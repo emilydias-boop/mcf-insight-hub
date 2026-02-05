@@ -1,187 +1,107 @@
 
-# Plano de Correção: Meta % Contratos e Cálculo de Variável para Closers
+# Plano: Corrigir Cálculo de % Meta Global para Closers
 
-## Problemas Identificados
+## Problema Identificado
 
-| Problema | Causa | Evidência |
-|----------|-------|-----------|
-| Meta mostrando 20 ao invés de 69 | Métricas configuradas sem BU (`squad=null`) têm `meta_percentual=30`, mas Edge Function busca métricas com `squad='incorporador'` que têm `meta_percentual=null` | Query retornou 2 registros de contratos para Closer Inside N1: um com squad=null e meta_percentual=30, outro com squad=incorporador e meta_percentual=null |
-| Contratos = 0 na Edge Function | A lógica de busca de contratos na Edge Function está filtrando por attendees de slots com `scheduled_at` no período, mas a contagem correta usa `contract_paid_at` | Log: `Contratos=0`, Frontend: 89 |
-| Variável = R$ 315 ao invés de ~R$ 1.785 | Sem contratos e sem meta%, o cálculo só considera organização (15% × R$ 2.100 = R$ 315) | Log: `valor_variavel: "315.00"` |
-| iFood Ultrameta = R$ 0 | pctContratos = 0%, regra exige >= 100% | Lógica correta, porém dependente do fix de contratos |
+O cálculo de **% Meta Global** na lista de fechamentos está mostrando valores incorretos para Closers porque:
 
-## Correções Técnicas
+1. **Edge Function salva `pct_reunioes_agendadas: 0`** para Closers (linha 980) ao invés de salvar `pctContratos`
+2. **O `calculateGlobalPct` no Index.tsx** usa campos de SDR que são zerados para Closers
 
-### 1. Corrigir Lógica de Busca de Métricas na Edge Function
+| Campo no DB | SDR usa para | Closer deveria usar para |
+|-------------|--------------|--------------------------|
+| `pct_reunioes_agendadas` | % Agendamento | % Contratos Pagos |
+| `pct_reunioes_realizadas` | % Realizadas | % Realizadas |
+| `pct_tentativas` | % Tentativas | 0 (não aplica) |
+| `pct_organizacao` | % Organização | % Organização |
 
-**Problema**: A Edge Function prioriza métricas com `squad` específico, mas a configuração com `meta_percentual=30` está salva com `squad=null`.
+## Correções
 
-**Solução**: Quando buscar métricas com squad específico, verificar se `meta_percentual` está preenchido. Se não estiver, usar fallback de métricas genéricas (squad=null).
+### 1. Edge Function: Salvar `pct_contratos` no campo `pct_reunioes_agendadas`
+
+**Arquivo**: `supabase/functions/recalculate-sdr-payout/index.ts`
+
+Na linha ~979, alterar:
+```typescript
+// ANTES
+pct_reunioes_agendadas: 0,
+
+// DEPOIS
+pct_reunioes_agendadas: pctContratos, // Para Closers, armazena % de Contratos
+```
+
+### 2. Index.tsx: Calcular % Meta Global diferenciado por role_type
+
+**Arquivo**: `src/pages/fechamento-sdr/Index.tsx`
+
+Alterar a função `calculateGlobalPct`:
 
 ```typescript
-// Na Edge Function, após buscar métricas específicas do squad:
-if (metricasSquad && metricasSquad.length > 0) {
-  // Verificar se as métricas têm meta_percentual para contratos
-  const metricaContratosSquad = metricasSquad.find(m => m.nome_metrica === 'contratos');
+const calculateGlobalPct = (payout: NonNullable<typeof payouts>[0]) => {
+  const sdrData = payout.sdr as any;
+  const isCloser = sdrData?.role_type === 'closer';
   
-  // Se não tiver meta_percentual, buscar fallback genérico
-  if (!metricaContratosSquad?.meta_percentual) {
-    const { data: metricasGenericas } = await supabase
-      .from('fechamento_metricas_mes')
-      .select('nome_metrica, peso_percentual, meta_valor, meta_percentual, fonte_dados')
-      .eq('ano_mes', ano_mes)
-      .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
-      .is('squad', null)
-      .eq('ativo', true);
-    
-    if (metricasGenericas) {
-      // Mesclar: usar peso do squad mas meta_percentual do genérico
-      const metricaContratosGenerica = metricasGenericas.find(m => m.nome_metrica === 'contratos');
-      if (metricaContratosGenerica?.meta_percentual) {
-        metricasSquad = metricasSquad.map(m => 
-          m.nome_metrica === 'contratos' 
-            ? { ...m, meta_percentual: metricaContratosGenerica.meta_percentual }
-            : m
-        );
-      }
-    }
+  let pcts: number[];
+  
+  if (isCloser) {
+    // Para Closers: usar Contratos (armazenado em pct_reunioes_agendadas) e Organização
+    pcts = [
+      payout.pct_reunioes_agendadas, // % Contratos
+      payout.pct_organizacao,        // % Organização
+    ].filter((p) => p !== null && p !== undefined) as number[];
+  } else {
+    // Para SDRs: usar Agendamento, Realizadas, Tentativas, Organização
+    pcts = [
+      payout.pct_reunioes_agendadas,
+      payout.pct_reunioes_realizadas,
+      payout.pct_tentativas,
+      payout.pct_organizacao,
+    ].filter((p) => p !== null) as number[];
   }
-  metricas = metricasSquad;
-}
+
+  if (pcts.length === 0) return 0;
+  return pcts.reduce((a, b) => a + b, 0) / pcts.length;
+};
 ```
 
-### 2. Corrigir Contagem de Contratos Pagos na Edge Function
+### 3. CloserFechamentoView.tsx: Confirmar consistência
 
-**Problema**: A Edge Function conta contratos de forma diferente do hook `useCloserAgendaMetrics`.
-
-**Solução**: Alinhar a lógica da Edge Function com o hook, usando `contract_paid_at` no período + fallback para registros antigos.
+O arquivo já usa a lógica correta (linhas 26-36), mas vamos garantir que está pegando os campos certos:
 
 ```typescript
-// Buscar contratos pagos pela DATA DO PAGAMENTO (igual ao hook useCloserAgendaMetrics)
-const { data: contractsByPaymentDate } = await supabase
-  .from('meeting_slot_attendees')
-  .select('id, status, contract_paid_at, meeting_slot:meeting_slots!inner(closer_id)')
-  .eq('meeting_slot.closer_id', closerRecord.id)
-  .in('status', ['contract_paid', 'refunded'])
-  .not('contract_paid_at', 'is', null)
-  .gte('contract_paid_at', `${monthStart}T00:00:00`)
-  .lte('contract_paid_at', `${monthEnd}T23:59:59`);
+const calculateGlobalPct = () => {
+  const pcts = [
+    payout.pct_reunioes_agendadas, // = pct_contratos para Closers
+    payout.pct_organizacao,
+  ].filter((p) => p !== null && p !== undefined) as number[];
 
-// Fallback para contratos antigos sem contract_paid_at
-const { data: contractsLegacy } = await supabase
-  .from('meeting_slot_attendees')
-  .select('id, status, meeting_slot:meeting_slots!inner(closer_id, scheduled_at)')
-  .eq('meeting_slot.closer_id', closerRecord.id)
-  .in('status', ['contract_paid', 'refunded'])
-  .is('contract_paid_at', null)
-  .gte('meeting_slot.scheduled_at', `${monthStart}T00:00:00`)
-  .lte('meeting_slot.scheduled_at', `${monthEnd}T23:59:59`);
-
-contratosPagos = (contractsByPaymentDate?.length || 0) + (contractsLegacy?.length || 0);
+  if (pcts.length === 0) return 0;
+  return pcts.reduce((a, b) => a + b, 0) / pcts.length;
+};
 ```
 
-### 3. Adicionar Campo Editável para iFood Ultrameta
+## Fluxo Esperado Após Correção
 
-**Problema**: Usuário precisa configurar o valor do iFood Ultrameta.
+Para o Closer Julio com:
+- Realizadas: 230
+- Contratos Pagos: 89
+- Meta Contratos: 30% × 230 = 69
+- % Contratos: 89/69 = 129%
+- Organização: 100%
 
-**Solução**: 
-- Usar o campo existente `ifood_ultrameta` do `sdr_comp_plan` (já existe)
-- Quando não houver comp_plan, usar o valor do calendário (`working_days_calendar.ifood_ultrameta`)
-- Adicionar campo na UI de configuração se necessário
-
-### 4. Atualizar Hook useActiveMetricsForSdr
-
-**Problema**: Mesmo no frontend, se existir métrica com squad mas sem `meta_percentual`, deveria usar fallback.
-
-**Solução**: Aplicar mesma lógica de mescla no hook.
-
-```typescript
-// Se encontrou métricas com squad mas sem meta_percentual para contratos,
-// buscar da versão genérica e mesclar
-if (metricas.length > 0) {
-  const contratosMetrica = metricas.find(m => m.nome_metrica === 'contratos');
-  if (contratosMetrica && !contratosMetrica.meta_percentual) {
-    // Buscar versão genérica para pegar meta_percentual
-    const { data: genericMetrics } = await supabase
-      .from('fechamento_metricas_mes')
-      .select('*')
-      .eq('ano_mes', anoMes)
-      .eq('cargo_catalogo_id', cargoId)
-      .is('squad', null)
-      .eq('ativo', true);
-    
-    if (genericMetrics) {
-      const genericContratos = genericMetrics.find(m => m.nome_metrica === 'contratos');
-      if (genericContratos?.meta_percentual) {
-        metricas = metricas.map(m => 
-          m.nome_metrica === 'contratos' 
-            ? { ...m, meta_percentual: genericContratos.meta_percentual }
-            : m
-        );
-      }
-    }
-  }
-}
-```
-
-## Fluxo de Cálculo Corrigido para Julio
-
-```text
-Entrada:
-├─ Realizadas: 230 (do KPI)
-├─ Contratos Pagos: 89 (da Agenda, pela data de pagamento)
-├─ Organização: 100% (manual)
-├─ Variável Total: R$ 2.100 (cargo_catalogo)
-└─ Métricas: contratos(50%, meta_percentual=30), organizacao(50%)
-
-Cálculo Contratos:
-├─ Meta: 30% × 230 = 69
-├─ Realizado: 89
-├─ %: 89/69 = 129%
-├─ Multiplicador: 1x (100-119%) → ERRADO! 129% = 1.5x
-├─ Valor Base: R$ 2.100 × 50% = R$ 1.050
-└─ Valor Final: R$ 1.050 × 1.5 = R$ 1.575
-
-Cálculo Organização:
-├─ Meta: 100%
-├─ Realizado: 100%
-├─ %: 100%
-├─ Multiplicador: 1x
-├─ Valor Base: R$ 2.100 × 50% = R$ 1.050
-└─ Valor Final: R$ 1.050 × 1 = R$ 1.050
-
-Resultado:
-├─ Variável Total: R$ 1.575 + R$ 1.050 = R$ 2.625
-├─ Fixo: R$ 4.900
-├─ Total Conta: R$ 7.525
-├─ iFood Mensal: R$ 600
-├─ iFood Ultrameta: R$ 50 (se pctContratos >= 100%)
-└─ Total: R$ 8.175
-```
+**% Meta Global = (129% + 100%) / 2 = 114.5%** ✅
 
 ## Arquivos a Modificar
 
-| Arquivo | Mudança |
-|---------|---------|
-| `supabase/functions/recalculate-sdr-payout/index.ts` | Corrigir busca de métricas com fallback para meta_percentual, corrigir contagem de contratos pagos |
-| `src/hooks/useActiveMetricsForSdr.ts` | Adicionar fallback para meta_percentual de métricas genéricas |
-
-## Opção Alternativa (mais simples)
-
-Se preferir, você pode simplesmente **deletar** as métricas duplicadas com `squad=incorporador` e manter apenas as genéricas (`squad=null`). Assim:
-
-1. Ir em Configurações > Métricas Ativas
-2. Selecionar "Closer Inside N1" e BU "Incorporador"
-3. Desativar todas as métricas
-4. Selecionar "Closer Inside N1" e BU "Todas"
-5. Configurar: Contratos 50% Meta% 30, Organização 50%
-6. Salvar
-
-Isso fará com que todos os Closers Inside N1 (independente de BU) usem a mesma configuração.
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/recalculate-sdr-payout/index.ts` | Salvar `pctContratos` em `pct_reunioes_agendadas` |
+| `src/pages/fechamento-sdr/Index.tsx` | Diferenciar cálculo por `role_type` |
+| `src/components/fechamento/CloserFechamentoView.tsx` | Verificar consistência (já está ok) |
 
 ## Ordem de Implementação
 
-1. Corrigir contagem de contratos pagos na Edge Function
-2. Corrigir fallback de meta_percentual na Edge Function
-3. Corrigir fallback de meta_percentual no hook useActiveMetricsForSdr
-4. Testar recálculo do Julio
+1. Corrigir Edge Function para salvar `pctContratos` no campo correto
+2. Atualizar `calculateGlobalPct` no Index.tsx para diferenciar Closers
+3. Deploy da Edge Function
+4. Recalcular os fechamentos de Closers
