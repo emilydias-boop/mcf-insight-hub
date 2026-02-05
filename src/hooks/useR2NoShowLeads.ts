@@ -17,6 +17,7 @@ export interface R2NoShowLead {
   
   // Histórico do funil
   sdr_name: string | null;
+  r1_closer_id: string | null;
   r1_closer_name: string | null;
   r1_date: string | null;
   
@@ -183,13 +184,14 @@ export function useR2NoShowLeads({
       });
 
       // Fetch R1 meetings for these deals to get R1 closer info
-      let r1Map = new Map<string, { closer_name: string | null; date: string | null }>();
+      let r1Map = new Map<string, { closer_id: string | null; closer_name: string | null; date: string | null }>();
       if (dealIds.size > 0) {
         const { data: r1Meetings } = await supabase
           .from('meeting_slots')
           .select(`
             scheduled_at,
             closer:closers!meeting_slots_closer_id_fkey (
+              id,
               name
             ),
             meeting_slot_attendees!inner (
@@ -204,8 +206,9 @@ export function useR2NoShowLeads({
           const attendees = r1.meeting_slot_attendees as Array<{ deal_id?: string | null }>;
           attendees?.forEach((att) => {
             if (att.deal_id && !r1Map.has(att.deal_id)) {
-              const closerObj = r1.closer as { name?: string } | null;
+              const closerObj = r1.closer as { id?: string; name?: string } | null;
               r1Map.set(att.deal_id, {
+                closer_id: closerObj?.id || null,
                 closer_name: closerObj?.name || null,
                 date: r1.scheduled_at,
               });
@@ -272,6 +275,7 @@ export function useR2NoShowLeads({
             closer_color: closerObj?.color || null,
             
             sdr_name: sdrName,
+            r1_closer_id: r1Info?.closer_id || null,
             r1_closer_name: r1Info?.closer_name || null,
             r1_date: r1Info?.date || null,
             

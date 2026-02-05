@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -16,11 +16,19 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useR2PendingLeads, R2PendingLead } from '@/hooks/useR2PendingLeads';
 import { R2QuickScheduleModal } from './R2QuickScheduleModal';
 import { RefundModal } from './RefundModal';
 import { R2CloserWithAvailability } from '@/hooks/useR2AgendaData';
 import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
+import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { cn } from '@/lib/utils';
 
 interface R2PendingLeadsPanelProps {
@@ -31,10 +39,17 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
   const { data: pendingLeads = [], isLoading, error } = useR2PendingLeads();
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
+  const { data: r1Closers = [] } = useGestorClosers('r1');
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<R2PendingLead | null>(null);
   const [refundModalOpen, setRefundModalOpen] = useState(false);
   const [refundLead, setRefundLead] = useState<R2PendingLead | null>(null);
+  const [r1CloserFilter, setR1CloserFilter] = useState<string>('all');
+
+  const filteredLeads = useMemo(() => {
+    if (r1CloserFilter === 'all') return pendingLeads;
+    return pendingLeads.filter(lead => lead.meeting_slot?.closer?.id === r1CloserFilter);
+  }, [pendingLeads, r1CloserFilter]);
 
   const handleScheduleR2 = (lead: R2PendingLead) => {
     setSelectedLead(lead);
@@ -81,19 +96,32 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
   return (
     <>
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
           <Badge variant="destructive" className="text-sm py-1 px-3">
-            {pendingLeads.length} pendente{pendingLeads.length !== 1 ? 's' : ''}
+            {filteredLeads.length} pendente{filteredLeads.length !== 1 ? 's' : ''}
           </Badge>
           <span className="text-sm text-muted-foreground">
             Leads com Contrato Pago aguardando agendamento de R2
           </span>
+          <Select value={r1CloserFilter} onValueChange={setR1CloserFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Closer R1" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Closers R1</SelectItem>
+              {r1Closers.map((closer) => (
+                <SelectItem key={closer.id} value={closer.id}>
+                  {closer.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       <ScrollArea className="h-[500px] pr-4">
         <div className="space-y-3">
-          {pendingLeads.map((lead) => {
+          {filteredLeads.map((lead) => {
             const leadName = lead.attendee_name || lead.deal?.contact?.name || lead.deal?.name || 'Lead';
             const phone = lead.attendee_phone || lead.deal?.contact?.phone;
             const r1Date = lead.meeting_slot?.scheduled_at 

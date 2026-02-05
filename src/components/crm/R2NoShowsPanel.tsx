@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -34,6 +34,7 @@ import { useR2NoShowLeads, R2NoShowLead, DateFilterType } from '@/hooks/useR2NoS
 import { R2RescheduleModal } from './R2RescheduleModal';
 import { R2MeetingDetailDrawer } from './R2MeetingDetailDrawer';
 import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
+import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { R2MeetingSlot, R2CloserWithAvailability } from '@/hooks/useR2AgendaData';
 import { cn } from '@/lib/utils';
 import { LEAD_PROFILE_OPTIONS, R2MeetingRow } from '@/types/r2Agenda';
@@ -190,6 +191,7 @@ export function R2NoShowsPanel({ closers }: R2NoShowsPanelProps) {
     end: new Date(),
   });
   const [closerFilter, setCloserFilter] = useState<string>('all');
+  const [r1CloserFilter, setR1CloserFilter] = useState<string>('all');
   
   // Reschedule modal state
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
@@ -208,6 +210,13 @@ export function R2NoShowsPanel({ closers }: R2NoShowsPanelProps) {
 
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
+  const { data: r1Closers = [] } = useGestorClosers('r1');
+
+  // Filter leads by R1 closer (client-side)
+  const filteredLeads = useMemo(() => {
+    if (r1CloserFilter === 'all') return leads;
+    return leads.filter(l => l.r1_closer_id === r1CloserFilter);
+  }, [leads, r1CloserFilter]);
 
   // Convert R2NoShowLead to R2MeetingRow for the detail drawer
   const convertToMeetingRow = (lead: R2NoShowLead): R2MeetingRow => ({
@@ -282,7 +291,7 @@ export function R2NoShowsPanel({ closers }: R2NoShowsPanelProps) {
   
   const handleRescheduleFromDrawer = (meeting: R2MeetingRow) => {
     // Find the original lead to pass to reschedule modal
-    const originalLead = leads.find(l => l.meeting_id === meeting.id);
+    const originalLead = filteredLeads.find(l => l.meeting_id === meeting.id);
     if (originalLead) {
       setSelectedLead(originalLead);
       setRescheduleModalOpen(true);
@@ -411,9 +420,27 @@ export function R2NoShowsPanel({ closers }: R2NoShowsPanelProps) {
           </Select>
         </div>
 
+        {/* R1 Closer Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">Closer R1:</span>
+          <Select value={r1CloserFilter} onValueChange={setR1CloserFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Todos closers R1" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos closers R1</SelectItem>
+              {r1Closers.map((closer) => (
+                <SelectItem key={closer.id} value={closer.id}>
+                  {closer.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Results Count */}
         <div className="ml-auto text-sm text-muted-foreground">
-          Mostrando <span className="font-medium text-foreground">{leads.length}</span> no-shows
+          Mostrando <span className="font-medium text-foreground">{filteredLeads.length}</span> no-shows
           {' '}de {getDateRangeLabel()}
         </div>
       </div>
@@ -443,9 +470,9 @@ export function R2NoShowsPanel({ closers }: R2NoShowsPanelProps) {
       )}
 
       {/* No-Show Cards Grid */}
-      {!isLoading && leads.length > 0 && (
+      {!isLoading && filteredLeads.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2">
-          {leads.map((lead) => (
+          {filteredLeads.map((lead) => (
             <NoShowCard
               key={lead.id}
               lead={lead}
