@@ -608,6 +608,23 @@ async function handleDealCreated(supabase: any, data: any) {
   const ownerId = ownerName || null;
   console.log('[DEAL.CREATED] Owner (email):', ownerId);
 
+  // 4.1 Buscar owner_profile_id correspondente para filtro do CRM
+  let ownerProfileId: string | null = null;
+  if (ownerId) {
+    const { data: ownerProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', ownerId)
+      .maybeSingle();
+    
+    if (ownerProfile) {
+      ownerProfileId = ownerProfile.id;
+      console.log('[DEAL.CREATED] Profile ID encontrado:', ownerProfileId);
+    } else {
+      console.log('[DEAL.CREATED] ⚠️ Profile não encontrado para:', ownerId);
+    }
+  }
+
   // 5. Detectar product_name baseado em tags, nome do deal ou origem
   const productName = extractProductFromDeal(data, originName);
   console.log('[DEAL.CREATED] Product detected:', productName);
@@ -642,6 +659,7 @@ async function handleDealCreated(supabase: any, data: any) {
       contact_id: contactId,
       origin_id: originId,
       owner_id: ownerId,
+      owner_profile_id: ownerProfileId,
       tags: parsedTags.length > 0 ? parsedTags : (data.tags || dealData.tags || []),
       probability: data.probability || dealData.probability,
       expected_close_date: data.expected_close_date || dealData.expected_close_date,
