@@ -39,6 +39,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useR2MeetingsExtended } from "@/hooks/useR2MeetingsExtended";
 import { useActiveR2Closers, useR2ClosersList } from "@/hooks/useR2Closers";
+import { useGestorClosers } from "@/hooks/useGestorClosers";
 import { useR2StatusOptions, useR2ThermometerOptions } from "@/hooks/useR2StatusOptions";
 import { R2CloserColumnCalendar } from "@/components/crm/R2CloserColumnCalendar";
 import { AgendaCalendar } from "@/components/crm/AgendaCalendar";
@@ -73,6 +74,7 @@ export default function AgendaR2() {
   const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [closerFilter, setCloserFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [r1CloserFilter, setR1CloserFilter] = useState<string>("all");
 
   // Determine initial tab from URL
   const urlTab = searchParams.get('tab');
@@ -132,6 +134,7 @@ export default function AgendaR2() {
   } = useR2MeetingsExtended(rangeStart, rangeEnd);
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
+  const { data: r1Closers = [] } = useGestorClosers('r1');
   const pendingCount = useR2PendingLeadsCount();
   const { data: noShowCount = 0 } = useR2NoShowsCount();
 
@@ -154,7 +157,12 @@ export default function AgendaR2() {
     if (statusFilter !== "all") {
       filtered = filtered.filter((m) => m.status === statusFilter);
     }
-    
+
+    // Filtro por closer R1
+    if (r1CloserFilter !== "all") {
+      filtered = filtered.filter((m) => m.r1_closer?.id === r1CloserFilter);
+    }
+
     // Group meetings by closer_id + scheduled_at to consolidate attendees
     const groups: Record<string, typeof filtered> = {};
     filtered.forEach((m) => {
@@ -168,7 +176,7 @@ export default function AgendaR2() {
       ...group[0],
       attendees: group.flatMap((m) => m.attendees || []),
     }));
-  }, [meetings, closerFilter, statusFilter, isR2Closer, myR2Closer?.id]);
+  }, [meetings, closerFilter, statusFilter, r1CloserFilter, isR2Closer, myR2Closer?.id]);
 
   // Filter closers based on filter (ou mostrar apenas o próprio closer se for R2 closer)
   const displayClosers = useMemo(() => {
@@ -502,6 +510,23 @@ export default function AgendaR2() {
               <SelectItem value="contract_paid">Contrato Pago</SelectItem>
             </SelectContent>
           </Select>
+
+          {/* R1 Closer Filter - escondido para closers R2 */}
+          {!isR2Closer && (
+            <Select value={r1CloserFilter} onValueChange={setR1CloserFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Closer R1" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos Closers R1</SelectItem>
+                {r1Closers.map((closer) => (
+                  <SelectItem key={closer.id} value={closer.id}>
+                    {closer.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 
