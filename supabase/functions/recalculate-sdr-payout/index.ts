@@ -313,9 +313,10 @@ const calculatePayoutValues = (
   let valor_organizacao: number;
 
   if (hasActiveMetrics) {
-    // Calcular variável total baseado nos pesos configurados
-    const variavelTotal = compPlan.valor_meta_rpg + compPlan.valor_docs_reuniao + 
-                          compPlan.valor_tentativas + compPlan.valor_organizacao;
+    // Usar variavel_total do compPlan como fonte da verdade, com fallback para soma dos valores individuais
+    const variavelTotal = compPlan.variavel_total || 
+      (compPlan.valor_meta_rpg + compPlan.valor_docs_reuniao + 
+       compPlan.valor_tentativas + compPlan.valor_organizacao);
     
     // Aplicar pesos das métricas ativas
     const pesoAgendadas = metricaAgendadas?.peso_percentual || 0;
