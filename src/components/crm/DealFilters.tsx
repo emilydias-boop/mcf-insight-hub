@@ -15,7 +15,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Search, X, Calendar as CalendarIcon, Clock, Radio, Phone } from 'lucide-react';
+import { Search, X, Calendar as CalendarIcon, Clock, Radio, Phone, Activity } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -25,6 +25,7 @@ import type { OwnerOption } from '@/hooks/useDealOwnerOptions';
 import { TagFilterPopover } from './TagFilterPopover';
 
 export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
+export type ActivityPriorityFilter = 'all' | 'high' | 'medium' | 'low';
 
 export interface DealFiltersState {
   search: string;
@@ -35,6 +36,7 @@ export interface DealFiltersState {
   salesChannel: SalesChannelFilter;
   attemptsRange: { min: number; max: number } | null;
   selectedTags: string[];
+  activityPriority: ActivityPriorityFilter;
 }
 
 interface DealFiltersProps {
@@ -130,6 +132,7 @@ export const DealFilters = ({
     filters.salesChannel !== 'all',
     filters.attemptsRange !== null,
     filters.selectedTags.length > 0,
+    filters.activityPriority !== 'all',
   ].filter(Boolean).length;
   
   return (
@@ -364,6 +367,43 @@ export const DealFilters = ({
         onChange={(tags) => onChange({ ...filters, selectedTags: tags })}
         isLoading={isLoadingTags}
       />
+      
+      {/* Filtro de Prioridade de Atividade */}
+      <Select
+        value={filters.activityPriority}
+        onValueChange={(value) => onChange({ 
+          ...filters, 
+          activityPriority: value as ActivityPriorityFilter 
+        })}
+      >
+        <SelectTrigger className="w-[160px]">
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Prioridade" />
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Qualquer</SelectItem>
+          <SelectItem value="high">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-500" />
+              Alta (0 ativ.)
+            </span>
+          </SelectItem>
+          <SelectItem value="medium">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-yellow-500" />
+              Média (1-3 ativ.)
+            </span>
+          </SelectItem>
+          <SelectItem value="low">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500" />
+              Baixa (4+ ativ.)
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
       
       {/* Filtro de Data */}
       <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>

@@ -55,6 +55,7 @@ const Negocios = () => {
     salesChannel: 'all',
     attemptsRange: null,
     selectedTags: [],
+    activityPriority: 'all',
   });
   
   // Estado para seleção e transferência em massa
@@ -455,6 +456,24 @@ const Negocios = () => {
         }
       }
       
+      // Filtro por prioridade de atividade
+      if (filters.activityPriority !== 'all' && activitySummaries) {
+        const summary = activitySummaries.get(deal.id);
+        const totalActivities = summary?.totalActivities ?? 0;
+        
+        switch (filters.activityPriority) {
+          case 'high': // 0 atividades
+            if (totalActivities !== 0) return false;
+            break;
+          case 'medium': // 1-3 atividades
+            if (totalActivities < 1 || totalActivities > 3) return false;
+            break;
+          case 'low': // 4+ atividades
+            if (totalActivities < 4) return false;
+            break;
+        }
+      }
+      
       return true;
     });
   }, [dealsData, isRestrictedRole, userProfile?.email, filters, activitySummaries, a010StatusMap]);
@@ -469,6 +488,7 @@ const Negocios = () => {
       salesChannel: 'all',
       attemptsRange: null,
       selectedTags: [],
+      activityPriority: 'all',
     });
   };
   

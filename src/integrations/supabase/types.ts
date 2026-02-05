@@ -2764,6 +2764,7 @@ export type Database = {
           data_source: string | null
           expected_close_date: string | null
           id: string
+          last_worked_at: string | null
           name: string
           next_action_date: string | null
           next_action_note: string | null
@@ -2792,6 +2793,7 @@ export type Database = {
           data_source?: string | null
           expected_close_date?: string | null
           id?: string
+          last_worked_at?: string | null
           name: string
           next_action_date?: string | null
           next_action_note?: string | null
@@ -2820,6 +2822,7 @@ export type Database = {
           data_source?: string | null
           expected_close_date?: string | null
           id?: string
+          last_worked_at?: string | null
           name?: string
           next_action_date?: string | null
           next_action_note?: string | null

@@ -577,7 +577,9 @@ export const useUpdateCRMDeal = () => {
       
       // Update stage_moved_at when stage changes
       if (deal.stage_id && previousStageId !== deal.stage_id) {
-        deal.stage_moved_at = new Date().toISOString();
+       const now = new Date().toISOString();
+       deal.stage_moved_at = now;
+       deal.last_worked_at = now; // Sync last_worked_at when stage changes
       }
       
       // Update the deal

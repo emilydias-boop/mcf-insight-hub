@@ -29,6 +29,32 @@ import { useAuth } from "@/contexts/AuthContext";
 import { OwnerChangeDialog } from "./OwnerChangeDialog";
 import { SalesChannel, detectSalesChannel } from "@/hooks/useBulkA010Check";
 
+// Helper para calcular badge de prioridade de atividade
+const getActivityPriorityBadge = (totalActivities: number) => {
+  if (totalActivities === 0) {
+    return { 
+      color: 'bg-red-500', 
+      textColor: 'text-white',
+      label: '0', 
+      tooltip: 'Alta prioridade - sem atividades' 
+    };
+  }
+  if (totalActivities <= 3) {
+    return { 
+      color: 'bg-yellow-500', 
+      textColor: 'text-black',
+      label: totalActivities.toString(), 
+      tooltip: 'Média prioridade - poucas atividades' 
+    };
+  }
+  return { 
+    color: 'bg-green-500', 
+    textColor: 'text-white',
+    label: totalActivities.toString(), 
+    tooltip: 'Baixa prioridade - bastante trabalhado' 
+  };
+};
+
 interface DealKanbanCardProps {
   deal: any;
   isDragging: boolean;
@@ -321,6 +347,23 @@ export const DealKanbanCard = ({
             </Badge>
           ))}
           {priority && <span className={priority.color}>{priority.icon}</span>}
+          
+          {/* Badge de Prioridade de Atividade */}
+          {activitySummary && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge 
+                  variant="outline"
+                  className={`text-[10px] px-1 py-0 ${getActivityPriorityBadge(activitySummary.totalActivities || 0).color} ${getActivityPriorityBadge(activitySummary.totalActivities || 0).textColor} border-0`}
+                >
+                  {getActivityPriorityBadge(activitySummary.totalActivities || 0).label}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                {getActivityPriorityBadge(activitySummary.totalActivities || 0).tooltip}
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
 
         {/* Linha 2: Nome do Lead */}
