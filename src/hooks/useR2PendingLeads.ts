@@ -213,6 +213,51 @@ export function useR2PendingLeads() {
           contract_paid_at: a.contract_paid_at || a.meeting_slot?.scheduled_at || a.created_at,
         })) as R2PendingLead[];
 
+      // Step 7: For rescheduled leads, find the most recent R1 closer
+      const dealIdsForLatestCloser = pendingLeads
+        .filter(a => a.deal_id)
+        .map(a => a.deal_id as string);
+
+      if (dealIdsForLatestCloser.length > 0) {
+        const { data: latestAttendees } = await supabase
+          .from('meeting_slot_attendees')
+          .select(`
+            deal_id,
+            meeting_slot:meeting_slots!inner(
+              scheduled_at,
+              meeting_type,
+              closer:closers(id, name)
+            )
+          `)
+          .in('deal_id', dealIdsForLatestCloser)
+          .eq('meeting_slots.meeting_type', 'r1')
+          .order('meeting_slots(scheduled_at)', { ascending: false });
+
+        // Create map: deal_id -> most recent closer
+        const latestCloserMap = new Map<string, { id: string; name: string } | null>();
+        ((latestAttendees as any[]) || []).forEach(att => {
+          if (att.deal_id && !latestCloserMap.has(att.deal_id)) {
+            const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
+            latestCloserMap.set(att.deal_id, slot?.closer || null);
+          }
+        });
+
+        // Enrich pendingLeads with most recent closer
+        return pendingLeads.map(lead => {
+          const latestCloser = lead.deal_id ? latestCloserMap.get(lead.deal_id) : null;
+          if (latestCloser) {
+            return {
+              ...lead,
+              meeting_slot: {
+                ...lead.meeting_slot,
+                closer: latestCloser
+              }
+            };
+          }
+          return lead;
+        }) as R2PendingLead[];
+      }
+
       return pendingLeads;
     },
     staleTime: 30000, // 30 seconds
