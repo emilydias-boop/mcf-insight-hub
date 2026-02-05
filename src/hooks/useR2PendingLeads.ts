@@ -213,10 +213,42 @@ export function useR2PendingLeads() {
           contract_paid_at: a.contract_paid_at || a.meeting_slot?.scheduled_at || a.created_at,
         })) as R2PendingLead[];
 
+      // Step 6.5: Deduplicate by contact_id, keeping the most recent meeting
+      const seenContacts = new Map<string, R2PendingLead>();
+
+      pendingLeads.forEach(lead => {
+        // Use contact_id as primary key, fallback to normalized_name or normalized_phone
+        const dedupeKey = lead.contact_id 
+          || (lead as any).normalized_name 
+          || (lead as any).normalized_phone 
+          || lead.id;
+        
+        const existing = seenContacts.get(dedupeKey);
+        
+        if (!existing) {
+          seenContacts.set(dedupeKey, lead);
+          return;
+        }
+        
+        // Keep the one with the most recent meeting
+        const existingDate = existing.meeting_slot?.scheduled_at 
+          ? new Date(existing.meeting_slot.scheduled_at).getTime() 
+          : 0;
+        const currentDate = lead.meeting_slot?.scheduled_at 
+          ? new Date(lead.meeting_slot.scheduled_at).getTime() 
+          : 0;
+        
+        if (currentDate > existingDate) {
+          seenContacts.set(dedupeKey, lead);
+        }
+      });
+
+      const uniquePendingLeads = Array.from(seenContacts.values());
+
       // Step 7: For rescheduled leads, find the most recent R1 closer by CONTACT (not deal)
       // This ensures we find meetings across all deals belonging to the same contact
       const contactIdsForLatestCloser = new Set<string>();
-      pendingLeads.forEach(lead => {
+      uniquePendingLeads.forEach(lead => {
         if (lead.contact_id) contactIdsForLatestCloser.add(lead.contact_id);
       });
 
@@ -273,7 +305,7 @@ export function useR2PendingLeads() {
         });
 
         // Enrich pendingLeads with most recent closer (by contact)
-        return pendingLeads.map(lead => {
+        return uniquePendingLeads.map(lead => {
           const latestCloser = lead.contact_id ? latestCloserByContact.get(lead.contact_id) : null;
           if (latestCloser) {
             return {
@@ -288,7 +320,7 @@ export function useR2PendingLeads() {
         }) as R2PendingLead[];
       }
 
-      return pendingLeads;
+      return uniquePendingLeads;
     },
     staleTime: 30000, // 30 seconds
     refetchInterval: 60000, // Refetch every minute
