@@ -108,11 +108,18 @@ export function useDealActivitySummary(dealId: string | undefined, stageId?: str
 // Hook para buscar atividades de múltiplos deals de uma vez (otimização)
 export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<string, string>) {
   return useQuery({
-    queryKey: ['batch-deal-activity-summary', dealIds.sort().join(','), stageIds ? Array.from(stageIds.entries()).sort().join(',') : ''],
+    queryKey: ['batch-deal-activity-summary', dealIds.map(id => id.toLowerCase().trim()).sort().join(','), stageIds ? Array.from(stageIds.entries()).sort().join(',') : ''],
     queryFn: async (): Promise<Map<string, ActivitySummary>> => {
       const summaryMap = new Map<string, ActivitySummary>();
       
       if (dealIds.length === 0) return summaryMap;
+
+      // Normalizar dealIds para garantir correspondência
+      const normalizedDealIds = dealIds.map(id => id.toLowerCase().trim());
+      const originalToNormalized = new Map<string, string>();
+      dealIds.forEach((id, index) => {
+        originalToNormalized.set(id, normalizedDealIds[index]);
+      });
 
       // Buscar limites de tentativas por estágio
       const { data: stageLimits } = await supabase
@@ -124,11 +131,12 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
         if (l.stage_id) limitsMap.set(l.stage_id, l.max_attempts);
       });
 
-      // Inicializar com valores padrão
-      dealIds.forEach(id => {
-        const stageId = stageIds?.get(id);
+      // Inicializar com valores padrão usando IDs normalizados
+      normalizedDealIds.forEach((normalizedId, index) => {
+        const originalId = dealIds[index];
+        const stageId = stageIds?.get(originalId);
         const maxAttempts = stageId ? (limitsMap.get(stageId) ?? DEFAULT_MAX_ATTEMPTS) : DEFAULT_MAX_ATTEMPTS;
-        summaryMap.set(id, { ...defaultSummary, maxAttempts });
+        summaryMap.set(normalizedId, { ...defaultSummary, maxAttempts });
       });
 
       // Buscar todas as ligações de uma vez
@@ -154,7 +162,12 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
 
       // Agregar por deal_id
       calls?.forEach(call => {
-        const summary = summaryMap.get(call.deal_id);
+        // Tentar normalizado primeiro, depois fallback para original
+        const normalizedCallId = call.deal_id?.toLowerCase().trim();
+        let summary = summaryMap.get(normalizedCallId);
+        if (!summary) {
+          summary = summaryMap.get(call.deal_id);
+        }
         if (summary) {
           summary.totalCalls++;
           
@@ -176,7 +189,11 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
 
       // Agregar WhatsApp
       whatsappActivities?.forEach(activity => {
-        const summary = summaryMap.get(activity.deal_id);
+        const normalizedId = activity.deal_id?.toLowerCase().trim();
+        let summary = summaryMap.get(normalizedId);
+        if (!summary) {
+          summary = summaryMap.get(activity.deal_id);
+        }
         if (summary) {
           summary.whatsappSent++;
         }
@@ -184,7 +201,11 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
 
       // Agregar Notas
       noteActivities?.forEach(activity => {
-        const summary = summaryMap.get(activity.deal_id);
+        const normalizedId = activity.deal_id?.toLowerCase().trim();
+        let summary = summaryMap.get(activity.deal_id);
+        if (!summary) {
+          summary = summaryMap.get(normalizedId);
+        }
         if (summary) {
           summary.notesCount++;
         }

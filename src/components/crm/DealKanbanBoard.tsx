@@ -277,7 +277,7 @@ export const DealKanbanBoard = ({
                                       isDragging={snapshot.isDragging}
                                       provided={provided}
                                       onClick={() => handleDealClick(deal.id)}
-                                      activitySummary={activitySummaries?.get(deal.id)}
+                                      activitySummary={activitySummaries?.get(deal.id.toLowerCase().trim())}
                                       selectionMode={selectionEnabled}
                                       isSelected={selectedDealIds.has(deal.id)}
                                       onSelect={onSelectionChange}
