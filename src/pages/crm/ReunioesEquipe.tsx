@@ -30,6 +30,7 @@ import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
+import { useSdrOutsideMetrics } from "@/hooks/useSdrOutsideMetrics";
 
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
@@ -247,6 +248,14 @@ export default function ReunioesEquipe() {
   // Fetch pending meetings for today (only used when preset is "today")
   const { data: pendentesHoje } = useMeetingsPendentesHoje();
 
+  // Fetch Outside metrics for the selected period
+  const { data: outsideData } = useSdrOutsideMetrics(start, end);
+
+  // Enrich teamKPIs with Outside data
+  const enrichedKPIs = useMemo(() => ({
+    ...teamKPIs,
+    totalOutside: outsideData?.totalOutside || 0,
+  }), [teamKPIs, outsideData]);
 
   // Create base dataset with all SDRs (zeros) for "today" preset
   const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
@@ -507,7 +516,7 @@ export default function ReunioesEquipe() {
 
       {/* KPI Cards */}
       <TeamKPICards 
-        kpis={teamKPIs} 
+        kpis={enrichedKPIs} 
         isLoading={isLoading}
         isToday={datePreset === "today"}
         pendentesHoje={pendentesHoje}
