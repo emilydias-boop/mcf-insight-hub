@@ -1,100 +1,172 @@
 
+# Corrigir Plano OTE da Carol Correa e Sincronização com Catálogo
 
-# Correção: iFood Ultrameta - Soma e Elegibilidade por Data de Admissão
+## Problema Identificado
 
-## ✅ Status: Implementado
+A Carol Correa (SDR N2) possui um plano de compensação (`sdr_comp_plan`) com valores desatualizados:
 
-## Regras de Negócio Identificadas
+| Campo | Plano Atual | Catálogo Correto |
+|-------|------------|------------------|
+| OTE Total | R$ 4.350 | R$ 4.500 |
+| Variável | R$ 1.200 | R$ 1.350 |
+| Fixo | R$ 3.150 | R$ 3.150 |
 
-### 1. iFood Mensal vs iFood Ultrameta
-- **iFood Mensal**: Pago no 1º dia do mês (baseado nos dias úteis trabalhados)
-- **iFood Ultrameta**: Pago no dia 20 do mês (bônus adicional)
-- **Ambos se SOMAM** (não substituem um ao outro)
-
-### 2. Elegibilidade para iFood Ultrameta
-O colaborador só recebe o iFood Ultrameta se:
-- A ultrameta do time foi batida **E**
-- O colaborador estava na equipe **desde o início do mês da meta**
-
-**Critério de verificação:**
-- Usar campo `employees.data_admissao`
-- Se `data_admissao` é NULL ou anterior ao 1º dia do mês da meta → **elegível**
-- Se `data_admissao` é durante o mês da meta → **não elegível**
-
-Exemplo: Para meta de janeiro/2026, quem entrou em 15/01/2026 não recebe a ultrameta.
+O plano foi criado em 01/11/2025 e está vigente até hoje (`vigencia_fim = null`).
 
 ---
 
-## Mudanças Implementadas
+## Parte 1: Correção Imediata (Carol Correa)
 
-### 1. Edge Function `recalculate-sdr-payout`
+### Opção A: Correção via SQL (mais rápida)
 
-**Modificações realizadas:**
+Executar um UPDATE direto na tabela `sdr_comp_plan`:
 
-1. **Busca de `data_admissao`**: Adicionado campo `data_admissao` na query do employee
-2. **Verificação de elegibilidade**: Comparação entre `data_admissao` e primeiro dia do mês
-3. **Condição para Closers**: Só libera `ifood_ultrameta` se `elegivelUltrameta = true`
-4. **Condição para SDRs**: Mesma lógica aplicada no cálculo padrão
+```sql
+UPDATE sdr_comp_plan
+SET 
+  ote_total = 4500,
+  variavel_total = 1350,
+  updated_at = NOW()
+WHERE id = '4cceabd7-4b98-46c6-a94d-3c8a4b5bbe8a';
+```
 
-**Código adicionado:**
+### Opção B: Correção via Interface
+
+Usar o botão "Editar" na aba "Planos OTE" do Fechamento para ajustar os valores manualmente.
+
+---
+
+## Parte 2: Funcionalidade de Sincronização em Massa
+
+### Objetivo
+
+Adicionar um botão "Sincronizar com Catálogo" na aba `PlansOteTab` que:
+
+1. Identifica colaboradores com divergência entre `sdr_comp_plan` e `cargos_catalogo`
+2. Exibe lista de divergências para revisão
+3. Permite sincronizar todos de uma vez ou individualmente
+
+### Mudanças Necessárias
+
+#### 2.1. Adicionar lógica de detecção de divergências em `PlansOteTab.tsx`
 
 ```typescript
-// Verificar elegibilidade para ultrameta (precisa estar desde o início do mês)
-const dataAdmissao = employeeData?.data_admissao 
-  ? new Date(employeeData.data_admissao) 
-  : null;
-const inicioMes = new Date(year, month - 1, 1);
-// Elegível se entrou antes do início do mês OU se data_admissao é null
-const elegivelUltrameta = !dataAdmissao || dataAdmissao < inicioMes;
+// Calcular divergências
+const divergencias = useMemo(() => {
+  return employeesWithPlans.filter(emp => {
+    if (!emp.comp_plan || !emp.cargo_catalogo) return false;
+    
+    return (
+      emp.comp_plan.ote_total !== emp.cargo_catalogo.ote_total ||
+      emp.comp_plan.fixo_valor !== emp.cargo_catalogo.fixo_valor ||
+      emp.comp_plan.variavel_total !== emp.cargo_catalogo.variavel_valor
+    );
+  });
+}, [employeesWithPlans]);
+```
 
-// Aplicar elegibilidade nas condições de atribuição de ifood_ultrameta
-if (teamUltrametaHit && teamGoal && elegivelUltrameta) {
-  ifoodUltrameta = teamGoal.ultrameta_premio_ifood || 0;
-} else if (teamUltrametaHit && teamGoal && !elegivelUltrameta) {
-  ifoodUltrameta = 0; // Não elegível por ter entrado no meio do mês
-}
+#### 2.2. Adicionar botão e dialog de sincronização
+
+```typescript
+// Estado do dialog
+const [syncDialog, setSyncDialog] = useState(false);
+
+// Mutation para sincronizar
+const syncWithCatalog = useMutation({
+  mutationFn: async (empIds: string[]) => {
+    for (const emp of employeesWithPlans.filter(e => empIds.includes(e.id))) {
+      if (!emp.sdr_id || !emp.cargo_catalogo || !emp.comp_plan) continue;
+      
+      await supabase
+        .from('sdr_comp_plan')
+        .update({
+          ote_total: emp.cargo_catalogo.ote_total,
+          fixo_valor: emp.cargo_catalogo.fixo_valor,
+          variavel_total: emp.cargo_catalogo.variavel_valor,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', emp.comp_plan.id);
+    }
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['sdr-comp-plans'] });
+    toast.success('Planos sincronizados com sucesso');
+    setSyncDialog(false);
+  },
+});
+```
+
+#### 2.3. UI do Botão e Dialog
+
+Na header do Card, adicionar:
+
+```tsx
+{divergencias.length > 0 && (
+  <Button
+    variant="outline"
+    size="sm"
+    onClick={() => setSyncDialog(true)}
+    className="text-yellow-600 border-yellow-600"
+  >
+    <AlertTriangle className="h-4 w-4 mr-2" />
+    {divergencias.length} divergência(s)
+  </Button>
+)}
+```
+
+Dialog mostrando lista de divergências:
+
+```tsx
+<Dialog open={syncDialog} onOpenChange={setSyncDialog}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Sincronizar Planos com Catálogo</DialogTitle>
+    </DialogHeader>
+    
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Colaborador</TableHead>
+          <TableHead>Plano Atual</TableHead>
+          <TableHead>Catálogo</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {divergencias.map(emp => (
+          <TableRow key={emp.id}>
+            <TableCell>{emp.nome_completo}</TableCell>
+            <TableCell>
+              OTE: {formatCurrency(emp.comp_plan!.ote_total)}
+            </TableCell>
+            <TableCell>
+              OTE: {formatCurrency(emp.cargo_catalogo!.ote_total)}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+    
+    <DialogFooter>
+      <Button onClick={() => syncWithCatalog.mutate(divergencias.map(d => d.id))}>
+        Sincronizar Todos
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
 ```
 
 ---
 
-## Fluxo Corrigido
+## Resumo das Mudanças
 
-```text
-Ultrameta do Time Batida (faturamento >= R$ 1.6M)
-     │
-     ▼
-Para cada colaborador:
-     │
-     ├── Buscar employees.data_admissao
-     │
-     ├── data_admissao NULL ou < 01/01/2026?
-     │       │
-     │       ├── SIM → ifood_ultrameta = R$ 1.000 (elegível)
-     │       │
-     │       └── NÃO → ifood_ultrameta = R$ 0 (entrou no meio do mês)
-     │
-     └── Somar com ifood_mensal para total_ifood
-```
+| Arquivo | Alteração |
+|---------|-----------|
+| **SQL** | UPDATE para corrigir plano da Carol Correa |
+| `src/components/fechamento/PlansOteTab.tsx` | Adicionar detecção de divergências, botão de alerta e dialog de sincronização |
 
 ---
 
-## Exemplo Prático - Janeiro 2026
+## Sequência de Implementação
 
-| Colaborador | Data Admissão | Elegível? | iFood Ultrameta |
-|-------------|---------------|-----------|-----------------|
-| Julio Caetano | 01/01/2024 | SIM | R$ 1.000 |
-| Thaynar | 01/01/2024 | SIM | R$ 1.000 |
-| Jessica Bellini | 01/05/2024 | SIM | R$ 1.000 |
-| Robert* | 15/01/2026 | NÃO | R$ 0 |
-| Mateus* | 10/01/2026 | NÃO | R$ 0 |
-| Evellyn* | 20/01/2026 | NÃO | R$ 0 |
-
-*Novos colaboradores que entraram durante o mês de janeiro
-
----
-
-## Resumo da Correção
-
-1. **Soma de valores**: O iFood Ultrameta sempre soma com o iFood mensal ✅
-2. **Elegibilidade**: Verificação de `data_admissao` implementada ✅
-3. **Logs**: Adicionados logs claros indicando elegibilidade ✅
+1. **Corrigir Carol Correa** via SQL UPDATE (imediato)
+2. **Adicionar funcionalidade de sincronização** em `PlansOteTab.tsx` para futuras divergências
