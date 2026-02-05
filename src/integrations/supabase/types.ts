@@ -1429,6 +1429,50 @@ export type Database = {
           },
         ]
       }
+      cargo_metricas_padrao: {
+        Row: {
+          ativo: boolean | null
+          cargo_catalogo_id: string
+          created_at: string | null
+          id: string
+          label_exibicao: string
+          meta_percentual: number | null
+          nome_metrica: string
+          peso_percentual: number
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cargo_catalogo_id: string
+          created_at?: string | null
+          id?: string
+          label_exibicao: string
+          meta_percentual?: number | null
+          nome_metrica: string
+          peso_percentual?: number
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cargo_catalogo_id?: string
+          created_at?: string | null
+          id?: string
+          label_exibicao?: string
+          meta_percentual?: number | null
+          nome_metrica?: string
+          peso_percentual?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cargo_metricas_padrao_cargo_catalogo_id_fkey"
+            columns: ["cargo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cargos_catalogo: {
         Row: {
           area: string
