@@ -191,16 +191,16 @@ Mostrar resumo das metas do time no topo:
 
 ## Arquivos a Criar/Modificar
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/hooks/useTeamMonthlyGoals.ts` | **Criar** | Hooks CRUD para metas mensais |
-| `src/components/fechamento/TeamMonthlyGoalsTab.tsx` | **Criar** | Componente de configuração |
-| `src/components/fechamento/TeamGoalsSummary.tsx` | **Criar** | Resumo de metas batidas |
-| `src/pages/fechamento-sdr/Configuracoes.tsx` | **Modificar** | Adicionar nova aba |
-| `src/pages/fechamento-sdr/Index.tsx` | **Modificar** | Mostrar resumo das metas |
-| `src/hooks/useUltrametaByBU.ts` | **Modificar** | Buscar targets da nova tabela |
-| `supabase/functions/recalculate-sdr-payout/index.ts` | **Modificar** | Lógica de premiação automática |
-| Migração SQL | **Criar** | Criar tabelas team_monthly_goals e team_monthly_goal_winners |
+| Arquivo | Ação | Descrição | Status |
+|---------|------|-----------|--------|
+| `src/hooks/useTeamMonthlyGoals.ts` | **Criar** | Hooks CRUD para metas mensais | ✅ Concluído |
+| `src/components/fechamento/TeamMonthlyGoalsTab.tsx` | **Criar** | Componente de configuração | ✅ Concluído |
+| `src/components/fechamento/TeamGoalsSummary.tsx` | **Criar** | Resumo de metas batidas | 🔜 Pendente |
+| `src/pages/fechamento-sdr/Configuracoes.tsx` | **Modificar** | Adicionar nova aba | ✅ Concluído |
+| `src/pages/fechamento-sdr/Index.tsx` | **Modificar** | Mostrar resumo das metas | 🔜 Pendente |
+| `src/hooks/useUltrametaByBU.ts` | **Modificar** | Buscar targets da nova tabela | ✅ Concluído |
+| `supabase/functions/recalculate-sdr-payout/index.ts` | **Modificar** | Lógica de premiação automática | 🔜 Pendente |
+| Migração SQL | **Criar** | Criar tabelas team_monthly_goals e team_monthly_goal_winners | ✅ Concluído |
 
 ---
 

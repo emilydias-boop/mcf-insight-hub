@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { startOfMonth, endOfMonth } from 'date-fns';
+import { startOfMonth, endOfMonth, format } from 'date-fns';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
 export interface BUMetrics {
@@ -9,7 +9,7 @@ export interface BUMetrics {
   target: number;
 }
 
-// Default targets (monthly values)
+// Default targets (monthly values) - used as fallback if no team_monthly_goals configured
 const DEFAULT_TARGETS: Record<string, number> = {
   ultrameta_incorporador: 2500000,  // 2.5M
   ultrameta_consorcio: 15000000,    // 15M em cartas
@@ -33,17 +33,19 @@ export function useUltrametaByBU() {
       const now = new Date();
       const monthStart = startOfMonth(now);
       const monthEnd = endOfMonth(now);
+      const currentAnoMes = format(now, 'yyyy-MM');
 
       // 1. Fetch first transaction IDs for deduplication
       const { data: firstIdsData } = await supabase.rpc('get_first_transaction_ids');
       const firstIdSet = new Set((firstIdsData || []).map((r: { id: string }) => r.id));
 
-      // 2. Fetch all data in parallel
+      // 2. Fetch all data in parallel (including team_monthly_goals)
       const [
         incorporadorResult,
         consorcioResult,
         leilaoResult,
         targetsResult,
+        teamGoalsResult,
       ] = await Promise.all([
         // Incorporador: use RPC with monthly period
         supabase.rpc('get_all_hubla_transactions', {
@@ -70,7 +72,7 @@ export function useUltrametaByBU() {
           .gte('sale_date', monthStart.toISOString())
           .lte('sale_date', monthEnd.toISOString()),
 
-        // Targets from team_targets
+        // Legacy targets from team_targets (fallback)
         supabase
           .from('team_targets')
           .select('target_type, target_value')
@@ -80,6 +82,12 @@ export function useUltrametaByBU() {
             'ultrameta_credito',
             'ultrameta_leilao',
           ]),
+
+        // NEW: Fetch team_monthly_goals for current month
+        supabase
+          .from('team_monthly_goals')
+          .select('*')
+          .eq('ano_mes', currentAnoMes),
       ]);
 
       // 3. Calculate Incorporador with deduplication
@@ -109,34 +117,52 @@ export function useUltrametaByBU() {
       // Crédito placeholder (no data source yet)
       const creditoValue = 0;
 
-      // Build targets map
-      const targetsMap: Record<string, number> = {};
+      // Build legacy targets map (fallback)
+      const legacyTargetsMap: Record<string, number> = {};
       targetsResult.data?.forEach((t) => {
-        targetsMap[t.target_type] = t.target_value;
+        legacyTargetsMap[t.target_type] = t.target_value;
       });
 
-      const getTarget = (key: string) => targetsMap[key] || DEFAULT_TARGETS[key] || 0;
+      // Build team_monthly_goals map by BU
+      const teamGoalsMap: Record<string, any> = {};
+      (teamGoalsResult.data || []).forEach((goal: any) => {
+        teamGoalsMap[goal.bu] = goal;
+      });
+
+      // Helper to get target with priority: team_monthly_goals > team_targets > DEFAULT
+      const getTarget = (bu: string, legacyKey: string): number => {
+        // Priority 1: team_monthly_goals (ultrameta_valor)
+        if (teamGoalsMap[bu]?.ultrameta_valor) {
+          return teamGoalsMap[bu].ultrameta_valor;
+        }
+        // Priority 2: team_targets
+        if (legacyTargetsMap[legacyKey]) {
+          return legacyTargetsMap[legacyKey];
+        }
+        // Priority 3: DEFAULT
+        return DEFAULT_TARGETS[legacyKey] || 0;
+      };
 
       return [
         {
           bu: 'incorporador',
           value: incorporadorValue,
-          target: getTarget('ultrameta_incorporador'),
+          target: getTarget('incorporador', 'ultrameta_incorporador'),
         },
         {
           bu: 'consorcio',
           value: consorcioValue,
-          target: getTarget('ultrameta_consorcio'),
+          target: getTarget('consorcio', 'ultrameta_consorcio'),
         },
         {
           bu: 'credito',
           value: creditoValue,
-          target: getTarget('ultrameta_credito'),
+          target: getTarget('credito', 'ultrameta_credito'),
         },
         {
           bu: 'leilao',
           value: leilaoValue,
-          target: getTarget('ultrameta_leilao'),
+          target: getTarget('leilao', 'ultrameta_leilao'),
         },
       ];
     },
