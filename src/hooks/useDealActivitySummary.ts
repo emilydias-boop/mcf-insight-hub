@@ -115,11 +115,7 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
       if (dealIds.length === 0) return summaryMap;
 
       // Normalizar dealIds para garantir correspondência
-      const normalizedDealIds = dealIds.map(id => id.toLowerCase().trim());
-      const originalToNormalized = new Map<string, string>();
-      dealIds.forEach((id, index) => {
-        originalToNormalized.set(id, normalizedDealIds[index]);
-      });
+       const normalizedDealIds = dealIds.map(id => String(id || '').toLowerCase().trim());
 
       // Buscar limites de tentativas por estágio
       const { data: stageLimits } = await supabase
@@ -162,12 +158,9 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
 
       // Agregar por deal_id
       calls?.forEach(call => {
-        // Tentar normalizado primeiro, depois fallback para original
-        const normalizedCallId = call.deal_id?.toLowerCase().trim();
-        let summary = summaryMap.get(normalizedCallId);
-        if (!summary) {
-          summary = summaryMap.get(call.deal_id);
-        }
+         // Converter para string e normalizar - FORÇAR conversão de tipo
+         const normalizedCallId = String(call.deal_id || '').toLowerCase().trim();
+         const summary = summaryMap.get(normalizedCallId);
         if (summary) {
           summary.totalCalls++;
           
@@ -189,11 +182,8 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
 
       // Agregar WhatsApp
       whatsappActivities?.forEach(activity => {
-        const normalizedId = activity.deal_id?.toLowerCase().trim();
-        let summary = summaryMap.get(normalizedId);
-        if (!summary) {
-          summary = summaryMap.get(activity.deal_id);
-        }
+         const normalizedId = String(activity.deal_id || '').toLowerCase().trim();
+         const summary = summaryMap.get(normalizedId);
         if (summary) {
           summary.whatsappSent++;
         }
@@ -201,11 +191,8 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
 
       // Agregar Notas
       noteActivities?.forEach(activity => {
-        const normalizedId = activity.deal_id?.toLowerCase().trim();
-        let summary = summaryMap.get(activity.deal_id);
-        if (!summary) {
-          summary = summaryMap.get(normalizedId);
-        }
+         const normalizedId = String(activity.deal_id || '').toLowerCase().trim();
+         const summary = summaryMap.get(normalizedId);
         if (summary) {
           summary.notesCount++;
         }
