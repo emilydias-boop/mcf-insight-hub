@@ -9,6 +9,8 @@ export interface ActivitySummary {
   lastContactAttempt: string | null;
   attemptsExhausted: boolean;
   maxAttempts: number;
+  totalActivities: number; // Total de todas as atividades (calls + whatsapp + notes)
+  notesCount: number; // Quantidade de notas
 }
 
 const DEFAULT_MAX_ATTEMPTS = 5;
@@ -21,6 +23,8 @@ const defaultSummary: ActivitySummary = {
   lastContactAttempt: null,
   attemptsExhausted: false,
   maxAttempts: DEFAULT_MAX_ATTEMPTS,
+  totalActivities: 0,
+  notesCount: 0,
 };
 
 export function useDealActivitySummary(dealId: string | undefined, stageId?: string) {
@@ -74,6 +78,16 @@ export function useDealActivitySummary(dealId: string | undefined, stageId?: str
 
       const attemptsExhausted = totalCalls >= maxAttempts && answeredCalls === 0;
 
+      // Buscar notas do deal
+      const { data: noteActivities } = await supabase
+        .from('deal_activities')
+        .select('id')
+        .eq('deal_id', dealId)
+        .eq('activity_type', 'note');
+
+      const notesCount = noteActivities?.length || 0;
+      const totalActivities = totalCalls + whatsappSent + notesCount;
+
       return {
         totalCalls,
         answeredCalls,
@@ -82,6 +96,8 @@ export function useDealActivitySummary(dealId: string | undefined, stageId?: str
         lastContactAttempt: calls?.[0]?.created_at || null,
         attemptsExhausted,
         maxAttempts,
+        totalActivities,
+        notesCount,
       };
     },
     enabled: !!dealId,
@@ -129,6 +145,13 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
         .in('deal_id', dealIds)
         .eq('activity_type', 'whatsapp_sent');
 
+      // Buscar notas
+      const { data: noteActivities } = await supabase
+        .from('deal_activities')
+        .select('deal_id')
+        .in('deal_id', dealIds)
+        .eq('activity_type', 'note');
+
       // Agregar por deal_id
       calls?.forEach(call => {
         const summary = summaryMap.get(call.deal_id);
@@ -159,9 +182,18 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
         }
       });
 
+      // Agregar Notas
+      noteActivities?.forEach(activity => {
+        const summary = summaryMap.get(activity.deal_id);
+        if (summary) {
+          summary.notesCount++;
+        }
+      });
+
       // Marcar tentativas esgotadas
       summaryMap.forEach((summary) => {
         summary.attemptsExhausted = summary.totalCalls >= summary.maxAttempts && summary.answeredCalls === 0;
+        summary.totalActivities = summary.totalCalls + summary.whatsappSent + summary.notesCount;
       });
 
       return summaryMap;

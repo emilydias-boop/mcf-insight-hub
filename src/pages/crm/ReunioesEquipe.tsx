@@ -22,6 +22,7 @@ import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
 import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
+import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTable";
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
 import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
@@ -573,6 +574,15 @@ export default function ReunioesEquipe() {
           )}
         </CardContent>
       </Card>
+
+      {/* Tabela de Atividades por SDR */}
+      {activeTab === "sdrs" && (
+        <SdrActivityMetricsTable
+          startDate={start}
+          endDate={end}
+          originId={undefined}
+        />
+      )}
     </div>
   );
 }
