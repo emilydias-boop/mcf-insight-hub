@@ -240,10 +240,11 @@ export function useR2PendingLeads() {
         const sortedAttendees = ((latestAttendees as any[]) || [])
           .map(att => {
             const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
+           const closer = Array.isArray(slot?.closer) ? slot?.closer[0] : slot?.closer;
             return {
               deal_id: att.deal_id,
               scheduled_at: slot?.scheduled_at,
-              closer: slot?.closer
+             closer: closer
             };
           })
           .sort((a, b) => {
