@@ -1,122 +1,172 @@
 
-## Objetivo imediato
-Corrigir o erro ao cadastrar equipamento:
+# Próximos Passos - Central de Patrimônio de TI
 
-> `new row violates row-level security policy for table "assets"`
+## Estado Atual (Concluído)
 
-Hoje, o INSERT em `public.assets` está sendo bloqueado pelo RLS porque as policies de “Admin/Manager full access” dependem de uma função `public.get_user_role()` (sem parâmetros) que tenta ler role de `auth.users.raw_app_meta_data->>'role'`. Porém, neste projeto **as roles corretas estão na tabela `public.user_roles`** (e já existe a função `public.has_role(user_id, role)`), então `get_user_role()` retorna “viewer” e **nega INSERT/UPDATE/DELETE**.
-
-Além disso, existe uma **sobrecarga confusa**: há duas funções `get_user_role` no schema:
-- `get_user_role()` → retorna `text` via `auth.users.raw_app_meta_data` (ruim/errado para este projeto)
-- `get_user_role(_user_id uuid)` → retorna `app_role` consultando `public.user_roles` (correto)
-
-As policies atuais chamam **a versão errada** (`get_user_role()`).
-
----
-
-## Diagnóstico (confirmado no banco)
-- Policies em `assets`, `asset_assignments`, `asset_assignment_items`, `asset_terms`, `asset_history` usam:
-  - `public.get_user_role() IN ('admin','manager')`
-- `user_roles` já contém usuários `admin`/etc.
-- `public.has_role(auth.uid(), 'admin')` existe e é o padrão seguro para RLS sem recursão.
-- As policies estão como `TO public` (roles:{public}), o que é permissivo/desnecessário; o ideal é escopar a `authenticated`.
+| Componente | Status |
+|------------|--------|
+| Banco de dados (tabelas + RLS) | Concluído |
+| Types/Interfaces TypeScript | Concluído |
+| Hooks (CRUD assets, assignments, history, terms) | Concluído |
+| Listagem de equipamentos com filtros | Concluído |
+| Formulário de cadastro de equipamento | Concluído |
+| Dashboard de estatísticas | Concluído |
 
 ---
 
-## Estratégia de correção (fase rápida e segura)
-### 1) Ajustar RLS para usar `user_roles` (e não auth metadata)
-Criar uma migration SQL que:
-1. **Remove** a função errada `public.get_user_role()` (sem parâmetros) ou renomeia (preferível remover para evitar uso acidental).
-2. **Recria** todas as policies “Admin/Manager full access …” usando:
-   - `public.has_role(auth.uid(),'admin') OR public.has_role(auth.uid(),'manager')`
-3. **Recria** as policies aplicando a `TO authenticated` (em vez de `public`).
+## Fase 2 - Detalhes e Histórico do Equipamento
 
-> Observação: em Postgres, policy `FOR ALL` sem `WITH CHECK` normalmente reaproveita a expressão para `WITH CHECK`, mas aqui o problema não é esse — é que a role nunca bate como admin/manager.
+### 2.1 Página de Detalhes do Equipamento
+Criar `/patrimonio/:id` com:
+- **Card de Informações**: dados gerais (patrimônio, tipo, marca/modelo, S/O, nº série, fornecedor)
+- **Badge de Status**: status atual com cores distintas
+- **Responsável Atual**: card com foto/nome do colaborador (se em uso)
+- **Timeline de Histórico**: eventos ordenados (compra, liberação, devolução, manutenção, baixa)
+- **Ações rápidas**: botões para Editar, Liberar, Devolver, Manutenção, Baixa
 
-### 2) Não mexer no front-end para resolver o INSERT
-O front já manda `created_by` e o payload está OK. O erro é 100% de RLS/role-check no banco.
+### 2.2 Componentes Necessários
+- `AssetDetailsPage.tsx` - página completa de detalhes
+- `AssetInfoCard.tsx` - card com dados do equipamento
+- `AssetTimeline.tsx` - timeline visual do histórico
+- `AssetCurrentHolder.tsx` - card do responsável atual
 
 ---
 
-## Mudanças detalhadas (SQL – o que a migration vai fazer)
+## Fase 3 - Fluxo de Liberação (Check-out)
 
-### A) Remover a função errada e evitar ambiguidade
-- `DROP FUNCTION IF EXISTS public.get_user_role();`  
-(essa remove a versão sem parâmetros; a versão `get_user_role(uuid)` permanece)
+### 3.1 Dialog de Liberação
+Modal para atribuir equipamento a colaborador:
+- Seletor de colaborador (busca por nome)
+- Data de liberação (padrão: hoje)
+- Data prevista de devolução (opcional)
+- Checklist de itens entregues (mouse, carregador, headset, etc.)
 
-Se preferirmos ser ainda mais explícitos:
-- manter somente `has_role(...)` e evitar `get_user_role(...)` no RLS do patrimônio.
+### 3.2 Geração Automática do Termo
+- Gerar conteúdo do termo com dados do equipamento + colaborador + itens
+- Criar registro em `asset_terms` com `aceito = false`
+- Atualizar status do equipamento para `em_uso`
+- Registrar evento `liberado` no histórico
 
-### B) Substituir policies “Admin/Manager full access …”
-Para cada tabela:
-- `assets`
-- `asset_assignments`
-- `asset_assignment_items`
-- `asset_terms`
-- `asset_history`
+### 3.3 Componentes Necessários
+- `AssignAssetDialog.tsx` - modal de liberação
+- `EmployeeSelector.tsx` - combo de busca de colaboradores
+- `ChecklistEditor.tsx` - seletor de itens com observações
 
-Recriar policy:
+---
 
-```sql
-CREATE POLICY "Admin/Manager full access on assets"
-ON public.assets
-FOR ALL
-TO authenticated
-USING (
-  public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'manager')
-)
-WITH CHECK (
-  public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'manager')
-);
+## Fase 4 - Aceite Digital do Termo
+
+### 4.1 Tela de Aceite (Colaborador)
+Acessível via "Meu RH" ou link direto:
+- Exibir conteúdo completo do termo (formatado)
+- Checkbox "Li e aceito os termos"
+- Área de assinatura digital (canvas touch/mouse)
+- Botão "Assinar e Aceitar"
+
+### 4.2 Lógica de Aceite
+- Capturar assinatura como base64
+- Atualizar `asset_terms`: `aceito = true`, `data_aceite`, `assinatura_digital`, `bloqueado = true`
+- Registrar IP do aceite (via edge function ou header)
+
+### 4.3 Seção "Meus Equipamentos" no Meu RH
+Nova seção na página Meu RH mostrando:
+- Lista de equipamentos atualmente atribuídos
+- Status do termo (pendente/aceito)
+- Link para visualizar/aceitar termo
+
+### 4.4 Componentes Necessários
+- `MeuRHPatrimonioSection.tsx` - seção para Meu RH
+- `TermAcceptanceDialog.tsx` - modal de aceite
+- `SignaturePad.tsx` - canvas para assinatura digital
+- `TermViewer.tsx` - visualizador do termo formatado
+
+---
+
+## Fase 5 - Fluxo de Devolução
+
+### 5.1 Dialog de Devolução
+Modal para conferência e devolução:
+- Exibir itens do checklist original
+- Para cada item: checkbox "Conferido" + campo observação
+- Seletor de status pós-devolução: `em_estoque` ou `em_manutencao`
+- Observações gerais
+
+### 5.2 Lógica de Devolução
+- Atualizar `asset_assignment_items` com conferência
+- Atualizar `asset_assignments`: `status = 'devolvido'`, `data_devolucao_real`
+- Atualizar `assets`: status conforme escolha
+- Registrar evento `devolucao` no histórico
+
+### 5.3 Componentes Necessários
+- `ReturnAssetDialog.tsx` - modal de devolução com checklist
+
+---
+
+## Fase 6 - Transferência entre Colaboradores
+
+### 6.1 Dialog de Transferência
+Quando equipamento está em uso, permitir transferir para outro colaborador:
+- Finaliza assignment atual (`status = 'transferido'`)
+- Cria novo assignment para novo colaborador
+- Gera novo termo de responsabilidade
+- Registra evento `transferido` no histórico
+
+### 6.2 Componentes Necessários
+- `TransferAssetDialog.tsx` - modal de transferência
+- Reutilizar `EmployeeSelector` e `ChecklistEditor`
+
+---
+
+## Fase 7 - Upload de Nota Fiscal
+
+### 7.1 Funcionalidade
+- Upload de arquivo PDF/imagem da NF
+- Armazenar no bucket Supabase `patrimonio-nf`
+- Salvar URL em `assets.nota_fiscal_url`
+
+### 7.2 Componentes Necessários
+- `InvoiceUploader.tsx` - componente de upload
+- Configurar bucket de storage (migration)
+
+---
+
+## Ordem de Implementação Recomendada
+
+```text
+Prioridade 1 (MVP funcional):
+├── 2.1 Página de detalhes do equipamento
+├── 2.2 Timeline de histórico
+├── 3.1 Dialog de liberação
+└── 3.2 Geração do termo
+
+Prioridade 2 (Fluxo completo):
+├── 4.1 Aceite digital do termo
+├── 4.3 Seção Meu RH - Equipamentos
+└── 5.1 Dialog de devolução
+
+Prioridade 3 (Complementares):
+├── 6.1 Transferência
+└── 7.1 Upload de NF
 ```
 
-(Repete o mesmo padrão para as demais tabelas, mudando apenas o nome e a tabela.)
-
-### C) Manter as policies de “usuário comum” (SELECT limitado)
-As policies de SELECT por vínculo/employee já fazem sentido e podem ficar, mas vamos também colocá-las como `TO authenticated` para reduzir superfície:
-
-- `Users can view their assigned assets`
-- `Users can view their own assignments`
-- `Users can view their own assignment items`
-- `Users can view their own terms`
-- `Users can accept their own terms`
-- `Users can view history of their assets`
-
 ---
 
-## Sequência de implementação
-1. Criar uma nova migration (incremental) só para correção de RLS do módulo Patrimônio:
-   - Drop/recreate policies acima
-   - Drop function `get_user_role()` sem parâmetros
-2. Validar no Supabase:
-   - Logar como usuário `admin` (que exista em `public.user_roles`)
-   - Tentar cadastrar um equipamento
-3. Testar comportamento de usuário comum:
-   - Não deve conseguir cadastrar
-   - Deve conseguir ver apenas equipamentos/termos vinculados ao seu `employees.user_id`
+## Arquivos a Criar/Modificar
 
----
-
-## Critérios de aceite (o que deve funcionar ao final)
-- Admin/Manager consegue:
-  - Inserir/editar/deletar assets (sem erro de RLS)
-  - Inserir histórico (`asset_history`) (já ocorre no hook após create/update)
-- Usuário comum:
-  - Não consegue cadastrar
-  - Consegue ver apenas seus assets/terms quando houver assignment ligado ao seu employee (via `employees.user_id = auth.uid()`)
-
----
-
-## Riscos / pontos de atenção
-- Se o usuário que está testando “admin” **não estiver** com role `admin` na tabela `public.user_roles`, continuará falhando. Se isso acontecer, vamos:
-  - confirmar `select * from public.user_roles where user_id = auth.uid();` no contexto do usuário logado
-- O módulo está usando `created_by` referenciando `auth.users` (FK). Isso é aceitável, mas não usaremos `auth.users` para “descobrir role”.
-
----
-
-## Próximo passo após o fix de RLS
-Depois de cadastrar sem erro, seguimos para as próximas entregas do módulo:
-- fluxo de liberação (assignments + checklist items)
-- geração/aceite do termo (asset_terms)
-- devolução e conferência de itens
-- drawer de detalhes com timeline (`asset_history`)
+| Arquivo | Ação |
+|---------|------|
+| `src/pages/patrimonio/[id].tsx` | Criar |
+| `src/components/patrimonio/AssetInfoCard.tsx` | Criar |
+| `src/components/patrimonio/AssetTimeline.tsx` | Criar |
+| `src/components/patrimonio/AssetCurrentHolder.tsx` | Criar |
+| `src/components/patrimonio/AssignAssetDialog.tsx` | Criar |
+| `src/components/patrimonio/ReturnAssetDialog.tsx` | Criar |
+| `src/components/patrimonio/TransferAssetDialog.tsx` | Criar |
+| `src/components/patrimonio/EmployeeSelector.tsx` | Criar |
+| `src/components/patrimonio/ChecklistEditor.tsx` | Criar |
+| `src/components/patrimonio/TermViewer.tsx` | Criar |
+| `src/components/patrimonio/TermAcceptanceDialog.tsx` | Criar |
+| `src/components/patrimonio/SignaturePad.tsx` | Criar |
+| `src/components/meu-rh/MeuRHPatrimonioSection.tsx` | Criar |
+| `src/pages/MeuRH.tsx` | Modificar (adicionar seção) |
+| `src/App.tsx` | Modificar (adicionar rota detalhes) |
