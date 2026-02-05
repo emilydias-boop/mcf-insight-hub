@@ -20,6 +20,22 @@ export function useLinkContractToAttendee() {
 
   return useMutation({
     mutationFn: async ({ transactionId, attendeeId, dealId }: LinkContractParams) => {
+      // VERIFICAÇÃO: Evitar duplicatas - se deal_id já tem outro attendee pago, bloquear
+      if (dealId) {
+        const { data: existingPaid } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id, attendee_name')
+          .eq('deal_id', dealId)
+          .not('contract_paid_at', 'is', null)
+          .neq('id', attendeeId)
+          .limit(1)
+          .maybeSingle();
+        
+        if (existingPaid) {
+          throw new Error(`Este lead já possui contrato pago vinculado a outro attendee (${existingPaid.attendee_name})`);
+        }
+      }
+
       // 1. Link the transaction to the attendee
       const { error: txError } = await supabase
         .from('hubla_transactions')
