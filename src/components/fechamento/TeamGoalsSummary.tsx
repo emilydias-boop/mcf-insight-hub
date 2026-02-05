@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTeamMonthlyGoals, useTeamMonthlyGoalWinners, useAuthorizeWinner } from "@/hooks/useTeamMonthlyGoals";
-import { useUltrametaByBU } from "@/hooks/useUltrametaByBU";
+import { useTeamRevenueByMonth } from "@/hooks/useTeamRevenueByMonth";
 import { formatCurrency } from "@/lib/formatters";
 import { useSdrPayouts } from "@/hooks/useSdrFechamento";
 import { Target, Trophy, CheckCircle2, Circle, Sparkles, UtensilsCrossed, Award } from "lucide-react";
@@ -29,19 +29,16 @@ interface GoalLevel {
 export function TeamGoalsSummary({ anoMes, bu = 'incorporador' }: TeamGoalsSummaryProps) {
   const { data: teamGoal, isLoading: isLoadingGoal } = useTeamMonthlyGoals(anoMes, bu);
   const { data: winners, isLoading: isLoadingWinners } = useTeamMonthlyGoalWinners(teamGoal?.id);
-  const { data: ultrametaData, isLoading: isLoadingUltrameta } = useUltrametaByBU();
+  const { data: currentRevenue = 0, isLoading: isLoadingRevenue } = useTeamRevenueByMonth(anoMes, bu);
   const { data: payouts } = useSdrPayouts(anoMes, {});
   const authorizeWinner = useAuthorizeWinner();
-
-  // Calcular faturamento atual da BU
-  const currentRevenue = ultrametaData?.find(d => d.bu === bu)?.value || 0;
 
   // Se não há meta configurada, não mostrar
   if (!teamGoal && !isLoadingGoal) {
     return null;
   }
 
-  if (isLoadingGoal || isLoadingUltrameta) {
+  if (isLoadingGoal || isLoadingRevenue) {
     return (
       <Card className="bg-card/50 border-primary/20">
         <CardHeader className="pb-3">
