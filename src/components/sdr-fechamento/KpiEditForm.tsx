@@ -26,6 +26,7 @@ interface KpiEditFormProps {
   roleType?: 'sdr' | 'closer';
   metaContratosDiaria?: number;
   vendasParceria?: number;
+  metaContratosPercentual?: number; // Novo: % das Realizadas para meta de contratos
 }
 
 export const KpiEditForm = ({
@@ -42,6 +43,7 @@ export const KpiEditForm = ({
   roleType = 'sdr',
   metaContratosDiaria = 1,
   vendasParceria = 0,
+  metaContratosPercentual,
 }: KpiEditFormProps) => {
   const isCloser = roleType === 'closer';
   // Calcular metas baseadas na meta diária do SDR
@@ -50,8 +52,6 @@ export const KpiEditForm = ({
   const metaTentativasCalculada = 84 * diasUteisMes;
   // Meta fixa de organização: 100%
   const metaOrganizacaoFixa = 100;
-  // Meta de contratos para Closer
-  const metaContratosCalculada = metaContratosDiaria * diasUteisMes;
   
   const [formData, setFormData] = useState({
     reunioes_agendadas: 0,
@@ -69,6 +69,12 @@ export const KpiEditForm = ({
 
   // Flag para indicar se estamos carregando dados automáticos
   const isLoadingAuto = agendaMetrics.isLoading || (!isCloser && callMetrics.isLoading);
+
+  // Meta de contratos para Closer - dinâmica se metaContratosPercentual está configurado
+  const realizadasAtual = kpi?.reunioes_realizadas || agendaMetrics.data?.r1_realizada || 0;
+  const metaContratosCalculada = metaContratosPercentual && metaContratosPercentual > 0
+    ? Math.round((realizadasAtual * metaContratosPercentual) / 100)
+    : metaContratosDiaria * diasUteisMes;
 
   // Preencher formulário com dados existentes do KPI
   useEffect(() => {
@@ -262,7 +268,11 @@ export const KpiEditForm = ({
                     </Badge>
                   </Label>
                   <span className="text-[10px] text-muted-foreground/70 block">
-                    Meta: {metaContratosCalculada} ({metaContratosDiaria}/dia × {diasUteisMes} dias)
+                    {metaContratosPercentual && metaContratosPercentual > 0 ? (
+                      <>Meta: {metaContratosPercentual}% de {realizadasAtual} Realizadas = {metaContratosCalculada}</>
+                    ) : (
+                      <>Meta: {metaContratosCalculada} ({metaContratosDiaria}/dia × {diasUteisMes} dias)</>
+                    )}
                     {agendaMetrics.data && (
                       <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.contratos}</span>
                     )}

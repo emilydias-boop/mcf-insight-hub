@@ -111,6 +111,11 @@ const FechamentoSDRDetail = () => {
     payout?.ano_mes
   );
 
+  // Fetch active metrics to get meta_percentual for contracts
+  const { metricas: activeMetrics } = useActiveMetricsForSdr(payout?.sdr_id, payout?.ano_mes || "");
+  const metricaContratos = activeMetrics?.find(m => m.nome_metrica === 'contratos');
+  const metaContratosPercentual = metricaContratos?.meta_percentual ?? undefined;
+
   const updateStatus = useUpdatePayoutStatus();
   const recalculateWithKpi = useRecalculateWithKpi();
   const authorizeUltrameta = useAuthorizeUltrameta();
@@ -473,6 +478,7 @@ const FechamentoSDRDetail = () => {
           diasUteisMes={payout.dias_uteis_mes || 19}
           roleType={(payout.sdr as any)?.role_type || "sdr"}
           vendasParceria={vendasParceria}
+          metaContratosPercentual={metaContratosPercentual}
         />
       )}
 
