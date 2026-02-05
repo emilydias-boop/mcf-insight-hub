@@ -16,6 +16,7 @@ interface SdrIndicatorCardProps {
   valorFinal: number;
   isPercentage?: boolean;
   isManual?: boolean;
+  metaSubtitle?: string; // Texto customizado para exibir abaixo da meta (ex: "30% de 230 = 69")
 }
 
 export const SdrIndicatorCard = ({
@@ -29,6 +30,7 @@ export const SdrIndicatorCard = ({
   valorFinal,
   isPercentage = false,
   isManual = false,
+  metaSubtitle,
 }: SdrIndicatorCardProps) => {
   const faixa = getMultiplierRange(pct);
   const needsInput = isManual && realizado === 0 && meta > 0;
@@ -87,10 +89,13 @@ export const SdrIndicatorCard = ({
             <span className="text-muted-foreground/70">Meta:</span>
             <span className="ml-1.5 font-medium">
               {isPercentage ? `${metaAjustada ?? meta}%` : (metaAjustada ?? meta).toLocaleString('pt-BR')}
-              {metaAjustada && metaAjustada !== meta && !isPercentage && (
+              {metaAjustada && metaAjustada !== meta && !isPercentage && !metaSubtitle && (
                 <span className="text-[10px] text-muted-foreground/60 ml-1">({meta}/dia)</span>
               )}
             </span>
+            {metaSubtitle && (
+              <div className="text-[10px] text-muted-foreground/60 mt-0.5">{metaSubtitle}</div>
+            )}
           </div>
           <div>
             <span className="text-muted-foreground/70">Realizado:</span>

@@ -4417,6 +4417,7 @@ export type Database = {
           fonte_dados: string | null
           id: string
           label_exibicao: string
+          meta_percentual: number | null
           meta_valor: number | null
           nome_metrica: string
           peso_percentual: number | null
@@ -4431,6 +4432,7 @@ export type Database = {
           fonte_dados?: string | null
           id?: string
           label_exibicao: string
+          meta_percentual?: number | null
           meta_valor?: number | null
           nome_metrica: string
           peso_percentual?: number | null
@@ -4445,6 +4447,7 @@ export type Database = {
           fonte_dados?: string | null
           id?: string
           label_exibicao?: string
+          meta_percentual?: number | null
           meta_valor?: number | null
           nome_metrica?: string
           peso_percentual?: number | null

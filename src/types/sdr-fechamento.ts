@@ -207,6 +207,7 @@ export interface FechamentoMetricaMes {
   label_exibicao: string;
   peso_percentual: number;
   meta_valor: number | null;
+  meta_percentual: number | null; // Percentual para metas dinâmicas (ex: 30 = 30% das Realizadas)
   fonte_dados: string | null;
   ativo: boolean;
   created_at: string;
