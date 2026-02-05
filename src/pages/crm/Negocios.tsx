@@ -431,8 +431,13 @@ const Negocios = () => {
       if (filters.selectedTags.length > 0) {
         const dealTags = deal.tags || [];
         
-        // Normalizar para comparação segura (NFC + trim + lowercase)
-        const normalizeTag = (t: string) => t.normalize('NFC').trim().toLowerCase();
+        // Normalização avançada: remove acentos, padroniza separadores
+        const normalizeTag = (t: string) => 
+          t.normalize('NFD')                    // Decompose para separar acentos
+           .replace(/[\u0300-\u036f]/g, '')     // Remove diacríticos (acentos)
+           .replace(/\s+/g, '-')                // Espaços → hífens
+           .trim()
+           .toLowerCase();
         const normalizedSelectedTags = filters.selectedTags.map(normalizeTag);
         const normalizedDealTags = dealTags.map((t: string) => normalizeTag(t));
         
