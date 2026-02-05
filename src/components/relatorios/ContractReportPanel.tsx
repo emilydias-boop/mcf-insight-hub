@@ -80,6 +80,9 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
       const items = (result.data as OriginOption[]) || [];
       return items.sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name));
     },
+   staleTime: 30 * 60 * 1000,
+   gcTime: 60 * 60 * 1000,
+   refetchOnWindowFocus: false,
   });
   
   // Build filters for Agenda query

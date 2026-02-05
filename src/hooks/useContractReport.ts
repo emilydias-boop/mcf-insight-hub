@@ -217,7 +217,11 @@ export const useContractReport = (
       });
     },
     enabled: filters.startDate instanceof Date && filters.endDate instanceof Date,
-    staleTime: 2 * 60 * 1000,
+   staleTime: 10 * 60 * 1000,
+   gcTime: 30 * 60 * 1000,
+   refetchOnWindowFocus: false,
+   refetchOnReconnect: false,
+   placeholderData: (previousData) => previousData,
   });
 };
 
