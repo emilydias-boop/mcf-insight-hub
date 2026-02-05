@@ -1,62 +1,58 @@
 
-# Plano: Corrigir Ordenacao do Closer R1 Mais Recente
+# Plano: Corrigir Extração do Closer no Array
 
-## Problema
+## Problema Identificado
 
-A query do Supabase com `.order('meeting_slots(scheduled_at)')` nao esta ordenando corretamente os resultados aninhados. A ordenacao por campos de relacionamentos no Supabase client tem limitacoes.
+O código atual não está tratando o caso onde o `closer` pode ser retornado como array pelo Supabase client (similar ao `meeting_slot`):
 
-## Solucao
+```typescript
+// Linha 246 atual:
+closer: slot?.closer  // <- Pode ser array!
+```
 
-Ordenar os resultados no JavaScript apos recebe-los, em vez de confiar na ordenacao do Supabase.
+## Solução
+
+Adicionar tratamento para array no objeto `closer`, similar ao que já fazemos com `meeting_slot`.
 
 ---
 
-## Alteracao
+## Alteração
 
 ### Arquivo: `src/hooks/useR2PendingLeads.ts`
 
-Modificar o Step 7 para ordenar os dados localmente:
-
-**Antes (linhas 236-243):**
+**Antes (linha 246):**
 ```typescript
-// Create map: deal_id -> most recent closer
-const latestCloserMap = new Map<string, { id: string; name: string } | null>();
-((latestAttendees as any[]) || []).forEach(att => {
-  if (att.deal_id && !latestCloserMap.has(att.deal_id)) {
-    const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
-    latestCloserMap.set(att.deal_id, slot?.closer || null);
-  }
-});
+closer: slot?.closer
 ```
 
 **Depois:**
 ```typescript
-// Sort attendees by scheduled_at DESC (client-side) since Supabase nested ordering is unreliable
+closer: Array.isArray(slot?.closer) ? slot?.closer[0] : slot?.closer
+```
+
+---
+
+## Código Completo do Trecho (linhas 240-252)
+
+```typescript
 const sortedAttendees = ((latestAttendees as any[]) || [])
   .map(att => {
     const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
+    const closer = Array.isArray(slot?.closer) ? slot?.closer[0] : slot?.closer;
     return {
       deal_id: att.deal_id,
       scheduled_at: slot?.scheduled_at,
-      closer: slot?.closer
+      closer: closer
     };
   })
   .sort((a, b) => {
     if (!a.scheduled_at || !b.scheduled_at) return 0;
     return new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime();
   });
-
-// Create map: deal_id -> most recent closer
-const latestCloserMap = new Map<string, { id: string; name: string } | null>();
-sortedAttendees.forEach(att => {
-  if (att.deal_id && !latestCloserMap.has(att.deal_id)) {
-    latestCloserMap.set(att.deal_id, att.closer || null);
-  }
-});
 ```
 
 ---
 
 ## Resultado Esperado
 
-Eduardo Spadaro aparecera com **Cristiane Gomes** como Closer R1 (reuniao mais recente em 04/02), em vez de Julio.
+Eduardo Spadaro aparecerá com **Cristiane Gomes** como Closer R1 (reunião mais recente em 04/02/2026).
