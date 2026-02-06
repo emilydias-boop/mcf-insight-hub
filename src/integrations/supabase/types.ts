@@ -8992,6 +8992,7 @@ export type Database = {
           hubla_id: string
           id: string
           installment_number: number
+          linked_attendee_id: string
           net_value: number
           product_category: string
           product_name: string
