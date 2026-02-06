@@ -19,7 +19,7 @@ export const useTransactionsByBU = (targetBU: string, filters: TransactionFilter
         throw error;
       }
 
-      return (data || []) as HublaTransaction[];
+      return (data || []) as unknown as HublaTransaction[];
     },
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
