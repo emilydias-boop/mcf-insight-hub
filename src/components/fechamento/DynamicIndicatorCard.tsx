@@ -138,9 +138,30 @@ export const DynamicIndicatorCard = ({
   
   // For metrics that use SdrIndicatorCard (have payout percentage fields)
   if (config.payoutPctField && config.payoutMultField && config.payoutValueField) {
-    const pct = (payout as any)[config.payoutPctField] || 0;
-    const mult = (payout as any)[config.payoutMultField] || 0;
-    const valorFinal = (payout as any)[config.payoutValueField] || 0;
+    // Calculate meta FIRST based on metric type
+    let meta = 0;
+    let metaAjustada = 0;
+    
+    if (metrica.nome_metrica === 'agendamentos') {
+      meta = sdrMetaDiaria;
+      metaAjustada = compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
+    } else if (metrica.nome_metrica === 'realizadas') {
+      // Usar a meta teórica de agendadas do compPlan ou calcular (metaDiaria × diasUteis)
+      const metaTeoricaAgendadas = compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
+      // Meta de realizadas = 70% da meta teórica de agendadas (conforme regra de negócio)
+      meta = Math.round(metaTeoricaAgendadas / diasUteisMes);
+      metaAjustada = Math.round(metaTeoricaAgendadas * 0.7);
+    } else if (metrica.nome_metrica === 'tentativas') {
+      meta = 84;
+      metaAjustada = (payout as any).meta_tentativas_ajustada ?? (84 * diasUteisMes);
+    } else if (metrica.nome_metrica === 'organizacao') {
+      meta = 100;
+      metaAjustada = 100;
+    }
+
+    // RECALCULAR porcentagem localmente para garantir consistência com a meta exibida
+    const pct = metaAjustada > 0 ? (kpiValue / metaAjustada) * 100 : 0;
+    const mult = getMultiplier(pct);
     
     // Prioridade: valor específico do compPlan > cálculo dinâmico
     let valorBase = 0;
@@ -158,27 +179,9 @@ export const DynamicIndicatorCard = ({
       const pesoPercent = metrica.peso_percentual || 25;
       valorBase = baseVariavel * (pesoPercent / 100);
     }
-
-    // Calculate meta based on metric type
-    let meta = 0;
-    let metaAjustada = 0;
     
-    if (metrica.nome_metrica === 'agendamentos') {
-      meta = sdrMetaDiaria;
-      metaAjustada = (payout as any).meta_agendadas_ajustada ?? (sdrMetaDiaria * diasUteisMes);
-    } else if (metrica.nome_metrica === 'realizadas') {
-      // Usar a meta teórica de agendadas do compPlan ou calcular (metaDiaria × diasUteis)
-      const metaTeoricaAgendadas = compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
-      // Meta de realizadas = 70% da meta teórica de agendadas (conforme regra de negócio)
-      meta = Math.round(metaTeoricaAgendadas / diasUteisMes);
-      metaAjustada = Math.round(metaTeoricaAgendadas * 0.7);
-    } else if (metrica.nome_metrica === 'tentativas') {
-      meta = 84;
-      metaAjustada = (payout as any).meta_tentativas_ajustada ?? (84 * diasUteisMes);
-    } else if (metrica.nome_metrica === 'organizacao') {
-      meta = 100;
-      metaAjustada = 100;
-    }
+    // Valor final = base × multiplicador (recalculado localmente)
+    const valorFinal = valorBase * mult;
 
     return (
       <SdrIndicatorCard
