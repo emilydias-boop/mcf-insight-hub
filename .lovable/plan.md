@@ -1,56 +1,58 @@
 
-# Correção: Remover Funções Duplicadas
+
+# Correção: Colunas Inexistentes na RPC
 
 ## Problema Identificado
 
-Erro **PGRST203** - Existem duas versões da função `get_sdr_metrics_from_agenda` com assinaturas diferentes:
+A função `get_sdr_metrics_from_agenda` usa colunas que **não existem**:
 
-| Versão | Parâmetros |
-|--------|------------|
-| 1 | `start_date => date, end_date => date` |
-| 2 | `start_date => text, end_date => text` |
+| Coluna Errada | Tabela | Coluna Correta |
+|---------------|--------|----------------|
+| `msa.sdr_id` | `meeting_slot_attendees` | `msa.booked_by` |
+| `p.nome`, `p.name` | `profiles` | `p.full_name` |
+| `p.role` | `profiles` | Deve usar JOIN com `user_roles.role` |
 
-O PostgREST não consegue escolher automaticamente qual usar.
+## Estrutura Real das Tabelas
 
-## Solução
+```text
+meeting_slot_attendees:
+├── id, meeting_slot_id, contact_id, deal_id
+├── booked_by (uuid) --> profiles.id  ← SDR que agendou
+├── booked_at, status, is_reschedule
+└── contract_paid_at
 
-Criar uma migration que:
+profiles:
+├── id, email
+├── full_name  ← Nome correto
+└── (sem coluna role)
 
-1. **Remove TODAS** as versões existentes da função (ambas assinaturas)
-2. **Cria apenas UMA** versão com parâmetros `text` (compatível com o frontend)
-
-## SQL da Correção
-
-```sql
--- Passo 1: Remover TODAS as versões
-DROP FUNCTION IF EXISTS public.get_sdr_metrics_from_agenda(date, date, text);
-DROP FUNCTION IF EXISTS public.get_sdr_metrics_from_agenda(text, text, text);
-
--- Passo 2: Criar UMA única versão (text)
-CREATE OR REPLACE FUNCTION public.get_sdr_metrics_from_agenda(
-  start_date text,
-  end_date text,
-  sdr_email_filter text DEFAULT NULL
-)
-RETURNS json
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-  -- Lógica completa restaurada
-  -- Com parent_msa JOIN
-  -- Com status != 'cancelled'
-  -- Com no_show = agendamentos - r1_realizada
-$$;
+user_roles:
+├── user_id --> profiles.id
+└── role (sdr, closer, admin, etc.)
 ```
 
-## Arquivo a Criar
+## Correção SQL
 
-| Arquivo | Descrição |
-|---------|-----------|
-| Nova migration SQL | Remove duplicatas + cria versão única |
+| Local | Antes | Depois |
+|-------|-------|--------|
+| JOIN principal | `msa.sdr_id = p.id` | `msa.booked_by = p.id` |
+| Nome do SDR | `p.nome, p.name` | `p.full_name` |
+| Filtro de role | `p.role IN (...)` | `JOIN user_roles ur ON ur.user_id = p.id WHERE ur.role IN (...)` |
+
+## Migration a Criar
+
+Nova migration SQL que:
+
+1. **DROP** a função existente
+2. **CREATE** nova versão com:
+   - `msa.booked_by` para identificar o SDR
+   - `p.full_name` para nome
+   - JOIN com `user_roles` para filtrar por role
+   - Mantém lógica de No-Show: `GREATEST(0, agendamentos - r1_realizada)`
 
 ## Resultado Esperado
 
-- Erro PGRST203 eliminado
-- Dashboard mostra dados corretamente
+Após a correção:
 - Carol Correa: 181 Agendamentos, 124 R1 Realizada, 57 No-Show
+- Lista de SDRs aparece corretamente no Painel Comercial
+
