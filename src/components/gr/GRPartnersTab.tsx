@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useGRWalletEntries } from '@/hooks/useGRWallet';
-import { GR_STATUS_LABELS, GR_PRODUCTS, GREntryStatus } from '@/types/gr-types';
+import { GR_STATUS_LABELS, GR_PRODUCTS, GREntryStatus, GRWalletEntry } from '@/types/gr-types';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Search, Users, Eye, Loader2 } from 'lucide-react';
+import { GREntryDrawer } from './GREntryDrawer';
 
 interface GRPartnersTabProps {
   walletId: string;
@@ -20,6 +21,7 @@ export const GRPartnersTab = ({ walletId }: GRPartnersTabProps) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [productFilter, setProductFilter] = useState<string>('all');
+  const [selectedEntry, setSelectedEntry] = useState<GRWalletEntry | null>(null);
   
   const { data: entries = [], isLoading } = useGRWalletEntries(walletId);
   
@@ -159,7 +161,11 @@ export const GRPartnersTab = ({ walletId }: GRPartnersTabProps) => {
                         }
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="sm">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => setSelectedEntry(entry)}
+                        >
                           <Eye className="h-4 w-4" />
                         </Button>
                       </TableCell>
@@ -181,6 +187,12 @@ export const GRPartnersTab = ({ walletId }: GRPartnersTabProps) => {
           </span>
         </div>
       </CardContent>
+      
+      <GREntryDrawer 
+        entry={selectedEntry}
+        open={!!selectedEntry}
+        onClose={() => setSelectedEntry(null)}
+      />
     </Card>
   );
 };

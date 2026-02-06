@@ -88,6 +88,18 @@ export const useGREntryTimeline = (entryId?: string, contactEmail?: string) => {
       if (!entryId && !contactEmail) return [];
       
       const timeline: any[] = [];
+      let dealId: string | null = null;
+      
+      // 0. Buscar deal_id da entry
+      if (entryId) {
+        const { data: entryData } = await supabase
+          .from('gr_wallet_entries')
+          .select('deal_id')
+          .eq('id', entryId)
+          .single();
+        
+        dealId = entryData?.deal_id || null;
+      }
       
       // 1. Ações do GR
       if (entryId) {
@@ -133,33 +145,51 @@ export const useGREntryTimeline = (entryId?: string, contactEmail?: string) => {
         });
       }
       
-      // 3. Atividades CRM (deal_activities) via email do contato
-      if (contactEmail) {
-        const { data: dealActivities } = await supabase
+      // 3. Histórico de stages (deal_activities com stage_change)
+      if (dealId) {
+        const { data: stageChanges } = await supabase
           .from('deal_activities')
-          .select(`
-            *,
-            deal:deal_id (
-              id,
-              name,
-              contact:contact_id (email, name)
-            )
-          `)
+          .select('*')
+          .eq('deal_id', dealId)
+          .in('activity_type', ['stage_change', 'stage_changed'])
           .order('created_at', { ascending: false })
           .limit(50);
         
-        // Filtrar por email do contato
-        (dealActivities || [])
-          .filter((da: any) => da.deal?.contact?.email?.toLowerCase() === contactEmail.toLowerCase())
-          .forEach((da: any) => {
-            timeline.push({
-              type: 'crm_activity',
-              date: da.created_at,
-              title: da.activity_type,
-              description: da.description,
-              metadata: da.metadata,
-            });
+        (stageChanges || []).forEach((sc: any) => {
+          const fromStage = sc.from_stage || sc.metadata?.from_stage || '';
+          const toStage = sc.to_stage || sc.metadata?.to_stage || '';
+          
+          timeline.push({
+            type: 'stage_change',
+            date: sc.created_at,
+            title: 'Mudança de Stage',
+            description: fromStage && toStage 
+              ? `${fromStage} → ${toStage}` 
+              : toStage || sc.description,
+            metadata: sc.metadata,
           });
+        });
+      }
+      
+      // 4. Outras atividades CRM (deal_activities não-stage) via deal_id
+      if (dealId) {
+        const { data: otherActivities } = await supabase
+          .from('deal_activities')
+          .select('*')
+          .eq('deal_id', dealId)
+          .not('activity_type', 'in', '("stage_change","stage_changed")')
+          .order('created_at', { ascending: false })
+          .limit(30);
+        
+        (otherActivities || []).forEach((da: any) => {
+          timeline.push({
+            type: 'crm_activity',
+            date: da.created_at,
+            title: da.activity_type,
+            description: da.description,
+            metadata: da.metadata,
+          });
+        });
       }
       
       // Ordenar por data descendente
