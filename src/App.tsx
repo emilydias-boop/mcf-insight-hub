@@ -124,6 +124,7 @@ import Home from "./pages/Home";
 import GerenciamentoGRIndex from "./pages/gerentes-conta/Index";
 import MinhaCarteira from "./pages/gerentes-conta/MinhaCarteira";
 import GestaoCarteiras from "./pages/gerentes-conta/GestaoCarteiras";
+import GRDetail from "./pages/gerentes-conta/GRDetail";
 
 // Patrimônio (TI)
 import PatrimonioIndex from "./pages/patrimonio/Index";
@@ -313,6 +314,7 @@ const App = () => (
                 <Route index element={<MinhaCarteira />} />
                 <Route path="minha-carteira" element={<MinhaCarteira />} />
                 <Route path="gestao" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><GestaoCarteiras /></RoleGuard>} />
+                <Route path="gestao/:walletId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><GRDetail /></RoleGuard>} />
               </Route>
               
               <Route path="meu-rh" element={<MeuRH />} />
