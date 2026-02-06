@@ -1,89 +1,137 @@
 
+# Plano: Centralizar Permissões de Acesso R2 no Sistema de Usuários
 
-# Corrigir: Excluir Leads Outside da Métrica "Contrato Pago"
+## Situacao Atual
 
-## Problema
-Leads que compraram contrato **antes** da R1 (Outside) estão sendo contados como "Contrato Pago" para os Closers, inflando incorretamente suas métricas de conversão.
+O sistema tem dois caminhos separados para controlar acesso:
+
+1. **Sistema de Permissoes por Usuario** - Existe na tela Gerenciamento de Usuarios, aba Permissoes. Controla acesso a modulos como CRM, Dashboard, etc.
+
+2. **Acesso Agenda R2** - Sistema separado com:
+   - Roles automaticos (admin, manager, coordenador)
+   - Whitelist hardcoded no codigo (`R2_AUTHORIZED_USERS`)
+   - Tabela `closers` com `meeting_type = 'r2'`
+
+Isso causa confusao porque nao ha um lugar unico para gerenciar todas as permissoes.
+
+## Solucao Proposta
+
+Unificar o acesso a Agenda R2 no sistema existente de `user_permissions`, permitindo que voce controle o acesso de qualquer usuario diretamente na aba de Permissoes.
+
+```text
+Fluxo apos implementacao:
+
+  Admin Usuarios               Drawer do Usuario         Aba Permissoes
+  ┌─────────────┐              ┌────────────────┐        ┌─────────────────────┐
+  │ Mateus      │  ──click──>  │ Geral          │        │ CRM: Visualizar     │
+  │ Macedo      │              │ Seguranca      │        │ Dashboard: Nenhum   │
+  │             │              │ Permissoes  <──│────>   │ Agenda R2: Completo │  <-- NOVO
+  └─────────────┘              │ Integracoes    │        │ ...                 │
+                               └────────────────┘        └─────────────────────┘
+```
+
+## Etapas de Implementacao
+
+### Etapa 1: Adicionar "agenda_r2" ao enum do banco
+
+Executar migracao SQL para adicionar o novo valor ao enum `resource_type`:
+
+```sql
+ALTER TYPE resource_type ADD VALUE 'agenda_r2';
+```
+
+### Etapa 2: Atualizar labels no frontend
+
+Arquivo: `src/types/user-management.ts`
+
+Adicionar label para o novo recurso:
+
+```typescript
+export const RESOURCE_LABELS: Record<ResourceType, string> = {
+  // ... recursos existentes
+  agenda_r2: "Agenda R2",  // NOVO
+};
+```
+
+### Etapa 3: Adicionar "Agenda R2" na UI de Permissoes
+
+Arquivo: `src/components/user-management/UserDetailsDrawer.tsx`
+
+Adicionar o recurso na lista e nos grupos:
+
+```typescript
+const allResources: ResourceType[] = [
+  // ... existentes
+  'agenda_r2',  // NOVO
+];
+
+const resourceGroups = {
+  // ... grupos existentes
+  'CRM': ['crm', 'agenda_r2'] as ResourceType[],  // ADICIONAR AQUI
+};
+```
+
+### Etapa 4: Atualizar R2AccessGuard para verificar user_permissions
+
+Arquivo: `src/components/auth/R2AccessGuard.tsx`
+
+Modificar para consultar `user_permissions` como fonte adicional de acesso:
+
+```typescript
+// Adicionar hook para verificar permissao
+const { data: r2Permission } = useQuery({
+  queryKey: ['user-r2-permission', user?.id],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('user_permissions')
+      .select('permission_level')
+      .eq('user_id', user.id)
+      .eq('resource', 'agenda_r2')
+      .maybeSingle();
+    return data;
+  },
+  enabled: !!user?.id,
+});
+
+// Adicionar na logica de verificacao
+const hasUserPermission = r2Permission?.permission_level && 
+  r2Permission.permission_level !== 'none';
+
+// Acesso = role permitido OU whitelist OU closer R2 OU user_permission
+if (!hasRoleAccess && !hasUserAccess && !hasCloserAccess && !hasUserPermission) {
+  // negar acesso
+}
+```
+
+### Etapa 5 (Opcional): Remover whitelist hardcoded
+
+Apos migrar os usuarios da whitelist para `user_permissions`, remover o array `R2_AUTHORIZED_USERS` do codigo.
 
 ## Arquivos a Modificar
 
-### 1. `src/hooks/useR1CloserMetrics.ts`
-Usado no Painel Comercial (tabela de Closers R1)
+| Arquivo | Alteracao |
+|---------|-----------|
+| Migracao SQL | Adicionar `agenda_r2` ao enum `resource_type` |
+| `src/types/user-management.ts` | Adicionar label "Agenda R2" |
+| `src/components/user-management/UserDetailsDrawer.tsx` | Incluir `agenda_r2` na lista de recursos |
+| `src/components/auth/R2AccessGuard.tsx` | Verificar `user_permissions` para acesso R2 |
 
-### 2. `src/hooks/useCloserAgendaMetrics.ts`
-Usado no sistema de Fechamento
+## Resultado Final
 
-## Solução Técnica
+Apos a implementacao, para dar acesso ao Mateus Macedo (ou qualquer usuario):
 
-### Lógica de Detecção de Outside
-Para cada contrato pago, comparar:
-- `contract_paid_at` (ou `sale_date` da Hubla) com `scheduled_at` da reunião
-- Se `contract_paid_at < scheduled_at` → É Outside → NÃO contar como Contrato Pago
+1. Ir em **Gerenciamento de Usuarios**
+2. Clicar em **Mateus Macedo** → **Gerenciar**
+3. Ir na aba **Permissoes**
+4. Definir **Agenda R2** como **Visualizar** ou **Completo**
+5. Clicar em **Salvar Permissoes**
 
-### Alteração em useR1CloserMetrics.ts
+O Mateus tera acesso imediato a Agenda R2, sem precisar alterar codigo ou pedir ajuda.
 
-Na seção de contagem de contratos (linhas 168-239), adicionar a data da reunião na query e filtrar:
+## Beneficios
 
-```tsx
-// Query atual busca contract_paid_at e meeting_slot.scheduled_at
-// Adicionar lógica para excluir Outside:
-
-contractsByPaymentDate?.forEach(att => {
-  const closerId = (att.meeting_slot as any)?.closer_id;
-  const scheduledAt = (att.meeting_slot as any)?.scheduled_at;
-  const contractPaidAt = att.contract_paid_at;
-  
-  // NOVO: Verificar se é Outside
-  if (contractPaidAt && scheduledAt) {
-    const isOutside = new Date(contractPaidAt) < new Date(scheduledAt);
-    if (isOutside) {
-      return; // Não contar Outside como contrato pago
-    }
-  }
-  
-  // ... resto da lógica existente
-});
-```
-
-### Alteração em useCloserAgendaMetrics.ts
-
-Adicionar `scheduled_at` na query de contratos e filtrar:
-
-```tsx
-// Query 1: Adicionar scheduled_at para verificação
-const { data: contractsByPaymentDate } = await supabase
-  .from('meeting_slot_attendees')
-  .select(`
-    id, status, contract_paid_at,
-    meeting_slot:meeting_slots!inner(closer_id, scheduled_at)  // ← Adicionar scheduled_at
-  `)
-  // ... resto dos filtros
-
-// Ao contar, excluir Outside:
-let contratos_pagos = 0;
-
-contractsByPaymentDate?.forEach(att => {
-  const scheduledAt = (att.meeting_slot as any)?.scheduled_at;
-  const contractPaidAt = att.contract_paid_at;
-  
-  // Excluir Outside
-  if (contractPaidAt && scheduledAt && new Date(contractPaidAt) < new Date(scheduledAt)) {
-    return; // Outside - não contar
-  }
-  
-  contratos_pagos++;
-});
-```
-
-## Resultado Esperado
-
-| Cenário | Data Pagamento | Data R1 | Conta como Outside? | Conta como Contrato Pago? |
-|---------|----------------|---------|---------------------|--------------------------|
-| Normal | 05/02 18:00 | 05/02 14:00 | Não | **Sim** |
-| Outside | 04/02 10:00 | 05/02 14:00 | Sim | **Não** |
-
-## Impacto
-- Taxa de conversão dos Closers será calculada corretamente
-- Leads Outside continuam visíveis na coluna "Outside" (apenas para informação)
-- Não afeta outras métricas (R1 Agendada, R1 Realizada, No-show, etc.)
-
+- Gestao centralizada de todas as permissoes em um unico lugar
+- Self-service para o admin (voce)
+- Auditoria: todas as permissoes ficam registradas no banco
+- Escalavel: facil adicionar novos recursos no futuro (ex: agenda_r1, relatorios_financeiros, etc.)
+- Elimina whitelists hardcoded no codigo
