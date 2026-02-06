@@ -1,85 +1,64 @@
 
-# Plano: Corrigir No-Show para Usar Contagem por Status
+# Plano: Corrigir No-Show para Usar Cálculo R1 Agendada - R1 Realizada
 
-## Problema Identificado
+## Problema
 
-A fórmula atual calcula No-show como `R1 Agendada - R1 Realizada`, mas isso inclui reuniões ainda não classificadas (status pendente).
+A migration anterior alterou o cálculo para contar apenas `status = 'no_show'`, mas a regra correta é:
 
-### Comparação dos Dados:
+**No-Show = R1 Agendada - R1 Realizada**
 
-| SDR | No-show CORRETO (status) | No-show ATUAL (cálculo) | Erro |
-|-----|--------------------------|-------------------------|------|
-| Carol Correa | 44 | 49 | +5 |
-| Jessica Martins | 54 | 57 | +3 |
-| Leticia Nunes | 29 | 34 | +5 |
-| Antony Elias | 38 | 39 | +1 |
+## Valores Atuais vs Corretos
 
-## Solução
+| SDR | R1 Agendada | R1 Realizada | Atual (errado) | Correto |
+|-----|-------------|--------------|----------------|---------|
+| Carol Correa | 173 | 124 | 44 | **49** |
+| Jessica Martins | 166 | 109 | 54 | **57** |
+| Leticia Nunes | 136 | 102 | 29 | **34** |
+| Caroline Souza | 135 | 100 | 33 | **35** |
+| Antony Elias | 125 | 86 | 38 | **39** |
+| Julia Caroline | 109 | 68 | 39 | **41** |
 
-Alterar a RPC `get_sdr_metrics_from_agenda` para contar No-shows pelo **status real** (`status = 'no_show'`) em vez da fórmula matemática.
+## Alteração Técnica
 
-## Alteração na Migration SQL
+Criar nova migration para atualizar a RPC `get_sdr_metrics_from_agenda`:
 
 ```sql
--- DE (cálculo matemático - ERRADO):
-'no_shows', GREATEST(0, r1_agendada - r1_realizada)
+-- REMOVER a coluna no_shows do SELECT (contagem por status)
 
--- PARA (contagem por status - CORRETO):
-'no_shows', COUNT(DISTINCT CASE 
-  WHEN (ms.scheduled_at AT TIME ZONE 'America/Sao_Paulo')::date >= start_date::DATE 
-   AND (ms.scheduled_at AT TIME ZONE 'America/Sao_Paulo')::date <= end_date::DATE 
-   AND msa.status = 'no_show'
-  THEN msa.id 
-END)
+-- NO JSON FINAL, calcular matematicamente:
+'no_shows', GREATEST(0, r1_agendada - r1_realizada)
 ```
 
-## Estrutura Completa da Função Corrigida
-
-A função será atualizada para incluir uma nova métrica `no_shows` que conta diretamente do status:
+## Estrutura Corrigida
 
 ```sql
-CREATE OR REPLACE FUNCTION get_sdr_metrics_from_agenda(...)
 WITH sdr_metrics AS (
   SELECT 
+    p_booker.email as sdr_email,
     ...
-    -- Nova coluna para No-shows por STATUS
-    COUNT(DISTINCT CASE 
-      WHEN scheduled_at no período
-       AND msa.status = 'no_show'
-      THEN msa.id 
-    END) as no_shows,
-    ...
-  FROM meeting_slot_attendees msa
-  ...
+    r1_agendada,
+    r1_realizada,
+    contratos
+    -- NÃO incluir no_shows aqui
 )
 SELECT jsonb_build_object(
   'metrics', jsonb_agg(
     jsonb_build_object(
-      ...
-      'no_shows', no_shows,  -- Agora vem da contagem, não do cálculo
-      ...
+      'sdr_email', sdr_email,
+      'r1_agendada', r1_agendada,
+      'r1_realizada', r1_realizada,
+      -- CÁLCULO MATEMÁTICO no JSON:
+      'no_shows', GREATEST(0, r1_agendada - r1_realizada),
+      'contratos', contratos
     )
   )
 )
 ```
 
-## Resultado Esperado
-
-Após a correção:
-
-| SDR | No-show (correto) |
-|-----|-------------------|
-| Carol Correa | 44 |
-| Jessica Martins | 54 |
-| Leticia Nunes | 29 |
-| Caroline Souza | 33 |
-| Antony Elias | 38 |
-| Julia Caroline | 39 |
-
-## Arquivos a Modificar
+## Arquivo a Criar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| Nova migration SQL | Contar no_shows por status em vez de cálculo |
+| Nova migration SQL | Remover contagem por status, usar `r1_agendada - r1_realizada` |
 
-Os hooks do frontend (`useTeamMeetingsData.ts` e `useMinhasReunioesFromAgenda.ts`) já estão usando `m.no_shows` da RPC, então não precisam ser alterados.
+Os hooks do frontend não precisam de alteração.
