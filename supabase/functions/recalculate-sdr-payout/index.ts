@@ -495,15 +495,26 @@ serve(async (req) => {
       p_products: null,
     });
     
-    // Calculate incorporador with deduplication
+    // Calculate incorporador with deduplication (sincronizado com frontend)
     const getDeduplicatedGross = (tx: any, isFirst: boolean): number => {
+      // Regra 1: Parcela > 1 sempre tem bruto zerado
+      const installment = tx.installment_number || 1;
+      if (installment > 1) {
+        return 0;
+      }
+      
+      // Regra 2: Override manual tem prioridade absoluta
       if (tx.gross_override !== null && tx.gross_override !== undefined) {
         return tx.gross_override;
       }
-      const isInstallment = tx.installment_number && tx.installment_number > 1;
-      if (isInstallment) return tx.product_price || 0;
-      if (isFirst) return tx.product_price || 0;
-      return 0;
+      
+      // Regra 3: NÃO é primeira transação do grupo cliente+produto = 0
+      if (!isFirst) {
+        return 0;
+      }
+      
+      // Regra 4: É primeira - usar product_price
+      return tx.product_price || 0;
     };
     
     buRevenue['incorporador'] = (incorporadorTxs || []).reduce((sum: number, t: any) => {
