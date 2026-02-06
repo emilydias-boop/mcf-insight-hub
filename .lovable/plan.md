@@ -1,68 +1,53 @@
 
-# Corrigir Validacao do Campo Fixo no Dialog de Edicao
 
-## Problema Identificado
+# Corrigir Validação em TODOS os Campos de Valores
 
-O campo "Fixo" no dialog `EditIndividualPlanDialog.tsx` esta configurado com `step="100"`, o que significa que o navegador so aceita valores multiplos de 100 (3000, 3100, 3200...).
+## Problema
 
-Porem, o catalogo de cargos do RH possui valores como **R$ 3.150,00** que nao sao multiplos de 100, causando a validacao nativa do HTML5 "valor nao e valido".
+Os campos de "Valores por Métrica" (Agendamentos, R1 Realizadas, Tentativas, Organização) estão configurados com `step="10"`, o que só aceita múltiplos de 10 (470, 480, 490...).
 
-### Evidencia
+O catálogo possui valores como **R$ 475,00** que não são múltiplos de 10, causando erro de validação.
 
-- Catalogo RH: `fixo_valor = 3150.00` para SDR Inside N2
-- Campo HTML atual: `step="100"` (valores validos: 3000, 3100, 3200...)
-- Resultado: Navegador bloqueia o valor 3150
+## Campos Afetados
 
-## Solucao
+| Campo | Linha | Valor Atual | Problema |
+|-------|-------|-------------|----------|
+| Métricas dinâmicas | 247 | `step="10"` | Bloqueia 475, 225, etc. |
+| Agendadas (R$) | 265 | `step="10"` | Bloqueia valores não múltiplos de 10 |
+| Realizadas (R$) | 278 | `step="10"` | Bloqueia valores não múltiplos de 10 |
+| Tentativas (R$) | 289 | `step="10"` | Bloqueia valores não múltiplos de 10 |
+| Organização (R$) | 301 | `step="10"` | Bloqueia valores não múltiplos de 10 |
 
-Alterar o atributo `step` dos campos numericos de "100" para **"1"** ou simplesmente **remover o step** para permitir qualquer valor numerico inteiro.
+## Solução
 
-### Alteracoes no Arquivo
+Alterar todos os `step="10"` para `step="1"` nos campos de valores por métrica.
+
+### Arquivo a Modificar
 
 **src/components/fechamento/EditIndividualPlanDialog.tsx**
 
-Linhas a alterar:
-
-| Campo | Linha | De | Para |
-|-------|-------|-----|------|
-| OTE Total | 141 | `step="100"` | `step="1"` |
-| Fixo | 159 | `step="100"` | `step="1"` |
-| Variavel | 179 | `step="100"` | `step="1"` |
-
-### Codigo Antes
+### Alterações
 
 ```jsx
-<Input
-  id="fixo_valor"
-  type="number"
-  min="0"
-  step="100"  // <-- Problema aqui
-  value={formData.fixo_valor}
-  ...
-/>
-```
+// Linha 247 - Métricas dinâmicas
+step="1"  // Era step="10"
 
-### Codigo Depois
+// Linha 265 - Agendadas
+step="1"  // Era step="10"
 
-```jsx
-<Input
-  id="fixo_valor"
-  type="number"
-  min="0"
-  step="1"  // <-- Permite qualquer valor inteiro
-  value={formData.fixo_valor}
-  ...
-/>
+// Linha 278 - Realizadas
+step="1"  // Era step="10"
+
+// Linha 289 - Tentativas
+step="1"  // Era step="10"
+
+// Linha 301 - Organização
+step="1"  // Era step="10"
 ```
 
 ## Resultado Esperado
 
-- Usuarios poderao salvar valores como 3150, 2750, etc.
-- Compatibilidade total com os valores ja existentes no catalogo RH
-- Nenhuma restricao artificial nos valores OTE/Fixo/Variavel
+- Todos os valores do catálogo serão aceitos (475, 225, 350, etc.)
+- Sem erros de validação HTML5
+- Usuário poderá salvar qualquer valor inteiro
 
-## Arquivos a Modificar
-
-| Arquivo | Alteracao |
-|---------|-----------|
-| `src/components/fechamento/EditIndividualPlanDialog.tsx` | Alterar step de "100" para "1" em 3 campos |
