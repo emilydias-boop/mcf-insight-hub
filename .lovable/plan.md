@@ -1,107 +1,115 @@
 
-# Correcao do Timeout nas Transacoes - Relatorios Incorporador
+# Adicionar Paginacao ao Relatorio de Vendas
 
-## Problema Identificado
+## Objetivo
+Adicionar controles de paginacao na tabela de transacoes do `SalesReportPanel.tsx` com opcoes de 25, 50 e 100 itens por pagina, alem de navegacao entre paginas.
 
-A funcao RPC `get_hubla_transactions_by_bu` esta dando **timeout** (erro 57014) porque executa uma subconsulta correlacionada para cada uma das 31.145+ linhas, buscando `deal_tags` do CRM.
+## Situacao Atual
 
-### Evidencia do Erro
-
-```json
-{
-  "code": "57014",
-  "message": "canceling statement due to statement timeout"
-}
-```
-
-### Causa Raiz
-
-Subconsulta correlacionada com `LOWER()` para cada linha:
-
-```sql
-COALESCE(
-  (SELECT d.tags 
-   FROM crm_contacts c
-   INNER JOIN crm_deals d ON d.contact_id = c.id
-   WHERE LOWER(c.email) = LOWER(ht.customer_email)
-   LIMIT 1),
-  ARRAY[]::text[]
-) as deal_tags
-```
-
-Este padrao e conhecido como "N+1 query problem" e causa:
-- 31.145 subconsultas executadas sequencialmente
-- Uso de `LOWER()` que impede indices
-- Joins pesados em tabelas grandes
-
-### Descoberta Importante
-
-Os `deal_tags` **nao sao utilizados** no componente `SalesReportPanel.tsx`:
-- Linha 222: `'Tags': ''` (sempre vazio no export)
-- Nenhum filtro ou exibicao usa essa coluna
-
----
+O componente `SalesReportPanel.tsx` atualmente:
+- Usa `.slice(0, 100)` fixo para limitar transacoes exibidas
+- Mostra mensagem "Mostrando 100 de X transacoes" quando ha mais de 100
+- Nao possui controles de paginacao
 
 ## Solucao
 
-### Passo 1: Otimizar Funcao RPC (Remover Subconsulta)
+Seguir o padrao existente no projeto (usado em `TransacoesIncorp.tsx`, `Vendas.tsx`, etc.) que inclui:
 
-Recriar a funcao `get_hubla_transactions_by_bu` **sem** a subconsulta de `deal_tags`:
-
-```sql
-CREATE OR REPLACE FUNCTION public.get_hubla_transactions_by_bu(
-  p_bu text,
-  p_search text DEFAULT NULL,
-  p_start_date text DEFAULT NULL,
-  p_end_date text DEFAULT NULL,
-  p_limit integer DEFAULT 5000
-)
-RETURNS TABLE(...)
-AS $$
-BEGIN
-  RETURN QUERY
-  SELECT 
-    ht.id,
-    ht.hubla_id::text,
-    ht.product_name::text,
-    ...
-    ARRAY[]::text[] as deal_tags  -- Retorna array vazio (sem subconsulta)
-  FROM hubla_transactions ht
-  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
-  WHERE pc.target_bu = p_bu
-    AND ht.sale_status IN ('completed', 'refunded')
-    AND ht.source IN ('hubla', 'manual')
-    AND (filtros...)
-  ORDER BY ht.sale_date DESC
-  LIMIT p_limit;
-END;
-$$;
+### Estados a Adicionar
+```javascript
+const [currentPage, setCurrentPage] = useState(1);
+const [itemsPerPage, setItemsPerPage] = useState(25);
 ```
 
-### Impacto Esperado
+### Constante de Opcoes
+```javascript
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
+```
 
-| Metrica | Antes | Depois |
-|---------|-------|--------|
-| Tempo de execucao | >30 segundos (timeout) | <1 segundo |
-| Subconsultas | 31.145+ por request | 0 |
-| Status | Erro 500 | Sucesso 200 |
+### Logica de Paginacao
+```javascript
+const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+const paginatedTransactions = useMemo(() => {
+  const start = (currentPage - 1) * itemsPerPage;
+  return filteredTransactions.slice(start, start + itemsPerPage);
+}, [filteredTransactions, currentPage, itemsPerPage]);
+```
 
----
+### Handler para Mudanca de Tamanho
+```javascript
+const handlePageSizeChange = (value: string) => {
+  setItemsPerPage(Number(value));
+  setCurrentPage(1); // Reset para primeira pagina
+};
+```
+
+### Reset ao Mudar Filtros
+Resetar para pagina 1 quando filtros mudarem (incluir `currentPage` reset no `useEffect` ou adicionar dependencia nos filtros).
+
+## Interface de Paginacao
+
+Adicionar no rodape da tabela (substituir o texto atual "Mostrando 100 de..."):
+
+```
++-------------------------------------------------------+
+| Mostrar [25 v]  |  Mostrando 1-25 de 500 transacoes   |
+|                                                       |
+|        [<<] [<]  Pagina 1 de 20  [>] [>>]            |
++-------------------------------------------------------+
+```
+
+Componentes:
+1. **Select de itens por pagina**: 25, 50, 100
+2. **Contador**: "Mostrando X a Y de Z transacoes"
+3. **Navegacao de paginas**: Primeira, Anterior, Texto, Proxima, Ultima
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| Nova migracao SQL | Recriar funcao sem subconsulta de deal_tags |
+| `src/components/relatorios/SalesReportPanel.tsx` | Adicionar paginacao completa |
+
+## Resultado Esperado
+
+- Exibicao controlada de 25/50/100 transacoes por pagina
+- Navegacao fluida entre paginas (botoes <<, <, >, >>)
+- Contador mostrando intervalo atual e total
+- Reset automatico para pagina 1 ao mudar filtros ou tamanho
+- UX consistente com outras paginas do sistema
 
 ---
 
-## Alternativa Futura
+## Detalhes Tecnicos
 
-Se futuramente os `deal_tags` forem necessarios, a solucao correta seria:
+### Imports Adicionais
+```javascript
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+```
 
-1. Usar LEFT JOIN em vez de subconsulta correlacionada
-2. Criar indice em `crm_contacts.email` (case-insensitive)
-3. Ou pre-calcular tags em coluna da hubla_transactions
+### Estrutura do JSX de Paginacao
 
-Mas para agora, remover a subconsulta resolve o problema imediatamente.
+Substituir o bloco atual (linhas 471-475):
+```jsx
+{filteredTransactions.length > 100 && (
+  <p className="text-sm text-muted-foreground text-center py-4">
+    Mostrando 100 de {filteredTransactions.length} transações. Exporte para ver todas.
+  </p>
+)}
+```
+
+Por controles de paginacao completos com:
+- Flex container responsivo
+- Select para tamanho de pagina
+- Contador de itens
+- Botoes de navegacao (desabilitados quando na primeira/ultima pagina)
+
+### Mudanca na Tabela
+
+Alterar linha 427:
+```jsx
+// De:
+{filteredTransactions.slice(0, 100).map((row, index) => { ... })}
+
+// Para:
+{paginatedTransactions.map((row, index) => { ... })}
+```
