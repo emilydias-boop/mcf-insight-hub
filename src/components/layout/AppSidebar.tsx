@@ -64,7 +64,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { ResourceType } from "@/types/user-management";
 
-type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "closer_sombra" | "coordenador" | "rh" | "financeiro";
+type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "closer_sombra" | "coordenador" | "rh" | "financeiro" | "gr";
 
 // Sub-sub-item (3º nível)
 interface SubSubItem {
@@ -240,6 +240,17 @@ const menuItems: MenuItem[] = [
     url: "/tarefas",
     icon: CheckSquare,
     requiredRoles: ["admin", "manager", "coordenador"],
+  },
+
+  // GERENTES DE CONTA
+  {
+    title: "Gerentes de Conta",
+    icon: Briefcase,
+    requiredRoles: ["admin", "manager", "coordenador", "gr"],
+    items: [
+      { title: "Minha Carteira", url: "/gerentes-conta/minha-carteira", requiredRoles: ["gr"] },
+      { title: "Gestão Carteiras", url: "/gerentes-conta/gestao", requiredRoles: ["admin", "manager", "coordenador"] },
+    ],
   },
 
   // ===== ITENS AVULSOS PARA SDR/CLOSER =====

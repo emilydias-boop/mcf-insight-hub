@@ -120,6 +120,11 @@ import ConsorcioVendas from "./pages/bu-consorcio/Vendas";
 import Chairman from "./pages/Chairman";
 import Home from "./pages/Home";
 
+// Gerentes de Conta
+import GerenciamentoGRIndex from "./pages/gerentes-conta/Index";
+import MinhaCarteira from "./pages/gerentes-conta/MinhaCarteira";
+import GestaoCarteiras from "./pages/gerentes-conta/GestaoCarteiras";
+
 // Patrimônio (TI)
 import PatrimonioIndex from "./pages/patrimonio/Index";
 import AssetDetailsPage from "./pages/patrimonio/AssetDetailsPage";
@@ -302,6 +307,14 @@ const App = () => (
               <Route path="rh/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager']}><ConfiguracoesRH /></RoleGuard>} />
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="tarefas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Tarefas /></RoleGuard>} />
+              
+              {/* Gerentes de Conta Routes */}
+              <Route path="gerentes-conta" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'gr']}><GerenciamentoGRIndex /></RoleGuard>}>
+                <Route index element={<MinhaCarteira />} />
+                <Route path="minha-carteira" element={<MinhaCarteira />} />
+                <Route path="gestao" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><GestaoCarteiras /></RoleGuard>} />
+              </Route>
+              
               <Route path="meu-rh" element={<MeuRH />} />
               <Route path="patrimonio" element={<ResourceGuard resource="patrimonio"><PatrimonioIndex /></ResourceGuard>} />
               <Route path="patrimonio/:id" element={<ResourceGuard resource="patrimonio"><AssetDetailsPage /></ResourceGuard>} />
