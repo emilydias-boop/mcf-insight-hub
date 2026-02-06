@@ -142,10 +142,22 @@ export const DynamicIndicatorCard = ({
     const mult = (payout as any)[config.payoutMultField] || 0;
     const valorFinal = (payout as any)[config.payoutValueField] || 0;
     
-    // Calculate valorBase dynamically from peso_percentual
-    const baseVariavel = variavelTotal || compPlan?.variavel_total || 1200;
-    const pesoPercent = metrica.peso_percentual || 25;
-    const valorBase = baseVariavel * (pesoPercent / 100);
+    // Prioridade: valor específico do compPlan > cálculo dinâmico
+    let valorBase = 0;
+    
+    if (config.compPlanValueField && compPlan) {
+      const valorEspecifico = (compPlan as any)[config.compPlanValueField] || 0;
+      if (valorEspecifico > 0) {
+        valorBase = valorEspecifico;
+      }
+    }
+    
+    // Fallback: cálculo dinâmico se não houver valor específico
+    if (valorBase === 0) {
+      const baseVariavel = variavelTotal || compPlan?.variavel_total || 1200;
+      const pesoPercent = metrica.peso_percentual || 25;
+      valorBase = baseVariavel * (pesoPercent / 100);
+    }
 
     // Calculate meta based on metric type
     let meta = 0;
