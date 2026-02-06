@@ -1,219 +1,124 @@
 
 
-# Plano: Pagina de Detalhe do Gerente de Conta (Visao 360 do GR)
+# Correcao: Campo owner_profile_id nao esta sendo salvo na importacao de CSV
 
-## Resumo
+## Problema Identificado
 
-Criar uma nova pagina de detalhe acessivel ao clicar em "Gerenciar" na tabela de GRs. Esta pagina fornece uma visao completa do desempenho, carteira, agenda, historico e financeiro de cada Gerente de Conta.
+Quando o usuario importa negocios via CSV e seleciona um responsavel no formulario, os leads estao chegando **sem owner** porque:
 
-## Estado Atual
+1. O frontend (`ImportarNegocios.tsx`) envia corretamente `owner_email` e `owner_profile_id` para a Edge Function
+2. A Edge Function `import-deals-csv` salva esses valores no `metadata` do job
+3. A Edge Function `process-csv-imports` le esses valores e monta o objeto `dbDeal` com `owner_id` e `owner_profile_id`
+4. **PROBLEMA**: A funcao SQL `upsert_deals_smart` nao inclui o campo `owner_profile_id` na insercao/atualizacao
 
-O modulo de GR ja possui:
-- Tabelas: `gr_wallets`, `gr_wallet_entries`, `gr_actions`, `gr_transfers_log`, `gr_distribution_rules`
-- Paginas: `GestaoCarteiras.tsx`, `MinhaCarteira.tsx`
-- Componentes: `GRWalletStats`, `GREntryCard`, `GREntryDrawer`, `GRActionModal`, `CreateGRWalletDialog`, `GRDistributionPanel`
-- Hooks: `useGRWallet`, `useGRActions`, `useGRMetrics`, `useGRTransfer`
+## Analise do Codigo
 
-## Estrutura da Nova Pagina
-
-```text
-/gerentes-conta/gestao/:walletId
-
-┌─────────────────────────────────────────────────────────────────────────┐
-│  CABECALHO DO GR                                                        │
-│  ┌─────────────────────────────────────────────────────────────────────┐│
-│  │ Avatar  NOME DO GR                   Status: [ABERTA v]             ││
-│  │         email@empresa.com            Capacidade: 15/700             ││
-│  │         BU: CREDITO                  [Ajustar Capacidade]           ││
-│  │         Leads Ativos: 12             [Redistribuir Leads]           ││
-│  │         Receita: R$ 450k                                            ││
-│  └─────────────────────────────────────────────────────────────────────┘│
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  TABS: [Performance] [Parceiros] [Agenda] [Historico] [Financeiro] [Aud]│
-│                                                                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│  TAB: PERFORMANCE (INDICADORES)                                         │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐       │
-│  │TOTAL    │  │ATIVOS   │  │CONVERSAO│  │TEMPO MED│  │RECEITA  │       │
-│  │LEADS    │  │         │  │         │  │         │  │GERADA   │       │
-│  │   47    │  │   32    │  │  17.5%  │  │ 12 dias │  │ R$450k  │       │
-│  └─────────┘  └─────────┘  └─────────┘  └─────────┘  └─────────┘       │
-│                                                                         │
-│  DISTRIBUICAO POR PRODUTO                                               │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │ Consorcio: 8 (25%)  │  HE: 5 (15%)  │  IP: 12 (37%)  │ ...      │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                                                                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│  TAB: PARCEIROS (FUNIL)                                                 │
-│  Filtros: [Status v] [Produto v] [Periodo v] [Buscar...]               │
-│                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │ Nome       │ Status  │ Ultima Int.│ Prox Acao │ Produto │ Valor │   │
-│  ├─────────────────────────────────────────────────────────────────┤   │
-│  │ Joao Silva │ ATIVO   │ 3 dias     │ 20/01     │ HE      │ 250k  │   │
-│  │ Maria S.   │ NEGOC.  │ 1 dia      │ 18/01     │ IP      │ 180k  │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                                                                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│  TAB: AGENDA                                                            │
-│  [Reunioes Agendadas: 5] [Reunioes Realizadas: 12] [Pendentes: 2]      │
-│                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │ 20/01 14:00 - Joao Silva - Diagnostico Inicial                  │   │
-│  │ 21/01 10:00 - Maria Santos - Apresentacao HE                    │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                                                                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│  TAB: HISTORICO CONSOLIDADO                                             │
-│  Timeline de todos os parceiros trabalhados (ativos, convertidos,       │
-│  perdidos) com indicacao de destino (BU) e data de decisao             │
-│                                                                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│  TAB: FINANCEIRO                                                        │
-│  Tabela: Cliente | Produto | Valor | Status Pag. | Data                │
-│  Totais por produto e periodo                                          │
-│                                                                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│  TAB: AUDITORIA                                                         │
-│  Log de distribuicoes, redistribuicoes, mudancas de status             │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+### Edge Function (process-csv-imports - linhas 206-218)
+```typescript
+// Corretamente resolve owner_profile_id
+if (finalOwnerEmail) {
+  dbDeal.owner_id = finalOwnerEmail
+  const resolvedProfileId = ownerProfileId || profilesCache.get(finalOwnerEmail.toLowerCase())
+  if (resolvedProfileId) {
+    dbDeal.owner_profile_id = resolvedProfileId  // ✅ Campo setado
+  }
+}
 ```
 
-## Arquivos a Criar
+### Funcao SQL (upsert_deals_smart - atual)
+```sql
+INSERT INTO crm_deals (
+  clint_id, name, value, stage_id, contact_id,
+  origin_id, owner_id,  -- ❌ Falta owner_profile_id
+  tags, custom_fields, updated_at, created_at, data_source
+)
+```
 
-| Arquivo | Descricao |
-|---------|-----------|
-| `src/pages/gerentes-conta/GRDetail.tsx` | Pagina principal de detalhe do GR |
-| `src/components/gr/GRDetailHeader.tsx` | Cabecalho com dados do GR e acoes |
-| `src/components/gr/GRPerformanceTab.tsx` | Tab de metricas e distribuicao por produto |
-| `src/components/gr/GRPartnersTab.tsx` | Tab com tabela de parceiros/clientes |
-| `src/components/gr/GRAgendaTab.tsx` | Tab de agenda com reunioes |
-| `src/components/gr/GRHistoryTab.tsx` | Tab de historico consolidado |
-| `src/components/gr/GRFinancialTab.tsx` | Tab financeira com pagamentos |
-| `src/components/gr/GRAuditTab.tsx` | Tab de auditoria e logs |
-| `src/components/gr/GRCapacityDialog.tsx` | Dialog para ajustar capacidade |
-| `src/components/gr/GRRedistributeDialog.tsx` | Dialog para redistribuir leads |
+## Solucao
+
+Criar uma nova migracao SQL para atualizar a funcao `upsert_deals_smart` incluindo o campo `owner_profile_id`:
+
+### Migracao SQL
+```sql
+CREATE OR REPLACE FUNCTION public.upsert_deals_smart(deals_data jsonb)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
+DECLARE
+  deal jsonb;
+BEGIN
+  FOR deal IN SELECT * FROM jsonb_array_elements(deals_data)
+  LOOP
+    INSERT INTO crm_deals (
+      clint_id,
+      name,
+      value,
+      stage_id,
+      contact_id,
+      origin_id,
+      owner_id,
+      owner_profile_id,  -- ✅ NOVO
+      tags,
+      custom_fields,
+      updated_at,
+      created_at,
+      data_source
+    )
+    VALUES (
+      (deal->>'clint_id')::text,
+      (deal->>'name')::text,
+      (deal->>'value')::numeric,
+      (deal->>'stage_id')::uuid,
+      (deal->>'contact_id')::uuid,
+      (deal->>'origin_id')::uuid,
+      (deal->>'owner_id')::text,
+      (deal->>'owner_profile_id')::uuid,  -- ✅ NOVO
+      CASE 
+        WHEN jsonb_typeof(deal->'tags') = 'array' THEN
+          (SELECT array_agg(value::text) FROM jsonb_array_elements_text(deal->'tags'))
+        ELSE 
+          NULL
+      END::text[],
+      (deal->'custom_fields')::jsonb,
+      COALESCE((deal->>'updated_at')::timestamptz, NOW()),
+      NOW(),
+      'csv'
+    )
+    ON CONFLICT (clint_id) 
+    DO UPDATE SET
+      name = EXCLUDED.name,
+      value = EXCLUDED.value,
+      stage_id = EXCLUDED.stage_id,
+      contact_id = EXCLUDED.contact_id,
+      origin_id = EXCLUDED.origin_id,
+      owner_id = EXCLUDED.owner_id,
+      owner_profile_id = EXCLUDED.owner_profile_id,  -- ✅ NOVO
+      tags = EXCLUDED.tags,
+      custom_fields = EXCLUDED.custom_fields,
+      updated_at = EXCLUDED.updated_at,
+      data_source = 'csv'
+    WHERE crm_deals.data_source != 'webhook'
+      AND crm_deals.updated_at < EXCLUDED.updated_at;
+  END LOOP;
+END;
+$function$;
+```
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/App.tsx` | Adicionar rota `/gerentes-conta/gestao/:walletId` |
-| `src/pages/gerentes-conta/GestaoCarteiras.tsx` | Adicionar `useNavigate` ao botao "Gerenciar" |
-| `src/hooks/useGRMetrics.ts` | Adicionar hook para metricas por produto |
-| `src/types/gr-types.ts` | Adicionar tipos para metricas detalhadas |
-
-## Novos Hooks Necessarios
-
-```typescript
-// useGRDetailMetrics.ts - Metricas detalhadas com distribuicao por produto
-export const useGRDetailMetrics = (walletId: string) => {
-  // Retorna:
-  // - Metricas gerais (total, ativos, conversao, tempo medio)
-  // - Distribuicao por produto (consorcio, he, ip, cp, projetos, outros)
-  // - Origem dos leads (SDR, Closer, R2, Indicacao)
-}
-
-// useGRAgenda.ts - Reunioes agendadas do GR
-export const useGRAgenda = (grUserId: string) => {
-  // Busca reunioes de meeting_slots + gr_actions do tipo reuniao_agendada
-}
-
-// useGRAuditLog.ts - Log de auditoria
-export const useGRAuditLog = (walletId: string) => {
-  // Busca gr_transfers_log + mudancas de status
-}
-```
-
-## Fluxo de Navegacao
-
-```text
-Gestao de Carteiras
-        │
-        │ Clique em "Gerenciar"
-        ▼
-/gerentes-conta/gestao/:walletId
-        │
-        │ Visualiza detalhes completos
-        ▼
-Acoes disponiveis:
-  - Abrir/Fechar carteira
-  - Ajustar capacidade
-  - Redistribuir leads
-  - Ver parceiros
-  - Ver agenda
-  - Ver financeiro
-  - Ver auditoria
-```
-
-## Regras de Negocio
-
-1. **Distribuicao por Produto**: Agrupa `gr_wallet_entries` por `recommended_products` e produtos contratados
-2. **Origem dos Leads**: Usa campo `entry_source` da tabela `gr_wallet_entries`
-3. **Destino dos Leads**: Quando status = 'transferido', registra BU de destino no `gr_actions.metadata`
-4. **Financeiro**: Cruza `gr_wallet_entries` com `hubla_transactions` por `transaction_id` ou `customer_email`
-5. **Auditoria**: Usa tabela `gr_transfers_log` para transferencias e `gr_actions` para mudancas de status
-
-## Tipos de Produtos para Distribuicao
-
-```typescript
-const PRODUCT_DISTRIBUTION = [
-  { code: 'consorcio', label: 'Consorcio', color: 'blue' },
-  { code: 'he', label: 'Home Equity', color: 'green' },
-  { code: 'ip', label: 'Incorporacao Propria', color: 'purple' },
-  { code: 'cp', label: 'Construcao Propria', color: 'amber' },
-  { code: 'projetos', label: 'Projetos', color: 'cyan' },
-  { code: 'outros', label: 'Outros Creditos', color: 'gray' },
-];
-```
-
-## Rota Nova
-
-```typescript
-// Em App.tsx, dentro das rotas de gerentes-conta:
-<Route path="gestao/:walletId" element={
-  <RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}>
-    <GRDetail />
-  </RoleGuard>
-} />
-```
-
-## Etapas de Implementacao
-
-### Fase 1: Estrutura Base
-1. Criar pagina `GRDetail.tsx` com layout de tabs
-2. Adicionar rota no `App.tsx`
-3. Modificar botao "Gerenciar" para navegar para a nova rota
-
-### Fase 2: Cabecalho e Performance
-4. Criar `GRDetailHeader.tsx` com dados do GR e acoes
-5. Criar `GRPerformanceTab.tsx` com metricas e distribuicao
-6. Criar hook `useGRDetailMetrics` para dados agregados
-
-### Fase 3: Parceiros e Agenda
-7. Criar `GRPartnersTab.tsx` com tabela filtrada
-8. Criar `GRAgendaTab.tsx` com reunioes
-9. Criar hook `useGRAgenda`
-
-### Fase 4: Historico e Financeiro
-10. Criar `GRHistoryTab.tsx` com timeline consolidada
-11. Criar `GRFinancialTab.tsx` com tabela de pagamentos
-
-### Fase 5: Auditoria e Dialogs
-12. Criar `GRAuditTab.tsx` com logs
-13. Criar `GRCapacityDialog.tsx` e `GRRedistributeDialog.tsx`
+| Nova migracao SQL | Atualizar funcao `upsert_deals_smart` para incluir `owner_profile_id` |
 
 ## Resultado Esperado
 
-O gestor tera uma visao completa de cada GR, podendo:
-- Ver performance detalhada com distribuicao por produto
-- Acompanhar todos os parceiros e seus status
-- Visualizar agenda de reunioes
-- Analisar historico completo de leads trabalhados
-- Controlar receita e pagamentos
-- Auditar todas as acoes e transferencias
-- Ajustar capacidade e redistribuir leads quando necessario
+Apos a correcao:
+- Deals importados via CSV terao `owner_id` (email) E `owner_profile_id` (UUID) populados
+- O filtro de ownership no CRM funcionara corretamente
+- SDRs e Closers verao os leads atribuidos a eles
+
+## Porque isso e importante
+
+O sistema de filtro do CRM usa `owner_profile_id` (UUID) para filtrar leads por responsavel. Sem esse campo preenchido, os leads importados ficam "orfaos" e nao aparecem na visao do SDR/Closer responsavel.
 
