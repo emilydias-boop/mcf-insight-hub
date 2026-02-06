@@ -111,32 +111,6 @@ const FechamentoSDRList = () => {
     return compPlans?.find((cp) => cp.sdr_id === sdrId);
   };
 
-  const calculateGlobalPct = (payout: NonNullable<typeof payouts>[0]) => {
-    const sdrData = payout.sdr as any;
-    const isCloser = sdrData?.role_type === 'closer';
-    
-    let pcts: number[];
-    
-    if (isCloser) {
-      // Para Closers: usar Contratos (armazenado em pct_reunioes_agendadas) e Organização
-      pcts = [
-        payout.pct_reunioes_agendadas, // % Contratos
-        payout.pct_organizacao,        // % Organização
-      ].filter((p) => p !== null && p !== undefined) as number[];
-    } else {
-      // Para SDRs: usar Agendamento, Realizadas, Tentativas, Organização
-      pcts = [
-        payout.pct_reunioes_agendadas,
-        payout.pct_reunioes_realizadas,
-        payout.pct_tentativas,
-        payout.pct_organizacao,
-      ].filter((p) => p !== null) as number[];
-    }
-
-    if (pcts.length === 0) return 0;
-    return pcts.reduce((a, b) => a + b, 0) / pcts.length;
-  };
-
   // Calculate financial summary
   const financialSummary = payouts?.reduce(
     (acc, p) => ({
@@ -147,14 +121,6 @@ const FechamentoSDRList = () => {
     }),
     { totalFixo: 0, totalVariavel: 0, totalConta: 0, totalIfood: 0 },
   );
-
-  // Count critical alerts
-  const criticalCount = payouts?.filter((p) => calculateGlobalPct(p) < 70).length || 0;
-  const warningCount =
-    payouts?.filter((p) => {
-      const pct = calculateGlobalPct(p);
-      return pct >= 70 && pct < 100;
-    }).length || 0;
 
   const escapeCSV = (value: string | number | null | undefined): string => {
     if (value === null || value === undefined) return "";
@@ -236,7 +202,6 @@ const FechamentoSDRList = () => {
       "BU",
       "Nível",
       "OTE",
-      "% Meta Global",
       "% Agendamento",
       "% Reuniões Realizadas",
       "% Tentativas",
@@ -257,7 +222,6 @@ const FechamentoSDRList = () => {
 
     const rows = payouts.map((p) => {
       const compPlan = getCompPlanForSdr(p.sdr_id);
-      const globalPct = calculateGlobalPct(p);
       const sdrData = p.sdr as any;
       const employee = (p as any).employee;
 
@@ -271,7 +235,6 @@ const FechamentoSDRList = () => {
         escapeCSV(getSquadLabel(sdrData?.squad)),
         escapeCSV(nivel),
         escapeCSV(ote),
-        escapeCSV(globalPct.toFixed(1)),
         escapeCSV((p.pct_reunioes_agendadas || 0).toFixed(1)),
         escapeCSV((p.pct_reunioes_realizadas || 0).toFixed(1)),
         escapeCSV((p.pct_tentativas || 0).toFixed(1)),
@@ -468,27 +431,6 @@ const FechamentoSDRList = () => {
         </div>
       )}
 
-      {/* Alerts Summary */}
-      {(criticalCount > 0 || warningCount > 0) && (
-        <div className="flex gap-4">
-          {criticalCount > 0 && (
-            <Badge variant="destructive" className="flex items-center gap-1 px-3 py-1">
-              <AlertTriangle className="h-3 w-3" />
-              {criticalCount} SDR(s) em situação crítica (&lt;70%)
-            </Badge>
-          )}
-          {warningCount > 0 && (
-            <Badge
-              variant="outline"
-              className="flex items-center gap-1 px-3 py-1 bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
-            >
-              <AlertTriangle className="h-3 w-3" />
-              {warningCount} SDR(s) abaixo da meta (70-99%)
-            </Badge>
-          )}
-        </div>
-      )}
-
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -522,7 +464,6 @@ const FechamentoSDRList = () => {
                   <TableHead className="text-center">BU</TableHead>
                   <TableHead className="text-center">Nível</TableHead>
                   <TableHead className="text-right">OTE</TableHead>
-                  <TableHead className="text-right">% Meta Global</TableHead>
                   <TableHead className="text-right">Variável</TableHead>
                   <TableHead className="text-right">Total Conta</TableHead>
                   <TableHead className="text-right">iFood</TableHead>
@@ -532,7 +473,6 @@ const FechamentoSDRList = () => {
               </TableHeader>
               <TableBody>
                 {payouts.map((payout) => {
-                  const globalPct = calculateGlobalPct(payout);
                   const compPlan = getCompPlanForSdr(payout.sdr_id);
                   const employee = (payout as any).employee;
 
@@ -542,24 +482,12 @@ const FechamentoSDRList = () => {
                   // Priority: 1) compPlan vigente, 2) RH cargo_catalogo.ote_total, 3) fallback 4000
                   const ote = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
 
-                  const isCritical = globalPct < 70;
-                  const isWarning = globalPct >= 70 && globalPct < 100;
                   const sdrData = payout.sdr as any;
 
                   return (
-                    <TableRow
-                      key={payout.id}
-                      className={isCritical ? "bg-red-500/5" : isWarning ? "bg-yellow-500/5" : ""}
-                    >
+                    <TableRow key={payout.id}>
                       <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {payout.sdr?.name || "SDR"}
-                          {isCritical && (
-                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                              CRÍTICO
-                            </Badge>
-                          )}
-                        </div>
+                        {payout.sdr?.name || "SDR"}
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge
@@ -593,15 +521,6 @@ const FechamentoSDRList = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">{formatCurrency(ote)}</TableCell>
-                      <TableCell className="text-right">
-                        <span
-                          className={
-                            globalPct >= 100 ? "text-green-400" : globalPct >= 70 ? "text-yellow-400" : "text-red-400"
-                          }
-                        >
-                          {globalPct.toFixed(1)}%
-                        </span>
-                      </TableCell>
                       <TableCell className="text-right">{formatCurrency(payout.valor_variavel_total || 0)}</TableCell>
                       <TableCell className="text-right font-semibold">
                         {formatCurrency(payout.total_conta || 0)}

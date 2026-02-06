@@ -7,13 +7,13 @@ import {
   Target,
   Wallet,
   CreditCard,
-  TrendingUp,
   UtensilsCrossed,
   Users,
   FileCheck,
   AlertTriangle,
   Sparkles,
   CalendarPlus,
+  TrendingUp,
 } from 'lucide-react';
 
 interface CloserFechamentoViewProps {
@@ -22,18 +22,11 @@ interface CloserFechamentoViewProps {
 }
 
 export function CloserFechamentoView({ payout, closerMetrics }: CloserFechamentoViewProps) {
-  // Calculate global percentage based on closer metrics (Contratos + Organização)
-  const calculateGlobalPct = () => {
-    const pcts = [
-      payout.pct_reunioes_agendadas, // = pct_contratos para Closers
-      payout.pct_organizacao,
-    ].filter((p) => p !== null && p !== undefined) as number[];
-
-    if (pcts.length === 0) return 0;
-    return pcts.reduce((a, b) => a + b, 0) / pcts.length;
+  const getNoShowColor = (rate: number) => {
+    if (rate <= 20) return 'text-success';
+    if (rate <= 35) return 'text-warning';
+    return 'text-destructive';
   };
-
-  const globalPct = calculateGlobalPct();
 
   const getColorForPct = (pct: number) => {
     if (pct >= 100) return 'text-success';
@@ -41,27 +34,10 @@ export function CloserFechamentoView({ payout, closerMetrics }: CloserFechamento
     return 'text-destructive';
   };
 
-  const getNoShowColor = (rate: number) => {
-    if (rate <= 20) return 'text-success';
-    if (rate <= 35) return 'text-warning';
-    return 'text-destructive';
-  };
-
   return (
     <>
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
-              <TrendingUp className="h-3.5 w-3.5" />
-              % Meta Global
-            </div>
-            <div className={`text-xl font-bold mt-1 ${getColorForPct(globalPct)}`}>
-              {globalPct.toFixed(1)}%
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
 
         <Card>
           <CardContent className="pt-4 pb-3">
