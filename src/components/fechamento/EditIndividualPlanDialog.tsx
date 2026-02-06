@@ -244,7 +244,7 @@ export const EditIndividualPlanDialog = ({
                           id={field}
                           type="number"
                           min="0"
-                          step="10"
+                          step="1"
                           value={formData[field]}
                           onChange={(e) => handleChange(field, e.target.value)}
                           className="h-8 text-sm"
@@ -262,7 +262,7 @@ export const EditIndividualPlanDialog = ({
                       id="valor_meta_rpg"
                       type="number"
                       min="0"
-                      step="10"
+                      step="1"
                       value={formData.valor_meta_rpg}
                       onChange={(e) => handleChange('valor_meta_rpg', e.target.value)}
                       className="h-8 text-sm"
@@ -274,7 +274,7 @@ export const EditIndividualPlanDialog = ({
                       id="valor_docs_reuniao"
                       type="number"
                       min="0"
-                      step="10"
+                      step="1"
                       value={formData.valor_docs_reuniao}
                       onChange={(e) => handleChange('valor_docs_reuniao', e.target.value)}
                       className="h-8 text-sm"
@@ -286,7 +286,7 @@ export const EditIndividualPlanDialog = ({
                       id="valor_tentativas"
                       type="number"
                       min="0"
-                      step="10"
+                      step="1"
                       value={formData.valor_tentativas}
                       onChange={(e) => handleChange('valor_tentativas', e.target.value)}
                       className="h-8 text-sm"
@@ -298,7 +298,7 @@ export const EditIndividualPlanDialog = ({
                       id="valor_organizacao"
                       type="number"
                       min="0"
-                      step="10"
+                      step="1"
                       value={formData.valor_organizacao}
                       onChange={(e) => handleChange('valor_organizacao', e.target.value)}
                       className="h-8 text-sm"
