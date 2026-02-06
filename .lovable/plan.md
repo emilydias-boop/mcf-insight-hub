@@ -1,127 +1,89 @@
 
 
-# Leads Outside: Exigir R1 Realizada Antes de R2
+# Corrigir: Excluir Leads Outside da Métrica "Contrato Pago"
 
-## Problema Atual
-Quando um lead compra o contrato **antes** da R1 (Outside), ele aparece imediatamente na lista de "R2 Pendentes", permitindo agendar R2 mesmo sem a R1 ter sido realizada.
+## Problema
+Leads que compraram contrato **antes** da R1 (Outside) estão sendo contados como "Contrato Pago" para os Closers, inflando incorretamente suas métricas de conversão.
 
-## Regra de Negócio Desejada
-- **Lead Normal**: Contrato pago **depois** da R1 → aparece em R2 Pendentes imediatamente
-- **Lead Outside**: Contrato pago **antes** da R1 → só aparece em R2 Pendentes **após** a R1 ser marcada como "Realizada" (completed)
+## Arquivos a Modificar
+
+### 1. `src/hooks/useR1CloserMetrics.ts`
+Usado no Painel Comercial (tabela de Closers R1)
+
+### 2. `src/hooks/useCloserAgendaMetrics.ts`
+Usado no sistema de Fechamento
 
 ## Solução Técnica
 
-### Arquivo a Modificar
-**`src/hooks/useR2PendingLeads.ts`**
+### Lógica de Detecção de Outside
+Para cada contrato pago, comparar:
+- `contract_paid_at` (ou `sale_date` da Hubla) com `scheduled_at` da reunião
+- Se `contract_paid_at < scheduled_at` → É Outside → NÃO contar como Contrato Pago
 
-### Alterações
+### Alteração em useR1CloserMetrics.ts
 
-#### 1. Adicionar Campo `status` do meeting_slot na Query
-Incluir o status do slot para verificar se a R1 foi realizada:
-
-```tsx
-meeting_slot:meeting_slots!inner(
-  id,
-  scheduled_at,
-  closer_id,
-  meeting_type,
-  status,  // ← ADICIONAR
-  closer:closers(id, name)
-)
-```
-
-#### 2. Atualizar Interface R2PendingLead
-Adicionar campo `slot_status` para tipagem:
+Na seção de contagem de contratos (linhas 168-239), adicionar a data da reunião na query e filtrar:
 
 ```tsx
-meeting_slot: {
-  id: string;
-  scheduled_at: string;
-  closer_id: string | null;
-  status?: string;  // ← ADICIONAR
-  closer?: { ... } | null;
-};
-```
+// Query atual busca contract_paid_at e meeting_slot.scheduled_at
+// Adicionar lógica para excluir Outside:
 
-#### 3. Adicionar Lógica de Filtro para Leads Outside
-Após extrair os dados, verificar se o lead é Outside e se a R1 foi realizada:
-
-```tsx
-// Detectar se é Outside: contrato_paid_at < scheduled_at
-const isOutside = (contractPaidAt: string, scheduledAt: string) => {
-  return new Date(contractPaidAt) < new Date(scheduledAt);
-};
-
-// No filtro de pendingLeads, adicionar verificação:
-const pendingLeads = attendeesWithContact
-  .filter(a => {
-    // ... filtros existentes de R2 já agendada ...
-    
-    // NOVO: Se for Outside, exigir R1 realizada
-    const contractPaidAt = a.contract_paid_at || a.created_at;
-    const scheduledAt = a.meeting_slot?.scheduled_at;
-    
-    if (contractPaidAt && scheduledAt) {
-      const leadIsOutside = new Date(contractPaidAt) < new Date(scheduledAt);
-      if (leadIsOutside) {
-        // Outside: só incluir se R1 foi realizada (completed)
-        const slotStatus = a.meeting_slot?.status;
-        if (slotStatus !== 'completed') {
-          return false;  // Excluir: Outside sem R1 realizada
-        }
-      }
+contractsByPaymentDate?.forEach(att => {
+  const closerId = (att.meeting_slot as any)?.closer_id;
+  const scheduledAt = (att.meeting_slot as any)?.scheduled_at;
+  const contractPaidAt = att.contract_paid_at;
+  
+  // NOVO: Verificar se é Outside
+  if (contractPaidAt && scheduledAt) {
+    const isOutside = new Date(contractPaidAt) < new Date(scheduledAt);
+    if (isOutside) {
+      return; // Não contar Outside como contrato pago
     }
-    
-    return true;
-  })
+  }
+  
+  // ... resto da lógica existente
+});
 ```
 
-## Fluxo Visual
+### Alteração em useCloserAgendaMetrics.ts
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                     LEAD COMPRA CONTRATO                        │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-     ┌────────────────┐              ┌────────────────┐
-     │ DEPOIS da R1   │              │ ANTES da R1    │
-     │ (Normal)       │              │ (Outside)      │
-     └────────────────┘              └────────────────┘
-              │                               │
-              ▼                               ▼
-     ┌────────────────┐              ┌────────────────┐
-     │ Vai direto     │              │ Aguarda R1     │
-     │ para R2        │              │ ser Realizada  │
-     │ Pendentes      │              │                │
-     └────────────────┘              └────────────────┘
-                                              │
-                                              ▼
-                                     ┌────────────────┐
-                                     │ Closer marca   │
-                                     │ R1 Realizada   │
-                                     └────────────────┘
-                                              │
-                                              ▼
-                                     ┌────────────────┐
-                                     │ Aparece em R2  │
-                                     │ Pendentes      │
-                                     └────────────────┘
+Adicionar `scheduled_at` na query de contratos e filtrar:
+
+```tsx
+// Query 1: Adicionar scheduled_at para verificação
+const { data: contractsByPaymentDate } = await supabase
+  .from('meeting_slot_attendees')
+  .select(`
+    id, status, contract_paid_at,
+    meeting_slot:meeting_slots!inner(closer_id, scheduled_at)  // ← Adicionar scheduled_at
+  `)
+  // ... resto dos filtros
+
+// Ao contar, excluir Outside:
+let contratos_pagos = 0;
+
+contractsByPaymentDate?.forEach(att => {
+  const scheduledAt = (att.meeting_slot as any)?.scheduled_at;
+  const contractPaidAt = att.contract_paid_at;
+  
+  // Excluir Outside
+  if (contractPaidAt && scheduledAt && new Date(contractPaidAt) < new Date(scheduledAt)) {
+    return; // Outside - não contar
+  }
+  
+  contratos_pagos++;
+});
 ```
 
-## Comportamento Esperado
+## Resultado Esperado
 
-| Cenário | Data Contrato | Data R1 | Status R1 | Aparece em R2 Pendentes? |
-|---------|--------------|---------|-----------|-------------------------|
-| Normal | 05/02 18:00 | 05/02 14:00 | completed | Sim |
-| Normal | 05/02 18:00 | 05/02 14:00 | scheduled | Sim |
-| Outside | 04/02 10:00 | 05/02 14:00 | completed | Sim |
-| Outside | 04/02 10:00 | 05/02 14:00 | scheduled | **Não** |
-| Outside | 04/02 10:00 | 05/02 14:00 | rescheduled | **Não** |
+| Cenário | Data Pagamento | Data R1 | Conta como Outside? | Conta como Contrato Pago? |
+|---------|----------------|---------|---------------------|--------------------------|
+| Normal | 05/02 18:00 | 05/02 14:00 | Não | **Sim** |
+| Outside | 04/02 10:00 | 05/02 14:00 | Sim | **Não** |
 
 ## Impacto
-- Leads Outside só vão para R2 quando o Closer marcar a R1 como realizada
-- Leads normais continuam funcionando como antes
-- Não afeta outras partes do sistema (métricas, relatórios, etc.)
+- Taxa de conversão dos Closers será calculada corretamente
+- Leads Outside continuam visíveis na coluna "Outside" (apenas para informação)
+- Não afeta outras métricas (R1 Agendada, R1 Realizada, No-show, etc.)
 
