@@ -21,7 +21,10 @@ export const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
     '35361575-d8a9-4ea0-8703-372a2988d2be', // Grupo: Hubla - Construir Para Alugar
     '4e2b810a-6782-4ce9-9c0d-10d04c018636', // Origin: PIPELINE INSIDE SALES - VIVER DE ALUGUEL
   ],
-  credito: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // Padrão (a definir)
+  credito: [
+    '8d33bad6-46ab-4f9c-a570-dc7b74be2ac9', // Grupo: BU - MCF CAPITAL
+    '7f74499a-6474-4b9d-ad28-1fbc85579bc2', // Origem: INSIDE SALES - CREDITO
+  ],
   projetos: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // Padrão (a definir)
   leilao: [
     'f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c', // Grupo: BU - LEILÃO
@@ -38,7 +41,7 @@ export const BU_GROUP_MAP: Record<BusinessUnit, string[]> = {
     '35361575-d8a9-4ea0-8703-372a2988d2be', // Hubla - Construir Para Alugar
     'a6f3cbfc-0567-427f-a405-5a869aaa6010', // Perpétuo - X1 (contém PIPELINE - INSIDE SALES - VIVER DE ALUGUEL)
   ],
-  credito: [],    // A definir
+  credito: ['8d33bad6-46ab-4f9c-a570-dc7b74be2ac9'],  // BU - MCF CAPITAL
   projetos: [],   // A definir
   leilao: ['f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c'],       // BU - LEILÃO
 };
@@ -47,7 +50,7 @@ export const BU_GROUP_MAP: Record<BusinessUnit, string[]> = {
 export const BU_DEFAULT_ORIGIN_MAP: Record<BusinessUnit, string> = {
   incorporador: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', // PIPELINE INSIDE SALES
   consorcio: '57013597-22f6-4969-848c-404b81dcc0cb',    // PIPE LINE - INSIDE SALES (Perpétuo - Construa para Alugar)
-  credito: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
+  credito: '7f74499a-6474-4b9d-ad28-1fbc85579bc2',   // INSIDE SALES - CREDITO
   projetos: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
   leilao: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d', // Pipeline Leilão
 };
@@ -56,7 +59,7 @@ export const BU_DEFAULT_ORIGIN_MAP: Record<BusinessUnit, string> = {
 export const BU_DEFAULT_GROUP_MAP: Record<BusinessUnit, string> = {
   incorporador: 'a6f3cbfc-0567-427f-a405-5a869aaa6010', // Perpétuo - X1
   consorcio: 'b98e3746-d727-445b-b878-fc5742b6e6b8', // Perpétuo - Construa para Alugar
-  credito: 'a6f3cbfc-0567-427f-a405-5a869aaa6010',
+  credito: '8d33bad6-46ab-4f9c-a570-dc7b74be2ac9',   // BU - MCF CAPITAL
   projetos: 'a6f3cbfc-0567-427f-a405-5a869aaa6010',
   leilao: 'f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c', // BU - LEILÃO
 };
@@ -72,7 +75,7 @@ export const SDR_AUTHORIZED_GROUP_ID = 'a6f3cbfc-0567-427f-a405-5a869aaa6010';
 export const SDR_ORIGIN_BY_BU: Record<BusinessUnit, string> = {
   incorporador: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', // PIPELINE INSIDE SALES
   consorcio: '57013597-22f6-4969-848c-404b81dcc0cb',    // PIPE LINE - INSIDE SALES (Perpétuo - Construa para Alugar)
-  credito: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',      // Fallback (a definir)
+  credito: '7f74499a-6474-4b9d-ad28-1fbc85579bc2',      // INSIDE SALES - CREDITO
   projetos: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',     // Fallback (a definir)
   leilao: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',       // Pipeline Leilão
 };
