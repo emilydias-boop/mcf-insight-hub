@@ -9089,6 +9089,7 @@ export type Database = {
         | "usuarios"
         | "financeiro"
         | "patrimonio"
+        | "agenda_r2"
       target_period: "mensal" | "trimestral" | "anual"
       target_type: "receita" | "vendas" | "leads" | "conversao" | "custom"
       transaction_status: "pago" | "pendente" | "cancelado"
@@ -9327,6 +9328,7 @@ export const Constants = {
         "usuarios",
         "financeiro",
         "patrimonio",
+        "agenda_r2",
       ],
       target_period: ["mensal", "trimestral", "anual"],
       target_type: ["receita", "vendas", "leads", "conversao", "custom"],
