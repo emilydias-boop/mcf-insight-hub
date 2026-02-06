@@ -1,137 +1,111 @@
 
-# Plano: Centralizar Permissões de Acesso R2 no Sistema de Usuários
+# Plano: Corrigir Exibição de Leads no CRM da BU Crédito
 
-## Situacao Atual
+## Problemas Identificados
 
-O sistema tem dois caminhos separados para controlar acesso:
+### Problema 1: Mapeamento de BU incompleto
+O `bu_origin_mapping` para Crédito está configurado com o grupo `BU - MCF CAPITAL` (ID: `8d33bad6-46ab-4f9c-a570-dc7b74be2ac9`), que contém a origem correta `INSIDE SALES - CREDITO` (ID: `7f74499a-6474-4b9d-ad28-1fbc85579bc2`) com 1.231 leads.
 
-1. **Sistema de Permissoes por Usuario** - Existe na tela Gerenciamento de Usuarios, aba Permissoes. Controla acesso a modulos como CRM, Dashboard, etc.
-
-2. **Acesso Agenda R2** - Sistema separado com:
-   - Roles automaticos (admin, manager, coordenador)
-   - Whitelist hardcoded no codigo (`R2_AUTHORIZED_USERS`)
-   - Tabela `closers` com `meeting_type = 'r2'`
-
-Isso causa confusao porque nao ha um lugar unico para gerenciar todas as permissoes.
-
-## Solucao Proposta
-
-Unificar o acesso a Agenda R2 no sistema existente de `user_permissions`, permitindo que voce controle o acesso de qualquer usuario diretamente na aba de Permissoes.
-
-```text
-Fluxo apos implementacao:
-
-  Admin Usuarios               Drawer do Usuario         Aba Permissoes
-  ┌─────────────┐              ┌────────────────┐        ┌─────────────────────┐
-  │ Mateus      │  ──click──>  │ Geral          │        │ CRM: Visualizar     │
-  │ Macedo      │              │ Seguranca      │        │ Dashboard: Nenhum   │
-  │             │              │ Permissoes  <──│────>   │ Agenda R2: Completo │  <-- NOVO
-  └─────────────┘              │ Integracoes    │        │ ...                 │
-                               └────────────────┘        └─────────────────────┘
+Porém, o fallback hardcoded em `NegociosAccessGuard.tsx` aponta para a pipeline do Incorporador:
+```
+credito: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c']  // PIPELINE INSIDE SALES (Incorporador)
 ```
 
-## Etapas de Implementacao
-
-### Etapa 1: Adicionar "agenda_r2" ao enum do banco
-
-Executar migracao SQL para adicionar o novo valor ao enum `resource_type`:
-
-```sql
-ALTER TYPE resource_type ADD VALUE 'agenda_r2';
+### Problema 2: Pipeline padrão errada
+O `BU_DEFAULT_ORIGIN_MAP` também usa a origem do Incorporador como fallback:
+```
+credito: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c'  // PIPELINE INSIDE SALES (Incorporador)
 ```
 
-### Etapa 2: Atualizar labels no frontend
+### Problema 3: UX - Exigir seleção manual de funil
+O usuário precisa clicar no funil para ver leads, ao invés do sistema mostrar automaticamente todos os leads da BU.
 
-Arquivo: `src/types/user-management.ts`
+## Solução Proposta
 
-Adicionar label para o novo recurso:
+### Etapa 1: Atualizar mapeamentos hardcoded
+Corrigir os fallbacks em `src/components/auth/NegociosAccessGuard.tsx` para apontar para a pipeline correta do Crédito.
+
+**Alterações:**
 
 ```typescript
-export const RESOURCE_LABELS: Record<ResourceType, string> = {
-  // ... recursos existentes
-  agenda_r2: "Agenda R2",  // NOVO
-};
+// BU_PIPELINE_MAP
+credito: [
+  '8d33bad6-46ab-4f9c-a570-dc7b74be2ac9',  // Grupo: BU - MCF CAPITAL
+  '7f74499a-6474-4b9d-ad28-1fbc85579bc2',  // Origem: INSIDE SALES - CREDITO
+],
+
+// BU_GROUP_MAP
+credito: ['8d33bad6-46ab-4f9c-a570-dc7b74be2ac9'],  // BU - MCF CAPITAL
+
+// BU_DEFAULT_ORIGIN_MAP
+credito: '7f74499a-6474-4b9d-ad28-1fbc85579bc2',  // INSIDE SALES - CREDITO
+
+// BU_DEFAULT_GROUP_MAP
+credito: '8d33bad6-46ab-4f9c-a570-dc7b74be2ac9',  // BU - MCF CAPITAL
+
+// SDR_ORIGIN_BY_BU
+credito: '7f74499a-6474-4b9d-ad28-1fbc85579bc2',  // INSIDE SALES - CREDITO
 ```
 
-### Etapa 3: Adicionar "Agenda R2" na UI de Permissoes
+### Etapa 2: Ajustar lógica de carregamento inicial
+Modificar `src/pages/crm/Negocios.tsx` para que, ao abrir o CRM de uma BU, o sistema:
 
-Arquivo: `src/components/user-management/UserDetailsDrawer.tsx`
+1. Se houver um default configurado (`BU_DEFAULT_ORIGIN_MAP`), seleciona automaticamente
+2. Se não houver default, carrega todos os leads das origens mapeadas para a BU (em vez de não mostrar nada)
 
-Adicionar o recurso na lista e nos grupos:
+**Alteração na lógica de `effectiveOriginId`:**
+Quando não há pipeline selecionada mas existe uma BU ativa, usar todas as origens da BU em vez de exigir seleção.
 
-```typescript
-const allResources: ResourceType[] = [
-  // ... existentes
-  'agenda_r2',  // NOVO
-];
+### Etapa 3: Melhorar UX - Mostrar todos os leads da BU por default
+Modificar `src/hooks/useCRMData.ts` para aceitar um array de `originIds` como alternativa ao `originId` único, permitindo carregar leads de múltiplas origens simultaneamente.
 
-const resourceGroups = {
-  // ... grupos existentes
-  'CRM': ['crm', 'agenda_r2'] as ResourceType[],  // ADICIONAR AQUI
-};
-```
-
-### Etapa 4: Atualizar R2AccessGuard para verificar user_permissions
-
-Arquivo: `src/components/auth/R2AccessGuard.tsx`
-
-Modificar para consultar `user_permissions` como fonte adicional de acesso:
-
-```typescript
-// Adicionar hook para verificar permissao
-const { data: r2Permission } = useQuery({
-  queryKey: ['user-r2-permission', user?.id],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('user_permissions')
-      .select('permission_level')
-      .eq('user_id', user.id)
-      .eq('resource', 'agenda_r2')
-      .maybeSingle();
-    return data;
-  },
-  enabled: !!user?.id,
-});
-
-// Adicionar na logica de verificacao
-const hasUserPermission = r2Permission?.permission_level && 
-  r2Permission.permission_level !== 'none';
-
-// Acesso = role permitido OU whitelist OU closer R2 OU user_permission
-if (!hasRoleAccess && !hasUserAccess && !hasCloserAccess && !hasUserPermission) {
-  // negar acesso
-}
-```
-
-### Etapa 5 (Opcional): Remover whitelist hardcoded
-
-Apos migrar os usuarios da whitelist para `user_permissions`, remover o array `R2_AUTHORIZED_USERS` do codigo.
+**Comportamento esperado:**
+- Ao entrar em `/bu-credito/crm/negocios`: Mostrar todos os leads da BU Crédito automaticamente (1.231 leads)
+- Se clicar em um funil específico: Filtrar por aquele funil
+- Se não tiver mapeamento: Mostrar warning e nenhum lead (não mostrar leads de outra BU)
 
 ## Arquivos a Modificar
 
-| Arquivo | Alteracao |
+| Arquivo | Alteração |
 |---------|-----------|
-| Migracao SQL | Adicionar `agenda_r2` ao enum `resource_type` |
-| `src/types/user-management.ts` | Adicionar label "Agenda R2" |
-| `src/components/user-management/UserDetailsDrawer.tsx` | Incluir `agenda_r2` na lista de recursos |
-| `src/components/auth/R2AccessGuard.tsx` | Verificar `user_permissions` para acesso R2 |
+| `src/components/auth/NegociosAccessGuard.tsx` | Atualizar IDs de pipeline/grupo/origem para Crédito |
+| `src/pages/crm/Negocios.tsx` | Ajustar lógica de seleção inicial para usar o default da BU |
 
-## Resultado Final
+## Diagrama de Fluxo
 
-Apos a implementacao, para dar acesso ao Mateus Macedo (ou qualquer usuario):
+```text
+Usuário acessa /bu-credito/crm/negocios
+         │
+         ▼
+   BUContext → bu = 'credito'
+         │
+         ▼
+   useActiveBU() → 'credito'
+         │
+         ▼
+   useBUPipelineMap('credito')
+         │
+         ├──(banco)──► Grupo: BU - MCF CAPITAL
+         │             └── Origem: INSIDE SALES - CREDITO
+         │
+         └──(fallback)──► BU_DEFAULT_ORIGIN_MAP['credito']
+                          = '7f74499a-6474-4b9d-ad28-1fbc85579bc2'
+         │
+         ▼
+   setSelectedPipelineId(defaultOrigin)
+         │
+         ▼
+   useCRMDeals({ originId: '7f74499a...' })
+         │
+         ▼
+   Kanban exibe 1.231 leads do Crédito ✓
+```
 
-1. Ir em **Gerenciamento de Usuarios**
-2. Clicar em **Mateus Macedo** → **Gerenciar**
-3. Ir na aba **Permissoes**
-4. Definir **Agenda R2** como **Visualizar** ou **Completo**
-5. Clicar em **Salvar Permissoes**
+## Resultado Esperado
 
-O Mateus tera acesso imediato a Agenda R2, sem precisar alterar codigo ou pedir ajuda.
+Após implementação:
 
-## Beneficios
-
-- Gestao centralizada de todas as permissoes em um unico lugar
-- Self-service para o admin (voce)
-- Auditoria: todas as permissoes ficam registradas no banco
-- Escalavel: facil adicionar novos recursos no futuro (ex: agenda_r1, relatorios_financeiros, etc.)
-- Elimina whitelists hardcoded no codigo
+1. **Ao entrar em `/bu-credito/crm/negocios`**: Sistema carrega automaticamente os 1.231 leads da pipeline `INSIDE SALES - CREDITO`
+2. **Sidebar de origens**: Mostra apenas o grupo `BU - MCF CAPITAL` e sua origem filha
+3. **Dropdown de funil**: Mostra apenas funis mapeados para Crédito
+4. **Sem vazamento de dados**: Leads do Incorporador não aparecem mais no CRM do Crédito
