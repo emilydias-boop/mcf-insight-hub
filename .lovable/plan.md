@@ -1,64 +1,107 @@
 
-# Plano: Corrigir No-Show para Usar Cálculo R1 Agendada - R1 Realizada
+# Plano: Restaurar RPC + No-Show = Agendamentos - R1 Realizada
 
 ## Problema
 
-A migration anterior alterou o cálculo para contar apenas `status = 'no_show'`, mas a regra correta é:
+A migration `20260206005738` quebrou a função:
 
-**No-Show = R1 Agendada - R1 Realizada**
+| Aspecto | Versão ANTIGA (correta) | Versão NOVA (quebrada) |
+|---------|------------------------|------------------------|
+| Agendamentos Carol | **181** | 183 (errado) |
+| JOIN parent_msa | ✅ Presente | ❌ Removido |
+| Filtro cancelled | ✅ `status != 'cancelled'` | ❌ Removido |
+| No-Show | Por status | Por status |
 
-## Valores Atuais vs Corretos
+## Fórmula Correta
 
-| SDR | R1 Agendada | R1 Realizada | Atual (errado) | Correto |
-|-----|-------------|--------------|----------------|---------|
-| Carol Correa | 173 | 124 | 44 | **49** |
-| Jessica Martins | 166 | 109 | 54 | **57** |
-| Leticia Nunes | 136 | 102 | 29 | **34** |
-| Caroline Souza | 135 | 100 | 33 | **35** |
-| Antony Elias | 125 | 86 | 38 | **39** |
-| Julia Caroline | 109 | 68 | 39 | **41** |
+```text
+No-Show = Agendamentos - R1 Realizada
+```
+
+**Exemplo Carol Correa (Jan/26):**
+- Agendamentos: 181
+- R1 Realizada: 124
+- **No-Show = 181 - 124 = 57** ✅
+
+## Solução
+
+Criar nova migration que:
+1. **RESTAURA** a lógica completa da versão `20260201021137`
+2. **CALCULA** no_show como `GREATEST(0, agendamentos - r1_realizada)` no JSON final
 
 ## Alteração Técnica
 
-Criar nova migration para atualizar a RPC `get_sdr_metrics_from_agenda`:
+### Nova Migration SQL
 
 ```sql
--- REMOVER a coluna no_shows do SELECT (contagem por status)
-
--- NO JSON FINAL, calcular matematicamente:
-'no_shows', GREATEST(0, r1_agendada - r1_realizada)
-```
-
-## Estrutura Corrigida
-
-```sql
-WITH sdr_metrics AS (
-  SELECT 
-    p_booker.email as sdr_email,
+CREATE OR REPLACE FUNCTION public.get_sdr_metrics_from_agenda(...)
+AS $$
+BEGIN
+  WITH sdr_stats AS (
+    SELECT 
+      p.email as sdr_email,
+      COALESCE(p.full_name, p.email) as sdr_name,
+      
+      -- AGENDAMENTOS: Lógica CORRETA (originais + 1º reagendamento)
+      COUNT(CASE 
+        WHEN (COALESCE(msa.booked_at, msa.created_at) AT TIME ZONE 'America/Sao_Paulo')::date 
+             BETWEEN start_date::DATE AND end_date::DATE
+         AND (
+           (msa.parent_attendee_id IS NULL AND COALESCE(msa.is_reschedule, false) = false)
+           OR (msa.parent_attendee_id IS NOT NULL AND parent_msa.parent_attendee_id IS NULL)
+           OR (msa.parent_attendee_id IS NULL AND msa.is_reschedule = true)
+         )
+        THEN 1 
+      END) as agendamentos,
+      
+      -- R1 Agendada
+      COUNT(CASE WHEN scheduled_at no período THEN 1 END) as r1_agendada,
+      
+      -- R1 Realizada
+      COUNT(CASE WHEN status IN ('completed','contract_paid','refunded') THEN 1 END) as r1_realizada,
+      
+      -- Contratos
+      COUNT(CASE WHEN contract_paid_at no período THEN 1 END) as contratos
+      
+    FROM meeting_slot_attendees msa
+    INNER JOIN meeting_slots ms ON ms.id = msa.meeting_slot_id
+    LEFT JOIN profiles p ON p.id = msa.booked_by
+    LEFT JOIN meeting_slot_attendees parent_msa ON parent_msa.id = msa.parent_attendee_id  -- RESTAURADO!
+    WHERE msa.status != 'cancelled'  -- RESTAURADO!
     ...
-    r1_agendada,
-    r1_realizada,
-    contratos
-    -- NÃO incluir no_shows aqui
-)
-SELECT jsonb_build_object(
-  'metrics', jsonb_agg(
-    jsonb_build_object(
-      'sdr_email', sdr_email,
-      'r1_agendada', r1_agendada,
-      'r1_realizada', r1_realizada,
-      -- CÁLCULO MATEMÁTICO no JSON:
-      'no_shows', GREATEST(0, r1_agendada - r1_realizada),
-      'contratos', contratos
-    )
   )
-)
+  SELECT json_build_object(
+    'metrics', json_agg(
+      json_build_object(
+        'sdr_email', sdr_email,
+        'agendamentos', agendamentos,
+        'r1_agendada', r1_agendada,
+        'r1_realizada', r1_realizada,
+        -- NO-SHOW CALCULADO: Agendamentos - R1 Realizada
+        'no_shows', GREATEST(0, agendamentos - r1_realizada),
+        'contratos', contratos
+      )
+    )
+  );
+END;
+$$;
 ```
+
+## Resultado Esperado
+
+| SDR | Agendamentos | R1 Realizada | No-Show (calculado) |
+|-----|-------------|--------------|---------------------|
+| Carol Correa | **181** | 124 | **57** |
+| Jessica Martins | ~171 | 109 | **62** |
+| Leticia Nunes | ~153 | 102 | **51** |
+| Caroline Souza | ~146 | 100 | **46** |
+| Antony Elias | ~134 | 86 | **48** |
+| Julia Caroline | ~112 | 68 | **44** |
 
 ## Arquivo a Criar
 
-| Arquivo | Alteração |
+| Arquivo | Descrição |
 |---------|-----------|
-| Nova migration SQL | Remover contagem por status, usar `r1_agendada - r1_realizada` |
+| Nova migration SQL | Restaura lógica completa + no_show = agendamentos - r1_realizada |
 
-Os hooks do frontend não precisam de alteração.
+Frontend não precisa de alterações.
