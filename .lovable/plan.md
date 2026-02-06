@@ -1,53 +1,89 @@
 
 
-# Corrigir Validação em TODOS os Campos de Valores
+# Corrigir Indicadores para Usar Valores do Plano Individual
 
-## Problema
+## Problema Identificado
 
-Os campos de "Valores por Métrica" (Agendamentos, R1 Realizadas, Tentativas, Organização) estão configurados com `step="10"`, o que só aceita múltiplos de 10 (470, 480, 490...).
+Os indicadores de meta estao calculando o `valorBase` sempre de forma dinamica (`variavel_total * peso_percentual / 100`), ignorando os valores especificos configurados no plano individual (`valor_meta_rpg`, `valor_docs_reuniao`, `valor_tentativas`, `valor_organizacao`).
 
-O catálogo possui valores como **R$ 475,00** que não são múltiplos de 10, causando erro de validação.
-
-## Campos Afetados
-
-| Campo | Linha | Valor Atual | Problema |
-|-------|-------|-------------|----------|
-| Métricas dinâmicas | 247 | `step="10"` | Bloqueia 475, 225, etc. |
-| Agendadas (R$) | 265 | `step="10"` | Bloqueia valores não múltiplos de 10 |
-| Realizadas (R$) | 278 | `step="10"` | Bloqueia valores não múltiplos de 10 |
-| Tentativas (R$) | 289 | `step="10"` | Bloqueia valores não múltiplos de 10 |
-| Organização (R$) | 301 | `step="10"` | Bloqueia valores não múltiplos de 10 |
-
-## Solução
-
-Alterar todos os `step="10"` para `step="1"` nos campos de valores por métrica.
-
-### Arquivo a Modificar
-
-**src/components/fechamento/EditIndividualPlanDialog.tsx**
-
-### Alterações
-
-```jsx
-// Linha 247 - Métricas dinâmicas
-step="1"  // Era step="10"
-
-// Linha 265 - Agendadas
-step="1"  // Era step="10"
-
-// Linha 278 - Realizadas
-step="1"  // Era step="10"
-
-// Linha 289 - Tentativas
-step="1"  // Era step="10"
-
-// Linha 301 - Organização
-step="1"  // Era step="10"
+### Fluxo Atual (Incorreto)
+```text
+EditIndividualPlanDialog -> salva valor_meta_rpg = R$ 475,00 -> sdr_comp_plan
+                                                                     |
+DynamicIndicatorCard -> calcula valorBase = variavel * peso% = R$ 540,00
+                        (ignora o valor do plano individual!)
 ```
+
+### Fluxo Esperado
+```text
+EditIndividualPlanDialog -> salva valor_meta_rpg = R$ 475,00 -> sdr_comp_plan
+                                                                     |
+DynamicIndicatorCard -> usa valorBase = R$ 475,00 (do plano individual)
+```
+
+## Solucao
+
+Alterar `DynamicIndicatorCard.tsx` para:
+1. Verificar se existe valor especifico no `compPlan` para a metrica
+2. Se existir e for maior que zero, usar esse valor como `valorBase`
+3. Se nao existir ou for zero, usar o calculo dinamico como fallback
+
+## Arquivo a Modificar
+
+**src/components/fechamento/DynamicIndicatorCard.tsx**
+
+### Alteracao (Linhas 139-148)
+
+Codigo atual:
+```javascript
+if (config.payoutPctField && config.payoutMultField && config.payoutValueField) {
+  const pct = (payout as any)[config.payoutPctField] || 0;
+  const mult = (payout as any)[config.payoutMultField] || 0;
+  const valorFinal = (payout as any)[config.payoutValueField] || 0;
+  
+  // Calculate valorBase dynamically from peso_percentual
+  const baseVariavel = variavelTotal || compPlan?.variavel_total || 1200;
+  const pesoPercent = metrica.peso_percentual || 25;
+  const valorBase = baseVariavel * (pesoPercent / 100);
+```
+
+Codigo corrigido:
+```javascript
+if (config.payoutPctField && config.payoutMultField && config.payoutValueField) {
+  const pct = (payout as any)[config.payoutPctField] || 0;
+  const mult = (payout as any)[config.payoutMultField] || 0;
+  const valorFinal = (payout as any)[config.payoutValueField] || 0;
+  
+  // Prioridade: valor especifico do compPlan > calculo dinamico
+  let valorBase = 0;
+  
+  if (config.compPlanValueField && compPlan) {
+    const valorEspecifico = (compPlan as any)[config.compPlanValueField] || 0;
+    if (valorEspecifico > 0) {
+      valorBase = valorEspecifico;
+    }
+  }
+  
+  // Fallback: calculo dinamico se nao houver valor especifico
+  if (valorBase === 0) {
+    const baseVariavel = variavelTotal || compPlan?.variavel_total || 1200;
+    const pesoPercent = metrica.peso_percentual || 25;
+    valorBase = baseVariavel * (pesoPercent / 100);
+  }
+```
+
+## Mapeamento de Campos (METRIC_CONFIG)
+
+| Metrica | Campo CompPlan |
+|---------|----------------|
+| agendamentos | `valor_meta_rpg` |
+| realizadas | `valor_docs_reuniao` |
+| tentativas | `valor_tentativas` |
+| organizacao | `valor_organizacao` |
 
 ## Resultado Esperado
 
-- Todos os valores do catálogo serão aceitos (475, 225, 350, etc.)
-- Sem erros de validação HTML5
-- Usuário poderá salvar qualquer valor inteiro
+- Quando o usuario editar valores no plano individual, os indicadores refletirao os novos valores imediatamente
+- Se os valores especificos forem zero (ou nao configurados), o sistema usara o calculo dinamico como fallback
+- Compatibilidade total com a arquitetura atual de pesos percentuais
 
