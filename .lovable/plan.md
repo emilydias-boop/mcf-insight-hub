@@ -1,175 +1,110 @@
 
-# Correcao: Importacao CSV nao captura owner e data de entrada do lead
+# Automacao Cross-Pipeline: Falta Cron Job para Processamento Automatico
 
-## Problemas Identificados
+## Diagnostico
 
-Ao analisar o CSV exportado e o codigo de processamento, encontrei **2 problemas**:
+O sistema de replicacao cross-pipeline **esta parcialmente funcionando**, mas falta a automacao final:
 
-### Problema 1: Owner nao capturado do CSV
+| Componente | Status | Descricao |
+|------------|--------|-----------|
+| Trigger (adicionar na fila) | Funcionando | Quando deal muda de stage, insere em `deal_replication_queue` |
+| Edge Function | Funcionando | `process-deal-replication` processa corretamente |
+| Cron Job | **NAO EXISTE** | Nada esta chamando a Edge Function automaticamente |
 
-**Codigo atual (linha 207):**
-```typescript
-const csvOwnerEmail = csvDeal.owner?.trim() || csvDeal.dono?.trim()
+## Evidencias
+
+### 1. Trigger funcionando (insere na fila)
+```sql
+-- Trigger exists and is active
+CREATE TRIGGER trigger_deal_replication
+AFTER UPDATE OF stage_id ON public.crm_deals
+FOR EACH ROW
+EXECUTE FUNCTION public.notify_deal_replication();
 ```
 
-**Colunas no CSV real:**
+### 2. Fila com items processados (via botao manual)
 ```
-user_email: "william.ferreira@minhacasafinanciada.com"
-user_name: "WilliamFerreira"
-```
-
-O codigo busca pelas colunas `owner` ou `dono`, mas o CSV exportado usa `user_email` para armazenar o email do responsavel.
-
-### Problema 2: Data de criacao nao preservada
-
-**CSV possui:**
-```
-created_at: "25/08/2025 17:40:59"
+deal_id: fe15e90d-a231-467f-b625-860bb265ec38
+status: processed
+processed_at: 2026-02-06 19:03:29
 ```
 
-**Codigo atual:**
-- `process-csv-imports` nao le a coluna `created_at` do CSV
-- `upsert_deals_smart` sempre usa `NOW()` para created_at
+### 3. Logs da Edge Function (processou ao clicar "Processar Fila")
+```
+2026-02-06T19:03:29Z - Created replica: bdd41174... via rule Parceria - GR
+2026-02-06T19:03:29Z - Created replica: ac0b3d81... via rule Parceria -> Consorcio
+```
 
-**Resultado:** Todos os deals importados ficam com data de hoje, perdendo o historico original.
+### 4. Cron Jobs existentes (nenhum para replicacao)
+```text
+sync-contacts-cron           */5 * * * *   (a cada 5 min)
+sync-deals-cron              */10 * * * *  (a cada 10 min)
+sync-clint-full-auto         */10 * * * *  (a cada 10 min)
+process-csv-imports          */2 * * * *   (a cada 2 min)
+auto-close-weekly-metrics    30 3 * * 6    (sabado 3:30)
+detect-ghost-hourly          0 * * * *     (todo hora)
+sync-newsale-orphans-daily   0 6 * * *     (todo dia 6h)
+detect-duplicates-daily      0 3 * * *     (todo dia 3h)
+reprocess-failed-webhooks    */15 * * * *  (a cada 15 min)
+```
+
+**Nao existe `process-deal-replication-cron`!**
 
 ## Solucao
 
-Duas alteracoes necessarias:
+Criar uma migracao SQL para adicionar o cron job que chama a Edge Function `process-deal-replication` automaticamente:
 
-### 1. Edge Function: Mapear colunas corretas
-
-**Arquivo:** `supabase/functions/process-csv-imports/index.ts`
-
-Adicionar mapeamento para `user_email` e `created_at`:
-
-```typescript
-// Linha 8-26 - Adicionar campos ao interface CSVDeal
-interface CSVDeal {
-  // ... campos existentes ...
-  user_email?: string      // NOVO: email do responsavel
-  created_at?: string      // NOVO: data original de criacao
-}
-
-// Linha 42 - Adicionar created_at ao interface CRMDeal
-interface CRMDeal {
-  // ... campos existentes ...
-  created_at?: string      // NOVO
-}
-
-// Linha 207 - Atualizar resolucao de owner
-const csvOwnerEmail = csvDeal.owner?.trim() || 
-                      csvDeal.dono?.trim() || 
-                      csvDeal.user_email?.trim()  // NOVO
-
-// Funcao convertToDBFormat - Adicionar created_at
-if (csvDeal.created_at) {
-  const parsedDate = parseCSVDate(csvDeal.created_at)
-  if (parsedDate) {
-    dbDeal.created_at = parsedDate.toISOString()
-  }
-}
-
-// Nova funcao para parsear datas do CSV
-function parseCSVDate(dateStr: string): Date | null {
-  // Formato: "25/08/2025 17:40:59"
-  const match = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/)
-  if (match) {
-    const [_, day, month, year, hour, min, sec] = match
-    return new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}`)
-  }
-  // Tentar parse direto
-  const date = new Date(dateStr)
-  return isNaN(date.getTime()) ? null : date
-}
-```
-
-### 2. Funcao SQL: Preservar data original
-
-**Migracao SQL:** Atualizar `upsert_deals_smart` para usar `created_at` do JSON quando disponivel:
+### Migracao SQL
 
 ```sql
-CREATE OR REPLACE FUNCTION public.upsert_deals_smart(deals_data jsonb)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $function$
-DECLARE
-  deal jsonb;
-BEGIN
-  FOR deal IN SELECT * FROM jsonb_array_elements(deals_data)
-  LOOP
-    INSERT INTO crm_deals (
-      clint_id, name, value, stage_id, contact_id,
-      origin_id, owner_id, owner_profile_id,
-      tags, custom_fields, updated_at, created_at, data_source
-    )
-    VALUES (
-      (deal->>'clint_id')::text,
-      (deal->>'name')::text,
-      (deal->>'value')::numeric,
-      (deal->>'stage_id')::uuid,
-      (deal->>'contact_id')::uuid,
-      (deal->>'origin_id')::uuid,
-      (deal->>'owner_id')::text,
-      (deal->>'owner_profile_id')::uuid,
-      CASE 
-        WHEN jsonb_typeof(deal->'tags') = 'array' THEN
-          (SELECT array_agg(value::text) FROM jsonb_array_elements_text(deal->'tags'))
-        ELSE NULL
-      END::text[],
-      (deal->'custom_fields')::jsonb,
-      COALESCE((deal->>'updated_at')::timestamptz, NOW()),
-      COALESCE((deal->>'created_at')::timestamptz, NOW()),  -- ALTERADO: usar data do CSV
-      'csv'
-    )
-    ON CONFLICT (clint_id) 
-    DO UPDATE SET
-      name = EXCLUDED.name,
-      value = EXCLUDED.value,
-      stage_id = EXCLUDED.stage_id,
-      contact_id = EXCLUDED.contact_id,
-      origin_id = EXCLUDED.origin_id,
-      owner_id = EXCLUDED.owner_id,
-      owner_profile_id = EXCLUDED.owner_profile_id,
-      tags = EXCLUDED.tags,
-      custom_fields = EXCLUDED.custom_fields,
-      updated_at = EXCLUDED.updated_at,
-      -- NAO atualiza created_at no UPDATE (preserva data original)
-      data_source = 'csv'
-    WHERE crm_deals.data_source != 'webhook'
-      AND crm_deals.updated_at < EXCLUDED.updated_at;
-  END LOOP;
-END;
-$function$;
+-- Adicionar cron job para processar fila de replicacao cross-pipeline
+-- Executa a cada 2 minutos para garantir processamento rapido
+
+SELECT cron.schedule(
+  'process-deal-replication-cron',
+  '*/2 * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/process-deal-replication',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlaGNmZ3F2aWdmY2VraWlwcWtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0Nzk1NzgsImV4cCI6MjA3OTA1NTU3OH0.Rab8S7rX6c7N92CufTkaXKJh0jpS9ydHWSmJMaPMVtE'
+    ),
+    body := '{"process_queue": true}'::jsonb
+  ) AS request_id;
+  $$
+);
 ```
 
-## Arquivos a Modificar
+## Fluxo Apos Correcao
+
+```text
+ANTES (atual):
+Deal muda stage → Trigger → Fila → [NADA] → Usuario clica "Processar Fila" → Edge Function
+
+DEPOIS (corrigido):
+Deal muda stage → Trigger → Fila → Cron (2min) → Edge Function → Replica criada automaticamente
+```
+
+## Arquivos a Criar/Modificar
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `supabase/functions/process-csv-imports/index.ts` | Adicionar mapeamento para `user_email` e `created_at` |
-| Nova migracao SQL | Atualizar funcao para usar `created_at` do JSON |
-
-## Fluxo Corrigido
-
-```text
-CSV                          Edge Function                  SQL Function
-┌──────────────────┐        ┌─────────────────────┐        ┌─────────────────────┐
-│ user_email:      │   →    │ csvDeal.user_email  │   →    │ owner_id = email    │
-│ william@...      │        │ → owner_id          │        │ owner_profile_id =  │
-│                  │        │ → owner_profile_id  │        │ profiles.get(email) │
-├──────────────────┤        ├─────────────────────┤        ├─────────────────────┤
-│ created_at:      │   →    │ parseCSVDate()      │   →    │ COALESCE(           │
-│ 25/08/2025       │        │ → created_at        │        │   deal.created_at,  │
-│ 17:40:59         │        │   (ISO string)      │        │   NOW()             │
-│                  │        │                     │        │ )                   │
-└──────────────────┘        └─────────────────────┘        └─────────────────────┘
-```
+| Nova migracao SQL | Adicionar cron job `process-deal-replication-cron` |
 
 ## Resultado Esperado
 
-Apos a correcao:
-- William Ferreira e Marceline Cunha aparecerao como owners dos deals
-- Datas originais de entrada serao preservadas (ex: 25/08/2025)
-- Historico completo do CRM sera mantido na importacao
+- Deals que chegam ao stage "Venda Realizada" serao automaticamente replicados
+- Processamento maximo em 2 minutos apos a mudanca de stage
+- Sem necessidade de clicar manualmente em "Processar Fila"
+- Logs continuam funcionando para monitoramento
+
+## Frequencia Recomendada
+
+| Frequencia | Pros | Contras |
+|------------|------|---------|
+| `*/1 * * * *` (1 min) | Mais rapido | Mais chamadas |
+| `*/2 * * * *` (2 min) | Equilibrado | Delay aceitavel |
+| `*/5 * * * *` (5 min) | Menos chamadas | Delay maior |
+
+Recomendo **2 minutos** como equilibrio entre velocidade e eficiencia, seguindo o padrao do `process-csv-imports`.
