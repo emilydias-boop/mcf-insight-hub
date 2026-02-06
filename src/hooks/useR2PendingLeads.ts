@@ -13,6 +13,7 @@ export interface R2PendingLead {
     id: string;
     scheduled_at: string;
     closer_id: string | null;
+    status?: string;
     closer?: {
       id: string;
       name: string;
@@ -55,6 +56,7 @@ export function useR2PendingLeads() {
             scheduled_at,
             closer_id,
             meeting_type,
+            status,
             closer:closers(id, name)
           ),
           deal:crm_deals(
@@ -188,6 +190,7 @@ export function useR2PendingLeads() {
       });
 
       // Step 6: Filter out leads that already have R2 (by any correlation method)
+      // Also filter out Outside leads whose R1 is not yet completed
       const pendingLeads = attendeesWithContact
         .filter(a => {
           // 1. Check by contact_id
@@ -206,6 +209,23 @@ export function useR2PendingLeads() {
           if (a.normalized_phone && r2Phones.has(a.normalized_phone)) {
             return false;
           }
+          
+          // 5. OUTSIDE LEAD CHECK: If contract was paid BEFORE the R1 meeting,
+          // only include if R1 has been marked as completed
+          const contractPaidAt = a.contract_paid_at || a.created_at;
+          const scheduledAt = a.meeting_slot?.scheduled_at;
+          
+          if (contractPaidAt && scheduledAt) {
+            const isOutside = new Date(contractPaidAt) < new Date(scheduledAt);
+            if (isOutside) {
+              // Outside lead: require R1 to be completed
+              const slotStatus = a.meeting_slot?.status;
+              if (slotStatus !== 'completed') {
+                return false; // Exclude: Outside lead without completed R1
+              }
+            }
+          }
+          
           return true;
         })
         .map(a => ({
