@@ -31,23 +31,31 @@ export const useAllGRWallets = () => {
   return useQuery({
     queryKey: ['all-gr-wallets'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Buscar carteiras sem JOIN (evita erro de FK com auth.users)
+      const { data: wallets, error: walletsError } = await supabase
         .from('gr_wallets')
-        .select(`
-          *,
-          profiles:gr_user_id (
-            full_name,
-            email
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: true });
       
-      if (error) throw error;
+      if (walletsError) throw walletsError;
+      if (!wallets || wallets.length === 0) return [];
       
-      return (data || []).map((w: any) => ({
+      // Buscar profiles dos GRs separadamente
+      const grUserIds = wallets.map(w => w.gr_user_id);
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', grUserIds);
+      
+      if (profilesError) throw profilesError;
+      
+      // Merge dos dados
+      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+      
+      return wallets.map(w => ({
         ...w,
-        gr_name: w.profiles?.full_name,
-        gr_email: w.profiles?.email,
+        gr_name: profileMap.get(w.gr_user_id)?.full_name,
+        gr_email: profileMap.get(w.gr_user_id)?.email,
       })) as GRWallet[];
     },
   });
