@@ -167,8 +167,11 @@ export const DynamicIndicatorCard = ({
       meta = sdrMetaDiaria;
       metaAjustada = (payout as any).meta_agendadas_ajustada ?? (sdrMetaDiaria * diasUteisMes);
     } else if (metrica.nome_metrica === 'realizadas') {
-      meta = kpi?.reunioes_agendadas || 0;
-      metaAjustada = Math.round((kpi?.reunioes_agendadas || 0) * 0.7);
+      // Usar a meta teórica de agendadas do compPlan ou calcular (metaDiaria × diasUteis)
+      const metaTeoricaAgendadas = compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
+      // Meta de realizadas = 70% da meta teórica de agendadas (conforme regra de negócio)
+      meta = Math.round(metaTeoricaAgendadas / diasUteisMes);
+      metaAjustada = Math.round(metaTeoricaAgendadas * 0.7);
     } else if (metrica.nome_metrica === 'tentativas') {
       meta = 84;
       metaAjustada = (payout as any).meta_tentativas_ajustada ?? (84 * diasUteisMes);
