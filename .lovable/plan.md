@@ -1,212 +1,139 @@
 
-# Sincronizacao Bidirecional: Pipeline GR e Carteiras GR
+# Correções: Contagem Duplicada e Detalhes dos Parceiros GR
 
-## Situacao Atual
+## Problemas Identificados
 
-Identificamos que os 1.867 leads na pipeline "00 - GERENTES DE RELACIONAMENTO" **nao estao sincronizados** com as carteiras GR:
+### 1. Contagem Duplicada (current_count = 2x o valor real)
 
-| Dado | Situacao |
-|------|----------|
-| Leads na pipeline GR | 1.867 deals |
-| Entradas em `gr_wallet_entries` | 0 |
-| Carteira do William | Criada (vazia) |
-| Carteira da Marceline | **NAO EXISTE** |
+| Carteira | current_count | entries reais |
+|----------|---------------|---------------|
+| William | 2152 | 1076 |
+| Marceline | 1580 | 790 |
 
-## Problemas
+**Causa**: O trigger `trigger_update_gr_wallet_count` incrementou o contador durante a execucao de `sync_crm_deals_to_gr_wallets()`, resultando em contagem dupla (funcao inseriu + trigger incrementou).
 
-1. **Marceline nao tem carteira GR** - precisa ser criada
-2. **Deals nao populam carteiras automaticamente** - falta trigger/funcao
-3. **Nenhuma sincronizacao bidirecional** entre CRM e carteiras
+**Solucao**: Corrigir os valores no banco para refletir a contagem real.
 
-## Solucao Proposta
+### 2. Botao de Olho nao Abre Detalhes
 
-### 1. Criar carteira para Marceline
+O componente `GRPartnersTab.tsx` tem o botao com icone `<Eye />` mas **nao tem onClick** para abrir o drawer de detalhes (`GREntryDrawer.tsx`).
+
+**Solucao**: Adicionar estado para controlar o drawer e conectar o botao.
+
+### 3. Historico de Stages Incompleto
+
+A timeline em `GREntryDrawer` busca acoes GR e pagamentos Hubla, mas **nao inclui o historico de movimentacao entre stages** da tabela `deal_activities`.
+
+**Solucao**: Incluir o historico de stages (from_stage/to_stage) na timeline unificada.
+
+---
+
+## Plano de Implementacao
+
+### Passo 1: Corrigir Contagem Duplicada (SQL)
+
+Criar migracao para recalcular o `current_count` baseado nas entries reais:
 
 ```sql
-INSERT INTO gr_wallets (gr_user_id, bu, max_capacity)
-SELECT '094a75c9-7e87-4886-be1a-1dba4297173f', 'credito', 700
-WHERE NOT EXISTS (
-  SELECT 1 FROM gr_wallets WHERE gr_user_id = '094a75c9-7e87-4886-be1a-1dba4297173f'
+-- Recalcular current_count para refletir contagem real
+UPDATE gr_wallets gw
+SET current_count = (
+  SELECT COUNT(*) 
+  FROM gr_wallet_entries gwe 
+  WHERE gwe.wallet_id = gw.id
 );
 ```
 
-### 2. Sincronizar deals existentes com carteiras
+### Passo 2: Conectar Botao de Olho ao Drawer
 
-Criar funcao SQL que popula `gr_wallet_entries` baseado nos deals existentes:
+Modificar `src/components/gr/GRPartnersTab.tsx`:
 
-```sql
-CREATE OR REPLACE FUNCTION sync_crm_deals_to_gr_wallets()
-RETURNS integer
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  synced_count integer := 0;
-  deal_row RECORD;
-  v_wallet_id UUID;
-BEGIN
-  -- Buscar todos os deals da pipeline GR que ainda nao tem entrada na carteira
-  FOR deal_row IN 
-    SELECT 
-      d.id as deal_id,
-      d.name,
-      d.value,
-      d.contact_id,
-      d.owner_id,
-      d.created_at,
-      c.email as contact_email,
-      c.phone as contact_phone,
-      p.id as owner_profile_id
-    FROM crm_deals d
-    LEFT JOIN crm_contacts c ON c.id = d.contact_id
-    LEFT JOIN profiles p ON p.email = d.owner_id
-    WHERE d.origin_id = '016e7467-e105-4d9a-9ff5-ecfe5f915e0c'  -- Pipeline GR
-      AND NOT EXISTS (
-        SELECT 1 FROM gr_wallet_entries gwe WHERE gwe.deal_id = d.id
-      )
-  LOOP
-    -- Buscar carteira do owner
-    SELECT id INTO v_wallet_id
-    FROM gr_wallets
-    WHERE gr_user_id = deal_row.owner_profile_id;
-    
-    IF v_wallet_id IS NOT NULL THEN
-      INSERT INTO gr_wallet_entries (
-        wallet_id, deal_id, contact_id, customer_name, 
-        customer_email, customer_phone, status, entry_source,
-        product_purchased, purchase_value, entry_date
-      ) VALUES (
-        v_wallet_id, deal_row.deal_id, deal_row.contact_id,
-        deal_row.name, deal_row.contact_email, deal_row.contact_phone,
-        'ativo', 'crm_sync', NULL, deal_row.value, deal_row.created_at
-      );
-      synced_count := synced_count + 1;
-    END IF;
-  END LOOP;
-  
-  RETURN synced_count;
-END;
-$$;
-```
+- Adicionar estado `selectedEntry` para armazenar a entry selecionada
+- Adicionar estado `drawerOpen` para controlar abertura
+- Importar `GREntryDrawer`
+- Conectar botao Eye ao onClick que abre o drawer
 
-### 3. Criar trigger para sincronizacao automatica futura
+### Passo 3: Incluir Historico de Stages na Timeline
 
-Trigger que sincroniza novos deals/mudancas com as carteiras:
+Modificar `src/hooks/useGRActions.ts` na funcao `useGREntryTimeline`:
 
-```sql
-CREATE OR REPLACE FUNCTION sync_deal_to_gr_wallet()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_wallet_id UUID;
-  v_owner_profile_id UUID;
-  v_contact crm_contacts%ROWTYPE;
-BEGIN
-  -- Apenas para pipeline GR
-  IF NEW.origin_id != '016e7467-e105-4d9a-9ff5-ecfe5f915e0c' THEN
-    RETURN NEW;
-  END IF;
-  
-  -- Buscar profile do owner
-  SELECT id INTO v_owner_profile_id
-  FROM profiles WHERE email = NEW.owner_id;
-  
-  -- Buscar carteira do GR
-  SELECT id INTO v_wallet_id
-  FROM gr_wallets WHERE gr_user_id = v_owner_profile_id;
-  
-  -- Buscar dados do contato
-  SELECT * INTO v_contact FROM crm_contacts WHERE id = NEW.contact_id;
-  
-  IF v_wallet_id IS NOT NULL THEN
-    -- INSERT or UPDATE na carteira
-    INSERT INTO gr_wallet_entries (
-      wallet_id, deal_id, contact_id, customer_name,
-      customer_email, customer_phone, status, entry_source,
-      purchase_value, entry_date
-    ) VALUES (
-      v_wallet_id, NEW.id, NEW.contact_id, NEW.name,
-      v_contact.email, v_contact.phone, 'ativo', 'crm_sync',
-      NEW.value, COALESCE(NEW.created_at, NOW())
-    )
-    ON CONFLICT (deal_id) DO UPDATE SET
-      wallet_id = EXCLUDED.wallet_id,
-      customer_name = EXCLUDED.customer_name,
-      updated_at = NOW();
-  END IF;
-  
-  RETURN NEW;
-END;
-$$;
+- Adicionar busca na tabela `deal_activities` filtrando pelo `deal_id` da entry
+- Mapear `from_stage` e `to_stage` para nomes legíveis usando as stages do CRM
+- Incluir na timeline com tipo `stage_change`
 
-CREATE TRIGGER trigger_sync_deal_to_gr
-AFTER INSERT OR UPDATE OF owner_id, stage_id ON crm_deals
-FOR EACH ROW
-EXECUTE FUNCTION sync_deal_to_gr_wallet();
-```
-
-### 4. Sincronizacao reversa: Carteira para CRM
-
-Quando GR atualiza status/stage na carteira, refletir no deal:
-
-```sql
-CREATE OR REPLACE FUNCTION sync_gr_entry_to_deal()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  -- Se mudou status, atualizar stage do deal correspondente
-  IF NEW.deal_id IS NOT NULL AND OLD.status != NEW.status THEN
-    -- Mapear status GR para stages do CRM
-    -- (implementar mapeamento especifico)
-    UPDATE crm_deals
-    SET updated_at = NOW()
-    WHERE id = NEW.deal_id;
-  END IF;
-  
-  RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER trigger_sync_gr_to_deal
-AFTER UPDATE OF status ON gr_wallet_entries
-FOR EACH ROW
-EXECUTE FUNCTION sync_gr_entry_to_deal();
-```
-
-## Fluxo Apos Implementacao
-
-```text
-                     Bidirecional
-┌─────────────────┐ ◄──────────────► ┌─────────────────────┐
-│  PIPELINE GR    │                  │  CARTEIRA GR        │
-│  (crm_deals)    │                  │ (gr_wallet_entries) │
-├─────────────────┤                  ├─────────────────────┤
-│ ┌───────────┐   │   Novo Deal      │ ┌───────────────┐   │
-│ │ Deal entra│───┼─────────────────►│ │ Entry criada  │   │
-│ └───────────┘   │   (trigger)      │ └───────────────┘   │
-│                 │                  │                     │
-│ ┌───────────┐   │   Owner muda     │ ┌───────────────┐   │
-│ │Owner muda │───┼─────────────────►│ │ Transferido   │   │
-│ └───────────┘   │                  │ └───────────────┘   │
-│                 │                  │                     │
-│ ┌───────────┐   │   Status muda    │ ┌───────────────┐   │
-│ │Stage atua.│◄──┼──────────────────│ │ Status atua.  │   │
-│ └───────────┘   │   (trigger rev.) │ └───────────────┘   │
-└─────────────────┘                  └─────────────────────┘
-```
+---
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| Nova migracao SQL | Criar carteira Marceline + funcao sync + triggers |
-| Ajustar `gr_wallet_entries` | Adicionar constraint UNIQUE em deal_id |
+| Nova migracao SQL | Recalcular current_count |
+| `src/components/gr/GRPartnersTab.tsx` | Conectar botao Eye ao GREntryDrawer |
+| `src/hooks/useGRActions.ts` | Incluir deal_activities na timeline |
+
+---
+
+## Detalhes Tecnicos
+
+### GRPartnersTab.tsx - Mudancas
+
+```typescript
+// Adicionar imports
+import { GREntryDrawer } from './GREntryDrawer';
+
+// Adicionar estados
+const [selectedEntry, setSelectedEntry] = useState<GRWalletEntry | null>(null);
+
+// Modificar botao Eye
+<Button 
+  variant="ghost" 
+  size="sm"
+  onClick={() => setSelectedEntry(entry)}
+>
+  <Eye className="h-4 w-4" />
+</Button>
+
+// Adicionar drawer no final
+<GREntryDrawer 
+  entry={selectedEntry}
+  open={!!selectedEntry}
+  onClose={() => setSelectedEntry(null)}
+/>
+```
+
+### useGRActions.ts - Timeline com Stages
+
+```typescript
+// 4. Historico de stages (deal_activities)
+const entryData = await supabase
+  .from('gr_wallet_entries')
+  .select('deal_id')
+  .eq('id', entryId)
+  .single();
+
+if (entryData.data?.deal_id) {
+  const { data: stageChanges } = await supabase
+    .from('deal_activities')
+    .select('*')
+    .eq('deal_id', entryData.data.deal_id)
+    .eq('activity_type', 'stage_change')
+    .order('created_at', { ascending: false });
+  
+  stageChanges?.forEach(sc => {
+    timeline.push({
+      type: 'stage_change',
+      date: sc.created_at,
+      title: 'Mudanca de Stage',
+      description: `${sc.from_stage} → ${sc.to_stage}`,
+    });
+  });
+}
+```
+
+---
 
 ## Resultado Esperado
 
-1. Carteira da Marceline criada automaticamente
-2. 1.867 deals sincronizados com carteiras (William: ~1.000, Marceline: ~800)
-3. Novos deals que entram na pipeline GR criam entrada automatica
-4. Mudanca de owner transfere entre carteiras
-5. Acoes do GR refletem no CRM
+1. **Contagem correta**: William mostrara 1076, Marceline 790
+2. **Drawer funcional**: Clicar no icone de olho abre os detalhes do parceiro
+3. **Timeline completa**: Historico inclui acoes GR + pagamentos + mudancas de stage
