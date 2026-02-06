@@ -186,4 +186,5 @@ export const RESOURCE_LABELS: Record<ResourceType, string> = {
   usuarios: "Gestão de Usuários",
   financeiro: "Módulo Financeiro",
   patrimonio: "Patrimônio (TI)",
+  agenda_r2: "Agenda R2",
 };

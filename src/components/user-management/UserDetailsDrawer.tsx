@@ -82,13 +82,13 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const allResources: ResourceType[] = [
     'dashboard', 'receita', 'custos', 'relatorios', 'alertas',
     'efeito_alavanca', 'projetos', 'credito', 'leilao', 'configuracoes',
-    'crm', 'fechamento_sdr', 'tv_sdr', 'usuarios'
+    'crm', 'fechamento_sdr', 'tv_sdr', 'usuarios', 'agenda_r2'
   ];
 
   // Grouped resources for better organization
   const resourceGroups = {
     'Dashboards': ['dashboard', 'tv_sdr'] as ResourceType[],
-    'CRM': ['crm'] as ResourceType[],
+    'CRM': ['crm', 'agenda_r2'] as ResourceType[],
     'Financeiro': ['receita', 'custos'] as ResourceType[],
     'Relatórios & Alertas': ['relatorios', 'alertas'] as ResourceType[],
     'SDR': ['fechamento_sdr'] as ResourceType[],
