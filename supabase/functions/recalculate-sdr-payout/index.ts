@@ -326,26 +326,43 @@ const calculatePayoutValues = (
     const pesoOrganizacao = metricaOrganizacao?.peso_percentual || 0;
     const pesoTotal = pesoAgendadas + pesoRealizadas + pesoTentativas + pesoOrganizacao;
     
-    if (pesoTotal > 0) {
-      valor_reunioes_agendadas = pesoAgendadas > 0 
-        ? (variavelTotal * (pesoAgendadas / 100)) * mult_reunioes_agendadas 
-        : 0;
-      valor_reunioes_realizadas = pesoRealizadas > 0 
-        ? (variavelTotal * (pesoRealizadas / 100)) * mult_reunioes_realizadas 
-        : 0;
-      valor_tentativas = (pesoTentativas > 0 && !isCloser)
-        ? (variavelTotal * (pesoTentativas / 100)) * mult_tentativas 
-        : 0;
-      valor_organizacao = (pesoOrganizacao > 0 && !isCloser)
-        ? (variavelTotal * (pesoOrganizacao / 100)) * mult_organizacao 
-        : 0;
-    } else {
-      // Fallback para valores do comp_plan
+    // PRIORIZAR valores específicos do compPlan > cálculo dinâmico por peso
+    // Se o valor específico no plano individual for maior que zero, usá-lo
+    // Caso contrário, usar o cálculo dinâmico baseado no peso percentual
+    
+    if (compPlan.valor_meta_rpg > 0) {
       valor_reunioes_agendadas = compPlan.valor_meta_rpg * mult_reunioes_agendadas;
-      valor_reunioes_realizadas = compPlan.valor_docs_reuniao * mult_reunioes_realizadas;
-      valor_tentativas = isCloser ? 0 : compPlan.valor_tentativas * mult_tentativas;
-      valor_organizacao = isCloser ? 0 : compPlan.valor_organizacao * mult_organizacao;
+    } else if (pesoAgendadas > 0) {
+      valor_reunioes_agendadas = (variavelTotal * (pesoAgendadas / 100)) * mult_reunioes_agendadas;
+    } else {
+      valor_reunioes_agendadas = 0;
     }
+    
+    if (compPlan.valor_docs_reuniao > 0) {
+      valor_reunioes_realizadas = compPlan.valor_docs_reuniao * mult_reunioes_realizadas;
+    } else if (pesoRealizadas > 0) {
+      valor_reunioes_realizadas = (variavelTotal * (pesoRealizadas / 100)) * mult_reunioes_realizadas;
+    } else {
+      valor_reunioes_realizadas = 0;
+    }
+    
+    if (!isCloser && compPlan.valor_tentativas > 0) {
+      valor_tentativas = compPlan.valor_tentativas * mult_tentativas;
+    } else if (pesoTentativas > 0 && !isCloser) {
+      valor_tentativas = (variavelTotal * (pesoTentativas / 100)) * mult_tentativas;
+    } else {
+      valor_tentativas = 0;
+    }
+    
+    if (!isCloser && compPlan.valor_organizacao > 0) {
+      valor_organizacao = compPlan.valor_organizacao * mult_organizacao;
+    } else if (pesoOrganizacao > 0 && !isCloser) {
+      valor_organizacao = (variavelTotal * (pesoOrganizacao / 100)) * mult_organizacao;
+    } else {
+      valor_organizacao = 0;
+    }
+    
+    console.log(`   💰 Valores calculados (prioridade compPlan): Agendadas=R$ ${valor_reunioes_agendadas.toFixed(2)}, Realizadas=R$ ${valor_reunioes_realizadas.toFixed(2)}, Tentativas=R$ ${valor_tentativas.toFixed(2)}, Org=R$ ${valor_organizacao.toFixed(2)}`);
   } else {
     // Sem métricas ativas, usar valores fixos do comp_plan
     valor_reunioes_agendadas = compPlan.valor_meta_rpg * mult_reunioes_agendadas;
