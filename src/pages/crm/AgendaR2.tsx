@@ -30,12 +30,14 @@ import {
   AlertCircle,
   FileText,
   Download,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useR2MeetingsExtended } from "@/hooks/useR2MeetingsExtended";
 import { useActiveR2Closers, useR2ClosersList } from "@/hooks/useR2Closers";
@@ -75,6 +77,7 @@ export default function AgendaR2() {
   const [closerFilter, setCloserFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [r1CloserFilter, setR1CloserFilter] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState<string>("");
 
   // Determine initial tab from URL
   const urlTab = searchParams.get('tab');
@@ -163,6 +166,24 @@ export default function AgendaR2() {
       filtered = filtered.filter((m) => m.r1_closer?.id === r1CloserFilter);
     }
 
+    // Filtro por nome/email/telefone
+    if (searchTerm.length >= 2) {
+      const search = searchTerm.toLowerCase();
+      const searchDigits = searchTerm.replace(/\D/g, '');
+      
+      filtered = filtered.filter((m) => 
+        m.attendees?.some(att => {
+          const name = (att.name || att.deal?.contact?.name || att.deal?.name || '').toLowerCase();
+          const phone = (att.phone || att.deal?.contact?.phone || '').replace(/\D/g, '');
+          const email = (att.deal?.contact?.email || '').toLowerCase();
+          
+          return name.includes(search) || 
+                 email.includes(search) ||
+                 (searchDigits.length > 0 && phone.includes(searchDigits));
+        })
+      );
+    }
+
     // Group meetings by closer_id + scheduled_at to consolidate attendees
     const groups: Record<string, typeof filtered> = {};
     filtered.forEach((m) => {
@@ -176,7 +197,7 @@ export default function AgendaR2() {
       ...group[0],
       attendees: group.flatMap((m) => m.attendees || []),
     }));
-  }, [meetings, closerFilter, statusFilter, r1CloserFilter, isR2Closer, myR2Closer?.id]);
+  }, [meetings, closerFilter, statusFilter, r1CloserFilter, isR2Closer, myR2Closer?.id, searchTerm]);
 
   // Filter closers based on filter (ou mostrar apenas o próprio closer se for R2 closer)
   const displayClosers = useMemo(() => {
@@ -463,7 +484,7 @@ export default function AgendaR2() {
         </div>
 
         {/* View Mode & Filters */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* View Mode Toggle */}
           <div className="flex items-center border rounded-md">
             {(["day", "week", "month"] as ViewMode[]).map((mode) => (
@@ -477,6 +498,17 @@ export default function AgendaR2() {
                 {mode === "day" ? "Dia" : mode === "week" ? "Semana" : "Mês"}
               </Button>
             ))}
+          </div>
+
+          {/* Search Filter */}
+          <div className="relative w-[200px]">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar lead..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 h-9"
+            />
           </div>
 
           {/* Closer Filter - escondido para closers R2 (eles veem apenas sua agenda) */}
