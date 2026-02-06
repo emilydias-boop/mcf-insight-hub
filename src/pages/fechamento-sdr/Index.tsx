@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,8 +33,9 @@ import { toast } from "sonner";
 const FechamentoSDRList = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const currentMonth = format(new Date(), "yyyy-MM");
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedMonth, setSelectedMonth] = useState(searchParams.get('month') || currentMonth);
 
   // Filter states
   const [roleFilter, setRoleFilter] = useState<"sdr" | "closer" | "all">("all");
@@ -274,7 +275,10 @@ const FechamentoSDRList = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <Select value={selectedMonth} onValueChange={(month) => {
+              setSelectedMonth(month);
+              setSearchParams({ month });
+            }}>
               <SelectTrigger className="w-[200px]">
                 <SelectValue />
               </SelectTrigger>
@@ -530,7 +534,7 @@ const FechamentoSDRList = () => {
                         <SdrStatusBadge status={payout.status} />
                       </TableCell>
                       <TableCell className="text-center">
-                        <Button variant="ghost" size="sm" onClick={() => navigate(`/fechamento-sdr/${payout.id}`)}>
+                        <Button variant="ghost" size="sm" onClick={() => navigate(`/fechamento-sdr/${payout.id}?from=${selectedMonth}`)}>
                           <Eye className="h-4 w-4 mr-1" />
                           Ver
                         </Button>

@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -95,6 +95,8 @@ const DynamicIndicatorsSection = ({
 const FechamentoSDRDetail = () => {
   const { payoutId } = useParams<{ payoutId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromMonth = searchParams.get('from');
   const { user, role } = useAuth();
 
   const { data: payout, isLoading } = useSdrPayoutDetail(payoutId);
@@ -138,7 +140,7 @@ const FechamentoSDRDetail = () => {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">Fechamento não encontrado.</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate("/fechamento-sdr")}>
+        <Button variant="outline" className="mt-4" onClick={() => navigate(fromMonth ? `/fechamento-sdr?month=${fromMonth}` : '/fechamento-sdr')}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Voltar
         </Button>
@@ -303,7 +305,7 @@ const FechamentoSDRDetail = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(fromMonth ? `/fechamento-sdr?month=${fromMonth}` : '/fechamento-sdr')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
