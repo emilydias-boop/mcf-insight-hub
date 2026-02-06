@@ -4996,7 +4996,7 @@ export type Database = {
           {
             foreignKeyName: "gr_wallet_entries_deal_id_fkey"
             columns: ["deal_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "crm_deals"
             referencedColumns: ["id"]
           },
@@ -9257,6 +9257,7 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sync_crm_deals_to_gr_wallets: { Args: never; Returns: number }
       upsert_deals_smart: { Args: { deals_data: Json }; Returns: undefined }
       user_has_permission: {
         Args: {
