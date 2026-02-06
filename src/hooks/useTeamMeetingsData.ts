@@ -71,8 +71,8 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: Team
           agendamentos: m.agendamentos,
           r1Agendada: m.r1_agendada,
           r1Realizada: m.r1_realizada,
-          // NOVA LÓGICA: No-Show = Agendamentos - Realizadas (garantir consistência)
-          noShows: Math.max(0, m.agendamentos - m.r1_realizada),
+          // No-Show vem corrigido da RPC (r1_agendada - r1_realizada)
+          noShows: m.no_shows || 0,
           contratos: m.contratos,
         };
       })
@@ -90,8 +90,10 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: Team
     const taxaConversao = totalRealizadas > 0
       ? (totalContratos / totalRealizadas) * 100
       : 0;
-    const taxaNoShow = totalAgendamentos > 0
-      ? (totalNoShows / totalAgendamentos) * 100
+    // Taxa de No-Show usa R1 Agendada como base (reuniões que deveriam ocorrer)
+    const totalR1Agendada = bySDR.reduce((sum, s) => sum + s.r1Agendada, 0);
+    const taxaNoShow = totalR1Agendada > 0
+      ? (totalNoShows / totalR1Agendada) * 100
       : 0;
 
     return {

@@ -32,19 +32,20 @@ export const useMinhasReunioesFromAgenda = (startDate: Date | null, endDate: Dat
 
   // Calcular métricas derivadas
   const agendamentos = myMetrics?.agendamentos || 0;
+  const r1Agendada = myMetrics?.r1_agendada || 0;
   const r1Realizada = myMetrics?.r1_realizada || 0;
-  // NOVA LÓGICA: No-Show = Agendamentos - Realizadas
-  const noShows = Math.max(0, agendamentos - r1Realizada);
+  // No-Show vem corrigido da RPC (r1_agendada - r1_realizada)
+  const noShows = myMetrics?.no_shows || 0;
   const contratos = myMetrics?.contratos || 0;
 
-  // Taxa de conversão: realizadas / (realizadas + no_shows)
-  const taxaConversao = (r1Realizada + noShows) > 0 
-    ? Math.round((r1Realizada / (r1Realizada + noShows)) * 100) 
+  // Taxa de conversão: realizadas / r1_agendada
+  const taxaConversao = r1Agendada > 0 
+    ? Math.round((r1Realizada / r1Agendada) * 100) 
     : 0;
 
-  // Taxa de no-show: no_shows / (realizadas + no_shows)
-  const taxaNoShow = (r1Realizada + noShows) > 0 
-    ? Math.round((noShows / (r1Realizada + noShows)) * 100) 
+  // Taxa de no-show: no_shows / r1_agendada
+  const taxaNoShow = r1Agendada > 0 
+    ? Math.round((noShows / r1Agendada) * 100) 
     : 0;
 
   const summary: MinhasReunioesSummary = {
