@@ -62,7 +62,8 @@ export default function TransacoesIncorp() {
   const deleteMutation = useDeleteTransaction();
   
   // Closers disponíveis para filtro
-  const { data: closers = [] } = useGestorClosers();
+  // Closers R1 apenas (Julio, Cristiane, Thayna)
+  const { data: closers = [] } = useGestorClosers('r1');
 
   // Query com filtros
   const filters: TransactionFilters = {
@@ -85,21 +86,30 @@ export default function TransacoesIncorp() {
     staleTime: 1000 * 60 * 5, // 5 minutos
   });
 
-  // Attendees para matching de closer com transações
+  // Attendees R1 para matching - busca TODOS os status (não apenas contract_paid)
+  // para atribuir vendas ao closer R1 independente do tipo de produto
   const { data: attendees = [] } = useQuery({
-    queryKey: ['attendees-for-matching', startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ['r1-attendees-for-matching', startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!startDate) return [];
+      
+      // Buscar período expandido (30 dias antes) para capturar leads
+      // que fizeram R1 antes e compraram no período
+      const expandedStart = new Date(startDate);
+      expandedStart.setDate(expandedStart.getDate() - 30);
       
       const { data, error } = await supabase
         .from('meeting_slot_attendees')
         .select(`
-          id, attendee_phone, deal_id,
-          meeting_slots!inner(closer_id),
+          id, 
+          attendee_phone, 
+          deal_id,
+          meeting_slots!inner(closer_id, meeting_type),
           crm_deals!deal_id(crm_contacts!contact_id(email, phone))
         `)
-        .eq('status', 'contract_paid')
-        .gte('contract_paid_at', startDate.toISOString());
+        .eq('meeting_slots.meeting_type', 'r1')
+        .gte('meeting_slots.scheduled_at', expandedStart.toISOString())
+        .in('status', ['scheduled', 'invited', 'completed', 'contract_paid', 'rescheduled', 'no_show']);
       
       if (error) throw error;
       return data || [];
