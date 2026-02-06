@@ -1,93 +1,96 @@
 
-# Persistir Mês Selecionado na Navegação do Fechamento de Equipe
+# Corrigir Bônus de iFood Ultrameta para BU Incorporador
 
 ## Problema Identificado
 
-Quando o usuário:
-1. Seleciona um mês diferente (ex: Janeiro 2026)
-2. Clica em um SDR para ver detalhes
-3. Clica em "Voltar" para retornar à lista
+Quando a Ultrameta do time é batida (faturamento >= R$ 1.600.000), o sistema deveria adicionar R$ 1.000 ao iFood de todos os colaboradores da BU Incorporador. Atualmente isso não está acontecendo devido a:
 
-A página volta ao **mês atual** em vez de manter o **mês selecionado anteriormente**.
+1. **Discrepância no cálculo de faturamento**: A Edge Function usa uma lógica de deduplicação diferente do frontend
+2. **Bug na função de deduplicação**: A Edge Function retorna `product_price` para parcelas > 1 ao invés de 0
+3. **Ausência de preços fixos**: A Edge Function não utiliza os preços fixos configurados para produtos
 
-## Causa Raiz
+## Análise dos Valores
 
-O estado `selectedMonth` é armazenado em `useState` local no componente `Index.tsx`:
-
-```javascript
-// Linha 37 - Index.tsx
-const [selectedMonth, setSelectedMonth] = useState(currentMonth);
-```
-
-Quando o usuário navega para outra página e volta, o componente é remontado e o estado reinicializa para o mês atual.
+| Componente | Valor Calculado | Lógica |
+|------------|-----------------|--------|
+| Edge Function | ~R$ 201.287 | Deduplicação com bugs |
+| Frontend (estimativa) | ~R$ 1.315.332 | `getDeduplicatedGross` correto |
+| Meta Ultrameta | R$ 1.600.000 | Configurado em `team_monthly_goals` |
+| Prêmio iFood | R$ 1.000 | Configurado em `ultrameta_premio_ifood` |
 
 ## Solução
 
-Usar **URL Search Parameters** para persistir o mês selecionado. Essa é a abordagem já utilizada em outras partes do sistema (ex: `ReunioesEquipe.tsx`, `AgendaR2.tsx`).
+### 1. Corrigir Edge Function (`supabase/functions/recalculate-sdr-payout/index.ts`)
+
+**Problema atual (linhas 499-507):**
+```javascript
+const getDeduplicatedGross = (tx: any, isFirst: boolean): number => {
+  if (tx.gross_override !== null && tx.gross_override !== undefined) {
+    return tx.gross_override;
+  }
+  const isInstallment = tx.installment_number && tx.installment_number > 1;
+  if (isInstallment) return tx.product_price || 0;  // BUG: deveria ser 0
+  if (isFirst) return tx.product_price || 0;
+  return 0;
+};
+```
+
+**Correção:**
+```javascript
+const getDeduplicatedGross = (tx: any, isFirst: boolean): number => {
+  // Regra 1: Parcela > 1 sempre tem bruto zerado
+  const installment = tx.installment_number || 1;
+  if (installment > 1) {
+    return 0;
+  }
+  
+  // Regra 2: Override manual tem prioridade absoluta
+  if (tx.gross_override !== null && tx.gross_override !== undefined) {
+    return tx.gross_override;
+  }
+  
+  // Regra 3: NÃO é primeira transação do grupo cliente+produto = 0
+  if (!isFirst) {
+    return 0;
+  }
+  
+  // Regra 4: É primeira - usar product_price
+  return tx.product_price || 0;
+};
+```
+
+### 2. Verificar Meta do Time Corretamente
+
+A Edge Function precisa usar a mesma lógica do frontend para calcular o faturamento da BU. Atualmente ela pode estar calculando um valor muito baixo, fazendo com que `buUltrametaHit['incorporador']` seja `false` quando deveria ser `true`.
+
+### 3. Fluxo Esperado Após Correção
+
+```text
+1. Edge Function calcula faturamento Incorporador = R$ 1.600.000+
+2. buUltrametaHit['incorporador'] = true
+3. Para cada SDR/Closer da BU Incorporador elegível:
+   - ifood_ultrameta = teamGoal.ultrameta_premio_ifood (R$ 1.000)
+   - total_ifood = ifood_mensal + R$ 1.000
+4. Payout salvo com novo valor
+```
 
 ## Arquivos a Modificar
 
-### 1. `src/pages/fechamento-sdr/Index.tsx`
-
-**Alterações:**
-- Importar `useSearchParams` do react-router-dom
-- Inicializar `selectedMonth` a partir do URL param `?month=`
-- Atualizar URL quando o mês for alterado
-- Incluir o mês ao navegar para detalhes
-
-```javascript
-// Antes
-import { useNavigate } from "react-router-dom";
-const [selectedMonth, setSelectedMonth] = useState(currentMonth);
-
-// Depois  
-import { useNavigate, useSearchParams } from "react-router-dom";
-const [searchParams, setSearchParams] = useSearchParams();
-const [selectedMonth, setSelectedMonth] = useState(
-  searchParams.get('month') || currentMonth
-);
-
-// Atualizar URL ao mudar mês
-const handleMonthChange = (month: string) => {
-  setSelectedMonth(month);
-  setSearchParams({ month });
-};
-
-// Navegar mantendo o mês
-navigate(`/fechamento-sdr/${payout.id}?from=${selectedMonth}`)
-```
-
-### 2. `src/pages/fechamento-sdr/Detail.tsx`
-
-**Alterações:**
-- Importar `useSearchParams`
-- Ler o parâmetro `from` para saber de qual mês veio
-- Navegar de volta preservando o mês
-
-```javascript
-// Antes
-onClick={() => navigate(-1)}
-
-// Depois
-const [searchParams] = useSearchParams();
-const fromMonth = searchParams.get('from');
-
-onClick={() => navigate(fromMonth ? `/fechamento-sdr?month=${fromMonth}` : '/fechamento-sdr')}
-```
-
-## Fluxo Após Correção
-
-```text
-/fechamento-sdr?month=2026-01
-        ↓ (clica em SDR)
-/fechamento-sdr/abc123?from=2026-01
-        ↓ (clica em Voltar)
-/fechamento-sdr?month=2026-01  ← Mês preservado!
-```
+1. **`supabase/functions/recalculate-sdr-payout/index.ts`**:
+   - Corrigir função `getDeduplicatedGross` (linhas 499-507)
+   - Garantir que a lógica de cálculo de `buRevenue['incorporador']` seja consistente com o frontend
 
 ## Resultado Esperado
 
-- O mês selecionado persiste na URL
-- Navegação de volta mantém a seleção anterior
-- Compartilhar link da página já abre no mês correto
-- Padrão consistente com outras páginas do sistema (`ReunioesEquipe`, `AgendaR2`)
+Após a correção e recálculo:
+- Todos os SDRs e Closers da BU Incorporador elegíveis terão:
+  - `ifood_ultrameta`: R$ 1.000
+  - `total_ifood`: ifood_mensal + R$ 1.000
+- O campo ficará visível na página de detalhe do fechamento
+- O valor será somado ao Total iFood
+
+## Observação
+
+A lógica de elegibilidade (`elegivelUltrameta`) já está implementada:
+- Colaboradores que entraram durante o mês (data_admissao >= início do mês) **não** recebem o bônus
+- Apenas colaboradores que estavam no time desde o início do mês são elegíveis
