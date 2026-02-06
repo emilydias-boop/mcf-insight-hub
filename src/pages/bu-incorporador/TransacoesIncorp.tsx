@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Filter } from 'lucide-react';
+import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Filter, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -56,8 +57,12 @@ export default function TransacoesIncorp() {
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [productFilterOpen, setProductFilterOpen] = useState(false);
+  const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
 
   const deleteMutation = useDeleteTransaction();
+  
+  // Closers disponíveis para filtro
+  const { data: closers = [] } = useGestorClosers();
 
   // Query com filtros
   const filters: TransactionFilters = {
@@ -80,13 +85,64 @@ export default function TransacoesIncorp() {
     staleTime: 1000 * 60 * 5, // 5 minutos
   });
 
+  // Attendees para matching de closer com transações
+  const { data: attendees = [] } = useQuery({
+    queryKey: ['attendees-for-matching', startDate?.toISOString(), endDate?.toISOString()],
+    queryFn: async () => {
+      if (!startDate) return [];
+      
+      const { data, error } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id, attendee_phone, deal_id,
+          meeting_slots!inner(closer_id),
+          crm_deals!deal_id(crm_contacts!contact_id(email, phone))
+        `)
+        .eq('status', 'contract_paid')
+        .gte('contract_paid_at', startDate.toISOString());
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!startDate,
+  });
+
   // Produtos já são filtrados no RPC - usar diretamente
   const transactions = allTransactions;
+  
+  // Filtrar por closer (via matching com attendees)
+  const filteredByCloser = useMemo(() => {
+    if (selectedCloserId === 'all') return transactions;
+    
+    const closerAttendees = attendees.filter((a: any) => 
+      a.meeting_slots?.closer_id === selectedCloserId
+    );
+    
+    const closerEmails = new Set(
+      closerAttendees
+        .map((a: any) => a.crm_deals?.crm_contacts?.email?.toLowerCase())
+        .filter(Boolean)
+    );
+    
+    const closerPhones = new Set(
+      closerAttendees
+        .map((a: any) => (a.crm_deals?.crm_contacts?.phone || '').replace(/\D/g, ''))
+        .filter((p: string) => p.length >= 8)
+    );
+    
+    return transactions.filter(t => {
+      const txEmail = (t.customer_email || '').toLowerCase();
+      const txPhone = (t.customer_phone || '').replace(/\D/g, '');
+      
+      return closerEmails.has(txEmail) || 
+             (txPhone.length >= 8 && closerPhones.has(txPhone));
+    });
+  }, [transactions, selectedCloserId, attendees]);
 
   // Agrupa transações por compra (parent + order bumps)
   const transactionGroups = useMemo(() => {
-    return groupTransactionsByPurchase(transactions, globalFirstIds);
-  }, [transactions, globalFirstIds]);
+    return groupTransactionsByPurchase(filteredByCloser, globalFirstIds);
+  }, [filteredByCloser, globalFirstIds]);
 
   // Paginação por grupos
   const totalPages = Math.ceil(transactionGroups.length / itemsPerPage);
@@ -100,14 +156,14 @@ export default function TransacoesIncorp() {
     let bruto = 0;
     let liquido = 0;
     
-    transactions.forEach(t => {
+    filteredByCloser.forEach(t => {
       const isFirst = globalFirstIds.has(t.id);
       bruto += getDeduplicatedGross(t, isFirst);
       liquido += t.net_value || 0;
     });
     
-    return { count: transactions.length, bruto, liquido };
-  }, [transactions, globalFirstIds]);
+    return { count: filteredByCloser.length, bruto, liquido };
+  }, [filteredByCloser, globalFirstIds]);
 
   // Handlers
   const handleRefresh = async () => {
@@ -120,17 +176,18 @@ export default function TransacoesIncorp() {
     setStartDate(undefined);
     setEndDate(undefined);
     setSelectedProducts([]);
+    setSelectedCloserId('all');
     setCurrentPage(1);
   };
 
   const handleExport = () => {
-    if (transactions.length === 0) {
+    if (filteredByCloser.length === 0) {
       toast.error('Nenhuma transação para exportar');
       return;
     }
 
     const headers = ['Data', 'Produto', 'Cliente', 'Email', 'Parcela', 'Bruto', 'Líquido', 'Fonte', 'Tipo', 'Duplicado'];
-    const rows = transactions.map(t => {
+    const rows = filteredByCloser.map(t => {
       const isFirst = globalFirstIds.has(t.id);
       return [
         t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yyyy HH:mm') : '',
@@ -265,6 +322,26 @@ export default function TransacoesIncorp() {
                   placeholder="Selecione..."
                 />
               </div>
+              <div className="w-full sm:w-48">
+                <label className="text-sm font-medium mb-2 block">Closer</label>
+                <Select value={selectedCloserId} onValueChange={(v) => {
+                  setSelectedCloserId(v);
+                  setCurrentPage(1);
+                }}>
+                  <SelectTrigger>
+                    <Users className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {closers.map(closer => (
+                      <SelectItem key={closer.id} value={closer.id}>
+                        {closer.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-end">
                 <Button 
                   variant="outline" 
@@ -385,7 +462,7 @@ export default function TransacoesIncorp() {
                     <span className="text-sm text-muted-foreground">grupos por página</span>
                   </div>
                   <div className="text-sm text-muted-foreground hidden md:block">
-                    {transactionGroups.length.toLocaleString('pt-BR')} grupos ({transactions.length.toLocaleString('pt-BR')} transações)
+                    {transactionGroups.length.toLocaleString('pt-BR')} grupos ({filteredByCloser.length.toLocaleString('pt-BR')} transações)
                   </div>
                 </div>
                 {totalPages > 1 && (
