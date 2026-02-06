@@ -1,89 +1,89 @@
 
-
-# Corrigir Indicadores para Usar Valores do Plano Individual
+# Corrigir Edge Function para Usar Valores do Plano Individual
 
 ## Problema Identificado
 
-Os indicadores de meta estao calculando o `valorBase` sempre de forma dinamica (`variavel_total * peso_percentual / 100`), ignorando os valores especificos configurados no plano individual (`valor_meta_rpg`, `valor_docs_reuniao`, `valor_tentativas`, `valor_organizacao`).
+A edge function `recalculate-sdr-payout` esta calculando os valores finais usando a formula de peso (`variavel_total * peso_percentual / 100`) em vez de usar os valores especificos configurados no plano individual (`valor_meta_rpg`, `valor_docs_reuniao`, `valor_tentativas`, `valor_organizacao`).
 
-### Fluxo Atual (Incorreto)
-```text
-EditIndividualPlanDialog -> salva valor_meta_rpg = R$ 475,00 -> sdr_comp_plan
-                                                                     |
-DynamicIndicatorCard -> calcula valorBase = variavel * peso% = R$ 540,00
-                        (ignora o valor do plano individual!)
-```
+### Exemplo do Problema
 
-### Fluxo Esperado
-```text
-EditIndividualPlanDialog -> salva valor_meta_rpg = R$ 475,00 -> sdr_comp_plan
-                                                                     |
-DynamicIndicatorCard -> usa valorBase = R$ 475,00 (do plano individual)
-```
+O usuario configurou no plano:
+- `valor_meta_rpg` = R$ 475,00
+- `valor_docs_reuniao` = R$ 475,00
+- `valor_tentativas` = R$ 200,00
+- `valor_organizacao` = R$ 200,00
+
+Mas a edge function esta calculando:
+- Agendamentos = R$ 1.200 x 45% = R$ 540,00 (errado)
+- Realizadas = R$ 1.200 x 45% = R$ 540,00 x 0.7 = R$ 378,00 (errado)
+
+Quando deveria ser:
+- Agendamentos = R$ 475,00 x 1 = R$ 475,00 (correto)
+- Realizadas = R$ 475,00 x 0.7 = R$ 332,50 (correto)
 
 ## Solucao
 
-Alterar `DynamicIndicatorCard.tsx` para:
-1. Verificar se existe valor especifico no `compPlan` para a metrica
-2. Se existir e for maior que zero, usar esse valor como `valorBase`
-3. Se nao existir ou for zero, usar o calculo dinamico como fallback
+Alterar a edge function `recalculate-sdr-payout` para priorizar os valores especificos do compPlan sobre o calculo dinamico por peso.
 
-## Arquivo a Modificar
+### Arquivo a Modificar
 
-**src/components/fechamento/DynamicIndicatorCard.tsx**
+**supabase/functions/recalculate-sdr-payout/index.ts**
 
-### Alteracao (Linhas 139-148)
+### Alteracao (Linhas 316-355)
 
-Codigo atual:
+Logica atual:
 ```javascript
-if (config.payoutPctField && config.payoutMultField && config.payoutValueField) {
-  const pct = (payout as any)[config.payoutPctField] || 0;
-  const mult = (payout as any)[config.payoutMultField] || 0;
-  const valorFinal = (payout as any)[config.payoutValueField] || 0;
+if (hasActiveMetrics) {
+  const variavelTotal = compPlan.variavel_total || ...;
   
-  // Calculate valorBase dynamically from peso_percentual
-  const baseVariavel = variavelTotal || compPlan?.variavel_total || 1200;
-  const pesoPercent = metrica.peso_percentual || 25;
-  const valorBase = baseVariavel * (pesoPercent / 100);
+  // Sempre calcula pelo peso (ignora valores do plano)
+  valor_reunioes_agendadas = pesoAgendadas > 0 
+    ? (variavelTotal * (pesoAgendadas / 100)) * mult_reunioes_agendadas 
+    : 0;
+  valor_reunioes_realizadas = pesoRealizadas > 0 
+    ? (variavelTotal * (pesoRealizadas / 100)) * mult_reunioes_realizadas 
+    : 0;
+  // ...
+}
 ```
 
-Codigo corrigido:
+Nova logica (priorizar valores especificos):
 ```javascript
-if (config.payoutPctField && config.payoutMultField && config.payoutValueField) {
-  const pct = (payout as any)[config.payoutPctField] || 0;
-  const mult = (payout as any)[config.payoutMultField] || 0;
-  const valorFinal = (payout as any)[config.payoutValueField] || 0;
+if (hasActiveMetrics) {
+  const variavelTotal = compPlan.variavel_total || ...;
   
-  // Prioridade: valor especifico do compPlan > calculo dinamico
-  let valorBase = 0;
-  
-  if (config.compPlanValueField && compPlan) {
-    const valorEspecifico = (compPlan as any)[config.compPlanValueField] || 0;
-    if (valorEspecifico > 0) {
-      valorBase = valorEspecifico;
-    }
-  }
-  
-  // Fallback: calculo dinamico se nao houver valor especifico
-  if (valorBase === 0) {
-    const baseVariavel = variavelTotal || compPlan?.variavel_total || 1200;
-    const pesoPercent = metrica.peso_percentual || 25;
-    valorBase = baseVariavel * (pesoPercent / 100);
-  }
+  // PRIORIZAR valores especificos do compPlan > calculo dinamico por peso
+  valor_reunioes_agendadas = compPlan.valor_meta_rpg > 0
+    ? compPlan.valor_meta_rpg * mult_reunioes_agendadas
+    : (pesoAgendadas > 0 ? (variavelTotal * (pesoAgendadas / 100)) * mult_reunioes_agendadas : 0);
+    
+  valor_reunioes_realizadas = compPlan.valor_docs_reuniao > 0
+    ? compPlan.valor_docs_reuniao * mult_reunioes_realizadas
+    : (pesoRealizadas > 0 ? (variavelTotal * (pesoRealizadas / 100)) * mult_reunioes_realizadas : 0);
+    
+  valor_tentativas = compPlan.valor_tentativas > 0
+    ? compPlan.valor_tentativas * mult_tentativas
+    : (pesoTentativas > 0 && !isCloser ? (variavelTotal * (pesoTentativas / 100)) * mult_tentativas : 0);
+    
+  valor_organizacao = compPlan.valor_organizacao > 0
+    ? compPlan.valor_organizacao * mult_organizacao
+    : (pesoOrganizacao > 0 && !isCloser ? (variavelTotal * (pesoOrganizacao / 100)) * mult_organizacao : 0);
+}
 ```
 
-## Mapeamento de Campos (METRIC_CONFIG)
+## Resumo das Alteracoes
 
-| Metrica | Campo CompPlan |
-|---------|----------------|
-| agendamentos | `valor_meta_rpg` |
-| realizadas | `valor_docs_reuniao` |
-| tentativas | `valor_tentativas` |
-| organizacao | `valor_organizacao` |
+| Campo | Logica Atual | Nova Logica |
+|-------|--------------|-------------|
+| valor_reunioes_agendadas | variavel x peso% x mult | valor_meta_rpg x mult (se > 0) |
+| valor_reunioes_realizadas | variavel x peso% x mult | valor_docs_reuniao x mult (se > 0) |
+| valor_tentativas | variavel x peso% x mult | valor_tentativas x mult (se > 0) |
+| valor_organizacao | variavel x peso% x mult | valor_organizacao x mult (se > 0) |
 
 ## Resultado Esperado
 
-- Quando o usuario editar valores no plano individual, os indicadores refletirao os novos valores imediatamente
-- Se os valores especificos forem zero (ou nao configurados), o sistema usara o calculo dinamico como fallback
-- Compatibilidade total com a arquitetura atual de pesos percentuais
-
+Apos recalcular:
+- Agendamentos R1: R$ 475,00 x 1 = R$ 475,00
+- R1 Realizadas: R$ 475,00 x 0.7 = R$ 332,50
+- Tentativas: R$ 200,00 x 0.5 = R$ 100,00
+- Organizacao: R$ 200,00 x 1 = R$ 200,00
