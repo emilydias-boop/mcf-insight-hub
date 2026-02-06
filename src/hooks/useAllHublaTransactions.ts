@@ -20,6 +20,7 @@ export interface HublaTransaction {
   total_installments: number | null;
   source: string | null;
   gross_override: number | null;
+  linked_attendee_id: string | null;
 }
 
 export interface TransactionFilters {

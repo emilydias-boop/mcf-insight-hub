@@ -120,12 +120,17 @@ export default function TransacoesIncorp() {
   // Produtos já são filtrados no RPC - usar diretamente
   const transactions = allTransactions;
   
-  // Filtrar por closer (via matching com attendees)
+  // Filtrar por closer (via matching com attendees - email, telefone ou linked_attendee_id)
   const filteredByCloser = useMemo(() => {
     if (selectedCloserId === 'all') return transactions;
     
     const closerAttendees = attendees.filter((a: any) => 
       a.meeting_slots?.closer_id === selectedCloserId
+    );
+    
+    // IDs dos attendees do closer (para matching direto por linked_attendee_id)
+    const closerAttendeeIds = new Set(
+      closerAttendees.map((a: any) => a.id)
     );
     
     const closerEmails = new Set(
@@ -144,8 +149,14 @@ export default function TransacoesIncorp() {
       const txEmail = (t.customer_email || '').toLowerCase();
       const txPhone = (t.customer_phone || '').replace(/\D/g, '');
       
-      return closerEmails.has(txEmail) || 
-             (txPhone.length >= 8 && closerPhones.has(txPhone));
+      // Match por email ou telefone
+      const emailMatch = closerEmails.has(txEmail);
+      const phoneMatch = txPhone.length >= 8 && closerPhones.has(txPhone);
+      
+      // Match por linked_attendee_id (vendas intermediadas manualmente vinculadas)
+      const linkedMatch = t.linked_attendee_id && closerAttendeeIds.has(t.linked_attendee_id);
+      
+      return emailMatch || phoneMatch || linkedMatch;
     });
   }, [transactions, selectedCloserId, attendees]);
 
