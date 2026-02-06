@@ -1,83 +1,37 @@
+# ✅ Remoção de "% Meta Global" - CONCLUÍDO
 
+## Problema Resolvido
+A "% Meta Global" estava exibindo valores incorretos porque era calculada como média simples dos percentuais de atingimento, sem considerar os pesos diferentes de cada indicador.
 
-# Remover "% Meta Global" do Sistema de Fechamento
+## Alterações Realizadas
 
-## Problema
-A "% Meta Global" está exibindo valores incorretos porque é calculada como uma média simples dos percentuais de atingimento, mas isso não reflete corretamente a performance considerando os pesos diferentes de cada indicador.
+### 1. `src/pages/fechamento-sdr/Index.tsx`
+- ✅ Removida função `calculateGlobalPct`
+- ✅ Removidas variáveis `criticalCount` e `warningCount`
+- ✅ Removida seção de alertas de performance
+- ✅ Removido "% Meta Global" do header da tabela
+- ✅ Removida coluna "% Meta Global" das células da tabela
+- ✅ Removido destaque de linhas baseado em globalPct
+- ✅ Removida badge "CRÍTICO"
+- ✅ Removido "% Meta Global" do CSV export
 
-## Locais de Alteração
+### 2. `src/components/fechamento/SdrFechamentoView.tsx`
+- ✅ Removido Card "% Meta Global"
+- ✅ Removida função `calculateGlobalPct`
+- ✅ Ajustado grid de 6 para 5 colunas
+- ✅ Removido import de `TrendingUp`
 
-### 1. Página Principal de Fechamento (`src/pages/fechamento-sdr/Index.tsx`)
-- **Tabela**: Remover coluna "% Meta Global" do cabeçalho e das células
-- **CSV Export**: Remover "% Meta Global" dos headers e dados exportados
-- **Alertas de performance**: Remover lógica de cores baseada em globalPct (criticalCount, warningCount, row highlighting)
-- **Função**: Remover `calculateGlobalPct`
+### 3. `src/components/fechamento/CloserFechamentoView.tsx`
+- ✅ Removido Card "% Meta Global"
+- ✅ Removida função `calculateGlobalPct`
+- ✅ Ajustado grid de 6 para 5 colunas
 
-### 2. View do SDR (`src/components/fechamento/SdrFechamentoView.tsx`)
-- Remover o primeiro Card que mostra "% Meta Global"
-- Remover função `calculateGlobalPct`
-- Ajustar grid de 6 para 5 colunas
+### 4. `src/components/fechamento/TeamGoalsSummary.tsx`
+- ✅ Substituído cálculo de "Meta Global" por "Total Conta" para identificar melhor SDR/Closer
+- ✅ Exibição alterada de "Meta Global: X%" para "Total: R$ X"
 
-### 3. View do Closer (`src/components/fechamento/CloserFechamentoView.tsx`)
-- Remover o primeiro Card que mostra "% Meta Global"
-- Remover função `calculateGlobalPct` e `getColorForPct`
-- Ajustar grid de 6 para 5 colunas
-
-### 4. Resumo de Metas da Equipe (`src/components/fechamento/TeamGoalsSummary.tsx`)
-- Remover linha "Meta Global: X%" na seção "Melhor SDR" / "Melhor Closer"
-- Substituir por outra métrica relevante ou remover completamente
-
-## Detalhes Técnicos
-
-### Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/fechamento-sdr/Index.tsx` | Remover coluna da tabela, CSV e lógica de alertas |
-| `src/components/fechamento/SdrFechamentoView.tsx` | Remover card "% Meta Global" |
-| `src/components/fechamento/CloserFechamentoView.tsx` | Remover card "% Meta Global" |
-| `src/components/fechamento/TeamGoalsSummary.tsx` | Remover "Meta Global" do display de melhor SDR/Closer |
-
-### Código a Remover/Modificar
-
-**Index.tsx - Remover da tabela:**
-```text
-// Remover header
-<TableHead className="text-right">% Meta Global</TableHead>
-
-// Remover célula
-<TableCell className="text-right">
-  <span className={...}>{globalPct.toFixed(1)}%</span>
-</TableCell>
-```
-
-**Index.tsx - Remover do CSV:**
-```text
-// Remover de headers array:
-"% Meta Global"
-
-// Remover de rows map:
-globalPct.toFixed(1) + "%"
-```
-
-**SdrFechamentoView.tsx e CloserFechamentoView.tsx:**
-```text
-// Remover Card inteiro de "% Meta Global"
-<Card>
-  <CardContent className="pt-4 pb-3">
-    <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
-      <TrendingUp className="h-3.5 w-3.5" />
-      % Meta Global
-    </div>
-    ...
-  </CardContent>
-</Card>
-
-// Ajustar grid: lg:grid-cols-6 → lg:grid-cols-5
-```
-
-## Resultado Esperado
+## Resultado
 - Interface mais limpa sem métrica incorreta
 - CSV exportado sem coluna "% Meta Global"
-- Os indicadores individuais (Agendamento, Realizadas, etc.) continuam visíveis com seus valores corretos
-
+- Os indicadores individuais (Agendamento, Realizadas, Tentativas, Organização) continuam visíveis com valores corretos
+- Premiação Meta Divina agora usa Total Conta como critério para melhor SDR/Closer

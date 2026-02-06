@@ -97,26 +97,9 @@ export function TeamGoalsSummary({ anoMes, bu = 'incorporador' }: TeamGoalsSumma
     ? Math.min(100, (currentRevenue / teamGoal.meta_valor) * 100)
     : 0;
 
-  // Identificar melhor SDR e Closer para Meta Divina
-  const calculateGlobalPct = (payout: any) => {
-    const sdrData = payout.sdr as any;
-    const isCloser = sdrData?.role_type === 'closer';
-    
-    if (isCloser) {
-      // Para Closers: % Contratos (armazenado em pct_reunioes_agendadas)
-      return payout.pct_reunioes_agendadas || 0;
-    } else {
-      // Para SDRs: média de agendamento, realizadas, tentativas, organização
-      const pcts = [
-        payout.pct_reunioes_agendadas,
-        payout.pct_reunioes_realizadas,
-        payout.pct_tentativas,
-        payout.pct_organizacao,
-      ].filter((p) => p !== null && p !== undefined) as number[];
-      
-      if (pcts.length === 0) return 0;
-      return pcts.reduce((a, b) => a + b, 0) / pcts.length;
-    }
+  // Identificar melhor SDR e Closer para Meta Divina baseado em Total Conta
+  const getTotalConta = (payout: any) => {
+    return payout.total_conta || 0;
   };
 
   // Filtrar payouts por BU
@@ -129,10 +112,10 @@ export function TeamGoalsSummary({ anoMes, bu = 'incorporador' }: TeamGoalsSumma
   const closerPayouts = buPayouts.filter(p => (p.sdr as any)?.role_type === 'closer');
 
   const bestSdr = sdrPayouts.length > 0
-    ? sdrPayouts.reduce((max, p) => calculateGlobalPct(p) > calculateGlobalPct(max) ? p : max)
+    ? sdrPayouts.reduce((max, p) => getTotalConta(p) > getTotalConta(max) ? p : max)
     : null;
   const bestCloser = closerPayouts.length > 0
-    ? closerPayouts.reduce((max, p) => calculateGlobalPct(p) > calculateGlobalPct(max) ? p : max)
+    ? closerPayouts.reduce((max, p) => getTotalConta(p) > getTotalConta(max) ? p : max)
     : null;
 
   // Buscar vencedores já registrados
@@ -243,7 +226,7 @@ export function TeamGoalsSummary({ anoMes, bu = 'incorporador' }: TeamGoalsSumma
                       <span className="text-xs text-muted-foreground">Melhor SDR</span>
                       <p className="font-semibold">{(bestSdr.sdr as any)?.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        Meta Global: {calculateGlobalPct(bestSdr).toFixed(0)}%
+                        Total: {formatCurrency(getTotalConta(bestSdr))}
                       </p>
                     </div>
                     <div className="text-right">
@@ -278,7 +261,7 @@ export function TeamGoalsSummary({ anoMes, bu = 'incorporador' }: TeamGoalsSumma
                       <span className="text-xs text-muted-foreground">Melhor Closer</span>
                       <p className="font-semibold">{(bestCloser.sdr as any)?.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        % Contratos: {calculateGlobalPct(bestCloser).toFixed(0)}%
+                        Total: {formatCurrency(getTotalConta(bestCloser))}
                       </p>
                     </div>
                     <div className="text-right">

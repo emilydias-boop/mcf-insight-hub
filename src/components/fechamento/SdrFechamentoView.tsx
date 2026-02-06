@@ -6,7 +6,6 @@ import {
   Target,
   Wallet,
   CreditCard,
-  TrendingUp,
   UtensilsCrossed,
 } from 'lucide-react';
 
@@ -15,43 +14,10 @@ interface SdrFechamentoViewProps {
 }
 
 export function SdrFechamentoView({ payout }: SdrFechamentoViewProps) {
-  const calculateGlobalPct = () => {
-    const pcts = [
-      payout.pct_reunioes_agendadas,
-      payout.pct_reunioes_realizadas,
-      payout.pct_tentativas,
-      payout.pct_organizacao,
-    ].filter((p) => p !== null) as number[];
-
-    if (pcts.length === 0) return 0;
-    return pcts.reduce((a, b) => a + b, 0) / pcts.length;
-  };
-
-  const globalPct = calculateGlobalPct();
-
   return (
     <>
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
-              <TrendingUp className="h-3.5 w-3.5" />
-              % Meta Global
-            </div>
-            <div
-              className={`text-xl font-bold mt-1 ${
-                globalPct >= 100
-                  ? 'text-success'
-                  : globalPct >= 70
-                  ? 'text-warning'
-                  : 'text-destructive'
-              }`}
-            >
-              {globalPct.toFixed(1)}%
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
 
         <Card>
           <CardContent className="pt-4 pb-3">
