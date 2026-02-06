@@ -1,58 +1,68 @@
 
-# Adicionar Filtro de Closer na Pagina de Transacoes
+# Filtro de Closers R1 - Atribuição Total de Vendas
 
-## Contexto
+## Objetivo
 
-A pagina "Vendas MCF INCORPORADOR" (`TransacoesIncorp.tsx`) nao possui filtro de Closer, enquanto o SalesReportPanel ja tem essa funcionalidade implementada. Vamos adicionar o mesmo filtro.
+Modificar o filtro de Closer na página de Transações para:
+1. Mostrar **apenas closers de R1** (Julio, Cristiane Gomes, Thayna)
+2. Atribuir **TODAS as vendas** ao closer R1 que atendeu o lead (A000, A010, A001, A009, Order Bumps, etc.)
+3. Contabilizar o valor bruto total no período para cada closer R1
 
-## Logica de Matching
+## Cenário de Uso
 
-Como as transacoes nao tem relacao direta com closers no banco, o matching e feito via:
-1. Buscar attendees que pagaram contrato (`status = 'contract_paid'`)
-2. Cruzar por email ou telefone do cliente da transacao com o contato do deal do attendee
-3. O closer e identificado pelo `meeting_slots.closer_id` do attendee
+Quando um lead passa por uma R1 com um closer e depois compra qualquer produto:
 
-## Alteracoes Necessarias
+| Produto | Descrição | Atribuição |
+|---------|-----------|------------|
+| A000 | Contrato R$ 497 | Closer R1 |
+| A010 | Consultoria Construa para Vender | Closer R1 |
+| A001 | Incorporador Completo | Closer R1 |
+| A009 | Incorporador + Club | Closer R1 |
+| Order Bumps | Produtos adicionais na compra | Closer R1 |
+| Qualquer outro | P2, extras | Closer R1 |
+
+## Alterações Técnicas
 
 ### Arquivo: `src/pages/bu-incorporador/TransacoesIncorp.tsx`
 
-#### 1. Adicionar imports necessarios
+#### 1. Filtrar apenas closers R1
 
 ```typescript
-import { useGestorClosers } from '@/hooks/useGestorClosers';
-```
-
-#### 2. Adicionar estado para filtro de closer
-
-```typescript
-const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
-```
-
-#### 3. Buscar lista de closers
-
-```typescript
-// Closers disponiveis para filtro
+// Linha 65 - Mudar de:
 const { data: closers = [] } = useGestorClosers();
+
+// Para:
+const { data: closers = [] } = useGestorClosers('r1');
 ```
 
-#### 4. Buscar attendees para matching
+#### 2. Expandir query de attendees para buscar TODOS os R1
+
+A query atual só busca `status = 'contract_paid'`. Precisamos buscar **todos os attendees de R1** (scheduled, completed, contract_paid) para capturar leads que compraram sem necessariamente ter "contract_paid":
 
 ```typescript
-// Attendees para matching de closer com transacoes
+// Linhas 89-108 - Substituir query por:
 const { data: attendees = [] } = useQuery({
-  queryKey: ['attendees-for-matching', startDate?.toISOString(), endDate?.toISOString()],
+  queryKey: ['r1-attendees-for-matching', startDate?.toISOString(), endDate?.toISOString()],
   queryFn: async () => {
     if (!startDate) return [];
+    
+    // Buscar período expandido (30 dias antes) para capturar leads
+    // que fizeram R1 antes e compraram no período
+    const expandedStart = new Date(startDate);
+    expandedStart.setDate(expandedStart.getDate() - 30);
     
     const { data, error } = await supabase
       .from('meeting_slot_attendees')
       .select(`
-        id, attendee_phone, deal_id,
-        meeting_slots!inner(closer_id),
+        id, 
+        attendee_phone, 
+        deal_id,
+        meeting_slots!inner(closer_id, meeting_type),
         crm_deals!deal_id(crm_contacts!contact_id(email, phone))
       `)
-      .eq('status', 'contract_paid')
-      .gte('contract_paid_at', startDate.toISOString());
+      .eq('meeting_slots.meeting_type', 'r1')
+      .gte('meeting_slots.scheduled_at', expandedStart.toISOString())
+      .in('status', ['scheduled', 'invited', 'completed', 'contract_paid', 'rescheduled', 'no_show']);
     
     if (error) throw error;
     return data || [];
@@ -61,90 +71,38 @@ const { data: attendees = [] } = useQuery({
 });
 ```
 
-#### 5. Adicionar filtro por closer no processamento
+## Por que expandir 30 dias antes?
 
-```typescript
-// Filtrar por closer (via matching com attendees)
-const filteredByCloser = useMemo(() => {
-  if (selectedCloserId === 'all') return transactions;
-  
-  const closerAttendees = attendees.filter((a: any) => 
-    a.meeting_slots?.closer_id === selectedCloserId
-  );
-  
-  const closerEmails = new Set(
-    closerAttendees
-      .map((a: any) => a.crm_deals?.crm_contacts?.email?.toLowerCase())
-      .filter(Boolean)
-  );
-  
-  const closerPhones = new Set(
-    closerAttendees
-      .map((a: any) => (a.crm_deals?.crm_contacts?.phone || '').replace(/\D/g, ''))
-      .filter((p: string) => p.length >= 8)
-  );
-  
-  return transactions.filter(t => {
-    const txEmail = (t.customer_email || '').toLowerCase();
-    const txPhone = (t.customer_phone || '').replace(/\D/g, '');
-    
-    return closerEmails.has(txEmail) || 
-           (txPhone.length >= 8 && closerPhones.has(txPhone));
-  });
-}, [transactions, selectedCloserId, attendees]);
-```
+Um lead pode:
+1. Fazer R1 com Julio em 10/01
+2. Comprar A001 em 05/02
 
-#### 6. Adicionar Select de Closer na UI (nos filtros)
+Ao filtrar Fevereiro, precisamos buscar R1s de Janeiro para fazer o matching corretamente.
 
-```jsx
-<div className="w-full sm:w-48">
-  <label className="text-sm font-medium mb-2 block">Closer</label>
-  <Select value={selectedCloserId} onValueChange={(v) => {
-    setSelectedCloserId(v);
-    setCurrentPage(1);
-  }}>
-    <SelectTrigger>
-      <SelectValue placeholder="Todos" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="all">Todos</SelectItem>
-      {closers.map(closer => (
-        <SelectItem key={closer.id} value={closer.id}>
-          {closer.name}
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-</div>
-```
+## Resultado Esperado
 
-#### 7. Atualizar totais e agrupamentos para usar dados filtrados
+### Exemplo Prático
 
-Substituir `transactions` por `filteredByCloser` nos calculos de:
-- `transactionGroups`
-- `totals`
+**Lead João:**
+- 15/01: Fez R1 com **Julio**
+- 20/01: Comprou **A000** (Contrato R$ 497)
+- 25/01: Fez R2 com Jessica
+- 30/01: Comprou **A009** (R$ 19.500)
+- 30/01: Comprou **Order Bump A010** (R$ 47)
 
-#### 8. Atualizar funcao de limpar filtros
+**Ao filtrar por "Julio" em Janeiro:**
 
-```typescript
-const handleClearFilters = () => {
-  setSearchTerm('');
-  setStartDate(undefined);
-  setEndDate(undefined);
-  setSelectedProducts([]);
-  setSelectedCloserId('all');  // Adicionar
-  setCurrentPage(1);
-};
-```
+| Produto | Valor |
+|---------|-------|
+| A000 (Contrato) | R$ 497 |
+| A009 (Incorporador + Club) | R$ 19.500 |
+| A010 (Order Bump) | R$ 47 |
+| **Total Bruto** | **R$ 20.044** |
 
-## Resultado Final
+Todas as vendas do João são atribuídas ao Julio (closer R1), independente do tipo de produto.
 
-A pagina tera um novo filtro "Closer" que permite:
-- Ver todas as transacoes (padrao)
-- Filtrar por closer especifico
-- O matching e feito por email ou telefone do cliente
-- Os totais (bruto/liquido) serao atualizados de acordo com o filtro
+## Arquivos a Modificar
 
-## Observacao
-
-O filtro funciona cruzando dados de attendees que pagaram contrato. Transacoes de clientes que nao passaram pelo funil de reunioes (vendas diretas, bio, etc) nao aparecerao ao filtrar por closer especifico - apenas na opcao "Todos".
+1. **`src/pages/bu-incorporador/TransacoesIncorp.tsx`**:
+   - Linha 65: Mudar `useGestorClosers()` → `useGestorClosers('r1')`
+   - Linhas 89-108: Expandir query de attendees para buscar todos R1 (não apenas contract_paid)
