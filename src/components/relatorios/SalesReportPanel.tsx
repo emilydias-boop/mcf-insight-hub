@@ -17,6 +17,7 @@ import { BusinessUnit } from '@/hooks/useMyBU';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
 interface SalesReportPanelProps {
   bu: BusinessUnit;
@@ -88,6 +89,17 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
         (a.display_name || a.name).localeCompare(b.display_name || b.name)
       );
     },
+  });
+  
+  // IDs de primeira transação (para deduplicação do bruto)
+  const { data: globalFirstIds = new Set<string>() } = useQuery({
+    queryKey: ['global-first-transaction-ids'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_first_transaction_ids');
+      if (error) throw error;
+      return new Set((data || []).map((r: { id: string }) => r.id));
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutos
   });
   
   // Interface para attendees
@@ -215,15 +227,18 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     setCurrentPage(1);
   };
   
-  // Calculate stats from filtered data
+  // Calculate stats from filtered data (usando deduplicação consistente com Transações/Fechamento)
   const stats = useMemo(() => {
-    const totalGross = filteredTransactions.reduce((sum, t) => sum + (t.gross_override || t.product_price || 0), 0);
+    const totalGross = filteredTransactions.reduce((sum, t) => {
+      const isFirst = globalFirstIds.has(t.id);
+      return sum + getDeduplicatedGross(t, isFirst);
+    }, 0);
     const totalNet = filteredTransactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
     const count = filteredTransactions.length;
     const avgTicket = count > 0 ? totalNet / count : 0;
     
     return { totalGross, totalNet, count, avgTicket };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, globalFirstIds]);
   
   // Export to Excel
   const handleExportExcel = () => {
@@ -235,7 +250,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
       'Cliente': row.customer_name || '',
       'Email': row.customer_email || '',
       'Telefone': row.customer_phone || '',
-      'Valor Bruto': row.gross_override || row.product_price || 0,
+      'Valor Bruto': getDeduplicatedGross(row, globalFirstIds.has(row.id)),
       'Valor Líquido': row.net_value || 0,
       'Parcela': row.installment_number ? `${row.installment_number}/${row.total_installments}` : '-',
       'Status': row.sale_status || '',
