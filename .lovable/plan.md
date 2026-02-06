@@ -1,43 +1,34 @@
 
-# Diagnóstico Completo e Solução Definitiva
 
-## Análise Realizada
+# Correção Definitiva: Coluna `start_time` → `scheduled_at`
 
-### Frontend (✅ OK)
-| Arquivo | Status | Observação |
-|---------|--------|------------|
-| `useSdrMetricsFromAgenda.ts` | Correto | Chama RPC com parâmetros `text` |
-| `useTeamMeetingsData.ts` | Correto | Processa resposta normalmente |
+## Problema Identificado
 
-### Backend (❌ ERRO)
-| Objeto | Problema |
-|--------|----------|
-| RPC `get_sdr_metrics_from_agenda` | Usa `msa.rescheduled_from_id` que **NÃO EXISTE** |
+A RPC `get_sdr_metrics_from_agenda` falha porque usa uma coluna que **não existe**:
 
-### Estrutura Real da Tabela `meeting_slot_attendees`
-```text
-Colunas relevantes:
-├── booked_by (uuid)         --> profiles.id (SDR)
-├── booked_at (timestamp)    --> Data do agendamento
-├── parent_attendee_id (uuid)--> ID do attendee pai (reagendamento)
-├── is_reschedule (boolean)  --> Flag de reagendamento
-├── status (text)
-└── contract_paid_at (timestamp)
-
-NOTA: Não existe coluna "rescheduled_from_id"
+```
+ERROR: 42703: column ms.start_time does not exist
 ```
 
-## Causa Raiz
+## Estrutura Real da Tabela `meeting_slots`
 
-A migration `20260206013613` sobrescreveu a função com a coluna errada:
-- **Usou:** `msa.rescheduled_from_id` 
-- **Deveria usar:** `msa.parent_attendee_id`
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `scheduled_at` | timestamp with time zone | Data/hora da reunião |
+| `meeting_type` | text | Tipo (r1, r2) |
+| `status` | text | Status do slot |
+| `booked_by` | uuid | Quem agendou |
 
-## Solução
+## Correção SQL
 
-Nova migration que restaura a função correta baseada na versão funcional (`20260206012145`):
+Trocar em 3 lugares na função:
 
-### SQL a Aplicar
+```text
+ANTES: ms.start_time AT TIME ZONE 'America/Sao_Paulo'
+DEPOIS: ms.scheduled_at AT TIME ZONE 'America/Sao_Paulo'
+```
+
+## Migration a Aplicar
 
 ```sql
 DROP FUNCTION IF EXISTS public.get_sdr_metrics_from_agenda(text, text, text);
@@ -72,16 +63,16 @@ BEGIN
         THEN 1 
       END) as agendamentos,
       
-      -- R1 Agendada
+      -- R1 Agendada: usa ms.scheduled_at (corrigido)
       COUNT(CASE 
-        WHEN (ms.start_time AT TIME ZONE 'America/Sao_Paulo')::date 
+        WHEN (ms.scheduled_at AT TIME ZONE 'America/Sao_Paulo')::date 
              BETWEEN start_date::DATE AND end_date::DATE
         THEN 1 
       END) as r1_agendada,
       
-      -- R1 Realizada
+      -- R1 Realizada: usa ms.scheduled_at (corrigido)
       COUNT(CASE 
-        WHEN (ms.start_time AT TIME ZONE 'America/Sao_Paulo')::date 
+        WHEN (ms.scheduled_at AT TIME ZONE 'America/Sao_Paulo')::date 
              BETWEEN start_date::DATE AND end_date::DATE
          AND msa.status IN ('completed', 'contract_paid', 'refunded')
         THEN 1 
@@ -128,19 +119,19 @@ END;
 $$;
 ```
 
-## Diferenças Críticas
+## Resumo das Correções Acumuladas
 
-| Aspecto | Versão Errada (Atual) | Versão Correta |
-|---------|----------------------|----------------|
-| Coluna reagendamento | `rescheduled_from_id` ❌ | `parent_attendee_id` ✅ |
-| JOIN parent | Inexistente | `LEFT JOIN parent_msa` ✅ |
-| Data reunião | `scheduled_at` | `start_time` ✅ |
-| Filtro tipo | Nenhum | `meeting_type = 'r1'` ✅ |
-| Timezone | Sem conversão | `AT TIME ZONE 'America/Sao_Paulo'` ✅ |
+| Versão | Problema | Correção |
+|--------|----------|----------|
+| 1ª | `msa.sdr_id` não existe | Trocado por `msa.booked_by` |
+| 2ª | `p.nome/name` não existe | Trocado por `p.full_name` |
+| 3ª | `rescheduled_from_id` não existe | Trocado por `parent_attendee_id` |
+| **4ª (AGORA)** | `ms.start_time` não existe | Trocar por `ms.scheduled_at` |
 
 ## Resultado Esperado
 
-Após a correção:
+Após esta correção:
 - Lista de SDRs aparece no Painel Comercial
-- Métricas corretas: Carol Correa com ~181 Agendamentos
-- No-Show calculado: `Agendamentos - R1 Realizada`
+- Métricas calculadas corretamente
+- Carol Correa com ~181 Agendamentos
+
