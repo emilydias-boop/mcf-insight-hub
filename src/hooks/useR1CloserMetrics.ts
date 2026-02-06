@@ -217,6 +217,17 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
       // Processar contratos COM contract_paid_at (prioridade)
       contractsByPaymentDate?.forEach(att => {
         const closerId = (att.meeting_slot as any)?.closer_id;
+        const scheduledAt = (att.meeting_slot as any)?.scheduled_at;
+        const contractPaidAt = att.contract_paid_at;
+        
+        // EXCLUIR OUTSIDE: contrato pago ANTES da reunião não conta
+        if (contractPaidAt && scheduledAt) {
+          const isOutside = new Date(contractPaidAt) < new Date(scheduledAt);
+          if (isOutside) {
+            return; // Outside - não contar como contrato pago
+          }
+        }
+        
         if (closerId && att.booked_by && !countedAttendeeIds.has(att.id)) {
           const bookedByEmail = profileEmailMap.get(att.booked_by) || allProfileEmailMap.get(att.booked_by);
           if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
@@ -227,6 +238,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
       });
 
       // Processar contratos SEM contract_paid_at (fallback) - apenas se não foi contado ainda
+      // Nota: fallback usa scheduled_at como data, então nunca é Outside por definição
       contractsWithoutTimestamp?.forEach(att => {
         const closerId = (att.meeting_slot as any)?.closer_id;
         if (closerId && att.booked_by && !countedAttendeeIds.has(att.id)) {

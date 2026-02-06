@@ -106,14 +106,14 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
       });
 
       // 6. CONTRATOS PAGOS: Buscar pela DATA DO PAGAMENTO (contract_paid_at)
-      // Query 1: Contratos com contract_paid_at no período
+      // Query 1: Contratos com contract_paid_at no período (inclui scheduled_at para detectar Outside)
       const { data: contractsByPaymentDate, error: contractsError } = await supabase
         .from('meeting_slot_attendees')
         .select(`
           id,
           status,
           contract_paid_at,
-          meeting_slot:meeting_slots!inner(closer_id)
+          meeting_slot:meeting_slots!inner(closer_id, scheduled_at)
         `)
         .eq('meeting_slot.closer_id', closerId)
         .in('status', ['contract_paid', 'refunded'])
@@ -126,6 +126,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
       }
 
       // Query 2: Fallback para contratos antigos sem contract_paid_at (usa scheduled_at)
+      // Nota: fallback nunca é Outside por definição (usa scheduled_at como data)
       const { data: contractsWithoutTimestamp, error: fallbackError } = await supabase
         .from('meeting_slot_attendees')
         .select(`
@@ -144,11 +145,27 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         console.error('[useCloserAgendaMetrics] Error fetching contracts fallback:', fallbackError);
       }
 
-      // Total de contratos = pagamentos no período + fallback
-      const contratos_pagos = (contractsByPaymentDate?.length || 0) + (contractsWithoutTimestamp?.length || 0);
+      // Contar contratos EXCLUINDO Outside (contrato pago ANTES da reunião)
+      let contratos_pagos = 0;
+      
+      contractsByPaymentDate?.forEach(att => {
+        const scheduledAt = (att.meeting_slot as any)?.scheduled_at;
+        const contractPaidAt = att.contract_paid_at;
+        
+        // Excluir Outside: contrato pago ANTES da reunião não conta
+        if (contractPaidAt && scheduledAt && new Date(contractPaidAt) < new Date(scheduledAt)) {
+          return; // Outside - não contar
+        }
+        
+        contratos_pagos++;
+      });
+      
+      // Fallback: adicionar contratos sem timestamp (nunca são Outside)
+      contratos_pagos += contractsWithoutTimestamp?.length || 0;
 
       console.log('[useCloserAgendaMetrics] Contratos pagos:', {
         byPaymentDate: contractsByPaymentDate?.length || 0,
+        outsideExcluded: (contractsByPaymentDate?.length || 0) - contratos_pagos + (contractsWithoutTimestamp?.length || 0),
         fallback: contractsWithoutTimestamp?.length || 0,
         total: contratos_pagos
       });
