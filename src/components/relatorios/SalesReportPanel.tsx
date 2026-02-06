@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileSpreadsheet, DollarSign, ShoppingCart, TrendingUp, Loader2, Search } from 'lucide-react';
+import { FileSpreadsheet, DollarSign, ShoppingCart, TrendingUp, Loader2, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
@@ -51,6 +51,10 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   const [selectedSource, setSelectedSource] = useState<string>('all');
   const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
   const [selectedOriginId, setSelectedOriginId] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  
+  const PAGE_SIZE_OPTIONS = [25, 50, 100];
   
   const filters = useMemo(() => ({
     startDate: dateRange?.from,
@@ -193,6 +197,23 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     
     return filtered;
   }, [transactions, selectedChannel, selectedSource, selectedOriginId, selectedCloserId, searchTerm, attendees]);
+  
+  // Paginação
+  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredTransactions.slice(start, start + itemsPerPage);
+  }, [filteredTransactions, currentPage, itemsPerPage]);
+  
+  // Reset página ao mudar filtros
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [selectedChannel, selectedSource, selectedOriginId, selectedCloserId, searchTerm, dateRange]);
+  
+  const handlePageSizeChange = (value: string) => {
+    setItemsPerPage(Number(value));
+    setCurrentPage(1);
+  };
   
   // Calculate stats from filtered data
   const stats = useMemo(() => {
@@ -424,7 +445,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                {filteredTransactions.slice(0, 100).map((row, index) => {
+                {paginatedTransactions.map((row, index) => {
                     const channel = detectSalesChannel(row.product_name);
                     return (
                       <TableRow key={row.id || index}>
@@ -468,11 +489,65 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                   })}
                 </TableBody>
               </Table>
-              {filteredTransactions.length > 100 && (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Mostrando 100 de {filteredTransactions.length} transações. Exporte para ver todas.
-                </p>
-              )}
+              {/* Controles de Paginação */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4 border-t">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Mostrar</span>
+                    <Select value={String(itemsPerPage)} onValueChange={handlePageSizeChange}>
+                      <SelectTrigger className="w-[80px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAGE_SIZE_OPTIONS.map(size => (
+                          <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredTransactions.length)} a {Math.min(currentPage * itemsPerPage, filteredTransactions.length)} de {filteredTransactions.length} transações
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="px-3 text-sm">
+                    Página {currentPage} de {totalPages || 1}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage >= totalPages}
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>
