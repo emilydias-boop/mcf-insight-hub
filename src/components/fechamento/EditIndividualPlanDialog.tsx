@@ -138,7 +138,7 @@ export const EditIndividualPlanDialog = ({
                 id="ote_total"
                 type="number"
                 min="0"
-                step="100"
+                step="1"
                 value={formData.ote_total}
                 onChange={(e) => handleChange('ote_total', e.target.value)}
                 className="h-9"
@@ -156,7 +156,7 @@ export const EditIndividualPlanDialog = ({
                 id="fixo_valor"
                 type="number"
                 min="0"
-                step="100"
+                step="1"
                 value={formData.fixo_valor}
                 onChange={(e) => handleChange('fixo_valor', e.target.value)}
                 className="h-9"
@@ -176,7 +176,7 @@ export const EditIndividualPlanDialog = ({
                 id="variavel_total"
                 type="number"
                 min="0"
-                step="100"
+                step="1"
                 value={formData.variavel_total}
                 onChange={(e) => {
                   setAutoCalculateVariavel(false);
