@@ -1,108 +1,139 @@
 
-# Filtro de Closers R1 - Atribuição Total de Vendas
+# Incluir Vendas Intermediadas no Filtro de Closer R1
 
-## Objetivo
+## Problema Identificado
 
-Modificar o filtro de Closer na página de Transações para:
-1. Mostrar **apenas closers de R1** (Julio, Cristiane Gomes, Thayna)
-2. Atribuir **TODAS as vendas** ao closer R1 que atendeu o lead (A000, A010, A001, A009, Order Bumps, etc.)
-3. Contabilizar o valor bruto total no período para cada closer R1
+A RPC `get_all_hubla_transactions` não retorna o campo `linked_attendee_id`, então vendas que foram **manualmente vinculadas** a um attendee (intermediações) não são consideradas no filtro de closer.
 
-## Cenário de Uso
+## Solução
 
-Quando um lead passa por uma R1 com um closer e depois compra qualquer produto:
-
-| Produto | Descrição | Atribuição |
-|---------|-----------|------------|
-| A000 | Contrato R$ 497 | Closer R1 |
-| A010 | Consultoria Construa para Vender | Closer R1 |
-| A001 | Incorporador Completo | Closer R1 |
-| A009 | Incorporador + Club | Closer R1 |
-| Order Bumps | Produtos adicionais na compra | Closer R1 |
-| Qualquer outro | P2, extras | Closer R1 |
+Adicionar o campo `linked_attendee_id` na consulta e usar no matching de closer.
 
 ## Alterações Técnicas
 
-### Arquivo: `src/pages/bu-incorporador/TransacoesIncorp.tsx`
+### 1. Atualizar a RPC `get_all_hubla_transactions`
 
-#### 1. Filtrar apenas closers R1
+Adicionar `ht.linked_attendee_id` no SELECT:
 
-```typescript
-// Linha 65 - Mudar de:
-const { data: closers = [] } = useGestorClosers();
-
-// Para:
-const { data: closers = [] } = useGestorClosers('r1');
+```sql
+CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(
+  p_search text DEFAULT NULL,
+  p_start_date timestamp with time zone DEFAULT NULL,
+  p_end_date timestamp with time zone DEFAULT NULL,
+  p_limit integer DEFAULT 5000,
+  p_products text[] DEFAULT NULL
+)
+RETURNS TABLE(
+  id uuid,
+  hubla_id text,
+  product_name text,
+  product_category text,
+  product_price numeric,
+  net_value numeric,
+  customer_name text,
+  customer_email text,
+  customer_phone text,
+  sale_date timestamp with time zone,
+  sale_status text,
+  installment_number integer,
+  total_installments integer,
+  source text,
+  gross_override numeric,
+  linked_attendee_id uuid  -- NOVO CAMPO
+)
 ```
 
-#### 2. Expandir query de attendees para buscar TODOS os R1
+### 2. Atualizar Interface `HublaTransaction`
 
-A query atual só busca `status = 'contract_paid'`. Precisamos buscar **todos os attendees de R1** (scheduled, completed, contract_paid) para capturar leads que compraram sem necessariamente ter "contract_paid":
+**Arquivo:** `src/hooks/useAllHublaTransactions.ts`
 
 ```typescript
-// Linhas 89-108 - Substituir query por:
-const { data: attendees = [] } = useQuery({
-  queryKey: ['r1-attendees-for-matching', startDate?.toISOString(), endDate?.toISOString()],
-  queryFn: async () => {
-    if (!startDate) return [];
-    
-    // Buscar período expandido (30 dias antes) para capturar leads
-    // que fizeram R1 antes e compraram no período
-    const expandedStart = new Date(startDate);
-    expandedStart.setDate(expandedStart.getDate() - 30);
-    
-    const { data, error } = await supabase
-      .from('meeting_slot_attendees')
-      .select(`
-        id, 
-        attendee_phone, 
-        deal_id,
-        meeting_slots!inner(closer_id, meeting_type),
-        crm_deals!deal_id(crm_contacts!contact_id(email, phone))
-      `)
-      .eq('meeting_slots.meeting_type', 'r1')
-      .gte('meeting_slots.scheduled_at', expandedStart.toISOString())
-      .in('status', ['scheduled', 'invited', 'completed', 'contract_paid', 'rescheduled', 'no_show']);
-    
-    if (error) throw error;
-    return data || [];
-  },
-  enabled: !!startDate,
-});
+export interface HublaTransaction {
+  // ... campos existentes
+  linked_attendee_id: string | null;  // NOVO
+}
 ```
 
-## Por que expandir 30 dias antes?
+### 3. Expandir Lógica de Matching no Filtro
 
-Um lead pode:
-1. Fazer R1 com Julio em 10/01
-2. Comprar A001 em 05/02
+**Arquivo:** `src/pages/bu-incorporador/TransacoesIncorp.tsx`
 
-Ao filtrar Fevereiro, precisamos buscar R1s de Janeiro para fazer o matching corretamente.
+Adicionar matching por `linked_attendee_id`:
 
-## Resultado Esperado
+```typescript
+const filteredByCloser = useMemo(() => {
+  if (selectedCloserId === 'all') return transactions;
+  
+  const closerAttendees = attendees.filter((a: any) => 
+    a.meeting_slots?.closer_id === selectedCloserId
+  );
+  
+  // IDs dos attendees do closer (para matching direto por linked_attendee_id)
+  const closerAttendeeIds = new Set(
+    closerAttendees.map((a: any) => a.id)
+  );
+  
+  const closerEmails = new Set(
+    closerAttendees
+      .map((a: any) => a.crm_deals?.crm_contacts?.email?.toLowerCase())
+      .filter(Boolean)
+  );
+  
+  const closerPhones = new Set(
+    closerAttendees
+      .map((a: any) => (a.crm_deals?.crm_contacts?.phone || '').replace(/\D/g, ''))
+      .filter((p: string) => p.length >= 8)
+  );
+  
+  return transactions.filter(t => {
+    const txEmail = (t.customer_email || '').toLowerCase();
+    const txPhone = (t.customer_phone || '').replace(/\D/g, '');
+    
+    // Match por email ou telefone
+    const emailMatch = closerEmails.has(txEmail);
+    const phoneMatch = txPhone.length >= 8 && closerPhones.has(txPhone);
+    
+    // NOVO: Match por linked_attendee_id (vendas intermediadas)
+    const linkedMatch = t.linked_attendee_id && closerAttendeeIds.has(t.linked_attendee_id);
+    
+    return emailMatch || phoneMatch || linkedMatch;
+  });
+}, [transactions, selectedCloserId, attendees]);
+```
 
-### Exemplo Prático
+## Fluxo de Matching Completo
 
-**Lead João:**
-- 15/01: Fez R1 com **Julio**
-- 20/01: Comprou **A000** (Contrato R$ 497)
-- 25/01: Fez R2 com Jessica
-- 30/01: Comprou **A009** (R$ 19.500)
-- 30/01: Comprou **Order Bump A010** (R$ 47)
-
-**Ao filtrar por "Julio" em Janeiro:**
-
-| Produto | Valor |
-|---------|-------|
-| A000 (Contrato) | R$ 497 |
-| A009 (Incorporador + Club) | R$ 19.500 |
-| A010 (Order Bump) | R$ 47 |
-| **Total Bruto** | **R$ 20.044** |
-
-Todas as vendas do João são atribuídas ao Julio (closer R1), independente do tipo de produto.
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                     FILTRO POR CLOSER R1                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Transação → Atribuída ao Closer se:                            │
+│                                                                  │
+│  1. Email do cliente = Email do contato de um deal              │
+│     que teve R1 com o closer                                    │
+│                                                                  │
+│  2. Telefone do cliente = Telefone do contato de um deal        │
+│     que teve R1 com o closer                                    │
+│                                                                  │
+│  3. linked_attendee_id aponta para um attendee de R1            │
+│     do closer (vendas vinculadas manualmente)                   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Arquivos a Modificar
 
-1. **`src/pages/bu-incorporador/TransacoesIncorp.tsx`**:
-   - Linha 65: Mudar `useGestorClosers()` → `useGestorClosers('r1')`
-   - Linhas 89-108: Expandir query de attendees para buscar todos R1 (não apenas contract_paid)
+| Arquivo | Alteração |
+|---------|-----------|
+| **RPC** `get_all_hubla_transactions` | Adicionar `linked_attendee_id` no SELECT e RETURNS |
+| `src/hooks/useAllHublaTransactions.ts` | Adicionar `linked_attendee_id` na interface |
+| `src/pages/bu-incorporador/TransacoesIncorp.tsx` | Adicionar matching por `linked_attendee_id` |
+
+## Resultado Esperado
+
+Ao filtrar por "Julio":
+- Vendas de clientes que fizeram R1 com Julio (match por email/telefone)
+- **NOVO:** Vendas que foram manualmente vinculadas a attendees de R1 do Julio (intermediações)
+
+Isso garante que TODAS as vendas atribuídas ao closer (seja automaticamente ou por intermediação manual) apareçam no filtro.
