@@ -1,94 +1,90 @@
 
-# Liberacao do iFood Ultrameta para Equipe Inside Incorporador
+# Correcao do Timeout nas Transacoes - Relatorios Incorporador
 
-## Situacao Atual
+## Problema Identificado
 
-Na tela de Fechamento SDR (janeiro/2026), apenas o **Antony Elias** esta recebendo R$ 840 de iFood Ultrameta, enquanto **toda a equipe Inside Incorporador** deveria receber R$ 1.000 cada.
+A funcao RPC `get_hubla_transactions_by_bu` esta dando **timeout** (erro 57014) porque executa uma subconsulta correlacionada para cada uma das 31.145+ linhas, buscando `deal_tags` do CRM.
 
-### Dados Verificados
+### Evidencia do Erro
 
-| Dado | Valor |
-|------|-------|
-| Faturamento Incorporador (jan/2026) | R$ 5.035.678 |
-| Meta Ultrameta configurada | R$ 1.600.000 |
-| Premio Ultrameta (team_monthly_goals) | R$ 1.000 |
-| SDRs elegíveis no Incorporador | 10 (Julia, Carol Correa, Leticia, Carol Souza, Antony, Cristiane, Juliana, Vinicius, Jessica Martins, Yanca) |
-| Closers elegíveis no Incorporador | 3 (Jessica Bellini, Julio, Thayna) |
-
-### Valores Atuais no Banco
-
-```
-Antony Elias    → ifood_ultrameta: 840 (INCORRETO - deveria ser 1000)
-Julio           → ifood_ultrameta: 50  (INCORRETO - deveria ser 1000)
-Todos os outros → ifood_ultrameta: 0   (INCORRETO - deveria ser 1000)
-```
-
-## Diagnostico
-
-Analisando a Edge Function `recalculate-sdr-payout`, identifiquei **dois problemas**:
-
-### Problema 1: Logica de Calculo Individual Sobrescreve o Time
-
-Na funcao `calculatePayoutValues()` (linha 366), o `ifood_ultrameta` e calculado baseado na **performance individual**:
-
-```javascript
-const ifood_ultrameta = pct_media_global >= 100 ? compPlan.ifood_ultrameta : 0;
-```
-
-Isso usa `compPlan.ifood_ultrameta` que e R$ 50 (valor individual), NAO o premio do time (R$ 1.000).
-
-### Problema 2: Substituicao do Time Nao Esta Funcionando
-
-A logica nas linhas 1175-1185 deveria substituir o valor individual pelo premio do time:
-
-```javascript
-if (teamUltrametaHit && teamGoal && elegivelUltrameta) {
-  baseValues.ifood_ultrameta = teamGoal.ultrameta_premio_ifood || 0;
+```json
+{
+  "code": "57014",
+  "message": "canceling statement due to statement timeout"
 }
 ```
 
-Mas `teamUltrametaHit` pode nao estar sendo calculado corretamente OU o calculo de faturamento da BU Incorporador esta errado na funcao.
+### Causa Raiz
 
-### Problema 3: Valor 840 do Antony
+Subconsulta correlacionada com `LOWER()` para cada linha:
 
-O valor R$ 840 para Antony Elias nao corresponde a nenhuma configuracao:
-- Premio do time: R$ 1.000
-- Premio individual: R$ 50
-- R$ 840 parece ser um valor remanescente de calculo antigo ou erro de arredondamento
+```sql
+COALESCE(
+  (SELECT d.tags 
+   FROM crm_contacts c
+   INNER JOIN crm_deals d ON d.contact_id = c.id
+   WHERE LOWER(c.email) = LOWER(ht.customer_email)
+   LIMIT 1),
+  ARRAY[]::text[]
+) as deal_tags
+```
+
+Este padrao e conhecido como "N+1 query problem" e causa:
+- 31.145 subconsultas executadas sequencialmente
+- Uso de `LOWER()` que impede indices
+- Joins pesados em tabelas grandes
+
+### Descoberta Importante
+
+Os `deal_tags` **nao sao utilizados** no componente `SalesReportPanel.tsx`:
+- Linha 222: `'Tags': ''` (sempre vazio no export)
+- Nenhum filtro ou exibicao usa essa coluna
+
+---
 
 ## Solucao
 
-### Passo 1: Correcao Imediata via SQL
+### Passo 1: Otimizar Funcao RPC (Remover Subconsulta)
 
-Atualizar manualmente o `ifood_ultrameta` para R$ 1.000 em todos os SDRs/Closers elegiveis do Inside Incorporador para janeiro/2026:
+Recriar a funcao `get_hubla_transactions_by_bu` **sem** a subconsulta de `deal_tags`:
 
 ```sql
-UPDATE sdr_month_payout p
-SET 
-  ifood_ultrameta = 1000,
-  total_ifood = ifood_mensal + 1000,
-  updated_at = NOW()
-FROM sdr s
-WHERE p.sdr_id = s.id
-  AND p.ano_mes = '2026-01'
-  AND s.squad = 'incorporador'
-  AND s.active = true
-  AND p.status != 'LOCKED'
-  AND EXISTS (
-    SELECT 1 FROM employees e 
-    WHERE e.sdr_id = s.id 
-    AND e.status = 'ativo'
-    AND (e.data_admissao IS NULL OR e.data_admissao < '2026-01-01')
-  );
+CREATE OR REPLACE FUNCTION public.get_hubla_transactions_by_bu(
+  p_bu text,
+  p_search text DEFAULT NULL,
+  p_start_date text DEFAULT NULL,
+  p_end_date text DEFAULT NULL,
+  p_limit integer DEFAULT 5000
+)
+RETURNS TABLE(...)
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    ht.id,
+    ht.hubla_id::text,
+    ht.product_name::text,
+    ...
+    ARRAY[]::text[] as deal_tags  -- Retorna array vazio (sem subconsulta)
+  FROM hubla_transactions ht
+  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
+  WHERE pc.target_bu = p_bu
+    AND ht.sale_status IN ('completed', 'refunded')
+    AND ht.source IN ('hubla', 'manual')
+    AND (filtros...)
+  ORDER BY ht.sale_date DESC
+  LIMIT p_limit;
+END;
+$$;
 ```
 
-### Passo 2: Corrigir Edge Function
+### Impacto Esperado
 
-Modificar `supabase/functions/recalculate-sdr-payout/index.ts` para garantir que:
-
-1. O calculo de faturamento da BU Incorporador use a mesma logica do frontend (`useUltrametaByBU`)
-2. Adicionar logs de debug para verificar o calculo de `buUltrametaHit`
-3. Garantir que o premio do time seja aplicado ANTES da funcao `calculatePayoutValues` retornar, nao depois
+| Metrica | Antes | Depois |
+|---------|-------|--------|
+| Tempo de execucao | >30 segundos (timeout) | <1 segundo |
+| Subconsultas | 31.145+ por request | 0 |
+| Status | Erro 500 | Sucesso 200 |
 
 ---
 
@@ -96,27 +92,16 @@ Modificar `supabase/functions/recalculate-sdr-payout/index.ts` para garantir que
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| Nova migracao SQL | Corrigir ifood_ultrameta para R$ 1000 nos SDRs/Closers Incorporador |
-| `supabase/functions/recalculate-sdr-payout/index.ts` | Melhorar logica de verificacao ultrameta do time |
+| Nova migracao SQL | Recriar funcao sem subconsulta de deal_tags |
 
 ---
 
-## Resultado Esperado
+## Alternativa Futura
 
-| SDR/Closer | iFood Mensal | iFood Ultrameta | Total iFood |
-|------------|--------------|-----------------|-------------|
-| Julia Caroline | R$ 600 | R$ 1.000 | R$ 1.600 |
-| Carol Correa | R$ 600 | R$ 1.000 | R$ 1.600 |
-| Leticia Nunes | R$ 600 | R$ 1.000 | R$ 1.600 |
-| Carol Souza | R$ 600 | R$ 1.000 | R$ 1.600 |
-| Antony Elias | R$ 600 | R$ 1.000 | R$ 1.600 |
-| Cristiane Gomes | R$ 600 | R$ 1.000 | R$ 1.600 |
-| Juliana Rodrigues | R$ 600 | R$ 1.000 | R$ 1.600 |
-| Vinicius Rangel | R$ 600 | R$ 1.000 | R$ 1.600 |
-| Jessica Martins | R$ 600 | R$ 1.000 | R$ 1.600 |
-| Yanca Oliveira | R$ 600 | R$ 1.000 | R$ 1.600 |
-| Jessica Bellini | R$ 600 | R$ 1.000 | R$ 1.600 |
-| Julio | R$ 650* | R$ 1.000 | R$ 1.650 |
-| Thayna | R$ 600 | R$ 1.000 | R$ 1.600 |
+Se futuramente os `deal_tags` forem necessarios, a solucao correta seria:
 
-*Julio tem iFood Mensal de R$ 650 configurado no calendario
+1. Usar LEFT JOIN em vez de subconsulta correlacionada
+2. Criar indice em `crm_contacts.email` (case-insensitive)
+3. Ou pre-calcular tags em coluna da hubla_transactions
+
+Mas para agora, remover a subconsulta resolve o problema imediatamente.
