@@ -1,115 +1,68 @@
 
-# Adicionar Paginacao ao Relatorio de Vendas
+# Corrigir Validacao do Campo Fixo no Dialog de Edicao
 
-## Objetivo
-Adicionar controles de paginacao na tabela de transacoes do `SalesReportPanel.tsx` com opcoes de 25, 50 e 100 itens por pagina, alem de navegacao entre paginas.
+## Problema Identificado
 
-## Situacao Atual
+O campo "Fixo" no dialog `EditIndividualPlanDialog.tsx` esta configurado com `step="100"`, o que significa que o navegador so aceita valores multiplos de 100 (3000, 3100, 3200...).
 
-O componente `SalesReportPanel.tsx` atualmente:
-- Usa `.slice(0, 100)` fixo para limitar transacoes exibidas
-- Mostra mensagem "Mostrando 100 de X transacoes" quando ha mais de 100
-- Nao possui controles de paginacao
+Porem, o catalogo de cargos do RH possui valores como **R$ 3.150,00** que nao sao multiplos de 100, causando a validacao nativa do HTML5 "valor nao e valido".
+
+### Evidencia
+
+- Catalogo RH: `fixo_valor = 3150.00` para SDR Inside N2
+- Campo HTML atual: `step="100"` (valores validos: 3000, 3100, 3200...)
+- Resultado: Navegador bloqueia o valor 3150
 
 ## Solucao
 
-Seguir o padrao existente no projeto (usado em `TransacoesIncorp.tsx`, `Vendas.tsx`, etc.) que inclui:
+Alterar o atributo `step` dos campos numericos de "100" para **"1"** ou simplesmente **remover o step** para permitir qualquer valor numerico inteiro.
 
-### Estados a Adicionar
-```javascript
-const [currentPage, setCurrentPage] = useState(1);
-const [itemsPerPage, setItemsPerPage] = useState(25);
+### Alteracoes no Arquivo
+
+**src/components/fechamento/EditIndividualPlanDialog.tsx**
+
+Linhas a alterar:
+
+| Campo | Linha | De | Para |
+|-------|-------|-----|------|
+| OTE Total | 141 | `step="100"` | `step="1"` |
+| Fixo | 159 | `step="100"` | `step="1"` |
+| Variavel | 179 | `step="100"` | `step="1"` |
+
+### Codigo Antes
+
+```jsx
+<Input
+  id="fixo_valor"
+  type="number"
+  min="0"
+  step="100"  // <-- Problema aqui
+  value={formData.fixo_valor}
+  ...
+/>
 ```
 
-### Constante de Opcoes
-```javascript
-const PAGE_SIZE_OPTIONS = [25, 50, 100];
+### Codigo Depois
+
+```jsx
+<Input
+  id="fixo_valor"
+  type="number"
+  min="0"
+  step="1"  // <-- Permite qualquer valor inteiro
+  value={formData.fixo_valor}
+  ...
+/>
 ```
 
-### Logica de Paginacao
-```javascript
-const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
-const paginatedTransactions = useMemo(() => {
-  const start = (currentPage - 1) * itemsPerPage;
-  return filteredTransactions.slice(start, start + itemsPerPage);
-}, [filteredTransactions, currentPage, itemsPerPage]);
-```
+## Resultado Esperado
 
-### Handler para Mudanca de Tamanho
-```javascript
-const handlePageSizeChange = (value: string) => {
-  setItemsPerPage(Number(value));
-  setCurrentPage(1); // Reset para primeira pagina
-};
-```
-
-### Reset ao Mudar Filtros
-Resetar para pagina 1 quando filtros mudarem (incluir `currentPage` reset no `useEffect` ou adicionar dependencia nos filtros).
-
-## Interface de Paginacao
-
-Adicionar no rodape da tabela (substituir o texto atual "Mostrando 100 de..."):
-
-```
-+-------------------------------------------------------+
-| Mostrar [25 v]  |  Mostrando 1-25 de 500 transacoes   |
-|                                                       |
-|        [<<] [<]  Pagina 1 de 20  [>] [>>]            |
-+-------------------------------------------------------+
-```
-
-Componentes:
-1. **Select de itens por pagina**: 25, 50, 100
-2. **Contador**: "Mostrando X a Y de Z transacoes"
-3. **Navegacao de paginas**: Primeira, Anterior, Texto, Proxima, Ultima
+- Usuarios poderao salvar valores como 3150, 2750, etc.
+- Compatibilidade total com os valores ja existentes no catalogo RH
+- Nenhuma restricao artificial nos valores OTE/Fixo/Variavel
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/components/relatorios/SalesReportPanel.tsx` | Adicionar paginacao completa |
-
-## Resultado Esperado
-
-- Exibicao controlada de 25/50/100 transacoes por pagina
-- Navegacao fluida entre paginas (botoes <<, <, >, >>)
-- Contador mostrando intervalo atual e total
-- Reset automatico para pagina 1 ao mudar filtros ou tamanho
-- UX consistente com outras paginas do sistema
-
----
-
-## Detalhes Tecnicos
-
-### Imports Adicionais
-```javascript
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
-```
-
-### Estrutura do JSX de Paginacao
-
-Substituir o bloco atual (linhas 471-475):
-```jsx
-{filteredTransactions.length > 100 && (
-  <p className="text-sm text-muted-foreground text-center py-4">
-    Mostrando 100 de {filteredTransactions.length} transações. Exporte para ver todas.
-  </p>
-)}
-```
-
-Por controles de paginacao completos com:
-- Flex container responsivo
-- Select para tamanho de pagina
-- Contador de itens
-- Botoes de navegacao (desabilitados quando na primeira/ultima pagina)
-
-### Mudanca na Tabela
-
-Alterar linha 427:
-```jsx
-// De:
-{filteredTransactions.slice(0, 100).map((row, index) => { ... })}
-
-// Para:
-{paginatedTransactions.map((row, index) => { ... })}
-```
+| `src/components/fechamento/EditIndividualPlanDialog.tsx` | Alterar step de "100" para "1" em 3 campos |
