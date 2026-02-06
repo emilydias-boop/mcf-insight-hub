@@ -1,89 +1,47 @@
 
-# Corrigir Edge Function para Usar Valores do Plano Individual
+# Corrigir Exibição da Meta de R1 Realizadas
 
 ## Problema Identificado
 
-A edge function `recalculate-sdr-payout` esta calculando os valores finais usando a formula de peso (`variavel_total * peso_percentual / 100`) em vez de usar os valores especificos configurados no plano individual (`valor_meta_rpg`, `valor_docs_reuniao`, `valor_tentativas`, `valor_organizacao`).
+A interface está exibindo a meta de "R1 Realizadas" incorretamente:
+- **Exibido**: Meta 78 (calculado como 70% do REALIZADO de agendadas: 112 × 0.7)
+- **Correto**: Meta 126 (calculado como 70% da META TEÓRICA de agendadas: 180 × 0.7)
 
-### Exemplo do Problema
+O percentual está correto (54.8% = 69/126), pois a Edge Function usa a meta teórica. Apenas a exibição da meta na interface está errada.
 
-O usuario configurou no plano:
-- `valor_meta_rpg` = R$ 475,00
-- `valor_docs_reuniao` = R$ 475,00
-- `valor_tentativas` = R$ 200,00
-- `valor_organizacao` = R$ 200,00
+## Arquivo a Modificar
 
-Mas a edge function esta calculando:
-- Agendamentos = R$ 1.200 x 45% = R$ 540,00 (errado)
-- Realizadas = R$ 1.200 x 45% = R$ 540,00 x 0.7 = R$ 378,00 (errado)
+**src/components/fechamento/DynamicIndicatorCard.tsx**
 
-Quando deveria ser:
-- Agendamentos = R$ 475,00 x 1 = R$ 475,00 (correto)
-- Realizadas = R$ 475,00 x 0.7 = R$ 332,50 (correto)
+### Alteração (Linhas 169-171)
 
-## Solucao
-
-Alterar a edge function `recalculate-sdr-payout` para priorizar os valores especificos do compPlan sobre o calculo dinamico por peso.
-
-### Arquivo a Modificar
-
-**supabase/functions/recalculate-sdr-payout/index.ts**
-
-### Alteracao (Linhas 316-355)
-
-Logica atual:
+Código atual:
 ```javascript
-if (hasActiveMetrics) {
-  const variavelTotal = compPlan.variavel_total || ...;
-  
-  // Sempre calcula pelo peso (ignora valores do plano)
-  valor_reunioes_agendadas = pesoAgendadas > 0 
-    ? (variavelTotal * (pesoAgendadas / 100)) * mult_reunioes_agendadas 
-    : 0;
-  valor_reunioes_realizadas = pesoRealizadas > 0 
-    ? (variavelTotal * (pesoRealizadas / 100)) * mult_reunioes_realizadas 
-    : 0;
-  // ...
+} else if (metrica.nome_metrica === 'realizadas') {
+  meta = kpi?.reunioes_agendadas || 0;  // Usa REALIZADO de agendadas - ERRADO
+  metaAjustada = Math.round((kpi?.reunioes_agendadas || 0) * 0.7);
 }
 ```
 
-Nova logica (priorizar valores especificos):
+Código corrigido:
 ```javascript
-if (hasActiveMetrics) {
-  const variavelTotal = compPlan.variavel_total || ...;
-  
-  // PRIORIZAR valores especificos do compPlan > calculo dinamico por peso
-  valor_reunioes_agendadas = compPlan.valor_meta_rpg > 0
-    ? compPlan.valor_meta_rpg * mult_reunioes_agendadas
-    : (pesoAgendadas > 0 ? (variavelTotal * (pesoAgendadas / 100)) * mult_reunioes_agendadas : 0);
-    
-  valor_reunioes_realizadas = compPlan.valor_docs_reuniao > 0
-    ? compPlan.valor_docs_reuniao * mult_reunioes_realizadas
-    : (pesoRealizadas > 0 ? (variavelTotal * (pesoRealizadas / 100)) * mult_reunioes_realizadas : 0);
-    
-  valor_tentativas = compPlan.valor_tentativas > 0
-    ? compPlan.valor_tentativas * mult_tentativas
-    : (pesoTentativas > 0 && !isCloser ? (variavelTotal * (pesoTentativas / 100)) * mult_tentativas : 0);
-    
-  valor_organizacao = compPlan.valor_organizacao > 0
-    ? compPlan.valor_organizacao * mult_organizacao
-    : (pesoOrganizacao > 0 && !isCloser ? (variavelTotal * (pesoOrganizacao / 100)) * mult_organizacao : 0);
+} else if (metrica.nome_metrica === 'realizadas') {
+  // Usar a meta teórica de agendadas do compPlan ou calcular (metaDiaria × diasUteis)
+  const metaTeoricaAgendadas = compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
+  // Meta de realizadas = 70% da meta teórica de agendadas (conforme regra de negócio)
+  meta = Math.round(metaTeoricaAgendadas / diasUteisMes);
+  metaAjustada = Math.round(metaTeoricaAgendadas * 0.7);
 }
 ```
-
-## Resumo das Alteracoes
-
-| Campo | Logica Atual | Nova Logica |
-|-------|--------------|-------------|
-| valor_reunioes_agendadas | variavel x peso% x mult | valor_meta_rpg x mult (se > 0) |
-| valor_reunioes_realizadas | variavel x peso% x mult | valor_docs_reuniao x mult (se > 0) |
-| valor_tentativas | variavel x peso% x mult | valor_tentativas x mult (se > 0) |
-| valor_organizacao | variavel x peso% x mult | valor_organizacao x mult (se > 0) |
 
 ## Resultado Esperado
 
-Apos recalcular:
-- Agendamentos R1: R$ 475,00 x 1 = R$ 475,00
-- R1 Realizadas: R$ 475,00 x 0.7 = R$ 332,50
-- Tentativas: R$ 200,00 x 0.5 = R$ 100,00
-- Organizacao: R$ 200,00 x 1 = R$ 200,00
+Após a correção, o indicador "R1 Realizadas" exibirá:
+- **Meta**: 126 (ou valor calculado de 70% da meta teórica)
+- **Realizado**: 69
+- **Percentual**: 54.8% (consistente com a Edge Function)
+
+## Impacto
+
+Esta correção alinha a interface com a lógica da Edge Function e com a regra de negócio documentada:
+> "The 'Realizadas' (Completed) target is calculated as 70% of the theoretical monthly 'Agendadas' target, not the actual performance"
