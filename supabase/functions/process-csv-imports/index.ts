@@ -14,6 +14,8 @@ interface CSVDeal {
   origin?: string
   owner?: string
   dono?: string // Alias para owner
+  user_email?: string // Email do responsável (formato exportação)
+  user_name?: string // Nome do responsável (formato exportação)
   tags?: string
   expected_close_date?: string
   probability?: string
@@ -22,6 +24,7 @@ interface CSVDeal {
   telefone?: string
   celular?: string
   whatsapp?: string
+  created_at?: string // Data original de criação do lead
   [key: string]: string | undefined
 }
 
@@ -39,6 +42,7 @@ interface CRMDeal {
   expected_close_date?: string
   probability?: number
   updated_at: string
+  created_at?: string // Data original de criação do lead
 }
 
 interface ContactData {
@@ -203,8 +207,8 @@ Deno.serve(async (req) => {
             dbDeal.contact_id = contactId
           }
           
-          // Resolver owner: prioridade para job, depois CSV
-          const csvOwnerEmail = csvDeal.owner?.trim() || csvDeal.dono?.trim()
+          // Resolver owner: prioridade para job, depois CSV (incluindo user_email do formato exportação)
+          const csvOwnerEmail = csvDeal.owner?.trim() || csvDeal.dono?.trim() || csvDeal.user_email?.trim()
           const finalOwnerEmail = ownerEmail || csvOwnerEmail
           
           if (finalOwnerEmail) {
@@ -496,7 +500,7 @@ function convertToDBFormat(
   }
 
   // Custom fields - incluir email/phone que não foram mapeados para contato
-  const excludedFields = ['id', 'name', 'value', 'stage', 'contact', 'origin', 'owner', 'dono', 'tags', 'expected_close_date', 'probability', 'email', 'phone', 'telefone', 'celular', 'whatsapp']
+  const excludedFields = ['id', 'name', 'value', 'stage', 'contact', 'origin', 'owner', 'dono', 'user_email', 'user_name', 'tags', 'expected_close_date', 'probability', 'email', 'phone', 'telefone', 'celular', 'whatsapp', 'created_at']
   const customFields: Record<string, any> = {}
   
   for (const [key, value] of Object.entries(csvDeal)) {
@@ -509,7 +513,35 @@ function convertToDBFormat(
     dbDeal.custom_fields = customFields
   }
 
+  // Preservar data original de criação se disponível no CSV
+  if (csvDeal.created_at) {
+    const parsedDate = parseCSVDate(csvDeal.created_at)
+    if (parsedDate) {
+      dbDeal.created_at = parsedDate.toISOString()
+    }
+  }
+
   return dbDeal
+}
+
+/**
+ * Parseia data do CSV em formatos comuns (DD/MM/YYYY HH:mm:ss ou ISO)
+ */
+function parseCSVDate(dateStr: string): Date | null {
+  if (!dateStr?.trim()) return null
+  
+  // Formato: "25/08/2025 17:40:59" ou "25/08/2025"
+  const brMatch = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}):(\d{2}))?/)
+  if (brMatch) {
+    const [, day, month, year, hour = '00', min = '00', sec = '00'] = brMatch
+    const isoString = `${year}-${month}-${day}T${hour}:${min}:${sec}`
+    const date = new Date(isoString)
+    return isNaN(date.getTime()) ? null : date
+  }
+  
+  // Tentar parse direto (formato ISO)
+  const date = new Date(dateStr)
+  return isNaN(date.getTime()) ? null : date
 }
 
 async function loadContactsCache(supabase: any): Promise<Map<string, string>> {
