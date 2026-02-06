@@ -1,108 +1,118 @@
 
-# Sincronizar Cálculo de Faturamento com Preços Fixos na Edge Function
+# Corrigir Cálculo de Faturamento Bruto no Relatório de Vendas
 
 ## Problema Identificado
 
-A Edge Function `recalculate-sdr-payout` calcula o faturamento da BU Incorporador usando apenas `product_price`, mas o frontend usa **preços fixos por produto** definidos em `incorporadorPricing.ts`.
+O componente `SalesReportPanel.tsx` (usado na página de Relatórios do Incorporador) calcula o faturamento bruto de forma diferente das outras partes do sistema:
 
-| Metodo | Faturamento Janeiro 2026 | Ultrameta Batida? |
-|--------|--------------------------|-------------------|
-| Edge Function atual | R$ 1.496.628 | NAO (< R$ 1.600.000) |
-| Frontend (precos fixos) | R$ 2.013.894 | SIM (>= R$ 1.600.000) |
+| Componente | Fórmula | Janeiro 2026 |
+|------------|---------|--------------|
+| Relatórios (atual) | `sum(gross_override \|\| product_price)` | R$ 2.889.358 |
+| Transações | `sum(getDeduplicatedGross())` | ~R$ 2.000.000 |
+| Fechamento (Edge Function) | `sum(getDeduplicatedGross())` | ~R$ 2.000.000 |
 
-## Causa Raiz
+### Diferença de ~R$ 889.358 causada por:
 
-A funcao `getDeduplicatedGross` na Edge Function (linhas 499-517) nao aplica os precos fixos:
+1. **Transações duplicadas** - mesmo cliente comprando mesmo produto é contado várias vezes
+2. **Parcelas > 1** - parcelas subsequentes são somadas (deveriam ser zero)
+3. **Preços não-fixos** - usa `product_price` real ao invés dos configurados:
+   - A009 deveria ser R$ 19.500, não R$ 1.000
+   - A001 deveria ser R$ 14.500, não R$ 4.184
 
+## Código Problemático
+
+**Arquivo: `src/components/relatorios/SalesReportPanel.tsx`**
+
+Linha 220:
 ```javascript
-// Regra 4: E primeira - usar product_price
-return tx.product_price || 0;  // BUG: deveria usar preco fixo!
+const totalGross = filteredTransactions.reduce(
+  (sum, t) => sum + (t.gross_override || t.product_price || 0), 
+  0
+);
 ```
 
-O frontend usa `getFixedGrossPrice()` que substitui por valores fixos:
-- A009 (MCF + The Club) = R$ 19.500
-- A001 (MCF Completo) = R$ 14.500
-- A005 (P2) = R$ 0
-- A000/Contrato = R$ 497
-- etc.
+## Solução
 
-## Solucao
+Atualizar o `SalesReportPanel` para usar a mesma lógica de deduplicação do `TransacoesIncorp`:
 
-Atualizar a Edge Function para aplicar os mesmos precos fixos do frontend.
+### Alterações Necessárias
 
-### Arquivo a Modificar
-
-**supabase/functions/recalculate-sdr-payout/index.ts**
-
-### Alteracoes
-
-#### 1. Adicionar mapa de precos fixos (apos linha 30)
+#### 1. Adicionar query para buscar IDs de primeira transação
 
 ```javascript
-// Precos fixos por produto (sincronizado com frontend incorporadorPricing.ts)
-const FIXED_GROSS_PRICES: { pattern: string; price: number }[] = [
-  { pattern: 'a005', price: 0 },  // MCF P2 nao conta no faturamento
-  { pattern: 'mcf p2', price: 0 },
-  { pattern: 'a009', price: 19500 },  // MCF + The Club
-  { pattern: 'a001', price: 14500 },  // MCF Completo
-  { pattern: 'a000', price: 497 },    // Contrato
-  { pattern: 'contrato', price: 497 },
-  { pattern: 'a010', price: 47 },
-  { pattern: 'plano construtor', price: 997 },
-  { pattern: 'a004', price: 5500 },   // Anticrise Basico
-  { pattern: 'a003', price: 7500 },   // Anticrise Completo
-];
+import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
-const getFixedGrossPrice = (productName: string | null, originalPrice: number): number => {
-  if (!productName) return originalPrice;
-  const normalizedName = productName.toLowerCase().trim();
-  
-  for (const { pattern, price } of FIXED_GROSS_PRICES) {
-    if (normalizedName.includes(pattern)) {
-      return price;
-    }
-  }
-  
-  return originalPrice;
-};
+// Buscar IDs de primeira compra GLOBAL via RPC
+const { data: globalFirstIds = new Set<string>() } = useQuery({
+  queryKey: ['global-first-transaction-ids'],
+  queryFn: async () => {
+    const { data, error } = await supabase.rpc('get_first_transaction_ids');
+    if (error) throw error;
+    return new Set((data || []).map((r: { id: string }) => r.id));
+  },
+  staleTime: 1000 * 60 * 5, // 5 minutos
+});
 ```
 
-#### 2. Atualizar getDeduplicatedGross (linha 517)
+#### 2. Atualizar cálculo dos stats (linha 219-226)
 
 De:
 ```javascript
-// Regra 4: E primeira - usar product_price
-return tx.product_price || 0;
+const stats = useMemo(() => {
+  const totalGross = filteredTransactions.reduce(
+    (sum, t) => sum + (t.gross_override || t.product_price || 0), 
+    0
+  );
+  // ...
+}, [filteredTransactions]);
 ```
 
 Para:
 ```javascript
-// Regra 4: E primeira - usar preco fixo do produto
-return getFixedGrossPrice(tx.product_name, tx.product_price || 0);
+const stats = useMemo(() => {
+  const totalGross = filteredTransactions.reduce((sum, t) => {
+    const isFirst = globalFirstIds.has(t.id);
+    return sum + getDeduplicatedGross(t, isFirst);
+  }, 0);
+  // ...
+}, [filteredTransactions, globalFirstIds]);
 ```
 
-## Fluxo Apos Correcao
+#### 3. Atualizar export Excel (linha 238)
 
-```text
-1. Edge Function calcula faturamento Incorporador = R$ 2.013.894
-2. buUltrametaHit['incorporador'] = true (2.013.894 >= 1.600.000)
-3. Para cada SDR/Closer elegivel da BU:
-   - ifood_ultrameta = R$ 1.000
-   - total_ifood = ifood_mensal + R$ 1.000
-4. Thayna, Julio, Julia, Julia Caroline, etc. receberao o bonus
+De:
+```javascript
+'Valor Bruto': row.gross_override || row.product_price || 0,
+```
+
+Para:
+```javascript
+'Valor Bruto': getDeduplicatedGross(row, globalFirstIds.has(row.id)),
 ```
 
 ## Resultado Esperado
 
-Apos recalcular os payouts de Janeiro 2026:
+Após a correção:
 
-| Campo | Antes | Depois |
-|-------|-------|--------|
-| Faturamento Calculado | R$ 1.496.628 | R$ 2.013.894 |
-| Ultrameta Batida | NAO | SIM |
-| iFood Ultrameta | R$ 0 | R$ 1.000 |
-| Total iFood (ex: Thayna) | R$ 600 | R$ 1.600 |
+| Componente | Faturamento Janeiro 2026 |
+|------------|--------------------------|
+| Relatórios | ~R$ 2.000.000 |
+| Transações | ~R$ 2.000.000 |
+| Fechamento | ~R$ 2.000.000 |
 
-## Observacao
+Todos os componentes mostrarão valores consistentes.
 
-Colaboradores que entraram durante Janeiro 2026 (como Ygor Fereira e Victoria da Silva Paz) **nao** receberao o bonus de Ultrameta - essa regra de elegibilidade ja esta implementada e continuara funcionando.
+## Arquivos a Modificar
+
+1. **`src/components/relatorios/SalesReportPanel.tsx`**:
+   - Adicionar import de `getDeduplicatedGross`
+   - Adicionar query para `get_first_transaction_ids`
+   - Atualizar cálculo de `totalGross` nos stats
+   - Atualizar valor bruto no export Excel
+
+## Observação
+
+A discrepância **NÃO é causada por reembolsos** - as transações com status `refunded` já estão incluídas em ambos os cálculos. A diferença é puramente pela falta de:
+- Deduplicação por cliente+produto
+- Aplicação dos preços fixos configurados
+- Zeragem de parcelas > 1
