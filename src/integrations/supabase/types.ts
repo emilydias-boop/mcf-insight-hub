@@ -8927,23 +8927,14 @@ export type Database = {
         }
         Returns: Json
       }
-      get_sdr_metrics_from_agenda:
-        | {
-            Args: {
-              end_date: string
-              sdr_email_filter?: string
-              start_date: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              end_date: string
-              sdr_email_filter?: string
-              start_date: string
-            }
-            Returns: Json
-          }
+      get_sdr_metrics_from_agenda: {
+        Args: {
+          end_date: string
+          sdr_email_filter?: string
+          start_date: string
+        }
+        Returns: Json
+      }
       get_sdr_metrics_v2: {
         Args: {
           end_date: string
