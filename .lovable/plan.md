@@ -1,41 +1,43 @@
 
-# Plano: Correção da Função RPC get_sdr_metrics_from_agenda
+# Plano: Correção Urgente da Função RPC get_sdr_metrics_from_agenda
 
-## Problema Identificado
+## Problemas Identificados
 
-A função RPC `get_sdr_metrics_from_agenda` está falhando com o erro:
+### Problema 1: Fórmula de No-Show Errada
+A linha 64 da migration atual usa:
+```sql
+'no_shows', GREATEST(0, agendamentos - r1_realizada)
 ```
-column msa.slot_id does not exist
+
+Mas deveria ser:
+```sql
+'no_shows', GREATEST(0, r1_agendada - r1_realizada)
 ```
 
-Isso está impedindo a exibição da lista de SDRs no Painel Comercial.
+### Problema 2: Agendamentos Usando Campo NULL
+A query usa `msa.booked_at` para contar agendamentos, mas 66% dos registros têm esse campo NULL.
 
-## Análise Técnica
+| Campo | Registros Preenchidos |
+|-------|----------------------|
+| `booked_at` | 538 (34%) |
+| `created_at` | 1574 (100%) |
 
-A função atual referencia colunas que não existem na tabela `meeting_slot_attendees`:
+**Solução**: Usar `COALESCE(msa.booked_at, msa.created_at)` como fallback.
 
-| Coluna Usada na Função | Coluna Real | Status |
-|------------------------|-------------|--------|
-| `msa.slot_id` | `msa.meeting_slot_id` | ERRO |
-| `msa.booked_by_email` | Não existe - precisa JOIN com profiles | ERRO |
-| `msa.booked_by_name` | Não existe | ERRO |
-| `msa.reschedule_count` | `msa.is_reschedule` (boolean) | ERRO |
+## Dados Atuais vs Esperados
 
-## Solução
+| SDR | Agendamentos Atual | Agendamentos Esperado | No-Show Atual | No-Show Esperado |
+|-----|-------------------|----------------------|---------------|-----------------|
+| Julio Caetano | 0 | ~80+ | 0 | 13 |
+| Thaynar Tavares | 0 | ~70+ | 0 | 13 |
+| Cristiane Gomes | 0 | ~50+ | 0 | 6 |
+| Carol Correa | 89 | ~173 | 0 | 49 |
 
-Recriar a função RPC corrigindo as referências de colunas:
+## Alterações Necessárias
 
-### Correções Necessárias
+### 1. Nova Migration SQL
 
-1. **JOIN correto**: `JOIN meeting_slots ms ON ms.id = msa.meeting_slot_id`
-
-2. **Obter email do SDR**: Fazer JOIN com `profiles` usando o UUID `msa.booked_by`
-
-3. **Filtro de reschedule**: Usar `msa.is_reschedule IS NOT TRUE` em vez de `reschedule_count <= 1`
-
-4. **Nome do SDR**: Buscar de `profiles.full_name` ou extrair do email
-
-## Nova Função SQL
+Recriar a função RPC com duas correções:
 
 ```sql
 CREATE OR REPLACE FUNCTION get_sdr_metrics_from_agenda(
@@ -55,10 +57,10 @@ BEGIN
       p_booker.email as sdr_email,
       COALESCE(p_booker.full_name, split_part(p_booker.email, '@', 1)) as sdr_name,
       
-      -- Agendamentos: criados NO período (data de criação/booking)
+      -- CORREÇÃO 1: Agendamentos usa COALESCE para fallback em created_at
       COUNT(DISTINCT CASE 
-        WHEN (msa.booked_at AT TIME ZONE 'America/Sao_Paulo')::date >= start_date::DATE 
-         AND (msa.booked_at AT TIME ZONE 'America/Sao_Paulo')::date <= end_date::DATE 
+        WHEN (COALESCE(msa.booked_at, msa.created_at) AT TIME ZONE 'America/Sao_Paulo')::date >= start_date::DATE 
+         AND (COALESCE(msa.booked_at, msa.created_at) AT TIME ZONE 'America/Sao_Paulo')::date <= end_date::DATE 
         THEN msa.id 
       END) as agendamentos,
       
@@ -100,7 +102,8 @@ BEGIN
         'agendamentos', agendamentos,
         'r1_agendada', r1_agendada,
         'r1_realizada', r1_realizada,
-        'no_shows', GREATEST(0, agendamentos - r1_realizada),
+        -- CORREÇÃO 2: No-shows usa r1_agendada - r1_realizada
+        'no_shows', GREATEST(0, r1_agendada - r1_realizada),
         'contratos', contratos
       )
     ), '[]'::jsonb)
@@ -112,16 +115,40 @@ END;
 $$;
 ```
 
-## Arquivos a Modificar
+### 2. Hook useTeamMeetingsData.ts
 
-| Arquivo | Alteração |
-|---------|-----------|
-| Nova migration SQL | Recriar função RPC com colunas corretas |
+Manter cálculo de no_shows usando dados da RPC (que já estará corrigido):
+
+```typescript
+// Linha ~75 - Manter usando dados da RPC
+noShows: m.no_shows || 0,  // Vem corrigido da RPC
+```
+
+### 3. Hook useMinhasReunioesFromAgenda.ts
+
+Ajustar para usar dados da RPC:
+
+```typescript
+// Linhas 34-37
+const agendamentos = myMetrics?.agendamentos || 0;
+const r1Agendada = myMetrics?.r1_agendada || 0;
+const r1Realizada = myMetrics?.r1_realizada || 0;
+const noShows = myMetrics?.no_shows || 0; // Usar direto da RPC
+```
+
+## Resumo das Correções
+
+| Local | Correção |
+|-------|----------|
+| Migration SQL | `COALESCE(booked_at, created_at)` para agendamentos |
+| Migration SQL | `r1_agendada - r1_realizada` para no_shows |
+| useTeamMeetingsData.ts | Usar `m.no_shows` da RPC |
+| useMinhasReunioesFromAgenda.ts | Usar `no_shows` da RPC |
 
 ## Resultado Esperado
 
-Após a correção:
-- A lista de SDRs voltará a aparecer no Painel Comercial
-- Métricas serão calculadas corretamente usando os dados reais da tabela
-- Filtros de período funcionarão normalmente
+Após as correções, os números voltarão a estar corretos:
 
+- SDRs com `booked_at` NULL terão seus agendamentos contabilizados via `created_at`
+- No-show será calculado corretamente como `R1 Agendada - R1 Realizada`
+- A identidade matemática `R1 Agendada = R1 Realizada + No-Show` estará preservada
