@@ -1,42 +1,56 @@
 
-# Correção: Coluna `start_time` → `scheduled_at`
+# Correção: Remover Funções Duplicadas
 
-## Problema
+## Problema Identificado
 
-A migration anterior usou `ms.start_time` mas a coluna correta na tabela `meeting_slots` é **`scheduled_at`**.
+Erro **PGRST203** - Existem duas versões da função `get_sdr_metrics_from_agenda` com assinaturas diferentes:
 
-## Erro Atual
+| Versão | Parâmetros |
+|--------|------------|
+| 1 | `start_date => date, end_date => date` |
+| 2 | `start_date => text, end_date => text` |
 
-```
-column ms.start_time does not exist
-```
+O PostgREST não consegue escolher automaticamente qual usar.
 
-## Correção
+## Solução
 
-Criar nova migration substituindo todas as referências de `ms.start_time` por `ms.scheduled_at`:
+Criar uma migration que:
+
+1. **Remove TODAS** as versões existentes da função (ambas assinaturas)
+2. **Cria apenas UMA** versão com parâmetros `text` (compatível com o frontend)
+
+## SQL da Correção
 
 ```sql
--- Onde estava:
-(ms.start_time AT TIME ZONE 'America/Sao_Paulo')::date
+-- Passo 1: Remover TODAS as versões
+DROP FUNCTION IF EXISTS public.get_sdr_metrics_from_agenda(date, date, text);
+DROP FUNCTION IF EXISTS public.get_sdr_metrics_from_agenda(text, text, text);
 
--- Corrigir para:
-(ms.scheduled_at AT TIME ZONE 'America/Sao_Paulo')::date
+-- Passo 2: Criar UMA única versão (text)
+CREATE OR REPLACE FUNCTION public.get_sdr_metrics_from_agenda(
+  start_date text,
+  end_date text,
+  sdr_email_filter text DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+  -- Lógica completa restaurada
+  -- Com parent_msa JOIN
+  -- Com status != 'cancelled'
+  -- Com no_show = agendamentos - r1_realizada
+$$;
 ```
 
-## Locais de Alteração
-
-| Linha | Errado | Correto |
-|-------|--------|---------|
-| R1 Agendada | `ms.start_time` | `ms.scheduled_at` |
-| R1 Realizada | `ms.start_time` | `ms.scheduled_at` |
-
-## Arquivo
+## Arquivo a Criar
 
 | Arquivo | Descrição |
 |---------|-----------|
-| Nova migration SQL | Corrige nome da coluna para `scheduled_at` |
+| Nova migration SQL | Remove duplicatas + cria versão única |
 
 ## Resultado Esperado
 
-Após a correção, os dados voltarão a aparecer com os valores corretos:
+- Erro PGRST203 eliminado
+- Dashboard mostra dados corretamente
 - Carol Correa: 181 Agendamentos, 124 R1 Realizada, 57 No-Show
