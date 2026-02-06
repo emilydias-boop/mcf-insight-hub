@@ -15,6 +15,33 @@ const getMultiplier = (pct: number): number => {
   return 1.5;
 };
 
+// Preços fixos por produto (sincronizado com frontend incorporadorPricing.ts)
+const FIXED_GROSS_PRICES: { pattern: string; price: number }[] = [
+  { pattern: 'a005', price: 0 },       // MCF P2 não conta no faturamento
+  { pattern: 'mcf p2', price: 0 },
+  { pattern: 'a009', price: 19500 },   // MCF + The Club
+  { pattern: 'a001', price: 14500 },   // MCF Completo
+  { pattern: 'a000', price: 497 },     // Contrato
+  { pattern: 'contrato', price: 497 },
+  { pattern: 'a010', price: 47 },
+  { pattern: 'plano construtor', price: 997 },
+  { pattern: 'a004', price: 5500 },    // Anticrise Básico
+  { pattern: 'a003', price: 7500 },    // Anticrise Completo
+];
+
+const getFixedGrossPrice = (productName: string | null, originalPrice: number): number => {
+  if (!productName) return originalPrice;
+  const normalizedName = productName.toLowerCase().trim();
+  
+  for (const { pattern, price } of FIXED_GROSS_PRICES) {
+    if (normalizedName.includes(pattern)) {
+      return price;
+    }
+  }
+  
+  return originalPrice;
+};
+
 // Cálculo inverso do No-Show
 const calculateNoShowPerformance = (noShows: number, agendadas: number): number => {
   if (agendadas <= 0) return 100;
@@ -513,8 +540,8 @@ serve(async (req) => {
         return 0;
       }
       
-      // Regra 4: É primeira - usar product_price
-      return tx.product_price || 0;
+      // Regra 4: É primeira - usar preço fixo do produto
+      return getFixedGrossPrice(tx.product_name, tx.product_price || 0);
     };
     
     buRevenue['incorporador'] = (incorporadorTxs || []).reduce((sum: number, t: any) => {
