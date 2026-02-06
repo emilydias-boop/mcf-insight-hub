@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +15,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const GestaoCarteiras = () => {
+  const navigate = useNavigate();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showDistributionPanel, setShowDistributionPanel] = useState(false);
   
@@ -128,7 +130,11 @@ const GestaoCarteiras = () => {
                             checked={wallet.is_open}
                             onCheckedChange={() => handleToggleWallet(wallet.id, wallet.is_open)}
                           />
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => navigate(`/gerentes-conta/gestao/${wallet.id}`)}
+                          >
                             Gerenciar
                           </Button>
                         </div>
