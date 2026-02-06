@@ -1,118 +1,150 @@
 
-# Corrigir Cálculo de Faturamento Bruto no Relatório de Vendas
+# Adicionar Filtro de Closer na Pagina de Transacoes
 
-## Problema Identificado
+## Contexto
 
-O componente `SalesReportPanel.tsx` (usado na página de Relatórios do Incorporador) calcula o faturamento bruto de forma diferente das outras partes do sistema:
+A pagina "Vendas MCF INCORPORADOR" (`TransacoesIncorp.tsx`) nao possui filtro de Closer, enquanto o SalesReportPanel ja tem essa funcionalidade implementada. Vamos adicionar o mesmo filtro.
 
-| Componente | Fórmula | Janeiro 2026 |
-|------------|---------|--------------|
-| Relatórios (atual) | `sum(gross_override \|\| product_price)` | R$ 2.889.358 |
-| Transações | `sum(getDeduplicatedGross())` | ~R$ 2.000.000 |
-| Fechamento (Edge Function) | `sum(getDeduplicatedGross())` | ~R$ 2.000.000 |
+## Logica de Matching
 
-### Diferença de ~R$ 889.358 causada por:
+Como as transacoes nao tem relacao direta com closers no banco, o matching e feito via:
+1. Buscar attendees que pagaram contrato (`status = 'contract_paid'`)
+2. Cruzar por email ou telefone do cliente da transacao com o contato do deal do attendee
+3. O closer e identificado pelo `meeting_slots.closer_id` do attendee
 
-1. **Transações duplicadas** - mesmo cliente comprando mesmo produto é contado várias vezes
-2. **Parcelas > 1** - parcelas subsequentes são somadas (deveriam ser zero)
-3. **Preços não-fixos** - usa `product_price` real ao invés dos configurados:
-   - A009 deveria ser R$ 19.500, não R$ 1.000
-   - A001 deveria ser R$ 14.500, não R$ 4.184
+## Alteracoes Necessarias
 
-## Código Problemático
+### Arquivo: `src/pages/bu-incorporador/TransacoesIncorp.tsx`
 
-**Arquivo: `src/components/relatorios/SalesReportPanel.tsx`**
+#### 1. Adicionar imports necessarios
 
-Linha 220:
-```javascript
-const totalGross = filteredTransactions.reduce(
-  (sum, t) => sum + (t.gross_override || t.product_price || 0), 
-  0
-);
+```typescript
+import { useGestorClosers } from '@/hooks/useGestorClosers';
 ```
 
-## Solução
+#### 2. Adicionar estado para filtro de closer
 
-Atualizar o `SalesReportPanel` para usar a mesma lógica de deduplicação do `TransacoesIncorp`:
+```typescript
+const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
+```
 
-### Alterações Necessárias
+#### 3. Buscar lista de closers
 
-#### 1. Adicionar query para buscar IDs de primeira transação
+```typescript
+// Closers disponiveis para filtro
+const { data: closers = [] } = useGestorClosers();
+```
 
-```javascript
-import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
+#### 4. Buscar attendees para matching
 
-// Buscar IDs de primeira compra GLOBAL via RPC
-const { data: globalFirstIds = new Set<string>() } = useQuery({
-  queryKey: ['global-first-transaction-ids'],
+```typescript
+// Attendees para matching de closer com transacoes
+const { data: attendees = [] } = useQuery({
+  queryKey: ['attendees-for-matching', startDate?.toISOString(), endDate?.toISOString()],
   queryFn: async () => {
-    const { data, error } = await supabase.rpc('get_first_transaction_ids');
+    if (!startDate) return [];
+    
+    const { data, error } = await supabase
+      .from('meeting_slot_attendees')
+      .select(`
+        id, attendee_phone, deal_id,
+        meeting_slots!inner(closer_id),
+        crm_deals!deal_id(crm_contacts!contact_id(email, phone))
+      `)
+      .eq('status', 'contract_paid')
+      .gte('contract_paid_at', startDate.toISOString());
+    
     if (error) throw error;
-    return new Set((data || []).map((r: { id: string }) => r.id));
+    return data || [];
   },
-  staleTime: 1000 * 60 * 5, // 5 minutos
+  enabled: !!startDate,
 });
 ```
 
-#### 2. Atualizar cálculo dos stats (linha 219-226)
+#### 5. Adicionar filtro por closer no processamento
 
-De:
-```javascript
-const stats = useMemo(() => {
-  const totalGross = filteredTransactions.reduce(
-    (sum, t) => sum + (t.gross_override || t.product_price || 0), 
-    0
+```typescript
+// Filtrar por closer (via matching com attendees)
+const filteredByCloser = useMemo(() => {
+  if (selectedCloserId === 'all') return transactions;
+  
+  const closerAttendees = attendees.filter((a: any) => 
+    a.meeting_slots?.closer_id === selectedCloserId
   );
-  // ...
-}, [filteredTransactions]);
+  
+  const closerEmails = new Set(
+    closerAttendees
+      .map((a: any) => a.crm_deals?.crm_contacts?.email?.toLowerCase())
+      .filter(Boolean)
+  );
+  
+  const closerPhones = new Set(
+    closerAttendees
+      .map((a: any) => (a.crm_deals?.crm_contacts?.phone || '').replace(/\D/g, ''))
+      .filter((p: string) => p.length >= 8)
+  );
+  
+  return transactions.filter(t => {
+    const txEmail = (t.customer_email || '').toLowerCase();
+    const txPhone = (t.customer_phone || '').replace(/\D/g, '');
+    
+    return closerEmails.has(txEmail) || 
+           (txPhone.length >= 8 && closerPhones.has(txPhone));
+  });
+}, [transactions, selectedCloserId, attendees]);
 ```
 
-Para:
-```javascript
-const stats = useMemo(() => {
-  const totalGross = filteredTransactions.reduce((sum, t) => {
-    const isFirst = globalFirstIds.has(t.id);
-    return sum + getDeduplicatedGross(t, isFirst);
-  }, 0);
-  // ...
-}, [filteredTransactions, globalFirstIds]);
+#### 6. Adicionar Select de Closer na UI (nos filtros)
+
+```jsx
+<div className="w-full sm:w-48">
+  <label className="text-sm font-medium mb-2 block">Closer</label>
+  <Select value={selectedCloserId} onValueChange={(v) => {
+    setSelectedCloserId(v);
+    setCurrentPage(1);
+  }}>
+    <SelectTrigger>
+      <SelectValue placeholder="Todos" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="all">Todos</SelectItem>
+      {closers.map(closer => (
+        <SelectItem key={closer.id} value={closer.id}>
+          {closer.name}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+</div>
 ```
 
-#### 3. Atualizar export Excel (linha 238)
+#### 7. Atualizar totais e agrupamentos para usar dados filtrados
 
-De:
-```javascript
-'Valor Bruto': row.gross_override || row.product_price || 0,
+Substituir `transactions` por `filteredByCloser` nos calculos de:
+- `transactionGroups`
+- `totals`
+
+#### 8. Atualizar funcao de limpar filtros
+
+```typescript
+const handleClearFilters = () => {
+  setSearchTerm('');
+  setStartDate(undefined);
+  setEndDate(undefined);
+  setSelectedProducts([]);
+  setSelectedCloserId('all');  // Adicionar
+  setCurrentPage(1);
+};
 ```
 
-Para:
-```javascript
-'Valor Bruto': getDeduplicatedGross(row, globalFirstIds.has(row.id)),
-```
+## Resultado Final
 
-## Resultado Esperado
+A pagina tera um novo filtro "Closer" que permite:
+- Ver todas as transacoes (padrao)
+- Filtrar por closer especifico
+- O matching e feito por email ou telefone do cliente
+- Os totais (bruto/liquido) serao atualizados de acordo com o filtro
 
-Após a correção:
+## Observacao
 
-| Componente | Faturamento Janeiro 2026 |
-|------------|--------------------------|
-| Relatórios | ~R$ 2.000.000 |
-| Transações | ~R$ 2.000.000 |
-| Fechamento | ~R$ 2.000.000 |
-
-Todos os componentes mostrarão valores consistentes.
-
-## Arquivos a Modificar
-
-1. **`src/components/relatorios/SalesReportPanel.tsx`**:
-   - Adicionar import de `getDeduplicatedGross`
-   - Adicionar query para `get_first_transaction_ids`
-   - Atualizar cálculo de `totalGross` nos stats
-   - Atualizar valor bruto no export Excel
-
-## Observação
-
-A discrepância **NÃO é causada por reembolsos** - as transações com status `refunded` já estão incluídas em ambos os cálculos. A diferença é puramente pela falta de:
-- Deduplicação por cliente+produto
-- Aplicação dos preços fixos configurados
-- Zeragem de parcelas > 1
+O filtro funciona cruzando dados de attendees que pagaram contrato. Transacoes de clientes que nao passaram pelo funil de reunioes (vendas diretas, bio, etc) nao aparecerao ao filtrar por closer especifico - apenas na opcao "Todos".
