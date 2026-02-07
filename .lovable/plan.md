@@ -1,85 +1,51 @@
 
-# Sincronizar Fórmulas: Editar KPIs → Indicadores de Meta
+# Usar Meta Ajustada do Banco de Dados
 
-## Problema Identificado
+## Problema Encontrado
 
-As fórmulas de cálculo de meta estão **diferentes** entre os dois lugares:
+O valor "171" está sendo **recalculado** a cada exibição, ignorando o campo `meta_agendadas_ajustada` que já existe no banco de dados.
 
-### Fórmula no "Editar KPIs" (CORRETA)
-```
-Agendamentos: Meta = 10/dia × 20 dias = 200
-Realizadas:   Meta = 70% de 169 (agendadas REAIS) = 118 ✅
-```
-
-### Fórmula nos "Indicadores de Meta" (ERRADA)
-```
-Agendamentos: Meta = 10/dia × 20 dias = 200
-Realizadas:   Meta = 70% de 200 (meta TEÓRICA) = 140 ❌
-```
-
-A diferença: O "Editar KPIs" usa **70% das agendadas REAIS** (169), enquanto os "Indicadores de Meta" usam **70% da meta teórica** (200).
-
----
+| Componente | Lógica Atual | Deveria Ser |
+|------------|--------------|-------------|
+| DynamicIndicatorCard | `sdrMetaDiaria × diasUteisMes` | `payout.meta_agendadas_ajustada` |
+| CloserIndicators | `payout.meta_agendadas_ajustada` | Já está correto |
 
 ## Solução
 
-Alterar o cálculo nos "Indicadores de Meta" para usar a mesma lógica do "Editar KPIs":
+Modificar o `DynamicIndicatorCard` para usar o valor salvo no banco (`payout.meta_agendadas_ajustada`) como prioridade, igual ao `CloserIndicators`.
 
-### Código Atual (DynamicIndicatorCard.tsx - linha 148-153)
+### Código Atual (linha 145-147)
 ```typescript
-} else if (metrica.nome_metrica === 'realizadas') {
-  // Usar a meta teórica de agendadas do compPlan ou calcular
-  const metaTeoricaAgendadas = compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
-  meta = Math.round(metaTeoricaAgendadas / diasUteisMes);
-  metaAjustada = Math.round(metaTeoricaAgendadas * 0.7);  // ❌ 70% da meta TEÓRICA
+if (metrica.nome_metrica === 'agendamentos') {
+  meta = sdrMetaDiaria;
+  metaAjustada = compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
 }
 ```
 
-### Código Novo (como vai ficar)
+### Código Novo
 ```typescript
-} else if (metrica.nome_metrica === 'realizadas') {
-  // NOVO: Usar 70% das agendadas REAIS (igual ao KpiEditForm)
-  const agendadasReais = kpi?.reunioes_agendadas || 0;
-  meta = agendadasReais;
-  metaAjustada = Math.round(agendadasReais * 0.7);  // ✅ 70% das agendadas REAIS
+if (metrica.nome_metrica === 'agendamentos') {
+  meta = sdrMetaDiaria;
+  // Prioridade: valor salvo no payout > compPlan > cálculo dinâmico
+  metaAjustada = (payout as any).meta_agendadas_ajustada 
+    || compPlan?.meta_reunioes_agendadas 
+    || (sdrMetaDiaria * diasUteisMes);
 }
 ```
 
----
+## Resultado Esperado
 
-## Exemplo Visual - Como Vai Ficar
+Após essa mudança:
+- O "Editar KPIs" salva `meta_agendadas_ajustada = 180` no banco
+- O "Indicadores de Meta" exibe **180** (lido do banco)
+- Ambos ficam sincronizados
 
-### Antes (errado)
-| Indicador | Meta | Realizado | % |
-|-----------|------|-----------|---|
-| Agendamentos | 200 | 169 | 84.5% |
-| Realizadas | **140** (70% de 200) | 110 | **78.6%** |
+## Arquivo a Alterar
 
-### Depois (correto - igual ao Editar KPIs)
-| Indicador | Meta | Realizado | % |
-|-----------|------|-----------|---|
-| Agendamentos | 200 | 169 | 84.5% |
-| Realizadas | **118** (70% de 169) | 110 | **93.2%** |
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/fechamento/DynamicIndicatorCard.tsx` | Linha 147: adicionar prioridade para `payout.meta_agendadas_ajustada` |
 
-A porcentagem sobe de 78.6% para 93.2% porque a meta ajustada (118) reflete melhor a produtividade real.
+## Resumo
 
----
-
-## Arquivos a Alterar
-
-### 1. DynamicIndicatorCard.tsx
-Mudar a lógica de cálculo da meta de "realizadas" para usar as agendadas reais do KPI.
-
-### 2. useCalculatedVariavel.ts  
-Sincronizar a mesma lógica para manter consistência no cálculo do variável total.
-
----
-
-## Resumo Técnico
-
-| Componente | Arquivo | Mudança |
-|------------|---------|---------|
-| Indicadores de Meta | `src/components/fechamento/DynamicIndicatorCard.tsx` | Linha 148-153: usar `kpi?.reunioes_agendadas` em vez de `metaTeoricaAgendadas` |
-| Cálculo Variável | `src/hooks/useCalculatedVariavel.ts` | Linha 77-80: mesma mudança para consistência |
-
-Ambos passarão a usar: `metaAjustada = Math.round(kpi.reunioes_agendadas * 0.7)`
+Apenas **1 linha** precisa ser alterada para que o valor 180 (salvo pelo "Editar KPIs") apareça corretamente nos "Indicadores de Meta".
