@@ -123,6 +123,35 @@ const FechamentoSDRDetail = () => {
   const recalculateWithKpi = useRecalculateWithKpi();
   const authorizeUltrameta = useAuthorizeUltrameta();
 
+  // Calculate values needed for useCalculatedVariavel BEFORE early returns
+  const sdrMetaDiariaEarly = (payout?.sdr as any)?.meta_diaria || 10;
+  const diasUteisMesEarly = payout?.dias_uteis_mes || 19;
+  const employeeEarly = (payout as any)?.employee;
+  const effectiveVariavelEarly = compPlan?.variavel_total || employeeEarly?.cargo_catalogo?.variavel_valor || 1200;
+
+  // Create effective KPI with Closer-specific metrics from Agenda (BEFORE early returns)
+  const effectiveKpiEarly: SdrMonthKpi | null = kpi 
+    ? isCloser && closerMetrics.data
+      ? {
+          ...kpi,
+          reunioes_realizadas: closerMetrics.data.r1_realizadas,
+          no_shows: closerMetrics.data.no_shows,
+          intermediacoes_contrato: closerMetrics.data.contratos_pagos,
+        }
+      : kpi
+    : null;
+
+  // Calculate variable pay BEFORE early returns (hook handles null values)
+  const calculatedVariavel = useCalculatedVariavel({
+    metricas: activeMetrics,
+    kpi: effectiveKpiEarly,
+    payout,
+    compPlan,
+    diasUteisMes: diasUteisMesEarly,
+    sdrMetaDiaria: sdrMetaDiariaEarly,
+    variavelTotal: effectiveVariavelEarly,
+  });
+
   const isAdmin = role === "admin";
   const isManager = role === "manager" || role === "coordenador";
   const canEdit = (isAdmin || isManager) && payout?.status !== "LOCKED";
@@ -268,39 +297,15 @@ const FechamentoSDRDetail = () => {
     4;
   const metUltrameta = avgPerformance >= 100;
 
-  // isCloser is already defined above for hooks
-  const sdrMetaDiaria = (payout.sdr as any)?.meta_diaria || 10;
-  const diasUteisMes = payout.dias_uteis_mes || 19;
-  
-  // Calculate effective values with cascade: compPlan -> cargo_catalogo -> fallback
-  const employee = (payout as any)?.employee;
+  // Use early-calculated values (computed before early returns for hooks consistency)
+  const sdrMetaDiaria = sdrMetaDiariaEarly;
+  const diasUteisMes = diasUteisMesEarly;
+  const employee = employeeEarly;
   const effectiveOTE = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
   const effectiveFixo = compPlan?.fixo_valor || employee?.cargo_catalogo?.fixo_valor || 2800;
-  const effectiveVariavel = compPlan?.variavel_total || employee?.cargo_catalogo?.variavel_valor || 1200;
+  const effectiveVariavel = effectiveVariavelEarly;
   const oteSource = compPlan?.ote_total ? "plano" : employee?.cargo_catalogo?.ote_total ? "RH" : "fallback";
-
-  // Create effective KPI with Closer-specific metrics from Agenda
-  const effectiveKpi: SdrMonthKpi | null = kpi 
-    ? isCloser && closerMetrics.data
-      ? {
-          ...kpi,
-          reunioes_realizadas: closerMetrics.data.r1_realizadas,
-          no_shows: closerMetrics.data.no_shows,
-          intermediacoes_contrato: closerMetrics.data.contratos_pagos,
-        }
-      : kpi
-    : null;
-
-  // Calculate variable pay as sum of all indicator values (same logic as DynamicIndicatorCard)
-  const calculatedVariavel = useCalculatedVariavel({
-    metricas: activeMetrics,
-    kpi: effectiveKpi,
-    payout,
-    compPlan,
-    diasUteisMes,
-    sdrMetaDiaria,
-    variavelTotal: effectiveVariavel,
-  });
+  const effectiveKpi = effectiveKpiEarly;
 
   // Closer-specific intermediações count (use agenda data for Closers)
   const effectiveIntermediacao = isCloser && closerMetrics.data 
