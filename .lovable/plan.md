@@ -1,33 +1,49 @@
 
-# ✅ Corrigir Faturamento de Janeiro no Relatorio Incorporador - CONCLUÍDO
+# Reverter Status de Fechamento - Carol Correa
 
-## Alterações Realizadas
+## Situacao Atual
 
-### 1. Migration SQL
-- Atualizada função `get_hubla_transactions_by_bu` para retornar `reference_price` e `linked_attendee_id`
-- Atualizada função `get_all_hubla_transactions` para retornar `reference_price` e `linked_attendee_id`
-- Ambas RPCs agora fazem JOIN com `product_configurations` e retornam o preço de referência diretamente
+| SDR | Status | Precisa Reverter |
+|-----|--------|------------------|
+| Carol Correa | APPROVED | Sim |
+| Jessica Martins | DRAFT | Nao (ja revertido) |
 
-### 2. Interface TypeScript (`useAllHublaTransactions.ts`)
-- Adicionado campo `reference_price: number | null` na interface `HublaTransaction`
+## Solucao Proposta
 
-### 3. Lógica de Cálculo (`incorporadorPricing.ts`)
-- `TransactionForGross` agora inclui `reference_price` opcional
-- `getDeduplicatedGross()` prioriza `reference_price` do banco (regra 5) antes de usar fallbacks
+Executar UPDATE direto no banco para reverter o status de Carol Correa para DRAFT.
 
-## Hierarquia de Prioridade para Cálculo do Bruto
+```sql
+-- Reverter Carol Correa para DRAFT
+UPDATE sdr_month_payout 
+SET status = 'DRAFT', updated_at = NOW()
+WHERE id = 'be4e1204-ce83-43e7-a381-9230313c087d';
 
-1. **consolidated_gross** - Transações agrupadas (P1 + P2)
-2. **Parcela > 1** - Zerado automaticamente
-3. **gross_override** - Override manual (correções)
-4. **Não primeira do grupo** - Zerado (deduplicação cliente+produto)
-5. **Produto "Parceria"** - Usa product_price real
-6. **reference_price do banco** ← NOVA FONTE AUTORITATIVA
-7. **Fallback cache/hardcoded** - Último recurso
+-- Registrar no audit log
+INSERT INTO sdr_payout_audit_log (payout_id, campo, valor_anterior, valor_novo, motivo)
+VALUES (
+  'be4e1204-ce83-43e7-a381-9230313c087d',
+  'status',
+  'APPROVED',
+  'DRAFT',
+  'Reversao manual - fechamento reaberto para correcao'
+);
+```
 
 ## Resultado Esperado
 
-Janeiro 2025:
-- **Antes**: ~R$ 899.525 (usando product_price variável)
-- **Depois**: ~R$ 953.622 (usando reference_price da tabela)
-- **Diferença corrigida**: +R$ 54.096 (~6%)
+Apos a execucao:
+
+| SDR | Status Antes | Status Depois |
+|-----|-------------|---------------|
+| Carol Correa | APPROVED | DRAFT |
+| Jessica Martins | DRAFT | DRAFT (sem alteracao) |
+
+## Impacto
+
+- Carol Correa nao vera mais o fechamento na pagina "Meu Fechamento" (status DRAFT e oculto)
+- Gestores poderao editar/recalcular os valores novamente
+- O historico ficara registrado no audit log
+
+## Arquivos
+
+Nenhuma alteracao de codigo necessaria - apenas atualizacao de dados no banco.
