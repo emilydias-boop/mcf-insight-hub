@@ -1,135 +1,81 @@
 
 
-# Corrigir Faturamento Incorporador - Usar RPC Correta
+# Adicionar R$ 1.000 de iFood Ultrameta para BU Incorporador
 
-## Problema Confirmado
+## Situacao Atual
 
-O faturamento de janeiro 2026 esta errado porque os hooks usam a RPC errada, criando inconsistencia com a deduplicacao.
+| Colaborador | iFood Mensal | iFood Ultrameta | Total iFood | Status |
+|-------------|--------------|-----------------|-------------|--------|
+| Angelina Maia | R$ 630 | R$ 0 | R$ 630 | DRAFT |
+| Antony Elias | R$ 600 | R$ 840 | R$ 1.440 | DRAFT |
+| Carol Correa | R$ 600 | R$ 0 | R$ 600 | DRAFT |
+| Carol Souza | R$ 600 | R$ 0 | R$ 600 | DRAFT |
+| Claudia Carielo | R$ 600 | R$ 0 | R$ 600 | DRAFT |
+| Cristiane Gomes | R$ 600 | R$ 0 | R$ 600 | DRAFT |
+| Jessica Bellini | R$ 600 | R$ 0 | R$ 600 | DRAFT |
+| Jessica Martins | R$ 600 | R$ 0 | R$ 600 | APPROVED |
+| Julia Caroline | R$ 600 | R$ 0 | R$ 600 | DRAFT |
+| Juliana Rodrigues | R$ 600 | R$ 0 | R$ 600 | DRAFT |
+| Julio | R$ 600 | R$ 50 | R$ 650 | DRAFT |
+| Leticia Nunes | R$ 600 | R$ 0 | R$ 600 | DRAFT |
+| Thayna | R$ 600 | R$ 0 | R$ 600 | DRAFT |
+| Thobson Motta | R$ 600 | R$ 0 | R$ 600 | DRAFT |
+| Vinicius Rangel | R$ 600 | R$ 0 | R$ 600 | DRAFT |
+| Yanca Oliveira | R$ 600 | R$ 0 | R$ 600 | DRAFT |
 
-| Situacao | Valor |
-|----------|-------|
-| **Esperado pelo usuario** | ~R$ 2.038.000 |
-| **Calculo correto (validado via SQL)** | R$ 2.035.898 |
-| **Calculo atual (bugado)** | Valor incorreto |
-
-A diferenca de R$ 2.100 (~0.1%) e insignificante e pode ser de arredondamento.
-
-## Causa Raiz
-
-O hook `useTeamRevenueByMonth.ts` usa:
-
-- `get_all_hubla_transactions` -> Retorna TODAS as transacoes (6.955 em janeiro)
-- `get_first_transaction_ids` -> Retorna apenas IDs de `target_bu = 'incorporador'`
-
-Isso cria inconsistencia: transacoes de outros BUs sao processadas mas a deduplicacao nao considera elas corretamente.
+**Total atual de iFood Ultrameta no squad:** R$ 890
 
 ## Solucao
 
-Alterar os dois hooks para usar a RPC `get_hubla_transactions_by_bu` com `p_bu: 'incorporador'`, garantindo que apenas transacoes do Incorporador MCF sejam processadas.
+Executar um UPDATE direto na tabela `sdr_month_payout` para:
 
-### Arquivo 1: src/hooks/useTeamRevenueByMonth.ts
+1. Definir `ifood_ultrameta = 1000` para todos os 16 usuarios
+2. Recalcular `total_ifood = ifood_mensal + 1000`
 
-**Linhas 33-40 - ANTES:**
-```typescript
-const { data: transactions } = await supabase.rpc('get_all_hubla_transactions', {
-  p_start_date: formatDateForQuery(monthStart),
-  p_end_date: formatDateForQuery(monthEnd, true),
-  p_limit: 10000,
-  p_search: null,
-  p_products: null,
-});
+## Comando SQL a Executar
+
+```text
+UPDATE sdr_month_payout smp
+SET 
+  ifood_ultrameta = 1000,
+  total_ifood = ifood_mensal + 1000,
+  updated_at = NOW()
+WHERE ano_mes = '2026-01'
+  AND sdr_id IN (
+    SELECT s.id 
+    FROM sdr s
+    LEFT JOIN employees e ON e.sdr_id = s.id
+    WHERE s.squad = 'incorporador' 
+       OR e.departamento ILIKE '%incorporador%'
+  );
 ```
 
-**DEPOIS:**
-```typescript
-const { data: transactions } = await supabase.rpc('get_hubla_transactions_by_bu', {
-  p_bu: 'incorporador',
-  p_start_date: formatDateForQuery(monthStart),
-  p_end_date: formatDateForQuery(monthEnd, true),
-  p_limit: 10000,
-  p_search: null,
-});
-```
+## Resultado Esperado Apos a Alteracao
 
-**Linhas 45-50 - ANTES:**
-```typescript
-const transaction = {
-  product_name: t.product_name,
-  product_price: t.product_price,
-  installment_number: t.installment_number,
-  gross_override: t.gross_override,
-};
-```
+| Colaborador | iFood Mensal | iFood Ultrameta | Total iFood |
+|-------------|--------------|-----------------|-------------|
+| Angelina Maia | R$ 630 | R$ 1.000 | R$ 1.630 |
+| Antony Elias | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Carol Correa | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Carol Souza | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Claudia Carielo | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Cristiane Gomes | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Jessica Bellini | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Jessica Martins | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Julia Caroline | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Juliana Rodrigues | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Julio | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Leticia Nunes | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Thayna | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Thobson Motta | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Vinicius Rangel | R$ 600 | R$ 1.000 | R$ 1.600 |
+| Yanca Oliveira | R$ 600 | R$ 1.000 | R$ 1.600 |
 
-**DEPOIS:**
-```typescript
-const transaction = {
-  product_name: t.product_name,
-  product_price: t.product_price,
-  installment_number: t.installment_number,
-  gross_override: t.gross_override,
-  reference_price: t.reference_price,
-};
-```
+**Novo total de iFood Ultrameta no squad:** R$ 16.000 (16 pessoas x R$ 1.000)
 
-### Arquivo 2: src/hooks/useUltrametaByBU.ts
+## Observacoes
 
-**Linhas 51-57 - ANTES:**
-```typescript
-supabase.rpc('get_all_hubla_transactions', {
-  p_start_date: formatDateForQuery(monthStart),
-  p_end_date: formatDateForQuery(monthEnd, true),
-  p_limit: 10000,
-  p_search: null,
-  p_products: null,
-}),
-```
-
-**DEPOIS:**
-```typescript
-supabase.rpc('get_hubla_transactions_by_bu', {
-  p_bu: 'incorporador',
-  p_start_date: formatDateForQuery(monthStart),
-  p_end_date: formatDateForQuery(monthEnd, true),
-  p_limit: 10000,
-  p_search: null,
-}),
-```
-
-**Linhas 96-101 - ANTES:**
-```typescript
-const transaction = {
-  product_name: t.product_name,
-  product_price: t.product_price,
-  installment_number: t.installment_number,
-  gross_override: t.gross_override,
-};
-```
-
-**DEPOIS:**
-```typescript
-const transaction = {
-  product_name: t.product_name,
-  product_price: t.product_price,
-  installment_number: t.installment_number,
-  gross_override: t.gross_override,
-  reference_price: t.reference_price,
-};
-```
-
-## Resumo das Alteracoes
-
-| Arquivo | Alteracao |
-|---------|-----------|
-| `useTeamRevenueByMonth.ts` | Trocar RPC e adicionar `reference_price` |
-| `useUltrametaByBU.ts` | Trocar RPC e adicionar `reference_price` |
-
-## Resultado Esperado
-
-Apos a correcao:
-
-- **Faturamento Janeiro 2026:** ~R$ 2.035.898 (aproximadamente R$ 2.038.000)
-- Apenas produtos com `target_bu = 'incorporador'` serao contabilizados
-- O calculo respeitara os `reference_price` configurados
-- Consistencia com a RPC `get_first_transaction_ids`
+- Esta alteracao afeta **16 colaboradores** do Incorporador
+- A Jessica Martins tem status APPROVED - a alteracao tambem a afetara
+- Nenhuma alteracao de codigo e necessaria - apenas UPDATE no banco
 
