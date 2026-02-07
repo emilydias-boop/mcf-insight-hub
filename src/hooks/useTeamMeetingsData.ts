@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { MeetingV2 } from "./useSdrMetricsV2";
 import { useSdrMetricsFromAgenda, SdrAgendaMetrics } from "./useSdrMetricsFromAgenda";
 import { useSdrMeetingsFromAgenda } from "./useSdrMeetingsFromAgenda";
-import { SDR_LIST } from "@/constants/team";
+import { useSdrsFromSquad } from "./useSdrsFromSquad";
 
 export interface TeamKPIs {
   sdrCount: number;
@@ -33,24 +33,29 @@ interface TeamMeetingsParams {
 }
 
 export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: TeamMeetingsParams) {
+  // Fetch active SDRs from the 'incorporador' squad dynamically
+  const sdrsQuery = useSdrsFromSquad('incorporador');
+  
   // Fetch metrics from agenda (meeting_slot_attendees) instead of deal_activities
   const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmailFilter);
   // Use meetings from agenda (same source as metrics) for consistency
   const meetingsQuery = useSdrMeetingsFromAgenda({ startDate, endDate, sdrEmailFilter });
 
-  // Create Set of valid SDR emails from SDR_LIST
+  // Create Set of valid SDR emails from database (dynamic)
   const validSdrEmails = useMemo(() => {
-    return new Set(SDR_LIST.map(sdr => sdr.email.toLowerCase()));
-  }, []);
+    const sdrs = sdrsQuery.data || [];
+    return new Set(sdrs.map(sdr => sdr.email.toLowerCase()));
+  }, [sdrsQuery.data]);
 
-  // Create lookup for SDR names
+  // Create lookup for SDR names from database
   const sdrNameMap = useMemo(() => {
     const map = new Map<string, string>();
-    SDR_LIST.forEach(sdr => {
-      map.set(sdr.email.toLowerCase(), sdr.nome);
+    const sdrs = sdrsQuery.data || [];
+    sdrs.forEach(sdr => {
+      map.set(sdr.email.toLowerCase(), sdr.name);
     });
     return map;
-  }, []);
+  }, [sdrsQuery.data]);
 
   // Build summary rows per SDR - FILTERED to only include the 13 SDRs from SDR_LIST
   const bySDR = useMemo((): SdrSummaryRow[] => {
@@ -144,9 +149,10 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: Team
     bySDR,
     allMeetings,
     getMeetingsForSDR,
-    isLoading: metricsQuery.isLoading || meetingsQuery.isLoading,
-    error: metricsQuery.error || meetingsQuery.error,
+    isLoading: sdrsQuery.isLoading || metricsQuery.isLoading || meetingsQuery.isLoading,
+    error: sdrsQuery.error || metricsQuery.error || meetingsQuery.error,
     refetch: () => {
+      sdrsQuery.refetch();
       metricsQuery.refetch();
       meetingsQuery.refetch();
     },

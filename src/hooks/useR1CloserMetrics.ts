@@ -22,11 +22,12 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
       const start = startOfDay(startDate).toISOString();
       const end = endOfDay(endDate).toISOString();
 
-      // Fetch active closers that handle R1 meetings
+      // Fetch active closers that handle R1 meetings - FILTERED by BU
       const { data: closers, error: closersError } = await supabase
         .from('closers')
-        .select('id, name, color, meeting_type')
-        .eq('is_active', true);
+        .select('id, name, color, meeting_type, bu')
+        .eq('is_active', true)
+        .eq('bu', 'incorporador');  // Only Incorporador closers
 
       if (closersError) throw closersError;
 
