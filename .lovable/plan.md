@@ -1,148 +1,127 @@
 
-# Sincronizar Painel Comercial com o RH
+# Migrar Hooks Restantes para Dados Dinâmicos de SDR
 
 ## Diagnóstico
 
-O painel comercial (`/crm/reunioes-equipe`) está desatualizado por dois motivos:
+A tabela "Atividades por SDR" e outros hooks ainda usam a constante `SDR_LIST` hardcoded, causando os mesmos problemas identificados anteriormente (Vinicius aparece, Evellyn e Roger não aparecem).
 
-| Problema | Causa | Impacto |
-|----------|-------|---------|
-| Lista de SDRs hardcoded | Usa constante `SDR_LIST` em `src/constants/team.ts` | Vinicius (saiu do Inside) aparece, Evellyn e Roger (entraram) não aparecem |
-| Closers sem filtro por BU | Hook `useR1CloserMetrics` busca todos os closers ativos | João Pedro, Victoria, Luis Felipe, Thobson (Consórcio) aparecem no painel do Incorporador |
+| Arquivo | Problema | Status |
+|---------|----------|--------|
+| `src/hooks/useSdrActivityMetrics.ts` | Usa `SDR_LIST` nas linhas 62 e 78 | Pendente |
+| `src/hooks/useSDRCarrinhoMetrics.ts` | Usa `SDR_LIST` nas linhas 19-20 | Pendente |
+| `src/hooks/useSdrOutsideMetrics.ts` | Usa `SDR_LIST` na linha 26 | Pendente |
+| `src/hooks/useR1CloserMetrics.ts` | Usa `SDR_LIST` na linha 38 | Pendente |
+| `src/hooks/useTeamMeetingsData.ts` | Já usa `useSdrsFromSquad` | OK |
 
-### Dados atuais no Banco
+## Solução
 
-**SDRs ativos no Incorporador** (tabela `sdr`):
-- Antony Elias, Carol Correa, Carol Souza, Cristiane Gomes, Jessica Bellini, Jessica Martins, Julia Caroline, Juliana Rodrigues, Julio, Leticia Nunes, Thayna, Yanca Oliveira
+Todos os hooks acima devem:
+1. Receber a lista de SDRs válidos como parâmetro (injetada pelo componente pai)
+2. Ou buscar internamente usando o hook `useSdrsFromSquad`
 
-**Faltando na lista hardcoded:**
-- **Evellyn** (evellyn.santos@minhacasafinanciada.com) - está em `profiles` com squad=incorporador
-- **Roger** (robert.gusmao@minhacasafinanciada.com) - está em `profiles` e `employees` como SDR
+### Estratégia: Injeção de Dependência
 
-**Closers R1 no Incorporador** (tabela `closers`):
-- Cristiane Gomes, Julio, Thayna
+Como os hooks já existem e são usados em vários lugares, a melhor abordagem é:
+1. **Criar uma versão "interna"** das queries que recebe `validSdrEmails` e `sdrNameMap` como parâmetros
+2. **Exportar um hook wrapper** que busca os SDRs dinamicamente
 
-**Closers incorretamente mostrados** (são do Consórcio):
-- João Pedro Martins Vieira, Victoria Paz, Luis Felipe, Thobson
+### Alterações por Arquivo
 
-## Solução Proposta
+**1. `useSdrActivityMetrics.ts`**
 
-### Parte 1: SDRs - Usar dados dinâmicos do banco
-
-**Arquivo:** `src/hooks/useTeamMeetingsData.ts`
-
-Substituir a constante `SDR_LIST` por dados da tabela `sdr`:
-
+Substituir:
 ```typescript
-// Antes: SDR_LIST estático
-const validSdrEmails = new Set(SDR_LIST.map(sdr => sdr.email.toLowerCase()));
+import { SDR_LIST } from '@/constants/team';
 
-// Depois: buscar SDRs ativos do squad 'incorporador'
-const { data: activeSdrs } = useSdrsFromSquad('incorporador');
-const validSdrEmails = new Set((activeSdrs || []).map(s => s.email.toLowerCase()));
+// Inicializar métricas para SDRs conhecidos
+SDR_LIST.forEach(sdr => { ... });
 ```
 
-**Criar hook:** `src/hooks/useSdrsFromSquad.ts`
-
+Por:
 ```typescript
-export function useSdrsFromSquad(squad: string) {
+import { useSdrsFromSquad } from './useSdrsFromSquad';
+
+export function useSdrActivityMetrics(startDate, endDate, originId, squad = 'incorporador') {
+  const sdrsQuery = useSdrsFromSquad(squad);
+  
   return useQuery({
-    queryKey: ['sdrs-squad', squad],
+    // ...
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('sdr')
-        .select('id, name, email, role_type, meta_diaria')
-        .eq('active', true)
-        .eq('squad', squad)
-        .eq('role_type', 'sdr')  // Apenas SDRs, não closers
-        .order('name');
-      
-      if (error) throw error;
-      return data;
-    }
+      const sdrs = sdrsQuery.data || [];
+      const validSdrEmails = new Set(sdrs.map(s => s.email.toLowerCase()));
+      const sdrNameMap = new Map(sdrs.map(s => [s.email.toLowerCase(), s.name]));
+      // Usar esses sets em vez de SDR_LIST
+    },
+    enabled: !!startDate && !!endDate && sdrsQuery.isSuccess,
   });
 }
 ```
 
-### Parte 2: Closers - Filtrar por BU
+**2. `useSDRCarrinhoMetrics.ts`**
 
-**Arquivo:** `src/hooks/useR1CloserMetrics.ts`
+Mesmo padrão - substituir `SDR_LIST` por dados dinâmicos de `useSdrsFromSquad`.
 
-Adicionar filtro por BU na query de closers:
+**3. `useSdrOutsideMetrics.ts`**
 
+Mesmo padrão.
+
+**4. `useR1CloserMetrics.ts`**
+
+Substituir:
 ```typescript
-// Antes
-const { data: closers } = await supabase
-  .from('closers')
-  .select('id, name, color, meeting_type')
-  .eq('is_active', true);
-
-// Depois
-const { data: closers } = await supabase
-  .from('closers')
-  .select('id, name, color, meeting_type, bu')
-  .eq('is_active', true)
-  .eq('bu', 'incorporador');  // Filtrar por BU
+const validSdrEmails = new Set(SDR_LIST.map(s => s.email.toLowerCase()));
 ```
 
-### Parte 3: Adicionar SDRs faltantes no banco
+Por:
+```typescript
+// Fetch active SDRs from incorporador squad
+const { data: sdrs } = await supabase
+  .from('sdr')
+  .select('email, name')
+  .eq('active', true)
+  .eq('squad', 'incorporador')
+  .eq('role_type', 'sdr');
 
-Criar registros na tabela `sdr` para:
-
-| Nome | Email | Squad | Role |
-|------|-------|-------|------|
-| Evellyn Vieira dos Santos | evellyn.santos@minhacasafinanciada.com | incorporador | sdr |
-| Robert Roger Santos Gusmão | robert.gusmao@minhacasafinanciada.com | incorporador | sdr |
-
-### Parte 4: Atualizar Vinicius Rangel
-
-Mover da squad `incorporador` para `credito` (já está correto no RH):
-
-```sql
-UPDATE sdr SET squad = 'credito' WHERE email = 'rangel.vinicius@minhacasafinanciada.com';
+const validSdrEmails = new Set((sdrs || []).map(s => s.email.toLowerCase()));
 ```
 
 ## Arquivos a Modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/hooks/useSdrsFromSquad.ts` | Criar hook para buscar SDRs por squad |
-| `src/hooks/useTeamMeetingsData.ts` | Usar hook dinâmico em vez de `SDR_LIST` |
-| `src/hooks/useR1CloserMetrics.ts` | Adicionar filtro `.eq('bu', 'incorporador')` |
-| `src/pages/crm/ReunioesEquipe.tsx` | Atualizar imports e passar contexto de BU |
-| Banco de dados | Insert de Evellyn/Roger, Update de Vinicius |
+| `src/hooks/useSdrActivityMetrics.ts` | Usar `useSdrsFromSquad` em vez de `SDR_LIST` |
+| `src/hooks/useSDRCarrinhoMetrics.ts` | Usar `useSdrsFromSquad` em vez de `SDR_LIST` |
+| `src/hooks/useSdrOutsideMetrics.ts` | Usar `useSdrsFromSquad` em vez de `SDR_LIST` |
+| `src/hooks/useR1CloserMetrics.ts` | Buscar SDRs dinamicamente via Supabase |
 
 ## Resultado Esperado
 
-Após a implementação:
-
-**Aba SDRs:**
-- Alex Dias, Antony Elias, Carol Correa, Carol Souza, **Evellyn**, Jessica Martins, Julia Caroline, Juliana Rodrigues, Leticia Nunes, **Roger**, Yanca Oliveira
-- ~~Vinicius Rangel~~ (movido para Crédito)
-
-**Aba Closers:**
-- Cristiane Gomes, Julio, Thayna
-- ~~João Pedro~~, ~~Victoria~~, ~~Luis Felipe~~, ~~Thobson~~ (filtrados por serem do Consórcio)
+Após a implementação, **todas** as tabelas do painel comercial (Atividades por SDR, Métricas de Closer, Carrinho, etc.) mostrarão:
+- Evellyn e Roger (novos SDRs do Incorporador)
+- Sem Vinicius Rangel (movido para Crédito)
+- Sincronização automática com o RH
 
 ## Seção Técnica
 
-A refatoração segue a arquitetura existente de BU Context:
+A refatoração segue o padrão já estabelecido em `useTeamMeetingsData`:
 
 ```text
-┌─────────────────────────┐
-│   ReunioesEquipe.tsx    │
-│   (BU = incorporador)   │
-└───────────┬─────────────┘
-            │
-    ┌───────▼───────┐
-    │  useSdrsFrom  │
-    │    Squad()    │◄── Busca SDRs ativos por squad
-    └───────────────┘
-            │
-    ┌───────▼───────┐
-    │  useR1Closer  │
-    │   Metrics()   │◄── Adiciona filtro .eq('bu', bu)
-    └───────────────┘
+┌───────────────────────────────┐
+│   Componente (ReunioesEquipe) │
+└───────────────┬───────────────┘
+                │
+   ┌────────────▼────────────┐
+   │    useSdrsFromSquad     │◄── Fonte única de verdade
+   │    (squad='incorporador')│
+   └────────────┬────────────┘
+                │
+   ┌────────────▼────────────────────────────────────┐
+   │  Hooks de Métricas (Activity, Carrinho, etc.)  │
+   │  - Recebem sdrs como dependência               │
+   │  - Filtram apenas SDRs válidos                 │
+   └────────────────────────────────────────────────┘
 ```
 
-A solução é escalável para outras BUs (Consórcio, Crédito, Projetos) usando o mesmo padrão de filtro.
+Diferença técnica entre abordagens:
+- **Hooks que usam `useQuery`**: Podem compor com `useSdrsFromSquad` diretamente (ex: `useSdrActivityMetrics`)
+- **Hooks que fazem fetch interno**: Devem buscar SDRs dentro da `queryFn` para evitar regras de hooks (ex: `useR1CloserMetrics`)
