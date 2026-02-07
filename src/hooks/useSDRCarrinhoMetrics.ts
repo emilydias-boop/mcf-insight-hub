@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { getCustomWeekStart, getCustomWeekEnd } from "@/lib/dateHelpers";
-import { SDR_LIST } from "@/constants/team";
+import { useSdrsFromSquad } from "./useSdrsFromSquad";
 
 export interface SDRCarrinhoMetric {
   sdr_id: string;
@@ -11,17 +11,19 @@ export interface SDRCarrinhoMetric {
   aprovados: number;
 }
 
-export function useSDRCarrinhoMetrics(weekDate: Date) {
+export function useSDRCarrinhoMetrics(weekDate: Date, squad: string = 'incorporador') {
   const weekStart = getCustomWeekStart(weekDate);
   const weekEnd = getCustomWeekEnd(weekDate);
 
-  // Build set of valid SDR emails
-  const validSdrEmails = new Set(SDR_LIST.map(s => s.email.toLowerCase()));
-  const sdrNameMap = new Map(SDR_LIST.map(s => [s.email.toLowerCase(), s.nome]));
+  const sdrsQuery = useSdrsFromSquad(squad);
 
   return useQuery({
-    queryKey: ['sdr-carrinho-metrics', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
+    queryKey: ['sdr-carrinho-metrics', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), squad],
     queryFn: async (): Promise<SDRCarrinhoMetric[]> => {
+      const sdrs = sdrsQuery.data || [];
+      const validSdrEmails = new Set(sdrs.map(s => s.email.toLowerCase()));
+      const sdrNameMap = new Map(sdrs.map(s => [s.email.toLowerCase(), s.name]));
+
       // 1. Fetch R2 status options to find "aprovado"
       const { data: statusOptions, error: statusError } = await supabase
         .from('r2_status_options')
@@ -129,7 +131,7 @@ export function useSDRCarrinhoMetrics(weekDate: Date) {
         }
       });
 
-      // 8. Aggregate by SDR - ONLY include valid SDRs from SDR_LIST
+      // 8. Aggregate by SDR - ONLY include valid SDRs from database
       const sdrMap = new Map<string, SDRCarrinhoMetric>();
       let unassignedCount = 0;
 
@@ -152,7 +154,7 @@ export function useSDRCarrinhoMetrics(weekDate: Date) {
           return;
         }
 
-        // FILTER: Only count if booked by a valid SDR from SDR_LIST
+        // FILTER: Only count if booked by a valid SDR from the database
         if (!validSdrEmails.has(sdrEmail)) {
           unassignedCount++;
           return;
@@ -188,6 +190,7 @@ export function useSDRCarrinhoMetrics(weekDate: Date) {
 
       return result;
     },
+    enabled: sdrsQuery.isSuccess,
     refetchInterval: 60000, // 1 minuto
   });
 }
