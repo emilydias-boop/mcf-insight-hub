@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { startOfDay, endOfDay, format } from "date-fns";
-import { SDR_LIST } from "@/constants/team";
 
 export interface R1CloserMetric {
   closer_id: string;
@@ -15,9 +14,9 @@ export interface R1CloserMetric {
   r2_agendada: number;
 }
 
-export function useR1CloserMetrics(startDate: Date, endDate: Date) {
+export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 'incorporador') {
   return useQuery({
-    queryKey: ['r1-closer-metrics', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd')],
+    queryKey: ['r1-closer-metrics', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), bu],
     queryFn: async (): Promise<R1CloserMetric[]> => {
       const start = startOfDay(startDate).toISOString();
       const end = endOfDay(endDate).toISOString();
@@ -27,15 +26,24 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
         .from('closers')
         .select('id, name, color, meeting_type, bu')
         .eq('is_active', true)
-        .eq('bu', 'incorporador');  // Only Incorporador closers
+        .eq('bu', bu);
 
       if (closersError) throw closersError;
 
       // Filter closers that handle R1 (meeting_type is null or 'r1')
       const r1Closers = closers?.filter(c => !c.meeting_type || c.meeting_type === 'r1') || [];
 
-      // Build set of valid SDR emails (active SDRs only)
-      const validSdrEmails = new Set(SDR_LIST.map(s => s.email.toLowerCase()));
+      // Fetch active SDRs from database instead of hardcoded list
+      const { data: sdrs, error: sdrsError } = await supabase
+        .from('sdr')
+        .select('email, name')
+        .eq('active', true)
+        .eq('squad', bu)
+        .eq('role_type', 'sdr');
+
+      if (sdrsError) throw sdrsError;
+
+      const validSdrEmails = new Set((sdrs || []).map(s => s.email.toLowerCase()));
 
       // Statuses that count as "Agendada" - explicitly defined to avoid counting canceled/rescheduled
       const allowedAgendadaStatuses = ['scheduled', 'invited', 'completed', 'no_show', 'contract_paid'];
@@ -380,7 +388,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
 
         // Count attendees by status - only if booked by valid SDR
         meeting.meeting_slot_attendees?.forEach(att => {
-          // Filter: only count if booked by a valid SDR from SDR_LIST
+          // Filter: only count if booked by a valid SDR from database
           const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
           if (!bookedByEmail || !validSdrEmails.has(bookedByEmail)) {
             return; // Skip attendees not booked by valid SDR
