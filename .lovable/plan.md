@@ -1,73 +1,135 @@
 
 
-# Corrigir Faturamento R$ 0,00 - Erro de Ambiguidade RPC
+# Corrigir Faturamento Incorporador - Usar RPC Correta
 
-## Problema
+## Problema Confirmado
 
-O faturamento de janeiro de 2026 mostra **R$ 0,00** porque a chamada RPC `get_all_hubla_transactions` retorna erro **HTTP 300** (ambiguidade de funcao).
+O faturamento de janeiro 2026 esta errado porque os hooks usam a RPC errada, criando inconsistencia com a deduplicacao.
 
-### Mensagem de Erro
+| Situacao | Valor |
+|----------|-------|
+| **Esperado pelo usuario** | ~R$ 2.038.000 |
+| **Calculo correto (validado via SQL)** | R$ 2.035.898 |
+| **Calculo atual (bugado)** | Valor incorreto |
 
-```
-PGRST203: Could not choose the best candidate function between:
-- get_all_hubla_transactions(...p_start_date => text...)
-- get_all_hubla_transactions(...p_start_date => timestamp with time zone...)
-```
+A diferenca de R$ 2.100 (~0.1%) e insignificante e pode ser de arredondamento.
 
-### Causa Raiz
+## Causa Raiz
 
-Existem duas versoes da mesma funcao no banco de dados:
+O hook `useTeamRevenueByMonth.ts` usa:
 
-| Versao | Tipo dos Parametros | Status |
-|--------|---------------------|--------|
-| Antiga | `timestamp with time zone` | Obsoleta |
-| Nova | `text` | Correta (inclui `reference_price`) |
+- `get_all_hubla_transactions` -> Retorna TODAS as transacoes (6.955 em janeiro)
+- `get_first_transaction_ids` -> Retorna apenas IDs de `target_bu = 'incorporador'`
 
-Quando o frontend envia strings ISO (ex: `"2026-01-01T00:00:00-03:00"`), o PostgreSQL nao consegue decidir qual versao usar.
+Isso cria inconsistencia: transacoes de outros BUs sao processadas mas a deduplicacao nao considera elas corretamente.
 
 ## Solucao
 
-Criar uma migracao SQL para remover a versao antiga da funcao.
+Alterar os dois hooks para usar a RPC `get_hubla_transactions_by_bu` com `p_bu: 'incorporador'`, garantindo que apenas transacoes do Incorporador MCF sejam processadas.
 
-### SQL da Migracao
+### Arquivo 1: src/hooks/useTeamRevenueByMonth.ts
 
-```sql
--- Remover a versao antiga da funcao (com timestamp with time zone)
--- Manter apenas a versao com TEXT que e mais recente e completa
-DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(
-  p_search text,
-  p_start_date timestamp with time zone,
-  p_end_date timestamp with time zone,
-  p_limit integer,
-  p_products text[]
-);
+**Linhas 33-40 - ANTES:**
+```typescript
+const { data: transactions } = await supabase.rpc('get_all_hubla_transactions', {
+  p_start_date: formatDateForQuery(monthStart),
+  p_end_date: formatDateForQuery(monthEnd, true),
+  p_limit: 10000,
+  p_search: null,
+  p_products: null,
+});
 ```
 
-### Por que manter a versao TEXT?
+**DEPOIS:**
+```typescript
+const { data: transactions } = await supabase.rpc('get_hubla_transactions_by_bu', {
+  p_bu: 'incorporador',
+  p_start_date: formatDateForQuery(monthStart),
+  p_end_date: formatDateForQuery(monthEnd, true),
+  p_limit: 10000,
+  p_search: null,
+});
+```
 
-1. **Mais recente**: Inclui a coluna `reference_price` usada pelo sistema de pricing
-2. **Mais flexivel**: Aceita strings em qualquer formato de data
-3. **Compativel**: O frontend ja envia strings formatadas com timezone
+**Linhas 45-50 - ANTES:**
+```typescript
+const transaction = {
+  product_name: t.product_name,
+  product_price: t.product_price,
+  installment_number: t.installment_number,
+  gross_override: t.gross_override,
+};
+```
 
-## Impacto
+**DEPOIS:**
+```typescript
+const transaction = {
+  product_name: t.product_name,
+  product_price: t.product_price,
+  installment_number: t.installment_number,
+  gross_override: t.gross_override,
+  reference_price: t.reference_price,
+};
+```
+
+### Arquivo 2: src/hooks/useUltrametaByBU.ts
+
+**Linhas 51-57 - ANTES:**
+```typescript
+supabase.rpc('get_all_hubla_transactions', {
+  p_start_date: formatDateForQuery(monthStart),
+  p_end_date: formatDateForQuery(monthEnd, true),
+  p_limit: 10000,
+  p_search: null,
+  p_products: null,
+}),
+```
+
+**DEPOIS:**
+```typescript
+supabase.rpc('get_hubla_transactions_by_bu', {
+  p_bu: 'incorporador',
+  p_start_date: formatDateForQuery(monthStart),
+  p_end_date: formatDateForQuery(monthEnd, true),
+  p_limit: 10000,
+  p_search: null,
+}),
+```
+
+**Linhas 96-101 - ANTES:**
+```typescript
+const transaction = {
+  product_name: t.product_name,
+  product_price: t.product_price,
+  installment_number: t.installment_number,
+  gross_override: t.gross_override,
+};
+```
+
+**DEPOIS:**
+```typescript
+const transaction = {
+  product_name: t.product_name,
+  product_price: t.product_price,
+  installment_number: t.installment_number,
+  gross_override: t.gross_override,
+  reference_price: t.reference_price,
+};
+```
+
+## Resumo das Alteracoes
+
+| Arquivo | Alteracao |
+|---------|-----------|
+| `useTeamRevenueByMonth.ts` | Trocar RPC e adicionar `reference_price` |
+| `useUltrametaByBU.ts` | Trocar RPC e adicionar `reference_price` |
+
+## Resultado Esperado
 
 Apos a correcao:
 
-| Antes | Depois |
-|-------|--------|
-| Faturamento: R$ 0,00 | Faturamento: ~R$ 1.3M |
-| Erro HTTP 300 | Sucesso |
-| Dashboard quebrado | Dashboard funcionando |
-
-## Arquivos Afetados
-
-Nenhuma alteracao de codigo frontend necessaria - apenas a remocao da funcao duplicada no banco de dados via migracao SQL.
-
-## Verificacao Pos-Correcao
-
-Apos aplicar a migracao:
-
-1. O hook `useTeamRevenueByMonth` retornara os dados corretamente
-2. O card "Metas do Time" exibira o faturamento real (~R$ 1.3M para janeiro/2026)
-3. Todos os relatorios que usam essa RPC voltarao a funcionar
+- **Faturamento Janeiro 2026:** ~R$ 2.035.898 (aproximadamente R$ 2.038.000)
+- Apenas produtos com `target_bu = 'incorporador'` serao contabilizados
+- O calculo respeitara os `reference_price` configurados
+- Consistencia com a RPC `get_first_transaction_ids`
 
