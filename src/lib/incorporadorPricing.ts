@@ -46,6 +46,7 @@ export interface TransactionForGross {
   product_price: number | null;
   installment_number: number | null;
   gross_override?: number | null;  // Override manual do valor bruto
+  reference_price?: number | null;  // Preço de referência da tabela product_configurations
 }
 
 // Interface estendida para transações com campos de deduplicação por cliente+produto
@@ -95,7 +96,12 @@ export const getDeduplicatedGross = (
     return transaction.product_price || 0;
   }
   
-  // Regra 5: Calcula baseado no preço fixo do produto
+  // Regra 5: Usar reference_price do banco quando disponível (fonte autoritativa)
+  if (transaction.reference_price !== null && transaction.reference_price !== undefined) {
+    return transaction.reference_price;
+  }
+  
+  // Regra 6: Fallback - calcula baseado no preço fixo do produto via cache/hardcoded
   return getFixedGrossPrice(transaction.product_name, transaction.product_price || 0);
 };
 

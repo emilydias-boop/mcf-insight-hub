@@ -21,6 +21,7 @@ export interface HublaTransaction {
   source: string | null;
   gross_override: number | null;
   linked_attendee_id: string | null;
+  reference_price: number | null;
 }
 
 export interface TransactionFilters {
