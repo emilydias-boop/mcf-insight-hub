@@ -1,49 +1,132 @@
 
-# Corrigir Acesso Negado na Página "Meu Fechamento"
+# Corrigir Visibilidade do Fechamento para Closers
 
 ## Diagnóstico
 
-A página `/meu-fechamento` está protegida por um `ResourceGuard` com o recurso `fechamento_sdr`. No entanto, na tabela `role_permissions`:
+Os usuários **Julio** e **Thayna** não conseguem ver seus fechamentos porque:
 
-| Role | Permissão |
-|------|-----------|
-| admin | full ✅ |
-| manager | edit ✅ |
-| coordenador | edit ✅ |
-| sdr | view ✅ |
-| **closer** | **none ❌** |
+| Usuário | user_id na tabela SDR | Email Coincide |
+|---------|----------------------|----------------|
+| Julio | NULL ❌ | ✅ julio.caetano@minhacasafinanciada.com |
+| Thayna | NULL ❌ | ✅ thaynar.tavares@minhacasafinanciada.com |
+| Cristiane | ✅ Vinculado | ✅ |
 
-O usuário Julio (Closer) está sendo bloqueado porque Closers têm `permission_level = 'none'` para o recurso `fechamento_sdr`.
+A política RLS atual na tabela `sdr` só permite acesso via `user_id = auth.uid()`. Como o `user_id` está NULL, a condição falha e o registro não é retornado.
 
-## Solução Recomendada
+## Solução Proposta
 
-Trocar o `ResourceGuard` por um `RoleGuard` na rota `/meu-fechamento`, permitindo apenas SDRs e Closers. Isso é seguro porque:
-1. A página já usa `useOwnFechamento` que filtra por `user_id` - cada usuário só vê seus próprios dados
-2. O sidebar já define `requiredRoles: ["sdr", "closer"]` para esta página
-3. Mantém o `ResourceGuard` nas páginas de administração (`/fechamento-sdr`, `/fechamento-sdr/configuracoes`)
+Adicionar fallback por email nas políticas RLS e na função helper `is_own_sdr`.
 
-## Alteração no Código
+### Alteração 1: Atualizar RLS da tabela `sdr`
 
-**Arquivo:** `src/App.tsx` - linha 299
+Modificar a policy "SDRs podem ver seus próprios dados" para também verificar por email:
 
-```text
-ANTES:
-<Route path="meu-fechamento" element={<ResourceGuard resource="fechamento_sdr"><MeuFechamento /></ResourceGuard>} />
+```sql
+-- Remover policy antiga
+DROP POLICY IF EXISTS "SDRs podem ver seus próprios dados" ON public.sdr;
 
-DEPOIS:
-<Route path="meu-fechamento" element={<RoleGuard allowedRoles={['sdr', 'closer']}><MeuFechamento /></RoleGuard>} />
+-- Criar nova policy com fallback por email
+CREATE POLICY "SDRs podem ver seus próprios dados"
+ON public.sdr FOR SELECT
+USING (
+  user_id = auth.uid()
+  OR (
+    user_id IS NULL 
+    AND email = (SELECT email FROM auth.users WHERE id = auth.uid())
+  )
+);
+```
+
+### Alteração 2: Atualizar função `is_own_sdr`
+
+A função é usada nas policies de outras tabelas (sdr_comp_plan, sdr_month_payout, etc.):
+
+```sql
+CREATE OR REPLACE FUNCTION public.is_own_sdr(_sdr_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.sdr
+    WHERE id = _sdr_id 
+      AND (
+        user_id = auth.uid()
+        OR (
+          user_id IS NULL 
+          AND email = (SELECT email FROM auth.users WHERE id = auth.uid())
+        )
+      )
+  )
+$$;
+```
+
+### Alteração 3: Atualizar RLS da tabela `sdr_month_payout`
+
+Garantir que a policy também funcione com o fallback:
+
+```sql
+DROP POLICY IF EXISTS "SDRs podem ver seus próprios payouts" ON public.sdr_month_payout;
+
+CREATE POLICY "SDRs podem ver seus próprios payouts"
+ON public.sdr_month_payout FOR SELECT
+USING (is_own_sdr(sdr_id));
+```
+
+## Arquivo a Criar
+
+**Arquivo:** `supabase/migrations/YYYYMMDDHHMMSS_fix_sdr_email_fallback_rls.sql`
+
+```sql
+-- Corrigir função is_own_sdr para fallback por email
+CREATE OR REPLACE FUNCTION public.is_own_sdr(_sdr_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.sdr
+    WHERE id = _sdr_id 
+      AND (
+        user_id = auth.uid()
+        OR (
+          user_id IS NULL 
+          AND email = (SELECT email FROM auth.users WHERE id = auth.uid())
+        )
+      )
+  )
+$$;
+
+-- Atualizar policy da tabela sdr
+DROP POLICY IF EXISTS "SDRs podem ver seus próprios dados" ON public.sdr;
+
+CREATE POLICY "SDRs podem ver seus próprios dados"
+ON public.sdr FOR SELECT
+USING (
+  user_id = auth.uid()
+  OR (
+    user_id IS NULL 
+    AND email = (SELECT email FROM auth.users WHERE id = auth.uid())
+  )
+);
 ```
 
 ## Resultado Esperado
 
-- SDRs e Closers poderão acessar `/meu-fechamento` ✅
-- Cada usuário verá apenas seu próprio fechamento (controlado pelo hook)
-- A página de gestão `/fechamento-sdr` continua protegida para gestores
+Após aplicar a migração:
+- Julio, Thayna e Cristiane poderão acessar `/meu-fechamento`
+- Cada um verá apenas seu próprio fechamento
+- A segurança é mantida (usuários só veem dados onde email OU user_id coincide)
+- Não requer vincular manualmente o user_id
 
 ## Seção Técnica
 
-| Arquivo | Linha | Mudança |
-|---------|-------|---------|
-| `src/App.tsx` | 299 | Substituir `ResourceGuard` por `RoleGuard` |
+| Componente | Mudança |
+|------------|---------|
+| Função `is_own_sdr` | Adicionar OR com verificação de email |
+| Policy `sdr` SELECT | Adicionar fallback por email quando user_id é NULL |
+| Nova migração | 1 arquivo SQL com as alterações |
 
-O `RoleGuard` já está importado e usado em outras rotas do arquivo. A mudança é de apenas uma linha.
+A solução é retrocompatível - registros com `user_id` preenchido continuam funcionando normalmente.
