@@ -61,7 +61,7 @@ export function useCalculatedVariavel({
 
       // For metrics with isDynamicCalc (contratos, vendas_parceria)
       if (config.isDynamicCalc) {
-        const baseVariavel = variavelTotal || compPlan?.variavel_total || 1200;
+        const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
         const pesoPercent = metrica.peso_percentual || 25;
         valorBase = baseVariavel * (pesoPercent / 100);
 
@@ -113,7 +113,7 @@ export function useCalculatedVariavel({
 
         // Fallback: dynamic calculation if no specific value
         if (valorBase === 0) {
-          const baseVariavel = variavelTotal || compPlan?.variavel_total || 1200;
+          const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
           const pesoPercent = metrica.peso_percentual || 25;
           valorBase = baseVariavel * (pesoPercent / 100);
         }
