@@ -762,7 +762,7 @@ export const useRecalculatePayout = () => {
 
 // Default OTE values by SDR level for fallback when no comp_plan exists
 const DEFAULT_OTE_BY_LEVEL: Record<number, { ote_total: number; fixo_valor: number; variavel_total: number }> = {
-  1: { ote_total: 4000, fixo_valor: 2800, variavel_total: 1200 },
+  1: { ote_total: 4000, fixo_valor: 2800, variavel_total: 400 },
   2: { ote_total: 4500, fixo_valor: 3150, variavel_total: 1350 },
   3: { ote_total: 5000, fixo_valor: 3500, variavel_total: 1500 },
   4: { ote_total: 5500, fixo_valor: 3850, variavel_total: 1650 },
