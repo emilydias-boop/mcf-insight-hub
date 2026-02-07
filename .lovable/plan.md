@@ -1,73 +1,51 @@
 
-# Corrigir Prioridade do Cálculo de Valor Base
+# Usar Meta Ajustada do Banco de Dados
 
-## Problema
+## Problema Encontrado
 
-O valor "R$ 1.200,00" está sendo exibido porque o código atual **prioriza** o campo `valor_meta_rpg` salvo no plano de compensação.
+O valor "171" está sendo **recalculado** a cada exibição, ignorando o campo `meta_agendadas_ajustada` que já existe no banco de dados.
 
-### Código Atual (linha 168-183)
-```typescript
-// Prioridade: valor específico do compPlan > cálculo dinâmico ❌
-let valorBase = 0;
-
-if (config.compPlanValueField && compPlan) {
-  const valorEspecifico = (compPlan as any)[config.compPlanValueField] || 0;
-  if (valorEspecifico > 0) {
-    valorBase = valorEspecifico;  // Usa R$ 1.200 do banco
-  }
-}
-
-// Fallback: cálculo dinâmico
-if (valorBase === 0) {
-  valorBase = baseVariavel * (pesoPercent / 100);
-}
-```
+| Componente | Lógica Atual | Deveria Ser |
+|------------|--------------|-------------|
+| DynamicIndicatorCard | `sdrMetaDiaria × diasUteisMes` | `payout.meta_agendadas_ajustada` |
+| CloserIndicators | `payout.meta_agendadas_ajustada` | Já está correto |
 
 ## Solução
 
-Inverter a prioridade conforme a lógica de negócio documentada:
+Modificar o `DynamicIndicatorCard` para usar o valor salvo no banco (`payout.meta_agendadas_ajustada`) como prioridade, igual ao `CloserIndicators`.
+
+### Código Atual (linha 145-147)
+```typescript
+if (metrica.nome_metrica === 'agendamentos') {
+  meta = sdrMetaDiaria;
+  metaAjustada = compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
+}
+```
 
 ### Código Novo
 ```typescript
-// CORRIGIDO: Prioridade para cálculo dinâmico (peso-based)
-const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
-const pesoPercent = metrica.peso_percentual || 0;
-
-let valorBase = 0;
-
-// Prioridade 1: Cálculo dinâmico se peso está definido
-if (pesoPercent > 0) {
-  valorBase = baseVariavel * (pesoPercent / 100);
-}
-
-// Fallback: valor específico do compPlan se não houver peso
-if (valorBase === 0 && config.compPlanValueField && compPlan) {
-  valorBase = (compPlan as any)[config.compPlanValueField] || 0;
-}
-
-// Fallback final
-if (valorBase === 0) {
-  valorBase = baseVariavel * 0.25; // 25% default
+if (metrica.nome_metrica === 'agendamentos') {
+  meta = sdrMetaDiaria;
+  // Prioridade: valor salvo no payout > compPlan > cálculo dinâmico
+  metaAjustada = (payout as any).meta_agendadas_ajustada 
+    || compPlan?.meta_reunioes_agendadas 
+    || (sdrMetaDiaria * diasUteisMes);
 }
 ```
 
 ## Resultado Esperado
 
-| Situação | Antes | Depois |
-|----------|-------|--------|
-| Com peso 25% e variavelTotal=400 | R$ 1.200 (do banco) | R$ 100 (400 × 25%) |
-| Com peso 100% e variavelTotal=400 | R$ 1.200 (do banco) | R$ 400 (400 × 100%) |
-| Sem peso definido | R$ 1.200 (do banco) | R$ 1.200 (fallback do banco) |
+Após essa mudança:
+- O "Editar KPIs" salva `meta_agendadas_ajustada = 180` no banco
+- O "Indicadores de Meta" exibe **180** (lido do banco)
+- Ambos ficam sincronizados
 
-## Arquivos a Alterar
+## Arquivo a Alterar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/fechamento/DynamicIndicatorCard.tsx` | Inverter prioridade: dinâmico primeiro, compPlan como fallback |
-| `src/hooks/useCalculatedVariavel.ts` | Mesma lógica para consistência |
+| `src/components/fechamento/DynamicIndicatorCard.tsx` | Linha 147: adicionar prioridade para `payout.meta_agendadas_ajustada` |
 
-## Nota
+## Resumo
 
-Se o peso_percentual da métrica "agendamentos" estiver configurado como 100%, o valor exibido será R$ 400,00 (400 × 100%). Se estiver como 25%, será R$ 100,00 (400 × 25%).
-
-Caso queira exatamente R$ 400,00, verifique se o peso_percentual da métrica está configurado corretamente na tabela `fechamento_metricas_mes`.
+Apenas **1 linha** precisa ser alterada para que o valor 180 (salvo pelo "Editar KPIs") apareça corretamente nos "Indicadores de Meta".
