@@ -1,51 +1,45 @@
 
-# Usar Meta Ajustada do Banco de Dados
+# Corrigir Valor Base para uma Closer Específica
 
-## Problema Encontrado
+## Problema
 
-O valor "171" está sendo **recalculado** a cada exibição, ignorando o campo `meta_agendadas_ajustada` que já existe no banco de dados.
+O valor **R$ 1.200,00** mostrado como "Valor Base" no card de indicadores vem do fallback definido no código:
 
-| Componente | Lógica Atual | Deveria Ser |
-|------------|--------------|-------------|
-| DynamicIndicatorCard | `sdrMetaDiaria × diasUteisMes` | `payout.meta_agendadas_ajustada` |
-| CloserIndicators | `payout.meta_agendadas_ajustada` | Já está correto |
+```typescript
+// src/pages/fechamento-sdr/Detail.tsx - linha 130
+const effectiveVariavelEarly = compPlan?.variavel_total || employeeEarly?.cargo_catalogo?.variavel_valor || 1200;
+```
+
+A Closer específica cai no fallback de **1200** porque:
+- Não tem `sdr_comp_plan` aprovado OU
+- O plano dela tem `variavel_total = 1200`
 
 ## Solução
 
-Modificar o `DynamicIndicatorCard` para usar o valor salvo no banco (`payout.meta_agendadas_ajustada`) como prioridade, igual ao `CloserIndicators`.
+**Duas opções:**
 
-### Código Atual (linha 145-147)
+### Opção 1 - Via Interface (Recomendado)
+Ir na tela de **Configurações** do fechamento dessa Closer e definir o `variavel_total = 400` no plano de compensação dela.
+
+### Opção 2 - Mudar Fallback no Código
+Mudar o fallback de 1200 para 400 no código. **Isso afeta TODOS os funcionários sem plano configurado.**
+
+| Arquivo | Linha | Mudança |
+|---------|-------|---------|
+| `src/pages/fechamento-sdr/Detail.tsx` | 130 | Fallback de `1200` → `400` |
+
 ```typescript
-if (metrica.nome_metrica === 'agendamentos') {
-  meta = sdrMetaDiaria;
-  metaAjustada = compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
-}
+// ANTES
+const effectiveVariavelEarly = compPlan?.variavel_total || employeeEarly?.cargo_catalogo?.variavel_valor || 1200;
+
+// DEPOIS
+const effectiveVariavelEarly = compPlan?.variavel_total || employeeEarly?.cargo_catalogo?.variavel_valor || 400;
 ```
 
-### Código Novo
-```typescript
-if (metrica.nome_metrica === 'agendamentos') {
-  meta = sdrMetaDiaria;
-  // Prioridade: valor salvo no payout > compPlan > cálculo dinâmico
-  metaAjustada = (payout as any).meta_agendadas_ajustada 
-    || compPlan?.meta_reunioes_agendadas 
-    || (sdrMetaDiaria * diasUteisMes);
-}
-```
+## Recomendação
 
-## Resultado Esperado
+Se **apenas essa Closer** deve ter R$ 400 e os outros devem continuar com R$ 1.200, a solução correta é criar/atualizar o **plano de compensação individual** dela com `variavel_total = 400`.
 
-Após essa mudança:
-- O "Editar KPIs" salva `meta_agendadas_ajustada = 180` no banco
-- O "Indicadores de Meta" exibe **180** (lido do banco)
-- Ambos ficam sincronizados
+Se **todos** os funcionários sem plano devem ter R$ 400 como padrão, então podemos mudar o fallback no código.
 
-## Arquivo a Alterar
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/fechamento/DynamicIndicatorCard.tsx` | Linha 147: adicionar prioridade para `payout.meta_agendadas_ajustada` |
-
-## Resumo
-
-Apenas **1 linha** precisa ser alterada para que o valor 180 (salvo pelo "Editar KPIs") apareça corretamente nos "Indicadores de Meta".
+**Qual opção você prefere?**
