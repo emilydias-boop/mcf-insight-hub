@@ -108,6 +108,7 @@ export const useSdrCompPlan = (sdrId: string | undefined, anoMes: string) => {
         .from('sdr_comp_plan')
         .select('*')
         .eq('sdr_id', sdrId)
+        .eq('status', 'approved') // Apenas planos aprovados
         .lte('vigencia_inicio', monthStart)
         .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
         .order('vigencia_inicio', { ascending: false })
