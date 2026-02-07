@@ -31,12 +31,12 @@ export function useTeamRevenueByMonth(anoMes: string, bu: string) {
         const firstIdSet = new Set((firstIdsData || []).map((r: { id: string }) => r.id));
 
         // 2. Fetch transactions for the selected month
-        const { data: transactions } = await supabase.rpc('get_all_hubla_transactions', {
+        const { data: transactions } = await supabase.rpc('get_hubla_transactions_by_bu', {
+          p_bu: 'incorporador',
           p_start_date: formatDateForQuery(monthStart),
           p_end_date: formatDateForQuery(monthEnd, true),
           p_limit: 10000,
           p_search: null,
-          p_products: null,
         });
 
         // 3. Calculate with deduplication
@@ -47,6 +47,7 @@ export function useTeamRevenueByMonth(anoMes: string, bu: string) {
             product_price: t.product_price,
             installment_number: t.installment_number,
             gross_override: t.gross_override,
+            reference_price: t.reference_price,
           };
           return sum + getDeduplicatedGross(transaction, isFirst);
         }, 0);
