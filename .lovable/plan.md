@@ -1,55 +1,67 @@
 
-# Corrigir Meta de R1 Realizadas: Usar 70% dos Agendamentos Realizados
+# Corrigir Edge Function: Meta de R1 Realizadas = 70% dos Agendamentos Reais
 
-## Problema
+## Problema Diagnosticado
 
-A meta de "R1 Realizadas" no card está usando 70% da **META** de agendamentos, mas deveria usar 70% dos **AGENDAMENTOS REALIZADOS** (igual ao formulário "Editar KPIs").
+A varredura revelou que **todos os SDRs ativos** têm inconsistência entre:
+- **Banco de dados**: meta_realizadas_ajustada calculada como 70% da META teórica
+- **Frontend**: card exibe 70% dos AGENDAMENTOS REAIS (correto)
 
-| Local | Lógica Atual | Valor |
-|-------|--------------|-------|
-| Editar KPIs | `181 × 0.7` | **127** (correto) |
-| Card Indicador | `180 × 0.7` | **126** (errado) |
+Isso causa divergência nos percentuais salvos e exibidos.
+
+## Dados Afetados (Janeiro 2026)
+
+| SDR | Agendamentos | Meta Banco | Meta Correta | Diferença |
+|-----|--------------|------------|--------------|-----------|
+| Carol Correa | 181 | 126 | 127 | +1 |
+| Carol Souza | 148 | 98 | 104 | +6 |
+| Antony Elias | 132 | 98 | 92 | -6 |
+| Jessica Martins | 169 | 140 | 118 | -22 |
+| Julia Caroline | 112 | 126 | 78 | -48 |
+| Leticia Nunes | 153 | 98 | 107 | +9 |
+| Cleiton Lima | 217 | 98 | 152 | +54 |
+| Vinicius Rangel | 58 | 98 | 41 | -57 |
 
 ## Solucao
 
-Modificar o `DynamicIndicatorCard.tsx` para calcular a meta de "realizadas" usando 70% do valor real de agendamentos do KPI (`kpi.reunioes_agendadas`).
+### 1. Atualizar Edge Function (recalculate-sdr-payout)
 
-### Alteracao no Codigo
+**Arquivo:** `supabase/functions/recalculate-sdr-payout/index.ts`
 
-**Arquivo:** `src/components/fechamento/DynamicIndicatorCard.tsx`
-
-**Linhas 151-156 - ANTES:**
+**Linha 302 - ANTES:**
 ```typescript
-} else if (metrica.nome_metrica === 'realizadas') {
-  // PRIORIDADE: payout (recalculado) > compPlan > 70% da meta de agendadas
-  metaAjustada = payout.meta_realizadas_ajustada
-    || compPlan?.meta_reunioes_realizadas
-    || Math.round((payout.meta_agendadas_ajustada || sdrMetaDiaria * diasUteisMes) * 0.7);
-  meta = Math.round(metaAjustada / diasUteisMes);
-}
+// Meta de Realizadas = 70% da META de agendadas do mês (não do valor real)
+const metaRealizadasAjustada = Math.round(metaAgendadasAjustada * 0.7);
 ```
 
 **DEPOIS:**
 ```typescript
-} else if (metrica.nome_metrica === 'realizadas') {
-  // Meta de Realizadas = 70% dos AGENDAMENTOS REALIZADOS (kpi.reunioes_agendadas)
-  // Isso garante consistência com o formulário "Editar KPIs"
-  const agendamentosRealizados = kpi?.reunioes_agendadas || 0;
-  metaAjustada = Math.round(agendamentosRealizados * 0.7);
-  meta = Math.round(metaAjustada / diasUteisMes);
-}
+// Meta de Realizadas = 70% dos AGENDAMENTOS REALIZADOS (consistente com frontend)
+const metaRealizadasAjustada = Math.round((kpi.reunioes_agendadas || 0) * 0.7);
 ```
 
-## Resultado Esperado
+### 2. Recalcular Payouts do Mes
 
-Ambas as telas mostrarão a mesma meta:
+Apos a correcao, executar o recalculo para todos os SDRs de Janeiro 2026 para atualizar os percentuais.
 
-| Indicador | Editar KPIs | Card |
-|-----------|-------------|------|
-| R1 Realizadas | **127** (70% de 181) | **127** (70% de 181) |
-
-## Arquivo a Modificar
+## Arquivos a Modificar
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/components/fechamento/DynamicIndicatorCard.tsx` | Usar `kpi.reunioes_agendadas` para calcular meta de realizadas |
+| `supabase/functions/recalculate-sdr-payout/index.ts` | Usar kpi.reunioes_agendadas na linha 302 |
+
+## Resultado Esperado
+
+Apos a correcao e recalculo:
+
+1. **meta_realizadas_ajustada** no banco sera igual ao exibido no card
+2. **pct_reunioes_realizadas** sera recalculado corretamente
+3. Consistencia total entre frontend, banco e formulario de KPIs
+
+## Exemplo de Verificacao (Carol Correa)
+
+| Campo | Antes | Depois |
+|-------|-------|--------|
+| meta_realizadas_ajustada | 126 | 127 |
+| pct_reunioes_realizadas | 98.41% | 97.64% |
+| Exibicao no Card | 127 | 127 |
