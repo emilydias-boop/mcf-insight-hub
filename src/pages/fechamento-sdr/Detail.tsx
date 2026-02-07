@@ -11,6 +11,7 @@ import { NoShowIndicator } from "@/components/sdr-fechamento/NoShowIndicator";
 import { DynamicIndicatorsGrid } from "@/components/fechamento/DynamicIndicatorCard";
 import { useActiveMetricsForSdr } from "@/hooks/useActiveMetricsForSdr";
 import { useCloserAgendaMetrics } from "@/hooks/useCloserAgendaMetrics";
+import { useCalculatedVariavel } from "@/hooks/useCalculatedVariavel";
 import { useSdrPayoutDetail, useSdrCompPlan, useSdrMonthKpi, useUpdatePayoutStatus } from "@/hooks/useSdrFechamento";
 import { useRecalculateWithKpi, useAuthorizeUltrameta, useSdrIntermediacoes } from "@/hooks/useSdrKpiMutations";
 import { useAuth } from "@/contexts/AuthContext";
@@ -290,6 +291,17 @@ const FechamentoSDRDetail = () => {
       : kpi
     : null;
 
+  // Calculate variable pay as sum of all indicator values (same logic as DynamicIndicatorCard)
+  const calculatedVariavel = useCalculatedVariavel({
+    metricas: activeMetrics,
+    kpi: effectiveKpi,
+    payout,
+    compPlan,
+    diasUteisMes,
+    sdrMetaDiaria,
+    variavelTotal: effectiveVariavel,
+  });
+
   // Closer-specific intermediações count (use agenda data for Closers)
   const effectiveIntermediacao = isCloser && closerMetrics.data 
     ? closerMetrics.data.contratos_pagos 
@@ -405,7 +417,7 @@ const FechamentoSDRDetail = () => {
                   )}
                 </div>
                 <div className="text-xl font-bold mt-1 text-primary">
-                  {formatCurrency(payout.valor_variavel_total || effectiveVariavel)}
+                  {formatCurrency(calculatedVariavel.total)}
                 </div>
               </CardContent>
             </Card>
@@ -416,7 +428,9 @@ const FechamentoSDRDetail = () => {
                   <CreditCard className="h-3.5 w-3.5" />
                   Total Conta
                 </div>
-                <div className="text-xl font-bold mt-1 text-primary">{formatCurrency(payout.total_conta || 0)}</div>
+                <div className="text-xl font-bold mt-1 text-primary">
+                  {formatCurrency(effectiveFixo + calculatedVariavel.total)}
+                </div>
               </CardContent>
             </Card>
 
