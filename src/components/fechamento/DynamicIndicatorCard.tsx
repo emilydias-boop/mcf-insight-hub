@@ -165,21 +165,25 @@ export const DynamicIndicatorCard = ({
     const pct = metaAjustada > 0 ? (kpiValue / metaAjustada) * 100 : 0;
     const mult = getMultiplier(pct);
     
-    // Prioridade: valor específico do compPlan > cálculo dinâmico
+    // CORRIGIDO: Prioridade para cálculo dinâmico (peso-based)
+    const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
+    const pesoPercent = metrica.peso_percentual || 0;
+    
     let valorBase = 0;
     
-    if (config.compPlanValueField && compPlan) {
-      const valorEspecifico = (compPlan as any)[config.compPlanValueField] || 0;
-      if (valorEspecifico > 0) {
-        valorBase = valorEspecifico;
-      }
+    // Prioridade 1: Cálculo dinâmico se peso está definido
+    if (pesoPercent > 0) {
+      valorBase = baseVariavel * (pesoPercent / 100);
     }
     
-    // Fallback: cálculo dinâmico se não houver valor específico
+    // Fallback: valor específico do compPlan se não houver peso
+    if (valorBase === 0 && config.compPlanValueField && compPlan) {
+      valorBase = (compPlan as any)[config.compPlanValueField] || 0;
+    }
+    
+    // Fallback final
     if (valorBase === 0) {
-      const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
-      const pesoPercent = metrica.peso_percentual || 25;
-      valorBase = baseVariavel * (pesoPercent / 100);
+      valorBase = baseVariavel * 0.25;
     }
     
     // Valor final = base × multiplicador (recalculado localmente)
