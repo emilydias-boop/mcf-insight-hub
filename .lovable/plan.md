@@ -1,74 +1,49 @@
 
-# Corrigir Valor Base da Organização para Closer Thayna
+# Corrigir Acesso Negado na Página "Meu Fechamento"
 
 ## Diagnóstico
 
-A Closer Thayna possui um plano de compensação (`sdr_comp_plan`) com:
-- `valor_organizacao = 1200`
-- `status = PENDING` (não aprovado!)
+A página `/meu-fechamento` está protegida por um `ResourceGuard` com o recurso `fechamento_sdr`. No entanto, na tabela `role_permissions`:
 
-O problema é que o hook `useSdrCompPlan` não filtra por status, retornando planos pendentes como se fossem válidos.
+| Role | Permissão |
+|------|-----------|
+| admin | full ✅ |
+| manager | edit ✅ |
+| coordenador | edit ✅ |
+| sdr | view ✅ |
+| **closer** | **none ❌** |
 
-## Dados Encontrados
-
-| Campo | Valor |
-|-------|-------|
-| cargo_catalogo.variavel_valor | R$ 2.400,00 |
-| Peso Organização | 15% |
-| Valor correto calculado | 2400 × 15% = **R$ 360,00** |
-| valor_organizacao no plano PENDING | R$ 1.200,00 ← erro |
+O usuário Julio (Closer) está sendo bloqueado porque Closers têm `permission_level = 'none'` para o recurso `fechamento_sdr`.
 
 ## Solução Recomendada
 
-Adicionar filtro `.eq('status', 'approved')` no hook `useSdrCompPlan` para que apenas planos aprovados sejam utilizados nos cálculos.
+Trocar o `ResourceGuard` por um `RoleGuard` na rota `/meu-fechamento`, permitindo apenas SDRs e Closers. Isso é seguro porque:
+1. A página já usa `useOwnFechamento` que filtra por `user_id` - cada usuário só vê seus próprios dados
+2. O sidebar já define `requiredRoles: ["sdr", "closer"]` para esta página
+3. Mantém o `ResourceGuard` nas páginas de administração (`/fechamento-sdr`, `/fechamento-sdr/configuracoes`)
 
-### Arquivo a Alterar
+## Alteração no Código
 
-`src/hooks/useSdrFechamento.ts` - linhas 107-115
+**Arquivo:** `src/App.tsx` - linha 299
 
-### Código Atual
-```typescript
-const { data, error } = await supabase
-  .from('sdr_comp_plan')
-  .select('*')
-  .eq('sdr_id', sdrId)
-  .lte('vigencia_inicio', monthStart)
-  .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
-  .order('vigencia_inicio', { ascending: false })
-  .limit(1)
-  .single();
-```
+```text
+ANTES:
+<Route path="meu-fechamento" element={<ResourceGuard resource="fechamento_sdr"><MeuFechamento /></ResourceGuard>} />
 
-### Código Novo
-```typescript
-const { data, error } = await supabase
-  .from('sdr_comp_plan')
-  .select('*')
-  .eq('sdr_id', sdrId)
-  .eq('status', 'approved')  // Apenas planos aprovados
-  .lte('vigencia_inicio', monthStart)
-  .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
-  .order('vigencia_inicio', { ascending: false })
-  .limit(1)
-  .single();
+DEPOIS:
+<Route path="meu-fechamento" element={<RoleGuard allowedRoles={['sdr', 'closer']}><MeuFechamento /></RoleGuard>} />
 ```
 
 ## Resultado Esperado
 
-Após a correção:
-- O plano PENDING será ignorado
-- O sistema usará o cálculo dinâmico: `variavelTotal × peso%`
-- Com cargo_catalogo.variavel_valor = 2400 e peso = 15%
-- **Valor Base = R$ 360,00** (correto)
+- SDRs e Closers poderão acessar `/meu-fechamento` ✅
+- Cada usuário verá apenas seu próprio fechamento (controlado pelo hook)
+- A página de gestão `/fechamento-sdr` continua protegida para gestores
 
-## Alternativa (Via Interface)
+## Seção Técnica
 
-Se preferir manter o comportamento atual e corrigir apenas para a Thayna:
-1. Aprovar o plano dela na interface de Configurações
-2. Editar o `valor_organizacao` para 360 antes de aprovar
+| Arquivo | Linha | Mudança |
+|---------|-------|---------|
+| `src/App.tsx` | 299 | Substituir `ResourceGuard` por `RoleGuard` |
 
----
-
-**Qual opção você prefere?**
-- **Corrigir o Hook** (recomendado - garante consistência para todos)
-- **Aprovar/Editar o Plano da Thayna** (solução pontual)
+O `RoleGuard` já está importado e usado em outras rotas do arquivo. A mudança é de apenas uma linha.
