@@ -89,7 +89,7 @@ export const DynamicIndicatorCard = ({
   // For metrics with isDynamicCalc (contratos, vendas_parceria), calculate values dynamically
   if (config.isDynamicCalc) {
     // Use variável total do cargo_catalogo ou compPlan
-    const baseVariavel = variavelTotal || compPlan?.variavel_total || 1200;
+    const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
     const pesoPercent = metrica.peso_percentual || 25;
     const valorBase = baseVariavel * (pesoPercent / 100);
     
@@ -177,7 +177,7 @@ export const DynamicIndicatorCard = ({
     
     // Fallback: cálculo dinâmico se não houver valor específico
     if (valorBase === 0) {
-      const baseVariavel = variavelTotal || compPlan?.variavel_total || 1200;
+      const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
       const pesoPercent = metrica.peso_percentual || 25;
       valorBase = baseVariavel * (pesoPercent / 100);
     }
