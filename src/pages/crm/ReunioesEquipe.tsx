@@ -35,7 +35,7 @@ import { useSdrOutsideMetrics } from "@/hooks/useSdrOutsideMetrics";
 
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
-import { SDR_LIST } from "@/constants/team";
+import { useSdrsFromSquad } from "@/hooks/useSdrsFromSquad";
 
 type DatePreset = "today" | "week" | "month" | "custom";
 
@@ -191,6 +191,9 @@ export default function ReunioesEquipe() {
 
   // Fetch all SDRs for meta_diaria
   const { data: allSdrsData } = useSdrsAll();
+  
+  // Fetch active SDRs from squad for dropdown and base dataset
+  const { data: activeSdrsList } = useSdrsFromSquad('incorporador');
 
   // Create sdrMetaMap: email -> meta_diaria
   const sdrMetaMap = useMemo(() => {
@@ -260,16 +263,17 @@ export default function ReunioesEquipe() {
 
   // Create base dataset with all SDRs (zeros) for "today" preset
   const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
-    return SDR_LIST.map(sdr => ({
+    const sdrs = activeSdrsList || [];
+    return sdrs.map(sdr => ({
       sdrEmail: sdr.email,
-      sdrName: sdr.nome,
+      sdrName: sdr.name,
       agendamentos: 0,
       r1Agendada: 0,
       r1Realizada: 0,
       noShows: 0,
       contratos: 0,
     }));
-  }, []);
+  }, [activeSdrsList]);
 
   // Merge real data with base dataset for "today" preset
   const mergedBySDR = useMemo((): SdrSummaryRow[] => {
@@ -488,9 +492,9 @@ export default function ReunioesEquipe() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os SDRs</SelectItem>
-                {SDR_LIST.map(sdr => (
+                {(activeSdrsList || []).map(sdr => (
                   <SelectItem key={sdr.email} value={sdr.email}>
-                    {sdr.nome}
+                    {sdr.name}
                   </SelectItem>
                 ))}
               </SelectContent>
