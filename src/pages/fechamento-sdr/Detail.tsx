@@ -127,7 +127,7 @@ const FechamentoSDRDetail = () => {
   const sdrMetaDiariaEarly = (payout?.sdr as any)?.meta_diaria || 10;
   const diasUteisMesEarly = payout?.dias_uteis_mes || 19;
   const employeeEarly = (payout as any)?.employee;
-  const effectiveVariavelEarly = compPlan?.variavel_total || employeeEarly?.cargo_catalogo?.variavel_valor || 1200;
+  const effectiveVariavelEarly = compPlan?.variavel_total || employeeEarly?.cargo_catalogo?.variavel_valor || 400;
 
   // Create effective KPI with Closer-specific metrics from Agenda (BEFORE early returns)
   const effectiveKpiEarly: SdrMonthKpi | null = kpi 
