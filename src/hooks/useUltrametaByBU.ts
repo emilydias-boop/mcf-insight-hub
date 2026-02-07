@@ -48,12 +48,12 @@ export function useUltrametaByBU() {
         teamGoalsResult,
       ] = await Promise.all([
         // Incorporador: use RPC with monthly period
-        supabase.rpc('get_hubla_transactions_by_bu', {
-          p_bu: 'incorporador',
+        supabase.rpc('get_all_hubla_transactions', {
           p_start_date: formatDateForQuery(monthStart),
           p_end_date: formatDateForQuery(monthEnd, true),
           p_limit: 10000,
           p_search: null,
+          p_products: null,
         }),
 
         // Consórcio: consortium_cards valor_credito (NOT valor_comissao)
@@ -98,7 +98,6 @@ export function useUltrametaByBU() {
           product_price: t.product_price,
           installment_number: t.installment_number,
           gross_override: t.gross_override,
-          reference_price: t.reference_price,
         };
         return sum + getDeduplicatedGross(transaction, isFirst);
       }, 0);
