@@ -1,48 +1,57 @@
 
-# Reverter Status de Fechamento - Carol Correa
+# Reverter Status de Fechamento - Antony Elias e Cleiton Lima
 
 ## Situacao Atual
 
 | SDR | Status | Precisa Reverter |
 |-----|--------|------------------|
-| Carol Correa | APPROVED | Sim |
-| Jessica Martins | DRAFT | Nao (ja revertido) |
+| Antony Elias | APPROVED | Sim |
+| Cleiton Lima | APPROVED | Sim |
 
-## Solucao Proposta
+## Solucao
 
-Executar UPDATE direto no banco para reverter o status de Carol Correa para DRAFT.
+Executar UPDATE direto no banco para reverter ambos os status para DRAFT.
+
+Acesse o **Supabase SQL Editor** e execute:
 
 ```sql
--- Reverter Carol Correa para DRAFT
+-- Reverter Antony Elias para DRAFT
 UPDATE sdr_month_payout 
 SET status = 'DRAFT', updated_at = NOW()
-WHERE id = 'be4e1204-ce83-43e7-a381-9230313c087d';
+WHERE id = 'cc26135e-b77f-4789-912a-10892bad370c';
+
+-- Reverter Cleiton Lima para DRAFT
+UPDATE sdr_month_payout 
+SET status = 'DRAFT', updated_at = NOW()
+WHERE id = 'd0cff632-7f99-4e5b-a3e1-f7b867e1ead2';
 
 -- Registrar no audit log
 INSERT INTO sdr_payout_audit_log (payout_id, campo, valor_anterior, valor_novo, motivo)
-VALUES (
-  'be4e1204-ce83-43e7-a381-9230313c087d',
-  'status',
-  'APPROVED',
-  'DRAFT',
-  'Reversao manual - fechamento reaberto para correcao'
-);
+VALUES 
+  ('cc26135e-b77f-4789-912a-10892bad370c', 'status', 'APPROVED', 'DRAFT', 'Reversao manual - fechamento reaberto para correcao'),
+  ('d0cff632-7f99-4e5b-a3e1-f7b867e1ead2', 'status', 'APPROVED', 'DRAFT', 'Reversao manual - fechamento reaberto para correcao');
 ```
 
 ## Resultado Esperado
 
-Apos a execucao:
-
 | SDR | Status Antes | Status Depois |
 |-----|-------------|---------------|
-| Carol Correa | APPROVED | DRAFT |
-| Jessica Martins | DRAFT | DRAFT (sem alteracao) |
+| Antony Elias | APPROVED | DRAFT |
+| Cleiton Lima | APPROVED | DRAFT |
 
 ## Impacto
 
-- Carol Correa nao vera mais o fechamento na pagina "Meu Fechamento" (status DRAFT e oculto)
+- Ambos nao verao mais o fechamento na pagina "Meu Fechamento" (status DRAFT e oculto)
 - Gestores poderao editar/recalcular os valores novamente
 - O historico ficara registrado no audit log
+
+## Como Executar
+
+1. Acesse o Supabase Dashboard do projeto
+2. Va em SQL Editor
+3. Cole o SQL acima
+4. Clique em Run
+5. Atualize a pagina de fechamento para ver as mudancas
 
 ## Arquivos
 
