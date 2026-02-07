@@ -90,8 +90,9 @@ export function useCalculatedVariavel({
         if (metrica.nome_metrica === 'agendamentos') {
           metaAjustada = compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
         } else if (metrica.nome_metrica === 'realizadas') {
-          const metaTeoricaAgendadas = compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
-          metaAjustada = Math.round(metaTeoricaAgendadas * 0.7);
+          // SINCRONIZADO COM KpiEditForm: Usar 70% das agendadas REAIS
+          const agendadasReais = kpi?.reunioes_agendadas || 0;
+          metaAjustada = Math.round(agendadasReais * 0.7);
         } else if (metrica.nome_metrica === 'tentativas') {
           metaAjustada = (payout as any).meta_tentativas_ajustada ?? (84 * diasUteisMes);
         } else if (metrica.nome_metrica === 'organizacao') {
