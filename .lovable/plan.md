@@ -1,67 +1,60 @@
 
-# Corrigir Edge Function: Meta de R1 Realizadas = 70% dos Agendamentos Reais
 
-## Problema Diagnosticado
+# Corrigir Erro de Ambiguidade na Funcao get_all_hubla_transactions
 
-A varredura revelou que **todos os SDRs ativos** têm inconsistência entre:
-- **Banco de dados**: meta_realizadas_ajustada calculada como 70% da META teórica
-- **Frontend**: card exibe 70% dos AGENDAMENTOS REAIS (correto)
+## Problema
 
-Isso causa divergência nos percentuais salvos e exibidos.
+O faturamento de janeiro de 2026 nao aparece porque a chamada RPC retorna erro **HTTP 300** (ambiguidade):
 
-## Dados Afetados (Janeiro 2026)
+```
+Could not choose the best candidate function between:
+- get_all_hubla_transactions(...p_start_date => text...)
+- get_all_hubla_transactions(...p_start_date => timestamp with time zone...)
+```
 
-| SDR | Agendamentos | Meta Banco | Meta Correta | Diferença |
-|-----|--------------|------------|--------------|-----------|
-| Carol Correa | 181 | 126 | 127 | +1 |
-| Carol Souza | 148 | 98 | 104 | +6 |
-| Antony Elias | 132 | 98 | 92 | -6 |
-| Jessica Martins | 169 | 140 | 118 | -22 |
-| Julia Caroline | 112 | 126 | 78 | -48 |
-| Leticia Nunes | 153 | 98 | 107 | +9 |
-| Cleiton Lima | 217 | 98 | 152 | +54 |
-| Vinicius Rangel | 58 | 98 | 41 | -57 |
+### Causa Raiz
+
+Existem duas versoes da mesma funcao com tipos de parametros diferentes. Quando o frontend envia uma string ISO ("2026-01-01T00:00:00-03:00"), o PostgreSQL nao consegue decidir qual versao usar.
 
 ## Solucao
 
-### 1. Atualizar Edge Function (recalculate-sdr-payout)
+Remover a versao antiga (com `timestamp with time zone`) e manter apenas a versao com `text`, que e mais recente e inclui a coluna `reference_price`.
 
-**Arquivo:** `supabase/functions/recalculate-sdr-payout/index.ts`
+### Migracao SQL
 
-**Linha 302 - ANTES:**
-```typescript
-// Meta de Realizadas = 70% da META de agendadas do mês (não do valor real)
-const metaRealizadasAjustada = Math.round(metaAgendadasAjustada * 0.7);
+```sql
+-- Remover a versao antiga da funcao (com timestamp with time zone)
+DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(
+  p_search text,
+  p_start_date timestamp with time zone,
+  p_end_date timestamp with time zone,
+  p_limit integer,
+  p_products text[]
+);
 ```
 
-**DEPOIS:**
-```typescript
-// Meta de Realizadas = 70% dos AGENDAMENTOS REALIZADOS (consistente com frontend)
-const metaRealizadasAjustada = Math.round((kpi.reunioes_agendadas || 0) * 0.7);
-```
+### Por que manter a versao TEXT?
 
-### 2. Recalcular Payouts do Mes
+1. **Mais recente**: Inclui a coluna `reference_price` usada pelo sistema de pricing
+2. **Mais flexivel**: Aceita strings em qualquer formato
+3. **Compativel**: O frontend ja envia strings formatadas
 
-Apos a correcao, executar o recalculo para todos os SDRs de Janeiro 2026 para atualizar os percentuais.
+## Arquivos Afetados
 
-## Arquivos a Modificar
-
-| Arquivo | Alteracao |
-|---------|-----------|
-| `supabase/functions/recalculate-sdr-payout/index.ts` | Usar kpi.reunioes_agendadas na linha 302 |
+Nenhuma alteracao de codigo necessaria - apenas a remocao da funcao duplicada no banco.
 
 ## Resultado Esperado
 
-Apos a correcao e recalculo:
+Apos a correcao:
 
-1. **meta_realizadas_ajustada** no banco sera igual ao exibido no card
-2. **pct_reunioes_realizadas** sera recalculado corretamente
-3. Consistencia total entre frontend, banco e formulario de KPIs
+1. Chamadas RPC funcionarao sem ambiguidade
+2. Faturamento de janeiro de 2026 sera exibido corretamente
+3. Dashboard e relatorios voltarao a funcionar normalmente
 
-## Exemplo de Verificacao (Carol Correa)
+## Verificacao
 
-| Campo | Antes | Depois |
-|-------|-------|--------|
-| meta_realizadas_ajustada | 126 | 127 |
-| pct_reunioes_realizadas | 98.41% | 97.64% |
-| Exibicao no Card | 127 | 127 |
+Apos aplicar a migracao, o hook `useTeamRevenueByMonth` devera retornar os dados corretamente:
+
+- **Incorporador**: ~R$ 1.3M (com deduplicacao)
+- **Transacoes**: 5.498 registros de janeiro/2026
+
