@@ -1,139 +1,131 @@
 
-# Incluir Vendas Intermediadas no Filtro de Closer R1
+# Corrigir Faturamento de Janeiro no Relatorio Incorporador
 
 ## Problema Identificado
 
-A RPC `get_all_hubla_transactions` não retorna o campo `linked_attendee_id`, então vendas que foram **manualmente vinculadas** a um attendee (intermediações) não são consideradas no filtro de closer.
+O relatorio de vendas esta usando valores incorretos para calcular o faturamento bruto. A analise revelou:
 
-## Solução
+| Calculo | Valor Janeiro |
+|---------|---------------|
+| Usando `product_price` (errado) | R$ 899.525 |
+| Usando `reference_price` (correto) | R$ 953.622 |
+| Diferenca | R$ 54.096 |
 
-Adicionar o campo `linked_attendee_id` na consulta e usar no matching de closer.
+### Causa Raiz
 
-## Alterações Técnicas
+O componente `SalesReportPanel` usa a funcao `getDeduplicatedGross()` que depende do cache de precos (`getCachedFixedGrossPrice`). Porem:
 
-### 1. Atualizar a RPC `get_all_hubla_transactions`
+1. O RPC `get_hubla_transactions_by_bu` NAO retorna o `reference_price` da tabela `product_configurations`
+2. Quando o cache falha em encontrar o produto por pattern matching, a funcao usa `product_price` como fallback
+3. O `product_price` representa o valor PAGO pelo cliente (com descontos, promocoes), nao o preco de tabela
 
-Adicionar `ht.linked_attendee_id` no SELECT:
+Exemplo do problema:
+- A001 - MCF Incorporador Completo: `reference_price` = R$ 14.500
+- Mas clientes pagaram valores como R$ 5.000, R$ 17.577, R$ 21.000, R$ 29.000
+- Isso causa calculos inconsistentes
 
-```sql
-CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(
-  p_search text DEFAULT NULL,
-  p_start_date timestamp with time zone DEFAULT NULL,
-  p_end_date timestamp with time zone DEFAULT NULL,
-  p_limit integer DEFAULT 5000,
-  p_products text[] DEFAULT NULL
-)
-RETURNS TABLE(
-  id uuid,
-  hubla_id text,
-  product_name text,
-  product_category text,
-  product_price numeric,
-  net_value numeric,
-  customer_name text,
-  customer_email text,
-  customer_phone text,
-  sale_date timestamp with time zone,
-  sale_status text,
-  installment_number integer,
-  total_installments integer,
-  source text,
-  gross_override numeric,
-  linked_attendee_id uuid  -- NOVO CAMPO
-)
+## Solucao Proposta
+
+### 1. Atualizar RPC para retornar reference_price
+
+Modificar a funcao `get_hubla_transactions_by_bu` para incluir o preco de referencia:
+
+```text
+ANTES:
+  SELECT ht.id, ht.product_name, ht.product_price, ...
+  FROM hubla_transactions ht
+  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
+
+DEPOIS:
+  SELECT ht.id, ht.product_name, ht.product_price, 
+         pc.reference_price,  -- NOVO CAMPO
+         ...
+  FROM hubla_transactions ht
+  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
 ```
 
-### 2. Atualizar Interface `HublaTransaction`
+### 2. Atualizar Interface TypeScript
 
-**Arquivo:** `src/hooks/useAllHublaTransactions.ts`
+Adicionar campo no tipo `HublaTransaction`:
 
 ```typescript
+// src/hooks/useAllHublaTransactions.ts
 export interface HublaTransaction {
   // ... campos existentes
-  linked_attendee_id: string | null;  // NOVO
+  reference_price?: number | null;  // NOVO
 }
 ```
 
-### 3. Expandir Lógica de Matching no Filtro
+### 3. Atualizar Logica de Calculo no SalesReportPanel
 
-**Arquivo:** `src/pages/bu-incorporador/TransacoesIncorp.tsx`
-
-Adicionar matching por `linked_attendee_id`:
+Modificar o calculo do bruto para usar `reference_price` diretamente quando disponivel:
 
 ```typescript
-const filteredByCloser = useMemo(() => {
-  if (selectedCloserId === 'all') return transactions;
-  
-  const closerAttendees = attendees.filter((a: any) => 
-    a.meeting_slots?.closer_id === selectedCloserId
-  );
-  
-  // IDs dos attendees do closer (para matching direto por linked_attendee_id)
-  const closerAttendeeIds = new Set(
-    closerAttendees.map((a: any) => a.id)
-  );
-  
-  const closerEmails = new Set(
-    closerAttendees
-      .map((a: any) => a.crm_deals?.crm_contacts?.email?.toLowerCase())
-      .filter(Boolean)
-  );
-  
-  const closerPhones = new Set(
-    closerAttendees
-      .map((a: any) => (a.crm_deals?.crm_contacts?.phone || '').replace(/\D/g, ''))
-      .filter((p: string) => p.length >= 8)
-  );
-  
-  return transactions.filter(t => {
-    const txEmail = (t.customer_email || '').toLowerCase();
-    const txPhone = (t.customer_phone || '').replace(/\D/g, '');
-    
-    // Match por email ou telefone
-    const emailMatch = closerEmails.has(txEmail);
-    const phoneMatch = txPhone.length >= 8 && closerPhones.has(txPhone);
-    
-    // NOVO: Match por linked_attendee_id (vendas intermediadas)
-    const linkedMatch = t.linked_attendee_id && closerAttendeeIds.has(t.linked_attendee_id);
-    
-    return emailMatch || phoneMatch || linkedMatch;
-  });
-}, [transactions, selectedCloserId, attendees]);
+// src/components/relatorios/SalesReportPanel.tsx
+const stats = useMemo(() => {
+  const totalGross = filteredTransactions.reduce((sum, t) => {
+    const isFirst = globalFirstIds.has(t.id);
+    // Usar reference_price do banco quando disponivel
+    const refPrice = t.reference_price ?? getDeduplicatedGross(t, isFirst);
+    return sum + (isFirst ? refPrice : 0);
+  }, 0);
+  // ...
+}, [filteredTransactions, globalFirstIds]);
 ```
 
-## Fluxo de Matching Completo
+### 4. Adicionar Coluna de Validacao na Tabela (Opcional)
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                     FILTRO POR CLOSER R1                         │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Transação → Atribuída ao Closer se:                            │
-│                                                                  │
-│  1. Email do cliente = Email do contato de um deal              │
-│     que teve R1 com o closer                                    │
-│                                                                  │
-│  2. Telefone do cliente = Telefone do contato de um deal        │
-│     que teve R1 com o closer                                    │
-│                                                                  │
-│  3. linked_attendee_id aponta para um attendee de R1            │
-│     do closer (vendas vinculadas manualmente)                   │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+Para facilitar debugging, adicionar coluna mostrando valor de referencia:
+
+```typescript
+<TableCell className="text-right">
+  {formatCurrency(getDeduplicatedGross(row, globalFirstIds.has(row.id)))}
+  {row.reference_price && row.reference_price !== row.product_price && (
+    <span className="text-xs text-muted-foreground ml-1">
+      (ref: {formatCurrency(row.reference_price)})
+    </span>
+  )}
+</TableCell>
 ```
 
 ## Arquivos a Modificar
 
-| Arquivo | Alteração |
+| Arquivo | Alteracao |
 |---------|-----------|
-| **RPC** `get_all_hubla_transactions` | Adicionar `linked_attendee_id` no SELECT e RETURNS |
-| `src/hooks/useAllHublaTransactions.ts` | Adicionar `linked_attendee_id` na interface |
-| `src/pages/bu-incorporador/TransacoesIncorp.tsx` | Adicionar matching por `linked_attendee_id` |
+| Migration SQL | Atualizar RPC `get_hubla_transactions_by_bu` |
+| `src/hooks/useTransactionsByBU.ts` | Atualizar tipo de retorno |
+| `src/hooks/useAllHublaTransactions.ts` | Adicionar `reference_price` na interface |
+| `src/components/relatorios/SalesReportPanel.tsx` | Usar `reference_price` no calculo |
 
 ## Resultado Esperado
 
-Ao filtrar por "Julio":
-- Vendas de clientes que fizeram R1 com Julio (match por email/telefone)
-- **NOVO:** Vendas que foram manualmente vinculadas a attendees de R1 do Julio (intermediações)
+Apos a correcao, Janeiro 2025 devera mostrar:
+- Faturamento Bruto: ~R$ 953.622
+- Baseado em 300 transacoes primarias (primeira compra por cliente+produto)
+- Usando precos fixos da tabela `product_configurations`
 
-Isso garante que TODAS as vendas atribuídas ao closer (seja automaticamente ou por intermediação manual) apareçam no filtro.
+## Detalhes Tecnicos
+
+### Distribuicao por Produto (Janeiro 2025)
+
+| Produto | Qtd | Bruto Esperado |
+|---------|-----|----------------|
+| A001 | 32 | R$ 464.000 |
+| A009 | 7 | R$ 136.500 |
+| A003 | 16 | R$ 120.000 |
+| A000 | ~177 | R$ 88.481 |
+| A004 | 10 | R$ 55.000 |
+| A002 | 3 | R$ 43.500 |
+| A006 | 43 | R$ 43.000 |
+| A008 | 2 | R$ 3.000 |
+| A010 | 3 | R$ 141 |
+| A005 | 18 | R$ 0 (upgrades) |
+| **Total** | **300** | **R$ 953.622** |
+
+### Logica de Deduplicacao
+
+A deduplicacao continua funcionando:
+1. Parcela > 1 = bruto zerado
+2. `gross_override` tem prioridade (correcoes manuais)
+3. Nao e primeira transacao do cliente+produto = bruto zerado
+4. Usar `reference_price` da tabela (nao `product_price`)
