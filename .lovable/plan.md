@@ -1,45 +1,74 @@
 
-# Corrigir Valor Base para uma Closer Específica
+# Corrigir Valor Base da Organização para Closer Thayna
 
-## Problema
+## Diagnóstico
 
-O valor **R$ 1.200,00** mostrado como "Valor Base" no card de indicadores vem do fallback definido no código:
+A Closer Thayna possui um plano de compensação (`sdr_comp_plan`) com:
+- `valor_organizacao = 1200`
+- `status = PENDING` (não aprovado!)
 
+O problema é que o hook `useSdrCompPlan` não filtra por status, retornando planos pendentes como se fossem válidos.
+
+## Dados Encontrados
+
+| Campo | Valor |
+|-------|-------|
+| cargo_catalogo.variavel_valor | R$ 2.400,00 |
+| Peso Organização | 15% |
+| Valor correto calculado | 2400 × 15% = **R$ 360,00** |
+| valor_organizacao no plano PENDING | R$ 1.200,00 ← erro |
+
+## Solução Recomendada
+
+Adicionar filtro `.eq('status', 'approved')` no hook `useSdrCompPlan` para que apenas planos aprovados sejam utilizados nos cálculos.
+
+### Arquivo a Alterar
+
+`src/hooks/useSdrFechamento.ts` - linhas 107-115
+
+### Código Atual
 ```typescript
-// src/pages/fechamento-sdr/Detail.tsx - linha 130
-const effectiveVariavelEarly = compPlan?.variavel_total || employeeEarly?.cargo_catalogo?.variavel_valor || 1200;
+const { data, error } = await supabase
+  .from('sdr_comp_plan')
+  .select('*')
+  .eq('sdr_id', sdrId)
+  .lte('vigencia_inicio', monthStart)
+  .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
+  .order('vigencia_inicio', { ascending: false })
+  .limit(1)
+  .single();
 ```
 
-A Closer específica cai no fallback de **1200** porque:
-- Não tem `sdr_comp_plan` aprovado OU
-- O plano dela tem `variavel_total = 1200`
-
-## Solução
-
-**Duas opções:**
-
-### Opção 1 - Via Interface (Recomendado)
-Ir na tela de **Configurações** do fechamento dessa Closer e definir o `variavel_total = 400` no plano de compensação dela.
-
-### Opção 2 - Mudar Fallback no Código
-Mudar o fallback de 1200 para 400 no código. **Isso afeta TODOS os funcionários sem plano configurado.**
-
-| Arquivo | Linha | Mudança |
-|---------|-------|---------|
-| `src/pages/fechamento-sdr/Detail.tsx` | 130 | Fallback de `1200` → `400` |
-
+### Código Novo
 ```typescript
-// ANTES
-const effectiveVariavelEarly = compPlan?.variavel_total || employeeEarly?.cargo_catalogo?.variavel_valor || 1200;
-
-// DEPOIS
-const effectiveVariavelEarly = compPlan?.variavel_total || employeeEarly?.cargo_catalogo?.variavel_valor || 400;
+const { data, error } = await supabase
+  .from('sdr_comp_plan')
+  .select('*')
+  .eq('sdr_id', sdrId)
+  .eq('status', 'approved')  // Apenas planos aprovados
+  .lte('vigencia_inicio', monthStart)
+  .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
+  .order('vigencia_inicio', { ascending: false })
+  .limit(1)
+  .single();
 ```
 
-## Recomendação
+## Resultado Esperado
 
-Se **apenas essa Closer** deve ter R$ 400 e os outros devem continuar com R$ 1.200, a solução correta é criar/atualizar o **plano de compensação individual** dela com `variavel_total = 400`.
+Após a correção:
+- O plano PENDING será ignorado
+- O sistema usará o cálculo dinâmico: `variavelTotal × peso%`
+- Com cargo_catalogo.variavel_valor = 2400 e peso = 15%
+- **Valor Base = R$ 360,00** (correto)
 
-Se **todos** os funcionários sem plano devem ter R$ 400 como padrão, então podemos mudar o fallback no código.
+## Alternativa (Via Interface)
+
+Se preferir manter o comportamento atual e corrigir apenas para a Thayna:
+1. Aprovar o plano dela na interface de Configurações
+2. Editar o `valor_organizacao` para 360 antes de aprovar
+
+---
 
 **Qual opção você prefere?**
+- **Corrigir o Hook** (recomendado - garante consistência para todos)
+- **Aprovar/Editar o Plano da Thayna** (solução pontual)
