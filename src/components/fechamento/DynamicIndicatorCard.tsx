@@ -144,7 +144,10 @@ export const DynamicIndicatorCard = ({
     
     if (metrica.nome_metrica === 'agendamentos') {
       meta = sdrMetaDiaria;
-      metaAjustada = compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
+      // Prioridade: valor salvo no payout > compPlan > cálculo dinâmico
+      metaAjustada = (payout as any).meta_agendadas_ajustada 
+        || compPlan?.meta_reunioes_agendadas 
+        || (sdrMetaDiaria * diasUteisMes);
     } else if (metrica.nome_metrica === 'realizadas') {
       // SINCRONIZADO COM KpiEditForm: Usar 70% das agendadas REAIS
       const agendadasReais = kpi?.reunioes_agendadas || 0;
