@@ -1,36 +1,62 @@
 
 
-# Corrigir erro ao salvar telefone — campo `clint_id` obrigatorio
+# Permitir editar data do primeiro pagamento e recalcular todas as parcelas
 
-## Causa raiz
+## O que muda para o usuario
 
-A tabela `crm_contacts` tem uma coluna `clint_id` (TEXT, NOT NULL) sem valor padrao. Quando o sistema tenta criar um contato com apenas `name` e `phone`, o banco rejeita com:
+### No Formulario de Cadastro (Nova Carta)
+- Substituir o campo "Dia de Vencimento" (input numerico) por um **datepicker** chamado "Data do Primeiro Pagamento"
+- O usuario seleciona a data exata da primeira parcela (ex: 15/02/2026 — mes atual)
+- O `dia_vencimento` e extraido automaticamente dessa data (dia 15)
+- As parcelas seguintes sao calculadas a partir dessa data, nao da data de contratacao
 
-> null value in column "clint_id" of relation "crm_contacts" violates not-null constraint
+### Na Tabela de Parcelas (Drawer da Carta)
+- Ao editar a **parcela 1** e alterar a data de vencimento, o sistema pergunta: "Deseja recalcular as datas das demais parcelas a partir desta data?"
+- Se sim: recalcula todas as parcelas seguintes mantendo o mesmo dia do mes, ajustando para dia util
+- Se nao: altera apenas a parcela 1
 
-## Solucao
+## Alteracoes tecnicas
 
-Gerar um `clint_id` unico ao criar o contato automaticamente no `SdrSummaryBlock.tsx`.
+### 1. Schema do formulario (`ConsorcioCardForm.tsx`)
+- Adicionar campo `data_primeiro_pagamento: z.date()` no schema
+- Remover/substituir campo numerico `dia_vencimento` por datepicker de "Data do Primeiro Pagamento"
+- Derivar `dia_vencimento` automaticamente: `data_primeiro_pagamento.getDate()`
+- Ao submeter, enviar `data_primeiro_pagamento` formatada como string ISO
 
-## Alteracao
+### 2. Tipo de input (`types/consorcio.ts`)
+- Adicionar `data_primeiro_pagamento?: string` ao `CreateConsorcioCardInput`
 
-### Arquivo: `src/components/crm/SdrSummaryBlock.tsx`
+### 3. Geracao de parcelas (`useConsorcio.ts` — `useCreateConsorcioCard`)
+- Se `data_primeiro_pagamento` existir, usar essa data como base para parcela 1 (offset 0 meses em vez de 1)
+- Parcela 2 = data_primeiro_pagamento + 1 mes, parcela 3 = + 2 meses, etc.
+- Manter logica de ajuste para dia util
 
-Na parte do `handleSavePhone` que cria o contato (bloco `else if (deal?.id)`), incluir o campo `clint_id`:
+### 4. Recalcular datas ao editar parcela 1 (`EditInstallmentDialog.tsx` + `ConsorcioCardDrawer.tsx`)
+- No `EditInstallmentDialog`: detectar quando `numero_parcela === 1`
+- Mostrar checkbox/switch: "Recalcular datas das demais parcelas"
+- Quando ativado e salvo: atualizar `data_vencimento` de todas as parcelas subsequentes baseado na nova data da parcela 1
+- O `handleSaveInstallment` no drawer faz o batch update das parcelas restantes
+
+### 5. Funcao auxiliar (`businessDays.ts`)
+- Adicionar funcao `recalcularDatasAPartirDe(dataBase: Date, diaVencimento: number, totalParcelas: number, parcelaInicial: number)` que retorna array de datas recalculadas
+
+### Fluxo do recalculo ao editar parcela 1
 
 ```text
-const newContact = await createContact.mutateAsync({
-  name: deal.name || 'Contato sem nome',
-  phone: phoneValue,
-  clint_id: `manual-${Date.now()}`
-});
+Usuario edita parcela 1 -> muda data para 15/02/2026
+  -> Checkbox "Recalcular demais parcelas" marcado
+  -> Salvar
+  -> Parcela 1: 15/02/2026 (nova data do usuario) -- em fevereiro ja nesse mes
+  -> Parcela 2: 15/03/2026 (proximo dia util)
+  -> Parcela 3: 15/04/2026
+  -> ... (todas as N parcelas restantes recalculadas)
+  -> UPDATE em batch no banco
 ```
 
-Isso gera um identificador unico como `manual-1707500000000` que satisfaz a constraint NOT NULL.
-
-## Resultado
-
-- O contato sera criado com sucesso no banco
-- O `contact_id` sera vinculado ao deal
-- O telefone aparecera no drawer imediatamente
-- Nenhuma alteracao de schema necessaria
+### Arquivos modificados
+- `src/components/consorcio/ConsorcioCardForm.tsx` — datepicker para primeiro pagamento
+- `src/types/consorcio.ts` — novo campo no input
+- `src/hooks/useConsorcio.ts` — logica de geracao usando data_primeiro_pagamento
+- `src/components/consorcio/EditInstallmentDialog.tsx` — opcao de recalcular ao editar parcela 1
+- `src/components/consorcio/ConsorcioCardDrawer.tsx` — handler de recalculo em batch
+- `src/lib/businessDays.ts` — funcao auxiliar de recalculo
