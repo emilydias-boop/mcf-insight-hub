@@ -11,6 +11,7 @@ import { CloserDetailHeader } from "@/components/closer/CloserDetailHeader";
 import { CloserDetailKPICards } from "@/components/closer/CloserDetailKPICards";
 import { CloserLeadsTable } from "@/components/closer/CloserLeadsTable";
 import { CloserRankingBlock } from "@/components/closer/CloserRankingBlock";
+import { CloserRevenueTab } from "@/components/closer/CloserRevenueTab";
 import { useCloserDetailData } from "@/hooks/useCloserDetailData";
 
 export default function CloserMeetingsDetailPage() {
@@ -104,6 +105,7 @@ export default function CloserMeetingsDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="leads">Leads Realizados ({leads.length})</TabsTrigger>
+          <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -166,6 +168,14 @@ export default function CloserMeetingsDetailPage() {
               <CloserLeadsTable leads={leads} isLoading={isLoading} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="faturamento">
+          <CloserRevenueTab
+            closerId={closerId}
+            startDate={startDate}
+            endDate={endDate}
+          />
         </TabsContent>
       </Tabs>
     </div>
