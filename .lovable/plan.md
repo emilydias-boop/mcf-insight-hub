@@ -1,44 +1,36 @@
 
 
-# Corrigir Bruto no Detalhamento de Parcerias
+# Corrigir Bruto de Parcerias no KPI Card
 
 ## Problema
 
-Na tabela "Detalhamento de Parcerias", o bruto usa `getDeduplicatedGross` com `globalFirstIds`, que zera o valor de transacoes que nao sao a primeira do grupo cliente+produto. Exemplo: 3 vendas A009 mostram bruto de R$ 19.500 em vez de R$ 58.500 (3 x 19.500).
-
-O KPI totalizador de Parcerias deve manter a logica deduplicated (consistente com o dashboard), mas a **tabela de breakdown** precisa mostrar o bruto individual de cada venda para dar visibilidade real ao gestor.
+O fix anterior corrigiu apenas a tabela de detalhamento de parcerias (parceriaMap), mas o KPI card "Parcerias" ainda usa `calcGross()` que aplica deduplicacao global via `globalFirstIds.has(tx.id)`. Por isso o card mostra R$ 39.000 em vez do valor real.
 
 ## Solucao
 
-Na tabela de Detalhamento de Parcerias, usar `getDeduplicatedGross` com `isFirstOfGroup = true` para cada transacao (ignorando a deduplicacao global), garantindo que cada venda parcela 1 contribua com seu preco de referencia.
-
-Isso afeta apenas a tabela de breakdown — os KPI cards continuam usando a logica deduplicated global.
+Calcular o bruto de parcerias separadamente, sem deduplicacao global (passando `true` como `isFirstOfGroup`), igual ao que ja foi feito na tabela de breakdown.
 
 ## Secao Tecnica
 
-### Arquivo a Modificar
+### Arquivo: `src/components/relatorios/CloserRevenueDetailDialog.tsx`
 
-`src/components/relatorios/CloserRevenueDetailDialog.tsx`
+### Mudanca
 
-### Mudanca Especifica
-
-Linhas 152-159 — no loop do `parceriaMap`, trocar o calculo do gross de:
+Linha 120 — trocar o calculo de `parceriasGross` de:
 
 ```text
-existing.gross += getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
+const parceriasGross = calcGross(parcerias);
 ```
 
 Para:
 
 ```text
-existing.gross += getDeduplicatedGross(tx as any, true);
+const parceriasGross = parcerias.reduce(
+  (s, t) => s + getDeduplicatedGross(t as any, true), 0
+);
 ```
 
-Ao passar `true` como `isFirstOfGroup`, cada transacao parcela 1 contribuira com seu preco de referencia, sem ser zerada pela deduplicacao global. Transacoes com parcela > 1 continuam zeradas (regra interna do `getDeduplicatedGross`).
+Isso faz com que o KPI card "Parcerias" mostre o bruto individual de cada venda (sem zerar duplicatas), consistente com a tabela de detalhamento abaixo dele.
 
-### Resultado
-
-- A009 com 3 vendas: Bruto = R$ 58.500 (3 x 19.500) em vez de R$ 19.500
-- "Parceria" com 17 vendas: Bruto reflete a soma dos precos de referencia de cada venda individual
-- KPI cards permanecem inalterados (usam logica deduplicated)
+O `calcGross` original (com deduplicacao) continua sendo usado para contratos e total, mantendo a consistencia com o dashboard.
 
