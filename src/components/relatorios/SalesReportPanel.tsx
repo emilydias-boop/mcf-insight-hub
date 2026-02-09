@@ -436,6 +436,8 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
         attendees={attendees as any}
         globalFirstIds={globalFirstIds}
         isLoading={isLoading}
+        startDate={dateRange?.from}
+        endDate={dateRange?.to}
       />
       
       {/* Data Table */}
