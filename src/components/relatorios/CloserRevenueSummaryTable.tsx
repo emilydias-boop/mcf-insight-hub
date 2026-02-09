@@ -185,7 +185,12 @@ export function CloserRevenueSummaryTable({
                         {row.name}
                       </button>
                     ) : (
-                      <span className="font-medium text-muted-foreground">{row.name}</span>
+                      <button
+                        className="font-medium text-left hover:underline cursor-pointer text-muted-foreground"
+                        onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
+                      >
+                        {row.name}
+                      </button>
                     )}
                   </TableCell>
                   <TableCell className="text-right">{row.count}</TableCell>
