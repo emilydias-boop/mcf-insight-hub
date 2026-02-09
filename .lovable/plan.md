@@ -1,94 +1,47 @@
 
-# Popup de Detalhamento Individual do Closer ao Clicar na Tabela
 
-## Resumo
+# Melhorar Detalhamento do Popup de Closer com Informacoes Completas
 
-Ao clicar no nome de um closer na tabela "Faturamento por Closer" do Relatorio de Vendas, abrir um Dialog modal com visao completa e individual daquele closer, incluindo:
+## Problema
 
-- Contratos vendidos (quantidade e valor)
-- Vendas de Parceria (quantidade e valor)
-- Reembolsos (quantidade e valor perdido)
-- Melhor dia e pior dia do periodo
-- Comparativo com o mes anterior (variacao percentual)
-- Total de contribuicao para a empresa
+O popup atual tem informacoes incompletas:
+1. O KPI de Parcerias mostra apenas o bruto (R$ 53.500 para 31 parcerias), sem mostrar o liquido
+2. A tabela "Detalhamento de Parcerias" mostra apenas Qtd e Bruto, faltando a coluna Liquido
+3. Nao fica claro o valor real recebido em cada parceria
 
 ## Mudancas
 
-### 1. Novo componente: CloserRevenueDetailDialog
+### Arquivo: `src/components/relatorios/CloserRevenueDetailDialog.tsx`
 
-Dialog modal que recebe o closerId, nome, periodo e as transacoes ja filtradas daquele closer. Internamente:
+1. **KPI Cards - Adicionar Liquido nos cards de Contratos e Parcerias**:
+   - Card Contratos: mostrar bruto E liquido abaixo
+   - Card Parcerias: mostrar bruto E liquido abaixo
+   - Manter o mesmo padrao visual do card "Contribuicao Total" que ja mostra ambos
 
-- Agrupa transacoes por `product_category` para separar contratos (`incorporador`, `contrato`), parcerias (`parceria`), e outros
-- Identifica reembolsos via `sale_status = 'refunded'` ou `net_value < 0`
-- Agrupa por dia (`sale_date`) para identificar melhor e pior dia (por faturamento bruto)
-- Busca transacoes do mes anterior para calcular variacao percentual
+2. **Tabela Detalhamento de Parcerias - Adicionar coluna Liquido**:
+   - Adicionar tracking de `net` no `parceriaMap` (atualmente so tem `count` e `gross`)
+   - Nova coluna "Liquido" na tabela de parcerias
+   - Linha de total no rodape da tabela
 
-Layout do dialog:
-- Header com nome do closer e periodo
-- Grid de KPI cards (Contratos, Parcerias, Reembolsos, Contribuicao Total)
-- Linha de comparativo com mes anterior (setas verde/vermelha)
-- Cards de Melhor Dia e Pior Dia
-- Mini tabela com breakdown por categoria de produto
-
-Arquivo: `src/components/relatorios/CloserRevenueDetailDialog.tsx`
-
-### 2. Alterar CloserRevenueSummaryTable
-
-Tornar o nome do closer clicavel (cursor pointer, underline on hover). Ao clicar, abrir o `CloserRevenueDetailDialog` passando:
-- `closerName`, `closerId`
-- `transactions` ja filtradas daquele closer
-- `globalFirstIds` para deduplicacao
-- `startDate` e `endDate` do periodo
-
-Arquivo: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
-
-### 3. Alterar SalesReportPanel
-
-Passar `dateRange` (startDate/endDate) como props para o `CloserRevenueSummaryTable`, necessario para o dialog buscar dados do mes anterior.
-
-Arquivo: `src/components/relatorios/SalesReportPanel.tsx`
+3. **Calculos**: Adicionar `net` ao acumulador do `parceriaMap` e `contractsNet`/`parceriasNet` nos calculos de metricas
 
 ## Secao Tecnica
 
-### Arquivo a Criar
+### Mudancas no codigo
 
-| Arquivo | Descricao |
-|---------|-----------|
-| `src/components/relatorios/CloserRevenueDetailDialog.tsx` | Dialog modal com detalhamento individual |
-
-### Arquivos a Modificar
-
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/components/relatorios/CloserRevenueSummaryTable.tsx` | Nome clicavel + state para dialog + renderizar CloserRevenueDetailDialog |
-| `src/components/relatorios/SalesReportPanel.tsx` | Passar startDate/endDate para CloserRevenueSummaryTable |
-
-### Logica de Calculo no Dialog
-
+**parceriaMap** (linha 152-158): Adicionar campo `net` ao acumulador:
 ```text
-Contratos = transacoes com product_category IN ('incorporador', 'contrato', 'contrato-anticrise')
-Parcerias = transacoes com product_category = 'parceria'
-Reembolsos = transacoes com sale_status = 'refunded' ou net_value < 0
-Melhor Dia = dia com maior soma de bruto deduplicated
-Pior Dia = dia com menor soma de bruto deduplicated (excluindo dias com 0)
+// De: { count: 0, gross: 0 }
+// Para: { count: 0, gross: 0, net: 0 }
 ```
 
-### Comparativo Mes Anterior
-
-O dialog usara `useAllHublaTransactions` com filtros do mes anterior (startDate - 1 month) e fara o mesmo matching por email/phone com os attendees do closer para calcular:
-- Variacao % do bruto: `((brutoAtual - brutoAnterior) / brutoAnterior) * 100`
-- Variacao % de transacoes: `((countAtual - countAnterior) / countAnterior) * 100`
-
-### Props do CloserRevenueSummaryTable (atualizado)
-
+**metrics return** (linhas 173-176): Adicionar `contractsNet` e `parceriasNet`:
 ```text
-interface CloserRevenueSummaryTableProps {
-  transactions: Transaction[];
-  closers: Closer[];
-  attendees: AttendeeMatch[];
-  globalFirstIds: Set<string>;
-  isLoading?: boolean;
-  startDate?: Date;   // NOVO
-  endDate?: Date;     // NOVO
-}
+contracts: { count, gross, net }
+parcerias: { count, gross, net }
 ```
+
+**KPI Cards** (linhas 202-246): Adicionar linha de liquido nos cards de Contratos e Parcerias, seguindo o mesmo padrao do card Contribuicao Total
+
+**Tabela de Parcerias** (linhas 317-339): Adicionar coluna Liquido + linha de total
+
