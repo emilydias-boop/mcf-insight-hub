@@ -45,7 +45,8 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
       } else if (deal?.id) {
         const newContact = await createContact.mutateAsync({
           name: deal.name || 'Contato sem nome',
-          phone: phoneValue
+          phone: phoneValue,
+          clint_id: `manual-${Date.now()}`
         });
         await supabase
           .from('crm_deals')
