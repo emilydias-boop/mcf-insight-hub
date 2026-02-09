@@ -117,7 +117,9 @@ export function CloserRevenueDetailDialog({
       txs.reduce((s, t) => s + (t.net_value || 0), 0);
 
     const contractsGross = calcGross(contracts);
-    const parceriasGross = calcGross(parcerias);
+    const parceriasGross = parcerias.reduce(
+      (s, t) => s + getDeduplicatedGross(t as any, true), 0
+    );
     const refundsNet = Math.abs(calcNet(refunds));
     const totalGross = calcGross(transactions);
     const totalNet = calcNet(transactions);
