@@ -1,47 +1,44 @@
 
 
-# Melhorar Detalhamento do Popup de Closer com Informacoes Completas
+# Corrigir Bruto no Detalhamento de Parcerias
 
 ## Problema
 
-O popup atual tem informacoes incompletas:
-1. O KPI de Parcerias mostra apenas o bruto (R$ 53.500 para 31 parcerias), sem mostrar o liquido
-2. A tabela "Detalhamento de Parcerias" mostra apenas Qtd e Bruto, faltando a coluna Liquido
-3. Nao fica claro o valor real recebido em cada parceria
+Na tabela "Detalhamento de Parcerias", o bruto usa `getDeduplicatedGross` com `globalFirstIds`, que zera o valor de transacoes que nao sao a primeira do grupo cliente+produto. Exemplo: 3 vendas A009 mostram bruto de R$ 19.500 em vez de R$ 58.500 (3 x 19.500).
 
-## Mudancas
+O KPI totalizador de Parcerias deve manter a logica deduplicated (consistente com o dashboard), mas a **tabela de breakdown** precisa mostrar o bruto individual de cada venda para dar visibilidade real ao gestor.
 
-### Arquivo: `src/components/relatorios/CloserRevenueDetailDialog.tsx`
+## Solucao
 
-1. **KPI Cards - Adicionar Liquido nos cards de Contratos e Parcerias**:
-   - Card Contratos: mostrar bruto E liquido abaixo
-   - Card Parcerias: mostrar bruto E liquido abaixo
-   - Manter o mesmo padrao visual do card "Contribuicao Total" que ja mostra ambos
+Na tabela de Detalhamento de Parcerias, usar `getDeduplicatedGross` com `isFirstOfGroup = true` para cada transacao (ignorando a deduplicacao global), garantindo que cada venda parcela 1 contribua com seu preco de referencia.
 
-2. **Tabela Detalhamento de Parcerias - Adicionar coluna Liquido**:
-   - Adicionar tracking de `net` no `parceriaMap` (atualmente so tem `count` e `gross`)
-   - Nova coluna "Liquido" na tabela de parcerias
-   - Linha de total no rodape da tabela
-
-3. **Calculos**: Adicionar `net` ao acumulador do `parceriaMap` e `contractsNet`/`parceriasNet` nos calculos de metricas
+Isso afeta apenas a tabela de breakdown — os KPI cards continuam usando a logica deduplicated global.
 
 ## Secao Tecnica
 
-### Mudancas no codigo
+### Arquivo a Modificar
 
-**parceriaMap** (linha 152-158): Adicionar campo `net` ao acumulador:
+`src/components/relatorios/CloserRevenueDetailDialog.tsx`
+
+### Mudanca Especifica
+
+Linhas 152-159 — no loop do `parceriaMap`, trocar o calculo do gross de:
+
 ```text
-// De: { count: 0, gross: 0 }
-// Para: { count: 0, gross: 0, net: 0 }
+existing.gross += getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
 ```
 
-**metrics return** (linhas 173-176): Adicionar `contractsNet` e `parceriasNet`:
+Para:
+
 ```text
-contracts: { count, gross, net }
-parcerias: { count, gross, net }
+existing.gross += getDeduplicatedGross(tx as any, true);
 ```
 
-**KPI Cards** (linhas 202-246): Adicionar linha de liquido nos cards de Contratos e Parcerias, seguindo o mesmo padrao do card Contribuicao Total
+Ao passar `true` como `isFirstOfGroup`, cada transacao parcela 1 contribuira com seu preco de referencia, sem ser zerada pela deduplicacao global. Transacoes com parcela > 1 continuam zeradas (regra interna do `getDeduplicatedGross`).
 
-**Tabela de Parcerias** (linhas 317-339): Adicionar coluna Liquido + linha de total
+### Resultado
+
+- A009 com 3 vendas: Bruto = R$ 58.500 (3 x 19.500) em vez de R$ 19.500
+- "Parceria" com 17 vendas: Bruto reflete a soma dos precos de referencia de cada venda individual
+- KPI cards permanecem inalterados (usam logica deduplicated)
 
