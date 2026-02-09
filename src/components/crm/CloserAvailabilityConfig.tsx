@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Palette, Plus, Trash2, Copy, Loader2 } from 'lucide-react';
-import { CloserWithAvailability, useUpdateCloserColor } from '@/hooks/useAgendaData';
+import { Palette, Plus, Trash2, Copy, Loader2, Clock, Users } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { CloserWithAvailability, useUpdateCloserColor, useUpdateCloserSettings } from '@/hooks/useAgendaData';
 import { BlockedDatesConfig } from './BlockedDatesConfig';
 import { cn } from '@/lib/utils';
 import { 
@@ -42,11 +43,14 @@ const PRESET_COLORS = [
 function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) {
   const queryClient = useQueryClient();
   const updateColor = useUpdateCloserColor();
+  const updateSettings = useUpdateCloserSettings();
   const { data: links, isLoading } = useCloserMeetingLinksList(closer.id);
   const createLink = useCreateCloserMeetingLink();
   const deleteLink = useDeleteCloserMeetingLink();
   
   const [selectedColor, setSelectedColor] = useState(closer.color || '#3B82F6');
+  const [meetingDuration, setMeetingDuration] = useState(closer.meeting_duration_minutes || 45);
+  const [maxLeads, setMaxLeads] = useState(closer.max_leads_per_slot || 4);
   const [addingDay, setAddingDay] = useState<number | null>(null);
   const [newTime, setNewTime] = useState('09:00');
   const [newLink, setNewLink] = useState('');
@@ -185,6 +189,44 @@ function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) 
             style={{ backgroundColor: selectedColor }}
           />
         </div>
+      </div>
+
+      {/* Meeting Duration Slider */}
+      <div className="space-y-2 border rounded-lg p-4">
+        <Label className="flex items-center gap-2">
+          <Clock className="h-4 w-4" />
+          Duração da Reunião: <span className="font-bold">{meetingDuration} min</span>
+        </Label>
+        <Slider
+          value={[meetingDuration]}
+          min={15}
+          max={120}
+          step={15}
+          onValueChange={([val]) => setMeetingDuration(val)}
+          onValueCommit={([val]) => {
+            updateSettings.mutate({ closerId: closer.id, data: { meeting_duration_minutes: val } });
+          }}
+        />
+        <p className="text-xs text-muted-foreground">Tempo padrão de cada reunião</p>
+      </div>
+
+      {/* Max Leads Per Slot Slider */}
+      <div className="space-y-2 border rounded-lg p-4">
+        <Label className="flex items-center gap-2">
+          <Users className="h-4 w-4" />
+          Leads por Reunião: <span className="font-bold">{maxLeads}</span>
+        </Label>
+        <Slider
+          value={[maxLeads]}
+          min={1}
+          max={6}
+          step={1}
+          onValueChange={([val]) => setMaxLeads(val)}
+          onValueCommit={([val]) => {
+            updateSettings.mutate({ closerId: closer.id, data: { max_leads_per_slot: val } });
+          }}
+        />
+        <p className="text-xs text-muted-foreground">Quantos leads no mesmo horário (padrão: 4)</p>
       </div>
 
       {/* Slots by Day */}

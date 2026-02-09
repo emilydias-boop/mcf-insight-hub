@@ -1,0 +1,1 @@
+ALTER TABLE closers ADD COLUMN IF NOT EXISTS meeting_duration_minutes INTEGER DEFAULT 45;

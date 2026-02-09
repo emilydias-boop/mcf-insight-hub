@@ -90,6 +90,8 @@ export interface CloserWithAvailability {
   email: string;
   color: string;
   is_active: boolean;
+  meeting_duration_minutes: number;
+  max_leads_per_slot: number;
   availability: {
     id: string;
     day_of_week: number;
@@ -332,6 +334,8 @@ export function useClosersWithAvailability(buFilter?: string | null) {
       const closersWithAvailability: CloserWithAvailability[] = closers.map(closer => ({
         ...closer,
         color: closer.color || '#3B82F6',
+        meeting_duration_minutes: (closer as any).meeting_duration_minutes ?? 45,
+        max_leads_per_slot: (closer as any).max_leads_per_slot ?? 4,
         availability: (availability?.filter(a => a.closer_id === closer.id) || []).map(a => ({
           id: a.id,
           day_of_week: a.day_of_week,
@@ -440,6 +444,29 @@ export function useUpdateCloserColor() {
     },
     onError: () => {
       toast.error('Erro ao atualizar cor');
+    },
+  });
+}
+
+export function useUpdateCloserSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ closerId, data }: { closerId: string; data: Record<string, any> }) => {
+      const { error } = await supabase
+        .from('closers')
+        .update({ ...data, updated_at: new Date().toISOString() })
+        .eq('id', closerId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['closers-with-availability'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-closers'] });
+      queryClient.invalidateQueries({ queryKey: ['closers-list'] });
+    },
+    onError: () => {
+      toast.error('Erro ao salvar configuração');
     },
   });
 }

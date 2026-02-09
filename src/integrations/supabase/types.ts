@@ -1736,6 +1736,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           max_leads_per_slot: number | null
+          meeting_duration_minutes: number | null
           meeting_type: string | null
           name: string
           priority: number | null
@@ -1754,6 +1755,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           max_leads_per_slot?: number | null
+          meeting_duration_minutes?: number | null
           meeting_type?: string | null
           name: string
           priority?: number | null
@@ -1772,6 +1774,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           max_leads_per_slot?: number | null
+          meeting_duration_minutes?: number | null
           meeting_type?: string | null
           name?: string
           priority?: number | null
