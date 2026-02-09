@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Phone, Mail, Edit2, Check, X } from 'lucide-react';
-import { useUpdateCRMContact } from '@/hooks/useCRMData';
+import { useUpdateCRMContact, useCreateCRMContact } from '@/hooks/useCRMData';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface SdrSummaryBlockProps {
@@ -12,6 +14,8 @@ interface SdrSummaryBlockProps {
 
 export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
   const updateContact = useUpdateCRMContact();
+  const createContact = useCreateCRMContact();
+  const queryClient = useQueryClient();
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneValue, setPhoneValue] = useState('');
   
@@ -25,21 +29,35 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
   };
   
   const handleSavePhone = async () => {
-    if (!contact?.id) {
-      toast.error('Nenhum contato vinculado a este negócio');
+    if (!phoneValue.trim()) {
+      toast.error('Digite um número de telefone');
       setEditingPhone(false);
       return;
     }
-    
+
     try {
-      await updateContact.mutateAsync({
-        id: contact.id,
-        phone: phoneValue
-      });
-      toast.success('Telefone atualizado');
+      if (contact?.id) {
+        await updateContact.mutateAsync({
+          id: contact.id,
+          phone: phoneValue
+        });
+        toast.success('Telefone atualizado');
+      } else if (deal?.id) {
+        const newContact = await createContact.mutateAsync({
+          name: deal.name || 'Contato sem nome',
+          phone: phoneValue
+        });
+        await supabase
+          .from('crm_deals')
+          .update({ contact_id: (newContact as any).id })
+          .eq('id', deal.id);
+        queryClient.invalidateQueries({ queryKey: ['crm-deal'] });
+        queryClient.invalidateQueries({ queryKey: ['crm-contacts'] });
+        toast.success('Contato criado e telefone salvo');
+      }
       setEditingPhone(false);
     } catch (error) {
-      toast.error('Erro ao atualizar telefone');
+      toast.error('Erro ao salvar telefone');
     }
   };
   
