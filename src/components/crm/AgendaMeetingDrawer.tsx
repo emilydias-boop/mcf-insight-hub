@@ -10,6 +10,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCloserMeetingLink } from '@/hooks/useCloserMeetingLink';
 import { supabase } from '@/integrations/supabase/client';
 import { useOutsideDetectionBatch } from '@/hooks/useOutsideDetection';
+import { usePartnerProductDetectionBatch } from '@/hooks/usePartnerProductDetection';
+import { useBUContext } from '@/contexts/BUContext';
 import {
   Sheet,
   SheetContent,
@@ -302,6 +304,18 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
   // Hook to detect Outside leads (purchased contract before meeting) - MUST be before any conditional return
   const { data: outsideData = {} } = useOutsideDetectionBatch(attendeesForOutsideCheck);
+
+  // Hook to detect partner products (Consórcio BU) - MUST be before any conditional return
+  const { activeBU } = useBUContext();
+  const attendeesForPartnerCheck = useMemo(() => {
+    if (activeBU !== 'consorcio') return [];
+    return (activeMeeting?.attendees || []).map(att => ({
+      id: att.id,
+      email: att.contact?.email || null,
+    }));
+  }, [activeMeeting?.attendees, activeBU]);
+
+  const { data: partnerData = {} } = usePartnerProductDetectionBatch(attendeesForPartnerCheck);
 
   if (!meeting || !activeMeeting) return null;
 
@@ -629,11 +643,20 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                               Remanejado
                             </Badge>
                           )}
-                          {outsideData[p.id]?.isOutside && (
-                            <Badge variant="outline" className="text-xs bg-yellow-100 text-yellow-700 border-yellow-300 gap-1">
-                              <DollarSign className="h-3 w-3" />
-                              Outside {outsideData[p.id]?.contractDate && `- ${format(parseISO(outsideData[p.id].contractDate!), 'dd/MM')}`}
-                            </Badge>
+                          {activeBU === 'consorcio' ? (
+                            partnerData[p.id]?.isPartner && (
+                              <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700 border-blue-300 gap-1">
+                                <UserCircle className="h-3 w-3" />
+                                Parceiro {partnerData[p.id]?.productLabel}
+                              </Badge>
+                            )
+                          ) : (
+                            outsideData[p.id]?.isOutside && (
+                              <Badge variant="outline" className="text-xs bg-yellow-100 text-yellow-700 border-yellow-300 gap-1">
+                                <DollarSign className="h-3 w-3" />
+                                Outside {outsideData[p.id]?.contractDate && `- ${format(parseISO(outsideData[p.id].contractDate!), 'dd/MM')}`}
+                              </Badge>
+                            )
                           )}
                           {/* Individual Status Badge - contract_paid_at takes priority */}
                           {(() => {

@@ -1,13 +1,15 @@
 import { useMemo, useRef, useEffect } from "react";
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Settings, Plus, ArrowRightLeft, DollarSign, UserPlus } from "lucide-react";
+import { Settings, Plus, ArrowRightLeft, DollarSign, UserCircle, UserPlus } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { MeetingSlot, CloserWithAvailability, BlockedDate } from "@/hooks/useAgendaData";
 import { cn } from "@/lib/utils";
 import { useCloserDaySlots } from "@/hooks/useCloserMeetingLinks";
 import { useOutsideDetectionBatch } from "@/hooks/useOutsideDetection";
+import { usePartnerProductDetectionBatch } from "@/hooks/usePartnerProductDetection";
+import { useBUContext } from "@/contexts/BUContext";
 
 interface CloserColumnCalendarProps {
   meetings: MeetingSlot[];
@@ -92,6 +94,8 @@ export function CloserColumnCalendar({
 }: CloserColumnCalendarProps) {
   const dayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
 
+  const { activeBU } = useBUContext();
+
   // Buscar horários reais configurados em closer_meeting_links (apenas R1)
   const { data: daySlots = [] } = useCloserDaySlots(dayOfWeek, 'r1');
 
@@ -109,7 +113,18 @@ export function CloserColumnCalendar({
   // Hook para detectar leads Outside (compraram contrato antes da reunião)
   const { data: outsideData = {} } = useOutsideDetectionBatch(attendeesForOutsideCheck);
 
-  // Gerar slots únicos baseado nos horários reais
+  // Hook para detectar produtos de parceiro (BU Consórcio)
+  const attendeesForPartnerCheck = useMemo(() => {
+    if (activeBU !== 'consorcio') return [];
+    return meetings.flatMap(m => 
+      m.attendees?.map(att => ({
+        id: att.id,
+        email: att.contact?.email || null,
+      })) || []
+    );
+  }, [meetings, activeBU]);
+
+  const { data: partnerData = {} } = usePartnerProductDetectionBatch(attendeesForPartnerCheck);
   const timeSlots = useMemo(() => {
     const uniqueTimes = [...new Set(daySlots.map((s) => s.start_time))].sort();
 
@@ -320,10 +335,18 @@ export function CloserColumnCalendar({
                                           <span className="truncate font-medium">
                                             {leadFirstName}
                                           </span>
-                                          {outsideData[att.id]?.isOutside && (
-                                            <span className="flex items-center bg-yellow-500/40 rounded px-0.5">
-                                              <DollarSign className="h-2.5 w-2.5 text-white flex-shrink-0" />
-                                            </span>
+                                          {activeBU === 'consorcio' ? (
+                                            partnerData[att.id]?.isPartner && (
+                                              <span className="flex items-center bg-blue-500/40 rounded px-0.5" title={`Parceiro ${partnerData[att.id]?.productLabel}`}>
+                                                <UserCircle className="h-2.5 w-2.5 text-white flex-shrink-0" />
+                                              </span>
+                                            )
+                                          ) : (
+                                            outsideData[att.id]?.isOutside && (
+                                              <span className="flex items-center bg-yellow-500/40 rounded px-0.5">
+                                                <DollarSign className="h-2.5 w-2.5 text-white flex-shrink-0" />
+                                              </span>
+                                            )
                                           )}
                                           {!att.is_partner && att.parent_attendee_id && 
                                            !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
@@ -368,11 +391,20 @@ export function CloserColumnCalendar({
                                           Sócio
                                         </Badge>
                                       )}
-                                      {outsideData[att.id]?.isOutside && (
-                                        <Badge variant="outline" className="text-[9px] px-1 py-0 bg-yellow-100 text-yellow-700 border-yellow-300 gap-0.5">
-                                          <DollarSign className="h-2.5 w-2.5" />
-                                          Outside
-                                        </Badge>
+                                      {activeBU === 'consorcio' ? (
+                                        partnerData[att.id]?.isPartner && (
+                                          <Badge variant="outline" className="text-[9px] px-1 py-0 bg-blue-100 text-blue-700 border-blue-300 gap-0.5">
+                                            <UserCircle className="h-2.5 w-2.5" />
+                                            Parceiro {partnerData[att.id]?.productLabel}
+                                          </Badge>
+                                        )
+                                      ) : (
+                                        outsideData[att.id]?.isOutside && (
+                                          <Badge variant="outline" className="text-[9px] px-1 py-0 bg-yellow-100 text-yellow-700 border-yellow-300 gap-0.5">
+                                            <DollarSign className="h-2.5 w-2.5" />
+                                            Outside
+                                          </Badge>
+                                        )
                                       )}
                                       {!att.is_partner && att.parent_attendee_id && 
                                        !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
