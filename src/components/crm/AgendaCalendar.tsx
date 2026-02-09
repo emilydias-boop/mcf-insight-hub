@@ -61,8 +61,10 @@ const STATUS_BADGE_STYLES: Record<string, { label: string; className: string }> 
 const SLOT_HEIGHT = 40; // px per 15-min slot (matches h-[40px] in grid cells)
 const MAX_MEETINGS_PER_SLOT = 999; // No limit on meetings per slot
 
-import { Settings, Plus, ArrowRightLeft, DollarSign } from 'lucide-react';
+import { Settings, Plus, ArrowRightLeft, DollarSign, UserCircle } from 'lucide-react';
 import { useOutsideDetectionBatch } from '@/hooks/useOutsideDetection';
+import { usePartnerProductDetectionBatch } from '@/hooks/usePartnerProductDetection';
+import { useBUContext } from '@/contexts/BUContext';
 export function AgendaCalendar({ 
   meetings, 
   selectedDate, 
@@ -77,6 +79,7 @@ export function AgendaCalendar({
 }: AgendaCalendarProps) {
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
   const updateSchedule = useUpdateMeetingSchedule();
+  const { activeBU } = useBUContext();
   
   // Ref for scroll container - MUST be before any conditional returns
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -246,6 +249,19 @@ export function AgendaCalendar({
 
   // Hook to detect Outside leads (purchased contract before meeting)
   const { data: outsideData = {} } = useOutsideDetectionBatch(attendeesForOutsideCheck);
+
+  // Hook to detect partner products (for Consórcio BU)
+  const attendeesForPartnerCheck = useMemo(() => {
+    if (activeBU !== 'consorcio') return [];
+    return meetings.flatMap(m => 
+      m.attendees?.map(att => ({
+        id: att.id,
+        email: att.contact?.email || null,
+      })) || []
+    );
+  }, [meetings, activeBU]);
+
+  const { data: partnerData = {} } = usePartnerProductDetectionBatch(attendeesForPartnerCheck);
 
   const filteredMeetings = useMemo(() => {
     if (!closerFilter) return meetings;
@@ -1198,25 +1214,25 @@ export function AgendaCalendar({
                           onClick={(e) => {
                             // If slot is occupied by an earlier meeting, open that meeting
                             if (isOccupied) {
-                              // Determine which closer column was clicked based on X position
+                              // Use allDayClosers grid to determine which column was clicked
+                              const { allDayClosers, totalClosers } = getSlotGridInfo(day);
                               const rect = e.currentTarget.getBoundingClientRect();
                               const clickX = e.clientX - rect.left;
-                              const activeClosersInSlot = getActiveClosersInSlot(day, hour, minute);
+                              const widthPerCloser = rect.width / totalClosers;
+                              const clickedCloserIndex = Math.min(
+                                Math.floor(clickX / widthPerCloser),
+                                totalClosers - 1
+                              );
+                              const clickedCloserId = allDayClosers[clickedCloserIndex];
                               
-                              let clickedCloserId: string | undefined;
-                              if (activeClosersInSlot.length > 1) {
-                                const widthPerCloser = rect.width / activeClosersInSlot.length;
-                                const clickedCloserIndex = Math.min(
-                                  Math.floor(clickX / widthPerCloser),
-                                  activeClosersInSlot.length - 1
-                                );
-                                clickedCloserId = activeClosersInSlot[clickedCloserIndex];
+                              // Only open meeting if the clicked column's closer actually has a meeting covering this slot
+                              if (clickedCloserId) {
+                                const coveringMeeting = getMeetingCoveringSlot(day, hour, minute, clickedCloserId);
+                                if (coveringMeeting) {
+                                  onSelectMeeting(coveringMeeting);
+                                }
                               }
-                              
-                              const coveringMeeting = getMeetingCoveringSlot(day, hour, minute, clickedCloserId);
-                              if (coveringMeeting) {
-                                onSelectMeeting(coveringMeeting);
-                              }
+                              // If no meeting in this column -> do nothing (empty space)
                             }
                           }}
                           className={cn(
@@ -1567,11 +1583,20 @@ export function AgendaCalendar({
                                                         {att.already_builds === false && (
                                                           <Badge variant="outline" className="text-[8px] px-1 py-0 border-orange-500 text-orange-600">Não Constrói</Badge>
                                                         )}
-                                                        {outsideData[att.id]?.isOutside && (
-                                                          <Badge variant="outline" className="text-[8px] px-1 py-0 bg-yellow-100 text-yellow-700 border-yellow-300 gap-0.5">
-                                                            <DollarSign className="h-2.5 w-2.5" />
-                                                            Outside
-                                                          </Badge>
+                                                        {activeBU === 'consorcio' ? (
+                                                          partnerData[att.id]?.isPartner && (
+                                                            <Badge variant="outline" className="text-[8px] px-1 py-0 bg-blue-100 text-blue-700 border-blue-300 gap-0.5">
+                                                              <UserCircle className="h-2.5 w-2.5" />
+                                                              Parceiro {partnerData[att.id]?.productLabel}
+                                                            </Badge>
+                                                          )
+                                                        ) : (
+                                                          outsideData[att.id]?.isOutside && (
+                                                            <Badge variant="outline" className="text-[8px] px-1 py-0 bg-yellow-100 text-yellow-700 border-yellow-300 gap-0.5">
+                                                              <DollarSign className="h-2.5 w-2.5" />
+                                                              Outside
+                                                            </Badge>
+                                                          )
                                                         )}
                                                       </div>
                                                       <div>
