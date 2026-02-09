@@ -1,36 +1,39 @@
 
-# Remover a010 do KPI de Parcerias
+
+# Tornar "Sem closer" clicavel com o mesmo detalhamento
 
 ## Problema
 
-O KPI card "Parcerias" no topo do popup esta contando 77 transacoes incluindo as 55 de A010. O usuario quer que A010 nao seja contado no KPI de Parcerias (apenas `parceria` e `renovacao`).
+Na tabela "Faturamento por Closer", a linha "Sem closer" nao e clicavel — diferente das linhas dos closers que abrem um popup com KPIs, breakdown por categoria e detalhamento de parcerias. O usuario quer ver os mesmos dados para as transacoes sem atribuicao.
 
-A010 deve continuar aparecendo na tabela "Detalhamento de Parcerias" abaixo, mas nao inflar os numeros do KPI card.
+## Mudanca
 
-## Secao Tecnica
+### Arquivo: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
 
-### Arquivo: `src/components/relatorios/CloserRevenueDetailDialog.tsx`
+Tornar a linha "Sem closer" clicavel, usando o mesmo botao das demais linhas para abrir o `CloserRevenueDetailDialog`.
 
-### Mudanca
-
-Linha 109-111 — remover `a010` do filtro de parcerias usado nos KPIs:
-
-De:
+**Antes (linhas 186-189)**:
 ```text
-const parcerias = transactions.filter(
-  (t) => t.product_category === 'parceria' || t.product_category === 'a010' || t.product_category === 'renovacao'
-);
+) : (
+  <span className="font-medium text-muted-foreground">{row.name}</span>
+)}
 ```
 
-Para:
+**Depois**:
 ```text
-const parcerias = transactions.filter(
-  (t) => t.product_category === 'parceria' || t.product_category === 'renovacao'
-);
+) : (
+  <button
+    className="font-medium text-left hover:underline cursor-pointer text-muted-foreground"
+    onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
+  >
+    {row.name}
+  </button>
+)}
 ```
 
 ### Resultado
 
-- KPI "Parcerias": mostrara 22 transacoes (77 - 55) com bruto/liquido sem A010
-- Tabela "Detalhamento de Parcerias": continua mostrando A010 (pois usa `parceriaMap` que tem logica separada)
-- Breakdown por Categoria: A010 continua agrupado como `parceria` (sem mudanca)
+- Clicar em "Sem closer" abrira o mesmo popup de detalhamento
+- O popup mostrara: KPIs (Contratos, Parcerias, Reembolsos, Total), Breakdown por Categoria e Detalhamento de Parcerias das transacoes sem closer atribuido
+- A comparacao com mes anterior sera desabilitada automaticamente (pois o closerId `__unassigned__` nao tera attendees correspondentes)
+
