@@ -1,37 +1,36 @@
 
+# Remover a010 do KPI de Parcerias
 
-# Agrupar a010 e renovacao nas categorias corretas do Closer
+## Problema
 
-## Contexto de Negocio
+O KPI card "Parcerias" no topo do popup esta contando 77 transacoes incluindo as 55 de A010. O usuario quer que A010 nao seja contado no KPI de Parcerias (apenas `parceria` e `renovacao`).
 
-A jornada de venda do closer segue o fluxo: **a010 (curso) -> contrato -> parceria**. E renovacao e a renovacao da parceria. Portanto:
+A010 deve continuar aparecendo na tabela "Detalhamento de Parcerias" abaixo, mas nao inflar os numeros do KPI card.
 
-- **Parcerias** deve incluir: `parceria` + `a010` + `renovacao`
-- **Contratos** permanece como esta: `incorporador`, `contrato`, `contrato-anticrise`
-
-## Mudancas
+## Secao Tecnica
 
 ### Arquivo: `src/components/relatorios/CloserRevenueDetailDialog.tsx`
 
-1. **Filtro de parcerias** (linha 109): Expandir para incluir `a010` e `renovacao`:
-   ```text
-   const parcerias = transactions.filter(
-     (t) => t.product_category === 'parceria' 
-         || t.product_category === 'a010' 
-         || t.product_category === 'renovacao'
-   );
-   ```
+### Mudanca
 
-2. **Normalizar categorias no Breakdown por Categoria** (linhas 141-142): Mapear `a010` e `renovacao` para `parceria` no catMap para que nao aparecam como linhas separadas:
-   ```text
-   let cat = tx.product_category || 'outros';
-   if (cat === 'a010' || cat === 'renovacao') cat = 'parceria';
-   ```
+Linha 109-111 — remover `a010` do filtro de parcerias usado nos KPIs:
 
-## Resultado
+De:
+```text
+const parcerias = transactions.filter(
+  (t) => t.product_category === 'parceria' || t.product_category === 'a010' || t.product_category === 'renovacao'
+);
+```
 
-- O KPI "Parcerias" incluira transacoes de a010 e renovacao no bruto e liquido
-- O breakdown por categoria mostrara apenas "parceria" (agrupando a010 + renovacao + parceria)
-- A tabela "Detalhamento de Parcerias" listara os produtos individuais (A010, Parceria, Renovacao) com seus valores separados
-- O KPI "Contratos" permanece inalterado
+Para:
+```text
+const parcerias = transactions.filter(
+  (t) => t.product_category === 'parceria' || t.product_category === 'renovacao'
+);
+```
 
+### Resultado
+
+- KPI "Parcerias": mostrara 22 transacoes (77 - 55) com bruto/liquido sem A010
+- Tabela "Detalhamento de Parcerias": continua mostrando A010 (pois usa `parceriaMap` que tem logica separada)
+- Breakdown por Categoria: A010 continua agrupado como `parceria` (sem mudanca)
