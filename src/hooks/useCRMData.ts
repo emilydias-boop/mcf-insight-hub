@@ -354,6 +354,8 @@ export const useUpdateCRMContact = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-contact'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-deal'] });
       toast.success('Contato atualizado com sucesso');
     },
     onError: (error: any) => {

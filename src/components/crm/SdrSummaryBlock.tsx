@@ -25,7 +25,11 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
   };
   
   const handleSavePhone = async () => {
-    if (!contact?.id) return;
+    if (!contact?.id) {
+      toast.error('Nenhum contato vinculado a este negócio');
+      setEditingPhone(false);
+      return;
+    }
     
     try {
       await updateContact.mutateAsync({
