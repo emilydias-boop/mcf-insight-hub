@@ -1,30 +1,49 @@
 
+# Corrigir Mateus ausente nos filtros de Closer
 
-# Corrigir status da Juliane
+## Causa Raiz
 
-## Problema
-A Juliane (telefone 91988656185) foi marcada manualmente como "Contrato Pago" por engano. O registro precisa ser revertido.
+O Mateus Macedo existe na tabela `closers` (ID: `2396c873-a59c-4e07-bcd8-82b6f330b969`) com `is_active = true` e `bu = incorporador`, porem seu campo `meeting_type` esta **NULL**.
 
-## Dados identificados
+Quando os filtros usam `useGestorClosers('r1')`, a query faz `.eq('meeting_type', 'r1')`, que exclui registros com valor NULL. Por isso o Mateus nao aparece.
 
-- **Attendee ID**: `075c97ae-49b8-42b7-991a-fff96bdbf4e1`
-- **Nome**: Juliane
-- **Status atual**: `contract_paid`
-- **contract_paid_at**: `2026-02-09 12:54:00.525+00`
+Outro hook (`useClosersWithAvailability`) ja trata isso corretamente usando `.or('meeting_type.is.null,meeting_type.eq.r1')`.
 
-## Correcao
+## Correcao (2 partes)
 
-Executar um UPDATE no banco para reverter o status para `completed` e limpar o `contract_paid_at`:
+### 1. Corrigir o dado no banco
+
+Atualizar o `meeting_type` do Mateus para `'r1'`:
 
 ```text
-UPDATE meeting_slot_attendees 
-SET status = 'completed', 
-    contract_paid_at = NULL, 
-    updated_at = NOW() 
-WHERE id = '075c97ae-49b8-42b7-991a-fff96bdbf4e1';
+UPDATE closers 
+SET meeting_type = 'r1', updated_at = NOW() 
+WHERE id = '2396c873-a59c-4e07-bcd8-82b6f330b969';
 ```
 
-## Secao Tecnica
+### 2. Tornar a query resiliente a NULLs
 
-Sera utilizada a ferramenta de insert/update do Supabase (nao migracao) para executar o UPDATE diretamente na tabela `meeting_slot_attendees`. Nenhuma alteracao de codigo e necessaria.
+Alterar `src/hooks/useGestorClosers.ts` para que, quando `meetingType = 'r1'`, inclua tambem closers com `meeting_type` NULL (que sao closers legados sem classificacao). Isso evita que o problema se repita com outros closers.
 
+**Linha 29-31** — substituir:
+```text
+if (meetingType) {
+  query = query.eq('meeting_type', meetingType);
+}
+```
+por:
+```text
+if (meetingType === 'r1') {
+  query = query.or('meeting_type.is.null,meeting_type.eq.r1');
+} else if (meetingType) {
+  query = query.eq('meeting_type', meetingType);
+}
+```
+
+Aplicar a mesma logica na query do coordenador (linhas 77-79).
+
+## Resultado
+
+- Mateus aparecera imediatamente em todos os filtros de closer
+- Closers sem `meeting_type` definido serao tratados como R1 por padrao
+- Nenhum risco de quebrar filtros de R2 (que continuam usando `.eq('meeting_type', 'r2')`)
