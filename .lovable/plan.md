@@ -1,41 +1,52 @@
 
-# Corrigir Tag "SETEMBRO 2025" Invisível no Filtro de Tags
+
+# Adicionar Opção "Sem dono" no Filtro de Responsáveis do CRM
 
 ## Problema
 
-Os 165 leads com a tag "SETEMBRO 2025" existem corretamente no banco de dados, na pipeline "Efeito Alavanca + Clube" (origin_id: 7d7b1cb5-2a44-4552-9eff-c3b798646b78), com todos os dados corretos. O problema é exclusivamente no **filtro de tags** do Kanban.
+Atualmente, o filtro de responsáveis no CRM só permite selecionar "Todos os responsáveis" ou um responsável específico. Não existe uma opção para localizar deals sem dono (owner_id e owner_profile_id nulos), dificultando o trabalho dos SDRs ativos que precisam movimentar esses leads.
 
-A pipeline "Efeito Alavanca + Clube" possui **656 tags únicas**, mas o hook `useUniqueDealTags` tem um limite fixo de **500 tags**. Como a ordenação é alfabética, "SETEMBRO 2025" fica na posição **599** e é cortada antes de ser carregada no filtro.
+## Solução
 
-Por isso, ao buscar "setembro" no popover de tags, aparece "Nenhuma tag encontrada".
+Adicionar uma opção "Sem dono" no dropdown de responsáveis, presente em todos os CRMs (Consórcio, Crédito, Projetos, Leilão). Como todos usam o mesmo componente `DealFilters.tsx` e a mesma lógica de filtragem em `Negocios.tsx`, basta modificar esses dois arquivos.
 
-## Solucao
+## Mudanças
 
-Aumentar o limite de tags no hook `useUniqueDealTags` de 500 para 1000, garantindo que tags como "SETEMBRO 2025" (e outras nas posicoes 501-656) aparecam no filtro.
+### 1. Componente DealFilters.tsx - Adicionar opção no dropdown
 
-## Secao Tecnica
-
-### Arquivo a Modificar
-
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/hooks/useUniqueDealTags.ts` | Alterar limite de 500 para 1000 na linha `return uniqueTags.slice(0, 500)` |
-
-### Mudanca Especifica
-
-Na linha 53 do arquivo `src/hooks/useUniqueDealTags.ts`:
+Inserir um `SelectItem` com value `__no_owner__` logo após "Todos os responsáveis":
 
 ```text
-ANTES: return uniqueTags.slice(0, 500);
-DEPOIS: return uniqueTags.slice(0, 1000);
+<SelectItem value="all">Todos os responsáveis</SelectItem>
+<SelectItem value="__no_owner__">Sem dono</SelectItem>
 ```
 
-### Por que 1000?
+### 2. Página Negocios.tsx - Lógica de filtragem
 
-- Atualmente existem 656 tags unicas nessa pipeline
-- 1000 dá margem para crescimento sem impactar performance
-- O componente `TagFilterPopover` já possui busca textual, entao a UX nao é afetada por uma lista maior
+No bloco de filtro de responsável (linha ~370), adicionar tratamento para o valor `__no_owner__`:
 
-### Resultado Esperado
+```text
+if (filters.owner) {
+  if (filters.owner === '__no_owner__') {
+    // Mostrar apenas deals sem dono
+    if (deal.owner_id || deal.owner_profile_id) return false;
+  } else if (filters.owner.startsWith('email:')) {
+    const emailFilter = filters.owner.replace('email:', '');
+    if (deal.owner_id !== emailFilter) return false;
+  } else {
+    if (deal.owner_profile_id !== filters.owner) return false;
+  }
+}
+```
 
-Apos a correcao, ao abrir o filtro de Tags no Kanban da pipeline "Efeito Alavanca + Clube" e buscar "setembro", a tag "SETEMBRO 2025" aparecerá normalmente, permitindo filtrar os 165 leads.
+## Seção Técnica
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/crm/DealFilters.tsx` | Adicionar `<SelectItem value="__no_owner__">Sem dono</SelectItem>` após linha 194 |
+| `src/pages/crm/Negocios.tsx` | Adicionar condição `filters.owner === '__no_owner__'` no bloco de filtro (linhas 370-377) |
+
+### Abrangência
+
+Como todas as BUs (Consórcio, Crédito, Projetos, Leilão) compartilham o mesmo `DealFilters.tsx` e `Negocios.tsx`, a opção ficará disponível automaticamente em todos os CRMs sem necessidade de alterações individuais.
+
