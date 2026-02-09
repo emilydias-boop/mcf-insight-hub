@@ -11,7 +11,7 @@ import {
   TipoProduto
 } from '@/types/consorcio';
 import { calcularComissao, calcularComissaoTotal } from '@/lib/commissionCalculator';
-import { calcularDataVencimento } from '@/lib/businessDays';
+import { calcularDataVencimento, gerarDatasVencimentoComPrimeiroPagamento } from '@/lib/businessDays';
 import { toast } from 'sonner';
 
 interface ConsorcioFilters {
@@ -217,10 +217,25 @@ export function useCreateConsorcioCard() {
       // 3. Generate installments - Parse date without timezone issues
       const [year, month, day] = input.data_contratacao.split('-').map(Number);
       const dataContratacao = new Date(year, month - 1, day);
+      
+      // If data_primeiro_pagamento is provided, use it as base for installment dates
+      let dataPrimeiroPagamento: Date | null = null;
+      if (input.data_primeiro_pagamento) {
+        const [y, m, d] = input.data_primeiro_pagamento.split('-').map(Number);
+        dataPrimeiroPagamento = new Date(y, m - 1, d);
+      }
+      
+      // Generate dates
+      const datasVencimento = dataPrimeiroPagamento
+        ? gerarDatasVencimentoComPrimeiroPagamento(dataPrimeiroPagamento, input.dia_vencimento, input.prazo_meses)
+        : null;
+      
       const installments: Omit<ConsorcioInstallment, 'id' | 'created_at' | 'updated_at'>[] = [];
 
       for (let i = 1; i <= input.prazo_meses; i++) {
-        const dataVencimento = calcularDataVencimento(dataContratacao, input.dia_vencimento, i);
+        const dataVencimento = datasVencimento 
+          ? datasVencimento[i - 1]
+          : calcularDataVencimento(dataContratacao, input.dia_vencimento, i);
         const valorComissao = calcularComissao(input.valor_credito, input.tipo_produto, i);
         
         // Determine if this installment is paid by client or company

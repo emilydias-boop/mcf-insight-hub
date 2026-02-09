@@ -168,3 +168,42 @@ export function getDiasUteisSemana(weekDate: Date): number {
   const weekEnd = endOfWeek(weekDate, { weekStartsOn: WEEK_STARTS_ON });
   return contarDiasUteis(weekStart, weekEnd);
 }
+
+// Recalcula datas de vencimento a partir de uma data base
+// Retorna array de { numeroParcela, dataVencimento } para parcelas a partir de parcelaInicial
+export function recalcularDatasAPartirDe(
+  dataBase: Date,
+  diaVencimento: number,
+  totalParcelas: number,
+  parcelaInicial: number = 1
+): Array<{ numeroParcela: number; dataVencimento: Date }> {
+  const resultado: Array<{ numeroParcela: number; dataVencimento: Date }> = [];
+
+  for (let i = parcelaInicial; i <= totalParcelas; i++) {
+    const offset = i - parcelaInicial; // parcela 1 = offset 0, parcela 2 = offset 1, etc.
+    
+    const mesAlvo = dataBase.getMonth() + offset;
+    const anoAlvo = dataBase.getFullYear() + Math.floor(mesAlvo / 12);
+    const mesNormalizado = mesAlvo % 12;
+    
+    const ultimoDiaDoMes = new Date(anoAlvo, mesNormalizado + 1, 0).getDate();
+    const diaAjustado = Math.min(diaVencimento, ultimoDiaDoMes);
+    
+    const dataVencimento = new Date(anoAlvo, mesNormalizado, diaAjustado);
+    const dataUtil = calcularProximoDiaUtil(dataVencimento);
+    
+    resultado.push({ numeroParcela: i, dataVencimento: dataUtil });
+  }
+
+  return resultado;
+}
+
+// Gera datas de vencimento usando data do primeiro pagamento como base
+export function gerarDatasVencimentoComPrimeiroPagamento(
+  dataPrimeiroPagamento: Date,
+  diaVencimento: number,
+  prazoMeses: number
+): Date[] {
+  return recalcularDatasAPartirDe(dataPrimeiroPagamento, diaVencimento, prazoMeses, 1)
+    .map(r => r.dataVencimento);
+}

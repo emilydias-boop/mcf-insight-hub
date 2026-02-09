@@ -163,6 +163,7 @@ export interface CreateConsorcioCardInput {
   parcelas_pagas_empresa: number;
   data_contratacao: string;
   dia_vencimento: number;
+  data_primeiro_pagamento?: string;
   origem: OrigemConsorcio;
   origem_detalhe?: string;
   vendedor_id?: string;
