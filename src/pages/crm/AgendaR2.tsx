@@ -274,6 +274,8 @@ export default function AgendaR2() {
       email: c.email,
       color: c.color || "#8B5CF6",
       is_active: c.is_active ?? true,
+      meeting_duration_minutes: 45,
+      max_leads_per_slot: 4,
       availability: [],
     }));
   }, [displayClosers]);
