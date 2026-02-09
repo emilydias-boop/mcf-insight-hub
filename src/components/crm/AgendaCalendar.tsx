@@ -1119,7 +1119,7 @@ export function AgendaCalendar({
                                             ref={dragProvided.innerRef}
                                             {...dragProvided.draggableProps}
                                             {...dragProvided.dragHandleProps}
-                                            onClick={() => onSelectMeeting(firstMeeting)}
+onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                             className={cn(
                                               'absolute text-left rounded-md shadow-sm hover:shadow-md transition-all overflow-hidden z-10 border-l-4 p-1.5',
                                               STATUS_BORDER_COLORS[firstMeeting.status] || 'border-l-gray-300',
@@ -1372,7 +1372,7 @@ export function AgendaCalendar({
                                                     ref={dragProvided.innerRef}
                                                     {...dragProvided.draggableProps}
                                                     {...dragProvided.dragHandleProps}
-                                                    onClick={() => onSelectMeeting(firstMeeting)}
+                                                    onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                     className={cn(
                                                       'absolute inset-0 text-left rounded-md shadow-sm hover:shadow-md transition-all overflow-hidden z-10 border-l-4',
                                                       isCompact ? 'p-0.5 text-[10px]' : 'p-1.5',
