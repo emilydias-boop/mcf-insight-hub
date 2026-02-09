@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { 
@@ -13,7 +14,9 @@ import {
   Mail, Calendar, Clock, AlertTriangle, LogOut, RefreshCw, Search 
 } from "lucide-react";
 import { useClintUsers } from "@/hooks/useClintAPI";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { useUserDetails, useUserPermissions, useUserIntegrations } from "@/hooks/useUsers";
 import { 
   useUpdateUserRole, 
@@ -47,6 +50,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const { data: permissions = [] } = useUserPermissions(userId);
   const { data: integrations } = useUserIntegrations(userId);
   const { data: clintUsers } = useClintUsers();
+  const queryClient = useQueryClient();
 
   const updateRole = useUpdateUserRole();
   const updateAccess = useUpdateUserAccess();
@@ -55,7 +59,8 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const sendPasswordReset = useSendPasswordReset();
   
   const [searchingClint, setSearchingClint] = useState(false);
-
+  const [canBookR2, setCanBookR2] = useState(false);
+  const [savingCanBookR2, setSavingCanBookR2] = useState(false);
   // Form state for General tab
   const [generalData, setGeneralData] = useState({
     full_name: "",
@@ -106,6 +111,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
         squad: userDetails.squad || [],
       });
       setBlockedUntil(userDetails.blocked_until || "");
+      setCanBookR2(!!(userDetails as any).can_book_r2);
     }
   }, [userDetails]);
 
@@ -145,6 +151,25 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const handleSaveGeneral = () => {
     if (!userId) return;
     updateAccess.mutate({ userId, data: generalData });
+  };
+
+  const handleToggleCanBookR2 = async (checked: boolean) => {
+    if (!userId) return;
+    setSavingCanBookR2(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ can_book_r2: checked } as any)
+        .eq("id", userId);
+      if (error) throw error;
+      setCanBookR2(checked);
+      queryClient.invalidateQueries({ queryKey: ["r2-bookers"] });
+      toast.success(checked ? "Permissão R2 ativada" : "Permissão R2 desativada");
+    } catch {
+      toast.error("Erro ao atualizar permissão R2");
+    } finally {
+      setSavingCanBookR2(false);
+    }
   };
 
   const handleSaveBlockedUntil = () => {
@@ -375,6 +400,20 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground">Define quais BUs o usuário pode visualizar no menu</p>
+                </div>
+
+                <Separator />
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Pode agendar R2</Label>
+                    <p className="text-xs text-muted-foreground">Aparece como responsável no agendamento de R2</p>
+                  </div>
+                  <Switch
+                    checked={canBookR2}
+                    onCheckedChange={handleToggleCanBookR2}
+                    disabled={savingCanBookR2}
+                  />
                 </div>
 
                 <Button 
