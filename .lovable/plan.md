@@ -1,123 +1,90 @@
 
-# Corrigir Leads Invisíveis para SDRs (owner_profile_id = NULL)
+# Corrigir Agenda R1 Consorcio: Area de Clique e Classificacao Outside/Parceiro
 
-## Problema
+## Problema 1: Area de Clique Expandida nos Espacos Vazios
 
-Os novos leads que chegam via webhook do Clint não aparecem para os SDRs porque o campo `owner_profile_id` está NULL. O CRM filtra por esse campo para SDRs/Closers (`query.eq('owner_profile_id', user.id)`), então leads sem esse campo ficam invisíveis.
+Na visao semanal do calendario (week view), quando uma reuniao se estende por varios slots de 15 minutos, os slots subsequentes ficam marcados como "isOccupied". O handler `onClick` esta no **div pai da celula inteira**, fazendo com que clicar em qualquer ponto da celula (mesmo em colunas vazias de outros closers) abra a reuniao.
 
-| Dado | Valor |
-|------|-------|
-| Leads de hoje sem owner_profile_id | 21 |
-| Leads de hoje com owner_profile_id | 0 |
-| Causa raiz | Caminho de criacao no DEAL.STAGE_CHANGED nao resolve UUID |
+### Causa Raiz
 
-## Causa Raiz
+Linhas 1198-1221 do `AgendaCalendar.tsx`: o `onClick` no div da celula inteira dispara para qualquer clique quando `isOccupied = true`, mesmo que o clique seja em um espaco vazio ao lado do bloco da reuniao. A logica tenta identificar qual closer foi clicado via coordenada X, mas quando ha apenas um closer com reuniao, toda a largura e tratada como clicavel.
 
-No `clint-webhook-handler`, existem dois caminhos de criacao de deals:
+### Solucao
 
-1. **DEAL.CREATED** (linhas 611-662): Busca `owner_profile_id` corretamente via lookup na tabela `profiles`
-2. **DEAL.STAGE_CHANGED** (linhas 1044-1062): Cria o deal **sem** `owner_profile_id` quando o deal nao existe ainda
+Modificar a logica do `onClick` na celula para verificar se o clique realmente aconteceu dentro da coluna do closer que tem reuniao. Se o clique cai em uma coluna vazia, nao abrir nenhuma reuniao. Especificamente:
 
-O segundo caminho e o mais usado (Clint envia `DEAL.STAGE_CHANGED` quando o lead muda de estagio, mesmo que seja a primeira vez que o sistema ve esse deal). Resultado: todos os deals criados por esse caminho ficam com `owner_profile_id = NULL`.
+1. Calcular a coluna clicada com base no grid de closers do dia
+2. Verificar se essa coluna corresponde a um closer com reuniao ativa naquele slot
+3. Somente abrir a reuniao se houver match - caso contrario, nao fazer nada
 
-## Solucao
+---
 
-### Passo 1: Corrigir o webhook (prevencao)
+## Problema 2: Leads Parceiros Marcados como "Outside"
 
-No `clint-webhook-handler/index.ts`, adicionar lookup do `owner_profile_id` antes da insercao do deal no caminho `DEAL.STAGE_CHANGED`:
+Na agenda R1 do Consorcio, os leads que entram em reuniao ja sao parceiros existentes (compraram A001, A009, Anticrise, etc). O hook `useOutsideDetection` marca como "Outside" qualquer lead que tenha uma transacao com "Contrato" anterior a reuniao. Porem, no contexto do Consorcio, esses leads nao sao "outside" - sao parceiros sendo atendidos em uma nova BU.
 
-```typescript
-// Antes da linha 1044 (insert do deal)
-const ownerEmail = data.deal_user || data.deal?.user || null;
-let ownerProfileId: string | null = null;
-if (ownerEmail) {
-  const { data: ownerProfile } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('email', ownerEmail)
-    .maybeSingle();
-  if (ownerProfile) {
-    ownerProfileId = ownerProfile.id;
-  }
-}
+### Comportamento Desejado
 
-// No insert, adicionar:
-owner_profile_id: ownerProfileId,
-```
+| Situacao | Classificacao | Exibicao |
+|----------|--------------|----------|
+| Parceiro existente (A001, A009, Anticrise, etc) | Parceiro | Badge com nome do produto comprado |
+| Novo lead do curso "Construir para Alugar" | Lead Novo | Tratado como inside (sem badge especial) |
+| Lead que comprou contrato antes da R1 (incorporador) | Outside | Badge amarelo "Outside" (comportamento atual) |
 
-### Passo 2: Corrigir dados existentes (retroativo)
+### Solucao
 
-Executar uma migracao SQL para sincronizar todos os deals que tem `owner_id` mas nao tem `owner_profile_id`:
+1. **Criar novo hook `usePartnerProductDetection`**: busca transacoes do lead na tabela `hubla_transactions` para identificar qual produto ele comprou (A001, A009, A003/Anticrise, etc)
 
-```sql
-UPDATE crm_deals d
-SET owner_profile_id = p.id
-FROM profiles p
-WHERE d.owner_id = p.email
-  AND d.owner_profile_id IS NULL
-  AND d.owner_id IS NOT NULL;
-```
+2. **Ajustar logica no `AgendaCalendar.tsx` e `AgendaMeetingDrawer.tsx`**: 
+   - Se o lead tem produto principal (A001, A009, Anticrise, etc): exibir badge "Parceiro - A001" em vez de "Outside"
+   - Se o lead tem apenas "Construir para Alugar": tratar como lead novo (sem badge Outside, sem badge Parceiro)
+   - Manter "Outside" somente para leads do Incorporador que compraram contrato antes da R1
 
-### Passo 3: Adicionar trigger de seguranca (prevencao permanente)
+3. **Desativar Outside detection para BU Consorcio**: o conceito de "Outside" faz sentido apenas para o Incorporador (lead paga contrato antes da consultoria). No Consorcio, todos os leads ja sao parceiros pagantes.
 
-Criar um trigger que sincronize automaticamente `owner_profile_id` sempre que `owner_id` for inserido/atualizado sem o UUID correspondente:
-
-```sql
-CREATE OR REPLACE FUNCTION sync_owner_profile_id()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.owner_id IS NOT NULL AND NEW.owner_profile_id IS NULL THEN
-    SELECT id INTO NEW.owner_profile_id
-    FROM profiles
-    WHERE email = NEW.owner_id
-    LIMIT 1;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_sync_owner_profile_id
-BEFORE INSERT OR UPDATE ON crm_deals
-FOR EACH ROW
-EXECUTE FUNCTION sync_owner_profile_id();
-```
-
-Este trigger garante que mesmo que algum webhook ou importacao futura esqueca de resolver o UUID, o banco resolve automaticamente.
-
-## Arquivos a Modificar
-
-| Local | Mudanca |
-|-------|---------|
-| `supabase/functions/clint-webhook-handler/index.ts` | Adicionar lookup de owner_profile_id no caminho DEAL.STAGE_CHANGED (linhas 1038-1062) |
-| Migracao SQL | Sincronizar deals existentes + criar trigger de seguranca |
-
-## Resultado Esperado
-
-- Os 21 leads de hoje serao imediatamente visiveis para os SDRs apos a migracao
-- Todos os leads futuros terao `owner_profile_id` preenchido automaticamente (pelo webhook corrigido + trigger de seguranca)
-- Nenhum lead ficara "invisivel" novamente, independente do caminho de entrada
+---
 
 ## Secao Tecnica
 
-Fluxo corrigido:
+### Arquivos a Modificar
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/components/crm/AgendaCalendar.tsx` | Corrigir onClick na celula ocupada para verificar coluna do closer (linhas 1198-1221) |
+| `src/hooks/useOutsideDetection.ts` | Nao alterar - manter funcionando para Incorporador |
+| `src/hooks/usePartnerProductDetection.ts` | **NOVO** - Hook para detectar produto comprado pelo lead |
+| `src/components/crm/AgendaCalendar.tsx` | Substituir badge "Outside" por "Parceiro - [produto]" quando BU = consorcio |
+| `src/components/crm/AgendaMeetingDrawer.tsx` | Mesma logica: exibir produto do parceiro em vez de Outside |
+| `src/components/crm/CloserColumnCalendar.tsx` | Mesma logica na visao por closer |
+
+### Novo Hook: usePartnerProductDetection
+
+```typescript
+// Busca na hubla_transactions qual produto principal o lead comprou
+// Produtos principais: A001, A009, A003 (Anticrise), A004, A002, etc
+// Exclui: "Construir para Alugar" (lead novo), "Contrato" (pós-venda), P2/suplemento
+```
+
+### Mapeamento de Produtos para Badge
+
+| product_name contém | Badge |
+|---------------------|-------|
+| A001 | Parceiro A001 |
+| A009 | Parceiro A009 |
+| A003 ou Anticrise Completo | Parceiro Anticrise |
+| A004 ou Anticrise Basico | Parceiro Anticrise Basico |
+| A002 | Parceiro A002 |
+| A010 | Parceiro A010 |
+| Construir para Alugar | (sem badge - tratado como lead novo) |
+
+### Correcao do Click (pseudocodigo)
 
 ```text
-Clint Webhook (DEAL.STAGE_CHANGED)
-        |
-        v
-  Deal existe? --NO--> Criar deal
-        |                    |
-        |               Lookup profiles.id  <-- FIX APLICADO
-        |                    |
-        |               INSERT com owner_profile_id
-        |
-       YES
-        |
-  Deal tem owner? --NO--> Update owner_id + owner_profile_id
-        |
-       YES --> Manter owner atual
-        
-  [BACKUP] Trigger: sync_owner_profile_id()
-  Se qualquer INSERT/UPDATE chegar sem owner_profile_id,
-  o trigger resolve automaticamente via tabela profiles.
+onClick na celula:
+  1. Calcular totalClosers do dia
+  2. Calcular indice da coluna clicada (clickX / larguraPorCloser)
+  3. Identificar closerId da coluna clicada
+  4. Buscar reuniao que cobre esse slot PARA ESSE CLOSER especifico
+  5. Se encontrou -> abrir reuniao
+  6. Se nao encontrou -> nao fazer nada (espaco vazio)
 ```
