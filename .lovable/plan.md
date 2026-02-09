@@ -1,90 +1,87 @@
 
-# Corrigir Agenda R1 Consorcio: Area de Clique e Classificacao Outside/Parceiro
+# Adicionar Duracao de Reuniao e Leads por Reuniao na Config do Closer (Consorcio)
 
-## Problema 1: Area de Clique Expandida nos Espacos Vazios
+## Objetivo
 
-Na visao semanal do calendario (week view), quando uma reuniao se estende por varios slots de 15 minutos, os slots subsequentes ficam marcados como "isOccupied". O handler `onClick` esta no **div pai da celula inteira**, fazendo com que clicar em qualquer ponto da celula (mesmo em colunas vazias de outros closers) abra a reuniao.
+Adicionar dois controles na tela "Configurar Closers" do R1 (usada pelo Consorcio): tempo de duracao da reuniao e quantidade maxima de leads por horario. Atualmente, esses controles existem apenas na config do R2.
 
-### Causa Raiz
+## Mudancas
 
-Linhas 1198-1221 do `AgendaCalendar.tsx`: o `onClick` no div da celula inteira dispara para qualquer clique quando `isOccupied = true`, mesmo que o clique seja em um espaco vazio ao lado do bloco da reuniao. A logica tenta identificar qual closer foi clicado via coordenada X, mas quando ha apenas um closer com reuniao, toda a largura e tratada como clicavel.
+### 1. Nova coluna no banco de dados
 
-### Solucao
+Adicionar `meeting_duration_minutes` na tabela `closers` (default: 45 minutos).
 
-Modificar a logica do `onClick` na celula para verificar se o clique realmente aconteceu dentro da coluna do closer que tem reuniao. Se o clique cai em uma coluna vazia, nao abrir nenhuma reuniao. Especificamente:
+```sql
+ALTER TABLE closers ADD COLUMN meeting_duration_minutes INTEGER DEFAULT 45;
+```
 
-1. Calcular a coluna clicada com base no grid de closers do dia
-2. Verificar se essa coluna corresponde a um closer com reuniao ativa naquele slot
-3. Somente abrir a reuniao se houver match - caso contrario, nao fazer nada
+A coluna `max_leads_per_slot` ja existe (default: 4).
 
----
+### 2. Atualizar CloserAvailabilityConfig.tsx
 
-## Problema 2: Leads Parceiros Marcados como "Outside"
+Adicionar dois controles apos o color picker, seguindo o mesmo padrao visual do R2:
 
-Na agenda R1 do Consorcio, os leads que entram em reuniao ja sao parceiros existentes (compraram A001, A009, Anticrise, etc). O hook `useOutsideDetection` marca como "Outside" qualquer lead que tenha uma transacao com "Contrato" anterior a reuniao. Porem, no contexto do Consorcio, esses leads nao sao "outside" - sao parceiros sendo atendidos em uma nova BU.
+- **Slider "Duracao da Reuniao"**: valores de 15 a 120 minutos (step 15). Salva no campo `meeting_duration_minutes` do closer.
+- **Slider "Leads por Reuniao"**: valores de 1 a 6. Salva no campo `max_leads_per_slot` do closer. (Mesmo componente ja usado no R2.)
 
-### Comportamento Desejado
+Ambos salvam automaticamente ao arrastar (mesmo padrao do R2).
 
-| Situacao | Classificacao | Exibicao |
-|----------|--------------|----------|
-| Parceiro existente (A001, A009, Anticrise, etc) | Parceiro | Badge com nome do produto comprado |
-| Novo lead do curso "Construir para Alugar" | Lead Novo | Tratado como inside (sem badge especial) |
-| Lead que comprou contrato antes da R1 (incorporador) | Outside | Badge amarelo "Outside" (comportamento atual) |
+### 3. Atualizar hooks e tipos
 
-### Solucao
+- Adicionar `meeting_duration_minutes` ao tipo `CloserWithAvailability` em `useAgendaData.ts`
+- Adicionar mutation para salvar `max_leads_per_slot` e `meeting_duration_minutes` (usar `useUpdateCloserColor` como base ou criar mutation dedicada)
+- Atualizar `types.ts` do Supabase para incluir a nova coluna
 
-1. **Criar novo hook `usePartnerProductDetection`**: busca transacoes do lead na tabela `hubla_transactions` para identificar qual produto ele comprou (A001, A009, A003/Anticrise, etc)
+### 4. Usar duracao configurada na agenda
 
-2. **Ajustar logica no `AgendaCalendar.tsx` e `AgendaMeetingDrawer.tsx`**: 
-   - Se o lead tem produto principal (A001, A009, Anticrise, etc): exibir badge "Parceiro - A001" em vez de "Outside"
-   - Se o lead tem apenas "Construir para Alugar": tratar como lead novo (sem badge Outside, sem badge Parceiro)
-   - Manter "Outside" somente para leads do Incorporador que compraram contrato antes da R1
+No `AgendaCalendar.tsx`, onde aparece `meeting.duration_minutes || 30`, o fallback ja vem do `meeting_slots.duration_minutes`. Quando um agendamento for criado, ele deve usar o `meeting_duration_minutes` do closer como duracao padrao (isso ja e feito no fluxo de booking).
 
-3. **Desativar Outside detection para BU Consorcio**: o conceito de "Outside" faz sentido apenas para o Incorporador (lead paga contrato antes da consultoria). No Consorcio, todos os leads ja sao parceiros pagantes.
-
----
-
-## Secao Tecnica
-
-### Arquivos a Modificar
+## Arquivos a Modificar
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/components/crm/AgendaCalendar.tsx` | Corrigir onClick na celula ocupada para verificar coluna do closer (linhas 1198-1221) |
-| `src/hooks/useOutsideDetection.ts` | Nao alterar - manter funcionando para Incorporador |
-| `src/hooks/usePartnerProductDetection.ts` | **NOVO** - Hook para detectar produto comprado pelo lead |
-| `src/components/crm/AgendaCalendar.tsx` | Substituir badge "Outside" por "Parceiro - [produto]" quando BU = consorcio |
-| `src/components/crm/AgendaMeetingDrawer.tsx` | Mesma logica: exibir produto do parceiro em vez de Outside |
-| `src/components/crm/CloserColumnCalendar.tsx` | Mesma logica na visao por closer |
+| Migration SQL | Adicionar coluna `meeting_duration_minutes` |
+| `src/components/crm/CloserAvailabilityConfig.tsx` | Adicionar sliders de duracao e max leads |
+| `src/hooks/useAgendaData.ts` | Adicionar mutation para salvar configs do closer |
+| `src/integrations/supabase/types.ts` | Adicionar nova coluna ao tipo |
 
-### Novo Hook: usePartnerProductDetection
+## Secao Tecnica
 
-```typescript
-// Busca na hubla_transactions qual produto principal o lead comprou
-// Produtos principais: A001, A009, A003 (Anticrise), A004, A002, etc
-// Exclui: "Construir para Alugar" (lead novo), "Contrato" (pós-venda), P2/suplemento
-```
-
-### Mapeamento de Produtos para Badge
-
-| product_name contém | Badge |
-|---------------------|-------|
-| A001 | Parceiro A001 |
-| A009 | Parceiro A009 |
-| A003 ou Anticrise Completo | Parceiro Anticrise |
-| A004 ou Anticrise Basico | Parceiro Anticrise Basico |
-| A002 | Parceiro A002 |
-| A010 | Parceiro A010 |
-| Construir para Alugar | (sem badge - tratado como lead novo) |
-
-### Correcao do Click (pseudocodigo)
+### UI dos Novos Controles (entre color picker e slots)
 
 ```text
-onClick na celula:
-  1. Calcular totalClosers do dia
-  2. Calcular indice da coluna clicada (clickX / larguraPorCloser)
-  3. Identificar closerId da coluna clicada
-  4. Buscar reuniao que cobre esse slot PARA ESSE CLOSER especifico
-  5. Se encontrou -> abrir reuniao
-  6. Se nao encontrou -> nao fazer nada (espaco vazio)
++--------------------------------------------------+
+| Cor do Closer                                     |
+| [cores...]                                        |
++--------------------------------------------------+
+| Duracao da Reuniao: 45 min                        |  <-- NOVO
+| [========|==============] (slider 15-120, step 15)|
+| Tempo padrao de cada reuniao                      |
++--------------------------------------------------+
+| Leads por Reuniao: 4                              |  <-- NOVO
+| [===========|===========] (slider 1-6, step 1)    |
+| Quantos leads no mesmo horario (padrao: 4)        |
++--------------------------------------------------+
+| Segunda    7 horarios    [Copiar] [+ Adicionar]   |
+| ...                                               |
++--------------------------------------------------+
+```
+
+### Mutation para salvar
+
+Reutilizar o padrao do `useUpdateCloserColor` mas generalizar para aceitar qualquer campo:
+
+```typescript
+const updateCloserSettings = useMutation({
+  mutationFn: async ({ closerId, data }: { closerId: string; data: Partial<CloserSettings> }) => {
+    const { error } = await supabase
+      .from('closers')
+      .update({ ...data, updated_at: new Date().toISOString() })
+      .eq('id', closerId);
+    if (error) throw error;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['agenda-closers'] });
+  }
+});
 ```
