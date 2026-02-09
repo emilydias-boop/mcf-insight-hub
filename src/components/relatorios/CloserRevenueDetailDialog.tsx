@@ -106,7 +106,9 @@ export function CloserRevenueDetailDialog({
     const contracts = transactions.filter((t) =>
       CONTRACT_CATEGORIES.includes(t.product_category || '')
     );
-    const parcerias = transactions.filter((t) => t.product_category === 'parceria');
+    const parcerias = transactions.filter(
+      (t) => t.product_category === 'parceria' || t.product_category === 'a010' || t.product_category === 'renovacao'
+    );
     const refunds = transactions.filter(
       (t) => t.sale_status === 'refunded' || (t.net_value !== null && t.net_value < 0)
     );
@@ -139,7 +141,8 @@ export function CloserRevenueDetailDialog({
     // By category breakdown
     const catMap = new Map<string, { count: number; gross: number; net: number }>();
     for (const tx of transactions) {
-      const cat = tx.product_category || 'outros';
+      let cat = tx.product_category || 'outros';
+      if (cat === 'a010' || cat === 'renovacao') cat = 'parceria';
       const existing = catMap.get(cat) || { count: 0, gross: 0, net: 0 };
       existing.count++;
       existing.gross += getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
