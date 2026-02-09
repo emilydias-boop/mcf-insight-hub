@@ -323,7 +323,9 @@ const Negocios = () => {
   const handleSelectByCountInStage = (dealIds: string[], count: number) => {
     setSelectedDealIds(prev => {
       const newSet = new Set(prev);
-      // Selecionar os primeiros N da lista (já ordenada por stage_moved_at)
+      // Primeiro: remover todos os deals deste estágio
+      dealIds.forEach(id => newSet.delete(id));
+      // Depois: adicionar apenas os primeiros N
       dealIds.slice(0, count).forEach(id => newSet.add(id));
       return newSet;
     });
