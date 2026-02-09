@@ -26,7 +26,9 @@ export const useGestorClosers = (meetingType?: 'r1' | 'r2') => {
           .select('id, name, email, color, bu')
           .eq('is_active', true);
         
-        if (meetingType) {
+        if (meetingType === 'r1') {
+          query = query.or('meeting_type.is.null,meeting_type.eq.r1');
+        } else if (meetingType) {
           query = query.eq('meeting_type', meetingType);
         }
         
@@ -74,7 +76,9 @@ export const useGestorClosers = (meetingType?: 'r1' | 'r2') => {
           .eq('is_active', true)
           .in('employee_id', employeeIds);
         
-        if (meetingType) {
+        if (meetingType === 'r1') {
+          closerQuery = closerQuery.or('meeting_type.is.null,meeting_type.eq.r1');
+        } else if (meetingType) {
           closerQuery = closerQuery.eq('meeting_type', meetingType);
         }
         
