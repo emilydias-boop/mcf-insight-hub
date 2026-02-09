@@ -1,86 +1,46 @@
 
+# Corrigir Relatório de Vendas para Usar a Mesma Fonte de Dados da Página de Vendas
 
-# Faturamento por Closer no Relatório de Vendas e Detalhe Individual
+## Problema
 
-## Resumo
+A aba "Vendas" em Relatórios (/bu-incorporador/relatorios) mostra dados diferentes da página de Vendas (/bu-incorporador/vendas):
 
-Adicionar duas funcionalidades:
-1. Uma **tabela resumo por closer** no Relatório de Vendas, mostrando faturamento bruto, líquido, quantidade de transações e ticket médio por closer
-2. Uma **aba "Faturamento"** na página de detalhe individual do closer (/crm/reunioes-equipe/closer/:id), com os mesmos dados filtrados para aquele closer específico
+- **Vendas**: 2.196 transações, R$ 2.016.398 bruto (usa `get_all_hubla_transactions`)
+- **Relatórios**: 2.713 transações, R$ 1.799.871 bruto (usa `get_hubla_transactions_by_bu`)
 
-## Mudanças
+Duas causas raiz:
 
-### 1. Novo componente: CloserRevenueSummaryTable
+1. **RPCs diferentes**: A página de Vendas usa `useAllHublaTransactions` (RPC `get_all_hubla_transactions`), enquanto o Relatório usa `useTransactionsByBU` (RPC `get_hubla_transactions_by_bu`). Essas RPCs retornam conjuntos de dados diferentes.
 
-Tabela que agrega as transações por closer, reutilizando o matching já existente no SalesReportPanel (via attendees com contract_paid + email/phone matching).
+2. **Formatação de datas diferente**: A página de Vendas formata datas com timezone de Brasilia (UTC-3: `2026-01-01T00:00:00-03:00`), enquanto o Relatório passa datas em UTC (`.toISOString()`), causando discrepancia de 3 horas nos limites do periodo.
 
-Colunas da tabela:
-- Closer (nome)
-- Transações (quantidade)
-- Faturamento Bruto (R$)
-- Receita Líquida (R$)
-- Ticket Médio (R$)
-- % do Total
+## Solucao
 
-Incluirá uma linha "Sem closer" para transações que não foram atribuídas a nenhum closer, e uma linha "Total" no rodapé.
+Trocar o hook `useTransactionsByBU` por `useAllHublaTransactions` no `SalesReportPanel.tsx`, garantindo paridade exata com a pagina de Vendas.
 
-Arquivo: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
+## Secao Tecnica
 
-### 2. Alterar SalesReportPanel para exibir a tabela resumo
+### Arquivo a Modificar
 
-Inserir o novo componente entre os KPI cards e a tabela de transações, passando as transações filtradas, os closers e os attendees.
-
-Arquivo: `src/components/relatorios/SalesReportPanel.tsx`
-
-### 3. Nova aba "Faturamento" na página de detalhe do closer
-
-Adicionar uma terceira aba ao CloserMeetingsDetailPage que mostra:
-- KPI cards de faturamento (Total Transações, Bruto, Líquido, Ticket Médio)
-- Tabela de transações atribuídas a esse closer
-
-Reutiliza o mesmo hook `useTransactionsByBU` e lógica de matching por email/phone já existente.
-
-Arquivo: `src/pages/crm/CloserMeetingsDetailPage.tsx`
-
-### 4. Novo componente: CloserRevenueTab
-
-Componente isolado para a aba de faturamento dentro do detalhe do closer. Recebe closerId, startDate, endDate e busca as transações + attendees para aquele closer.
-
-Arquivo: `src/components/closer/CloserRevenueTab.tsx`
-
-## Seção Técnica
-
-### Lógica de Atribuição (já existente, será reutilizada)
-
-O matching de transação para closer funciona via:
-1. Buscar `meeting_slot_attendees` com `status = 'contract_paid'` no período
-2. Obter email/phone do contato via `crm_deals -> crm_contacts`
-3. Cruzar com `customer_email` e `customer_phone` das transações Hubla
-
-### Arquivos a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/components/relatorios/CloserRevenueSummaryTable.tsx` | Tabela resumo de faturamento por closer |
-| `src/components/closer/CloserRevenueTab.tsx` | Aba de faturamento no detalhe do closer |
-
-### Arquivos a Modificar
-
-| Arquivo | Mudança |
+| Arquivo | Mudanca |
 |---------|---------|
-| `src/components/relatorios/SalesReportPanel.tsx` | Importar e renderizar CloserRevenueSummaryTable entre KPIs e tabela |
-| `src/pages/crm/CloserMeetingsDetailPage.tsx` | Adicionar aba "Faturamento" com CloserRevenueTab |
+| `src/components/relatorios/SalesReportPanel.tsx` | Substituir `useTransactionsByBU` por `useAllHublaTransactions` |
 
-### Fluxo de Dados
+### Mudancas Especificas
 
-O CloserRevenueSummaryTable recebe como props:
-- `transactions`: transações filtradas do período
-- `closers`: lista de closers R1
-- `attendees`: attendees com contract_paid para matching
-- `globalFirstIds`: Set de IDs para deduplicação do bruto
+1. **Trocar import**: Remover `useTransactionsByBU`, importar `useAllHublaTransactions` e `TransactionFilters` de `@/hooks/useAllHublaTransactions`
 
-O CloserRevenueTab internamente:
-- Usa `useTransactionsByBU('incorporador', filters)` para buscar transações
-- Busca attendees filtrando por `closer_id` do closer em questão
-- Filtra transações por email/phone match (mesma lógica do SalesReportPanel)
-- Exibe KPIs + tabela paginada
+2. **Ajustar construcao dos filtros**: Passar `selectedProducts` nos filtros (compativel com a interface `TransactionFilters` do hook)
+
+3. **Trocar chamada do hook**:
+```text
+// Antes:
+const { data: transactions = [], isLoading } = useTransactionsByBU(bu, filters);
+
+// Depois:
+const { data: transactions = [], isLoading } = useAllHublaTransactions(filters);
+```
+
+### Resultado Esperado
+
+Os numeros de transacoes, faturamento bruto e receita liquida no Relatorio de Vendas serao identicos aos da pagina de Vendas para o mesmo periodo, pois ambos usarao a mesma RPC e o mesmo tratamento de timezone.
