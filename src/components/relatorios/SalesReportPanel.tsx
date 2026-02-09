@@ -11,7 +11,7 @@ import { FileSpreadsheet, DollarSign, ShoppingCart, TrendingUp, Loader2, Search,
 import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
-import { useTransactionsByBU } from '@/hooks/useTransactionsByBU';
+import { useAllHublaTransactions, TransactionFilters } from '@/hooks/useAllHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
 import * as XLSX from 'xlsx';
 import { BusinessUnit } from '@/hooks/useMyBU';
@@ -58,12 +58,14 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   
   const PAGE_SIZE_OPTIONS = [25, 50, 100];
   
-  const filters = useMemo(() => ({
+  const filters: TransactionFilters = useMemo(() => ({
     startDate: dateRange?.from,
     endDate: dateRange?.to,
+    search: undefined,
+    selectedProducts: undefined,
   }), [dateRange]);
   
-  const { data: transactions = [], isLoading } = useTransactionsByBU(bu, filters);
+  const { data: transactions = [], isLoading } = useAllHublaTransactions(filters);
   
   // Closers R1
   const { data: closers = [] } = useGestorClosers('r1');
