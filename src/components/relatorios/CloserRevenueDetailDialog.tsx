@@ -154,7 +154,7 @@ export function CloserRevenueDetailDialog({
       const name = tx.product_name || 'Parceria';
       const existing = parceriaMap.get(name) || { count: 0, gross: 0, net: 0 };
       existing.count++;
-      existing.gross += getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
+      existing.gross += getDeduplicatedGross(tx as any, true);
       existing.net += tx.net_value || 0;
       parceriaMap.set(name, existing);
     }
