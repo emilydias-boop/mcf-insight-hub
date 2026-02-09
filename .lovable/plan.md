@@ -1,77 +1,36 @@
 
-# Salvar telefone em deals sem contato vinculado
 
-## Problema
+# Corrigir erro ao salvar telefone — campo `clint_id` obrigatorio
 
-Quando um deal nao tem `contact_id` (contato nao existe na tabela `crm_contacts`), o sistema bloqueia a edicao de telefone com a mensagem "Nenhum contato vinculado a este negocio". O usuario precisa conseguir salvar o telefone independentemente.
+## Causa raiz
+
+A tabela `crm_contacts` tem uma coluna `clint_id` (TEXT, NOT NULL) sem valor padrao. Quando o sistema tenta criar um contato com apenas `name` e `phone`, o banco rejeita com:
+
+> null value in column "clint_id" of relation "crm_contacts" violates not-null constraint
 
 ## Solucao
 
-Quando nao houver contato vinculado ao deal, o sistema deve **criar automaticamente um contato** com o nome do deal e o telefone informado, e depois vincular esse contato ao deal.
+Gerar um `clint_id` unico ao criar o contato automaticamente no `SdrSummaryBlock.tsx`.
 
-## Fluxo
-
-1. Usuario clica no icone de editar telefone
-2. Digita o numero e clica em salvar
-3. **Se existe contato**: atualiza o telefone no contato existente (comportamento atual)
-4. **Se NAO existe contato**: 
-   - Cria um novo registro em `crm_contacts` com `name = deal.name` e `phone = telefone digitado`
-   - Atualiza o deal com `contact_id` apontando para o novo contato
-   - Invalida os caches para o drawer refletir a mudanca
-
-## Alteracoes tecnicas
+## Alteracao
 
 ### Arquivo: `src/components/crm/SdrSummaryBlock.tsx`
 
-Importar `useCreateCRMContact` e o `supabase` client. Alterar `handleSavePhone` para:
+Na parte do `handleSavePhone` que cria o contato (bloco `else if (deal?.id)`), incluir o campo `clint_id`:
 
 ```text
-const handleSavePhone = async () => {
-  if (!phoneValue.trim()) {
-    toast.error('Digite um número de telefone');
-    setEditingPhone(false);
-    return;
-  }
-
-  try {
-    if (contact?.id) {
-      // Contato existe: atualizar telefone
-      await updateContact.mutateAsync({
-        id: contact.id,
-        phone: phoneValue
-      });
-      toast.success('Telefone atualizado');
-    } else if (deal?.id) {
-      // Contato NAO existe: criar contato e vincular ao deal
-      const newContact = await createContact.mutateAsync({
-        name: deal.name || 'Contato sem nome',
-        phone: phoneValue
-      });
-      // Vincular contato ao deal
-      await supabase
-        .from('crm_deals')
-        .update({ contact_id: newContact.id })
-        .eq('id', deal.id);
-      // Invalidar cache do deal para refletir vinculo
-      queryClient.invalidateQueries({ queryKey: ['crm-deal'] });
-      toast.success('Contato criado e telefone salvo');
-    }
-    setEditingPhone(false);
-  } catch (error) {
-    toast.error('Erro ao salvar telefone');
-  }
-};
+const newContact = await createContact.mutateAsync({
+  name: deal.name || 'Contato sem nome',
+  phone: phoneValue,
+  clint_id: `manual-${Date.now()}`
+});
 ```
 
-### Imports adicionais em SdrSummaryBlock.tsx
+Isso gera um identificador unico como `manual-1707500000000` que satisfaz a constraint NOT NULL.
 
-- Adicionar `useCreateCRMContact` do hook `useCRMData`
-- Adicionar `useQueryClient` do `@tanstack/react-query`
-- Adicionar `supabase` de `@/integrations/supabase/client`
+## Resultado
 
-### Resultado
-
-- Deals com contato: telefone e atualizado normalmente
-- Deals sem contato: contato e criado automaticamente com o nome do deal e vinculado
-- O drawer atualiza imediatamente apos salvar
-- Nao aparece mais o erro "Nenhum contato vinculado"
+- O contato sera criado com sucesso no banco
+- O `contact_id` sera vinculado ao deal
+- O telefone aparecera no drawer imediatamente
+- Nenhuma alteracao de schema necessaria
