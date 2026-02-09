@@ -107,7 +107,7 @@ export function CloserRevenueDetailDialog({
       CONTRACT_CATEGORIES.includes(t.product_category || '')
     );
     const parcerias = transactions.filter(
-      (t) => t.product_category === 'parceria' || t.product_category === 'a010' || t.product_category === 'renovacao'
+      (t) => t.product_category === 'parceria' || t.product_category === 'renovacao'
     );
     const refunds = transactions.filter(
       (t) => t.sale_status === 'refunded' || (t.net_value !== null && t.net_value < 0)
