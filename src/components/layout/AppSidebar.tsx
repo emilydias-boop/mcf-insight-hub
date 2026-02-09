@@ -353,7 +353,7 @@ const getCRMBasePath = (userBUs: BusinessUnit[]): string => {
 };
 
 export function AppSidebar() {
-  const { user, role, signOut, loading: authLoading } = useAuth();
+  const { user, role, allRoles, signOut, loading: authLoading } = useAuth();
   const { canAccessResource, isAdmin } = useMyPermissions();
   const { data: myProducts = [] } = useMyProducts();
   const { data: myBUs = [] } = useMyBU();
@@ -412,7 +412,7 @@ export function AppSidebar() {
   // Filtragem de menu items
   const filteredMenuItems = allMenuItems.filter((item) => {
     // Se tem requiredRoles e o usuário não tem a role
-    if (item.requiredRoles && role && !item.requiredRoles.includes(role)) {
+    if (item.requiredRoles && role && !item.requiredRoles.some(r => (allRoles as string[]).includes(r))) {
       // Se o item tem requiredProducts, verifica se o usuário tem algum dos produtos
       if (item.requiredProducts && ["sdr", "closer"].includes(role)) {
         return item.requiredProducts.some((p) => myProducts.includes(p));
@@ -445,7 +445,7 @@ export function AppSidebar() {
     return items.filter((subItem) => {
       if (!subItem.requiredRoles) return true;
       if (isAdmin) return true;
-      return role && subItem.requiredRoles.includes(role);
+      return role && subItem.requiredRoles.some(r => (allRoles as string[]).includes(r));
     });
   };
 
@@ -454,7 +454,7 @@ export function AppSidebar() {
     return items.filter((subItem) => {
       if (!subItem.requiredRoles) return true;
       if (isAdmin) return true;
-      return role && subItem.requiredRoles.includes(role);
+      return role && subItem.requiredRoles.some(r => (allRoles as string[]).includes(r));
     });
   };
 
@@ -462,7 +462,7 @@ export function AppSidebar() {
   const filteredPersonalItems = personalMenuItems.filter((item) => {
     if (!item.requiredRoles) return true;
     if (isAdmin) return true;
-    return role && item.requiredRoles.includes(role);
+    return role && item.requiredRoles.some(r => (allRoles as string[]).includes(r));
   });
 
   // Verifica se uma rota está ativa (suporta 3 níveis)
