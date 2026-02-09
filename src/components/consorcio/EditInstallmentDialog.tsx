@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarIcon, Pencil } from 'lucide-react';
+import { CalendarIcon, Pencil, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -48,6 +49,7 @@ export interface UpdateInstallmentData {
   data_pagamento?: string | null;
   status: StatusParcela;
   observacao?: string;
+  recalcularDemais?: boolean;
 }
 
 function formatCurrency(value: number): string {
@@ -76,6 +78,9 @@ export function EditInstallmentDialog({
   const [dataPagamento, setDataPagamento] = useState<Date | undefined>();
   const [status, setStatus] = useState<StatusParcela>('pendente');
   const [observacao, setObservacao] = useState('');
+  const [recalcularDemais, setRecalcularDemais] = useState(false);
+
+  const isPrimeiraParcela = installment?.numero_parcela === 1;
 
   // Reset form when installment changes
   useEffect(() => {
@@ -91,6 +96,7 @@ export function EditInstallmentDialog({
       );
       setStatus(installment.status);
       setObservacao(installment.observacao || '');
+      setRecalcularDemais(false);
     }
   }, [installment]);
 
@@ -106,6 +112,7 @@ export function EditInstallmentDialog({
       data_pagamento: dataPagamento ? formatDateForDB(dataPagamento) : null,
       status,
       observacao: observacao.trim() || undefined,
+      recalcularDemais: isPrimeiraParcela ? recalcularDemais : undefined,
     });
   };
 
@@ -249,7 +256,27 @@ export function EditInstallmentDialog({
             </div>
           </div>
 
-          {/* Row 4: Observação */}
+          {/* Row 4: Recalcular demais (only for parcela 1) */}
+          {isPrimeiraParcela && (
+            <div className="flex items-start gap-3 p-3 border rounded-lg bg-muted/30">
+              <Checkbox
+                id="recalcularDemais"
+                checked={recalcularDemais}
+                onCheckedChange={(checked) => setRecalcularDemais(checked === true)}
+              />
+              <div className="space-y-1">
+                <label htmlFor="recalcularDemais" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  Recalcular datas das demais parcelas
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Ao ativar, todas as parcelas seguintes terão suas datas recalculadas a partir desta data de vencimento.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Row 5: Observação */}
           <div className="space-y-2">
             <Label htmlFor="observacao">Observação</Label>
             <Textarea

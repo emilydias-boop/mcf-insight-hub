@@ -39,6 +39,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useConsorcioCardDetails, usePayInstallment, useDeleteConsorcioCard, useUpdateCardStatus, useUpdateInstallment } from "@/hooks/useConsorcio";
 import { useRecalculateCommissions } from "@/hooks/useRecalculateCommissions";
+import { recalcularDatasAPartirDe } from "@/lib/businessDays";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { STATUS_OPTIONS, ESTADO_CIVIL_OPTIONS, ConsorcioInstallment, ConsorcioStatus, MotivoContemplacao } from "@/types/consorcio";
 import { calcularResumoComissoes } from "@/lib/commissionCalculator";
 import { verificarRiscoCancelamento, deveSerCancelado } from "@/lib/inadimplenciaUtils";
@@ -176,7 +179,34 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   };
 
   const handleSaveInstallment = async (data: UpdateInstallmentData) => {
+    // Save the edited installment first
     await updateInstallment.mutateAsync(data);
+    
+    // If recalculating subsequent installments from parcela 1
+    if (data.recalcularDemais && card?.installments) {
+      const [year, month, day] = data.data_vencimento.split('-').map(Number);
+      const novaDataBase = new Date(year, month - 1, day);
+      const diaVencimento = novaDataBase.getDate();
+      const totalParcelas = card.installments.length;
+      
+      // Recalculate dates for parcelas 2+
+      const novasDatas = recalcularDatasAPartirDe(novaDataBase, diaVencimento, totalParcelas, 2);
+      
+      // Batch update all subsequent installments
+      for (const { numeroParcela, dataVencimento } of novasDatas) {
+        const inst = card.installments.find(i => i.numero_parcela === numeroParcela);
+        if (inst) {
+          await supabase
+            .from('consortium_installments')
+            .update({ data_vencimento: dataVencimento.toISOString().split('T')[0] })
+            .eq('id', inst.id);
+        }
+      }
+      
+      // Refresh data
+      toast.success(`Datas de ${novasDatas.length} parcelas recalculadas!`);
+    }
+    
     setEditInstallmentOpen(false);
     setSelectedInstallment(null);
   };
