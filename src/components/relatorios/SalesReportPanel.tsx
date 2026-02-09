@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { CloserRevenueSummaryTable } from './CloserRevenueSummaryTable';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
@@ -425,6 +426,15 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
           </CardContent>
         </Card>
       </div>
+      
+      {/* Revenue by Closer */}
+      <CloserRevenueSummaryTable
+        transactions={filteredTransactions as any}
+        closers={closers}
+        attendees={attendees as any}
+        globalFirstIds={globalFirstIds}
+        isLoading={isLoading}
+      />
       
       {/* Data Table */}
       <Card>
