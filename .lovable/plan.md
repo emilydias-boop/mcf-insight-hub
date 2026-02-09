@@ -1,36 +1,37 @@
 
 
-# Corrigir Bruto de Parcerias no KPI Card
+# Agrupar a010 e renovacao nas categorias corretas do Closer
 
-## Problema
+## Contexto de Negocio
 
-O fix anterior corrigiu apenas a tabela de detalhamento de parcerias (parceriaMap), mas o KPI card "Parcerias" ainda usa `calcGross()` que aplica deduplicacao global via `globalFirstIds.has(tx.id)`. Por isso o card mostra R$ 39.000 em vez do valor real.
+A jornada de venda do closer segue o fluxo: **a010 (curso) -> contrato -> parceria**. E renovacao e a renovacao da parceria. Portanto:
 
-## Solucao
+- **Parcerias** deve incluir: `parceria` + `a010` + `renovacao`
+- **Contratos** permanece como esta: `incorporador`, `contrato`, `contrato-anticrise`
 
-Calcular o bruto de parcerias separadamente, sem deduplicacao global (passando `true` como `isFirstOfGroup`), igual ao que ja foi feito na tabela de breakdown.
-
-## Secao Tecnica
+## Mudancas
 
 ### Arquivo: `src/components/relatorios/CloserRevenueDetailDialog.tsx`
 
-### Mudanca
+1. **Filtro de parcerias** (linha 109): Expandir para incluir `a010` e `renovacao`:
+   ```text
+   const parcerias = transactions.filter(
+     (t) => t.product_category === 'parceria' 
+         || t.product_category === 'a010' 
+         || t.product_category === 'renovacao'
+   );
+   ```
 
-Linha 120 — trocar o calculo de `parceriasGross` de:
+2. **Normalizar categorias no Breakdown por Categoria** (linhas 141-142): Mapear `a010` e `renovacao` para `parceria` no catMap para que nao aparecam como linhas separadas:
+   ```text
+   let cat = tx.product_category || 'outros';
+   if (cat === 'a010' || cat === 'renovacao') cat = 'parceria';
+   ```
 
-```text
-const parceriasGross = calcGross(parcerias);
-```
+## Resultado
 
-Para:
-
-```text
-const parceriasGross = parcerias.reduce(
-  (s, t) => s + getDeduplicatedGross(t as any, true), 0
-);
-```
-
-Isso faz com que o KPI card "Parcerias" mostre o bruto individual de cada venda (sem zerar duplicatas), consistente com a tabela de detalhamento abaixo dele.
-
-O `calcGross` original (com deduplicacao) continua sendo usado para contratos e total, mantendo a consistencia com o dashboard.
+- O KPI "Parcerias" incluira transacoes de a010 e renovacao no bruto e liquido
+- O breakdown por categoria mostrara apenas "parceria" (agrupando a010 + renovacao + parceria)
+- A tabela "Detalhamento de Parcerias" listara os produtos individuais (A010, Parceria, Renovacao) com seus valores separados
+- O KPI "Contratos" permanece inalterado
 
