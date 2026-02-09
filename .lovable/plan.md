@@ -1,68 +1,64 @@
 
-# Corrigir Visibilidade de "Minhas Reunioes" e "Metas da Equipe"
 
-## Problemas Identificados
+# Tornar "Responsavel pelo agendamento R2" dinamico via flag no perfil
 
-### Problema 1: Jessica Martins nao ve "Minhas Reunioes"
-Jessica tem duas roles: `sdr` e `closer`. Como `closer` tem prioridade maior (4 vs 8), sua role primaria e `closer`. O menu lateral verifica apenas a role primaria (`role`) ao filtrar itens, e "Minhas Reunioes" exige `requiredRoles: ["sdr"]`. Como `closer` nao esta na lista, o item fica invisivel.
+## Problema
 
-### Problema 2: SDRs so veem seus proprios numeros em "Metas da Equipe"
-A tabela `sdr` possui politicas RLS que restringem SDRs e Closers a verem apenas seu proprio registro. O hook `useSdrsFromSquad` consulta essa tabela para montar a lista de emails validos, e como so retorna 1 email (o proprio), o `useTeamMeetingsData` filtra todas as metricas dos outros SDRs. O resultado: o TeamGoalsPanel mostra apenas os numeros individuais em vez dos totais da equipe.
+A lista de responsaveis por agendar R2 e hardcoded em `R2_BOOKERS_LIST` com 6 nomes fixos. Quando alguem novo precisa agendar R2 (ou sai da equipe), e necessario alterar o codigo. O usuario quer que essa configuracao esteja acessivel na area de usuarios.
 
 ## Solucao
 
-### Correcao 1: Sidebar - Verificar todas as roles do usuario
+Adicionar uma coluna `can_book_r2` (boolean) na tabela `profiles` e usar essa flag para montar a lista dinamicamente. Na tela de gerenciamento de usuarios, adicionar um toggle para ativar/desativar essa permissao.
 
-**Arquivo**: `src/components/layout/AppSidebar.tsx`
+## Secao Tecnica
 
-Alterar a filtragem de menu items (linha ~415) para usar `allRoles` em vez de apenas `role`, verificando se **qualquer** role do usuario esta na lista permitida.
+### 1. Migracao SQL
 
-De:
+Adicionar coluna `can_book_r2` na tabela `profiles` com default `false`, e setar `true` para os 6 usuarios atuais (Yanca, Julio, Cristiane, Thayna, Jessica Bellini, Leticia Rodrigues) baseando-se nos IDs ja presentes no `R2_BOOKERS_LIST`.
+
 ```text
-if (item.requiredRoles && role && !item.requiredRoles.includes(role)) {
-```
+ALTER TABLE public.profiles ADD COLUMN can_book_r2 boolean DEFAULT false;
 
-Para:
-```text
-if (item.requiredRoles && role && !item.requiredRoles.some(r => allRoles.includes(r))) {
-```
-
-Tambem aplicar a mesma logica nas funcoes `getFilteredSubItems` e `getFilteredSubSubItems`.
-
-### Correcao 2: Rota "Minhas Reunioes" - Permitir closers com role sdr
-
-**Arquivo**: `src/App.tsx`
-
-Mudar a rota de `ResourceGuard` para `RoleGuard` com roles `['sdr', 'closer']` para que Jessica (que tem ambas as roles) consiga acessar.
-
-### Correcao 3: RLS da tabela `sdr` - Permitir leitura para SDRs e Closers do incorporador
-
-**Migracao SQL**: Adicionar uma politica SELECT que permita usuarios com role `sdr`, `closer`, ou `manager` verem todos os registros da tabela `sdr`. Isso garante que `useSdrsFromSquad` retorne todos os SDRs ativos, permitindo que o TeamGoalsPanel e KPIs mostrem numeros da equipe inteira.
-
-Nova politica:
-```text
-CREATE POLICY "SDRs e Closers podem ver lista de SDRs"
-ON public.sdr FOR SELECT
-USING (
-  has_role(auth.uid(), 'sdr') OR 
-  has_role(auth.uid(), 'closer') OR 
-  has_role(auth.uid(), 'manager')
+UPDATE public.profiles SET can_book_r2 = true
+WHERE id IN (
+  '04bb4045-701d-443c-b2c9-aee74e7f58d9',  -- Yanca
+  'dd76c153-a4a5-432e-ab4c-0b48f6141659',  -- Julio
+  'c8fd2b83-2aee-41a4-9154-e812f492bc5f',  -- Cristiane
+  '6bb81a27-fd8f-4af8-bce0-377f3576124f',  -- Thayna
+  '6cb06155-26dd-4be9-87ce-53e60a59a4e7',  -- Leticia Rodrigues
+  'a6802c50-1b85-4646-b20e-f40ae89c3157'   -- Jessica Bellini
 );
 ```
 
-### Correcao 4: Manter restricao de navegacao individual
+### 2. Hook para buscar bookers R2
 
-O `disableNavigation={isRestrictedRole}` no `SdrSummaryTable` ja impede que SDRs/Closers cliquem em linhas individuais para ver detalhes de outros SDRs. Isso sera mantido — eles verao os numeros agregados da equipe mas nao poderao navegar para paginas de detalhe individual.
+**Novo arquivo**: `src/hooks/useR2Bookers.ts`
 
-## Secao Tecnica - Resumo de Arquivos
+Query simples que busca profiles com `can_book_r2 = true`:
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/components/layout/AppSidebar.tsx` | Usar `allRoles` na filtragem de menu items |
-| `src/App.tsx` | Rota minhas-reunioes: RoleGuard com `['sdr', 'closer']` |
-| Migracao SQL (tabela `sdr`) | Nova politica RLS permitindo sdr/closer/manager lerem todos |
+```text
+SELECT id, full_name FROM profiles
+WHERE can_book_r2 = true
+ORDER BY full_name
+```
 
-## Resultado Esperado
-- Jessica vera "Minhas Reunioes" no menu e conseguira acessar a pagina
-- Todos os SDRs e Closers verao os numeros completos da equipe no TeamGoalsPanel
-- Nenhum SDR/Closer conseguira clicar em outro SDR para ver detalhes individuais (mantido)
+### 3. R2QuickScheduleModal.tsx
+
+- Remover import de `R2_BOOKERS_LIST`
+- Usar o novo hook `useR2Bookers` para popular o dropdown
+- Manter a mesma UX (Select com nomes)
+
+### 4. UserDetailsDrawer.tsx — Aba Configuracoes
+
+Adicionar um toggle/switch "Pode agendar R2" na aba de configuracoes do usuario, que atualiza `profiles.can_book_r2`. Visivel apenas para admins/managers.
+
+### 5. Tipos Supabase
+
+Atualizar `src/integrations/supabase/types.ts` para incluir `can_book_r2` na interface de `profiles`.
+
+## Resultado
+
+- Admins podem ativar/desativar "Pode agendar R2" diretamente no painel de usuarios
+- O dropdown de agendamento R2 reflete automaticamente quem tem a flag ativa
+- Nenhuma lista hardcoded precisa ser mantida no codigo
+
