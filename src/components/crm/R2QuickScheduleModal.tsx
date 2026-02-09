@@ -27,7 +27,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { R2CloserWithAvailability, useCreateR2Meeting } from '@/hooks/useR2AgendaData';
 import { useSearchDealsForSchedule, useSearchDealsByPhone, useSearchDealsByEmail } from '@/hooks/useAgendaData';
 import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2CloserAvailableSlots';
-import { R2_BOOKERS_LIST } from '@/constants/team';
+import { useR2Bookers } from '@/hooks/useR2Bookers';
 import { R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
 import { cn } from '@/lib/utils';
 
@@ -64,7 +64,7 @@ interface DealOption {
   } | null;
 }
 
-export function R2QuickScheduleModal({ 
+export function R2QuickScheduleModal({
   open, 
   onOpenChange, 
   closers,
@@ -103,6 +103,7 @@ export function R2QuickScheduleModal({
   const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery);
   const { data: emailSearchResults = [], isLoading: searchingEmail } = useSearchDealsByEmail(emailQuery);
   const createMeeting = useCreateR2Meeting();
+  const { data: r2Bookers = [] } = useR2Bookers();
 
   // Fetch available slots for selected closer + date
   const { data: closerSlots, isLoading: loadingSlots } = useR2CloserAvailableSlots(
@@ -397,7 +398,7 @@ export function R2QuickScheduleModal({
                   <SelectValue placeholder="Selecione responsável" />
                 </SelectTrigger>
                 <SelectContent>
-                  {R2_BOOKERS_LIST.map(booker => (
+                  {r2Bookers.map(booker => (
                     <SelectItem key={booker.id} value={booker.id}>
                       {booker.nome}
                     </SelectItem>

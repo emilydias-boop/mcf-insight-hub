@@ -69,6 +69,7 @@ export const useUserDetails = (userId: string | null) => {
         blocked_until: (profile as any).blocked_until || null,
         last_login_at: (profile as any).last_login_at || null,
         squad: (profile as any).squad || null,
+        can_book_r2: (profile as any).can_book_r2 || false,
         employment: employment || null,
       } as UserDetails;
     },

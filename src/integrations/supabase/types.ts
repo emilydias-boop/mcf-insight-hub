@@ -6245,6 +6245,7 @@ export type Database = {
           access_status: string | null
           avatar_url: string | null
           blocked_until: string | null
+          can_book_r2: boolean | null
           created_at: string | null
           email: string | null
           full_name: string | null
@@ -6259,6 +6260,7 @@ export type Database = {
           access_status?: string | null
           avatar_url?: string | null
           blocked_until?: string | null
+          can_book_r2?: boolean | null
           created_at?: string | null
           email?: string | null
           full_name?: string | null
@@ -6273,6 +6275,7 @@ export type Database = {
           access_status?: string | null
           avatar_url?: string | null
           blocked_until?: string | null
+          can_book_r2?: boolean | null
           created_at?: string | null
           email?: string | null
           full_name?: string | null
