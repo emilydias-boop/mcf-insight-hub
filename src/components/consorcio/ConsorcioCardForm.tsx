@@ -117,8 +117,8 @@ const formSchema = z.object({
   tipo_contrato: z.enum(['normal', 'intercalado', 'intercalado_impar']).optional(),
   parcelas_pagas_empresa: z.number().min(0).optional(),
   data_contratacao: z.date(),
-  data_primeiro_pagamento: z.date().optional().nullable(),
   dia_vencimento: z.number().min(1).max(31),
+  inicio_segunda_parcela: z.enum(['proximo_mes', 'pular_mes', 'automatico']).default('automatico'),
   origem: z.string().min(1, 'Origem é obrigatória'),
   origem_detalhe: z.string().optional(),
   vendedor_id: z.string().optional(),
@@ -720,7 +720,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       parcelas_pagas_empresa: calculatedParcelas,
       data_contratacao: formatDateForDB(data.data_contratacao),
       dia_vencimento: data.dia_vencimento,
-      data_primeiro_pagamento: data.data_primeiro_pagamento ? formatDateForDB(data.data_primeiro_pagamento) : undefined,
+      inicio_segunda_parcela: data.inicio_segunda_parcela || 'automatico',
       origem: data.origem,
       origem_detalhe: data.origem_detalhe,
       vendedor_id: data.vendedor_id,
@@ -1075,43 +1075,47 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                   />
                   <FormField
                     control={form.control}
-                    name="data_primeiro_pagamento"
+                    name="dia_vencimento"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Data do Primeiro Pagamento</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                className={cn(
-                                  'w-full justify-start text-left font-normal',
-                                  !field.value && 'text-muted-foreground'
-                                )}
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value ? format(field.value, 'dd/MM/yyyy') : 'Selecione a data'}
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value || undefined}
-                              onSelect={(date) => {
-                                field.onChange(date);
-                                if (date) {
-                                  form.setValue('dia_vencimento', date.getDate());
-                                }
-                              }}
-                              locale={ptBR}
-                              initialFocus
-                              className="pointer-events-auto"
-                            />
-                          </PopoverContent>
-                        </Popover>
+                        <FormLabel>Dia de Vencimento</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={31}
+                            {...field}
+                            onChange={e => field.onChange(Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="inicio_segunda_parcela"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Início da 2ª Parcela</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || 'automatico'}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="automatico">Automático (dia 16)</SelectItem>
+                            <SelectItem value="proximo_mes">Próximo mês</SelectItem>
+                            <SelectItem value="pular_mes">Pular 1 mês</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <p className="text-xs text-muted-foreground">
-                          O dia de vencimento será extraído automaticamente (dia {form.watch('dia_vencimento')})
+                          {field.value === 'automatico' 
+                            ? 'Se contratação após dia 16, pula 1 mês' 
+                            : field.value === 'pular_mes' 
+                              ? '2ª parcela vence 2 meses após contratação' 
+                              : '2ª parcela vence no mês seguinte'}
                         </p>
                         <FormMessage />
                       </FormItem>

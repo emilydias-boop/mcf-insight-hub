@@ -11,7 +11,7 @@ import {
   TipoProduto
 } from '@/types/consorcio';
 import { calcularComissao, calcularComissaoTotal } from '@/lib/commissionCalculator';
-import { calcularDataVencimento, gerarDatasVencimentoComPrimeiroPagamento } from '@/lib/businessDays';
+import { calcularDataVencimento, calcularProximoDiaUtil } from '@/lib/businessDays';
 import { toast } from 'sonner';
 
 interface ConsorcioFilters {
@@ -218,24 +218,35 @@ export function useCreateConsorcioCard() {
       const [year, month, day] = input.data_contratacao.split('-').map(Number);
       const dataContratacao = new Date(year, month - 1, day);
       
-      // If data_primeiro_pagamento is provided, use it as base for installment dates
-      let dataPrimeiroPagamento: Date | null = null;
-      if (input.data_primeiro_pagamento) {
-        const [y, m, d] = input.data_primeiro_pagamento.split('-').map(Number);
-        dataPrimeiroPagamento = new Date(y, m - 1, d);
+      // Determine offset for 2nd installment based on inicio_segunda_parcela
+      const inicioSegunda = input.inicio_segunda_parcela || 'automatico';
+      let offsetSegundaParcela: number;
+      if (inicioSegunda === 'proximo_mes') {
+        offsetSegundaParcela = 1;
+      } else if (inicioSegunda === 'pular_mes') {
+        offsetSegundaParcela = 2;
+      } else {
+        // automatico: if contract day > 16, skip 1 month
+        offsetSegundaParcela = dataContratacao.getDate() > 16 ? 2 : 1;
       }
-      
-      // Generate dates
-      const datasVencimento = dataPrimeiroPagamento
-        ? gerarDatasVencimentoComPrimeiroPagamento(dataPrimeiroPagamento, input.dia_vencimento, input.prazo_meses)
-        : null;
       
       const installments: Omit<ConsorcioInstallment, 'id' | 'created_at' | 'updated_at'>[] = [];
 
       for (let i = 1; i <= input.prazo_meses; i++) {
-        const dataVencimento = datasVencimento 
-          ? datasVencimento[i - 1]
-          : calcularDataVencimento(dataContratacao, input.dia_vencimento, i);
+        let dataVencimento: Date;
+        if (i === 1) {
+          // Parcela 1 = data de contratação (já paga no ato)
+          dataVencimento = dataContratacao;
+        } else {
+          // Parcela N: base month = contratação month + offset + (i-2)
+          const monthOffset = offsetSegundaParcela + (i - 2);
+          const mesAlvo = dataContratacao.getMonth() + monthOffset;
+          const anoAlvo = dataContratacao.getFullYear() + Math.floor(mesAlvo / 12);
+          const mesNormalizado = ((mesAlvo % 12) + 12) % 12;
+          const ultimoDia = new Date(anoAlvo, mesNormalizado + 1, 0).getDate();
+          const diaAjustado = Math.min(input.dia_vencimento, ultimoDia);
+          dataVencimento = calcularProximoDiaUtil(new Date(anoAlvo, mesNormalizado, diaAjustado));
+        }
         const valorComissao = calcularComissao(input.valor_credito, input.tipo_produto, i);
         
         // Determine if this installment is paid by client or company

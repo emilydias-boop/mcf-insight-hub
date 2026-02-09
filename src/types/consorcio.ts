@@ -10,6 +10,7 @@ export type TipoParcela = 'cliente' | 'empresa';
 export type StatusParcela = 'pendente' | 'pago' | 'atrasado';
 export type CategoriaConsorcio = 'inside' | 'life';
 export type MotivoContemplacao = 'sorteio' | 'lance' | 'lance_fixo';
+export type InicioSegundaParcela = 'proximo_mes' | 'pular_mes' | 'automatico';
 
 export interface ConsorcioCard {
   id: string;
@@ -163,7 +164,7 @@ export interface CreateConsorcioCardInput {
   parcelas_pagas_empresa: number;
   data_contratacao: string;
   dia_vencimento: number;
-  data_primeiro_pagamento?: string;
+  inicio_segunda_parcela?: InicioSegundaParcela;
   origem: OrigemConsorcio;
   origem_detalhe?: string;
   vendedor_id?: string;
