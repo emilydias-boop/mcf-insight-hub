@@ -1040,6 +1040,21 @@ async function handleDealStageChanged(supabase: any, data: any) {
     
     const dealName = data.deal?.name || data.contact?.name || contactData.name || 'Deal via webhook';
     const dealValue = data.deal?.value || data.deal_value || 0;
+
+    // Resolver owner_profile_id a partir do email do owner
+    const ownerEmail = data.deal_user || data.deal?.user || null;
+    let ownerProfileId: string | null = null;
+    if (ownerEmail) {
+      const { data: ownerProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', ownerEmail)
+        .maybeSingle();
+      if (ownerProfile) {
+        ownerProfileId = ownerProfile.id;
+      }
+      console.log('[DEAL.STAGE_CHANGED] Owner lookup:', ownerEmail, '->', ownerProfileId);
+    }
     
     const { data: newDeal, error: createError } = await supabase
       .from('crm_deals')
@@ -1049,7 +1064,8 @@ async function handleDealStageChanged(supabase: any, data: any) {
         contact_id: contactId,
         stage_id: newStage.id,
         origin_id: originId,
-        owner_id: data.deal_user || data.deal?.user || null, // Salvar email como owner_id
+        owner_id: ownerEmail,
+        owner_profile_id: ownerProfileId,
         value: dealValue,
         custom_fields: {
           deal_user: data.deal_user,
