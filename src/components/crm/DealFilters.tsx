@@ -192,6 +192,7 @@ export const DealFilters = ({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Todos os responsáveis</SelectItem>
+          <SelectItem value="__no_owner__">Sem dono</SelectItem>
           
           {/* Se ownerOptions foi fornecido, usar ele */}
           {ownerOptions ? (

@@ -368,7 +368,9 @@ const Negocios = () => {
       
       // Filtro de responsável: suporta UUID e email legado (prefixo "email:")
       if (filters.owner) {
-        if (filters.owner.startsWith('email:')) {
+        if (filters.owner === '__no_owner__') {
+          if (deal.owner_id || deal.owner_profile_id) return false;
+        } else if (filters.owner.startsWith('email:')) {
           const emailFilter = filters.owner.replace('email:', '');
           if (deal.owner_id !== emailFilter) return false;
         } else {
