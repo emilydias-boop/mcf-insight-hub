@@ -59,7 +59,7 @@ export const useUniqueDealTags = (options: UseUniqueDealTagsOptions = {}) => {
       );
 
       // Limitar a 500 tags para evitar sobrecarga visual
-      return uniqueTags.slice(0, 500);
+      return uniqueTags.slice(0, 1000);
     },
     enabled,
     staleTime: 5 * 60 * 1000,
