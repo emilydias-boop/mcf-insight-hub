@@ -149,12 +149,13 @@ export function CloserRevenueDetailDialog({
       .sort((a, b) => b.gross - a.gross);
 
     // Parceria breakdown (by product_name)
-    const parceriaMap = new Map<string, { count: number; gross: number }>();
+    const parceriaMap = new Map<string, { count: number; gross: number; net: number }>();
     for (const tx of parcerias) {
       const name = tx.product_name || 'Parceria';
-      const existing = parceriaMap.get(name) || { count: 0, gross: 0 };
+      const existing = parceriaMap.get(name) || { count: 0, gross: 0, net: 0 };
       existing.count++;
       existing.gross += getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
+      existing.net += tx.net_value || 0;
       parceriaMap.set(name, existing);
     }
     const parceriaBreakdown = Array.from(parceriaMap.entries())
@@ -170,9 +171,12 @@ export function CloserRevenueDetailDialog({
     const grossChange = prevGross > 0 ? ((totalGross - prevGross) / prevGross) * 100 : null;
     const countChange = prevCount > 0 ? ((transactions.length - prevCount) / prevCount) * 100 : null;
 
+    const contractsNet = calcNet(contracts);
+    const parceriasNet = calcNet(parcerias);
+
     return {
-      contracts: { count: contracts.length, gross: contractsGross },
-      parcerias: { count: parcerias.length, gross: parceriasGross },
+      contracts: { count: contracts.length, gross: contractsGross, net: contractsNet },
+      parcerias: { count: parcerias.length, gross: parceriasGross, net: parceriasNet },
       refunds: { count: refunds.length, value: refundsNet },
       totalGross,
       totalNet,
@@ -207,7 +211,8 @@ export function CloserRevenueDetailDialog({
                 <span className="text-xs font-medium text-muted-foreground">Contratos</span>
               </div>
               <p className="text-lg font-bold">{metrics.contracts.count}</p>
-              <p className="text-xs text-muted-foreground font-mono">{formatCurrency(metrics.contracts.gross)}</p>
+              <p className="text-xs text-muted-foreground font-mono">Bruto {formatCurrency(metrics.contracts.gross)}</p>
+              <p className="text-xs text-success font-mono">Líq. {formatCurrency(metrics.contracts.net)}</p>
             </CardContent>
           </Card>
 
@@ -218,7 +223,8 @@ export function CloserRevenueDetailDialog({
                 <span className="text-xs font-medium text-muted-foreground">Parcerias</span>
               </div>
               <p className="text-lg font-bold">{metrics.parcerias.count}</p>
-              <p className="text-xs text-muted-foreground font-mono">{formatCurrency(metrics.parcerias.gross)}</p>
+              <p className="text-xs text-muted-foreground font-mono">Bruto {formatCurrency(metrics.parcerias.gross)}</p>
+              <p className="text-xs text-success font-mono">Líq. {formatCurrency(metrics.parcerias.net)}</p>
             </CardContent>
           </Card>
 
@@ -323,6 +329,7 @@ export function CloserRevenueDetailDialog({
                   <TableHead className="text-xs">Produto</TableHead>
                   <TableHead className="text-xs text-right">Qtd</TableHead>
                   <TableHead className="text-xs text-right">Bruto</TableHead>
+                  <TableHead className="text-xs text-right">Líquido</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -331,9 +338,18 @@ export function CloserRevenueDetailDialog({
                     <TableCell className="text-xs">{p.name}</TableCell>
                     <TableCell className="text-xs text-right">{p.count}</TableCell>
                     <TableCell className="text-xs text-right font-mono">{formatCurrency(p.gross)}</TableCell>
+                    <TableCell className="text-xs text-right font-mono text-success">{formatCurrency(p.net)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
+              <tfoot className="border-t bg-muted/50 font-medium">
+                <TableRow>
+                  <TableCell className="text-xs font-bold">Total</TableCell>
+                  <TableCell className="text-xs text-right font-bold">{metrics.parcerias.count}</TableCell>
+                  <TableCell className="text-xs text-right font-mono font-bold">{formatCurrency(metrics.parcerias.gross)}</TableCell>
+                  <TableCell className="text-xs text-right font-mono font-bold text-success">{formatCurrency(metrics.parcerias.net)}</TableCell>
+                </TableRow>
+              </tfoot>
             </Table>
           </div>
         )}
