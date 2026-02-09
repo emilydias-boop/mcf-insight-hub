@@ -1,43 +1,32 @@
 
-
-# Corrigir navegacao para detalhe de SDR no Painel Comercial
+# Excluir socios (partners) das metricas de SDR
 
 ## Problema
 
-A rota para a pagina de detalhe do SDR nao esta registrada no `App.tsx`. O componente `SdrMeetingsDetailPage` esta importado mas nunca usado em uma `<Route>`.
-
-Quando voce clica em qualquer SDR na tabela (ex: Juliana Rodrigues), o sistema tenta navegar para `/crm/reunioes-equipe/juliana.rodrigues@...`, mas essa URL nao tem rota — resultando em pagina em branco.
-
-## Dados
-
-Os dados estao todos corretos no banco. A RPC `get_sdr_metrics_from_agenda` retorna normalmente para fevereiro/2026:
-- Juliana Rodrigues: 24 agendamentos, 12 R1 realizadas, 2 contratos pagos
-- Todos os 10 SDRs ativos do squad `incorporador` aparecem
+Quando um lead e agendado com 2 socios, o sistema cria 3 registros em `meeting_slot_attendees` (1 lead principal + 2 com `is_partner = true`). As RPCs que calculam as metricas nao filtram socios, entao:
+- 1 lead + 2 socios = 3 agendamentos (deveria ser 1)
+- Se der no-show, conta 3 no-shows (deveria ser 1)
+- Na lista de reunioes, aparecem 3 linhas identicas (como visto na screenshot do Bruno)
 
 ## Solucao
 
-Adicionar a rota faltante no `App.tsx`:
+Adicionar o filtro `AND msa.is_partner = false` nas duas RPCs que alimentam o painel de SDR.
 
-### Arquivo: `src/App.tsx`
+## Alteracoes
 
-Adicionar entre a rota do `reunioes-equipe` (linha 325) e a do `closer/:closerId` (linha 326):
+### 1. RPC `get_sdr_metrics_from_agenda` (metricas/KPIs)
 
-```
-<Route path="crm/reunioes-equipe/:sdrEmail" element={
-  <RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}>
-    <SdrMeetingsDetailPage />
-  </RoleGuard>
-} />
-```
+Nova migration SQL adicionando `AND msa.is_partner = false` no WHERE da query principal (linha 59 da versao atual). Isso corrige:
+- Total Agendamentos
+- R1 Agendada
+- R1 Realizada
+- No-Shows (derivado de agendamentos - realizadas)
+- Contratos
 
-Isso registra a rota com o parametro `:sdrEmail` que o `SdrMeetingsDetailPage` ja espera receber via `useParams()`.
+### 2. RPC `get_sdr_meetings_from_agenda` (lista de reunioes)
 
-## Resultado
+Nova migration SQL adicionando `AND msa.is_partner = false` no WHERE. Isso corrige:
+- A lista que mostra 3 linhas "Bruno" identicas passara a mostrar apenas 1
 
-- Clicar em qualquer SDR na tabela abrira a pagina de detalhe com os leads e metricas individuais
-- Acesso restrito a admin, manager e coordenador (mesma regra do closer)
-- Nenhuma alteracao de componente necessaria — apenas o registro da rota
-
-### Arquivo modificado
-- `src/App.tsx` — adicionar 1 rota
-
+### Arquivos criados
+- `supabase/migrations/[timestamp]_exclude_partners_from_sdr_metrics.sql` -- migration com as 2 RPCs atualizadas
