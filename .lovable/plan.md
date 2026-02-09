@@ -1,49 +1,50 @@
 
-# Corrigir Mateus ausente nos filtros de Closer
+# Corrigir salvamento de telefone no lead
 
-## Causa Raiz
+## Problema
 
-O Mateus Macedo existe na tabela `closers` (ID: `2396c873-a59c-4e07-bcd8-82b6f330b969`) com `is_active = true` e `bu = incorporador`, porem seu campo `meeting_type` esta **NULL**.
+Ao editar o telefone no bloco "CONTATO" do drawer do deal e clicar no check verde, o numero nao salva e nao persiste. Existem dois bugs:
 
-Quando os filtros usam `useGestorClosers('r1')`, a query faz `.eq('meeting_type', 'r1')`, que exclui registros com valor NULL. Por isso o Mateus nao aparece.
+### Bug 1: Cache nao atualiza apos salvar
+O hook `useUpdateCRMContact` invalida apenas `['crm-contacts']` (lista), mas NAO invalida `['crm-contact', id]` (contato individual usado pelo drawer). Resultado: o telefone salva no banco, mas o drawer continua mostrando o valor antigo.
 
-Outro hook (`useClosersWithAvailability`) ja trata isso corretamente usando `.or('meeting_type.is.null,meeting_type.eq.r1')`.
+### Bug 2: Deal sem contato vinculado
+Se o deal nao tiver `contact_id` (contato nao existe), `handleSavePhone` verifica `if (!contact?.id) return;` e sai silenciosamente, sem mostrar nenhum erro ao usuario.
 
-## Correcao (2 partes)
+## Correcoes
 
-### 1. Corrigir o dado no banco
+### 1. Invalidar cache do contato individual (`src/hooks/useCRMData.ts`)
 
-Atualizar o `meeting_type` do Mateus para `'r1'`:
+No `useUpdateCRMContact`, adicionar invalidacao de `['crm-contact']` para que o drawer atualize:
 
 ```text
-UPDATE closers 
-SET meeting_type = 'r1', updated_at = NOW() 
-WHERE id = '2396c873-a59c-4e07-bcd8-82b6f330b969';
+onSuccess: (data) => {
+  queryClient.invalidateQueries({ queryKey: ['crm-contacts'] });
+  queryClient.invalidateQueries({ queryKey: ['crm-contact'] });
+  queryClient.invalidateQueries({ queryKey: ['crm-deal'] });
+  toast.success('Contato atualizado com sucesso');
+},
 ```
 
-### 2. Tornar a query resiliente a NULLs
+Invalida tambem `['crm-deal']` porque o deal carrega `crm_contacts(name, email, phone)` via join.
 
-Alterar `src/hooks/useGestorClosers.ts` para que, quando `meetingType = 'r1'`, inclua tambem closers com `meeting_type` NULL (que sao closers legados sem classificacao). Isso evita que o problema se repita com outros closers.
+### 2. Feedback ao usuario quando nao ha contato (`src/components/crm/SdrSummaryBlock.tsx`)
 
-**Linha 29-31** — substituir:
+Alterar `handleSavePhone` para mostrar erro quando nao existe contato vinculado:
+
 ```text
-if (meetingType) {
-  query = query.eq('meeting_type', meetingType);
-}
-```
-por:
-```text
-if (meetingType === 'r1') {
-  query = query.or('meeting_type.is.null,meeting_type.eq.r1');
-} else if (meetingType) {
-  query = query.eq('meeting_type', meetingType);
-}
+const handleSavePhone = async () => {
+  if (!contact?.id) {
+    toast.error('Nenhum contato vinculado a este negocio');
+    setEditingPhone(false);
+    return;
+  }
+  // ... resto do codigo
+};
 ```
 
-Aplicar a mesma logica na query do coordenador (linhas 77-79).
+## Secao Tecnica
 
-## Resultado
-
-- Mateus aparecera imediatamente em todos os filtros de closer
-- Closers sem `meeting_type` definido serao tratados como R1 por padrao
-- Nenhum risco de quebrar filtros de R2 (que continuam usando `.eq('meeting_type', 'r2')`)
+- **Arquivo 1**: `src/hooks/useCRMData.ts` — linhas 355-358, adicionar invalidacoes extras no `onSuccess`
+- **Arquivo 2**: `src/components/crm/SdrSummaryBlock.tsx` — linhas 28-29, adicionar toast de erro quando contact e null
+- Nenhuma alteracao de banco de dados necessaria
