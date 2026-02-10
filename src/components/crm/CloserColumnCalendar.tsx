@@ -160,11 +160,14 @@ export function CloserColumnCalendar({
     return meetings.filter((m) => {
       if (m.closer_id !== closerId) return false;
       const meetingTime = parseISO(m.scheduled_at);
-      return (
+      const timeMatch =
         isSameDay(meetingTime, slotTime) &&
         meetingTime.getHours() === slotTime.getHours() &&
-        meetingTime.getMinutes() === slotTime.getMinutes()
-      );
+        meetingTime.getMinutes() === slotTime.getMinutes();
+      if (!timeMatch) return false;
+      // Exclude orphan canceled slots (no attendees)
+      if (m.status === 'canceled' && (!m.attendees || m.attendees.length === 0)) return false;
+      return true;
     });
   };
 
