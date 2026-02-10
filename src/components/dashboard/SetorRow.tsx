@@ -60,6 +60,8 @@ interface SetorRowProps {
   metaAnual: number;
   apuradoAnual: number;
   isLoading?: boolean;
+  onEditGoals?: () => void;
+  canEdit?: boolean;
 }
 
 export function SetorRow({
