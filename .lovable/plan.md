@@ -1,27 +1,55 @@
 
-# Corrigir upsert de metas: buscar config em ambos os arrays de BU
+# Corrigir constraint do banco: adicionar tipos consorcio_sdr_* na tabela team_targets
 
 ## Problema
-Na linha 209 de `useSdrTeamTargets.ts`, o upsert so procura o config em `SDR_TARGET_CONFIGS` (Incorporador). Tipos do Consorcio como `consorcio_sdr_agendamento_dia` nao sao encontrados, entao o sistema pula silenciosamente sem salvar nada no banco.
+A tabela `team_targets` possui um CHECK constraint (`team_targets_target_type_check`) que lista explicitamente os valores permitidos para a coluna `target_type`. Atualmente, apenas tipos `sdr_*` (Incorporador) estao na lista. Os novos tipos `consorcio_sdr_*` sao rejeitados pelo banco com erro 23514.
 
 ## Solucao
-Alterar a linha 209 para buscar em ambos os arrays:
+Criar uma migration SQL que:
+1. Remove o constraint antigo (`team_targets_target_type_check`)
+2. Recria o constraint incluindo todos os 30 novos tipos do Consorcio
 
-### Arquivo: `src/hooks/useSdrTeamTargets.ts`
+## Detalhes Tecnicos
 
-Trocar:
-```typescript
-const config = SDR_TARGET_CONFIGS.find(c => c.type === type);
+### Migration SQL
+Executar `ALTER TABLE` para dropar e recriar o CHECK constraint, adicionando os seguintes tipos:
+
+```text
+consorcio_sdr_agendamento_dia
+consorcio_sdr_agendamento_semana
+consorcio_sdr_agendamento_mes
+consorcio_sdr_r1_agendada_dia
+consorcio_sdr_r1_agendada_semana
+consorcio_sdr_r1_agendada_mes
+consorcio_sdr_r1_realizada_dia
+consorcio_sdr_r1_realizada_semana
+consorcio_sdr_r1_realizada_mes
+consorcio_sdr_noshow_dia
+consorcio_sdr_noshow_semana
+consorcio_sdr_noshow_mes
+consorcio_sdr_proposta_enviada_dia
+consorcio_sdr_proposta_enviada_semana
+consorcio_sdr_proposta_enviada_mes
+consorcio_sdr_contrato_dia
+consorcio_sdr_contrato_semana
+consorcio_sdr_contrato_mes
+consorcio_sdr_aguardando_doc_dia
+consorcio_sdr_aguardando_doc_semana
+consorcio_sdr_aguardando_doc_mes
+consorcio_sdr_carta_fechada_dia
+consorcio_sdr_carta_fechada_semana
+consorcio_sdr_carta_fechada_mes
+consorcio_sdr_aporte_dia
+consorcio_sdr_aporte_semana
+consorcio_sdr_aporte_mes
+consorcio_sdr_venda_realizada_dia
+consorcio_sdr_venda_realizada_semana
+consorcio_sdr_venda_realizada_mes
 ```
-Por:
-```typescript
-const config = SDR_TARGET_CONFIGS.find(c => c.type === type)
-  || CONSORCIO_SDR_TARGET_CONFIGS.find(c => c.type === type);
-```
 
-Cada BU continua com seus proprios registros separados na tabela `team_targets` -- os tipos `sdr_*` sao do Incorporador e os tipos `consorcio_sdr_*` sao do Consorcio. A unica mudanca e que o upsert agora reconhece os tipos do Consorcio e efetivamente grava no banco.
+Todos os tipos existentes (`sdr_*`, `ultrameta_*`, `setor_*`, etc.) serao mantidos -- apenas adicionamos os novos.
 
 ### Resultado
-- Metas do Consorcio salvas com tipos `consorcio_sdr_*` (separadas do Incorporador)
-- Metas do Incorporador continuam com tipos `sdr_*` (inalteradas)
-- Cada BU le apenas seus proprios registros via o filtro `like('target_type', buPrefix + '%')`
+- Metas do Consorcio poderao ser salvas no banco sem erro
+- Nenhuma alteracao de codigo necessaria (o fix anterior do upsert ja esta correto)
+- Dados existentes do Incorporador nao sao afetados
