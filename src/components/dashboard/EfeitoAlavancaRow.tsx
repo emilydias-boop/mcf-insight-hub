@@ -41,6 +41,8 @@ interface EfeitoAlavancaRowProps {
   totalCartasAnual: number;
   comissaoAnual: number;
   isLoading?: boolean;
+  onEditGoals?: () => void;
+  canEdit?: boolean;
 }
 
 export function EfeitoAlavancaRow({
@@ -53,6 +55,8 @@ export function EfeitoAlavancaRow({
   totalCartasAnual,
   comissaoAnual,
   isLoading = false,
+  onEditGoals,
+  canEdit = false,
 }: EfeitoAlavancaRowProps) {
   if (isLoading) {
     return (
