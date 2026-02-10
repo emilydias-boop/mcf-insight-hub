@@ -51,20 +51,20 @@ const BU_PREFIX = "consorcio_sdr_";
 
 type DatePreset = "today" | "week" | "month" | "custom";
 
-function ConsorcioMetricsCard() {
+function ConsorcioMetricsCard({ onEditGoals, canEdit }: { onEditGoals?: () => void; canEdit?: boolean }) {
   const { data: setoresData, isLoading: setoresLoading } = useSetoresDashboard();
   const efeitoAlavanca = setoresData?.setores.find(s => s.id === 'efeito_alavanca');
   const credito = setoresData?.setores.find(s => s.id === 'credito');
 
   if (!efeitoAlavanca && !credito && !setoresLoading) return null;
 
-  // Combine both sectors for the card
+  // Combine both sectors: use apurado (valor em carta) for both
   const combined = {
-    apuradoSemanal: (efeitoAlavanca?.comissaoSemanal || 0) + (credito?.apuradoSemanal || 0),
+    apuradoSemanal: (efeitoAlavanca?.apuradoSemanal || 0) + (credito?.apuradoSemanal || 0),
     metaSemanal: (efeitoAlavanca?.metaSemanal || 0) + (credito?.metaSemanal || 0),
-    apuradoMensal: (efeitoAlavanca?.comissaoMensal || 0) + (credito?.apuradoMensal || 0),
+    apuradoMensal: (efeitoAlavanca?.apuradoMensal || 0) + (credito?.apuradoMensal || 0),
     metaMensal: (efeitoAlavanca?.metaMensal || 0) + (credito?.metaMensal || 0),
-    apuradoAnual: (efeitoAlavanca?.comissaoAnual || 0) + (credito?.apuradoAnual || 0),
+    apuradoAnual: (efeitoAlavanca?.apuradoAnual || 0) + (credito?.apuradoAnual || 0),
     metaAnual: (efeitoAlavanca?.metaAnual || 0) + (credito?.metaAnual || 0),
   };
 
@@ -85,6 +85,15 @@ function ConsorcioMetricsCard() {
           metaAnual={combined.metaAnual}
           isLoading={setoresLoading}
         />
+        {canEdit && (
+          <button
+            onClick={onEditGoals}
+            className="absolute top-3 right-3 p-1.5 rounded-md hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
+            title="Editar metas"
+          >
+            <Settings2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </div>
   );
