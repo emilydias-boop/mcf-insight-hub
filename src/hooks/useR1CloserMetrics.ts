@@ -2,6 +2,29 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { startOfDay, endOfDay, format } from "date-fns";
 
+/**
+ * Executes a Supabase .in() query in batches to avoid URL length limits.
+ * Splits large arrays into chunks of `batchSize` and runs them in parallel.
+ */
+async function batchedIn<T>(
+  queryFn: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: any }>,
+  items: string[],
+  batchSize = 200
+): Promise<T[]> {
+  if (items.length === 0) return [];
+  const chunks: string[][] = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    chunks.push(items.slice(i, i + batchSize));
+  }
+  const results = await Promise.all(chunks.map(chunk => queryFn(chunk)));
+  const allData: T[] = [];
+  for (const r of results) {
+    if (r.error) throw r.error;
+    if (r.data) allData.push(...r.data);
+  }
+  return allData;
+}
+
 export interface R1CloserMetric {
   closer_id: string;
   closer_name: string;
@@ -79,10 +102,10 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         });
       });
 
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .in('id', Array.from(bookedByIds));
+      const profiles = await batchedIn<{ id: string; email: string | null }>(
+        (chunk) => supabase.from('profiles').select('id, email').in('id', chunk),
+        Array.from(bookedByIds)
+      );
 
       const profileEmailMap = new Map<string, string>();
       profiles?.forEach(p => {
@@ -133,10 +156,10 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         });
       });
 
-      const { data: allProfiles } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .in('id', Array.from(allBookedByIds));
+      const allProfiles = await batchedIn<{ id: string; email: string | null }>(
+        (chunk) => supabase.from('profiles').select('id, email').in('id', chunk),
+        Array.from(allBookedByIds)
+      );
 
       const allProfileEmailMap = new Map<string, string>();
       allProfiles?.forEach(p => {
@@ -281,11 +304,11 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         });
       });
 
-      // Fetch deals with their contact emails
-      const { data: deals } = await supabase
-        .from('crm_deals')
-        .select('id, contact:crm_contacts(id, email)')
-        .in('id', Array.from(dealIds));
+      // Fetch deals with their contact emails (batched to avoid URL limit)
+      const deals = await batchedIn<{ id: string; contact: { id: string; email: string | null } | null }>(
+        (chunk) => supabase.from('crm_deals').select('id, contact:crm_contacts(id, email)').in('id', chunk),
+        Array.from(dealIds)
+      );
 
       // Map deal_id -> email
       const dealEmailMap = new Map<string, string>();
@@ -299,14 +322,17 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       // Get unique emails from deals in this period
       const attendeeEmails = [...new Set(Array.from(dealEmailMap.values()))];
 
-      // Fetch contract transactions for these emails
-      const { data: contracts } = await supabase
-        .from('hubla_transactions')
-        .select('customer_email, sale_date')
-        .in('customer_email', attendeeEmails.length > 0 ? attendeeEmails : [''])
-        .ilike('product_name', '%Contrato%')
-        .eq('sale_status', 'completed')
-        .order('sale_date', { ascending: true });
+      // Fetch contract transactions for these emails (batched to avoid URL limit)
+      const contracts = await batchedIn<{ customer_email: string | null; sale_date: string }>(
+        (chunk) => supabase
+          .from('hubla_transactions')
+          .select('customer_email, sale_date')
+          .in('customer_email', chunk)
+          .ilike('product_name', '%Contrato%')
+          .eq('sale_status', 'completed')
+          .order('sale_date', { ascending: true }),
+        attendeeEmails.length > 0 ? attendeeEmails : []
+      );
 
       // Map email -> earliest contract date
       const emailContractDate = new Map<string, Date>();
