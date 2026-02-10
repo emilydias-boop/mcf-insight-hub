@@ -26,7 +26,8 @@ import { useSdrTeamTargets } from "@/hooks/useSdrTeamTargets";
 import { TeamGoalsEditModal } from "@/components/sdr/TeamGoalsEditModal";
 import { Target, Settings2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
+import { ConsorcioSdrSummaryTable } from "@/components/sdr/ConsorcioSdrSummaryTable";
+import { useConsorcioPipelineMetricsBySdr } from "@/hooks/useConsorcioPipelineMetricsBySdr";
 import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
 import { PipelineSelector } from "@/components/crm/PipelineSelector";
 
@@ -281,6 +282,7 @@ export default function ConsorcioPainelEquipe() {
 
   // Consórcio pipeline metrics (deals by stage)
   const pipelineMetrics = useConsorcioPipelineMetrics();
+  const { data: propostasData } = useConsorcioPipelineMetricsBySdr(start, end);
   
   // Consórcio team targets
   const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
@@ -721,13 +723,13 @@ export default function ConsorcioPainelEquipe() {
         </CardHeader>
         <CardContent className="pt-0 px-0 sm:px-6 pb-3 sm:pb-6 overflow-x-auto">
           {activeTab === "sdrs" ? (
-            <SdrSummaryTable
+            <ConsorcioSdrSummaryTable
               data={filteredBySDR}
               isLoading={isLoading}
-              ghostCountBySdr={ghostCountBySdr}
               disableNavigation={isRestrictedRole}
               sdrMetaMap={sdrMetaMap}
               diasUteisNoPeriodo={diasUteisNoPeriodo}
+              propostasEnviadasBySdr={propostasData}
             />
           ) : (
             <CloserSummaryTable
