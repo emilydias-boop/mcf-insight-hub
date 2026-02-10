@@ -45,6 +45,7 @@ import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSdrsFromSquad } from "@/hooks/useSdrsFromSquad";
 import { ConsorcioRevenueGoalsEditModal } from "@/components/sdr/ConsorcioRevenueGoalsEditModal";
+import { useConsorcioSummary } from "@/hooks/useConsorcio";
 
 const BU_SQUAD = "consorcio";
 const BU_PREFIX = "consorcio_sdr_";
