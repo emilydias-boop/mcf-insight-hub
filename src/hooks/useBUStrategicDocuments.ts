@@ -101,7 +101,7 @@ export function useBUStrategicDocuments(bu: BusinessUnit | null, ano: number, me
           storage_path: storagePath,
           uploaded_by: user.id,
           uploaded_by_name: profile?.full_name || user.email,
-          uploaded_by_role: profile?.role || "N/A",
+          uploaded_by_role: (userRoleData?.role as string) || "N/A",
         });
 
       if (dbError) throw dbError;
