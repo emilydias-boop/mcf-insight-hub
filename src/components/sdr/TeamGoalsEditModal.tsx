@@ -250,12 +250,7 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
     
     // Se é o Agendamento, calcula todos os outros em cascata
     if (type === agendamentoDiaType) {
-      const baseDayValues = calculateDayCascade(numValue);
-      const dayValues: Record<string, number> = {};
-      Object.entries(baseDayValues).forEach(([key, val]) => {
-        const dynKey = buPrefix === 'sdr_' ? key : key.replace('sdr_', buPrefix);
-        dayValues[dynKey] = val;
-      });
+      const dayValues = calculateDayCascade(numValue, buPrefix);
       
       // Atualiza todos os valores do dia
       Object.entries(dayValues).forEach(([key, val]) => {
