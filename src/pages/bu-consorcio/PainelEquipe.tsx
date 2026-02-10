@@ -722,13 +722,13 @@ export default function ConsorcioPainelEquipe() {
         </CardHeader>
         <CardContent className="pt-0 px-0 sm:px-6 pb-3 sm:pb-6 overflow-x-auto">
           {activeTab === "sdrs" ? (
-            <SdrSummaryTable
+            <ConsorcioSdrSummaryTable
               data={filteredBySDR}
               isLoading={isLoading}
-              ghostCountBySdr={ghostCountBySdr}
               disableNavigation={isRestrictedRole}
               sdrMetaMap={sdrMetaMap}
               diasUteisNoPeriodo={diasUteisNoPeriodo}
+              propostasEnviadasBySdr={propostasData}
             />
           ) : (
             <CloserSummaryTable
