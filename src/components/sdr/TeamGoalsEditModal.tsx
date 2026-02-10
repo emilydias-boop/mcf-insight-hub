@@ -112,32 +112,16 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
 
   // Build dynamic target configs based on buPrefix
   const dynamicConfigs = useMemo(() => {
-    return SDR_TARGET_CONFIGS.map(c => ({
-      ...c,
-      // Replace 'sdr_' prefix with buPrefix for non-default BUs
-      type: (buPrefix === 'sdr_' ? c.type : c.type.replace('sdr_', buPrefix)) as SdrTargetType,
-    }));
+    return getTargetConfigsForBU(buPrefix);
   }, [buPrefix]);
 
   // Build dynamic day-to-week and day-to-month mappings
   const dynamicDayToWeek = useMemo(() => {
-    const map: Record<string, SdrTargetType> = {};
-    Object.entries(dayToWeekMapping).forEach(([day, week]) => {
-      const dynDay = buPrefix === 'sdr_' ? day : day.replace('sdr_', buPrefix);
-      const dynWeek = buPrefix === 'sdr_' ? week : (week as string).replace('sdr_', buPrefix);
-      map[dynDay] = dynWeek as SdrTargetType;
-    });
-    return map;
+    return buildDayToWeekMapping(buPrefix) as Record<string, SdrTargetType>;
   }, [buPrefix]);
 
   const dynamicDayToMonth = useMemo(() => {
-    const map: Record<string, SdrTargetType> = {};
-    Object.entries(dayToMonthMapping).forEach(([day, month]) => {
-      const dynDay = buPrefix === 'sdr_' ? day : day.replace('sdr_', buPrefix);
-      const dynMonth = buPrefix === 'sdr_' ? month : (month as string).replace('sdr_', buPrefix);
-      map[dynDay] = dynMonth as SdrTargetType;
-    });
-    return map;
+    return buildDayToMonthMapping(buPrefix) as Record<string, SdrTargetType>;
   }, [buPrefix]);
 
   // Fetch targets for selected month
