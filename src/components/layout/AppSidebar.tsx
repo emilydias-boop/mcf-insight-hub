@@ -150,6 +150,7 @@ const menuItems: MenuItem[] = [
       { title: "Controle Consorcio", url: "/consorcio" },
       { title: "Importar", url: "/consorcio/importar" },
       { title: "Relatórios", url: "/consorcio/relatorio" },
+      { title: "Documentos Estratégicos", url: "/consorcio/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 
