@@ -119,6 +119,7 @@ import ConsorcioPainelEquipe from "./pages/bu-consorcio/PainelEquipe";
 import ConsorcioVendas from "./pages/bu-consorcio/Vendas";
 import Chairman from "./pages/Chairman";
 import Home from "./pages/Home";
+import DocumentosEstrategicos from "./pages/bu-common/DocumentosEstrategicos";
 
 // Gerentes de Conta
 import GerenciamentoGRIndex from "./pages/gerentes-conta/Index";
@@ -196,6 +197,7 @@ const App = () => (
               <Route path="consorcio/relatorio" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioRelatorio /></RoleGuard>} />
               <Route path="consorcio/painel-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioPainelEquipe /></RoleGuard>} />
               <Route path="consorcio/vendas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioVendas /></RoleGuard>} />
+              <Route path="consorcio/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="consorcio" /></RoleGuard>} />
               
               {/* BU Consórcio CRM - Dedicado */}
               <Route path="consorcio/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><BUCRMLayout bu="consorcio" basePath="/consorcio/crm" /></RoleGuard>}>
@@ -225,6 +227,7 @@ const App = () => (
                 <Route path="vendas" element={<CreditoVendas />} />
               </Route>
               <Route path="bu-credito/relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CreditoRelatorios /></RoleGuard>} />
+              <Route path="bu-credito/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="credito" /></RoleGuard>} />
               
               {/* BU Crédito CRM - Dedicado */}
               <Route path="bu-credito/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><BUCRMLayout bu="credito" basePath="/bu-credito/crm" /></RoleGuard>}>
@@ -247,6 +250,7 @@ const App = () => (
                 <Route path="vendas" element={<ProjetosVendas />} />
               </Route>
               <Route path="bu-projetos/relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ProjetosRelatorios /></RoleGuard>} />
+              <Route path="bu-projetos/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="projetos" /></RoleGuard>} />
               
               {/* BU Projetos CRM - Dedicado */}
               <Route path="bu-projetos/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><BUCRMLayout bu="projetos" basePath="/bu-projetos/crm" /></RoleGuard>}>
@@ -284,6 +288,7 @@ const App = () => (
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
               
+              <Route path="leilao/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="leilao" /></RoleGuard>} />
               <Route path="leilao" element={<ResourceGuard resource="leilao"><Leilao /></ResourceGuard>} />
               <Route path="configuracoes" element={<ResourceGuard resource="configuracoes"><Configuracoes /></ResourceGuard>} />
               <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />
@@ -301,6 +306,7 @@ const App = () => (
               {/* BU Incorporador Routes */}
               <Route path="bu-incorporador/transacoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><TransacoesIncorp /></RoleGuard>} />
               <Route path="bu-incorporador/relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><IncorporadorRelatorios /></RoleGuard>} />
+              <Route path="bu-incorporador/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="incorporador" /></RoleGuard>} />
               
               <Route path="playbook" element={<MeuPlaybook />} />
               <Route path="rh/colaboradores" element={<ResourceGuard resource={"rh" as any}><RHColaboradores /></ResourceGuard>} />

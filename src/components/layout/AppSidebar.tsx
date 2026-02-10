@@ -132,6 +132,7 @@ const menuItems: MenuItem[] = [
       { title: "Vendas", url: "/bu-incorporador/transacoes" },
       { title: "CRM", url: "/crm" },
       { title: "Relatórios", url: "/bu-incorporador/relatorios" },
+      { title: "Documentos Estratégicos", url: "/bu-incorporador/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 
@@ -149,6 +150,7 @@ const menuItems: MenuItem[] = [
       { title: "Controle Consorcio", url: "/consorcio" },
       { title: "Importar", url: "/consorcio/importar" },
       { title: "Relatórios", url: "/consorcio/relatorio" },
+      { title: "Documentos Estratégicos", url: "/consorcio/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 
@@ -166,6 +168,7 @@ const menuItems: MenuItem[] = [
       { title: "CRM", url: "/bu-credito/crm" },
       { title: "Gestão Legado", url: "/credito" },
       { title: "Relatórios", url: "/bu-credito/relatorios" },
+      { title: "Documentos Estratégicos", url: "/bu-credito/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 
@@ -178,6 +181,7 @@ const menuItems: MenuItem[] = [
       { title: "Gestão de Projetos", url: "/projetos" },
       { title: "CRM", url: "/bu-projetos/crm" },
       { title: "Relatórios", url: "/bu-projetos/relatorios" },
+      { title: "Documentos Estratégicos", url: "/bu-projetos/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 
@@ -190,6 +194,7 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "Leilões Imobiliários", url: "/leilao" },
       { title: "CRM", url: "/leilao/crm" },
+      { title: "Documentos Estratégicos", url: "/leilao/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 
