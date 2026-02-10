@@ -553,7 +553,21 @@ export default function ConsorcioPainelEquipe() {
   return (
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-6">
       {/* Consórcio Metrics Card */}
-      <ConsorcioMetricsCard />
+      <ConsorcioMetricsCard
+        onEditGoals={() => setRevenueGoalsEditOpen(true)}
+        canEdit={canEditGoals || false}
+      />
+
+      {/* Revenue Goals Edit Modal */}
+      <ConsorcioRevenueGoalsEditModal
+        open={revenueGoalsEditOpen}
+        onOpenChange={setRevenueGoalsEditOpen}
+        currentTargets={(() => {
+          const targets: Record<string, number> = {};
+          const setoresData = undefined; // We need to pass from the card
+          return targets;
+        })()}
+      />
 
       {/* Goals Panel - Consórcio specific with both pipelines */}
       {targetsLoading ? (
