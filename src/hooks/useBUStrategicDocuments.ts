@@ -65,11 +65,19 @@ export function useBUStrategicDocuments(bu: BusinessUnit | null, ano: number, me
         throw new Error("Arquivo deve ter no máximo 20MB");
       }
 
-      // Get user profile for name and role
+      // Get user profile name
       const { data: profile } = await supabase
         .from("profiles")
-        .select("full_name, role")
+        .select("full_name")
         .eq("id", user.id)
+        .single();
+
+      // Get user role from user_roles table
+      const { data: userRoleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .limit(1)
         .single();
 
       const storagePath = `${bu}/${ano}/${mes}/semana-${semana}/${Date.now()}_${file.name}`;
