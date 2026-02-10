@@ -8,7 +8,7 @@ import { Calendar, Users, Download, Briefcase, TrendingUp } from "lucide-react";
 import { SetorRow } from "@/components/dashboard/SetorRow";
 import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
