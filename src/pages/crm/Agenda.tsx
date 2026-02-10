@@ -100,6 +100,9 @@ export default function Agenda() {
     
     let result = meetings;
     
+    // Remove orphan canceled slots (canceled with no attendees)
+    result = result.filter(m => !(m.status === 'canceled' && (!m.attendees || m.attendees.length === 0)));
+    
     // Closer só vê suas próprias reuniões
     if (isCloser && myCloser?.id) {
       result = result.filter(m => m.closer_id === myCloser.id);
