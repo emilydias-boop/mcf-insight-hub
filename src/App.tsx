@@ -197,6 +197,7 @@ const App = () => (
               <Route path="consorcio/relatorio" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioRelatorio /></RoleGuard>} />
               <Route path="consorcio/painel-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioPainelEquipe /></RoleGuard>} />
               <Route path="consorcio/vendas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioVendas /></RoleGuard>} />
+              <Route path="consorcio/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="consorcio" /></RoleGuard>} />
               
               {/* BU Consórcio CRM - Dedicado */}
               <Route path="consorcio/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><BUCRMLayout bu="consorcio" basePath="/consorcio/crm" /></RoleGuard>}>
