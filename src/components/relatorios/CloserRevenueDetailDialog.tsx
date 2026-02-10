@@ -28,7 +28,7 @@ interface AttendeeMatch {
   id: string;
   attendee_phone: string | null;
   deal_id: string | null;
-  meeting_slots: { closer_id: string | null } | null;
+  meeting_slots: { closer_id: string | null; scheduled_at: string | null } | null;
   crm_deals: { crm_contacts: { email: string | null; phone: string | null } | null } | null;
 }
 
@@ -101,6 +101,19 @@ export function CloserRevenueDetailDialog({
     });
   }, [prevMonthTransactions, closerContacts]);
 
+  // Build contact->attendee map for Outside detection
+  const contactToAttendee = useMemo(() => {
+    const map = new Map<string, AttendeeMatch>();
+    for (const a of attendees) {
+      if (a.meeting_slots?.closer_id !== closerId) continue;
+      const email = a.crm_deals?.crm_contacts?.email?.toLowerCase();
+      if (email) map.set(`e:${email}`, a);
+      const phone = normalizePhone(a.crm_deals?.crm_contacts?.phone);
+      if (phone.length >= 8) map.set(`p:${phone}`, a);
+    }
+    return map;
+  }, [attendees, closerId]);
+
   const metrics = useMemo(() => {
     // Current period
     const contracts = transactions.filter((t) =>
@@ -112,6 +125,22 @@ export function CloserRevenueDetailDialog({
     const refunds = transactions.filter(
       (t) => t.sale_status === 'refunded' || (t.net_value !== null && t.net_value < 0)
     );
+
+    // Outside detection
+    let outsideCount = 0;
+    let outsideGross = 0;
+    for (const tx of transactions) {
+      const txEmail = (tx.customer_email || '').toLowerCase();
+      const txPhone = normalizePhone(tx.customer_phone);
+      const att = (txEmail && contactToAttendee.get(`e:${txEmail}`)) ||
+        (txPhone.length >= 8 && contactToAttendee.get(`p:${txPhone}`)) || null;
+      if (att?.meeting_slots?.scheduled_at && tx.sale_date) {
+        if (new Date(tx.sale_date) < new Date(att.meeting_slots.scheduled_at)) {
+          outsideCount++;
+          outsideGross += getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
+        }
+      }
+    }
 
     const calcGross = (txs: Transaction[]) =>
       txs.reduce((s, t) => s + getDeduplicatedGross(t as any, globalFirstIds.has(t.id)), 0);
@@ -183,6 +212,7 @@ export function CloserRevenueDetailDialog({
       contracts: { count: contracts.length, gross: contractsGross, net: contractsNet },
       parcerias: { count: parcerias.length, gross: parceriasGross, net: parceriasNet },
       refunds: { count: refunds.length, value: refundsNet },
+      outside: { count: outsideCount, gross: outsideGross },
       totalGross,
       totalNet,
       bestDay,
@@ -193,7 +223,7 @@ export function CloserRevenueDetailDialog({
       countChange,
       prevGross,
     };
-  }, [transactions, globalFirstIds, prevCloserTxs]);
+  }, [transactions, globalFirstIds, prevCloserTxs, contactToAttendee]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -241,6 +271,17 @@ export function CloserRevenueDetailDialog({
               </div>
               <p className="text-lg font-bold">{metrics.refunds.count}</p>
               <p className="text-xs text-destructive font-mono">-{formatCurrency(metrics.refunds.value)}</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-border">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp className="h-4 w-4 text-warning" />
+                <span className="text-xs font-medium text-muted-foreground">Outside</span>
+              </div>
+              <p className="text-lg font-bold">{metrics.outside.count}</p>
+              <p className="text-xs text-warning font-mono">Bruto {formatCurrency(metrics.outside.gross)}</p>
             </CardContent>
           </Card>
 
