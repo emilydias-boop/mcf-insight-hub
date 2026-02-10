@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { LucideIcon } from "lucide-react";
+import { LucideIcon, Settings2 } from "lucide-react";
 
 interface MetricColumnProps {
   label: string;
@@ -60,6 +60,8 @@ interface SetorRowProps {
   metaAnual: number;
   apuradoAnual: number;
   isLoading?: boolean;
+  onEditGoals?: () => void;
+  canEdit?: boolean;
 }
 
 export function SetorRow({
@@ -74,6 +76,8 @@ export function SetorRow({
   metaAnual,
   apuradoAnual,
   isLoading = false,
+  onEditGoals,
+  canEdit = false,
 }: SetorRowProps) {
   if (isLoading) {
     return (
@@ -103,7 +107,16 @@ export function SetorRow({
           <div className="p-1.5 rounded-lg bg-primary/10">
             <Icon className="h-4 w-4 text-primary" />
           </div>
-          {titulo}
+          <span className="flex-1">{titulo}</span>
+          {canEdit && onEditGoals && (
+            <button
+              onClick={onEditGoals}
+              className="p-1.5 rounded-md hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
+              title="Editar metas"
+            >
+              <Settings2 className="h-4 w-4" />
+            </button>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>

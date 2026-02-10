@@ -36,10 +36,12 @@ import { useSdrOutsideMetrics } from "@/hooks/useSdrOutsideMetrics";
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSdrsFromSquad } from "@/hooks/useSdrsFromSquad";
+import { BURevenueGoalsEditModal } from "@/components/sdr/BURevenueGoalsEditModal";
+import { Settings2 } from "lucide-react";
 
 type DatePreset = "today" | "week" | "month" | "custom";
 
-function IncorporadorMetricsCard() {
+function IncorporadorMetricsCard({ onEditGoals, canEdit }: { onEditGoals?: () => void; canEdit?: boolean }) {
   const { data: setoresData, isLoading: setoresLoading } = useSetoresDashboard();
   const incorporadorSetor = setoresData?.setores.find(s => s.id === 'incorporador');
 
@@ -47,7 +49,6 @@ function IncorporadorMetricsCard() {
 
   return (
     <div className="relative group">
-      {/* Animated glow border */}
       <div className="absolute -inset-0.5 bg-gradient-to-r from-primary via-primary/60 to-primary rounded-xl blur opacity-30 group-hover:opacity-50 transition-opacity duration-300" />
       <div className="relative">
         <SetorRow
@@ -62,6 +63,8 @@ function IncorporadorMetricsCard() {
           apuradoAnual={incorporadorSetor?.apuradoAnual || 0}
           metaAnual={incorporadorSetor?.metaAnual || 0}
           isLoading={setoresLoading}
+          onEditGoals={onEditGoals}
+          canEdit={canEdit}
         />
       </div>
     </div>
@@ -72,6 +75,8 @@ export default function ReunioesEquipe() {
   const { role } = useAuth();
   const navigate = useNavigate();
   const isRestrictedRole = role === 'sdr' || role === 'closer';
+  const canEditGoals = !!role && ['admin', 'manager', 'coordenador'].includes(role);
+  const [incorpGoalsOpen, setIncorpGoalsOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Initialize state from URL params
@@ -408,7 +413,17 @@ export default function ReunioesEquipe() {
   return (
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-6">
       {/* MCF Incorporador - Métricas Monetárias - PRIMEIRO */}
-      <IncorporadorMetricsCard />
+      <IncorporadorMetricsCard
+        onEditGoals={() => setIncorpGoalsOpen(true)}
+        canEdit={canEditGoals}
+      />
+
+      <BURevenueGoalsEditModal
+        open={incorpGoalsOpen}
+        onOpenChange={setIncorpGoalsOpen}
+        title="MCF Incorporador"
+        sections={[{ prefix: "setor_incorporador", label: "Incorporador" }]}
+      />
 
       {/* Goals Panel */}
       <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} monthValues={monthValues} />
