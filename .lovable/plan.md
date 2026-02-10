@@ -1,30 +1,53 @@
 
-# Corrigir Apurado do Card BU Consorcio: Incluir TODAS as Cartas
+# Adicionar Modal de Metas em Todas as BUs
 
-## Problema
-O card "BU Consorcio" no Painel de Equipe mostra R$ 0,00 para semana e mes, enquanto a pagina principal do Consorcio mostra R$ 8.5MM em "Total em Cartas" para fevereiro.
+## Contexto
+O modal de edicao de metas monetarias (Semana, Mes, Ano) ja funciona para o BU Consorcio. O Incorporador e demais BUs (Projetos, Leilao) mostram "Meta: R$ 0,00" porque nao ha interface para definir esses valores. O banco de dados ja aceita os tipos `setor_incorporador_*`, `setor_projetos_*`, `setor_leilao_*` no CHECK constraint, e o hook `useSetoresDashboard` ja busca e aplica esses targets via `getTarget('setor_${config.id}_*')`.
 
-A causa raiz: o hook `useSetoresDashboard` busca apenas cartas com `categoria = 'inside'` para o setor Efeito Alavanca. Porem, a pagina do Consorcio (`Index.tsx`) soma **todas** as cartas (sem filtro de categoria), o que resulta no valor de R$ 8.5MM.
+## O que sera feito
 
-O card BU Consorcio precisa refletir o total real de todas as cartas, nao apenas as "inside".
+### 1. Generalizar o modal de edicao de metas
+Refatorar o `ConsorcioRevenueGoalsEditModal` para um componente generico `BURevenueGoalsEditModal` que recebe:
+- `buId`: identificador do setor (ex: `'incorporador'`, `'efeito_alavanca'`, `'projetos'`, `'leilao'`)
+- `buName`: nome para exibir no titulo (ex: "MCF Incorporador")
+- `targetPrefix`: prefixo dos target types no banco (ex: `'setor_incorporador'`)
 
-## Solucao
-Alterar o `ConsorcioMetricsCard` para buscar dados diretamente da mesma fonte que a pagina Index usa (`useConsorcioSummary`), ou criar queries adicionais no `useSetoresDashboard` para incluir todas as cartas.
+O modal tera campos para Semana, Mes e Ano com inputs monetarios (R$), fazendo upsert na tabela `team_targets`.
 
-A abordagem mais limpa e fazer o `ConsorcioMetricsCard` usar o hook `useConsorcioSummary` com filtros de data por periodo (semana, mes, ano) para exibir o valor correto de "Total em Cartas".
+### 2. Adicionar botao de edicao no card do Incorporador
+Na pagina `ReunioesEquipe.tsx`, o `IncorporadorMetricsCard` ganhara:
+- Um botao de engrenagem (Settings2), visivel apenas para admin/manager/coordenador
+- Abertura do modal generico configurado para `setor_incorporador_*`
+
+### 3. Adicionar botao de edicao no Dashboard de Diretoria
+Na pagina `Dashboard.tsx`, cada `SetorRow` (Incorporador, Efeito Alavanca, Credito, Projetos, Leilao) ganhara um botao de edicao com o modal correspondente, tambem restrito por role.
+
+### 4. Atualizar o BU Consorcio para usar o modal generico
+O `ConsorcioRevenueGoalsEditModal` existente sera substituido pelo componente generico, mantendo o mesmo comportamento (2 secoes: Efeito Alavanca + Credito).
 
 ## Detalhes Tecnicos
 
-### Alteracao: `src/pages/bu-consorcio/PainelEquipe.tsx` (ConsorcioMetricsCard)
+### Novo componente: `src/components/sdr/BURevenueGoalsEditModal.tsx`
+- Props: `open`, `onOpenChange`, `sections` (array de `{ prefix, label }`)
+- Cada section gera 3 campos: `{prefix}_semana`, `{prefix}_mes`, `{prefix}_ano`
+- Busca valores existentes via `supabase.from('team_targets').select()` filtrando por prefixo
+- Upsert com `week_start='2000-01-01'` e `week_end='2099-12-31'` (mesma logica atual)
+- Invalida query `['setores-dashboard']` ao salvar
 
-1. Importar `useConsorcioSummary` de `@/hooks/useConsorcio`
-2. Chamar o hook 3 vezes com filtros de data para semana, mes e ano (usando as mesmas datas que o `useSetoresDashboard` calcula: `startOfWeek` com `weekStartsOn: 6`, `startOfMonth`, `startOfYear`)
-3. Usar `totalCredito` do summary como "Apurado" (valor em carta) para cada periodo
-4. Manter as metas vindas de `useSetoresDashboard` (os `metaSemanal`, `metaMensal`, `metaAnual` dos setores efeito_alavanca + credito)
-5. Somar o `apuradoSemanal` do setor credito (comissao de `consortium_payments`) como antes
+### Alteracao: `src/components/dashboard/SetorRow.tsx`
+- Adicionar prop opcional `onEditGoals` e `canEdit`
+- Renderizar botao Settings2 no canto superior direito quando `canEdit=true`
 
-### Resultado
-- Card BU Consorcio mostrara R$ 8.5MM+ para o mes (paridade com pagina Index)
-- Valores semanais refletirao as cartas contratadas na semana atual
-- Metas continuam editaveis pelo modal existente
-- Setor Credito continua usando comissao de `consortium_payments`
+### Alteracao: `src/pages/crm/ReunioesEquipe.tsx`
+- Importar modal generico e estado de abertura
+- Passar `onEditGoals` e `canEdit` para o `SetorRow` do Incorporador
+
+### Alteracao: `src/pages/Dashboard.tsx`
+- Adicionar modal generico para cada setor com o prefixo correto
+- Permitir edicao de metas para todos os setores (admin/manager/coordenador)
+
+### Alteracao: `src/pages/bu-consorcio/PainelEquipe.tsx`
+- Substituir `ConsorcioRevenueGoalsEditModal` pelo `BURevenueGoalsEditModal` generico com 2 sections (efeito_alavanca + credito)
+
+### Banco de dados
+- Nenhuma migracao necessaria - todos os target types ja existem no CHECK constraint
