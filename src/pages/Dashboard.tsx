@@ -1,5 +1,5 @@
 // Dashboard - Director Panel with sector metrics
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ResourceGuard } from "@/components/auth/ResourceGuard";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,9 +10,38 @@ import { TotalGeralRow } from "@/components/dashboard/TotalGeralRow";
 import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
 import { Separator } from "@/components/ui/separator";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { BURevenueGoalsEditModal, BURevenueSection } from "@/components/sdr/BURevenueGoalsEditModal";
+
+const SETOR_MODAL_CONFIG: Record<string, { title: string; sections: BURevenueSection[] }> = {
+  incorporador: {
+    title: "MCF Incorporador",
+    sections: [{ prefix: "setor_incorporador", label: "Incorporador" }],
+  },
+  efeito_alavanca: {
+    title: "Efeito Alavanca",
+    sections: [{ prefix: "setor_efeito_alavanca", label: "Efeito Alavanca (Valor em Carta)" }],
+  },
+  credito: {
+    title: "MCF Crédito",
+    sections: [{ prefix: "setor_credito", label: "Crédito (Comissão)" }],
+  },
+  projetos: {
+    title: "MCF Projetos",
+    sections: [{ prefix: "setor_projetos", label: "Projetos" }],
+  },
+  leilao: {
+    title: "MCF Leilão",
+    sections: [{ prefix: "setor_leilao", label: "Leilão" }],
+  },
+};
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
+  const { role } = useAuth();
+  const canEdit = !!role && ['admin', 'manager', 'coordenador'].includes(role);
+
+  const [editingSetor, setEditingSetor] = useState<string | null>(null);
 
   // Hook para dados dos setores (busca semana/mês/ano automaticamente)
   const { data, isLoading, error } = useSetoresDashboard();
@@ -48,6 +77,8 @@ export default function Dashboard() {
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
+
+  const modalConfig = editingSetor ? SETOR_MODAL_CONFIG[editingSetor] : null;
 
   return (
     <ResourceGuard resource="dashboard">
@@ -96,7 +127,6 @@ export default function Dashboard() {
         {/* Setores em Linhas */}
         <div className="space-y-4">
           {isLoading ? (
-            // Loading skeletons
             Array.from({ length: 5 }).map((_, i) => (
               <SetorRow
                 key={i}
@@ -126,6 +156,8 @@ export default function Dashboard() {
                   comissaoMensal={setor.comissaoMensal || 0}
                   totalCartasAnual={setor.apuradoAnual}
                   comissaoAnual={setor.comissaoAnual || 0}
+                  onEditGoals={canEdit ? () => setEditingSetor('efeito_alavanca') : undefined}
+                  canEdit={canEdit}
                 />
               ) : (
                 <SetorRow
@@ -140,11 +172,23 @@ export default function Dashboard() {
                   mesLabel={data.mesLabel}
                   metaAnual={setor.metaAnual}
                   apuradoAnual={setor.apuradoAnual}
+                  onEditGoals={canEdit ? () => setEditingSetor(setor.id) : undefined}
+                  canEdit={canEdit}
                 />
               )
             )
           )}
         </div>
+
+        {/* Modal genérico de edição de metas */}
+        {modalConfig && (
+          <BURevenueGoalsEditModal
+            open={!!editingSetor}
+            onOpenChange={(open) => { if (!open) setEditingSetor(null); }}
+            title={modalConfig.title}
+            sections={modalConfig.sections}
+          />
+        )}
       </div>
     </ResourceGuard>
   );
