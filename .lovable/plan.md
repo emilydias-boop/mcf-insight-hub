@@ -1,32 +1,34 @@
 
-# Vincular SDRs e Closers do Consorcio
+# Corrigir 4 Closers "Desconhecido" no Painel Consorcio
 
-## Situacao atual
+## Causa raiz
+O hook `useR1CloserMetrics` busca **todas** as reunioes R1 do periodo (sem filtro de BU), mas so carrega closers da BU selecionada. Quando uma reuniao pertence a um closer de outra BU (ex: incorporador), o sistema nao encontra o nome e exibe "Desconhecido".
 
-A tabela `sdr` tem registros do consorcio mas com **emails nulos** e **duplicatas**. Sem email, o painel nao consegue vincular metricas da agenda.
+## Correcao
 
-### Registros atuais vs dados corretos (do profiles)
+### Arquivo: `src/hooks/useR1CloserMetrics.ts` (linhas 392-413)
 
-| Nome | sdr.id (correto) | Email (falta preencher) | Duplicata a remover |
-|------|-------------------|------------------------|---------------------|
-| Ithaline Clara dos Santos | `3aa83069...` | ithaline.clara@minhacasafinanciada.com | `12803e3a...` (remover) |
-| Cleiton Lima | `11111111...` | ja tem email OK | -- |
-| Luis Felipe | `17fdd964...` | luis.felipe@minhacasafinanciada.com | -- |
-| Ygor Ferreira | `929e60c5...` | ygor.ferreira@minhacasafinanciada.com | `eee8e90e...` (remover) |
-| Joao Pedro (Closer) | `1c6c4acd...` | joao.pedro@minhacasafinanciada.com | -- |
-| Victoria Paz (Closer) | `131c9863...` | victoria.paz@minhacasafinanciada.com | -- |
+Adicionar um filtro para ignorar reunioes cujo `closer_id` nao pertence a nenhum closer da BU atual. Em vez de criar entradas "Desconhecido", simplesmente pular essas reunioes.
 
-## Acoes
+Logica atual (linha 397-412):
+```text
+if (!metric) {
+  // Cria entrada com nome "Desconhecido" para closers de outra BU
+  metricsMap.set(closerId, { closer_name: 'Desconhecido', ... });
+}
+```
 
-### 1. Atualizar emails nos 5 registros que estao nulos
-Preencher o campo `email` na tabela `sdr` para cada pessoa usando o email do sistema (tabela `profiles`).
+Logica corrigida:
+```text
+if (!metric) {
+  // Se o closer nao pertence a esta BU, ignorar a reuniao
+  const closerInfo = closers?.find(c => c.id === closerId);
+  if (!closerInfo) return; // <-- SKIP, nao criar "Desconhecido"
+  // ... criar metrica apenas se o closer existe na BU
+}
+```
 
-### 2. Remover 2 registros duplicados
-- `12803e3a-c98e-49a3-85c7-eacd3d6965a3` (Ithaline duplicada, sem vinculo no employees)
-- `eee8e90e-db40-40e9-beda-7b30bab86151` (Ygor duplicado, sem vinculo no employees)
-
-### 3. Atualizar profile_id nos registros que faltam
-Vincular o `profile_id` correto para que permissoes e filtros por usuario funcionem.
-
-## Resultado esperado
-Apos essas correcoes de dados, o painel do Consorcio exibira automaticamente todos os SDRs e Closers com suas respectivas metricas da agenda (agendamentos, realizadas, no-shows, contratos).
+### Resultado
+- Os 4 closers "Desconhecido" desaparecem do painel Consorcio
+- Apenas closers da BU correta sao exibidos
+- Nenhum impacto no painel do Incorporador (que ja filtra por `bu='incorporador'`)
