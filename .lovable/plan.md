@@ -1,34 +1,57 @@
 
-# Corrigir 4 Closers "Desconhecido" no Painel Consorcio
 
-## Causa raiz
-O hook `useR1CloserMetrics` busca **todas** as reunioes R1 do periodo (sem filtro de BU), mas so carrega closers da BU selecionada. Quando uma reuniao pertence a um closer de outra BU (ex: incorporador), o sistema nao encontra o nome e exibe "Desconhecido".
+# Adicionar Seletor de Pipeline no Painel de Equipe do Consorcio
 
-## Correcao
+## O que muda
+Um dropdown (seletor) sera adicionado na barra de filtros do Painel de Equipe do Consorcio, permitindo alternar entre as pipelines para visualizar metricas especificas de cada uma.
 
-### Arquivo: `src/hooks/useR1CloserMetrics.ts` (linhas 392-413)
+## Pipelines disponiveis no seletor
+- **Todos** (padrao) -- mostra metricas consolidadas de todas as pipelines do Consorcio
+- **Efeito Alavanca + Clube** -- mostra apenas metricas desta pipeline
+- **Pipeline Viver de Aluguel** -- mostra apenas metricas desta pipeline
 
-Adicionar um filtro para ignorar reunioes cujo `closer_id` nao pertence a nenhum closer da BU atual. Em vez de criar entradas "Desconhecido", simplesmente pular essas reunioes.
+## Comportamento
+Ao trocar a pipeline no seletor:
+- As tabelas de SDRs e Closers filtram os dados pela pipeline selecionada
+- Os KPI cards refletem apenas os numeros da pipeline escolhida
+- O painel de metas (GoalsPanel) continua mostrando os dados gerais (agenda)
 
-Logica atual (linha 397-412):
+## Detalhes Tecnicos
+
+### Arquivo: `src/pages/bu-consorcio/PainelEquipe.tsx`
+
+1. **Adicionar estado** `selectedPipelineId` para controlar a pipeline selecionada
+2. **Importar** `PipelineSelector` de `@/components/crm/PipelineSelector` e o hook `useBUPipelineMap` de `@/hooks/useBUPipelineMap`
+3. **Renderizar o seletor** na barra de filtros (ao lado do filtro de SDR), passando `allowedGroupIds` com os grupos mapeados para a BU Consorcio
+4. **Passar `selectedPipelineId`** para os hooks `useTeamMeetingsData` e `useR1CloserMetrics` para que filtrem os dados pela pipeline selecionada (ou filtrar no lado do cliente com os dados ja carregados)
+
+### Mudancas nos hooks (se necessario)
+
+Se os hooks `useTeamMeetingsData` e `useR1CloserMetrics` nao suportarem filtro por pipeline/origin, sera feita uma filtragem no lado do cliente:
+- Cruzar os `origin_id` dos meetings/deals com as origens da pipeline selecionada
+- Usar o hook `useCRMOriginsByPipeline` para obter os origin IDs da pipeline escolhida
+
+### Componente PipelineSelector
+O componente `PipelineSelector` ja existe em `src/components/crm/PipelineSelector.tsx` e sera reutilizado diretamente. Ele ja suporta `allowedGroupIds` para filtrar por BU.
+
+### Fluxo de dados
+
 ```text
-if (!metric) {
-  // Cria entrada com nome "Desconhecido" para closers de outra BU
-  metricsMap.set(closerId, { closer_name: 'Desconhecido', ... });
-}
+PipelineSelector (dropdown)
+  |
+  v
+selectedPipelineId (state)
+  |
+  v
+useCRMOriginsByPipeline(selectedPipelineId)
+  |
+  v
+Filtra meetings/closerMetrics por origin_ids da pipeline
+  |
+  v
+KPI Cards + SDR Table + Closer Table (dados filtrados)
 ```
 
-Logica corrigida:
-```text
-if (!metric) {
-  // Se o closer nao pertence a esta BU, ignorar a reuniao
-  const closerInfo = closers?.find(c => c.id === closerId);
-  if (!closerInfo) return; // <-- SKIP, nao criar "Desconhecido"
-  // ... criar metrica apenas se o closer existe na BU
-}
-```
+### Arquivos modificados
+- `src/pages/bu-consorcio/PainelEquipe.tsx` -- adicionar seletor, estado e logica de filtragem
 
-### Resultado
-- Os 4 closers "Desconhecido" desaparecem do painel Consorcio
-- Apenas closers da BU correta sao exibidos
-- Nenhum impacto no painel do Incorporador (que ja filtra por `bu='incorporador'`)
