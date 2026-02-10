@@ -44,6 +44,7 @@ import { useCRMOriginsByPipeline } from "@/hooks/useCRMOriginsByPipeline";
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSdrsFromSquad } from "@/hooks/useSdrsFromSquad";
+import { ConsorcioRevenueGoalsEditModal } from "@/components/sdr/ConsorcioRevenueGoalsEditModal";
 
 const BU_SQUAD = "consorcio";
 const BU_PREFIX = "consorcio_sdr_";
