@@ -132,6 +132,7 @@ const menuItems: MenuItem[] = [
       { title: "Vendas", url: "/bu-incorporador/transacoes" },
       { title: "CRM", url: "/crm" },
       { title: "Relatórios", url: "/bu-incorporador/relatorios" },
+      { title: "Documentos Estratégicos", url: "/bu-incorporador/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 
