@@ -82,7 +82,10 @@ const CONSORCIO_DAY_TARGET_PROPORTIONS = {
 };
 
 // Calcula todas as metas do dia em cascata a partir do Agendamento
-const calculateDayCascade = (agendamento: number): Record<string, number> => {
+const calculateDayCascade = (agendamento: number, prefix: string = 'sdr_'): Record<string, number> => {
+  if (prefix === 'consorcio_sdr_') {
+    return calculateConsorcioDayCascade(agendamento, prefix);
+  }
   const r1Agendada = Math.round(agendamento * DAY_TARGET_PROPORTIONS.r1_agendada);
   const r1Realizada = Math.round(r1Agendada * DAY_TARGET_PROPORTIONS.r1_realizada);
   const noShow = Math.round(r1Agendada * DAY_TARGET_PROPORTIONS.noshow);
@@ -92,14 +95,40 @@ const calculateDayCascade = (agendamento: number): Record<string, number> => {
   const vendaRealizada = Math.round(r2Realizada * DAY_TARGET_PROPORTIONS.venda_realizada);
 
   return {
-    'sdr_agendamento_dia': agendamento,
-    'sdr_r1_agendada_dia': r1Agendada,
-    'sdr_r1_realizada_dia': r1Realizada,
-    'sdr_noshow_dia': noShow,
-    'sdr_contrato_dia': contratoPago,
-    'sdr_r2_agendada_dia': r2Agendada,
-    'sdr_r2_realizada_dia': r2Realizada,
-    'sdr_venda_realizada_dia': vendaRealizada,
+    [`${prefix}agendamento_dia`]: agendamento,
+    [`${prefix}r1_agendada_dia`]: r1Agendada,
+    [`${prefix}r1_realizada_dia`]: r1Realizada,
+    [`${prefix}noshow_dia`]: noShow,
+    [`${prefix}contrato_dia`]: contratoPago,
+    [`${prefix}r2_agendada_dia`]: r2Agendada,
+    [`${prefix}r2_realizada_dia`]: r2Realizada,
+    [`${prefix}venda_realizada_dia`]: vendaRealizada,
+  };
+};
+
+const calculateConsorcioDayCascade = (agendamento: number, prefix: string): Record<string, number> => {
+  const p = CONSORCIO_DAY_TARGET_PROPORTIONS;
+  const r1Agendada = Math.round(agendamento * p.r1_agendada);
+  const r1Realizada = Math.round(r1Agendada * p.r1_realizada);
+  const noShow = Math.round(r1Agendada * p.noshow);
+  const propostaEnviada = Math.round(r1Realizada * p.proposta_enviada);
+  const contratoPago = Math.round(propostaEnviada * p.contrato);
+  const aguardandoDoc = Math.round(r1Realizada * p.aguardando_doc);
+  const cartaFechada = Math.round(aguardandoDoc * p.carta_fechada);
+  const aporte = Math.round(cartaFechada * p.aporte);
+  const vendaRealizada = Math.round(contratoPago * p.venda_realizada);
+
+  return {
+    [`${prefix}agendamento_dia`]: agendamento,
+    [`${prefix}r1_agendada_dia`]: r1Agendada,
+    [`${prefix}r1_realizada_dia`]: r1Realizada,
+    [`${prefix}noshow_dia`]: noShow,
+    [`${prefix}proposta_enviada_dia`]: propostaEnviada,
+    [`${prefix}contrato_dia`]: contratoPago,
+    [`${prefix}aguardando_doc_dia`]: aguardandoDoc,
+    [`${prefix}carta_fechada_dia`]: cartaFechada,
+    [`${prefix}aporte_dia`]: aporte,
+    [`${prefix}venda_realizada_dia`]: vendaRealizada,
   };
 };
 
