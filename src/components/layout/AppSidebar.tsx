@@ -168,6 +168,7 @@ const menuItems: MenuItem[] = [
       { title: "CRM", url: "/bu-credito/crm" },
       { title: "Gestão Legado", url: "/credito" },
       { title: "Relatórios", url: "/bu-credito/relatorios" },
+      { title: "Documentos Estratégicos", url: "/bu-credito/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 
