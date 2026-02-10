@@ -119,6 +119,7 @@ import ConsorcioPainelEquipe from "./pages/bu-consorcio/PainelEquipe";
 import ConsorcioVendas from "./pages/bu-consorcio/Vendas";
 import Chairman from "./pages/Chairman";
 import Home from "./pages/Home";
+import DocumentosEstrategicos from "./pages/bu-common/DocumentosEstrategicos";
 
 // Gerentes de Conta
 import GerenciamentoGRIndex from "./pages/gerentes-conta/Index";
