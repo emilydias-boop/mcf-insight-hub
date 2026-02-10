@@ -1,52 +1,96 @@
 
-# Tabela SDR Especifica para Consorcio
+# Documentos Estrategicos por BU
 
-## Problema
-A tabela de SDRs no Painel Equipe do Consorcio usa o componente generico `SdrSummaryTable` do Incorporador, com colunas como "Contrato PAGO" e "Taxa Contrato" que nao fazem sentido para o fluxo do Consorcio.
+## Resumo
+Criar um modulo de upload e visualizacao de documentos estrategicos (PDFs) por Business Unit, com controle rigido de permissoes por cargo. Cada BU tera uma aba "Documentos Estrategicos" visivel apenas para coordenadores e acima. Diretores/admins podem ver documentos de todas as BUs.
 
-## Colunas desejadas (Consorcio)
-| SDR | Meta | Agendamento | R1 Agendada | R1 Realizada | No-Show | Proposta Enviada | Taxa Venda | Taxa Conv. | > |
+## Estrutura
 
-- **Meta**: meta diaria x dias uteis (igual ao atual)
-- **Agendamento**: reunioes criadas no periodo
-- **R1 Agendada**: reunioes agendadas para o periodo
-- **R1 Realizada**: reunioes realizadas
-- **No-Show**: com percentual sobre agendada
-- **Proposta Enviada**: deals na stage "Proposta Enviada" do pipeline Viver de Aluguel, atribuidos ao SDR via `crm_deals.owner_id` (que armazena o email do SDR)
-- **Taxa Venda**: Contratos / R1 Realizada (taxa de conversao sobre venda)
-- **Taxa Conv.**: R1 Realizada / R1 Agendada (taxa de conversao de agendada para realizada)
+### 1. Banco de Dados
 
-## O que sera feito
+**Nova tabela: `bu_strategic_documents`**
+- `id` (uuid, PK)
+- `bu` (text, NOT NULL) - identificador da BU (incorporador, consorcio, credito, projetos, leilao)
+- `mes` (integer, NOT NULL) - mes de referencia (1-12)
+- `ano` (integer, NOT NULL) - ano de referencia
+- `semana` (integer, NOT NULL) - semana dentro do mes (1-5)
+- `nome_arquivo` (text, NOT NULL)
+- `storage_path` (text, NOT NULL)
+- `uploaded_by` (uuid, FK profiles.id)
+- `uploaded_by_name` (text) - nome de quem enviou (desnormalizado para exibicao rapida)
+- `uploaded_by_role` (text) - cargo de quem enviou
+- `created_at` (timestamptz, default now())
 
-### 1. Hook `useConsorcioPipelineMetricsBySdr`
-Novo hook que busca deals na stage "Proposta Enviada" agrupados por `owner_id` (email do SDR), filtrado pelo periodo selecionado. Retorna um `Map<string, number>` de email para contagem.
+RLS: Apenas usuarios autenticados com role coordenador, manager ou admin podem SELECT/INSERT/DELETE. Admins e managers podem ver de todas as BUs; coordenadores apenas da sua squad/BU.
 
-### 2. Componente `ConsorcioSdrSummaryTable`
-Novo componente de tabela especifico para o Consorcio com as colunas corretas:
-- Remove colunas "Contrato PAGO", "Taxa Contrato", "Ghost"
-- Adiciona coluna "Proposta Enviada" com dados do novo hook
-- "Taxa Venda" = Contratos / R1 Realizada
-- "Taxa Conv." = R1 Realizada / R1 Agendada
-- Mantém navegacao para detalhe do SDR e comportamento de click
+**Novo bucket de storage: `bu-strategic-documents`**
+- Bucket privado
+- Politicas de acesso para authenticated users (upload, view, delete)
+- Path: `{bu}/{ano}/{mes}/semana-{semana}/{filename}`
 
-### 3. Alterar `PainelEquipe.tsx`
-Substituir `SdrSummaryTable` pelo novo `ConsorcioSdrSummaryTable`, passando os dados necessarios incluindo as propostas por SDR.
+### 2. Hook: `useBUStrategicDocuments`
+- Busca documentos filtrados por BU, mes, ano e semana
+- Mutations para upload (com validacao PDF only) e delete
+- No upload: salva no storage, cria registro com mes/semana, busca nome e cargo do usuario logado
+
+### 3. Pagina: `BUDocumentosEstrategicos.tsx`
+Componente reutilizavel que recebe `bu` como prop:
+- **Filtros no topo**: Ano, Mes, Semana (dropdowns)
+- **Botao de upload**: abre dialog para selecionar PDF, informar Mes e Semana
+- **Lista de documentos**: agrupados por Semana, exibindo nome do arquivo, quem enviou, cargo, data
+- **Clique no documento**: abre o PDF (signed URL)
+- **Delete**: icone de lixeira para quem tem permissao
+
+### 4. Rotas (App.tsx)
+Uma rota por BU, todas protegidas com RoleGuard:
+- `/bu-incorporador/documentos-estrategicos`
+- `/consorcio/documentos-estrategicos`
+- `/bu-credito/documentos-estrategicos`
+- `/bu-projetos/documentos-estrategicos`
+- `/leilao/documentos-estrategicos`
+
+Cada rota passa a `bu` correspondente como prop.
+
+### 5. Sidebar (AppSidebar.tsx)
+Adicionar "Documentos Estrategicos" como subitem em cada BU:
+- BU Incorporador MCF -> Documentos Estrategicos
+- BU Consorcio -> Documentos Estrategicos
+- BU Credito -> Documentos Estrategicos
+- BU Projetos -> Documentos Estrategicos
+- Leilao -> Documentos Estrategicos
+
+Visivel apenas para `admin`, `manager`, `coordenador` (via `requiredRoles`).
+
+### 6. Permissoes
+- **Coordenadores**: veem e uploadam documentos da sua BU
+- **Managers/Admins**: veem e uploadam documentos de TODAS as BUs, com um seletor de BU no topo da pagina para alternar entre elas
+- **Demais cargos**: nao veem a aba nem tem acesso
 
 ## Detalhes Tecnicos
 
-### Novo: `src/hooks/useConsorcioPipelineMetricsBySdr.ts`
-- Consulta `crm_deals` filtrada por `stage_id = '09a0a99e-feee-46df-a817-bc4d0e1ac3d9'` (Proposta Enviada)
-- Filtra por `stage_moved_at` dentro do periodo selecionado
-- Agrupa por `owner_id` (que contem o email do SDR)
-- Retorna `Map<string, number>` para lookup rapido na tabela
+### Migracao SQL
+```text
+- CREATE TABLE bu_strategic_documents (campos acima)
+- ALTER TABLE ... ENABLE ROW LEVEL SECURITY
+- CREATE POLICY para SELECT/INSERT/DELETE restrito a coordenador+
+- INSERT INTO storage.buckets (bu-strategic-documents, privado)
+- CREATE POLICY storage para authenticated users
+```
 
-### Novo: `src/components/sdr/ConsorcioSdrSummaryTable.tsx`
-- Recebe as mesmas props base (`data: SdrSummaryRow[]`, `sdrMetaMap`, `diasUteisNoPeriodo`, etc.)
-- Prop adicional: `propostasEnviadasBySdr: Map<string, number>`
-- Tabela com 9 colunas + navegacao
-- Sem coluna Ghost (especifica do Incorporador)
+### Componente de Upload
+- Input file com `accept=".pdf"`
+- Selects para Mes (Janeiro-Dezembro) e Semana (1 a 5)
+- Validacao: arquivo obrigatorio, max 20MB, apenas PDF
+- Ao salvar: upload no storage -> criar registro na tabela com nome/cargo do uploader
 
-### Alteracao: `src/pages/bu-consorcio/PainelEquipe.tsx`
-- Importar e usar `useConsorcioPipelineMetricsBySdr` com as datas do periodo
-- Importar `ConsorcioSdrSummaryTable` em vez de `SdrSummaryTable`
-- Passar `propostasEnviadasBySdr` como prop
+### Componente de Listagem
+- Agrupado por semana (Semana 1, Semana 2, etc.)
+- Cada item mostra: icone PDF, nome do arquivo, "Enviado por [Nome] ([Cargo])", data formatada
+- Botao de download/visualizar (signed URL)
+- Botao de deletar (apenas para quem fez upload ou admin)
+
+### Arquivos novos
+- `supabase/migrations/xxx_bu_strategic_documents.sql` - tabela + bucket + RLS
+- `src/hooks/useBUStrategicDocuments.ts` - hook de dados
+- `src/pages/bu-common/DocumentosEstrategicos.tsx` - pagina reutilizavel
+- Alteracoes em `src/App.tsx` (5 rotas) e `src/components/layout/AppSidebar.tsx` (5 subitens)
