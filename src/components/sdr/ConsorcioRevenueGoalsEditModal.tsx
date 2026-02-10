@@ -36,8 +36,6 @@ export function ConsorcioRevenueGoalsEditModal({
   const queryClient = useQueryClient();
   const [values, setValues] = useState<Record<string, string>>({});
   const [loadingTargets, setLoadingTargets] = useState(false);
-  const queryClient = useQueryClient();
-  const [values, setValues] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (open) {
