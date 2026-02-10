@@ -113,6 +113,7 @@ export default function ConsorcioPainelEquipe() {
   const [sdrFilter, setSdrFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"sdrs" | "closers">("sdrs");
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
+  const [goalsEditModalOpen, setGoalsEditModalOpen] = useState(false);
 
   // BU pipeline mapping for Consórcio
   const { data: buMapping } = useBUPipelineMap('consorcio');
