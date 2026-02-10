@@ -208,13 +208,7 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
     const agendamentoDiaType = `${buPrefix}agendamento_dia`;
     const agendamentoDia = initial[agendamentoDiaType] || 0;
     if (agendamentoDia > 0) {
-      const baseDayValues = calculateDayCascade(agendamentoDia);
-      // Map cascade results to dynamic keys
-      const dayValues: Record<string, number> = {};
-      Object.entries(baseDayValues).forEach(([key, val]) => {
-        const dynKey = buPrefix === 'sdr_' ? key : key.replace('sdr_', buPrefix);
-        dayValues[dynKey] = val;
-      });
+      const dayValues = calculateDayCascade(agendamentoDia, buPrefix);
       
       // Aplica valores em cascata para campos zerados do dia
       Object.entries(dayValues).forEach(([key, val]) => {
