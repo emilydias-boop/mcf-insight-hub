@@ -75,6 +75,46 @@ export const SDR_TARGET_CONFIGS: SdrTargetConfig[] = [
   { type: 'sdr_venda_realizada_mes', label: 'Vendas Realizadas', period: 'month' },
 ];
 
+// Consórcio-specific target configs with labels from both pipelines
+export const CONSORCIO_SDR_TARGET_CONFIGS: SdrTargetConfig[] = [
+  { type: 'consorcio_sdr_agendamento_dia' as SdrTargetType, label: 'Agendamento', period: 'day' },
+  { type: 'consorcio_sdr_r1_agendada_dia' as SdrTargetType, label: 'R1 Agendada', period: 'day' },
+  { type: 'consorcio_sdr_r1_realizada_dia' as SdrTargetType, label: 'R1 Realizada', period: 'day' },
+  { type: 'consorcio_sdr_noshow_dia' as SdrTargetType, label: 'No-Show', period: 'day' },
+  { type: 'consorcio_sdr_proposta_enviada_dia' as SdrTargetType, label: 'Proposta Enviada', period: 'day' },
+  { type: 'consorcio_sdr_contrato_dia' as SdrTargetType, label: 'Contrato Pago', period: 'day' },
+  { type: 'consorcio_sdr_aguardando_doc_dia' as SdrTargetType, label: 'Aguardando Doc', period: 'day' },
+  { type: 'consorcio_sdr_carta_fechada_dia' as SdrTargetType, label: 'Carta Sócios Fechada', period: 'day' },
+  { type: 'consorcio_sdr_aporte_dia' as SdrTargetType, label: 'Aporte Holding', period: 'day' },
+  { type: 'consorcio_sdr_venda_realizada_dia' as SdrTargetType, label: 'Venda Realizada', period: 'day' },
+  { type: 'consorcio_sdr_agendamento_semana' as SdrTargetType, label: 'Agendamento', period: 'week' },
+  { type: 'consorcio_sdr_r1_agendada_semana' as SdrTargetType, label: 'R1 Agendada', period: 'week' },
+  { type: 'consorcio_sdr_r1_realizada_semana' as SdrTargetType, label: 'R1 Realizada', period: 'week' },
+  { type: 'consorcio_sdr_noshow_semana' as SdrTargetType, label: 'No-Show', period: 'week' },
+  { type: 'consorcio_sdr_proposta_enviada_semana' as SdrTargetType, label: 'Proposta Enviada', period: 'week' },
+  { type: 'consorcio_sdr_contrato_semana' as SdrTargetType, label: 'Contrato Pago', period: 'week' },
+  { type: 'consorcio_sdr_aguardando_doc_semana' as SdrTargetType, label: 'Aguardando Doc', period: 'week' },
+  { type: 'consorcio_sdr_carta_fechada_semana' as SdrTargetType, label: 'Carta Sócios Fechada', period: 'week' },
+  { type: 'consorcio_sdr_aporte_semana' as SdrTargetType, label: 'Aporte Holding', period: 'week' },
+  { type: 'consorcio_sdr_venda_realizada_semana' as SdrTargetType, label: 'Venda Realizada', period: 'week' },
+  { type: 'consorcio_sdr_agendamento_mes' as SdrTargetType, label: 'Agendamento', period: 'month' },
+  { type: 'consorcio_sdr_r1_agendada_mes' as SdrTargetType, label: 'R1 Agendada', period: 'month' },
+  { type: 'consorcio_sdr_r1_realizada_mes' as SdrTargetType, label: 'R1 Realizada', period: 'month' },
+  { type: 'consorcio_sdr_noshow_mes' as SdrTargetType, label: 'No-Show', period: 'month' },
+  { type: 'consorcio_sdr_proposta_enviada_mes' as SdrTargetType, label: 'Proposta Enviada', period: 'month' },
+  { type: 'consorcio_sdr_contrato_mes' as SdrTargetType, label: 'Contrato Pago', period: 'month' },
+  { type: 'consorcio_sdr_aguardando_doc_mes' as SdrTargetType, label: 'Aguardando Doc', period: 'month' },
+  { type: 'consorcio_sdr_carta_fechada_mes' as SdrTargetType, label: 'Carta Sócios Fechada', period: 'month' },
+  { type: 'consorcio_sdr_aporte_mes' as SdrTargetType, label: 'Aporte Holding', period: 'month' },
+  { type: 'consorcio_sdr_venda_realizada_mes' as SdrTargetType, label: 'Venda Realizada', period: 'month' },
+];
+
+// Helper to get correct target configs for a BU prefix
+export function getTargetConfigsForBU(buPrefix: string): SdrTargetConfig[] {
+  if (buPrefix === 'consorcio_sdr_') return CONSORCIO_SDR_TARGET_CONFIGS;
+  return SDR_TARGET_CONFIGS;
+}
+
 // Fetch SDR team targets for current month (targets are saved with week_start = first day of month)
 // buPrefix allows filtering by BU (e.g. 'consorcio_sdr_' for consórcio, default 'sdr_' for incorporador)
 export const useSdrTeamTargets = (buPrefix: string = 'sdr_') => {
