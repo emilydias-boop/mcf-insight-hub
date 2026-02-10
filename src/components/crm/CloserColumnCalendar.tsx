@@ -160,11 +160,14 @@ export function CloserColumnCalendar({
     return meetings.filter((m) => {
       if (m.closer_id !== closerId) return false;
       const meetingTime = parseISO(m.scheduled_at);
-      return (
+      const timeMatch =
         isSameDay(meetingTime, slotTime) &&
         meetingTime.getHours() === slotTime.getHours() &&
-        meetingTime.getMinutes() === slotTime.getMinutes()
-      );
+        meetingTime.getMinutes() === slotTime.getMinutes();
+      if (!timeMatch) return false;
+      // Exclude orphan canceled slots (no attendees)
+      if (m.status === 'canceled' && (!m.attendees || m.attendees.length === 0)) return false;
+      return true;
     });
   };
 
@@ -293,7 +296,13 @@ export function CloserColumnCalendar({
                 const hasMeetings = slotMeetings.length > 0;
                 // Combinar attendees de todos os meetings no mesmo slot
                 const allAttendees = slotMeetings.flatMap(m => m.attendees || []);
-                const firstMeeting = slotMeetings[0];
+                // Prioritize active slots over canceled ones
+                const sortedMeetings = [...slotMeetings].sort((a, b) => {
+                  if (a.status === 'canceled' && b.status !== 'canceled') return 1;
+                  if (a.status !== 'canceled' && b.status === 'canceled') return -1;
+                  return 0;
+                });
+                const firstMeeting = sortedMeetings[0];
                 const available = isSlotAvailable(closer.id, slot);
                 const isBlocked = blockedDates.some(
                   (bd) => bd.closer_id === closer.id && isSameDay(parseISO(bd.blocked_date), selectedDate),
