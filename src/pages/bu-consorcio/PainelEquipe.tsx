@@ -562,11 +562,6 @@ export default function ConsorcioPainelEquipe() {
       <ConsorcioRevenueGoalsEditModal
         open={revenueGoalsEditOpen}
         onOpenChange={setRevenueGoalsEditOpen}
-        currentTargets={(() => {
-          const targets: Record<string, number> = {};
-          const setoresData = undefined; // We need to pass from the card
-          return targets;
-        })()}
       />
 
       {/* Goals Panel - Consórcio specific with both pipelines */}
