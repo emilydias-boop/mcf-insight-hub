@@ -1,41 +1,100 @@
 
-# Fix: Reuniao do Julio ainda mostrando "Cancelada" no Drawer
 
-## Diagnostico
+# Fix: "new row violates row-level security policy" on Strategic Documents
 
-A correcao anterior aplicou o filtro apenas dentro do `CloserColumnCalendar.tsx` (na funcao `getMeetingsForSlot`). Isso fez o **grid do calendario** mostrar corretamente, mas o **drawer** continua recebendo o slot cancelado orfao por outra via.
+## Root Cause
 
-O problema raiz esta em `Agenda.tsx`: a variavel `filteredMeetings` inclui **todos** os meeting slots, inclusive o slot orfao cancelado (`d2254bfc`, status `canceled`, 0 participantes). Esse array e passado para:
-1. `relatedMeetings` do drawer -- que pode incluir o slot cancelado como "relacionado"
-2. Outras views (AgendaCalendar, MeetingsList) que nao tem o filtro
+The RLS policies created for `bu_strategic_documents` table and `bu-strategic-documents` storage bucket check roles via `auth.users.raw_app_meta_data -> 'roles'`, but this project stores roles in the `user_roles` table. The `raw_app_meta_data` field is empty for all users, so every policy check fails.
 
-## Solucao
+## Solution
 
-Aplicar o filtro de slots orfaos cancelados **na origem** dos dados, no `filteredMeetings` dentro de `Agenda.tsx`, antes de passar para qualquer componente. Isso garante que nenhum componente (calendario, drawer, lista) veja esses slots fantasma.
+Replace all RLS policies on both the table and storage bucket to use the existing `public.has_role(auth.uid(), role)` security definer function, which correctly queries the `user_roles` table.
 
-## Alteracao
+## Database Migration
 
-### Arquivo: `src/pages/crm/Agenda.tsx`
+### 1. Drop and recreate policies on `bu_strategic_documents`
 
-Dentro do `useMemo` de `filteredMeetings` (linhas 95-115), adicionar um filtro que exclui meeting slots com status `canceled` que tenham 0 participantes:
+- **INSERT policy**: Use `has_role()` to check for admin, manager, or coordenador
+- **SELECT policy**: Admin/manager see all; coordenador sees only their BU (using `profiles.squad`)
+- **DELETE policy**: Owner can delete their own, admin/manager can delete any
+
+### 2. Drop and recreate storage policies on `bu-strategic-documents` bucket
+
+- **INSERT (upload)**: `has_role()` check for admin/manager/coordenador
+- **SELECT (view)**: `has_role()` check for admin/manager/coordenador
+- **DELETE**: `has_role()` check for admin/manager + owner check
+
+## Technical Details
+
+SQL migration will:
 
 ```text
-let result = meetings;
+-- Drop existing broken policies
+DROP POLICY "coordenador_plus_insert_strategic_docs" ON public.bu_strategic_documents;
+DROP POLICY "coordenador_plus_select_strategic_docs" ON public.bu_strategic_documents;
+DROP POLICY "owner_or_admin_delete_strategic_docs" ON public.bu_strategic_documents;
 
-// Remove orphan canceled slots (canceled with no attendees)
-result = result.filter(m => {
-  if (m.status === 'canceled' && (!m.attendees || m.attendees.length === 0)) return false;
-  return true;
-});
+-- Recreate using has_role()
+CREATE POLICY "insert_strategic_docs" ON public.bu_strategic_documents
+FOR INSERT TO authenticated
+WITH CHECK (
+  has_role(auth.uid(), 'admin') OR
+  has_role(auth.uid(), 'manager') OR
+  has_role(auth.uid(), 'coordenador')
+);
 
-// ... resto dos filtros existentes
+CREATE POLICY "select_strategic_docs" ON public.bu_strategic_documents
+FOR SELECT TO authenticated
+USING (
+  has_role(auth.uid(), 'admin') OR
+  has_role(auth.uid(), 'manager') OR
+  (has_role(auth.uid(), 'coordenador') AND bu = ANY(
+    SELECT unnest(squad) FROM profiles WHERE id = auth.uid()
+  ))
+);
+
+CREATE POLICY "delete_strategic_docs" ON public.bu_strategic_documents
+FOR DELETE TO authenticated
+USING (
+  uploaded_by = auth.uid() OR
+  has_role(auth.uid(), 'admin') OR
+  has_role(auth.uid(), 'manager')
+);
+
+-- Same pattern for storage.objects policies on bucket 'bu-strategic-documents'
+DROP POLICY "coordenador_plus_upload_strategic_docs" ON storage.objects;
+DROP POLICY "coordenador_plus_view_strategic_docs" ON storage.objects;
+DROP POLICY "owner_or_admin_delete_strategic_docs_storage" ON storage.objects;
+
+CREATE POLICY "upload_strategic_docs" ON storage.objects
+FOR INSERT TO authenticated
+WITH CHECK (
+  bucket_id = 'bu-strategic-documents' AND (
+    has_role(auth.uid(), 'admin') OR
+    has_role(auth.uid(), 'manager') OR
+    has_role(auth.uid(), 'coordenador')
+  )
+);
+
+CREATE POLICY "view_strategic_docs" ON storage.objects
+FOR SELECT TO authenticated
+USING (
+  bucket_id = 'bu-strategic-documents' AND (
+    has_role(auth.uid(), 'admin') OR
+    has_role(auth.uid(), 'manager') OR
+    has_role(auth.uid(), 'coordenador')
+  )
+);
+
+CREATE POLICY "delete_strategic_docs_storage" ON storage.objects
+FOR DELETE TO authenticated
+USING (
+  bucket_id = 'bu-strategic-documents' AND (
+    has_role(auth.uid(), 'admin') OR
+    has_role(auth.uid(), 'manager')
+  )
+);
 ```
 
-Isso resolve o problema na raiz, garantindo que:
-- O grid do calendario nao exibe slots orfaos
-- O drawer nao recebe slots orfaos como `meeting` nem como `relatedMeetings`
-- A lista de reunioes tambem fica limpa
-- Qualquer view futura tambem se beneficia
+No code changes needed -- only the database policies need to be fixed.
 
-## Complexidade
-Alteracao de 3 linhas em 1 arquivo. Sem efeitos colaterais -- reunioes canceladas com participantes continuam vissiveis normalmente.
