@@ -474,14 +474,29 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
                 <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}contrato_mes`] || 0).toLocaleString('pt-BR')}</p>
                 <p className="text-muted-foreground">Contratos</p>
               </div>
-              <div className="text-center">
-                <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}r2_realizada_mes`] || 0).toLocaleString('pt-BR')}</p>
-                <p className="text-muted-foreground">R2 Realizadas</p>
-              </div>
-              <div className="text-center">
-                <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}venda_realizada_mes`] || 0).toLocaleString('pt-BR')}</p>
-                <p className="text-muted-foreground">Vendas</p>
-              </div>
+              {buPrefix === 'consorcio_sdr_' ? (
+                <>
+                  <div className="text-center">
+                    <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}carta_fechada_mes`] || 0).toLocaleString('pt-BR')}</p>
+                    <p className="text-muted-foreground">Carta Sócios</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}aporte_mes`] || 0).toLocaleString('pt-BR')}</p>
+                    <p className="text-muted-foreground">Aporte Holding</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-center">
+                    <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}r2_realizada_mes`] || 0).toLocaleString('pt-BR')}</p>
+                    <p className="text-muted-foreground">R2 Realizadas</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}venda_realizada_mes`] || 0).toLocaleString('pt-BR')}</p>
+                    <p className="text-muted-foreground">Vendas</p>
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
