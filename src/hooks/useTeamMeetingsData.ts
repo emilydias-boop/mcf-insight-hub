@@ -30,11 +30,12 @@ interface TeamMeetingsParams {
   endDate: Date | null;
   sdrEmailFilter?: string; // Filter for a specific SDR
   originIdFilter?: string; // Filter by origin (for future use)
+  squad?: string; // BU squad filter (default: 'incorporador')
 }
 
-export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: TeamMeetingsParams) {
-  // Fetch active SDRs from the 'incorporador' squad dynamically
-  const sdrsQuery = useSdrsFromSquad('incorporador');
+export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad = 'incorporador' }: TeamMeetingsParams) {
+  // Fetch active SDRs from the specified squad dynamically
+  const sdrsQuery = useSdrsFromSquad(squad);
   
   // Fetch metrics from agenda (meeting_slot_attendees) instead of deal_activities
   const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmailFilter);

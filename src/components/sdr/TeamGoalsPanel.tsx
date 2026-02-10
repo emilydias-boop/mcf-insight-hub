@@ -23,57 +23,59 @@ interface TeamGoalsPanelProps {
   dayValues: MetricValues;
   weekValues: MetricValues;
   monthValues: MetricValues;
+  buPrefix?: string; // e.g. 'consorcio_sdr_' for consórcio, default 'sdr_'
 }
 
-export function TeamGoalsPanel({ dayValues, weekValues, monthValues }: TeamGoalsPanelProps) {
+export function TeamGoalsPanel({ dayValues, weekValues, monthValues, buPrefix = 'sdr_' }: TeamGoalsPanelProps) {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const { role } = useAuth();
-  const { data: targets, isLoading } = useSdrTeamTargets();
+  const { data: targets, isLoading } = useSdrTeamTargets(buPrefix);
 
   // Roles allowed to edit
   const canEdit = role && ['admin', 'manager', 'coordenador'].includes(role);
 
-  // Map target types to their values
-  const getTargetValue = (type: SdrTargetType): number => {
-    const target = targets?.find(t => t.target_type === type);
+  // Map target types to their values - uses buPrefix to find correct targets
+  const getTargetValue = (suffix: string): number => {
+    const targetType = `${buPrefix}${suffix}`;
+    const target = targets?.find(t => t.target_type === targetType);
     return target?.target_value ?? 0;
   };
 
   // Day targets
   const dayTargets = useMemo(() => ({
-    agendamento: getTargetValue('sdr_agendamento_dia'),
-    r1Agendada: getTargetValue('sdr_r1_agendada_dia'),
-    r1Realizada: getTargetValue('sdr_r1_realizada_dia'),
-    noShow: getTargetValue('sdr_noshow_dia'),
-    contrato: getTargetValue('sdr_contrato_dia'),
-    r2Agendada: getTargetValue('sdr_r2_agendada_dia'),
-    r2Realizada: getTargetValue('sdr_r2_realizada_dia'),
-    vendaRealizada: getTargetValue('sdr_venda_realizada_dia'),
-  }), [targets]);
+    agendamento: getTargetValue('agendamento_dia'),
+    r1Agendada: getTargetValue('r1_agendada_dia'),
+    r1Realizada: getTargetValue('r1_realizada_dia'),
+    noShow: getTargetValue('noshow_dia'),
+    contrato: getTargetValue('contrato_dia'),
+    r2Agendada: getTargetValue('r2_agendada_dia'),
+    r2Realizada: getTargetValue('r2_realizada_dia'),
+    vendaRealizada: getTargetValue('venda_realizada_dia'),
+  }), [targets, buPrefix]);
 
   // Week targets
   const weekTargets = useMemo(() => ({
-    agendamento: getTargetValue('sdr_agendamento_semana'),
-    r1Agendada: getTargetValue('sdr_r1_agendada_semana'),
-    r1Realizada: getTargetValue('sdr_r1_realizada_semana'),
-    noShow: getTargetValue('sdr_noshow_semana'),
-    contrato: getTargetValue('sdr_contrato_semana'),
-    r2Agendada: getTargetValue('sdr_r2_agendada_semana'),
-    r2Realizada: getTargetValue('sdr_r2_realizada_semana'),
-    vendaRealizada: getTargetValue('sdr_venda_realizada_semana'),
-  }), [targets]);
+    agendamento: getTargetValue('agendamento_semana'),
+    r1Agendada: getTargetValue('r1_agendada_semana'),
+    r1Realizada: getTargetValue('r1_realizada_semana'),
+    noShow: getTargetValue('noshow_semana'),
+    contrato: getTargetValue('contrato_semana'),
+    r2Agendada: getTargetValue('r2_agendada_semana'),
+    r2Realizada: getTargetValue('r2_realizada_semana'),
+    vendaRealizada: getTargetValue('venda_realizada_semana'),
+  }), [targets, buPrefix]);
 
   // Month targets
   const monthTargets = useMemo(() => ({
-    agendamento: getTargetValue('sdr_agendamento_mes'),
-    r1Agendada: getTargetValue('sdr_r1_agendada_mes'),
-    r1Realizada: getTargetValue('sdr_r1_realizada_mes'),
-    noShow: getTargetValue('sdr_noshow_mes'),
-    contrato: getTargetValue('sdr_contrato_mes'),
-    r2Agendada: getTargetValue('sdr_r2_agendada_mes'),
-    r2Realizada: getTargetValue('sdr_r2_realizada_mes'),
-    vendaRealizada: getTargetValue('sdr_venda_realizada_mes'),
-  }), [targets]);
+    agendamento: getTargetValue('agendamento_mes'),
+    r1Agendada: getTargetValue('r1_agendada_mes'),
+    r1Realizada: getTargetValue('r1_realizada_mes'),
+    noShow: getTargetValue('noshow_mes'),
+    contrato: getTargetValue('contrato_mes'),
+    r2Agendada: getTargetValue('r2_agendada_mes'),
+    r2Realizada: getTargetValue('r2_realizada_mes'),
+    vendaRealizada: getTargetValue('venda_realizada_mes'),
+  }), [targets, buPrefix]);
 
   if (isLoading) {
     return (
@@ -123,6 +125,7 @@ export function TeamGoalsPanel({ dayValues, weekValues, monthValues }: TeamGoals
         open={editModalOpen}
         onOpenChange={setEditModalOpen}
         existingTargets={targets || []}
+        buPrefix={buPrefix}
       />
     </>
   );

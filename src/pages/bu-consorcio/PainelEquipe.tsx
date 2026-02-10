@@ -1,25 +1,458 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users2 } from 'lucide-react';
+import { useState, useMemo } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import * as XLSX from "xlsx";
+import { WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
+import { Calendar, Users, Download, Briefcase, TrendingUp } from "lucide-react";
+import { SetorRow } from "@/components/dashboard/SetorRow";
+import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
+import { TeamKPICards } from "@/components/sdr/TeamKPICards";
+import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
+import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
+import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
+
+import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
+import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
+import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
+import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
+import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
+import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
+import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
+import { useSdrOutsideMetrics } from "@/hooks/useSdrOutsideMetrics";
+
+import { useSdrsAll } from "@/hooks/useSdrFechamento";
+import { useAuth } from "@/contexts/AuthContext";
+import { useSdrsFromSquad } from "@/hooks/useSdrsFromSquad";
+
+const BU_SQUAD = "consorcio";
+const BU_PREFIX = "consorcio_sdr_";
+
+type DatePreset = "today" | "week" | "month" | "custom";
+
+function ConsorcioMetricsCard() {
+  const { data: setoresData, isLoading: setoresLoading } = useSetoresDashboard();
+  const efeitoAlavanca = setoresData?.setores.find(s => s.id === 'efeito_alavanca');
+  const credito = setoresData?.setores.find(s => s.id === 'credito');
+
+  if (!efeitoAlavanca && !credito && !setoresLoading) return null;
+
+  // Combine both sectors for the card
+  const combined = {
+    apuradoSemanal: (efeitoAlavanca?.comissaoSemanal || 0) + (credito?.apuradoSemanal || 0),
+    metaSemanal: (efeitoAlavanca?.metaSemanal || 0) + (credito?.metaSemanal || 0),
+    apuradoMensal: (efeitoAlavanca?.comissaoMensal || 0) + (credito?.apuradoMensal || 0),
+    metaMensal: (efeitoAlavanca?.metaMensal || 0) + (credito?.metaMensal || 0),
+    apuradoAnual: (efeitoAlavanca?.comissaoAnual || 0) + (credito?.apuradoAnual || 0),
+    metaAnual: (efeitoAlavanca?.metaAnual || 0) + (credito?.metaAnual || 0),
+  };
+
+  return (
+    <div className="relative group">
+      <div className="absolute -inset-0.5 bg-gradient-to-r from-primary via-primary/60 to-primary rounded-xl blur opacity-30 group-hover:opacity-50 transition-opacity duration-300" />
+      <div className="relative">
+        <SetorRow
+          titulo="BU Consórcio"
+          icone={TrendingUp}
+          semanaLabel={setoresData?.semanaLabel || 'Semana'}
+          mesLabel={setoresData?.mesLabel || 'Mês'}
+          apuradoSemanal={combined.apuradoSemanal}
+          metaSemanal={combined.metaSemanal}
+          apuradoMensal={combined.apuradoMensal}
+          metaMensal={combined.metaMensal}
+          apuradoAnual={combined.apuradoAnual}
+          metaAnual={combined.metaAnual}
+          isLoading={setoresLoading}
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function ConsorcioPainelEquipe() {
+  const { role } = useAuth();
+  const navigate = useNavigate();
+  const isRestrictedRole = role === 'sdr' || role === 'closer';
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const initialPreset = (searchParams.get("preset") as DatePreset) || "month";
+  const initialMonth = searchParams.get("month")
+    ? parseISO(searchParams.get("month") + "-01")
+    : new Date();
+  const initialStart = searchParams.get("start")
+    ? parseISO(searchParams.get("start")!)
+    : null;
+  const initialEnd = searchParams.get("end")
+    ? parseISO(searchParams.get("end")!)
+    : initialStart;
+
+  const [selectedMonth, setSelectedMonth] = useState(initialMonth);
+  const [datePreset, setDatePreset] = useState<DatePreset>(initialPreset);
+  const [customStartDate, setCustomStartDate] = useState<Date | null>(initialStart);
+  const [customEndDate, setCustomEndDate] = useState<Date | null>(initialEnd || initialStart);
+  const [sdrFilter, setSdrFilter] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState<"sdrs" | "closers">("sdrs");
+
+  const updateUrlParams = (
+    preset: DatePreset,
+    month?: Date,
+    startDate?: Date | null,
+    endDate?: Date | null
+  ) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("preset", preset);
+    if (preset === "month" && month) {
+      params.set("month", format(month, "yyyy-MM"));
+      params.delete("start");
+      params.delete("end");
+    } else if (preset === "custom") {
+      params.delete("month");
+      if (startDate) params.set("start", format(startDate, "yyyy-MM-dd"));
+      if (endDate) params.set("end", format(endDate, "yyyy-MM-dd"));
+    } else {
+      params.delete("month");
+      params.delete("start");
+      params.delete("end");
+    }
+    setSearchParams(params, { replace: true });
+  };
+
+  const getDateRange = () => {
+    const today = new Date();
+    switch (datePreset) {
+      case "today":
+        return { start: startOfDay(today), end: endOfDay(today) };
+      case "week": {
+        const todayNormalized = startOfDay(today);
+        return { start: startOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON }), end: endOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON }) };
+      }
+      case "month":
+        return { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) };
+      case "custom":
+        const startCustom = customStartDate || startOfMonth(today);
+        const endCustom = customEndDate || customStartDate || endOfMonth(today);
+        if (startCustom > endCustom) return { start: endCustom, end: startCustom };
+        return { start: startCustom, end: endCustom };
+      default:
+        return { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) };
+    }
+  };
+
+  const { start, end } = getDateRange();
+
+  const today = new Date();
+  const dayStart = startOfDay(today);
+  const dayEnd = endOfDay(today);
+  const todayNormalized = startOfDay(today);
+  const weekStartDate = startOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEndDate = endOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON });
+  const monthStartDate = startOfMonth(today);
+  const monthEndDate = endOfMonth(today);
+
+  // Fetch data with squad = 'consorcio'
+  const {
+    teamKPIs,
+    bySDR,
+    allMeetings,
+    isLoading,
+    refetch,
+  } = useTeamMeetingsData({
+    startDate: start,
+    endDate: end,
+    sdrEmailFilter: sdrFilter !== "all" ? sdrFilter : undefined,
+    squad: BU_SQUAD,
+  });
+
+  const { teamKPIs: dayKPIs } = useTeamMeetingsData({ startDate: dayStart, endDate: dayEnd, squad: BU_SQUAD });
+  const { teamKPIs: weekKPIs } = useTeamMeetingsData({ startDate: weekStartDate, endDate: weekEndDate, squad: BU_SQUAD });
+  const { teamKPIs: monthKPIs } = useTeamMeetingsData({ startDate: monthStartDate, endDate: monthEndDate, squad: BU_SQUAD });
+
+  const { data: ghostCountBySdr } = useGhostCountBySdr();
+  const { data: allSdrsData } = useSdrsAll();
+  const { data: activeSdrsList } = useSdrsFromSquad(BU_SQUAD);
+
+  const sdrMetaMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (allSdrsData) {
+      allSdrsData.forEach(sdr => {
+        if (sdr.email) map.set(sdr.email.toLowerCase(), sdr.meta_diaria || 10);
+      });
+    }
+    return map;
+  }, [allSdrsData]);
+
+  const diasUteisNoPeriodo = useMemo(() => contarDiasUteis(start, end), [start, end]);
+
+  const { data: dayAgendaKPIs } = useMeetingSlotsKPIs(dayStart, dayEnd);
+  const { data: weekAgendaKPIs } = useMeetingSlotsKPIs(weekStartDate, weekEndDate);
+  const { data: dayR2AgendaKPIs } = useR2MeetingSlotsKPIs(dayStart, dayEnd);
+  const { data: weekR2AgendaKPIs } = useR2MeetingSlotsKPIs(weekStartDate, weekEndDate);
+  const { data: dayR2VendasKPIs } = useR2VendasKPIs(dayStart, dayEnd);
+  const { data: weekR2VendasKPIs } = useR2VendasKPIs(weekStartDate, weekEndDate);
+  const { data: monthAgendaKPIs } = useMeetingSlotsKPIs(monthStartDate, monthEndDate);
+  const { data: monthR2AgendaKPIs } = useR2MeetingSlotsKPIs(monthStartDate, monthEndDate);
+  const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
+
+  // Closer metrics filtered by BU consorcio
+  const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end, BU_SQUAD);
+  const { data: pendentesHoje } = useMeetingsPendentesHoje();
+  const { data: outsideData } = useSdrOutsideMetrics(start, end);
+
+  const enrichedKPIs = useMemo(() => ({
+    ...teamKPIs,
+    totalOutside: outsideData?.totalOutside || 0,
+  }), [teamKPIs, outsideData]);
+
+  const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
+    const sdrs = activeSdrsList || [];
+    return sdrs.map(sdr => ({
+      sdrEmail: sdr.email,
+      sdrName: sdr.name,
+      agendamentos: 0,
+      r1Agendada: 0,
+      r1Realizada: 0,
+      noShows: 0,
+      contratos: 0,
+    }));
+  }, [activeSdrsList]);
+
+  const mergedBySDR = useMemo((): SdrSummaryRow[] => {
+    const dataMap = new Map(allSdrsWithZeros.map(s => [s.sdrEmail, { ...s }]));
+    bySDR.forEach(realRow => {
+      if (dataMap.has(realRow.sdrEmail)) dataMap.set(realRow.sdrEmail, realRow);
+    });
+    return Array.from(dataMap.values()).sort((a, b) => {
+      if (b.agendamentos !== a.agendamentos) return b.agendamentos - a.agendamentos;
+      if (b.r1Realizada !== a.r1Realizada) return b.r1Realizada - a.r1Realizada;
+      return a.sdrName.localeCompare(b.sdrName);
+    });
+  }, [allSdrsWithZeros, bySDR]);
+
+  const filteredBySDR = useMemo(() => {
+    const baseData = datePreset === "today" ? mergedBySDR : bySDR;
+    if (sdrFilter === "all") return baseData;
+    return baseData.filter(s => s.sdrEmail === sdrFilter);
+  }, [datePreset, mergedBySDR, bySDR, sdrFilter]);
+
+  const dayPendentes = pendentesHoje ?? 0;
+
+  const dayValues = useMemo(() => ({
+    agendamento: dayKPIs?.totalAgendamentos || 0,
+    r1Agendada: (dayKPIs?.totalRealizadas || 0) + (dayKPIs?.totalNoShows || 0) + dayPendentes,
+    r1Realizada: dayKPIs?.totalRealizadas || 0,
+    noShow: dayKPIs?.totalNoShows || 0,
+    contrato: dayKPIs?.totalContratos || 0,
+    r2Agendada: dayR2AgendaKPIs?.r2Agendadas || 0,
+    r2Realizada: dayR2AgendaKPIs?.r2Realizadas || 0,
+    vendaRealizada: dayR2VendasKPIs?.vendasRealizadas || 0,
+  }), [dayKPIs, dayPendentes, dayR2AgendaKPIs, dayR2VendasKPIs]);
+
+  const weekValues = useMemo(() => ({
+    agendamento: weekKPIs?.totalAgendamentos || 0,
+    r1Agendada: (weekKPIs?.totalRealizadas || 0) + (weekKPIs?.totalNoShows || 0),
+    r1Realizada: weekKPIs?.totalRealizadas || 0,
+    noShow: weekKPIs?.totalNoShows || 0,
+    contrato: weekKPIs?.totalContratos || 0,
+    r2Agendada: weekR2AgendaKPIs?.r2Agendadas || 0,
+    r2Realizada: weekR2AgendaKPIs?.r2Realizadas || 0,
+    vendaRealizada: weekR2VendasKPIs?.vendasRealizadas || 0,
+  }), [weekKPIs, weekR2AgendaKPIs, weekR2VendasKPIs]);
+
+  const monthValues = useMemo(() => ({
+    agendamento: monthKPIs?.totalAgendamentos || 0,
+    r1Agendada: (monthKPIs?.totalRealizadas || 0) + (monthKPIs?.totalNoShows || 0),
+    r1Realizada: monthKPIs?.totalRealizadas || 0,
+    noShow: monthKPIs?.totalNoShows || 0,
+    contrato: monthKPIs?.totalContratos || 0,
+    r2Agendada: monthR2AgendaKPIs?.r2Agendadas || 0,
+    r2Realizada: monthR2AgendaKPIs?.r2Realizadas || 0,
+    vendaRealizada: monthR2VendasKPIs?.vendasRealizadas || 0,
+  }), [monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs]);
+
+  const handlePresetChange = (preset: DatePreset) => {
+    setDatePreset(preset);
+    updateUrlParams(preset, selectedMonth, customStartDate, customEndDate);
+  };
+
+  const handleMonthChange = (increment: number) => {
+    const newDate = new Date(selectedMonth);
+    newDate.setMonth(newDate.getMonth() + increment);
+    setSelectedMonth(newDate);
+    updateUrlParams("month", newDate, null, null);
+  };
+
+  const handleCustomStartChange = (date: Date | null) => {
+    setCustomStartDate(date);
+    updateUrlParams("custom", selectedMonth, date, customEndDate);
+  };
+
+  const handleCustomEndChange = (date: Date | null) => {
+    setCustomEndDate(date);
+    updateUrlParams("custom", selectedMonth, customStartDate, date);
+  };
+
+  const handleExportExcel = () => {
+    const resumoData = filteredBySDR.map(sdr => ({
+      "SDR": sdr.sdrName,
+      "Agendamento": sdr.agendamentos,
+      "R1 Agendada": sdr.r1Agendada,
+      "R1 Realizada": sdr.r1Realizada,
+      "No-Show": sdr.noShows,
+      "Contrato PAGO": sdr.contratos,
+    }));
+
+    const leadsData = allMeetings
+      .filter(m => sdrFilter === "all" || m.intermediador === sdrFilter)
+      .map(m => ({
+        "SDR": m.intermediador || "",
+        "Data/Hora": m.data_agendamento ? format(new Date(m.data_agendamento), "dd/MM/yyyy HH:mm") : "",
+        "Lead": m.contact_name || "",
+        "Email": m.contact_email || "",
+        "Telefone": m.contact_phone || "",
+        "Tipo": m.tipo || "",
+        "Status": m.status_atual || "",
+        "Origem": m.origin_name || "",
+        "Closer": m.closer || "",
+        "Probabilidade": m.probability ? `${m.probability}%` : "",
+      }));
+
+    const wb = XLSX.utils.book_new();
+    const wsResumo = XLSX.utils.json_to_sheet(resumoData);
+    const wsLeads = XLSX.utils.json_to_sheet(leadsData);
+    XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo SDR");
+    XLSX.utils.book_append_sheet(wb, wsLeads, "Leads Detalhados");
+    XLSX.writeFile(wb, `painel_consorcio_${format(start, "yyyyMMdd")}_${format(end, "yyyyMMdd")}.xlsx`);
+  };
+
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <Users2 className="h-8 w-8 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold">Painel da Equipe - Consórcio</h1>
-          <p className="text-muted-foreground">
-            Acompanhamento de performance e metas das equipes de consórcio
-          </p>
-        </div>
-      </div>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>Em Desenvolvimento</CardTitle>
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-6">
+      {/* Consórcio Metrics Card */}
+      <ConsorcioMetricsCard />
+
+      {/* Goals Panel with consorcio prefix */}
+      <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} monthValues={monthValues} buPrefix={BU_PREFIX} />
+
+      {/* Filters */}
+      <Card className="bg-card border-border">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-full sm:w-auto">
+              <Button variant={datePreset === "today" ? "secondary" : "ghost"} size="sm" onClick={() => handlePresetChange("today")} className="flex-1 sm:flex-initial text-xs sm:text-sm">Hoje</Button>
+              <Button variant={datePreset === "week" ? "secondary" : "ghost"} size="sm" onClick={() => handlePresetChange("week")} className="flex-1 sm:flex-initial text-xs sm:text-sm">Semana</Button>
+              <Button variant={datePreset === "month" ? "secondary" : "ghost"} size="sm" onClick={() => handlePresetChange("month")} className="flex-1 sm:flex-initial text-xs sm:text-sm">Mês</Button>
+              <Button variant={datePreset === "custom" ? "secondary" : "ghost"} size="sm" onClick={() => handlePresetChange("custom")} className="flex-1 sm:flex-initial text-xs sm:text-sm">Custom</Button>
+            </div>
+
+            {datePreset === "month" && (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon" onClick={() => handleMonthChange(-1)}>
+                  <Calendar className="h-4 w-4" />
+                </Button>
+                <span className="text-sm font-medium min-w-[120px] text-center">
+                  {format(selectedMonth, "MMMM yyyy", { locale: ptBR })}
+                </span>
+                <Button variant="outline" size="icon" onClick={() => handleMonthChange(1)}>
+                  <Calendar className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            {datePreset === "custom" && (
+              <div className="flex items-center gap-2">
+                <DatePickerCustom selected={customStartDate || undefined} onSelect={(date) => handleCustomStartChange(date as Date | null)} placeholder="Data início" />
+                <span className="text-muted-foreground">até</span>
+                <DatePickerCustom selected={customEndDate || undefined} onSelect={(date) => handleCustomEndChange(date as Date | null)} placeholder="Data fim" />
+              </div>
+            )}
+
+            <Select value={sdrFilter} onValueChange={setSdrFilter}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="Filtrar por SDR" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os SDRs</SelectItem>
+                {(activeSdrsList || []).map(sdr => (
+                  <SelectItem key={sdr.email} value={sdr.email}>{sdr.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={isLoading} className="w-full sm:w-auto">
+              <Download className="h-4 w-4 mr-1" />
+              <span className="sm:inline">Exportar</span>
+            </Button>
+          </div>
+
+          <div className="mt-3 text-xs text-muted-foreground">
+            Período: {format(start, "dd/MM/yyyy")} - {format(end, "dd/MM/yyyy")}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* KPI Cards */}
+      <TeamKPICards
+        kpis={enrichedKPIs}
+        isLoading={isLoading}
+        isToday={datePreset === "today"}
+        pendentesHoje={pendentesHoje}
+      />
+
+      {/* SDR / Closer Summary Table with Tabs */}
+      <Card className="bg-card border-border overflow-hidden">
+        <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "sdrs" | "closers")}>
+            <TabsList className="bg-muted/50 w-full sm:w-auto">
+              <TabsTrigger value="sdrs" className="flex-1 sm:flex-initial flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+                SDRs
+                <span className="text-[10px] sm:text-xs text-muted-foreground">({filteredBySDR.length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="closers" className="flex-1 sm:flex-initial flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <Briefcase className="h-3 w-3 sm:h-4 sm:w-4" />
+                Closers
+                <span className="text-[10px] sm:text-xs text-muted-foreground">({closerMetrics?.length || 0})</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Este módulo está sendo implementado.</p>
+        <CardContent className="pt-0 px-0 sm:px-6 pb-3 sm:pb-6 overflow-x-auto">
+          {activeTab === "sdrs" ? (
+            <SdrSummaryTable
+              data={filteredBySDR}
+              isLoading={isLoading}
+              ghostCountBySdr={ghostCountBySdr}
+              disableNavigation={isRestrictedRole}
+              sdrMetaMap={sdrMetaMap}
+              diasUteisNoPeriodo={diasUteisNoPeriodo}
+            />
+          ) : (
+            <CloserSummaryTable
+              data={closerMetrics}
+              isLoading={closerLoading}
+              onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
+                const params = new URLSearchParams();
+                params.set("preset", datePreset);
+                if (datePreset === "month") {
+                  params.set("month", format(selectedMonth, "yyyy-MM"));
+                } else if (datePreset === "custom" && customStartDate && customEndDate) {
+                  params.set("start", format(customStartDate, "yyyy-MM-dd"));
+                  params.set("end", format(customEndDate, "yyyy-MM-dd"));
+                }
+                navigate(`/consorcio/painel-equipe/closer/${closerId}?${params.toString()}`);
+              }}
+            />
+          )}
         </CardContent>
       </Card>
     </div>

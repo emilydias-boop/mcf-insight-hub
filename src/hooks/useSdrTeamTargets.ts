@@ -76,19 +76,19 @@ export const SDR_TARGET_CONFIGS: SdrTargetConfig[] = [
 ];
 
 // Fetch SDR team targets for current month (targets are saved with week_start = first day of month)
-export const useSdrTeamTargets = () => {
+// buPrefix allows filtering by BU (e.g. 'consorcio_sdr_' for consórcio, default 'sdr_' for incorporador)
+export const useSdrTeamTargets = (buPrefix: string = 'sdr_') => {
   const today = new Date();
   const monthStart = startOfMonth(today);
   const monthStartStr = format(monthStart, 'yyyy-MM-dd');
 
   return useQuery({
-    queryKey: ['sdr-team-targets', monthStartStr],
+    queryKey: ['sdr-team-targets', monthStartStr, buPrefix],
     queryFn: async () => {
-      // Fetch all SDR targets for this month
       const { data, error } = await supabase
         .from('team_targets')
         .select('*')
-        .like('target_type', 'sdr_%')
+        .like('target_type', `${buPrefix}%`)
         .eq('week_start', monthStartStr);
 
       if (error) throw error;
@@ -99,17 +99,17 @@ export const useSdrTeamTargets = () => {
 };
 
 // Fetch SDR team targets for a specific month
-export const useSdrTeamTargetsByMonth = (month: Date) => {
+export const useSdrTeamTargetsByMonth = (month: Date, buPrefix: string = 'sdr_') => {
   const monthStart = startOfMonth(month);
   const monthStartStr = format(monthStart, 'yyyy-MM-dd');
 
   return useQuery({
-    queryKey: ['sdr-team-targets-month', monthStartStr],
+    queryKey: ['sdr-team-targets-month', monthStartStr, buPrefix],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('team_targets')
         .select('*')
-        .like('target_type', 'sdr_%')
+        .like('target_type', `${buPrefix}%`)
         .eq('week_start', monthStartStr);
 
       if (error) throw error;
@@ -120,14 +120,14 @@ export const useSdrTeamTargetsByMonth = (month: Date) => {
 };
 
 // Fetch SDR team targets for all months in a year (for annual sum)
-export const useSdrTeamTargetsForYear = (year: number) => {
+export const useSdrTeamTargetsForYear = (year: number, buPrefix: string = 'sdr_') => {
   return useQuery({
-    queryKey: ['sdr-team-targets-year', year],
+    queryKey: ['sdr-team-targets-year', year, buPrefix],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('team_targets')
         .select('*')
-        .like('target_type', 'sdr_%')
+        .like('target_type', `${buPrefix}%`)
         .gte('week_start', `${year}-01-01`)
         .lte('week_start', `${year}-12-31`);
 
