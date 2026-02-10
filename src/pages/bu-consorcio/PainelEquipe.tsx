@@ -20,6 +20,14 @@ import {
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
+import { ConsorcioGoalsMatrixTable, ConsorcioMetricRow } from "@/components/sdr/ConsorcioGoalsMatrixTable";
+import { useConsorcioPipelineMetrics } from "@/hooks/useConsorcioPipelineMetrics";
+import { useSdrTeamTargets } from "@/hooks/useSdrTeamTargets";
+import { useAuth as useAuthGoals } from "@/contexts/AuthContext";
+import { TeamGoalsEditModal } from "@/components/sdr/TeamGoalsEditModal";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Target, Settings2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
 import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
 import { PipelineSelector } from "@/components/crm/PipelineSelector";
