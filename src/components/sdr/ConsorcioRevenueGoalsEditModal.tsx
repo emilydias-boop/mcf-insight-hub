@@ -32,8 +32,10 @@ const TARGET_FIELDS = [
 export function ConsorcioRevenueGoalsEditModal({
   open,
   onOpenChange,
-  currentTargets,
 }: ConsorcioRevenueGoalsEditModalProps) {
+  const queryClient = useQueryClient();
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [loadingTargets, setLoadingTargets] = useState(false);
   const queryClient = useQueryClient();
   const [values, setValues] = useState<Record<string, string>>({});
 
