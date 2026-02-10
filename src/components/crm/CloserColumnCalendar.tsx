@@ -296,7 +296,13 @@ export function CloserColumnCalendar({
                 const hasMeetings = slotMeetings.length > 0;
                 // Combinar attendees de todos os meetings no mesmo slot
                 const allAttendees = slotMeetings.flatMap(m => m.attendees || []);
-                const firstMeeting = slotMeetings[0];
+                // Prioritize active slots over canceled ones
+                const sortedMeetings = [...slotMeetings].sort((a, b) => {
+                  if (a.status === 'canceled' && b.status !== 'canceled') return 1;
+                  if (a.status !== 'canceled' && b.status === 'canceled') return -1;
+                  return 0;
+                });
+                const firstMeeting = sortedMeetings[0];
                 const available = isSlotAvailable(closer.id, slot);
                 const isBlocked = blockedDates.some(
                   (bd) => bd.closer_id === closer.id && isSameDay(parseISO(bd.blocked_date), selectedDate),
