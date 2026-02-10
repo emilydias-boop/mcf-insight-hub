@@ -41,7 +41,7 @@ import { Settings2 } from "lucide-react";
 
 type DatePreset = "today" | "week" | "month" | "custom";
 
-function IncorporadorMetricsCard() {
+function IncorporadorMetricsCard({ onEditGoals, canEdit }: { onEditGoals?: () => void; canEdit?: boolean }) {
   const { data: setoresData, isLoading: setoresLoading } = useSetoresDashboard();
   const incorporadorSetor = setoresData?.setores.find(s => s.id === 'incorporador');
 
@@ -49,7 +49,6 @@ function IncorporadorMetricsCard() {
 
   return (
     <div className="relative group">
-      {/* Animated glow border */}
       <div className="absolute -inset-0.5 bg-gradient-to-r from-primary via-primary/60 to-primary rounded-xl blur opacity-30 group-hover:opacity-50 transition-opacity duration-300" />
       <div className="relative">
         <SetorRow
@@ -64,6 +63,8 @@ function IncorporadorMetricsCard() {
           apuradoAnual={incorporadorSetor?.apuradoAnual || 0}
           metaAnual={incorporadorSetor?.metaAnual || 0}
           isLoading={setoresLoading}
+          onEditGoals={onEditGoals}
+          canEdit={canEdit}
         />
       </div>
     </div>
