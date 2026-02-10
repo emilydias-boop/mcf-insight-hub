@@ -86,7 +86,16 @@ export function EfeitoAlavancaRow({
           <div className="p-1.5 rounded-lg bg-primary/10">
             <TrendingUp className="h-4 w-4 text-primary" />
           </div>
-          Efeito Alavanca
+          <span className="flex-1">Efeito Alavanca</span>
+          {canEdit && onEditGoals && (
+            <button
+              onClick={onEditGoals}
+              className="p-1.5 rounded-md hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
+              title="Editar metas"
+            >
+              <Settings2 className="h-4 w-4" />
+            </button>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
