@@ -15,7 +15,7 @@ interface AttendeeMatch {
   id: string;
   attendee_phone: string | null;
   deal_id: string | null;
-  meeting_slots: { closer_id: string | null } | null;
+  meeting_slots: { closer_id: string | null; scheduled_at: string | null } | null;
   crm_deals: { crm_contacts: { email: string | null; phone: string | null } | null } | null;
 }
 
@@ -80,9 +80,18 @@ export function CloserRevenueSummaryTable({
       closerContactMap.set(closer.id, { emails, phones });
     }
     
-    const closerTotals = new Map<string, { count: number; gross: number; net: number }>();
+    // Build reverse map: email/phone -> attendee (for Outside detection)
+    const contactToAttendeeMap = new Map<string, AttendeeMatch>();
+    for (const a of attendees) {
+      const email = a.crm_deals?.crm_contacts?.email?.toLowerCase();
+      if (email) contactToAttendeeMap.set(`e:${email}`, a);
+      const phone = normalizePhone(a.crm_deals?.crm_contacts?.phone);
+      if (phone.length >= 8) contactToAttendeeMap.set(`p:${phone}`, a);
+    }
+
+    const closerTotals = new Map<string, { count: number; gross: number; net: number; outsideCount: number; outsideGross: number }>();
     const txMap = new Map<string, Transaction[]>();
-    let unassigned = { count: 0, gross: 0, net: 0 };
+    let unassigned = { count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
     const unassignedTxs: Transaction[] = [];
     
     for (const tx of transactions) {
@@ -101,10 +110,21 @@ export function CloserRevenueSummaryTable({
           (txEmail && contacts.emails.has(txEmail)) ||
           (txPhone.length >= 8 && contacts.phones.has(txPhone))
         ) {
-          const existing = closerTotals.get(closer.id) || { count: 0, gross: 0, net: 0 };
+          const existing = closerTotals.get(closer.id) || { count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
           existing.count++;
           existing.gross += gross;
           existing.net += net;
+
+          // Detect Outside: sale_date < scheduled_at
+          const matchedAttendee = (txEmail && contactToAttendeeMap.get(`e:${txEmail}`)) ||
+            (txPhone.length >= 8 && contactToAttendeeMap.get(`p:${txPhone}`)) || null;
+          if (matchedAttendee?.meeting_slots?.scheduled_at && tx.sale_date) {
+            if (new Date(tx.sale_date) < new Date(matchedAttendee.meeting_slots.scheduled_at)) {
+              existing.outsideCount++;
+              existing.outsideGross += gross;
+            }
+          }
+
           closerTotals.set(closer.id, existing);
           
           const arr = txMap.get(closer.id) || [];
@@ -128,7 +148,7 @@ export function CloserRevenueSummaryTable({
       .map((c) => ({
         id: c.id,
         name: c.name,
-        ...(closerTotals.get(c.id) || { count: 0, gross: 0, net: 0 }),
+        ...(closerTotals.get(c.id) || { count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 }),
       }))
       .filter((r) => r.count > 0)
       .sort((a, b) => b.gross - a.gross);
@@ -141,9 +161,11 @@ export function CloserRevenueSummaryTable({
     const totalGross = rows.reduce((s, r) => s + r.gross, 0);
     const totalNet = rows.reduce((s, r) => s + r.net, 0);
     const totalCount = rows.reduce((s, r) => s + r.count, 0);
+    const totalOutsideCount = rows.reduce((s, r) => s + r.outsideCount, 0);
+    const totalOutsideGross = rows.reduce((s, r) => s + r.outsideGross, 0);
     
     return {
-      summaryData: { rows, totalGross, totalNet, totalCount },
+      summaryData: { rows, totalGross, totalNet, totalCount, totalOutsideCount, totalOutsideGross },
       closerTransactionsMap: txMap,
     };
   }, [transactions, closers, attendees, globalFirstIds]);
@@ -169,6 +191,8 @@ export function CloserRevenueSummaryTable({
                 <TableHead className="text-right">Transações</TableHead>
                 <TableHead className="text-right">Faturamento Bruto</TableHead>
                 <TableHead className="text-right">Receita Líquida</TableHead>
+                <TableHead className="text-right">Outside</TableHead>
+                <TableHead className="text-right">Fat. Outside</TableHead>
                 <TableHead className="text-right">Ticket Médio</TableHead>
                 <TableHead className="text-right">% do Total</TableHead>
               </TableRow>
@@ -200,6 +224,12 @@ export function CloserRevenueSummaryTable({
                   <TableCell className="text-right font-mono text-success">
                     {formatCurrency(row.net)}
                   </TableCell>
+                  <TableCell className="text-right">
+                    {row.outsideCount > 0 ? row.outsideCount : '—'}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-warning">
+                    {row.outsideGross > 0 ? formatCurrency(row.outsideGross) : '—'}
+                  </TableCell>
                   <TableCell className="text-right font-mono">
                     {formatCurrency(row.count > 0 ? row.net / row.count : 0)}
                   </TableCell>
@@ -220,6 +250,12 @@ export function CloserRevenueSummaryTable({
                 </TableCell>
                 <TableCell className="text-right font-mono font-bold text-success">
                   {formatCurrency(summaryData.totalNet)}
+                </TableCell>
+                <TableCell className="text-right font-bold">
+                  {summaryData.totalOutsideCount > 0 ? summaryData.totalOutsideCount : '—'}
+                </TableCell>
+                <TableCell className="text-right font-mono font-bold text-warning">
+                  {summaryData.totalOutsideGross > 0 ? formatCurrency(summaryData.totalOutsideGross) : '—'}
                 </TableCell>
                 <TableCell className="text-right font-mono font-bold">
                   {formatCurrency(summaryData.totalCount > 0 ? summaryData.totalNet / summaryData.totalCount : 0)}
