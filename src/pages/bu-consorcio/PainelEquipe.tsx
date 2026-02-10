@@ -101,7 +101,7 @@ function ConsorcioMetricsCard({ onEditGoals, canEdit }: { onEditGoals?: () => vo
           metaMensal={combined.metaMensal}
           apuradoAnual={combined.apuradoAnual}
           metaAnual={combined.metaAnual}
-          isLoading={setoresLoading}
+          isLoading={setoresLoading || summaryLoading}
         />
         {canEdit && (
           <button
