@@ -80,18 +80,57 @@ export function CloserRevenueSummaryTable({
       closerContactMap.set(closer.id, { emails, phones });
     }
     
-    // Build reverse map: email/phone -> attendee (for Outside detection)
-    const contactToAttendeeMap = new Map<string, AttendeeMatch>();
+    // Step 1: Identify Outside leads (A000/Contrato sale_date < scheduled_at)
+    const outsideLeadEmails = new Set<string>();
+    const outsideLeadPhones = new Set<string>();
+    
+    // Build attendee contact -> scheduled_at map
+    const attendeeScheduleMap = new Map<string, Date>();
     for (const a of attendees) {
+      if (!a.meeting_slots?.scheduled_at) continue;
+      const scheduledDate = new Date(a.meeting_slots.scheduled_at);
       const email = a.crm_deals?.crm_contacts?.email?.toLowerCase();
-      if (email) contactToAttendeeMap.set(`e:${email}`, a);
+      if (email) {
+        const existing = attendeeScheduleMap.get(`e:${email}`);
+        if (!existing || scheduledDate < existing) attendeeScheduleMap.set(`e:${email}`, scheduledDate);
+      }
       const phone = normalizePhone(a.crm_deals?.crm_contacts?.phone);
-      if (phone.length >= 8) contactToAttendeeMap.set(`p:${phone}`, a);
+      if (phone.length >= 8) {
+        const existing = attendeeScheduleMap.get(`p:${phone}`);
+        if (!existing || scheduledDate < existing) attendeeScheduleMap.set(`p:${phone}`, scheduledDate);
+      }
+    }
+    
+    // Check which leads have an A000/Contrato before their R1
+    const isA000Product = (name: string | null) => {
+      if (!name) return false;
+      const upper = name.toUpperCase().trim();
+      return upper.includes('A000') || upper.includes('CONTRATO');
+    };
+    
+    for (const tx of transactions) {
+      if (!isA000Product(tx.product_name)) continue;
+      if (!tx.sale_date) continue;
+      const txDate = new Date(tx.sale_date);
+      const txEmail = (tx.customer_email || '').toLowerCase();
+      const txPhone = normalizePhone(tx.customer_phone);
+      
+      if (txEmail) {
+        const scheduled = attendeeScheduleMap.get(`e:${txEmail}`);
+        if (scheduled && txDate < scheduled) outsideLeadEmails.add(txEmail);
+      }
+      if (txPhone.length >= 8) {
+        const scheduled = attendeeScheduleMap.get(`p:${txPhone}`);
+        if (scheduled && txDate < scheduled) outsideLeadPhones.add(txPhone);
+      }
     }
 
     const closerTotals = new Map<string, { count: number; gross: number; net: number; outsideCount: number; outsideGross: number }>();
     const txMap = new Map<string, Transaction[]>();
+    // Track unique outside leads per closer to count leads not transactions
+    const closerOutsideLeads = new Map<string, Set<string>>();
     let unassigned = { count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
+    const unassignedOutsideLeads = new Set<string>();
     const unassignedTxs: Transaction[] = [];
     
     for (const tx of transactions) {
@@ -100,6 +139,9 @@ export function CloserRevenueSummaryTable({
       const isFirst = globalFirstIds.has(tx.id);
       const gross = getDeduplicatedGross(tx as any, isFirst);
       const net = tx.net_value || 0;
+      const isOutsideLead = (txEmail && outsideLeadEmails.has(txEmail)) ||
+        (txPhone.length >= 8 && outsideLeadPhones.has(txPhone));
+      const leadKey = txEmail || txPhone;
       
       let matched = false;
       for (const closer of closers) {
@@ -115,14 +157,11 @@ export function CloserRevenueSummaryTable({
           existing.gross += gross;
           existing.net += net;
 
-          // Detect Outside: sale_date < scheduled_at
-          const matchedAttendee = (txEmail && contactToAttendeeMap.get(`e:${txEmail}`)) ||
-            (txPhone.length >= 8 && contactToAttendeeMap.get(`p:${txPhone}`)) || null;
-          if (matchedAttendee?.meeting_slots?.scheduled_at && tx.sale_date) {
-            if (new Date(tx.sale_date) < new Date(matchedAttendee.meeting_slots.scheduled_at)) {
-              existing.outsideCount++;
-              existing.outsideGross += gross;
-            }
+          // Outside: sum all transactions of outside leads
+          if (isOutsideLead) {
+            existing.outsideGross += gross;
+            if (!closerOutsideLeads.has(closer.id)) closerOutsideLeads.set(closer.id, new Set());
+            closerOutsideLeads.get(closer.id)!.add(leadKey);
           }
 
           closerTotals.set(closer.id, existing);
@@ -140,9 +179,20 @@ export function CloserRevenueSummaryTable({
         unassigned.count++;
         unassigned.gross += gross;
         unassigned.net += net;
+        if (isOutsideLead) {
+          unassigned.outsideGross += gross;
+          unassignedOutsideLeads.add(leadKey);
+        }
         unassignedTxs.push(tx);
       }
     }
+    
+    // Set outsideCount to unique leads count
+    for (const [closerId, leads] of closerOutsideLeads) {
+      const totals = closerTotals.get(closerId);
+      if (totals) totals.outsideCount = leads.size;
+    }
+    unassigned.outsideCount = unassignedOutsideLeads.size;
     
     const rows = closers
       .map((c) => ({

@@ -126,21 +126,55 @@ export function CloserRevenueDetailDialog({
       (t) => t.sale_status === 'refunded' || (t.net_value !== null && t.net_value < 0)
     );
 
-    // Outside detection
-    let outsideCount = 0;
+    // Outside detection: lead-based (A000/Contrato before R1 = entire lead is Outside)
+    const isA000Product = (name: string | null) => {
+      if (!name) return false;
+      const upper = name.toUpperCase().trim();
+      return upper.includes('A000') || upper.includes('CONTRATO');
+    };
+    
+    // Build schedule map for this closer's attendees
+    const attendeeScheduleMap = new Map<string, Date>();
+    for (const [key, att] of contactToAttendee) {
+      if (att.meeting_slots?.scheduled_at) {
+        const d = new Date(att.meeting_slots.scheduled_at);
+        const existing = attendeeScheduleMap.get(key);
+        if (!existing || d < existing) attendeeScheduleMap.set(key, d);
+      }
+    }
+    
+    // Identify outside lead emails/phones
+    const outsideEmails = new Set<string>();
+    const outsidePhones = new Set<string>();
+    for (const tx of transactions) {
+      if (!isA000Product(tx.product_name) || !tx.sale_date) continue;
+      const txDate = new Date(tx.sale_date);
+      const txEmail = (tx.customer_email || '').toLowerCase();
+      const txPhone = normalizePhone(tx.customer_phone);
+      if (txEmail) {
+        const scheduled = attendeeScheduleMap.get(`e:${txEmail}`);
+        if (scheduled && txDate < scheduled) outsideEmails.add(txEmail);
+      }
+      if (txPhone.length >= 8) {
+        const scheduled = attendeeScheduleMap.get(`p:${txPhone}`);
+        if (scheduled && txDate < scheduled) outsidePhones.add(txPhone);
+      }
+    }
+    
+    // Sum all transactions of outside leads
     let outsideGross = 0;
+    const outsideLeadKeys = new Set<string>();
     for (const tx of transactions) {
       const txEmail = (tx.customer_email || '').toLowerCase();
       const txPhone = normalizePhone(tx.customer_phone);
-      const att = (txEmail && contactToAttendee.get(`e:${txEmail}`)) ||
-        (txPhone.length >= 8 && contactToAttendee.get(`p:${txPhone}`)) || null;
-      if (att?.meeting_slots?.scheduled_at && tx.sale_date) {
-        if (new Date(tx.sale_date) < new Date(att.meeting_slots.scheduled_at)) {
-          outsideCount++;
-          outsideGross += getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
-        }
+      const isOutside = (txEmail && outsideEmails.has(txEmail)) ||
+        (txPhone.length >= 8 && outsidePhones.has(txPhone));
+      if (isOutside) {
+        outsideGross += getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
+        outsideLeadKeys.add(txEmail || txPhone);
       }
     }
+    const outsideCount = outsideLeadKeys.size;
 
     const calcGross = (txs: Transaction[]) =>
       txs.reduce((s, t) => s + getDeduplicatedGross(t as any, globalFirstIds.has(t.id)), 0);
