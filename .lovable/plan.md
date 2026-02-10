@@ -1,53 +1,52 @@
 
-# Adicionar Modal de Metas em Todas as BUs
+# Tabela SDR Especifica para Consorcio
 
-## Contexto
-O modal de edicao de metas monetarias (Semana, Mes, Ano) ja funciona para o BU Consorcio. O Incorporador e demais BUs (Projetos, Leilao) mostram "Meta: R$ 0,00" porque nao ha interface para definir esses valores. O banco de dados ja aceita os tipos `setor_incorporador_*`, `setor_projetos_*`, `setor_leilao_*` no CHECK constraint, e o hook `useSetoresDashboard` ja busca e aplica esses targets via `getTarget('setor_${config.id}_*')`.
+## Problema
+A tabela de SDRs no Painel Equipe do Consorcio usa o componente generico `SdrSummaryTable` do Incorporador, com colunas como "Contrato PAGO" e "Taxa Contrato" que nao fazem sentido para o fluxo do Consorcio.
+
+## Colunas desejadas (Consorcio)
+| SDR | Meta | Agendamento | R1 Agendada | R1 Realizada | No-Show | Proposta Enviada | Taxa Venda | Taxa Conv. | > |
+
+- **Meta**: meta diaria x dias uteis (igual ao atual)
+- **Agendamento**: reunioes criadas no periodo
+- **R1 Agendada**: reunioes agendadas para o periodo
+- **R1 Realizada**: reunioes realizadas
+- **No-Show**: com percentual sobre agendada
+- **Proposta Enviada**: deals na stage "Proposta Enviada" do pipeline Viver de Aluguel, atribuidos ao SDR via `crm_deals.owner_id` (que armazena o email do SDR)
+- **Taxa Venda**: Contratos / R1 Realizada (taxa de conversao sobre venda)
+- **Taxa Conv.**: R1 Realizada / R1 Agendada (taxa de conversao de agendada para realizada)
 
 ## O que sera feito
 
-### 1. Generalizar o modal de edicao de metas
-Refatorar o `ConsorcioRevenueGoalsEditModal` para um componente generico `BURevenueGoalsEditModal` que recebe:
-- `buId`: identificador do setor (ex: `'incorporador'`, `'efeito_alavanca'`, `'projetos'`, `'leilao'`)
-- `buName`: nome para exibir no titulo (ex: "MCF Incorporador")
-- `targetPrefix`: prefixo dos target types no banco (ex: `'setor_incorporador'`)
+### 1. Hook `useConsorcioPipelineMetricsBySdr`
+Novo hook que busca deals na stage "Proposta Enviada" agrupados por `owner_id` (email do SDR), filtrado pelo periodo selecionado. Retorna um `Map<string, number>` de email para contagem.
 
-O modal tera campos para Semana, Mes e Ano com inputs monetarios (R$), fazendo upsert na tabela `team_targets`.
+### 2. Componente `ConsorcioSdrSummaryTable`
+Novo componente de tabela especifico para o Consorcio com as colunas corretas:
+- Remove colunas "Contrato PAGO", "Taxa Contrato", "Ghost"
+- Adiciona coluna "Proposta Enviada" com dados do novo hook
+- "Taxa Venda" = Contratos / R1 Realizada
+- "Taxa Conv." = R1 Realizada / R1 Agendada
+- Mantém navegacao para detalhe do SDR e comportamento de click
 
-### 2. Adicionar botao de edicao no card do Incorporador
-Na pagina `ReunioesEquipe.tsx`, o `IncorporadorMetricsCard` ganhara:
-- Um botao de engrenagem (Settings2), visivel apenas para admin/manager/coordenador
-- Abertura do modal generico configurado para `setor_incorporador_*`
-
-### 3. Adicionar botao de edicao no Dashboard de Diretoria
-Na pagina `Dashboard.tsx`, cada `SetorRow` (Incorporador, Efeito Alavanca, Credito, Projetos, Leilao) ganhara um botao de edicao com o modal correspondente, tambem restrito por role.
-
-### 4. Atualizar o BU Consorcio para usar o modal generico
-O `ConsorcioRevenueGoalsEditModal` existente sera substituido pelo componente generico, mantendo o mesmo comportamento (2 secoes: Efeito Alavanca + Credito).
+### 3. Alterar `PainelEquipe.tsx`
+Substituir `SdrSummaryTable` pelo novo `ConsorcioSdrSummaryTable`, passando os dados necessarios incluindo as propostas por SDR.
 
 ## Detalhes Tecnicos
 
-### Novo componente: `src/components/sdr/BURevenueGoalsEditModal.tsx`
-- Props: `open`, `onOpenChange`, `sections` (array de `{ prefix, label }`)
-- Cada section gera 3 campos: `{prefix}_semana`, `{prefix}_mes`, `{prefix}_ano`
-- Busca valores existentes via `supabase.from('team_targets').select()` filtrando por prefixo
-- Upsert com `week_start='2000-01-01'` e `week_end='2099-12-31'` (mesma logica atual)
-- Invalida query `['setores-dashboard']` ao salvar
+### Novo: `src/hooks/useConsorcioPipelineMetricsBySdr.ts`
+- Consulta `crm_deals` filtrada por `stage_id = '09a0a99e-feee-46df-a817-bc4d0e1ac3d9'` (Proposta Enviada)
+- Filtra por `stage_moved_at` dentro do periodo selecionado
+- Agrupa por `owner_id` (que contem o email do SDR)
+- Retorna `Map<string, number>` para lookup rapido na tabela
 
-### Alteracao: `src/components/dashboard/SetorRow.tsx`
-- Adicionar prop opcional `onEditGoals` e `canEdit`
-- Renderizar botao Settings2 no canto superior direito quando `canEdit=true`
-
-### Alteracao: `src/pages/crm/ReunioesEquipe.tsx`
-- Importar modal generico e estado de abertura
-- Passar `onEditGoals` e `canEdit` para o `SetorRow` do Incorporador
-
-### Alteracao: `src/pages/Dashboard.tsx`
-- Adicionar modal generico para cada setor com o prefixo correto
-- Permitir edicao de metas para todos os setores (admin/manager/coordenador)
+### Novo: `src/components/sdr/ConsorcioSdrSummaryTable.tsx`
+- Recebe as mesmas props base (`data: SdrSummaryRow[]`, `sdrMetaMap`, `diasUteisNoPeriodo`, etc.)
+- Prop adicional: `propostasEnviadasBySdr: Map<string, number>`
+- Tabela com 9 colunas + navegacao
+- Sem coluna Ghost (especifica do Incorporador)
 
 ### Alteracao: `src/pages/bu-consorcio/PainelEquipe.tsx`
-- Substituir `ConsorcioRevenueGoalsEditModal` pelo `BURevenueGoalsEditModal` generico com 2 sections (efeito_alavanca + credito)
-
-### Banco de dados
-- Nenhuma migracao necessaria - todos os target types ja existem no CHECK constraint
+- Importar e usar `useConsorcioPipelineMetricsBySdr` com as datas do periodo
+- Importar `ConsorcioSdrSummaryTable` em vez de `SdrSummaryTable`
+- Passar `propostasEnviadasBySdr` como prop
