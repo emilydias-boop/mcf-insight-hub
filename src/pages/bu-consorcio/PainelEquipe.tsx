@@ -22,6 +22,7 @@ import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
 import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
+import { PipelineSelector } from "@/components/crm/PipelineSelector";
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
 import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
@@ -31,6 +32,8 @@ import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
 import { useSdrOutsideMetrics } from "@/hooks/useSdrOutsideMetrics";
+import { useBUPipelineMap } from "@/hooks/useBUPipelineMap";
+import { useCRMOriginsByPipeline } from "@/hooks/useCRMOriginsByPipeline";
 
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
@@ -103,6 +106,37 @@ export default function ConsorcioPainelEquipe() {
   const [customEndDate, setCustomEndDate] = useState<Date | null>(initialEnd || initialStart);
   const [sdrFilter, setSdrFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"sdrs" | "closers">("sdrs");
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
+
+  // BU pipeline mapping for Consórcio
+  const { data: buMapping } = useBUPipelineMap('consorcio');
+  const allowedGroupIds = buMapping?.groups || [];
+
+  // Get origins for the selected pipeline to filter meetings
+  const { data: pipelineOrigins } = useCRMOriginsByPipeline(selectedPipelineId);
+
+  // Build set of allowed origin names for filtering
+  const allowedOriginNames = useMemo(() => {
+    if (!selectedPipelineId || !pipelineOrigins) return null; // null = no filter
+    // pipelineOrigins can be an array of origins or groups with children
+    const names = new Set<string>();
+    if (Array.isArray(pipelineOrigins)) {
+      pipelineOrigins.forEach((item: any) => {
+        if (item.children) {
+          // It's a group with children origins
+          item.children.forEach((child: any) => {
+            if (child.name) names.add(child.name.toLowerCase());
+            if (child.display_name) names.add(child.display_name.toLowerCase());
+          });
+        } else {
+          // It's a direct origin
+          if (item.name) names.add(item.name.toLowerCase());
+          if (item.display_name) names.add(item.display_name.toLowerCase());
+        }
+      });
+    }
+    return names.size > 0 ? names : null;
+  }, [selectedPipelineId, pipelineOrigins]);
 
   const updateUrlParams = (
     preset: DatePreset,
@@ -209,10 +243,82 @@ export default function ConsorcioPainelEquipe() {
   const { data: pendentesHoje } = useMeetingsPendentesHoje();
   const { data: outsideData } = useSdrOutsideMetrics(start, end);
 
+  // Helper to check if a meeting matches the selected pipeline
+  const matchesPipeline = (originName: string | null) => {
+    if (!allowedOriginNames) return true; // No pipeline filter
+    return allowedOriginNames.has((originName || '').toLowerCase());
+  };
+
+  // Filter meetings by pipeline
+  const pipelineFilteredMeetings = useMemo(() => {
+    if (!allowedOriginNames) return allMeetings;
+    return allMeetings.filter(m => matchesPipeline(m.origin_name));
+  }, [allMeetings, allowedOriginNames]);
+
+  // Re-derive SDR metrics from pipeline-filtered meetings
+  const pipelineFilteredBySDR = useMemo((): SdrSummaryRow[] => {
+    if (!allowedOriginNames) return bySDR; // No filter, use original data
+    
+    // Re-aggregate from filtered meetings
+    const sdrMap = new Map<string, SdrSummaryRow>();
+    pipelineFilteredMeetings.forEach(m => {
+      const email = m.intermediador?.toLowerCase() || '';
+      if (!email) return;
+      
+      if (!sdrMap.has(email)) {
+        const sdrName = activeSdrsList?.find(s => s.email?.toLowerCase() === email)?.name 
+          || m.intermediador?.split('@')[0] || 'Desconhecido';
+        sdrMap.set(email, {
+          sdrEmail: m.intermediador,
+          sdrName,
+          agendamentos: 0,
+          r1Agendada: 0,
+          r1Realizada: 0,
+          noShows: 0,
+          contratos: 0,
+        });
+      }
+      
+      const row = sdrMap.get(email)!;
+      row.agendamentos++;
+      
+      const status = (m.status_atual || '').toLowerCase();
+      if (status.includes('agendada')) row.r1Agendada++;
+      if (status.includes('realizada')) row.r1Realizada++;
+      if (status.includes('no-show') || status.includes('no show')) row.noShows++;
+      if (status.includes('contrato') || status.includes('contract')) row.contratos++;
+    });
+    
+    return Array.from(sdrMap.values()).sort((a, b) => b.agendamentos - a.agendamentos);
+  }, [bySDR, pipelineFilteredMeetings, allowedOriginNames, activeSdrsList]);
+
+  // Re-derive KPIs from pipeline-filtered data
+  const pipelineFilteredKPIs = useMemo(() => {
+    if (!allowedOriginNames) return teamKPIs; // No filter
+    
+    const data = pipelineFilteredBySDR;
+    const totalAgendamentos = data.reduce((sum, s) => sum + s.agendamentos, 0);
+    const totalRealizadas = data.reduce((sum, s) => sum + s.r1Realizada, 0);
+    const totalNoShows = data.reduce((sum, s) => sum + s.noShows, 0);
+    const totalContratos = data.reduce((sum, s) => sum + s.contratos, 0);
+    const totalR1Agendada = data.reduce((sum, s) => sum + s.r1Agendada, 0);
+    
+    return {
+      sdrCount: data.length,
+      totalAgendamentos,
+      totalRealizadas,
+      totalNoShows,
+      totalContratos,
+      totalOutside: 0,
+      taxaConversao: totalRealizadas > 0 ? (totalContratos / totalRealizadas) * 100 : 0,
+      taxaNoShow: totalR1Agendada > 0 ? (totalNoShows / totalR1Agendada) * 100 : 0,
+    };
+  }, [teamKPIs, pipelineFilteredBySDR, allowedOriginNames]);
+
   const enrichedKPIs = useMemo(() => ({
-    ...teamKPIs,
-    totalOutside: outsideData?.totalOutside || 0,
-  }), [teamKPIs, outsideData]);
+    ...pipelineFilteredKPIs,
+    totalOutside: allowedOriginNames ? 0 : (outsideData?.totalOutside || 0),
+  }), [pipelineFilteredKPIs, outsideData, allowedOriginNames]);
 
   const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
     const sdrs = activeSdrsList || [];
@@ -228,8 +334,9 @@ export default function ConsorcioPainelEquipe() {
   }, [activeSdrsList]);
 
   const mergedBySDR = useMemo((): SdrSummaryRow[] => {
+    const source = pipelineFilteredBySDR;
     const dataMap = new Map(allSdrsWithZeros.map(s => [s.sdrEmail, { ...s }]));
-    bySDR.forEach(realRow => {
+    source.forEach(realRow => {
       if (dataMap.has(realRow.sdrEmail)) dataMap.set(realRow.sdrEmail, realRow);
     });
     return Array.from(dataMap.values()).sort((a, b) => {
@@ -237,13 +344,13 @@ export default function ConsorcioPainelEquipe() {
       if (b.r1Realizada !== a.r1Realizada) return b.r1Realizada - a.r1Realizada;
       return a.sdrName.localeCompare(b.sdrName);
     });
-  }, [allSdrsWithZeros, bySDR]);
+  }, [allSdrsWithZeros, pipelineFilteredBySDR]);
 
   const filteredBySDR = useMemo(() => {
-    const baseData = datePreset === "today" ? mergedBySDR : bySDR;
+    const baseData = datePreset === "today" ? mergedBySDR : pipelineFilteredBySDR;
     if (sdrFilter === "all") return baseData;
     return baseData.filter(s => s.sdrEmail === sdrFilter);
-  }, [datePreset, mergedBySDR, bySDR, sdrFilter]);
+  }, [datePreset, mergedBySDR, pipelineFilteredBySDR, sdrFilter]);
 
   const dayPendentes = pendentesHoje ?? 0;
 
@@ -312,7 +419,7 @@ export default function ConsorcioPainelEquipe() {
       "Contrato PAGO": sdr.contratos,
     }));
 
-    const leadsData = allMeetings
+    const leadsData = pipelineFilteredMeetings
       .filter(m => sdrFilter === "all" || m.intermediador === sdrFilter)
       .map(m => ({
         "SDR": m.intermediador || "",
@@ -375,6 +482,12 @@ export default function ConsorcioPainelEquipe() {
                 <DatePickerCustom selected={customEndDate || undefined} onSelect={(date) => handleCustomEndChange(date as Date | null)} placeholder="Data fim" />
               </div>
             )}
+
+            <PipelineSelector
+              selectedPipelineId={selectedPipelineId}
+              onSelectPipeline={setSelectedPipelineId}
+              allowedGroupIds={allowedGroupIds}
+            />
 
             <Select value={sdrFilter} onValueChange={setSdrFilter}>
               <SelectTrigger className="w-full sm:w-[200px]">
