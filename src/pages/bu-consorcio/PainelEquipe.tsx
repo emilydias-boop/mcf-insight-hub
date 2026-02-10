@@ -282,6 +282,7 @@ export default function ConsorcioPainelEquipe() {
 
   // Consórcio pipeline metrics (deals by stage)
   const pipelineMetrics = useConsorcioPipelineMetrics();
+  const { data: propostasData } = useConsorcioPipelineMetricsBySdr(start, end);
   
   // Consórcio team targets
   const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
