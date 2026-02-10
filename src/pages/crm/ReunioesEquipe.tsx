@@ -413,7 +413,17 @@ export default function ReunioesEquipe() {
   return (
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-6">
       {/* MCF Incorporador - Métricas Monetárias - PRIMEIRO */}
-      <IncorporadorMetricsCard />
+      <IncorporadorMetricsCard
+        onEditGoals={() => setIncorpGoalsOpen(true)}
+        canEdit={canEditGoals}
+      />
+
+      <BURevenueGoalsEditModal
+        open={incorpGoalsOpen}
+        onOpenChange={setIncorpGoalsOpen}
+        title="MCF Incorporador"
+        sections={[{ prefix: "setor_incorporador", label: "Incorporador" }]}
+      />
 
       {/* Goals Panel */}
       <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} monthValues={monthValues} />
