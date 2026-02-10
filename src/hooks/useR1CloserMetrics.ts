@@ -396,12 +396,14 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
 
         let metric = metricsMap.get(closerId);
         if (!metric) {
-          // Closer might not be in R1 closers list, but has R1 meetings
+          // Only create metrics for closers that belong to the current BU
           const closerInfo = closers?.find(c => c.id === closerId);
+          if (!closerInfo) return; // Skip meetings from closers in other BUs
+          
           metric = {
             closer_id: closerId,
-            closer_name: closerInfo?.name || 'Desconhecido',
-            closer_color: closerInfo?.color || null,
+            closer_name: closerInfo.name,
+            closer_color: closerInfo.color || null,
             r1_agendada: 0,
             r1_realizada: 0,
             noshow: 0,
