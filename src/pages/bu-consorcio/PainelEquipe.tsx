@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, startOfYear, endOfYear, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
 import { WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
