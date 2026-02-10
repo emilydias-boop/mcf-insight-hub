@@ -41,13 +41,22 @@ export function ConsorcioRevenueGoalsEditModal({
 
   useEffect(() => {
     if (open) {
-      const initial: Record<string, string> = {};
-      TARGET_FIELDS.forEach(({ key }) => {
-        initial[key] = (currentTargets[key] || 0).toString();
-      });
-      setValues(initial);
+      setLoadingTargets(true);
+      supabase
+        .from("team_targets")
+        .select("target_type, target_value")
+        .like("target_type", "setor_%" as any)
+        .then(({ data }) => {
+          const initial: Record<string, string> = {};
+          TARGET_FIELDS.forEach(({ key }) => {
+            const found = data?.find((t: any) => t.target_type === key);
+            initial[key] = (found?.target_value || 0).toString();
+          });
+          setValues(initial);
+          setLoadingTargets(false);
+        });
     }
-  }, [open, currentTargets]);
+  }, [open]);
 
   const upsertMutation = useMutation({
     mutationFn: async (targets: { target_type: string; target_value: number }[]) => {
