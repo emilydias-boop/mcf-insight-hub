@@ -227,6 +227,7 @@ const App = () => (
                 <Route path="vendas" element={<CreditoVendas />} />
               </Route>
               <Route path="bu-credito/relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CreditoRelatorios /></RoleGuard>} />
+              <Route path="bu-credito/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="credito" /></RoleGuard>} />
               
               {/* BU Crédito CRM - Dedicado */}
               <Route path="bu-credito/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><BUCRMLayout bu="credito" basePath="/bu-credito/crm" /></RoleGuard>}>
