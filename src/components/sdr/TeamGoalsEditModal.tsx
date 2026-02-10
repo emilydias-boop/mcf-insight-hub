@@ -293,12 +293,7 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
   const handleRecalculate = () => {
     const agendamentoDiaType = `${buPrefix}agendamento_dia` as SdrTargetType;
     const agendamento = values[agendamentoDiaType] || 0;
-    const baseDayValues = calculateDayCascade(agendamento);
-    const dayValues: Record<string, number> = {};
-    Object.entries(baseDayValues).forEach(([key, val]) => {
-      const dynKey = buPrefix === 'sdr_' ? key : key.replace('sdr_', buPrefix);
-      dayValues[dynKey] = val;
-    });
+    const dayValues = calculateDayCascade(agendamento, buPrefix);
     
     const newValues = { ...values };
     
