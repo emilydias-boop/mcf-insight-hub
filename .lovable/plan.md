@@ -1,55 +1,40 @@
 
-# Corrigir constraint do banco: adicionar tipos consorcio_sdr_* na tabela team_targets
+# Adicionar Meta Editavel no Card "BU Consorcio"
 
-## Problema
-A tabela `team_targets` possui um CHECK constraint (`team_targets_target_type_check`) que lista explicitamente os valores permitidos para a coluna `target_type`. Atualmente, apenas tipos `sdr_*` (Incorporador) estao na lista. Os novos tipos `consorcio_sdr_*` sao rejeitados pelo banco com erro 23514.
+## Contexto
+O card "BU Consorcio" no topo do Painel Equipe mostra Apurado e Meta para Semana, Mes e Ano. Atualmente, as metas mostram R$ 0,00 porque nao existem registros na tabela `team_targets` para os tipos `setor_efeito_alavanca_*` e `setor_credito_*`. Tambem nao ha interface para o gestor editar esses valores.
 
-## Solucao
-Criar uma migration SQL que:
-1. Remove o constraint antigo (`team_targets_target_type_check`)
-2. Recria o constraint incluindo todos os 30 novos tipos do Consorcio
+## O que sera feito
+
+### 1. Criar um modal de edicao de metas monetarias do BU Consorcio
+- Um novo componente `ConsorcioRevenueGoalsEditModal` que permite ao gestor (admin, manager, coordenador) definir metas de faturamento para:
+  - **Efeito Alavanca**: meta semanal, mensal e anual (usa target types `setor_efeito_alavanca_semana`, `setor_efeito_alavanca_mes`, `setor_efeito_alavanca_ano`)
+  - **Credito**: meta semanal, mensal e anual (usa target types `setor_credito_semana`, `setor_credito_mes`, `setor_credito_ano`)
+- Campos de input monetario (R$) para cada periodo
+- Botao "Salvar" que faz upsert na tabela `team_targets`
+
+### 2. Adicionar botao de edicao no card ConsorcioMetricsCard
+- Um icone de engrenagem (Settings2) no card, visivel apenas para roles `admin`, `manager`, `coordenador`
+- Ao clicar, abre o modal de edicao
+
+### 3. Garantir que o "Apurado" mostra os valores corretos
+- O card ja combina `comissaoSemanal` (comissao de installments do Efeito Alavanca) + `apuradoSemanal` (comissao do Credito). Confirmaremos se o usuario quer ver **valor em carta** (total de creditos de cartas) ou **comissao** (o que ja esta sendo mostrado). A implementacao atual usa comissoes -- se o usuario quiser "valor em carta", ajustaremos para usar `apuradoSemanal` do efeito_alavanca (que ja e o total de cartas via `valor_credito`) em vez de `comissaoSemanal`.
 
 ## Detalhes Tecnicos
 
-### Migration SQL
-Executar `ALTER TABLE` para dropar e recriar o CHECK constraint, adicionando os seguintes tipos:
+### Novo componente: `src/components/sdr/ConsorcioRevenueGoalsEditModal.tsx`
+- Modal com 6 campos (2 setores x 3 periodos)
+- Usa upsert direto na tabela `team_targets` para os tipos `setor_*`
+- Invalida query `['setores-dashboard']` apos salvar para atualizar o card
 
-```text
-consorcio_sdr_agendamento_dia
-consorcio_sdr_agendamento_semana
-consorcio_sdr_agendamento_mes
-consorcio_sdr_r1_agendada_dia
-consorcio_sdr_r1_agendada_semana
-consorcio_sdr_r1_agendada_mes
-consorcio_sdr_r1_realizada_dia
-consorcio_sdr_r1_realizada_semana
-consorcio_sdr_r1_realizada_mes
-consorcio_sdr_noshow_dia
-consorcio_sdr_noshow_semana
-consorcio_sdr_noshow_mes
-consorcio_sdr_proposta_enviada_dia
-consorcio_sdr_proposta_enviada_semana
-consorcio_sdr_proposta_enviada_mes
-consorcio_sdr_contrato_dia
-consorcio_sdr_contrato_semana
-consorcio_sdr_contrato_mes
-consorcio_sdr_aguardando_doc_dia
-consorcio_sdr_aguardando_doc_semana
-consorcio_sdr_aguardando_doc_mes
-consorcio_sdr_carta_fechada_dia
-consorcio_sdr_carta_fechada_semana
-consorcio_sdr_carta_fechada_mes
-consorcio_sdr_aporte_dia
-consorcio_sdr_aporte_semana
-consorcio_sdr_aporte_mes
-consorcio_sdr_venda_realizada_dia
-consorcio_sdr_venda_realizada_semana
-consorcio_sdr_venda_realizada_mes
-```
+### Alteracao: `src/pages/bu-consorcio/PainelEquipe.tsx`
+- Adicionar estado `revenueGoalsEditOpen`
+- Adicionar botao de edicao no `ConsorcioMetricsCard`
+- Importar e renderizar o modal
+- Corrigir o "Apurado" para usar `apuradoSemanal` (valor em carta) do efeito_alavanca em vez de `comissaoSemanal` (comissao), somado ao `apuradoSemanal` do credito
 
-Todos os tipos existentes (`sdr_*`, `ultrameta_*`, `setor_*`, etc.) serao mantidos -- apenas adicionamos os novos.
+### Alteracao: `src/hooks/useSetoresDashboard.ts`
+- Nenhuma alteracao necessaria - o hook ja busca os targets `setor_*` e os retorna nos dados. Os targets simplesmente nao existiam no banco.
 
-### Resultado
-- Metas do Consorcio poderao ser salvas no banco sem erro
-- Nenhuma alteracao de codigo necessaria (o fix anterior do upsert ja esta correto)
-- Dados existentes do Incorporador nao sao afetados
+### Banco de dados
+- Nenhuma migracao necessaria - os tipos `setor_efeito_alavanca_semana`, `setor_efeito_alavanca_mes`, etc. ja estao permitidos no CHECK constraint
