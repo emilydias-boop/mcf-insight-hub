@@ -110,7 +110,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     id: string;
     attendee_phone: string | null;
     deal_id: string | null;
-    meeting_slots: { closer_id: string | null; scheduled_at: string | null } | null;
+    meeting_slots: { closer_id: string | null } | null;
     crm_deals: { crm_contacts: { email: string | null; phone: string | null } | null } | null;
   }
 
@@ -129,7 +129,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
         .from('meeting_slot_attendees')
         .select(`
           id, attendee_phone, deal_id,
-          meeting_slots!inner(closer_id, scheduled_at),
+          meeting_slots!inner(closer_id),
           crm_deals!deal_id(crm_contacts!contact_id(email, phone))
         `)
         .eq('status', 'contract_paid')

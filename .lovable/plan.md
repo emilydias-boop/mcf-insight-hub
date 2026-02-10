@@ -1,32 +1,52 @@
 
 
-# Corrigir Fat. Outside: Filtrar por A000 e Somar Todo Faturamento do Lead
+# Adicionar Outside ao Relatório de Vendas (Faturamento por Closer)
 
-## Resumo
+## Objetivo
 
-Duas correções na lógica de Outside:
-1. **Detecção**: Um lead só é "Outside" se tiver uma transação **A000 (Contrato)** com `sale_date` anterior ao `scheduled_at` da R1
-2. **Faturamento**: Uma vez identificado como Outside, **todas** as transações desse lead (A000, A001, A009, etc.) contam para "Fat. Outside"
+Na tabela "Faturamento por Closer" do Relatório de Vendas, identificar e exibir quais transacoes sao de leads "Outside" (pagaram antes da R1), com contagem e faturamento separados.
 
-## Lógica detalhada
+## Como funciona hoje
 
-### Passo 1 - Identificar leads Outside (antes do loop principal)
-- Cruzar attendees (com `scheduled_at`) com transações
-- Para cada par email/phone, verificar se existe transação onde:
-  - `product_name` contém "A000" ou "Contrato" (usando lógica existente em `incorporadorPricing.ts`)
-  - `sale_date < scheduled_at`
-- Se sim, adicionar email/phone a um Set `outsideLeadEmails` / `outsideLeadPhones`
+1. `SalesReportPanel` busca attendees com `status = 'contract_paid'` para vincular transacoes a closers
+2. `CloserRevenueSummaryTable` agrupa transacoes por closer via matching email/phone
+3. Nao ha distincao entre vendas normais e Outside
 
-### Passo 2 - No loop de atribuição de transações
-- Se o email/phone da transação pertence ao Set de leads Outside, somar gross ao `outsideGross` do closer
-- `outsideCount` = quantidade de leads únicos Outside por closer (não transações)
+## Alteracoes
 
-## Arquivos modificados
+### 1. Expandir query de attendees (`SalesReportPanel.tsx`)
 
-### `src/components/relatorios/CloserRevenueSummaryTable.tsx`
-- Antes do loop de transações: construir Sets de leads Outside filtrando por A000/Contrato
-- No loop: usar os Sets para classificar e somar todo o faturamento do lead
-- `outsideCount` passa a ser leads únicos, não transações individuais
+- Adicionar `scheduled_at` no select dos `meeting_slots` (atualmente so traz `closer_id`)
+- Atualizar a interface `AttendeeMatch` para incluir `scheduled_at`
 
-### `src/components/relatorios/CloserRevenueDetailDialog.tsx`
-- Mesma lógica: identificar leads Outside por A000 antes da R1, somar todas as transações do lead ao KPI de Outside
+### 2. Detectar Outside no `CloserRevenueSummaryTable.tsx`
+
+- Para cada transacao atribuida a um closer, verificar se o `sale_date` da transacao e anterior ao `scheduled_at` da reuniao do attendee correspondente
+- Computar por closer: `outsideCount` e `outsideGross`
+- Adicionar 2 colunas na tabela: "Outside" (contagem) e "Fat. Outside" (faturamento bruto)
+
+### 3. Propagar para o `CloserRevenueDetailDialog.tsx`
+
+- Adicionar KPI card de "Outside" no dialog de detalhe do closer
+- Marcar transacoes Outside com badge na lista de categorias
+
+### Detalhes tecnicos
+
+Interface `AttendeeMatch` atualizada:
+```text
+meeting_slots: { closer_id: string | null; scheduled_at: string | null } | null;
+```
+
+Logica de deteccao (dentro do useMemo de summaryData):
+```text
+Para cada transacao atribuida a um closer:
+  1. Encontrar o attendee que fez o match (via email/phone)
+  2. Comparar tx.sale_date < attendee.meeting_slots.scheduled_at
+  3. Se sim, contabilizar como Outside
+```
+
+### Arquivos modificados
+- `src/components/relatorios/SalesReportPanel.tsx` -- expandir select com scheduled_at
+- `src/components/relatorios/CloserRevenueSummaryTable.tsx` -- adicionar colunas Outside + Fat. Outside
+- `src/components/relatorios/CloserRevenueDetailDialog.tsx` -- adicionar KPI de Outside no dialog
+
