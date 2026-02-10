@@ -250,6 +250,7 @@ const App = () => (
                 <Route path="vendas" element={<ProjetosVendas />} />
               </Route>
               <Route path="bu-projetos/relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ProjetosRelatorios /></RoleGuard>} />
+              <Route path="bu-projetos/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="projetos" /></RoleGuard>} />
               
               {/* BU Projetos CRM - Dedicado */}
               <Route path="bu-projetos/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><BUCRMLayout bu="projetos" basePath="/bu-projetos/crm" /></RoleGuard>}>
