@@ -194,6 +194,7 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "Leilões Imobiliários", url: "/leilao" },
       { title: "CRM", url: "/leilao/crm" },
+      { title: "Documentos Estratégicos", url: "/leilao/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 
