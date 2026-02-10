@@ -206,7 +206,8 @@ export const useUpsertSdrTargets = () => {
 
       // For each target type, upsert the value
       const upsertPromises = Object.entries(targets).map(async ([type, value]) => {
-        const config = SDR_TARGET_CONFIGS.find(c => c.type === type);
+        const config = SDR_TARGET_CONFIGS.find(c => c.type === type)
+          || CONSORCIO_SDR_TARGET_CONFIGS.find(c => c.type === type);
         if (!config) return { success: true };
 
         // Check if target exists using maybeSingle() to avoid 406 error
