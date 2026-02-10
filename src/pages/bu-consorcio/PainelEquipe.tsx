@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, startOfYear, endOfYear, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
 import { WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
@@ -45,6 +45,7 @@ import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSdrsFromSquad } from "@/hooks/useSdrsFromSquad";
 import { ConsorcioRevenueGoalsEditModal } from "@/components/sdr/ConsorcioRevenueGoalsEditModal";
+import { useConsorcioSummary } from "@/hooks/useConsorcio";
 
 const BU_SQUAD = "consorcio";
 const BU_PREFIX = "consorcio_sdr_";
@@ -56,15 +57,32 @@ function ConsorcioMetricsCard({ onEditGoals, canEdit }: { onEditGoals?: () => vo
   const efeitoAlavanca = setoresData?.setores.find(s => s.id === 'efeito_alavanca');
   const credito = setoresData?.setores.find(s => s.id === 'credito');
 
-  if (!efeitoAlavanca && !credito && !setoresLoading) return null;
+  // Calculate date ranges for all cards (not just inside)
+  const today = new Date();
+  const todayNorm = startOfDay(today);
+  const wStart = startOfWeek(todayNorm, { weekStartsOn: 6 });
+  const wEnd = endOfWeek(todayNorm, { weekStartsOn: 6 });
+  const mStart = startOfMonth(today);
+  const mEnd = endOfMonth(today);
+  const yStart = startOfYear(today);
+  const yEnd = endOfYear(today);
 
-  // Combine both sectors: use apurado (valor em carta) for both
+  // Fetch ALL consortium cards (no categoria filter) for each period
+  const { data: weeklySummary, isLoading: wLoading } = useConsorcioSummary({ startDate: wStart, endDate: wEnd });
+  const { data: monthlySummary, isLoading: mLoading } = useConsorcioSummary({ startDate: mStart, endDate: mEnd });
+  const { data: annualSummary, isLoading: yLoading } = useConsorcioSummary({ startDate: yStart, endDate: yEnd });
+
+  const summaryLoading = wLoading || mLoading || yLoading;
+
+  if (!efeitoAlavanca && !credito && !setoresLoading && !summaryLoading) return null;
+
+  // Use totalCredito from ALL cards + credito sector commission from consortium_payments
   const combined = {
-    apuradoSemanal: (efeitoAlavanca?.apuradoSemanal || 0) + (credito?.apuradoSemanal || 0),
+    apuradoSemanal: (weeklySummary?.totalCredito || 0) + (credito?.apuradoSemanal || 0),
     metaSemanal: (efeitoAlavanca?.metaSemanal || 0) + (credito?.metaSemanal || 0),
-    apuradoMensal: (efeitoAlavanca?.apuradoMensal || 0) + (credito?.apuradoMensal || 0),
+    apuradoMensal: (monthlySummary?.totalCredito || 0) + (credito?.apuradoMensal || 0),
     metaMensal: (efeitoAlavanca?.metaMensal || 0) + (credito?.metaMensal || 0),
-    apuradoAnual: (efeitoAlavanca?.apuradoAnual || 0) + (credito?.apuradoAnual || 0),
+    apuradoAnual: (annualSummary?.totalCredito || 0) + (credito?.apuradoAnual || 0),
     metaAnual: (efeitoAlavanca?.metaAnual || 0) + (credito?.metaAnual || 0),
   };
 
@@ -83,7 +101,7 @@ function ConsorcioMetricsCard({ onEditGoals, canEdit }: { onEditGoals?: () => vo
           metaMensal={combined.metaMensal}
           apuradoAnual={combined.apuradoAnual}
           metaAnual={combined.metaAnual}
-          isLoading={setoresLoading}
+          isLoading={setoresLoading || summaryLoading}
         />
         {canEdit && (
           <button
