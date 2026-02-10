@@ -1,52 +1,26 @@
 
 
-# Adicionar Outside ao Relatório de Vendas (Faturamento por Closer)
+# Adicionar Alex Dias na tabela SDR
 
-## Objetivo
+## O que sera feito
 
-Na tabela "Faturamento por Closer" do Relatório de Vendas, identificar e exibir quais transacoes sao de leads "Outside" (pagaram antes da R1), com contagem e faturamento separados.
+Inserir o registro do Alex Dias na tabela `sdr` para que ele apareca no painel comercial da BU Incorporador.
 
-## Como funciona hoje
+## Dados para inserir
 
-1. `SalesReportPanel` busca attendees com `status = 'contract_paid'` para vincular transacoes a closers
-2. `CloserRevenueSummaryTable` agrupa transacoes por closer via matching email/phone
-3. Nao ha distincao entre vendas normais e Outside
+| Campo | Valor |
+|-------|-------|
+| name | Alex Dias |
+| email | alex.dias@minhacasafinanciada.com |
+| squad | incorporador |
+| role_type | sdr |
+| active | true |
+| meta_diaria | 7 |
+| profile_id | 16c5d025-9cda-45fa-ae2f-7170bfb8dee8 |
 
-## Alteracoes
+A meta diaria foi definida como **7** (valor medio entre os SDRs ativos do squad). Esse valor pode ser ajustado depois conforme necessario.
 
-### 1. Expandir query de attendees (`SalesReportPanel.tsx`)
+## Resultado esperado
 
-- Adicionar `scheduled_at` no select dos `meeting_slots` (atualmente so traz `closer_id`)
-- Atualizar a interface `AttendeeMatch` para incluir `scheduled_at`
-
-### 2. Detectar Outside no `CloserRevenueSummaryTable.tsx`
-
-- Para cada transacao atribuida a um closer, verificar se o `sale_date` da transacao e anterior ao `scheduled_at` da reuniao do attendee correspondente
-- Computar por closer: `outsideCount` e `outsideGross`
-- Adicionar 2 colunas na tabela: "Outside" (contagem) e "Fat. Outside" (faturamento bruto)
-
-### 3. Propagar para o `CloserRevenueDetailDialog.tsx`
-
-- Adicionar KPI card de "Outside" no dialog de detalhe do closer
-- Marcar transacoes Outside com badge na lista de categorias
-
-### Detalhes tecnicos
-
-Interface `AttendeeMatch` atualizada:
-```text
-meeting_slots: { closer_id: string | null; scheduled_at: string | null } | null;
-```
-
-Logica de deteccao (dentro do useMemo de summaryData):
-```text
-Para cada transacao atribuida a um closer:
-  1. Encontrar o attendee que fez o match (via email/phone)
-  2. Comparar tx.sale_date < attendee.meeting_slots.scheduled_at
-  3. Se sim, contabilizar como Outside
-```
-
-### Arquivos modificados
-- `src/components/relatorios/SalesReportPanel.tsx` -- expandir select com scheduled_at
-- `src/components/relatorios/CloserRevenueSummaryTable.tsx` -- adicionar colunas Outside + Fat. Outside
-- `src/components/relatorios/CloserRevenueDetailDialog.tsx` -- adicionar KPI de Outside no dialog
+Apos a insercao, o Alex Dias aparecera automaticamente no painel comercial da BU Incorporador, junto com os demais SDRs como Antony, Carol, Evellyn, Jessica, etc.
 
