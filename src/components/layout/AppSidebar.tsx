@@ -181,6 +181,7 @@ const menuItems: MenuItem[] = [
       { title: "Gestão de Projetos", url: "/projetos" },
       { title: "CRM", url: "/bu-projetos/crm" },
       { title: "Relatórios", url: "/bu-projetos/relatorios" },
+      { title: "Documentos Estratégicos", url: "/bu-projetos/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 
