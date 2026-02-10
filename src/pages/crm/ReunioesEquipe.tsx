@@ -75,6 +75,8 @@ export default function ReunioesEquipe() {
   const { role } = useAuth();
   const navigate = useNavigate();
   const isRestrictedRole = role === 'sdr' || role === 'closer';
+  const canEditGoals = !!role && ['admin', 'manager', 'coordenador'].includes(role);
+  const [incorpGoalsOpen, setIncorpGoalsOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Initialize state from URL params
