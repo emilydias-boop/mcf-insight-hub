@@ -33,39 +33,52 @@ interface TeamGoalsEditModalProps {
   buPrefix?: string; // e.g. 'consorcio_sdr_' or default 'sdr_'
 }
 
-// Mapeamento de tipo dia → semana
-const dayToWeekMapping: Record<string, SdrTargetType> = {
-  'sdr_agendamento_dia': 'sdr_agendamento_semana',
-  'sdr_r1_agendada_dia': 'sdr_r1_agendada_semana',
-  'sdr_r1_realizada_dia': 'sdr_r1_realizada_semana',
-  'sdr_noshow_dia': 'sdr_noshow_semana',
-  'sdr_contrato_dia': 'sdr_contrato_semana',
-  'sdr_r2_agendada_dia': 'sdr_r2_agendada_semana',
-  'sdr_r2_realizada_dia': 'sdr_r2_realizada_semana',
-  'sdr_venda_realizada_dia': 'sdr_venda_realizada_semana',
-};
+// Mapeamento base de tipo dia → semana (para sdr_)
+const BASE_DAY_SUFFIXES = [
+  'agendamento', 'r1_agendada', 'r1_realizada', 'noshow',
+  'contrato', 'r2_agendada', 'r2_realizada', 'venda_realizada',
+  // Consórcio-specific suffixes
+  'proposta_enviada', 'aguardando_doc', 'carta_fechada', 'aporte',
+];
 
-// Mapeamento de tipo dia → mês
-const dayToMonthMapping: Record<string, SdrTargetType> = {
-  'sdr_agendamento_dia': 'sdr_agendamento_mes',
-  'sdr_r1_agendada_dia': 'sdr_r1_agendada_mes',
-  'sdr_r1_realizada_dia': 'sdr_r1_realizada_mes',
-  'sdr_noshow_dia': 'sdr_noshow_mes',
-  'sdr_contrato_dia': 'sdr_contrato_mes',
-  'sdr_r2_agendada_dia': 'sdr_r2_agendada_mes',
-  'sdr_r2_realizada_dia': 'sdr_r2_realizada_mes',
-  'sdr_venda_realizada_dia': 'sdr_venda_realizada_mes',
-};
+function buildDayToWeekMapping(prefix: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  BASE_DAY_SUFFIXES.forEach(suffix => {
+    map[`${prefix}${suffix}_dia`] = `${prefix}${suffix}_semana`;
+  });
+  return map;
+}
 
-// Proporções para cálculo em cascata das metas do dia
+function buildDayToMonthMapping(prefix: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  BASE_DAY_SUFFIXES.forEach(suffix => {
+    map[`${prefix}${suffix}_dia`] = `${prefix}${suffix}_mes`;
+  });
+  return map;
+}
+
+// Proporções para cálculo em cascata das metas do dia (Incorporador)
 const DAY_TARGET_PROPORTIONS = {
-  r1_agendada: 1.00,      // 100% do Agendamento
-  r1_realizada: 0.70,     // 70% da R1 Agendada
-  noshow: 0.30,           // 30% da R1 Agendada
-  contrato: 0.35,         // 35% da R1 Realizada
-  r2_agendada: 1.00,      // 100% do Contrato Pago
-  r2_realizada: 0.75,     // 75% da R2 Agendada
-  venda_realizada: 0.60,  // 60% da R2 Realizada
+  r1_agendada: 1.00,
+  r1_realizada: 0.70,
+  noshow: 0.30,
+  contrato: 0.35,
+  r2_agendada: 1.00,
+  r2_realizada: 0.75,
+  venda_realizada: 0.60,
+};
+
+// Proporções para cálculo em cascata (Consórcio)
+const CONSORCIO_DAY_TARGET_PROPORTIONS = {
+  r1_agendada: 1.00,
+  r1_realizada: 0.70,
+  noshow: 0.30,
+  proposta_enviada: 0.50,
+  contrato: 0.40,
+  aguardando_doc: 0.50,
+  carta_fechada: 0.40,
+  aporte: 0.35,
+  venda_realizada: 0.30,
 };
 
 // Calcula todas as metas do dia em cascata a partir do Agendamento
