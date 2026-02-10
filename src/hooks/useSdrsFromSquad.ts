@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 export interface SdrFromSquad {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   role_type: string | null;
   meta_diaria: number | null;
 }

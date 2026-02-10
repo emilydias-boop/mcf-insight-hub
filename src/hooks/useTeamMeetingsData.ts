@@ -45,15 +45,15 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
   // Create Set of valid SDR emails from database (dynamic)
   const validSdrEmails = useMemo(() => {
     const sdrs = sdrsQuery.data || [];
-    return new Set(sdrs.map(sdr => sdr.email.toLowerCase()));
+    return new Set(sdrs.filter(sdr => sdr.email).map(sdr => sdr.email!.toLowerCase()));
   }, [sdrsQuery.data]);
 
   // Create lookup for SDR names from database
   const sdrNameMap = useMemo(() => {
     const map = new Map<string, string>();
     const sdrs = sdrsQuery.data || [];
-    sdrs.forEach(sdr => {
-      map.set(sdr.email.toLowerCase(), sdr.name);
+    sdrs.filter(sdr => sdr.email).forEach(sdr => {
+      map.set(sdr.email!.toLowerCase(), sdr.name);
     });
     return map;
   }, [sdrsQuery.data]);
