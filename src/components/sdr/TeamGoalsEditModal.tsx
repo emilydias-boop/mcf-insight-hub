@@ -17,6 +17,8 @@ import { ptBR } from "date-fns/locale";
 import { 
   SdrTargetType, 
   SDR_TARGET_CONFIGS, 
+  CONSORCIO_SDR_TARGET_CONFIGS,
+  getTargetConfigsForBU,
   SdrTarget, 
   useUpsertSdrTargets,
   useSdrTeamTargetsByMonth,
