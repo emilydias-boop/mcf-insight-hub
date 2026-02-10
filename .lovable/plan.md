@@ -1,32 +1,44 @@
 
-# Excluir socios (partners) das metricas de SDR
+# Corrigir contagem de Outside para meses com muitos leads
 
 ## Problema
 
-Quando um lead e agendado com 2 socios, o sistema cria 3 registros em `meeting_slot_attendees` (1 lead principal + 2 com `is_partner = true`). As RPCs que calculam as metricas nao filtram socios, entao:
-- 1 lead + 2 socios = 3 agendamentos (deveria ser 1)
-- Se der no-show, conta 3 no-shows (deveria ser 1)
-- Na lista de reunioes, aparecem 3 linhas identicas (como visto na screenshot do Bruno)
+O hook `useR1CloserMetrics` detecta leads "Outside" buscando transacoes na `hubla_transactions` via email. Para isso, faz duas queries com `.in()`:
+
+1. `.in('id', dealIds)` -- buscar emails dos deals (826 UUIDs em janeiro)
+2. `.in('customer_email', emails)` -- buscar contratos na hubla
+
+Com 826+ UUIDs, a URL do request ultrapassa o limite do Supabase (aprox. 4000 chars no query string), e a query falha silenciosamente retornando resultados vazios. Em fevereiro, com apenas 294 deals, funciona normalmente.
 
 ## Solucao
 
-Adicionar o filtro `AND msa.is_partner = false` nas duas RPCs que alimentam o painel de SDR.
+Dividir as queries `.in()` em **batches de 200 itens** para garantir que a URL nunca exceda o limite, independente do volume de dados do mes.
 
 ## Alteracoes
 
-### 1. RPC `get_sdr_metrics_from_agenda` (metricas/KPIs)
+### Arquivo: `src/hooks/useR1CloserMetrics.ts`
 
-Nova migration SQL adicionando `AND msa.is_partner = false` no WHERE da query principal (linha 59 da versao atual). Isso corrige:
-- Total Agendamentos
-- R1 Agendada
-- R1 Realizada
-- No-Shows (derivado de agendamentos - realizadas)
-- Contratos
+1. **Criar funcao auxiliar `batchedIn`**: Recebe um array grande e executa a query em lotes de 200, concatenando os resultados.
 
-### 2. RPC `get_sdr_meetings_from_agenda` (lista de reunioes)
+2. **Aplicar batch na query de deals** (linha 285-288):
+   - Em vez de `supabase.from('crm_deals').select(...).in('id', Array.from(dealIds))`
+   - Dividir `dealIds` em grupos de 200 e fazer queries paralelas
 
-Nova migration SQL adicionando `AND msa.is_partner = false` no WHERE. Isso corrige:
-- A lista que mostra 3 linhas "Bruno" identicas passara a mostrar apenas 1
+3. **Aplicar batch na query de hubla_transactions** (linha 303-309):
+   - Em vez de `.in('customer_email', attendeeEmails)`
+   - Dividir `attendeeEmails` em grupos de 200 e fazer queries paralelas
 
-### Arquivos criados
-- `supabase/migrations/[timestamp]_exclude_partners_from_sdr_metrics.sql` -- migration com as 2 RPCs atualizadas
+4. **Aplicar batch na query de profiles** (linhas 82-85 e 136-139):
+   - Mesma logica para `bookedByIds` e `allBookedByIds` que tambem podem crescer
+
+### Logica do batch
+
+```text
+function batchQuery(ids, batchSize=200):
+  chunks = split ids into groups of batchSize
+  results = await Promise.all(chunks.map(chunk => query.in(field, chunk)))
+  return flatten(results)
+```
+
+### Arquivo modificado
+- `src/hooks/useR1CloserMetrics.ts` -- adicionar batching em todas as queries `.in()`
