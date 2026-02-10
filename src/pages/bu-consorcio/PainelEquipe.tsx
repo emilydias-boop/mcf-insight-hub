@@ -250,6 +250,20 @@ export default function ConsorcioPainelEquipe() {
   const { data: pendentesHoje } = useMeetingsPendentesHoje();
   const { data: outsideData } = useSdrOutsideMetrics(start, end);
 
+  // Consórcio pipeline metrics (deals by stage)
+  const pipelineMetrics = useConsorcioPipelineMetrics();
+  
+  // Consórcio team targets
+  const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
+  const canEditGoals = role && ['admin', 'manager', 'coordenador'].includes(role);
+
+  // Helper to get target value by suffix
+  const getTargetValue = (suffix: string): number => {
+    const targetType = `${BU_PREFIX}${suffix}`;
+    const target = consorcioTargets?.find(t => t.target_type === targetType);
+    return target?.target_value ?? 0;
+  };
+
   // Helper to check if a meeting matches the selected pipeline
   const matchesPipeline = (originName: string | null) => {
     if (!allowedOriginNames) return true; // No pipeline filter
