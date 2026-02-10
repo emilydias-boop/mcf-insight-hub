@@ -1252,6 +1252,63 @@ export type Database = {
         }
         Relationships: []
       }
+      bu_strategic_documents: {
+        Row: {
+          ano: number
+          bu: string
+          created_at: string
+          id: string
+          mes: number
+          nome_arquivo: string
+          semana: number
+          storage_path: string
+          uploaded_by: string | null
+          uploaded_by_name: string | null
+          uploaded_by_role: string | null
+        }
+        Insert: {
+          ano: number
+          bu: string
+          created_at?: string
+          id?: string
+          mes: number
+          nome_arquivo: string
+          semana: number
+          storage_path: string
+          uploaded_by?: string | null
+          uploaded_by_name?: string | null
+          uploaded_by_role?: string | null
+        }
+        Update: {
+          ano?: number
+          bu?: string
+          created_at?: string
+          id?: string
+          mes?: number
+          nome_arquivo?: string
+          semana?: number
+          storage_path?: string
+          uploaded_by?: string | null
+          uploaded_by_name?: string | null
+          uploaded_by_role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bu_strategic_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bu_strategic_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       bu_webhook_logs: {
         Row: {
           bu_type: string
