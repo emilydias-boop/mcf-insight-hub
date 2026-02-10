@@ -18,7 +18,6 @@ import { Loader2 } from "lucide-react";
 interface ConsorcioRevenueGoalsEditModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  currentTargets: Record<string, number>;
 }
 
 const TARGET_FIELDS = [
