@@ -76,6 +76,8 @@ export function SetorRow({
   metaAnual,
   apuradoAnual,
   isLoading = false,
+  onEditGoals,
+  canEdit = false,
 }: SetorRowProps) {
   if (isLoading) {
     return (
