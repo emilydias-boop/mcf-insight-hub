@@ -28,6 +28,7 @@ interface TeamGoalsEditModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   existingTargets: SdrTarget[];
+  buPrefix?: string; // e.g. 'consorcio_sdr_' or default 'sdr_'
 }
 
 // Mapeamento de tipo dia → semana
@@ -87,37 +88,68 @@ const calculateDayCascade = (agendamento: number): Record<string, number> => {
   };
 };
 
-export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: TeamGoalsEditModalProps) {
+export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPrefix = 'sdr_' }: TeamGoalsEditModalProps) {
   const [values, setValues] = useState<Record<SdrTargetType, number>>({} as Record<SdrTargetType, number>);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const upsertMutation = useUpsertSdrTargets();
   
   const selectedYear = selectedMonth.getFullYear();
 
+  // Build dynamic target configs based on buPrefix
+  const dynamicConfigs = useMemo(() => {
+    return SDR_TARGET_CONFIGS.map(c => ({
+      ...c,
+      // Replace 'sdr_' prefix with buPrefix for non-default BUs
+      type: (buPrefix === 'sdr_' ? c.type : c.type.replace('sdr_', buPrefix)) as SdrTargetType,
+    }));
+  }, [buPrefix]);
+
+  // Build dynamic day-to-week and day-to-month mappings
+  const dynamicDayToWeek = useMemo(() => {
+    const map: Record<string, SdrTargetType> = {};
+    Object.entries(dayToWeekMapping).forEach(([day, week]) => {
+      const dynDay = buPrefix === 'sdr_' ? day : day.replace('sdr_', buPrefix);
+      const dynWeek = buPrefix === 'sdr_' ? week : (week as string).replace('sdr_', buPrefix);
+      map[dynDay] = dynWeek as SdrTargetType;
+    });
+    return map;
+  }, [buPrefix]);
+
+  const dynamicDayToMonth = useMemo(() => {
+    const map: Record<string, SdrTargetType> = {};
+    Object.entries(dayToMonthMapping).forEach(([day, month]) => {
+      const dynDay = buPrefix === 'sdr_' ? day : day.replace('sdr_', buPrefix);
+      const dynMonth = buPrefix === 'sdr_' ? month : (month as string).replace('sdr_', buPrefix);
+      map[dynDay] = dynMonth as SdrTargetType;
+    });
+    return map;
+  }, [buPrefix]);
+
   // Fetch targets for selected month
-  const { data: monthTargets, isLoading: isLoadingMonth } = useSdrTeamTargetsByMonth(selectedMonth);
+  const { data: monthTargets, isLoading: isLoadingMonth } = useSdrTeamTargetsByMonth(selectedMonth, buPrefix);
   
   // Fetch all targets for the year (for annual sum)
-  const { data: yearTargets } = useSdrTeamTargetsForYear(selectedYear);
+  const { data: yearTargets } = useSdrTeamTargetsForYear(selectedYear, buPrefix);
 
   // Calculate business days for selected month
   const diasUteisSemana = getDiasUteisSemana(selectedMonth);
   const diasUteisMes = getDiasUteisMes(selectedMonth);
 
   // Calculate annual sum of agendamento_mes targets
+  const agendamentoMesType = `${buPrefix}agendamento_mes`;
   const annualAgendamentoTotal = useMemo(() => {
     if (!yearTargets) return 0;
     return yearTargets
-      .filter(t => t.target_type === 'sdr_agendamento_mes')
+      .filter(t => t.target_type === agendamentoMesType)
       .reduce((sum, t) => sum + (t.target_value || 0), 0);
-  }, [yearTargets]);
+  }, [yearTargets, agendamentoMesType]);
 
   // Calculate annual sum for each metric
   const annualTotals = useMemo(() => {
     if (!yearTargets) return {} as Record<string, number>;
     
     const totals: Record<string, number> = {};
-    const monthTypes = SDR_TARGET_CONFIGS.filter(c => c.period === 'month');
+    const monthTypes = dynamicConfigs.filter(c => c.period === 'month');
     
     monthTypes.forEach(config => {
       totals[config.type] = yearTargets
@@ -126,7 +158,7 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
     });
     
     return totals;
-  }, [yearTargets]);
+  }, [yearTargets, dynamicConfigs]);
 
   // Month navigation
   const goToPreviousMonth = () => setSelectedMonth(prev => subMonths(prev, 1));
@@ -139,15 +171,22 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
     const targetsToUse = monthTargets || existingTargets;
     const initial: Record<string, number> = {};
     
-    SDR_TARGET_CONFIGS.forEach(config => {
+    dynamicConfigs.forEach(config => {
       const existing = targetsToUse.find(t => t.target_type === config.type);
       initial[config.type] = existing?.target_value ?? 0;
     });
     
     // Se tem valor de agendamento do dia mas outros estão zerados, aplica cascata
-    const agendamentoDia = initial['sdr_agendamento_dia'] || 0;
+    const agendamentoDiaType = `${buPrefix}agendamento_dia`;
+    const agendamentoDia = initial[agendamentoDiaType] || 0;
     if (agendamentoDia > 0) {
-      const dayValues = calculateDayCascade(agendamentoDia);
+      const baseDayValues = calculateDayCascade(agendamentoDia);
+      // Map cascade results to dynamic keys
+      const dayValues: Record<string, number> = {};
+      Object.entries(baseDayValues).forEach(([key, val]) => {
+        const dynKey = buPrefix === 'sdr_' ? key : key.replace('sdr_', buPrefix);
+        dayValues[dynKey] = val;
+      });
       
       // Aplica valores em cascata para campos zerados do dia
       Object.entries(dayValues).forEach(([key, val]) => {
@@ -159,8 +198,8 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
       // Auto-recalcular semana e mês se estiverem zerados
       Object.keys(dayValues).forEach(dayType => {
         const dayValue = initial[dayType] || 0;
-        const weekType = dayToWeekMapping[dayType];
-        const monthType = dayToMonthMapping[dayType];
+        const weekType = dynamicDayToWeek[dayType];
+        const monthType = dynamicDayToMonth[dayType];
         
         if (weekType && (!initial[weekType] || initial[weekType] === 0)) {
           initial[weekType] = dayValue * diasUteisSemana;
@@ -172,7 +211,7 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
     }
     
     setValues(initial as Record<SdrTargetType, number>);
-  }, [monthTargets, existingTargets, open, diasUteisSemana, diasUteisMes]);
+  }, [monthTargets, existingTargets, open, diasUteisSemana, diasUteisMes, dynamicConfigs, buPrefix, dynamicDayToWeek, dynamicDayToMonth]);
 
   // Handler para campos de semana e mês (edição manual)
   const handleChange = (type: SdrTargetType, value: string) => {
@@ -185,9 +224,16 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
     const numValue = parseInt(value) || 0;
     let newValues = { ...values };
     
+    const agendamentoDiaType = `${buPrefix}agendamento_dia` as SdrTargetType;
+    
     // Se é o Agendamento, calcula todos os outros em cascata
-    if (type === 'sdr_agendamento_dia') {
-      const dayValues = calculateDayCascade(numValue);
+    if (type === agendamentoDiaType) {
+      const baseDayValues = calculateDayCascade(numValue);
+      const dayValues: Record<string, number> = {};
+      Object.entries(baseDayValues).forEach(([key, val]) => {
+        const dynKey = buPrefix === 'sdr_' ? key : key.replace('sdr_', buPrefix);
+        dayValues[dynKey] = val;
+      });
       
       // Atualiza todos os valores do dia
       Object.entries(dayValues).forEach(([key, val]) => {
@@ -197,8 +243,8 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
       // Calcula semana e mês para TODOS os tipos do dia
       Object.keys(dayValues).forEach(dayType => {
         const dayVal = dayValues[dayType];
-        const weekType = dayToWeekMapping[dayType];
-        const monthType = dayToMonthMapping[dayType];
+        const weekType = dynamicDayToWeek[dayType];
+        const monthType = dynamicDayToMonth[dayType];
         
         if (weekType) {
           newValues[weekType] = dayVal * diasUteisSemana;
@@ -212,8 +258,8 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
       newValues[type] = Math.max(0, numValue);
       
       // Recalcula apenas semana e mês desse campo específico
-      const weekType = dayToWeekMapping[type];
-      const monthType = dayToMonthMapping[type];
+      const weekType = dynamicDayToWeek[type];
+      const monthType = dynamicDayToMonth[type];
       
       if (weekType) {
         newValues[weekType] = numValue * diasUteisSemana;
@@ -228,8 +274,14 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
 
   // Função para recalcular todas as metas baseado no agendamento
   const handleRecalculate = () => {
-    const agendamento = values['sdr_agendamento_dia'] || 0;
-    const dayValues = calculateDayCascade(agendamento);
+    const agendamentoDiaType = `${buPrefix}agendamento_dia` as SdrTargetType;
+    const agendamento = values[agendamentoDiaType] || 0;
+    const baseDayValues = calculateDayCascade(agendamento);
+    const dayValues: Record<string, number> = {};
+    Object.entries(baseDayValues).forEach(([key, val]) => {
+      const dynKey = buPrefix === 'sdr_' ? key : key.replace('sdr_', buPrefix);
+      dayValues[dynKey] = val;
+    });
     
     const newValues = { ...values };
     
@@ -241,8 +293,8 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
     // Recalcula semana e mês para todos
     Object.keys(dayValues).forEach(dayType => {
       const dayVal = dayValues[dayType];
-      const weekType = dayToWeekMapping[dayType];
-      const monthType = dayToMonthMapping[dayType];
+      const weekType = dynamicDayToWeek[dayType];
+      const monthType = dynamicDayToMonth[dayType];
       
       if (weekType) {
         newValues[weekType] = dayVal * diasUteisSemana;
@@ -264,9 +316,9 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
     onOpenChange(false);
   };
 
-  const dayConfigs = SDR_TARGET_CONFIGS.filter(c => c.period === 'day');
-  const weekConfigs = SDR_TARGET_CONFIGS.filter(c => c.period === 'week');
-  const monthConfigs = SDR_TARGET_CONFIGS.filter(c => c.period === 'month');
+  const dayConfigs = dynamicConfigs.filter(c => c.period === 'day');
+  const weekConfigs = dynamicConfigs.filter(c => c.period === 'week');
+  const monthConfigs = dynamicConfigs.filter(c => c.period === 'month');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -403,19 +455,19 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
             {/* Detalhes anuais de outras métricas */}
             <div className="mt-3 pt-3 border-t border-primary/10 grid grid-cols-4 gap-2 text-xs">
               <div className="text-center">
-                <p className="font-semibold text-foreground">{(annualTotals['sdr_r1_realizada_mes'] || 0).toLocaleString('pt-BR')}</p>
+                <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}r1_realizada_mes`] || 0).toLocaleString('pt-BR')}</p>
                 <p className="text-muted-foreground">R1 Realizadas</p>
               </div>
               <div className="text-center">
-                <p className="font-semibold text-foreground">{(annualTotals['sdr_contrato_mes'] || 0).toLocaleString('pt-BR')}</p>
+                <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}contrato_mes`] || 0).toLocaleString('pt-BR')}</p>
                 <p className="text-muted-foreground">Contratos</p>
               </div>
               <div className="text-center">
-                <p className="font-semibold text-foreground">{(annualTotals['sdr_r2_realizada_mes'] || 0).toLocaleString('pt-BR')}</p>
+                <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}r2_realizada_mes`] || 0).toLocaleString('pt-BR')}</p>
                 <p className="text-muted-foreground">R2 Realizadas</p>
               </div>
               <div className="text-center">
-                <p className="font-semibold text-foreground">{(annualTotals['sdr_venda_realizada_mes'] || 0).toLocaleString('pt-BR')}</p>
+                <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}venda_realizada_mes`] || 0).toLocaleString('pt-BR')}</p>
                 <p className="text-muted-foreground">Vendas</p>
               </div>
             </div>
