@@ -577,9 +577,14 @@ export default function ConsorcioPainelEquipe() {
       />
 
       {/* Revenue Goals Edit Modal */}
-      <ConsorcioRevenueGoalsEditModal
+      <BURevenueGoalsEditModal
         open={revenueGoalsEditOpen}
         onOpenChange={setRevenueGoalsEditOpen}
+        title="BU Consórcio"
+        sections={[
+          { prefix: "setor_efeito_alavanca", label: "Efeito Alavanca (Valor em Carta)" },
+          { prefix: "setor_credito", label: "Crédito (Comissão)" },
+        ]}
       />
 
       {/* Goals Panel - Consórcio specific with both pipelines */}
