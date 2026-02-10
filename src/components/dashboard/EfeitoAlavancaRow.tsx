@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/formatters";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, Settings2 } from "lucide-react";
 
 interface PeriodMetricsProps {
   label: string;
