@@ -36,6 +36,8 @@ import { useSdrOutsideMetrics } from "@/hooks/useSdrOutsideMetrics";
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSdrsFromSquad } from "@/hooks/useSdrsFromSquad";
+import { BURevenueGoalsEditModal } from "@/components/sdr/BURevenueGoalsEditModal";
+import { Settings2 } from "lucide-react";
 
 type DatePreset = "today" | "week" | "month" | "custom";
 
