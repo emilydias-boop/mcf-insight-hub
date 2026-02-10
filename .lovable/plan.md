@@ -1,44 +1,41 @@
 
-# Fix: Reuniao do Julio mostrando como Cancelada
+# Fix: Reuniao do Julio ainda mostrando "Cancelada" no Drawer
 
-## Problema
-Existem **dois meeting slots** para o Julio as 18:00 (21:00 UTC) no dia 11/02/2026:
+## Diagnostico
 
-1. Slot `d2254bfc` - status `canceled`, **sem participantes** (slot orfao/vazio)
-2. Slot `b77e1a07` - status `scheduled`, participante **Alan Carlos Rodrigues de Lira**
+A correcao anterior aplicou o filtro apenas dentro do `CloserColumnCalendar.tsx` (na funcao `getMeetingsForSlot`). Isso fez o **grid do calendario** mostrar corretamente, mas o **drawer** continua recebendo o slot cancelado orfao por outra via.
 
-O calendario pega ambos os slots no mesmo horario e usa o **primeiro da lista** (`slotMeetings[0]`) para renderizar. Como o slot cancelado vem primeiro, a celula inteira aparece como "Cancelada", escondendo a reuniao valida com o Alan.
+O problema raiz esta em `Agenda.tsx`: a variavel `filteredMeetings` inclui **todos** os meeting slots, inclusive o slot orfao cancelado (`d2254bfc`, status `canceled`, 0 participantes). Esse array e passado para:
+1. `relatedMeetings` do drawer -- que pode incluir o slot cancelado como "relacionado"
+2. Outras views (AgendaCalendar, MeetingsList) que nao tem o filtro
 
 ## Solucao
 
-### Alterar `CloserColumnCalendar.tsx`
+Aplicar o filtro de slots orfaos cancelados **na origem** dos dados, no `filteredMeetings` dentro de `Agenda.tsx`, antes de passar para qualquer componente. Isso garante que nenhum componente (calendario, drawer, lista) veja esses slots fantasma.
 
-Na funcao `getMeetingsForSlot`, filtrar slots cancelados que nao possuem participantes (slots orfaos). Isso remove os "ghost slots" sem afetar reunioes canceladas legitimas (que tem participantes vinculados).
+## Alteracao
 
-Adicionalmente, ao consolidar multiplos slots no mesmo horario, priorizar o slot com status ativo (scheduled/completed) sobre cancelados.
+### Arquivo: `src/pages/crm/Agenda.tsx`
 
-### Detalhes Tecnicos
+Dentro do `useMemo` de `filteredMeetings` (linhas 95-115), adicionar um filtro que exclui meeting slots com status `canceled` que tenham 0 participantes:
 
-**Arquivo**: `src/components/crm/CloserColumnCalendar.tsx`
-
-1. Modificar `getMeetingsForSlot` para excluir slots com status `canceled` que tenham zero attendees:
 ```text
-meetings.filter(m => {
-  // ... existing time/closer checks ...
-  // Exclude orphan canceled slots (no attendees)
+let result = meetings;
+
+// Remove orphan canceled slots (canceled with no attendees)
+result = result.filter(m => {
   if (m.status === 'canceled' && (!m.attendees || m.attendees.length === 0)) return false;
   return true;
-})
-```
-
-2. Ao selecionar `firstMeeting` da lista de slots consolidados (linha ~296), ordenar para que slots nao-cancelados venham primeiro:
-```text
-const sortedMeetings = slotMeetings.sort((a, b) => {
-  if (a.status === 'canceled' && b.status !== 'canceled') return 1;
-  if (a.status !== 'canceled' && b.status === 'canceled') return -1;
-  return 0;
 });
-const firstMeeting = sortedMeetings[0];
+
+// ... resto dos filtros existentes
 ```
 
-Isso garante que mesmo se houver um slot cancelado COM participantes no mesmo horario, o slot ativo sera exibido como principal.
+Isso resolve o problema na raiz, garantindo que:
+- O grid do calendario nao exibe slots orfaos
+- O drawer nao recebe slots orfaos como `meeting` nem como `relatedMeetings`
+- A lista de reunioes tambem fica limpa
+- Qualquer view futura tambem se beneficia
+
+## Complexidade
+Alteracao de 3 linhas em 1 arquivo. Sem efeitos colaterais -- reunioes canceladas com participantes continuam vissiveis normalmente.
