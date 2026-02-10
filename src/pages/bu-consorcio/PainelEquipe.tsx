@@ -8,7 +8,7 @@ import { Calendar, Users, Download, Briefcase, TrendingUp } from "lucide-react";
 import { SetorRow } from "@/components/dashboard/SetorRow";
 import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -20,6 +20,12 @@ import {
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
+import { ConsorcioGoalsMatrixTable, ConsorcioMetricRow } from "@/components/sdr/ConsorcioGoalsMatrixTable";
+import { useConsorcioPipelineMetrics } from "@/hooks/useConsorcioPipelineMetrics";
+import { useSdrTeamTargets } from "@/hooks/useSdrTeamTargets";
+import { TeamGoalsEditModal } from "@/components/sdr/TeamGoalsEditModal";
+import { Target, Settings2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
 import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
 import { PipelineSelector } from "@/components/crm/PipelineSelector";
@@ -107,6 +113,7 @@ export default function ConsorcioPainelEquipe() {
   const [sdrFilter, setSdrFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"sdrs" | "closers">("sdrs");
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
+  const [goalsEditModalOpen, setGoalsEditModalOpen] = useState(false);
 
   // BU pipeline mapping for Consórcio
   const { data: buMapping } = useBUPipelineMap('consorcio');
@@ -242,6 +249,20 @@ export default function ConsorcioPainelEquipe() {
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end, BU_SQUAD);
   const { data: pendentesHoje } = useMeetingsPendentesHoje();
   const { data: outsideData } = useSdrOutsideMetrics(start, end);
+
+  // Consórcio pipeline metrics (deals by stage)
+  const pipelineMetrics = useConsorcioPipelineMetrics();
+  
+  // Consórcio team targets
+  const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
+  const canEditGoals = role && ['admin', 'manager', 'coordenador'].includes(role);
+
+  // Helper to get target value by suffix
+  const getTargetValue = (suffix: string): number => {
+    const targetType = `${BU_PREFIX}${suffix}`;
+    const target = consorcioTargets?.find(t => t.target_type === targetType);
+    return target?.target_value ?? 0;
+  };
 
   // Helper to check if a meeting matches the selected pipeline
   const matchesPipeline = (originName: string | null) => {
@@ -387,6 +408,82 @@ export default function ConsorcioPainelEquipe() {
     vendaRealizada: monthR2VendasKPIs?.vendasRealizadas || 0,
   }), [monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs]);
 
+  // Build Consórcio goals matrix rows combining agenda + pipeline metrics
+  const consorcioGoalsRows = useMemo((): ConsorcioMetricRow[] => {
+    const pm = pipelineMetrics;
+    return [
+      // Agenda metrics (shared across pipelines)
+      {
+        label: 'Agendamento',
+        day: { value: dayValues.agendamento, target: getTargetValue('agendamento_dia') },
+        week: { value: weekValues.agendamento, target: getTargetValue('agendamento_semana') },
+        month: { value: monthValues.agendamento, target: getTargetValue('agendamento_mes') },
+      },
+      {
+        label: 'R1 Agendada',
+        day: { value: dayValues.r1Agendada, target: getTargetValue('r1_agendada_dia') },
+        week: { value: weekValues.r1Agendada, target: getTargetValue('r1_agendada_semana') },
+        month: { value: monthValues.r1Agendada, target: getTargetValue('r1_agendada_mes') },
+      },
+      {
+        label: 'R1 Realizada',
+        day: { value: dayValues.r1Realizada, target: getTargetValue('r1_realizada_dia') },
+        week: { value: weekValues.r1Realizada, target: getTargetValue('r1_realizada_semana') },
+        month: { value: monthValues.r1Realizada, target: getTargetValue('r1_realizada_mes') },
+      },
+      {
+        label: 'No-Show',
+        day: { value: dayValues.noShow, target: getTargetValue('noshow_dia') },
+        week: { value: weekValues.noShow, target: getTargetValue('noshow_semana') },
+        month: { value: monthValues.noShow, target: getTargetValue('noshow_mes') },
+      },
+      // Viver de Aluguel pipeline
+      {
+        label: 'Proposta Enviada',
+        pipelineGroup: 'Viver de Aluguel',
+        day: { value: pm.day.propostaEnviada, target: getTargetValue('proposta_enviada_dia') },
+        week: { value: pm.week.propostaEnviada, target: getTargetValue('proposta_enviada_semana') },
+        month: { value: pm.month.propostaEnviada, target: getTargetValue('proposta_enviada_mes') },
+      },
+      {
+        label: 'Contrato Pago',
+        pipelineGroup: 'Viver de Aluguel',
+        day: { value: pm.day.contratoPago, target: getTargetValue('contrato_dia') },
+        week: { value: pm.week.contratoPago, target: getTargetValue('contrato_semana') },
+        month: { value: pm.month.contratoPago, target: getTargetValue('contrato_mes') },
+      },
+      {
+        label: 'Venda Realizada',
+        pipelineGroup: 'Viver de Aluguel',
+        day: { value: pm.day.vendaRealizada, target: getTargetValue('venda_realizada_dia') },
+        week: { value: pm.week.vendaRealizada, target: getTargetValue('venda_realizada_semana') },
+        month: { value: pm.month.vendaRealizada, target: getTargetValue('venda_realizada_mes') },
+      },
+      // Efeito Alavanca + Clube pipeline
+      {
+        label: 'Aguardando Doc',
+        pipelineGroup: 'Efeito Alavanca + Clube',
+        day: { value: pm.day.aguardandoDoc, target: getTargetValue('aguardando_doc_dia') },
+        week: { value: pm.week.aguardandoDoc, target: getTargetValue('aguardando_doc_semana') },
+        month: { value: pm.month.aguardandoDoc, target: getTargetValue('aguardando_doc_mes') },
+      },
+      {
+        label: 'Carta Sócios Fechada',
+        pipelineGroup: 'Efeito Alavanca + Clube',
+        day: { value: pm.day.cartaSociosFechada, target: getTargetValue('carta_fechada_dia') },
+        week: { value: pm.week.cartaSociosFechada, target: getTargetValue('carta_fechada_semana') },
+        month: { value: pm.month.cartaSociosFechada, target: getTargetValue('carta_fechada_mes') },
+      },
+      {
+        label: 'Aporte Holding',
+        pipelineGroup: 'Efeito Alavanca + Clube',
+        day: { value: pm.day.aporteHolding, target: getTargetValue('aporte_dia') },
+        week: { value: pm.week.aporteHolding, target: getTargetValue('aporte_semana') },
+        month: { value: pm.month.aporteHolding, target: getTargetValue('aporte_mes') },
+      },
+    ];
+  }, [dayValues, weekValues, monthValues, pipelineMetrics, consorcioTargets]);
+
   const handlePresetChange = (preset: DatePreset) => {
     setDatePreset(preset);
     updateUrlParams(preset, selectedMonth, customStartDate, customEndDate);
@@ -447,8 +544,48 @@ export default function ConsorcioPainelEquipe() {
       {/* Consórcio Metrics Card */}
       <ConsorcioMetricsCard />
 
-      {/* Goals Panel with consorcio prefix */}
-      <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} monthValues={monthValues} buPrefix={BU_PREFIX} />
+      {/* Goals Panel - Consórcio specific with both pipelines */}
+      {targetsLoading ? (
+        <Card className="bg-card border-border">
+          <CardContent className="p-3 sm:p-6">
+            <Skeleton className="h-[400px] w-full rounded-lg" />
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <Target className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                  Metas da Equipe
+                </CardTitle>
+                {canEditGoals && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setGoalsEditModalOpen(true)}
+                    className="h-7 sm:h-8 px-2 text-xs sm:text-sm"
+                  >
+                    <Settings2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    <span className="hidden sm:inline">Editar</span>
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 px-3 sm:px-6 pb-3 sm:pb-6">
+              <ConsorcioGoalsMatrixTable rows={consorcioGoalsRows} />
+            </CardContent>
+          </Card>
+
+          <TeamGoalsEditModal
+            open={goalsEditModalOpen}
+            onOpenChange={setGoalsEditModalOpen}
+            existingTargets={consorcioTargets || []}
+            buPrefix={BU_PREFIX}
+          />
+        </>
+      )}
 
       {/* Filters */}
       <Card className="bg-card border-border">

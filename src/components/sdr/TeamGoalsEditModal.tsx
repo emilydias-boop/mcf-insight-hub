@@ -17,6 +17,8 @@ import { ptBR } from "date-fns/locale";
 import { 
   SdrTargetType, 
   SDR_TARGET_CONFIGS, 
+  CONSORCIO_SDR_TARGET_CONFIGS,
+  getTargetConfigsForBU,
   SdrTarget, 
   useUpsertSdrTargets,
   useSdrTeamTargetsByMonth,
@@ -31,43 +33,59 @@ interface TeamGoalsEditModalProps {
   buPrefix?: string; // e.g. 'consorcio_sdr_' or default 'sdr_'
 }
 
-// Mapeamento de tipo dia → semana
-const dayToWeekMapping: Record<string, SdrTargetType> = {
-  'sdr_agendamento_dia': 'sdr_agendamento_semana',
-  'sdr_r1_agendada_dia': 'sdr_r1_agendada_semana',
-  'sdr_r1_realizada_dia': 'sdr_r1_realizada_semana',
-  'sdr_noshow_dia': 'sdr_noshow_semana',
-  'sdr_contrato_dia': 'sdr_contrato_semana',
-  'sdr_r2_agendada_dia': 'sdr_r2_agendada_semana',
-  'sdr_r2_realizada_dia': 'sdr_r2_realizada_semana',
-  'sdr_venda_realizada_dia': 'sdr_venda_realizada_semana',
-};
+// Mapeamento base de tipo dia → semana (para sdr_)
+const BASE_DAY_SUFFIXES = [
+  'agendamento', 'r1_agendada', 'r1_realizada', 'noshow',
+  'contrato', 'r2_agendada', 'r2_realizada', 'venda_realizada',
+  // Consórcio-specific suffixes
+  'proposta_enviada', 'aguardando_doc', 'carta_fechada', 'aporte',
+];
 
-// Mapeamento de tipo dia → mês
-const dayToMonthMapping: Record<string, SdrTargetType> = {
-  'sdr_agendamento_dia': 'sdr_agendamento_mes',
-  'sdr_r1_agendada_dia': 'sdr_r1_agendada_mes',
-  'sdr_r1_realizada_dia': 'sdr_r1_realizada_mes',
-  'sdr_noshow_dia': 'sdr_noshow_mes',
-  'sdr_contrato_dia': 'sdr_contrato_mes',
-  'sdr_r2_agendada_dia': 'sdr_r2_agendada_mes',
-  'sdr_r2_realizada_dia': 'sdr_r2_realizada_mes',
-  'sdr_venda_realizada_dia': 'sdr_venda_realizada_mes',
-};
+function buildDayToWeekMapping(prefix: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  BASE_DAY_SUFFIXES.forEach(suffix => {
+    map[`${prefix}${suffix}_dia`] = `${prefix}${suffix}_semana`;
+  });
+  return map;
+}
 
-// Proporções para cálculo em cascata das metas do dia
+function buildDayToMonthMapping(prefix: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  BASE_DAY_SUFFIXES.forEach(suffix => {
+    map[`${prefix}${suffix}_dia`] = `${prefix}${suffix}_mes`;
+  });
+  return map;
+}
+
+// Proporções para cálculo em cascata das metas do dia (Incorporador)
 const DAY_TARGET_PROPORTIONS = {
-  r1_agendada: 1.00,      // 100% do Agendamento
-  r1_realizada: 0.70,     // 70% da R1 Agendada
-  noshow: 0.30,           // 30% da R1 Agendada
-  contrato: 0.35,         // 35% da R1 Realizada
-  r2_agendada: 1.00,      // 100% do Contrato Pago
-  r2_realizada: 0.75,     // 75% da R2 Agendada
-  venda_realizada: 0.60,  // 60% da R2 Realizada
+  r1_agendada: 1.00,
+  r1_realizada: 0.70,
+  noshow: 0.30,
+  contrato: 0.35,
+  r2_agendada: 1.00,
+  r2_realizada: 0.75,
+  venda_realizada: 0.60,
+};
+
+// Proporções para cálculo em cascata (Consórcio)
+const CONSORCIO_DAY_TARGET_PROPORTIONS = {
+  r1_agendada: 1.00,
+  r1_realizada: 0.70,
+  noshow: 0.30,
+  proposta_enviada: 0.50,
+  contrato: 0.40,
+  aguardando_doc: 0.50,
+  carta_fechada: 0.40,
+  aporte: 0.35,
+  venda_realizada: 0.30,
 };
 
 // Calcula todas as metas do dia em cascata a partir do Agendamento
-const calculateDayCascade = (agendamento: number): Record<string, number> => {
+const calculateDayCascade = (agendamento: number, prefix: string = 'sdr_'): Record<string, number> => {
+  if (prefix === 'consorcio_sdr_') {
+    return calculateConsorcioDayCascade(agendamento, prefix);
+  }
   const r1Agendada = Math.round(agendamento * DAY_TARGET_PROPORTIONS.r1_agendada);
   const r1Realizada = Math.round(r1Agendada * DAY_TARGET_PROPORTIONS.r1_realizada);
   const noShow = Math.round(r1Agendada * DAY_TARGET_PROPORTIONS.noshow);
@@ -77,14 +95,40 @@ const calculateDayCascade = (agendamento: number): Record<string, number> => {
   const vendaRealizada = Math.round(r2Realizada * DAY_TARGET_PROPORTIONS.venda_realizada);
 
   return {
-    'sdr_agendamento_dia': agendamento,
-    'sdr_r1_agendada_dia': r1Agendada,
-    'sdr_r1_realizada_dia': r1Realizada,
-    'sdr_noshow_dia': noShow,
-    'sdr_contrato_dia': contratoPago,
-    'sdr_r2_agendada_dia': r2Agendada,
-    'sdr_r2_realizada_dia': r2Realizada,
-    'sdr_venda_realizada_dia': vendaRealizada,
+    [`${prefix}agendamento_dia`]: agendamento,
+    [`${prefix}r1_agendada_dia`]: r1Agendada,
+    [`${prefix}r1_realizada_dia`]: r1Realizada,
+    [`${prefix}noshow_dia`]: noShow,
+    [`${prefix}contrato_dia`]: contratoPago,
+    [`${prefix}r2_agendada_dia`]: r2Agendada,
+    [`${prefix}r2_realizada_dia`]: r2Realizada,
+    [`${prefix}venda_realizada_dia`]: vendaRealizada,
+  };
+};
+
+const calculateConsorcioDayCascade = (agendamento: number, prefix: string): Record<string, number> => {
+  const p = CONSORCIO_DAY_TARGET_PROPORTIONS;
+  const r1Agendada = Math.round(agendamento * p.r1_agendada);
+  const r1Realizada = Math.round(r1Agendada * p.r1_realizada);
+  const noShow = Math.round(r1Agendada * p.noshow);
+  const propostaEnviada = Math.round(r1Realizada * p.proposta_enviada);
+  const contratoPago = Math.round(propostaEnviada * p.contrato);
+  const aguardandoDoc = Math.round(r1Realizada * p.aguardando_doc);
+  const cartaFechada = Math.round(aguardandoDoc * p.carta_fechada);
+  const aporte = Math.round(cartaFechada * p.aporte);
+  const vendaRealizada = Math.round(contratoPago * p.venda_realizada);
+
+  return {
+    [`${prefix}agendamento_dia`]: agendamento,
+    [`${prefix}r1_agendada_dia`]: r1Agendada,
+    [`${prefix}r1_realizada_dia`]: r1Realizada,
+    [`${prefix}noshow_dia`]: noShow,
+    [`${prefix}proposta_enviada_dia`]: propostaEnviada,
+    [`${prefix}contrato_dia`]: contratoPago,
+    [`${prefix}aguardando_doc_dia`]: aguardandoDoc,
+    [`${prefix}carta_fechada_dia`]: cartaFechada,
+    [`${prefix}aporte_dia`]: aporte,
+    [`${prefix}venda_realizada_dia`]: vendaRealizada,
   };
 };
 
@@ -97,32 +141,16 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
 
   // Build dynamic target configs based on buPrefix
   const dynamicConfigs = useMemo(() => {
-    return SDR_TARGET_CONFIGS.map(c => ({
-      ...c,
-      // Replace 'sdr_' prefix with buPrefix for non-default BUs
-      type: (buPrefix === 'sdr_' ? c.type : c.type.replace('sdr_', buPrefix)) as SdrTargetType,
-    }));
+    return getTargetConfigsForBU(buPrefix);
   }, [buPrefix]);
 
   // Build dynamic day-to-week and day-to-month mappings
   const dynamicDayToWeek = useMemo(() => {
-    const map: Record<string, SdrTargetType> = {};
-    Object.entries(dayToWeekMapping).forEach(([day, week]) => {
-      const dynDay = buPrefix === 'sdr_' ? day : day.replace('sdr_', buPrefix);
-      const dynWeek = buPrefix === 'sdr_' ? week : (week as string).replace('sdr_', buPrefix);
-      map[dynDay] = dynWeek as SdrTargetType;
-    });
-    return map;
+    return buildDayToWeekMapping(buPrefix) as Record<string, SdrTargetType>;
   }, [buPrefix]);
 
   const dynamicDayToMonth = useMemo(() => {
-    const map: Record<string, SdrTargetType> = {};
-    Object.entries(dayToMonthMapping).forEach(([day, month]) => {
-      const dynDay = buPrefix === 'sdr_' ? day : day.replace('sdr_', buPrefix);
-      const dynMonth = buPrefix === 'sdr_' ? month : (month as string).replace('sdr_', buPrefix);
-      map[dynDay] = dynMonth as SdrTargetType;
-    });
-    return map;
+    return buildDayToMonthMapping(buPrefix) as Record<string, SdrTargetType>;
   }, [buPrefix]);
 
   // Fetch targets for selected month
@@ -180,13 +208,7 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
     const agendamentoDiaType = `${buPrefix}agendamento_dia`;
     const agendamentoDia = initial[agendamentoDiaType] || 0;
     if (agendamentoDia > 0) {
-      const baseDayValues = calculateDayCascade(agendamentoDia);
-      // Map cascade results to dynamic keys
-      const dayValues: Record<string, number> = {};
-      Object.entries(baseDayValues).forEach(([key, val]) => {
-        const dynKey = buPrefix === 'sdr_' ? key : key.replace('sdr_', buPrefix);
-        dayValues[dynKey] = val;
-      });
+      const dayValues = calculateDayCascade(agendamentoDia, buPrefix);
       
       // Aplica valores em cascata para campos zerados do dia
       Object.entries(dayValues).forEach(([key, val]) => {
@@ -228,12 +250,7 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
     
     // Se é o Agendamento, calcula todos os outros em cascata
     if (type === agendamentoDiaType) {
-      const baseDayValues = calculateDayCascade(numValue);
-      const dayValues: Record<string, number> = {};
-      Object.entries(baseDayValues).forEach(([key, val]) => {
-        const dynKey = buPrefix === 'sdr_' ? key : key.replace('sdr_', buPrefix);
-        dayValues[dynKey] = val;
-      });
+      const dayValues = calculateDayCascade(numValue, buPrefix);
       
       // Atualiza todos os valores do dia
       Object.entries(dayValues).forEach(([key, val]) => {
@@ -276,12 +293,7 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
   const handleRecalculate = () => {
     const agendamentoDiaType = `${buPrefix}agendamento_dia` as SdrTargetType;
     const agendamento = values[agendamentoDiaType] || 0;
-    const baseDayValues = calculateDayCascade(agendamento);
-    const dayValues: Record<string, number> = {};
-    Object.entries(baseDayValues).forEach(([key, val]) => {
-      const dynKey = buPrefix === 'sdr_' ? key : key.replace('sdr_', buPrefix);
-      dayValues[dynKey] = val;
-    });
+    const dayValues = calculateDayCascade(agendamento, buPrefix);
     
     const newValues = { ...values };
     
@@ -462,14 +474,29 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
                 <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}contrato_mes`] || 0).toLocaleString('pt-BR')}</p>
                 <p className="text-muted-foreground">Contratos</p>
               </div>
-              <div className="text-center">
-                <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}r2_realizada_mes`] || 0).toLocaleString('pt-BR')}</p>
-                <p className="text-muted-foreground">R2 Realizadas</p>
-              </div>
-              <div className="text-center">
-                <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}venda_realizada_mes`] || 0).toLocaleString('pt-BR')}</p>
-                <p className="text-muted-foreground">Vendas</p>
-              </div>
+              {buPrefix === 'consorcio_sdr_' ? (
+                <>
+                  <div className="text-center">
+                    <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}carta_fechada_mes`] || 0).toLocaleString('pt-BR')}</p>
+                    <p className="text-muted-foreground">Carta Sócios</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}aporte_mes`] || 0).toLocaleString('pt-BR')}</p>
+                    <p className="text-muted-foreground">Aporte Holding</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-center">
+                    <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}r2_realizada_mes`] || 0).toLocaleString('pt-BR')}</p>
+                    <p className="text-muted-foreground">R2 Realizadas</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-semibold text-foreground">{(annualTotals[`${buPrefix}venda_realizada_mes`] || 0).toLocaleString('pt-BR')}</p>
+                    <p className="text-muted-foreground">Vendas</p>
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
