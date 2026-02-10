@@ -544,8 +544,48 @@ export default function ConsorcioPainelEquipe() {
       {/* Consórcio Metrics Card */}
       <ConsorcioMetricsCard />
 
-      {/* Goals Panel with consorcio prefix */}
-      <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} monthValues={monthValues} buPrefix={BU_PREFIX} />
+      {/* Goals Panel - Consórcio specific with both pipelines */}
+      {targetsLoading ? (
+        <Card className="bg-card border-border">
+          <CardContent className="p-3 sm:p-6">
+            <Skeleton className="h-[400px] w-full rounded-lg" />
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <Target className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                  Metas da Equipe
+                </CardTitle>
+                {canEditGoals && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setGoalsEditModalOpen(true)}
+                    className="h-7 sm:h-8 px-2 text-xs sm:text-sm"
+                  >
+                    <Settings2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    <span className="hidden sm:inline">Editar</span>
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 px-3 sm:px-6 pb-3 sm:pb-6">
+              <ConsorcioGoalsMatrixTable rows={consorcioGoalsRows} />
+            </CardContent>
+          </Card>
+
+          <TeamGoalsEditModal
+            open={goalsEditModalOpen}
+            onOpenChange={setGoalsEditModalOpen}
+            existingTargets={consorcioTargets || []}
+            buPrefix={BU_PREFIX}
+          />
+        </>
+      )}
 
       {/* Filters */}
       <Card className="bg-card border-border">
