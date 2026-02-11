@@ -65,6 +65,7 @@ import ContatosDuplicados from "./pages/crm/ContatosDuplicados";
 import AgendaMetricas from "./pages/crm/AgendaMetricas";
 import AgendaR2 from "./pages/crm/AgendaR2";
 import R2Carrinho from "./pages/crm/R2Carrinho";
+import PosReuniao from "./pages/crm/PosReuniao";
 import ConfigurarClosersR2 from "./pages/crm/ConfigurarClosersR2";
 import FechamentoSDRList from "./pages/fechamento-sdr/Index";
 import FechamentoSDRDetail from "./pages/fechamento-sdr/Detail";
@@ -211,6 +212,7 @@ const App = () => (
                 <Route path="deals-orfaos" element={<DealsOrfaos />} />
                 <Route path="contatos-duplicados" element={<ContatosDuplicados />} />
                 <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
+                <Route path="pos-reuniao" element={<PosReuniao />} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
               
