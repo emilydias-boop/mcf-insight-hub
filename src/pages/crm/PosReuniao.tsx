@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2, Search, CalendarIcon } from 'lucide-react';
+import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2, Search, CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ProposalModal } from '@/components/consorcio/ProposalModal';
 import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
@@ -55,12 +55,18 @@ function RealizadasTab() {
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+
   const closerOptions = useMemo(() => {
     const names = [...new Set(realizadas.map(r => r.closer_name).filter(Boolean))];
     return names.sort();
   }, [realizadas]);
 
   const filtered = useMemo(() => {
+    // Reset page when filters change
+    setCurrentPage(1);
     return realizadas.filter(r => {
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
@@ -84,12 +90,16 @@ function RealizadasTab() {
     });
   }, [realizadas, searchTerm, pipelineFilter, closerFilter, dateFrom, dateTo]);
 
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedData = filtered.slice(startIndex, startIndex + itemsPerPage);
+
   if (isLoading) return <LoadingState />;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Reuniões Realizadas — Aguardando Ação</CardTitle>
+        <CardTitle className="text-base">Reuniões Realizadas — Aguardando Ação ({filtered.length})</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Filters */}
@@ -107,8 +117,8 @@ function RealizadasTab() {
             <SelectTrigger className="w-48"><SelectValue placeholder="Pipeline" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas Pipelines</SelectItem>
-              <SelectItem value="Viver de Aluguel">Viver de Aluguel</SelectItem>
-              <SelectItem value="Efeito Alavanca">Efeito Alavanca</SelectItem>
+              <SelectItem value="PIPELINE - INSIDE SALES - VIVER DE ALUGUEL">Viver de Aluguel</SelectItem>
+              <SelectItem value="Efeito Alavanca + Clube">Efeito Alavanca</SelectItem>
             </SelectContent>
           </Select>
           <Select value={closerFilter} onValueChange={setCloserFilter}>
@@ -152,56 +162,104 @@ function RealizadasTab() {
         {filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Nenhuma reunião realizada pendente de ação.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Contato</TableHead>
-                  <TableHead>Telefone</TableHead>
-                  <TableHead>Pipeline / Stage</TableHead>
-                  <TableHead>Data Reunião</TableHead>
-                  <TableHead>Região</TableHead>
-                  <TableHead>Renda</TableHead>
-                  <TableHead>Closer</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map(r => (
-                  <TableRow key={r.deal_id} className="cursor-pointer" onClick={() => setSelectedDealId(r.deal_id)}>
-                    <TableCell className="font-medium">
-                      {r.contact_name || r.deal_name}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{r.contact_phone || '—'}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-0.5">
-                        <Badge variant="outline" className="text-xs w-fit">{r.origin_name}</Badge>
-                        <span className="text-xs text-muted-foreground">{r.stage_name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                      {r.meeting_date
-                        ? format(new Date(r.meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                        : r.updated_at
-                          ? format(new Date(r.updated_at), 'dd/MM/yyyy', { locale: ptBR })
-                          : '—'}
-                    </TableCell>
-                    <TableCell className="text-sm">{r.region || '—'}</TableCell>
-                    <TableCell className="text-sm">{r.renda || '—'}</TableCell>
-                    <TableCell className="text-sm">{r.closer_name || '—'}</TableCell>
-                    <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
-                      <Button size="sm" onClick={() => setProposalTarget(r)}>
-                        <Send className="h-3 w-3 mr-1" /> Proposta
-                      </Button>
-                      <Button size="sm" variant="destructive" onClick={() => setSemSucessoTarget(r)}>
-                        <XCircle className="h-3 w-3 mr-1" /> Sem Sucesso
-                      </Button>
-                    </TableCell>
+          <>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Contato</TableHead>
+                    <TableHead>Telefone</TableHead>
+                    <TableHead>Pipeline / Stage</TableHead>
+                    <TableHead>Data Reunião</TableHead>
+                    <TableHead>Região</TableHead>
+                    <TableHead>Renda</TableHead>
+                    <TableHead>Closer</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {paginatedData.map(r => (
+                    <TableRow key={r.deal_id} className="cursor-pointer" onClick={() => setSelectedDealId(r.deal_id)}>
+                      <TableCell className="font-medium">
+                        {r.contact_name || r.deal_name}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{r.contact_phone || '—'}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          <Badge variant="outline" className="text-xs w-fit">{r.origin_name}</Badge>
+                          <span className="text-xs text-muted-foreground">{r.stage_name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        {r.meeting_date
+                          ? format(new Date(r.meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                          : r.updated_at
+                            ? format(new Date(r.updated_at), 'dd/MM/yyyy', { locale: ptBR })
+                            : '—'}
+                      </TableCell>
+                      <TableCell className="text-sm">{r.region || '—'}</TableCell>
+                      <TableCell className="text-sm">{r.renda || '—'}</TableCell>
+                      <TableCell className="text-sm">{r.closer_name || '—'}</TableCell>
+                      <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
+                        <Button size="sm" onClick={() => setProposalTarget(r)}>
+                          <Send className="h-3 w-3 mr-1" /> Proposta
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => setSemSucessoTarget(r)}>
+                          <XCircle className="h-3 w-3 mr-1" /> Sem Sucesso
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  Mostrando {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filtered.length)} de {filtered.length} resultados
+                </span>
+                <Select value={String(itemsPerPage)} onValueChange={v => { setItemsPerPage(Number(v)); setCurrentPage(1); }}>
+                  <SelectTrigger className="w-20 h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground">por página</span>
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                    .reduce<(number | string)[]>((acc, p, idx, arr) => {
+                      if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('...');
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((p, i) =>
+                      typeof p === 'string' ? (
+                        <span key={`ellipsis-${i}`} className="px-2 text-muted-foreground">…</span>
+                      ) : (
+                        <Button key={p} variant={p === currentPage ? 'default' : 'outline'} size="sm" className="w-8 h-8 p-0" onClick={() => setCurrentPage(p)}>
+                          {p}
+                        </Button>
+                      )
+                    )}
+                  <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {proposalTarget && (
