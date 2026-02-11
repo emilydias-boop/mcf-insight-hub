@@ -1,46 +1,44 @@
 
+# Corrigir filtros, adicionar paginacao e contador na aba Realizadas
 
-# Filtrar closers para exibir apenas os do Consorcio
+## Problemas encontrados
 
-## Problema
-A tabela "Realizadas" esta mostrando closers de outras BUs (Incorporador, etc.) porque o campo `owner_id` dos deals pode conter emails de closers que nao pertencem ao Consorcio. Os closers reais do Consorcio sao apenas: Joao Pedro, Luis Felipe, Thobson e Victoria Paz.
+### 1. Filtros de pipeline nao funcionam
+Os valores no Select estao hardcoded como "Viver de Aluguel" e "Efeito Alavanca", mas os nomes reais no banco sao:
+- `PIPELINE - INSIDE SALES - VIVER DE ALUGUEL`
+- `Efeito Alavanca + Clube`
 
-## Solucao
-No hook `useRealizadas` (arquivo `src/hooks/useConsorcioPostMeeting.ts`), apos buscar os deals, fazer uma consulta adicional na tabela `closers` filtrando por `bu = 'consorcio'` e `is_active = true`. Usar os emails retornados para:
+O filtro compara `r.origin_name !== pipelineFilter` que nunca bate.
 
-1. Filtrar os deals, mantendo apenas aqueles cujo `owner_id` (email) pertence a um closer do Consorcio
-2. Resolver o nome do closer a partir da tabela `closers` diretamente (em vez de `profiles`), garantindo consistencia
+### 2. Quantidade de leads (~21) esta correta
+Os dados do banco confirmam: existem 237 deals no stage R1 Realizada, porem:
+- 108 nao tem owner (owner_id nulo)
+- 44 pertencem a Jessica Bellini (nao e closer de consorcio)
+- 40 pertencem a Cleiton (nao e closer de consorcio)
+- Apenas 21 pertencem a Thobson (unico closer de consorcio com deals)
+- Apos excluir deals com proposta, restam exatamente 21
 
-## Detalhes tecnicos
+Isso esta correto dado o filtro por closers do consorcio. Se quiser ver todos os deals independente do closer, precisaria remover esse filtro (decidido na implementacao anterior).
 
-### Arquivo: `src/hooks/useConsorcioPostMeeting.ts`
+### 3. Falta paginacao e contador
 
-Na funcao `useRealizadas`, antes do mapeamento final dos deals:
+## O que sera feito
 
-1. Buscar closers do Consorcio:
-```ts
-const { data: consorcioClosers } = await supabase
-  .from('closers')
-  .select('name, email')
-  .eq('bu', 'consorcio')
-  .eq('is_active', true);
-```
+### Arquivo: `src/pages/crm/PosReuniao.tsx`
 
-2. Criar um mapa de email para nome e um set de emails validos:
-```ts
-const closerEmails = new Set(
-  (consorcioClosers || []).map(c => c.email?.toLowerCase())
-);
-const closerNameByEmail: Record<string, string> = {};
-(consorcioClosers || []).forEach(c => {
-  if (c.email) closerNameByEmail[c.email.toLowerCase()] = c.name;
-});
-```
+1. **Corrigir valores do filtro de pipeline**: Usar os nomes reais do banco:
+   - "PIPELINE - INSIDE SALES - VIVER DE ALUGUEL"
+   - "Efeito Alavanca + Clube"
 
-3. Filtrar `filteredDeals` para manter apenas deals com `owner_id` pertencente a `closerEmails`
+2. **Adicionar contador**: Mostrar no titulo "Reunioes Realizadas -- Aguardando Acao (21)" com o total de deals filtrados
 
-4. Usar `closerNameByEmail` no mapeamento de `closer_name` em vez do lookup via `profiles`
+3. **Adicionar paginacao**: Seguindo o mesmo padrao usado em `/consorcio` (Index.tsx):
+   - Estado `currentPage` e `itemsPerPage` (default 20)
+   - `totalPages = Math.ceil(filtered.length / itemsPerPage)`
+   - `paginatedData = filtered.slice(start, start + itemsPerPage)`
+   - Componente de paginacao com Previous/Next e numeros de pagina
+   - Select para trocar items por pagina (10, 20, 50)
+   - Texto "Mostrando X-Y de Z resultados"
+   - Reset de pagina para 1 ao mudar filtros
 
-Isso remove a necessidade da query em `profiles` para resolver nomes de closers e garante que apenas deals atendidos por closers do Consorcio aparecam na listagem.
-
-Nenhuma mudanca de banco de dados. 1 arquivo modificado.
+1 arquivo modificado.
