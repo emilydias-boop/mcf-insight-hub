@@ -1,40 +1,59 @@
 
-# Usar Datas da Planilha (created_at e lost_at) na Tabela do Limbo
+# Corrigir Parsing de Datas do Excel (Serial Numbers)
 
-## O que muda
+## Problema
+O Excel armazena datas internamente como numeros seriais (dias desde 01/01/1900). Ao exportar para CSV/XLSX, algumas colunas vem como numeros (ex: `45388.52553240741`) em vez de strings de data formatadas. O `new Date()` do JavaScript nao entende esse formato, resultando em "Invalid Date".
 
-As colunas "Criado em" e "Ult. Mov." devem exibir dados vindos da planilha importada (campos `created_at` e `lost_at`), nao do banco de dados local.
+## Solucao
+Criar uma funcao auxiliar `parseExcelDate` que detecta se o valor e um numero serial do Excel e o converte para uma data valida. Se ja for uma string de data (ex: `25/11/2024 20:55:19`), parsear normalmente.
 
 ## Implementacao
 
-### 1. Adicionar novas colunas ao mapeamento (src/pages/crm/LeadsLimbo.tsx)
+### Arquivo: `src/pages/crm/LeadsLimbo.tsx`
 
-Expandir `COLUMN_KEYS` para incluir `created_at` e `lost_at`:
+Adicionar funcao utilitaria antes do componente:
 
+```typescript
+function parseExcelDate(value: string): Date | null {
+  if (!value || value === '') return null;
+  
+  // Caso 1: Numero serial do Excel (ex: 45388.52553240741)
+  const num = Number(value);
+  if (!isNaN(num) && num > 30000 && num < 60000) {
+    // Excel epoch: 01/01/1900, mas com bug do "leap year 1900"
+    // Subtrair 25569 dias para converter para Unix epoch, multiplicar por 86400000 ms
+    const date = new Date((num - 25569) * 86400000);
+    if (!isNaN(date.getTime())) return date;
+  }
+  
+  // Caso 2: Data no formato DD/MM/YYYY HH:mm:ss ou DD/MM/YYYY
+  const brMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (brMatch) {
+    const [, day, month, year, hour, min, sec] = brMatch;
+    return new Date(+year, +month - 1, +day, +(hour || 0), +(min || 0), +(sec || 0));
+  }
+  
+  // Caso 3: Tentar parse nativo
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
+}
 ```
-COLUMN_KEYS = ['name', 'email', 'phone', 'stage', 'value', 'owner', 'created_at', 'lost_at']
+
+Atualizar as duas `TableCell` que exibem as datas para usar essa funcao:
+
+```typescript
+// Criado em
+{row.excelCreatedAt ? (() => {
+  const d = parseExcelDate(row.excelCreatedAt);
+  return d ? format(d, 'dd/MM/yy') : '--';
+})() : '--'}
+
+// Ult. Mov.
+{row.excelLostAt ? (() => {
+  const d = parseExcelDate(row.excelLostAt);
+  return d ? format(d, 'dd/MM/yy') : '--';
+})() : '--'}
 ```
 
-Adicionar labels e hints de auto-map:
-- `created_at`: hints `['created_at', 'criado', 'data_criacao', 'data criação']`
-- `lost_at`: hints `['lost_at', 'perdido', 'ultima_mov', 'última movimentação', 'last_move']`
-
-### 2. Passar os novos campos na comparacao (src/pages/crm/LeadsLimbo.tsx)
-
-No `runComparison`, extrair `created_at` e `lost_at` do `rawData` e passa-los para `excelRows`.
-
-### 3. Adicionar campos no LimboRow (src/hooks/useLimboLeads.ts)
-
-Adicionar `excelCreatedAt` e `excelLostAt` ao tipo `LimboRow` e ao input de `compareExcelWithLocal`.
-
-### 4. Exibir na tabela (src/pages/crm/LeadsLimbo.tsx)
-
-As colunas "Criado em" e "Ult. Mov." passam a usar `row.excelCreatedAt` e `row.excelLostAt` em vez dos campos locais. A formatacao tentara parsear a data e exibir como `dd/MM/yy`.
-
-### 5. Remover campos locais desnecessarios
-
-Remover `localCreatedAt` e `localUpdatedAt` do LimboRow e da query, ja que nao serao mais usados para exibicao (podem ser mantidos se houver outro uso, mas no contexto atual nao ha).
-
-## Arquivos modificados
-- `src/pages/crm/LeadsLimbo.tsx` - Expandir ColumnKeys, auto-map, extrair dados no runComparison, atualizar colunas da tabela
-- `src/hooks/useLimboLeads.ts` - Adicionar `excelCreatedAt` e `excelLostAt` ao LimboRow e ao compareExcelWithLocal
+## Arquivo modificado
+- `src/pages/crm/LeadsLimbo.tsx` - Adicionar `parseExcelDate` e atualizar renderizacao das colunas de data
