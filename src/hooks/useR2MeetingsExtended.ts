@@ -130,37 +130,44 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
       let r1SdrMap: Record<string, string> = {}; // deal_id -> booked_by UUID from R1
       
       if (dealIds.length > 0) {
-        const { data: r1Meetings } = await supabase
-          .from('meeting_slots')
+        // Query R1 attendees directly by deal_id (no arbitrary limit)
+        const { data: r1Attendees } = await supabase
+          .from('meeting_slot_attendees')
           .select(`
-            id,
-            scheduled_at,
-            closer:closers!meeting_slots_closer_id_fkey(id, name),
-            attendees:meeting_slot_attendees(deal_id, notes, booked_by)
+            deal_id,
+            notes,
+            booked_by,
+            created_at,
+            meeting_slot:meeting_slots!inner(
+              id,
+              scheduled_at,
+              meeting_type,
+              closer:closers!meeting_slots_closer_id_fkey(id, name)
+            )
           `)
-          .eq('meeting_type', 'r1')
-          .limit(500);
+          .in('deal_id', dealIds)
+          .eq('meeting_slot.meeting_type', 'r1')
+          .order('created_at', { ascending: false });
 
-        // Map deal_id -> R1 closer with scheduled_at and notes
-        (r1Meetings || []).forEach((r1: Record<string, unknown>) => {
-          const r1Closer = r1.closer as { id: string; name: string } | null;
-          const r1ScheduledAt = r1.scheduled_at as string | null;
-          const r1Attendees = (r1.attendees || []) as Array<{ deal_id: string | null; notes: string | null; booked_by: string | null }>;
-          r1Attendees.forEach(att => {
-            if (att.deal_id && dealIds.includes(att.deal_id)) {
-              if (r1Closer) {
-                r1CloserMap[att.deal_id] = { ...r1Closer, scheduled_at: r1ScheduledAt };
-              }
-              // Store the R1 note for this deal (most recent wins if multiple)
-              if (att.notes && !r1NotesMap[att.deal_id]) {
-                r1NotesMap[att.deal_id] = att.notes;
-              }
-              // Store R1 booked_by as the real SDR
-              if (att.booked_by && !r1SdrMap[att.deal_id]) {
-                r1SdrMap[att.deal_id] = att.booked_by;
-              }
-            }
-          });
+        // Process attendee-centric results
+        (r1Attendees || []).forEach((att: Record<string, unknown>) => {
+          const dealId = att.deal_id as string | null;
+          if (!dealId) return;
+          
+          const slot = att.meeting_slot as { id: string; scheduled_at: string | null; closer: { id: string; name: string } | null } | null;
+          
+          // Closer R1: first match wins (most recent due to order)
+          if (slot?.closer && !r1CloserMap[dealId]) {
+            r1CloserMap[dealId] = { ...slot.closer, scheduled_at: slot.scheduled_at };
+          }
+          // R1 note: first match wins (most recent)
+          if (att.notes && !r1NotesMap[dealId]) {
+            r1NotesMap[dealId] = att.notes as string;
+          }
+          // SDR from R1 booked_by: first match wins (most recent = último agendamento)
+          if (att.booked_by && !r1SdrMap[dealId]) {
+            r1SdrMap[dealId] = att.booked_by as string;
+          }
         });
       }
 
