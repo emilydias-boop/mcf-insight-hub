@@ -66,18 +66,16 @@ function RealizadasTab() {
             </TableHeader>
             <TableBody>
               {realizadas.map(r => (
-                <TableRow key={r.deal_id}>
-                  <TableCell>
-                    <Button variant="link" className="p-0 h-auto font-medium" onClick={() => setSelectedDealId(r.deal_id)}>
-                      {r.contact_name || r.deal_name}
-                    </Button>
+                <TableRow key={r.deal_id} className="cursor-pointer" onClick={() => setSelectedDealId(r.deal_id)}>
+                  <TableCell className="font-medium">
+                    {r.contact_name || r.deal_name}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.contact_phone || '—'}</TableCell>
                   <TableCell><Badge variant="outline" className="text-xs">{r.origin_name}</Badge></TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {r.updated_at ? format(new Date(r.updated_at), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
                   </TableCell>
-                  <TableCell className="text-right space-x-2">
+                  <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
                     <Button size="sm" onClick={() => setProposalTarget(r)}>
                       <Send className="h-3 w-3 mr-1" /> Proposta
                     </Button>
@@ -152,11 +150,9 @@ function PropostasTab() {
             </TableHeader>
             <TableBody>
               {propostas.map(p => (
-                <TableRow key={p.id}>
-                  <TableCell>
-                    <Button variant="link" className="p-0 h-auto font-medium" onClick={() => setSelectedDealId(p.deal_id)}>
-                      {p.contact_name || p.deal_name}
-                    </Button>
+                <TableRow key={p.id} className="cursor-pointer" onClick={() => setSelectedDealId(p.deal_id)}>
+                  <TableCell className="font-medium">
+                    {p.contact_name || p.deal_name}
                   </TableCell>
                   <TableCell>{formatCurrency(p.valor_credito)}</TableCell>
                   <TableCell>{p.prazo_meses} meses</TableCell>
@@ -168,7 +164,7 @@ function PropostasTab() {
                       {p.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right space-x-2">
+                  <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
                     {p.status === 'pendente' && (
                       <>
                         <Button
@@ -248,11 +244,9 @@ function SemSucessoTab() {
             </TableHeader>
             <TableBody>
               {deals.map(d => (
-                <TableRow key={d.deal_id}>
-                  <TableCell>
-                    <Button variant="link" className="p-0 h-auto font-medium" onClick={() => setSelectedDealId(d.deal_id)}>
-                      {d.contact_name || d.deal_name}
-                    </Button>
+                <TableRow key={d.deal_id} className="cursor-pointer" onClick={() => setSelectedDealId(d.deal_id)}>
+                  <TableCell className="font-medium">
+                    {d.contact_name || d.deal_name}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{d.contact_phone || '—'}</TableCell>
                   <TableCell><Badge variant="outline" className="text-xs">{d.origin_name}</Badge></TableCell>
@@ -262,7 +256,7 @@ function SemSucessoTab() {
                   <TableCell className="text-sm text-muted-foreground">
                     {d.updated_at ? format(new Date(d.updated_at), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                     <Button
                       size="sm"
                       variant="outline"
