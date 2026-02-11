@@ -1,62 +1,88 @@
 
-# Fix: R1 Agendada mostrando valor duplicado (126 em vez de 66)
 
-## Causa raiz
+# Auto-vincular employees com tabela SDR por email
 
-No calculo do `dayValues.r1Agendada` na pagina `ReunioesEquipe.tsx` (linha 318), a formula atual e:
+## Problema atual
+Quando um colaborador e cadastrado no RH (employees) e tem um usuario do sistema (profile), o vinculo com a tabela `sdr` (necessario para metas, fechamento, dashboard) precisa ser feito manualmente. Isso causa colaboradores "fantasmas" sem metas configuradas.
 
-```text
-r1Agendada = Realizadas + NoShows + Pendentes
-```
+## Solucao: Trigger automatico no banco de dados
 
-O problema e que `NoShows` agora vem da RPC como `R1_Agendada - R1_Realizada`. Substituindo:
+Criar um trigger na tabela `employees` que, ao detectar um `profile_id` preenchido (novo insert ou update), automaticamente:
 
-```text
-r1Agendada = Realizadas + (R1_Agendada_RPC - Realizadas) + Pendentes
-           = R1_Agendada_RPC + Pendentes
-```
+1. Busca o email do profile na tabela `profiles`
+2. Procura um registro existente na tabela `sdr` com o mesmo email
+3. Se encontrar: atualiza `employees.sdr_id` com o ID encontrado
+4. Se nao encontrar: cria um novo registro na `sdr` com:
+   - `name`: nome do employee
+   - `email`: email do profile
+   - `squad`: derivado do departamento (mapeamento interno)
+   - `role_type`: derivado do cargo_catalogo.role_sistema (se disponivel) ou 'sdr' como padrao
+   - `active`: true
+   - `meta_diaria`: 7 (padrao)
+   - `user_id`: o profile_id do employee
 
-Como `R1_Agendada_RPC` ja inclui as reunioes pendentes (todas com `status != cancelled`), o valor de `Pendentes` esta sendo somado duas vezes. Resultado: 66 (real) + 60 (pendentes duplicados) = 126.
+Isso elimina qualquer passo manual: basta cadastrar o colaborador no RH e vincular ao usuario do sistema.
 
-## Solucao
+## Tambem atualizar o edge function `create-user`
 
-Usar diretamente o `r1_agendada` da RPC via `teamKPIs`, em vez de recalcular. O hook `useTeamMeetingsData` ja acumula `totalR1Agendada` internamente, mas nao o expoe no objeto `teamKPIs`.
+O edge function `create-user` ja cria employee e profile, mas nao cria o registro `sdr`. Adicionar essa logica apos a criacao do employee, usando os mesmos criterios do trigger.
 
-### Alteracoes necessarias
+## Correcao imediata dos dados existentes
 
-**1. `src/hooks/useTeamMeetingsData.ts`**
-- Adicionar campo `totalR1Agendada` ao interface `TeamKPIs`
-- Expor `totalR1Agendada` no objeto retornado (ja e calculado na linha 100, so precisa ser adicionado ao retorno)
-
-**2. `src/pages/crm/ReunioesEquipe.tsx`**
-- Linha 318 (dayValues): trocar de `(dayKPIs?.totalRealizadas || 0) + (dayKPIs?.totalNoShows || 0) + dayPendentes` para `dayKPIs?.totalR1Agendada || 0`
-- Linha 329 (weekValues): trocar de `(weekKPIs?.totalRealizadas || 0) + (weekKPIs?.totalNoShows || 0)` para `weekKPIs?.totalR1Agendada || 0`
-- Linha 340 (monthValues): trocar de `(monthKPIs?.totalRealizadas || 0) + (monthKPIs?.totalNoShows || 0)` para `monthKPIs?.totalR1Agendada || 0`
-- Remover a dependencia de `dayPendentes` do calculo de `r1Agendada` (pode manter o hook para outros usos se necessario)
-
-### Resultado esperado
-
-- DIA: R1 Agendada mostrara o numero real de reunioes agendadas para hoje (~66)
-- SEMANA/MES: valores tambem serao consistentes com a RPC
-- No-Show continuara sendo `R1 Agendada - R1 Realizada`, agora com a base correta
+Executar uma query de correcao para vincular os employees que ja possuem profile mas estao sem `sdr_id`:
+- Alexsandro, Claudia e Thobson: ja possuem registros na `sdr` com emails correspondentes, so precisam do `sdr_id` atualizado
+- Mateus Macedo e outros com profile mas sem `sdr`: criar registros automaticamente
 
 ## Secao tecnica
 
+### 1. Migration SQL - Trigger `auto_link_sdr_on_profile`
+
 ```text
--- Interface TeamKPIs (adicionar campo)
-totalR1Agendada: number;
+Funcao: auto_link_employee_sdr()
+Trigger: BEFORE INSERT OR UPDATE OF profile_id ON employees
 
--- teamKPIs object (adicionar ao retorno, linha ~106)
-totalR1Agendada,
-
--- dayValues (simplificado)
-r1Agendada: dayKPIs?.totalR1Agendada || 0,
-
--- weekValues
-r1Agendada: weekKPIs?.totalR1Agendada || 0,
-
--- monthValues
-r1Agendada: monthKPIs?.totalR1Agendada || 0,
+Logica:
+  IF NEW.profile_id IS NOT NULL AND (OLD.profile_id IS NULL OR NEW.profile_id != OLD.profile_id) THEN
+    1. Buscar email do profile
+    2. Buscar sdr existente por email
+    3. Se encontrar -> NEW.sdr_id = sdr.id
+    4. Se nao encontrar -> INSERT na sdr, NEW.sdr_id = novo ID
+    5. Mapear departamento para squad:
+       'BU - Incorporador 50K' -> 'incorporador'
+       'BU - Consorcio' -> 'consorcio'
+       'BU - Credito' -> 'credito'
+       'BU - Leilao' -> 'leilao'
+    6. Buscar role_sistema do cargo_catalogo se disponivel
+  END IF
 ```
 
-Nenhuma alteracao no banco de dados. Apenas 2 arquivos frontend afetados.
+### 2. Migration SQL - Correcao dos dados existentes
+
+```text
+UPDATE employees e
+SET sdr_id = s.id
+FROM profiles p
+JOIN sdr s ON LOWER(s.email) = LOWER(p.email)
+WHERE e.profile_id = p.id
+  AND e.sdr_id IS NULL
+  AND e.status = 'ativo'
+```
+
+Para employees com profile mas sem registro na `sdr`, criar os registros e vincular.
+
+### 3. Edge function `create-user` - Adicionar criacao do SDR
+
+Apos criar o employee (linha ~172), adicionar logica para criar registro na `sdr`:
+
+```text
+- Mapear squad do departamento do cargo
+- Determinar role_type do cargo.role_sistema
+- Inserir na sdr com name, email, squad, role_type, active, meta_diaria, user_id
+- Atualizar employees.sdr_id com o novo ID
+```
+
+### Arquivos afetados
+- 1 nova migration SQL (trigger + correcao de dados)
+- `supabase/functions/create-user/index.ts` (adicionar criacao do SDR)
+
+Nenhuma alteracao no frontend necessaria - o vinculo sera automatico.
