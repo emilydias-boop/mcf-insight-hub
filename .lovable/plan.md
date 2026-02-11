@@ -1,86 +1,89 @@
 
+# Fix: Selecao de Quantidade e Escopo de Selecao
 
-# Melhorias na Tabela de Resultados - Leads em Limbo
+## Problemas encontrados
 
-## Resumo das mudancas
+1. **Seleciona todos os filtrados, nao so a pagina atual**: `toggleSelectAll` usa indices do array `filtered` inteiro (1802 itens), ignorando a paginacao. O usuario ve 25 por pagina mas ao marcar "todos", marca os 1802.
+2. **Sem controle de quantidade**: Nao ha campo para digitar quantos leads selecionar (ex: selecionar os primeiros 100).
 
-Adicionar filtros avancados, busca por telefone, substituir coluna "Valor" por "Tags", popup de detalhes do lead, e controle de quantidade de itens por pagina.
+## Solucao
 
-## Mudancas no arquivo `src/pages/crm/LeadsLimbo.tsx`
+### Arquivo: `src/pages/crm/LeadsLimbo.tsx`
 
-### 1. Novos filtros no topo da tabela
-- **Filtro por Estagio**: Select que lista todos os estagios unicos extraidos dos resultados (excelStage). Permite filtrar por estagio especifico.
-- **Filtro por Dono**: Select que lista todos os donos unicos (excelOwner/localOwner). Permite filtrar por dono especifico.
-- **Controle de quantidade por pagina**: Select com opcoes 25, 50, 100, "Todos". Substitui o PAGE_SIZE fixo.
+### 1. Corrigir `toggleSelectAll` para operar apenas na pagina atual
+- Alterar a funcao para iterar sobre `paged` (itens da pagina visivel) em vez de `filtered`
+- Calcular o indice real no array `filtered` baseado na pagina atual: `page * pageSize + i`
 
-### 2. Busca expandida
-- Atualizar o campo de busca para tambem buscar por telefone (excelPhone), alem de nome e email.
-- Placeholder atualizado para "Buscar por nome, email ou telefone..."
+### 2. Adicionar campo de quantidade na barra de selecao
+- Novo estado `selectCount` (string) para o input de quantidade
+- Adicionar um Input numerico ao lado do checkbox "Selecionar todos" ou na barra de acoes
+- Botao "Selecionar X" que marca os primeiros X leads `sem_dono` do array `filtered` (respeitando os filtros ativos)
+- Isso permite a gestora filtrar por estagio/dono e depois selecionar uma quantidade especifica
 
-### 3. Substituir coluna "Valor" por "Tags"
-- Remover a coluna "Valor" da tabela
-- Adicionar coluna "Tags" que mostra badges coloridos baseados no estagio do lead:
-  - "Contrato Pago" -> badge verde
-  - "Lead Qualificado" -> badge azul
-  - "Sem Interesse" -> badge cinza
-  - "Novo Lead" -> badge amarelo
-  - Outros estagios -> badge default com o nome do estagio
-- Cada tag sera um Badge compacto com cores distintas
+### 3. Atualizar o `toggleSelect` para usar indices globais de `filtered`
+- Atualmente usa `idx` que e o indice dentro de `filtered`, o que ja esta correto
+- O problema e que na renderizacao, o checkbox usa o indice de `paged` mas precisa mapear para o indice de `filtered`
+- Corrigir para que o checkbox de cada linha use `page * pageSize + localIndex` como indice
 
-### 4. Popup de detalhes do lead
-- Ao clicar em qualquer linha da tabela, abre um Dialog/Sheet com informacoes completas:
-  - **Dados do Clint**: Nome, Email, Telefone, Estagio, Valor, Dono no Clint
-  - **Dados Locais** (se encontrado): Deal ID, Nome do deal, Contato local (nome, email, telefone), Owner local
-  - **Status** do matching (com badge colorido)
-  - **Acoes**: Botao para atribuir SDR (se sem dono), botao para vincular closer (se contrato pago)
+### 4. Detalhes da implementacao
 
-### 5. Selecao de quantidade
-- Adicionar select "Mostrar: 25 | 50 | 100 | Todos" ao lado da paginacao
-- Estado `pageSize` substitui constante `PAGE_SIZE`
-
-## Detalhes tecnicos
-
-### Novos estados no componente
-```typescript
-const [stageFilter, setStageFilter] = useState<string>('todos');
-const [ownerFilter, setOwnerFilter] = useState<string>('todos');
-const [pageSize, setPageSize] = useState<number>(50);
-const [selectedLead, setSelectedLead] = useState<LimboRow | null>(null);
+**Novos estados:**
+```
+const [selectCount, setSelectCount] = useState('');
 ```
 
-### Listas unicas para filtros (useMemo)
-```typescript
-const uniqueStages = useMemo(() => {
-  const stages = new Set(results.map(r => r.excelStage).filter(Boolean));
-  return Array.from(stages).sort();
-}, [results]);
-
-const uniqueOwners = useMemo(() => {
-  const owners = new Set(results.map(r => r.excelOwner || r.localOwner).filter(Boolean));
-  return Array.from(owners).sort();
-}, [results]);
+**toggleSelectAll corrigido (apenas pagina):**
 ```
+const toggleSelectAll = () => {
+  const pageStart = page * pageSize;
+  const pageIndices = paged
+    .map((r, i) => ({ r, globalIdx: showAll ? i : pageStart + i }))
+    .filter(({ r }) => r.status === 'sem_dono' && r.localDealId);
 
-### Filtro atualizado
-O `filtered` useMemo sera expandido para incluir stageFilter e ownerFilter alem dos existentes.
+  const allPageSelected = pageIndices.every(({ globalIdx }) => selectedIds.has(globalIdx));
 
-### Dialog de detalhes
-Usa o componente Dialog do shadcn/ui ja disponivel no projeto. Abre ao clicar na linha. Mostra os dados organizados em secoes com labels e valores.
-
-### Mapeamento de tags por estagio
-```typescript
-const STAGE_TAG_CONFIG: Record<string, { color: string; label: string }> = {
-  'contrato pago': { color: 'bg-emerald-500/20 text-emerald-700', label: 'Contrato Pago' },
-  'lead qualificado': { color: 'bg-blue-500/20 text-blue-700', label: 'Lead Qualificado' },
-  'sem interesse': { color: 'bg-gray-500/20 text-gray-700', label: 'Sem Interesse' },
-  'novo lead': { color: 'bg-yellow-500/20 text-yellow-700', label: 'Novo Lead' },
-  // fallback: badge default com o texto do estagio
+  if (allPageSelected) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      pageIndices.forEach(({ globalIdx }) => next.delete(globalIdx));
+      return next;
+    });
+  } else {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      pageIndices.forEach(({ globalIdx }) => next.add(globalIdx));
+      return next;
+    });
+  }
 };
 ```
 
-## Arquivos modificados
-- `src/pages/crm/LeadsLimbo.tsx` - Todas as mudancas acima (filtros, tags, dialog, paginacao)
+**Nova funcao selectByCount:**
+```
+const selectByCount = (count: number) => {
+  const ids = new Set<number>();
+  let added = 0;
+  for (let i = 0; i < filtered.length && added < count; i++) {
+    if (filtered[i].status === 'sem_dono' && filtered[i].localDealId) {
+      ids.add(i);
+      added++;
+    }
+  }
+  setSelectedIds(ids);
+};
+```
 
-## Nenhum arquivo novo necessario
-Todos os componentes UI ja existem no projeto (Dialog, Select, Badge, etc).
+**UI na barra de acoes (abaixo dos filtros):**
+- Input numerico com placeholder "Qtd" 
+- Botao "Selecionar" ao lado do input
+- Botao "Selecionar todos filtrados" para marcar todos os sem_dono do filtro atual
+- O texto "X leads selecionados" mostra apenas os efetivamente selecionados
 
+### 5. Corrigir indices do checkbox nas linhas
+Na renderizacao das linhas da tabela, o indice usado no checkbox deve ser o indice global dentro de `filtered`, nao o indice local de `paged`:
+```
+{paged.map((row, localIdx) => {
+  const globalIdx = showAll ? localIdx : page * pageSize + localIdx;
+  // usar globalIdx no toggleSelect e selectedIds.has
+})}
+```
