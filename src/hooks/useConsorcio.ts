@@ -188,7 +188,7 @@ export function useCreateConsorcioCard() {
   return useMutation({
     mutationFn: async (input: CreateConsorcioCardInput) => {
       // 1. Create the card
-      const { partners, ...cardData } = input;
+      const { partners, inicio_segunda_parcela, ...cardData } = input;
       
       const { data: card, error: cardError } = await supabase
         .from('consortium_cards')
