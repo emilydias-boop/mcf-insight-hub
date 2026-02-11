@@ -133,6 +133,29 @@ function clearStorage() {
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
+// ─── Excel Date Parser ──────────────────────────────────
+function parseExcelDate(value: string): Date | null {
+  if (!value || value === '') return null;
+  
+  // Case 1: Excel serial number (e.g. 45388.52553240741)
+  const num = Number(value);
+  if (!isNaN(num) && num > 30000 && num < 60000) {
+    const date = new Date((num - 25569) * 86400000);
+    if (!isNaN(date.getTime())) return date;
+  }
+  
+  // Case 2: DD/MM/YYYY HH:mm:ss or DD/MM/YYYY
+  const brMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (brMatch) {
+    const [, day, month, year, hour, min, sec] = brMatch;
+    return new Date(+year, +month - 1, +day, +(hour || 0), +(min || 0), +(sec || 0));
+  }
+  
+  // Case 3: Native parse fallback
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 // ─── Component ──────────────────────────────────────────
 export default function LeadsLimbo() {
   const [step, setStep] = useState<Step>(() => {
@@ -752,10 +775,10 @@ export default function LeadsLimbo() {
                         <StageTag stage={row.excelStage || row.localStage || ''} />
                       </TableCell>
                       <TableCell className="text-xs whitespace-nowrap">
-                        {row.excelCreatedAt ? (() => { try { const d = new Date(row.excelCreatedAt); return isNaN(d.getTime()) ? row.excelCreatedAt : format(d, 'dd/MM/yy'); } catch { return row.excelCreatedAt; } })() : '--'}
+                        {row.excelCreatedAt ? (() => { const d = parseExcelDate(row.excelCreatedAt); return d ? format(d, 'dd/MM/yy') : '--'; })() : '--'}
                       </TableCell>
                       <TableCell className="text-xs whitespace-nowrap">
-                        {row.excelLostAt ? (() => { try { const d = new Date(row.excelLostAt); return isNaN(d.getTime()) ? row.excelLostAt : format(d, 'dd/MM/yy'); } catch { return row.excelLostAt; } })() : '--'}
+                        {row.excelLostAt ? (() => { const d = parseExcelDate(row.excelLostAt); return d ? format(d, 'dd/MM/yy') : '--'; })() : '--'}
                       </TableCell>
                       <TableCell>
                         {row.status === 'com_dono' && <Badge className="bg-emerald-500/20 text-emerald-700 hover:bg-emerald-500/30">Com Dono</Badge>}
