@@ -1,35 +1,29 @@
 
 
-# Corrigir Scroll e Historico Cross-Pipeline
+# Corrigir Scroll do Drawer de Leads
 
-## Problema 1: Historico nao aparece
-Alguns deals do mesmo lead (ex: Guilherme Machado) nao possuem `contact_id` preenchido no banco. Quando o deal aberto tem `contact_id = NULL`, o componente `CrossPipelineHistory` retorna vazio pois a condicao `!contactId` e verdadeira.
+## Causa raiz
+O componente `SheetContent` (sheet.tsx) usa `position: fixed` com `h-full`, mas nao tem `display: flex` nem `flex-direction: column` nas classes base. O div interno `flex flex-col h-full` nao consegue se restringir a altura do pai porque o pai nao e um container flex. Resultado: o conteudo transborda sem scroll.
 
-**Solucao**: Fazer fallback buscando pelo nome do contato. Se `contact_id` estiver vazio, buscar deals com o mesmo `name` na tabela `crm_deals`.
+## Correcao
 
-### Arquivo modificado: `src/hooks/useContactDeals.ts`
-- Aceitar um parametro adicional `dealName` como fallback
-- Se `contactId` existir, buscar por `contact_id` (comportamento atual)
-- Se `contactId` for null mas `dealName` existir, buscar por `name` (fallback por nome)
-- Isso cobre os deals que nao tem contact_id populado
+### Arquivo: `src/components/crm/DealDetailsDrawer.tsx`
 
-### Arquivo modificado: `src/components/crm/CrossPipelineHistory.tsx`
-- Aceitar nova prop `dealName`
-- Passar para o hook `useContactDeals`
-- Remover a condicao `!contactId` que retorna null (agora pode funcionar sem contactId)
+Adicionar `flex flex-col` ao className do `SheetContent` para que o layout flex interno funcione corretamente:
 
-### Arquivo modificado: `src/components/crm/DealDetailsDrawer.tsx`
-- Passar `dealName={deal.name}` como prop adicional ao `CrossPipelineHistory`
+**De:**
+```
+<SheetContent className="bg-card border-border w-full sm:max-w-2xl overflow-hidden p-0">
+```
 
-## Problema 2: Scroll nao funciona
-O container interno com `flex-1 overflow-y-auto` nao scrolla porque em contexto flex, `min-height` padrao e `auto`, impedindo que o item encolha abaixo do tamanho do conteudo.
+**Para:**
+```
+<SheetContent className="bg-card border-border w-full sm:max-w-2xl overflow-hidden p-0 flex flex-col">
+```
 
-### Arquivo modificado: `src/components/crm/DealDetailsDrawer.tsx`
-- Adicionar `min-h-0` ao container scrollavel (linha 97)
-- De: `className="flex-1 overflow-y-auto p-4 space-y-3"`
-- Para: `className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3"`
+E remover o div wrapper `flex flex-col h-full` redundante (linha 92), deixando os filhos diretos no SheetContent.
 
-## Resumo
-- 3 arquivos modificados
-- Scroll corrigido com `min-h-0`
-- Historico cross-pipeline funciona mesmo sem `contact_id` (fallback por nome)
+Alternativa mais simples (sem remover o wrapper): manter o wrapper mas garantir que o SheetContent tenha `flex flex-col` para que `h-full` do wrapper funcione.
+
+1 arquivo, 1 linha alterada.
+
