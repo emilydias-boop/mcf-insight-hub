@@ -362,6 +362,7 @@ export default function ConsorcioPainelEquipe() {
       totalNoShows,
       totalContratos,
       totalOutside: 0,
+      totalR1Agendada,
       taxaConversao: totalRealizadas > 0 ? (totalContratos / totalRealizadas) * 100 : 0,
       taxaNoShow: totalR1Agendada > 0 ? (totalNoShows / totalR1Agendada) * 100 : 0,
     };
