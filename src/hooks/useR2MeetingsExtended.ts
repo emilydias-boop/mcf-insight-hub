@@ -127,6 +127,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
       // Fetch R1 meetings for those deals to get R1 closers and qualification notes
       let r1CloserMap: Record<string, { id: string; name: string; scheduled_at: string | null }> = {};
       let r1NotesMap: Record<string, string> = {};
+      let r1SdrMap: Record<string, string> = {}; // deal_id -> booked_by UUID from R1
       
       if (dealIds.length > 0) {
         const { data: r1Meetings } = await supabase
@@ -135,7 +136,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
             id,
             scheduled_at,
             closer:closers!meeting_slots_closer_id_fkey(id, name),
-            attendees:meeting_slot_attendees(deal_id, notes)
+            attendees:meeting_slot_attendees(deal_id, notes, booked_by)
           `)
           .eq('meeting_type', 'r1')
           .limit(500);
@@ -144,7 +145,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
         (r1Meetings || []).forEach((r1: Record<string, unknown>) => {
           const r1Closer = r1.closer as { id: string; name: string } | null;
           const r1ScheduledAt = r1.scheduled_at as string | null;
-          const r1Attendees = (r1.attendees || []) as Array<{ deal_id: string | null; notes: string | null }>;
+          const r1Attendees = (r1.attendees || []) as Array<{ deal_id: string | null; notes: string | null; booked_by: string | null }>;
           r1Attendees.forEach(att => {
             if (att.deal_id && dealIds.includes(att.deal_id)) {
               if (r1Closer) {
@@ -154,15 +155,23 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
               if (att.notes && !r1NotesMap[att.deal_id]) {
                 r1NotesMap[att.deal_id] = att.notes;
               }
+              // Store R1 booked_by as the real SDR
+              if (att.booked_by && !r1SdrMap[att.deal_id]) {
+                r1SdrMap[att.deal_id] = att.booked_by;
+              }
             }
           });
         });
       }
 
-      // Collect all booked_by IDs and SDR emails
-      const bookedByIds = (meetings || [])
-        .map(m => (m as Record<string, unknown>).booked_by as string)
-        .filter(Boolean);
+      // Collect all booked_by IDs (from R2 meetings AND R1 SDRs)
+      const r1SdrUuids = Object.values(r1SdrMap).filter(Boolean);
+      const bookedByIds = [
+        ...(meetings || [])
+          .map(m => (m as Record<string, unknown>).booked_by as string)
+          .filter(Boolean),
+        ...r1SdrUuids,
+      ];
       
       const sdrEmails = (meetings || []).flatMap(m => {
         const attendeesArr = ((m as Record<string, unknown>).attendees || []) as Array<Record<string, unknown>>;
@@ -210,17 +219,27 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
         const attendeesArr = (meetingObj.attendees || []) as Array<Record<string, unknown>>;
         const bookedById = meetingObj.booked_by as string | null;
 
-        // Find SDR from first attendee's deal
+        // Find SDR from R1 booked_by, fallback to deal.owner_id
         let sdr: { email: string; name: string | null } | null = null;
         let r1Closer: { id: string; name: string; scheduled_at: string | null } | null = null;
 
         if (attendeesArr.length > 0) {
           const firstAtt = attendeesArr[0];
-          const deal = firstAtt.deal as { owner_id?: string } | null;
-          if (deal?.owner_id) {
-            sdr = profilesByEmail[deal.owner_id] || { email: deal.owner_id, name: null };
-          }
           const dealId = firstAtt.deal_id as string | null;
+          
+          // SDR: prefer R1 booked_by (UUID) over deal.owner_id
+          if (dealId && r1SdrMap[dealId]) {
+            const sdrProfile = profilesById[r1SdrMap[dealId]];
+            sdr = sdrProfile 
+              ? { email: r1SdrMap[dealId], name: sdrProfile.name }
+              : { email: r1SdrMap[dealId], name: null };
+          } else {
+            const deal = firstAtt.deal as { owner_id?: string } | null;
+            if (deal?.owner_id) {
+              sdr = profilesByEmail[deal.owner_id] || { email: deal.owner_id, name: null };
+            }
+          }
+          
           if (dealId && r1CloserMap[dealId]) {
             r1Closer = r1CloserMap[dealId];
           }
