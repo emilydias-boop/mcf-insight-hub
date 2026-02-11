@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Upload, FileSpreadsheet, Search, Users, UserCheck, UserX, Download, Inbox } from 'lucide-react';
+import { Upload, FileSpreadsheet, Search, Users, UserCheck, UserX, Download, Inbox, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import {
@@ -57,7 +58,30 @@ function autoMapColumns(headers: string[]): Record<ColumnKey, string> {
   return mapping;
 }
 
-const PAGE_SIZE = 50;
+// Tag colors por estágio (normalized lowercase key)
+const STAGE_TAG_CONFIG: Record<string, { className: string; label: string }> = {
+  'contrato pago': { className: 'bg-emerald-500/20 text-emerald-700 hover:bg-emerald-500/30', label: 'Contrato Pago' },
+  'lead qualificado': { className: 'bg-blue-500/20 text-blue-700 hover:bg-blue-500/30', label: 'Lead Qualificado' },
+  'sem interesse': { className: 'bg-gray-500/20 text-gray-700 hover:bg-gray-500/30', label: 'Sem Interesse' },
+  'novo lead': { className: 'bg-yellow-500/20 text-yellow-700 hover:bg-yellow-500/30', label: 'Novo Lead' },
+  'agendamento': { className: 'bg-purple-500/20 text-purple-700 hover:bg-purple-500/30', label: 'Agendamento' },
+  'reunião realizada': { className: 'bg-indigo-500/20 text-indigo-700 hover:bg-indigo-500/30', label: 'Reunião Realizada' },
+  'proposta enviada': { className: 'bg-cyan-500/20 text-cyan-700 hover:bg-cyan-500/30', label: 'Proposta Enviada' },
+  'negociação': { className: 'bg-orange-500/20 text-orange-700 hover:bg-orange-500/30', label: 'Negociação' },
+};
+
+function StageTag({ stage }: { stage: string }) {
+  if (!stage) return <span className="text-xs text-muted-foreground">—</span>;
+  const key = stage.toLowerCase().trim();
+  const config = STAGE_TAG_CONFIG[key];
+  return (
+    <Badge className={config?.className || 'bg-muted text-muted-foreground hover:bg-muted/80'}>
+      {config?.label || stage}
+    </Badge>
+  );
+}
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
 export default function LeadsLimbo() {
   const [step, setStep] = useState<Step>('upload');
@@ -66,11 +90,15 @@ export default function LeadsLimbo() {
   const [columnMapping, setColumnMapping] = useState<Record<ColumnKey, string>>({ name: '', email: '', phone: '', stage: '', value: '', owner: '' });
   const [results, setResults] = useState<LimboRow[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
+  const [stageFilter, setStageFilter] = useState<string>('todos');
+  const [ownerFilter, setOwnerFilter] = useState<string>('todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [assignSdrEmail, setAssignSdrEmail] = useState('');
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(50);
   const [isComparing, setIsComparing] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<LimboRow | null>(null);
 
   const { data: localDeals, isLoading: loadingDeals } = useInsideSalesDeals();
   const { data: sdrs } = useActiveSdrs();
@@ -113,7 +141,6 @@ export default function LeadsLimbo() {
     }
     setIsComparing(true);
 
-    // Parse excel rows using mapping
     const excelRows = rawData.map((row) => ({
       name: String(row[columnMapping.name] || ''),
       email: String(row[columnMapping.email] || ''),
@@ -128,23 +155,39 @@ export default function LeadsLimbo() {
     setStep('results');
     setPage(0);
     setSelectedIds(new Set());
+    setStageFilter('todos');
+    setOwnerFilter('todos');
     setIsComparing(false);
   }, [rawData, columnMapping, localDeals]);
+
+  // Unique stages and owners for filters
+  const uniqueStages = useMemo(() => {
+    const stages = new Set(results.map(r => r.excelStage).filter(Boolean));
+    return Array.from(stages).sort();
+  }, [results]);
+
+  const uniqueOwners = useMemo(() => {
+    const owners = new Set(results.map(r => r.excelOwner || r.localOwner || '').filter(Boolean));
+    return Array.from(owners).sort();
+  }, [results]);
 
   // Filtered results
   const filtered = useMemo(() => {
     let items = results;
     if (statusFilter !== 'todos') items = items.filter(r => r.status === statusFilter);
+    if (stageFilter !== 'todos') items = items.filter(r => r.excelStage === stageFilter);
+    if (ownerFilter !== 'todos') items = items.filter(r => (r.excelOwner || r.localOwner || '') === ownerFilter);
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       items = items.filter(r =>
         r.excelName.toLowerCase().includes(term) ||
         r.excelEmail.toLowerCase().includes(term) ||
+        (r.excelPhone || '').toLowerCase().includes(term) ||
         (r.localContactName || '').toLowerCase().includes(term)
       );
     }
     return items;
-  }, [results, statusFilter, searchTerm]);
+  }, [results, statusFilter, stageFilter, ownerFilter, searchTerm]);
 
   // Counts
   const counts = useMemo(() => ({
@@ -155,8 +198,9 @@ export default function LeadsLimbo() {
   }), [results]);
 
   // Pagination
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const showAll = pageSize === 0;
+  const paged = showAll ? filtered : filtered.slice(page * pageSize, (page + 1) * pageSize);
+  const totalPages = showAll ? 1 : Math.ceil(filtered.length / pageSize);
 
   // Toggle selection
   const toggleSelect = (idx: number) => {
@@ -201,7 +245,6 @@ export default function LeadsLimbo() {
       { dealIds, ownerEmail: assignSdrEmail, ownerProfileId: profile.id },
       {
         onSuccess: () => {
-          // Remove assigned from results
           setResults(prev =>
             prev.map(r => dealIds.includes(r.localDealId || '') ? { ...r, status: 'com_dono' as const, localOwner: assignSdrEmail } : r)
           );
@@ -411,7 +454,7 @@ export default function LeadsLimbo() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nome ou email..."
+            placeholder="Buscar por nome, email ou telefone..."
             value={searchTerm}
             onChange={e => { setSearchTerm(e.target.value); setPage(0); }}
             className="pl-9"
@@ -419,7 +462,7 @@ export default function LeadsLimbo() {
         </div>
 
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v as StatusFilter); setPage(0); setSelectedIds(new Set()); }}>
-          <SelectTrigger className="w-48">
+          <SelectTrigger className="w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -427,6 +470,42 @@ export default function LeadsLimbo() {
             <SelectItem value="com_dono">Com Dono ({counts.com_dono})</SelectItem>
             <SelectItem value="sem_dono">Sem Dono ({counts.sem_dono})</SelectItem>
             <SelectItem value="nao_encontrado">Não Encontrado ({counts.nao_encontrado})</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={stageFilter} onValueChange={(v) => { setStageFilter(v); setPage(0); }}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Estágio" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos Estágios</SelectItem>
+            {uniqueStages.map(s => (
+              <SelectItem key={s} value={s}>{s}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={ownerFilter} onValueChange={(v) => { setOwnerFilter(v); setPage(0); }}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Dono" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos Donos</SelectItem>
+            {uniqueOwners.map(o => (
+              <SelectItem key={o} value={o}>{o}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(0); }}>
+          <SelectTrigger className="w-28">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PAGE_SIZE_OPTIONS.map(n => (
+              <SelectItem key={n} value={String(n)}>{n} / pág</SelectItem>
+            ))}
+            <SelectItem value="0">Todos</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -470,19 +549,23 @@ export default function LeadsLimbo() {
                   <TableHead>Nome (Clint)</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Telefone</TableHead>
-                  <TableHead>Estágio</TableHead>
-                  <TableHead>Valor</TableHead>
+                  <TableHead>Tags</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Dono Atual</TableHead>
+                  <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paged.map((row, idx) => {
-                  const globalIdx = page * PAGE_SIZE + idx;
+                  const globalIdx = showAll ? idx : page * pageSize + idx;
                   const isSemDono = row.status === 'sem_dono';
                   return (
-                    <TableRow key={globalIdx} className={isSemDono ? 'bg-amber-500/5' : row.status === 'nao_encontrado' ? 'bg-destructive/5' : ''}>
-                      <TableCell>
+                    <TableRow
+                      key={globalIdx}
+                      className={`cursor-pointer ${isSemDono ? 'bg-amber-500/5' : row.status === 'nao_encontrado' ? 'bg-destructive/5' : ''}`}
+                      onClick={() => setSelectedLead(row)}
+                    >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         {isSemDono && row.localDealId && (
                           <Checkbox
                             checked={selectedIds.has(globalIdx)}
@@ -493,9 +576,8 @@ export default function LeadsLimbo() {
                       <TableCell className="font-medium max-w-[200px] truncate">{row.excelName}</TableCell>
                       <TableCell className="text-xs max-w-[180px] truncate">{row.excelEmail}</TableCell>
                       <TableCell className="text-xs">{row.excelPhone}</TableCell>
-                      <TableCell className="text-xs">{row.excelStage || row.localStage}</TableCell>
-                      <TableCell className="text-xs">
-                        {row.excelValue ? `R$ ${row.excelValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
+                      <TableCell>
+                        <StageTag stage={row.excelStage || row.localStage || ''} />
                       </TableCell>
                       <TableCell>
                         {row.status === 'com_dono' && <Badge className="bg-emerald-500/20 text-emerald-700 hover:bg-emerald-500/30">Com Dono</Badge>}
@@ -504,6 +586,9 @@ export default function LeadsLimbo() {
                       </TableCell>
                       <TableCell className="text-xs max-w-[150px] truncate">
                         {row.localOwner || row.excelOwner || '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Eye className="h-4 w-4 text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   );
@@ -525,7 +610,7 @@ export default function LeadsLimbo() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Mostrando {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} de {filtered.length}
+            Mostrando {showAll ? filtered.length : `${page * pageSize + 1}–${Math.min((page + 1) * pageSize, filtered.length)}`} de {filtered.length}
           </p>
           <div className="flex gap-1">
             <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Anterior</Button>
@@ -533,6 +618,66 @@ export default function LeadsLimbo() {
           </div>
         </div>
       )}
+
+      {/* Lead Detail Dialog */}
+      <Dialog open={!!selectedLead} onOpenChange={(open) => !open && setSelectedLead(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedLead?.excelName || 'Detalhes do Lead'}
+              {selectedLead && (
+                <>
+                  {selectedLead.status === 'com_dono' && <Badge className="bg-emerald-500/20 text-emerald-700">Com Dono</Badge>}
+                  {selectedLead.status === 'sem_dono' && <Badge className="bg-amber-500/20 text-amber-700">Sem Dono</Badge>}
+                  {selectedLead.status === 'nao_encontrado' && <Badge variant="destructive">Não Encontrado</Badge>}
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription>Comparação entre dados do Clint e base local</DialogDescription>
+          </DialogHeader>
+
+          {selectedLead && (
+            <div className="grid grid-cols-2 gap-6 mt-4">
+              {/* Dados do Clint */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sm text-foreground border-b pb-1">📋 Dados do Clint</h4>
+                <DetailItem label="Nome" value={selectedLead.excelName} />
+                <DetailItem label="Email" value={selectedLead.excelEmail} />
+                <DetailItem label="Telefone" value={selectedLead.excelPhone} />
+                <DetailItem label="Estágio" value={selectedLead.excelStage} />
+                <DetailItem label="Valor" value={selectedLead.excelValue ? `R$ ${selectedLead.excelValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'} />
+                <DetailItem label="Dono (Clint)" value={selectedLead.excelOwner} />
+              </div>
+
+              {/* Dados Locais */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sm text-foreground border-b pb-1">🏠 Dados Locais</h4>
+                {selectedLead.status === 'nao_encontrado' ? (
+                  <p className="text-sm text-muted-foreground italic">Lead não encontrado na base local</p>
+                ) : (
+                  <>
+                    <DetailItem label="Deal ID" value={selectedLead.localDealId || '—'} />
+                    <DetailItem label="Nome Deal" value={selectedLead.localDealName || '—'} />
+                    <DetailItem label="Contato" value={selectedLead.localContactName || '—'} />
+                    <DetailItem label="Email" value={selectedLead.localContactEmail || '—'} />
+                    <DetailItem label="Telefone" value={selectedLead.localContactPhone || '—'} />
+                    <DetailItem label="Owner" value={selectedLead.localOwner || '—'} />
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm text-foreground font-medium truncate">{value || '—'}</p>
     </div>
   );
 }
