@@ -1046,6 +1046,26 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     )}
                   </div>
                 </div>
+
+                {/* Alerta Pós-Reunião para Consórcio */}
+                {activeBU === 'consorcio' && selectedParticipant.status === 'completed' && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <span className="font-medium text-sm text-amber-700 dark:text-amber-400">
+                        Pendente: Definir resultado da reunião
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Envie uma proposta ou marque como Sem Sucesso na aba Pós-Reunião.
+                    </p>
+                    <Button size="sm" variant="outline" onClick={() => navigate('/consorcio/crm/pos-reuniao')}>
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Ir para Pós-Reunião
+                    </Button>
+                  </div>
+                )}
+
               </>
             )}
 
