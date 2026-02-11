@@ -31,9 +31,6 @@ export function useInsideSalesDeals() {
               name,
               email,
               phone
-            ),
-            crm_stages!crm_deals_stage_id_fkey (
-              name
             )
           `)
           .eq('origin_id', INSIDE_SALES_ORIGIN_ID)
@@ -155,7 +152,7 @@ export function compareExcelWithLocal(
     }
 
     const contact = match.crm_contacts;
-    const stageName = match.crm_stages?.name || '';
+    const stageName = '';
 
     return {
       excelName: row.name,
