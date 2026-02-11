@@ -25,7 +25,7 @@ import { CLOSER_LIST } from '@/constants/team';
 type Step = 'upload' | 'mapping' | 'results';
 type StatusFilter = 'todos' | 'com_dono' | 'sem_dono' | 'nao_encontrado';
 
-const COLUMN_KEYS = ['name', 'email', 'phone', 'stage', 'value', 'owner'] as const;
+const COLUMN_KEYS = ['name', 'email', 'phone', 'stage', 'value', 'owner', 'created_at', 'lost_at'] as const;
 type ColumnKey = typeof COLUMN_KEYS[number];
 
 const COLUMN_LABELS: Record<ColumnKey, string> = {
@@ -35,6 +35,8 @@ const COLUMN_LABELS: Record<ColumnKey, string> = {
   stage: 'Estágio',
   value: 'Valor',
   owner: 'Dono',
+  created_at: 'Data Criação',
+  lost_at: 'Últ. Movimentação',
 };
 
 // Auto-map com heurísticas
@@ -45,10 +47,12 @@ const AUTO_MAP_HINTS: Record<ColumnKey, string[]> = {
   stage: ['estagio', 'estágio', 'stage', 'etapa', 'status', 'fase'],
   value: ['valor', 'value', 'amount', 'receita'],
   owner: ['dono', 'owner', 'responsavel', 'responsável', 'sdr', 'user'],
+  created_at: ['created_at', 'criado', 'data_criacao', 'data criação', 'data de criação'],
+  lost_at: ['lost_at', 'perdido', 'ultima_mov', 'última movimentação', 'last_move', 'ult mov'],
 };
 
 function autoMapColumns(headers: string[]): Record<ColumnKey, string> {
-  const mapping: Record<ColumnKey, string> = { name: '', email: '', phone: '', stage: '', value: '', owner: '' };
+  const mapping: Record<ColumnKey, string> = { name: '', email: '', phone: '', stage: '', value: '', owner: '', created_at: '', lost_at: '' };
   const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
 
   for (const key of COLUMN_KEYS) {
@@ -139,7 +143,7 @@ export default function LeadsLimbo() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [columnMapping, setColumnMapping] = useState<Record<ColumnKey, string>>(() => {
     const stored = loadFromStorage();
-    return stored?.columnMapping || { name: '', email: '', phone: '', stage: '', value: '', owner: '' };
+    return stored?.columnMapping || { name: '', email: '', phone: '', stage: '', value: '', owner: '', created_at: '', lost_at: '' };
   });
   const [results, setResults] = useState<LimboRow[]>(() => {
     const stored = loadFromStorage();
@@ -237,6 +241,8 @@ export default function LeadsLimbo() {
       stage: String(row[columnMapping.stage] || ''),
       value: columnMapping.value ? parseFloat(String(row[columnMapping.value]).replace(/[^\d.,]/g, '').replace(',', '.')) || null : null,
       owner: String(row[columnMapping.owner] || ''),
+      created_at: columnMapping.created_at ? String(row[columnMapping.created_at] || '') : '',
+      lost_at: columnMapping.lost_at ? String(row[columnMapping.lost_at] || '') : '',
     }));
 
     const compared = compareExcelWithLocal(excelRows, localDeals);
@@ -529,7 +535,7 @@ export default function LeadsLimbo() {
             clearStorage();
             setStep('upload');
             setResults([]);
-            setColumnMapping({ name: '', email: '', phone: '', stage: '', value: '', owner: '' });
+            setColumnMapping({ name: '', email: '', phone: '', stage: '', value: '', owner: '', created_at: '', lost_at: '' });
             setStatusFilter('todos');
             setStageFilter('todos');
             setOwnerFilter('todos');
@@ -746,10 +752,10 @@ export default function LeadsLimbo() {
                         <StageTag stage={row.excelStage || row.localStage || ''} />
                       </TableCell>
                       <TableCell className="text-xs whitespace-nowrap">
-                        {row.localCreatedAt ? format(new Date(row.localCreatedAt), 'dd/MM/yy') : '--'}
+                        {row.excelCreatedAt ? (() => { try { const d = new Date(row.excelCreatedAt); return isNaN(d.getTime()) ? row.excelCreatedAt : format(d, 'dd/MM/yy'); } catch { return row.excelCreatedAt; } })() : '--'}
                       </TableCell>
                       <TableCell className="text-xs whitespace-nowrap">
-                        {row.localUpdatedAt ? format(new Date(row.localUpdatedAt), 'dd/MM/yy') : '--'}
+                        {row.excelLostAt ? (() => { try { const d = new Date(row.excelLostAt); return isNaN(d.getTime()) ? row.excelLostAt : format(d, 'dd/MM/yy'); } catch { return row.excelLostAt; } })() : '--'}
                       </TableCell>
                       <TableCell>
                         {row.status === 'com_dono' && <Badge className="bg-emerald-500/20 text-emerald-700 hover:bg-emerald-500/30">Com Dono</Badge>}

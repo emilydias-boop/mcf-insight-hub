@@ -92,6 +92,8 @@ export interface LimboRow {
   excelStage: string;
   excelValue: number | null;
   excelOwner: string;
+  excelCreatedAt?: string;
+  excelLostAt?: string;
   // Resultado do match
   status: 'com_dono' | 'sem_dono' | 'nao_encontrado';
   // Deal local (se encontrado)
@@ -102,9 +104,6 @@ export interface LimboRow {
   localContactName?: string;
   localContactEmail?: string;
   localContactPhone?: string;
-  // Datas
-  localCreatedAt?: string;
-  localUpdatedAt?: string;
   // Para atribuição
   assignedSdrEmail?: string;
   assignedCloserName?: string;
@@ -117,7 +116,7 @@ function normalize(val: string | null | undefined): string {
 
 // Compara planilha com deals locais
 export function compareExcelWithLocal(
-  excelRows: Array<{ name: string; email: string; phone: string; stage: string; value: number | null; owner: string }>,
+  excelRows: Array<{ name: string; email: string; phone: string; stage: string; value: number | null; owner: string; created_at?: string; lost_at?: string }>,
   localDeals: any[]
 ): LimboRow[] {
   // Indexar deals locais por email do contato e por nome do contato
@@ -151,6 +150,8 @@ export function compareExcelWithLocal(
         excelStage: row.stage,
         excelValue: row.value,
         excelOwner: row.owner,
+        excelCreatedAt: row.created_at || '',
+        excelLostAt: row.lost_at || '',
         status: 'nao_encontrado' as const,
       };
     }
@@ -165,6 +166,8 @@ export function compareExcelWithLocal(
       excelStage: row.stage,
       excelValue: row.value,
       excelOwner: row.owner,
+      excelCreatedAt: row.created_at || '',
+      excelLostAt: row.lost_at || '',
       status: match.owner_id ? ('com_dono' as const) : ('sem_dono' as const),
       localDealId: match.id,
       localDealName: match.name,
@@ -173,8 +176,6 @@ export function compareExcelWithLocal(
       localContactName: contact?.name || '',
       localContactEmail: contact?.email || '',
       localContactPhone: contact?.phone || '',
-      localCreatedAt: match.created_at || '',
-      localUpdatedAt: match.updated_at || '',
     };
   });
 }
