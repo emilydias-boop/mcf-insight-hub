@@ -1,33 +1,37 @@
 
 
-# Corrigir campo "SDR" na Jornada do Lead
+# Corrigir SDR e Closer R1 no drawer da Agenda R2
 
 ## Problema
-O campo "SDR" na Jornada do Lead mostra o dono atual do deal (`deal.owner_id`), que apos a transferencia para o Closer passa a ser o proprio Closer. No exemplo, mostra "Thaynar Dos Santos Tavares" quando deveria mostrar "Leticia Nunes dos Santos" (quem agendou a R1).
+No "Historico do Funil" do drawer R2:
+1. **SDR** mostra o dono atual do deal (`deal.owner_id`) que apos transferencia vira o Closer
+2. **Closer R1** as vezes aparece como "—" quando deveria mostrar nome e data
 
 ## Solucao
-Alterar o hook `useLeadJourney.ts` para derivar o SDR a partir do `booked_by` da reuniao R1, em vez do `deal.owner_id`.
-
-A logica fica:
-1. Primeiro, buscar as reunioes (R1 e R2) como ja faz hoje
-2. Se existir uma R1 com `booked_by`, usar esse usuario como SDR
-3. Fallback: se nao houver R1 ou `booked_by`, manter o `deal.owner_id` como fonte
+Alterar `src/hooks/useR2MeetingsExtended.ts` para derivar o SDR a partir do `booked_by` da R1 (quem agendou), em vez do `deal.owner_id`.
 
 ## Secao tecnica
 
-### Arquivo: `src/hooks/useLeadJourney.ts`
+### Arquivo: `src/hooks/useR2MeetingsExtended.ts`
 
-**Mudanca principal**: Reordenar a logica para processar as reunioes primeiro, e depois derivar o SDR.
+**1. Adicionar `booked_by` na query de R1** (linha 138):
+- Mudar `attendees:meeting_slot_attendees(deal_id, notes)` para `attendees:meeting_slot_attendees(deal_id, notes, booked_by)`
 
-1. Mover o bloco de busca do SDR (linhas 44-83) para **depois** do processamento das reunioes (apos linha 200)
-2. Substituir a logica do SDR:
-   - Se `r1Meeting.bookedBy` existir, usar como SDR (nome e email)
-   - Senao, fallback para `deal.owner_id` (comportamento atual)
+**2. Criar mapa `r1SdrMap`** (apos linha 159):
+- Mapear `deal_id -> booked_by` (UUID) do R1
+- Dentro do forEach dos r1Meetings, salvar `att.booked_by` no mapa
+
+**3. Coletar booked_by UUIDs do R1 para buscar profiles** (linha 163):
+- Adicionar os UUIDs do `r1SdrMap` ao array `bookedByIds` para que sejam buscados no `profilesById`
+
+**4. Substituir logica do SDR** (linhas 219-222):
+- Em vez de usar `deal.owner_id`, usar `r1SdrMap[dealId]` com lookup no `profilesById`
+- Fallback para `deal.owner_id` se nao houver R1 booked_by
 
 ```text
-Antes:  deal.owner_id -> profiles -> SDR (incorreto apos transferencia)
-Depois: R1.booked_by -> profiles -> SDR (sempre quem agendou)
-        Fallback: deal.owner_id (se nao houver R1)
+Antes:  deal.owner_id -> profilesByEmail -> SDR (incorreto)
+Depois: R1.attendee.booked_by -> profilesById -> SDR (correto)
+        Fallback: deal.owner_id
 ```
 
-Nenhum outro arquivo precisa ser alterado - o componente `LeadJourneyCard.tsx` ja exibe `journey.sdr.name` e `journey.sdr.email` corretamente.
+Nenhuma alteracao no componente `R2MeetingDetailDrawer.tsx` - ele ja exibe `meeting.sdr.name` e `meeting.r1_closer` corretamente.
