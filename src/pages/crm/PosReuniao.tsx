@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2 } from 'lucide-react';
 import { ProposalModal } from '@/components/consorcio/ProposalModal';
 import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
+import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
   useRealizadas, useProposals, useSemSucesso,
   useConfirmarAceite, useRetomarContato,
@@ -40,6 +41,7 @@ function RealizadasTab() {
   const { data: realizadas = [], isLoading } = useRealizadas();
   const [proposalTarget, setProposalTarget] = useState<CompletedMeeting | null>(null);
   const [semSucessoTarget, setSemSucessoTarget] = useState<CompletedMeeting | null>(null);
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
 
   if (isLoading) return <LoadingState />;
 
@@ -65,7 +67,11 @@ function RealizadasTab() {
             <TableBody>
               {realizadas.map(r => (
                 <TableRow key={r.deal_id}>
-                  <TableCell className="font-medium">{r.contact_name || r.deal_name}</TableCell>
+                  <TableCell>
+                    <Button variant="link" className="p-0 h-auto font-medium" onClick={() => setSelectedDealId(r.deal_id)}>
+                      {r.contact_name || r.deal_name}
+                    </Button>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.contact_phone || '—'}</TableCell>
                   <TableCell><Badge variant="outline" className="text-xs">{r.origin_name}</Badge></TableCell>
                   <TableCell className="text-sm text-muted-foreground">
@@ -105,6 +111,8 @@ function RealizadasTab() {
             originId={semSucessoTarget.origin_id}
           />
         )}
+
+        <DealDetailsDrawer dealId={selectedDealId} open={!!selectedDealId} onOpenChange={o => !o && setSelectedDealId(null)} />
       </CardContent>
     </Card>
   );
@@ -115,6 +123,7 @@ function PropostasTab() {
   const { data: propostas = [], isLoading } = useProposals();
   const confirmarAceite = useConfirmarAceite();
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
 
   if (isLoading) return <LoadingState />;
 
@@ -144,7 +153,11 @@ function PropostasTab() {
             <TableBody>
               {propostas.map(p => (
                 <TableRow key={p.id}>
-                  <TableCell className="font-medium">{p.contact_name || p.deal_name}</TableCell>
+                  <TableCell>
+                    <Button variant="link" className="p-0 h-auto font-medium" onClick={() => setSelectedDealId(p.deal_id)}>
+                      {p.contact_name || p.deal_name}
+                    </Button>
+                  </TableCell>
                   <TableCell>{formatCurrency(p.valor_credito)}</TableCell>
                   <TableCell>{p.prazo_meses} meses</TableCell>
                   <TableCell>
@@ -198,6 +211,8 @@ function PropostasTab() {
             proposalId={semSucessoTarget.id}
           />
         )}
+
+        <DealDetailsDrawer dealId={selectedDealId} open={!!selectedDealId} onOpenChange={o => !o && setSelectedDealId(null)} />
       </CardContent>
     </Card>
   );
@@ -207,6 +222,7 @@ function PropostasTab() {
 function SemSucessoTab() {
   const { data: deals = [], isLoading } = useSemSucesso();
   const retomar = useRetomarContato();
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
 
   if (isLoading) return <LoadingState />;
 
@@ -233,7 +249,11 @@ function SemSucessoTab() {
             <TableBody>
               {deals.map(d => (
                 <TableRow key={d.deal_id}>
-                  <TableCell className="font-medium">{d.contact_name || d.deal_name}</TableCell>
+                  <TableCell>
+                    <Button variant="link" className="p-0 h-auto font-medium" onClick={() => setSelectedDealId(d.deal_id)}>
+                      {d.contact_name || d.deal_name}
+                    </Button>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{d.contact_phone || '—'}</TableCell>
                   <TableCell><Badge variant="outline" className="text-xs">{d.origin_name}</Badge></TableCell>
                   <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
@@ -257,6 +277,8 @@ function SemSucessoTab() {
             </TableBody>
           </Table>
         )}
+
+        <DealDetailsDrawer dealId={selectedDealId} open={!!selectedDealId} onOpenChange={o => !o && setSelectedDealId(null)} />
       </CardContent>
     </Card>
   );
