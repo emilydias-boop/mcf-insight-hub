@@ -10,7 +10,8 @@ import {
   CalendarDays, 
   UserX, 
   Copy,
-  ShoppingCart
+  ShoppingCart,
+  ClipboardCheck
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { BUProvider } from '@/contexts/BUContext';
@@ -26,7 +27,7 @@ const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
   ],
   consorcio: [
     'visao-geral', 'contatos', 'negocios', 'atendimentos', 
-    'agenda', 'configuracoes'
+    'agenda', 'pos-reuniao', 'configuracoes'
   ],
   credito: [
     'visao-geral', 'contatos', 'negocios', 'atendimentos', 
@@ -88,6 +89,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     { key: 'deals-orfaos', to: `${basePath}/deals-orfaos`, label: 'Órfãos', icon: UserX },
     { key: 'contatos-duplicados', to: `${basePath}/contatos-duplicados`, label: 'Duplicados', icon: Copy },
     { key: 'auditoria-agendamentos', to: `${basePath}/auditoria-agendamentos`, label: 'Auditoria', icon: Shield },
+    { key: 'pos-reuniao', to: `${basePath}/pos-reuniao`, label: 'Pós-Reunião', icon: ClipboardCheck },
     { key: 'configuracoes', to: `${basePath}/configuracoes`, label: 'Configurações', icon: Settings },
   ];
   

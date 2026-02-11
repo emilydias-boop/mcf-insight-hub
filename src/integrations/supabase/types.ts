@@ -2178,6 +2178,86 @@ export type Database = {
         }
         Relationships: []
       }
+      consorcio_proposals: {
+        Row: {
+          aceite_date: string | null
+          consortium_card_id: string | null
+          created_at: string | null
+          created_by: string | null
+          deal_id: string | null
+          id: string
+          motivo_recusa: string | null
+          prazo_meses: number | null
+          proposal_date: string | null
+          proposal_details: string | null
+          status: string | null
+          tipo_produto: string | null
+          updated_at: string | null
+          valor_credito: number | null
+        }
+        Insert: {
+          aceite_date?: string | null
+          consortium_card_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          deal_id?: string | null
+          id?: string
+          motivo_recusa?: string | null
+          prazo_meses?: number | null
+          proposal_date?: string | null
+          proposal_details?: string | null
+          status?: string | null
+          tipo_produto?: string | null
+          updated_at?: string | null
+          valor_credito?: number | null
+        }
+        Update: {
+          aceite_date?: string | null
+          consortium_card_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          deal_id?: string | null
+          id?: string
+          motivo_recusa?: string | null
+          prazo_meses?: number | null
+          proposal_date?: string | null
+          proposal_details?: string | null
+          status?: string | null
+          tipo_produto?: string | null
+          updated_at?: string | null
+          valor_credito?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_proposals_consortium_card_id_fkey"
+            columns: ["consortium_card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_proposals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_proposals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "consorcio_proposals_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_tipo_produto_options: {
         Row: {
           color: string | null
