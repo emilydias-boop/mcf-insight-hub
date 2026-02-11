@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -64,9 +64,11 @@ function RealizadasTab() {
     return names.sort();
   }, [realizadas]);
 
-  const filtered = useMemo(() => {
-    // Reset page when filters change
+  useEffect(() => {
     setCurrentPage(1);
+  }, [searchTerm, pipelineFilter, closerFilter, dateFrom, dateTo]);
+
+  const filtered = useMemo(() => {
     return realizadas.filter(r => {
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
