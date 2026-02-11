@@ -1,49 +1,33 @@
 
 
-# Corrigir employees sem profile_id e auto-vincular SDR
+# Corrigir campo "SDR" na Jornada do Lead
 
 ## Problema
-6 colaboradores ativos no RH possuem usuarios no sistema (profiles), mas o campo `profile_id` na tabela `employees` esta vazio. Sem esse vinculo, o trigger automatico nao dispara e o SDR nao e vinculado.
+O campo "SDR" na Jornada do Lead mostra o dono atual do deal (`deal.owner_id`), que apos a transferencia para o Closer passa a ser o proprio Closer. No exemplo, mostra "Thaynar Dos Santos Tavares" quando deveria mostrar "Leticia Nunes dos Santos" (quem agendou a R1).
 
 ## Solucao
+Alterar o hook `useLeadJourney.ts` para derivar o SDR a partir do `booked_by` da reuniao R1, em vez do `deal.owner_id`.
 
-### 1. Correcao imediata dos dados
-Atualizar o `profile_id` dos 6 employees com base no email do profile. Isso vai disparar o trigger `trg_auto_link_employee_sdr` que ja existe e automaticamente vincular ou criar os registros na tabela `sdr`.
+A logica fica:
+1. Primeiro, buscar as reunioes (R1 e R2) como ja faz hoje
+2. Se existir uma R1 com `booked_by`, usar esse usuario como SDR
+3. Fallback: se nao houver R1 ou `booked_by`, manter o `deal.owner_id` como fonte
 
-Mapeamento:
+## Secao tecnica
+
+### Arquivo: `src/hooks/useLeadJourney.ts`
+
+**Mudanca principal**: Reordenar a logica para processar as reunioes primeiro, e depois derivar o SDR.
+
+1. Mover o bloco de busca do SDR (linhas 44-83) para **depois** do processamento das reunioes (apos linha 200)
+2. Substituir a logica do SDR:
+   - Se `r1Meeting.bookedBy` existir, usar como SDR (nome e email)
+   - Senao, fallback para `deal.owner_id` (comportamento atual)
+
 ```text
-Evellyn Vieira dos Santos     -> profile 5ac53d91 (evellyn.santos@...)
-Robert Roger Santos Gusmao    -> profile f12d079b (robert.gusmao@...)
-Juliana de Oliveira Cavalheiro -> profile 5646fafc (juliana.oliveira@...)
-Mari Dias                     -> profile ed0ce5b6 (mari.dias@...)
-Matheus William Alves Elpidio -> profile d27c71c8 (matheus.alves@...)
-Stephany Martins Vieira Soares-> profile fe247e45 (stephany.soares@...)
+Antes:  deal.owner_id -> profiles -> SDR (incorreto apos transferencia)
+Depois: R1.booked_by -> profiles -> SDR (sempre quem agendou)
+        Fallback: deal.owner_id (se nao houver R1)
 ```
 
-### 2. Trigger adicional para auto-preencher profile_id
-Criar um segundo trigger na tabela `employees` que, ao inserir um novo colaborador, busca automaticamente um profile com email correspondente e preenche o `profile_id`. Assim, o fluxo completo fica:
-
-```text
-Cadastro no RH (insert employee)
-  -> Trigger 1: busca profile por email -> preenche profile_id
-    -> Trigger 2 (ja existe): detecta profile_id -> vincula/cria SDR
-```
-
-Tambem criar um trigger na tabela `profiles` que, ao criar um novo profile, busca employees sem profile_id com email correspondente e faz o vinculo automatico. Isso cobre o cenario inverso (usuario criado antes do cadastro no RH).
-
-### Secao tecnica
-
-**Migration SQL**:
-
-1. Update dos 6 employees com profile_id correto (dispara trigger existente)
-
-2. Funcao `auto_match_employee_profile()`: trigger BEFORE INSERT on employees
-   - Busca na tabela profiles por email correspondente ao campo employees.email (derivado do nome ou do cargo)
-   - Na verdade, como employees nao tem campo email, buscar pelo nome (`full_name` no profile vs `nome_completo` no employee) usando ILIKE
-
-3. Funcao `auto_match_profile_to_employee()`: trigger AFTER INSERT on profiles
-   - Busca employees sem profile_id com nome correspondente
-   - Atualiza profile_id, o que dispara o trigger de SDR
-
-**Nenhuma alteracao no frontend** - tudo resolvido via banco de dados.
-
+Nenhum outro arquivo precisa ser alterado - o componente `LeadJourneyCard.tsx` ja exibe `journey.sdr.name` e `journey.sdr.email` corretamente.
