@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Package, ShoppingBag, Tv } from 'lucide-react';
+import { MapPin, Package, ShoppingBag, Tv, DollarSign } from 'lucide-react';
 import { useA010Journey } from '@/hooks/useA010Journey';
 
 interface SdrCompactHeaderProps {
@@ -13,6 +13,8 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
   const customFields = deal?.custom_fields as Record<string, any> | null;
   const originName = deal?.crm_origins?.name || customFields?.origem || 'Não informada';
   const productName = deal?.product_name || customFields?.produto || customFields?.product_name || null;
+  const estado = customFields?.estado || null;
+  const faixaRenda = customFields?.faixa_de_renda || null;
   
   // Detect sales channel based on actual purchase data
   const isA010 = a010Data?.hasA010 === true;
@@ -76,6 +78,20 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
           <Badge variant="outline" className="text-xs bg-background/50">
             <Package className="h-3 w-3 mr-1" />
             {productName}
+          </Badge>
+        )}
+        
+        {estado && (
+          <Badge variant="outline" className="text-xs bg-background/50">
+            <MapPin className="h-3 w-3 mr-1" />
+            {estado}
+          </Badge>
+        )}
+        
+        {faixaRenda && (
+          <Badge variant="outline" className="text-xs bg-background/50">
+            <DollarSign className="h-3 w-3 mr-1" />
+            {faixaRenda}
           </Badge>
         )}
       </div>

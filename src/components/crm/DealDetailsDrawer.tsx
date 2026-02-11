@@ -18,6 +18,7 @@ import { LeadJourneyCard } from './LeadJourneyCard';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { QualificationSummaryCard } from './qualification/QualificationSummaryCard';
 import { LossReasonCard } from './LossReasonCard';
+import { CrossPipelineHistory } from './CrossPipelineHistory';
 import { Phone, History, StickyNote, CheckSquare, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -133,6 +134,9 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               
               {/* ===== 4. JORNADA DO LEAD (SDR, R1, R2) ===== */}
               <LeadJourneyCard dealId={dealId} dealCreatedAt={deal.created_at} />
+              
+              {/* ===== HISTÓRICO CROSS-PIPELINE ===== */}
+              <CrossPipelineHistory contactId={deal.contact_id} currentDealId={deal.id} />
               
               {/* ===== MOTIVO DE PERDA (apenas para stages de perda) ===== */}
               {stageInfo.isLostStage && (
