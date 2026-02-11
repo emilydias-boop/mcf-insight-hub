@@ -1,36 +1,40 @@
 
-# Adicionar Data de Criacao e Ultima Movimentacao na Tabela do Limbo
+# Usar Datas da Planilha (created_at e lost_at) na Tabela do Limbo
 
-## O que sera feito
+## O que muda
 
-Adicionar duas novas colunas na tabela de resultados do Leads em Limbo:
-1. **Criado em** - data de criacao do deal no sistema (`crm_deals.created_at`)
-2. **Ult. Mov.** - data da ultima atualizacao/movimentacao do deal (`crm_deals.updated_at`)
+As colunas "Criado em" e "Ult. Mov." devem exibir dados vindos da planilha importada (campos `created_at` e `lost_at`), nao do banco de dados local.
 
 ## Implementacao
 
-### 1. Buscar os dados (src/hooks/useLimboLeads.ts)
+### 1. Adicionar novas colunas ao mapeamento (src/pages/crm/LeadsLimbo.tsx)
 
-A query de `useInsideSalesDeals` ja busca `created_at`. Sera adicionado tambem `updated_at` na query do Supabase.
+Expandir `COLUMN_KEYS` para incluir `created_at` e `lost_at`:
 
-O tipo `LimboRow` recebera dois novos campos opcionais:
-- `localCreatedAt?: string`
-- `localUpdatedAt?: string`
+```
+COLUMN_KEYS = ['name', 'email', 'phone', 'stage', 'value', 'owner', 'created_at', 'lost_at']
+```
 
-A funcao `compareExcelWithLocal` passara esses campos do deal local para o LimboRow quando houver match.
+Adicionar labels e hints de auto-map:
+- `created_at`: hints `['created_at', 'criado', 'data_criacao', 'data criação']`
+- `lost_at`: hints `['lost_at', 'perdido', 'ultima_mov', 'última movimentação', 'last_move']`
 
-### 2. Exibir na tabela (src/pages/crm/LeadsLimbo.tsx)
+### 2. Passar os novos campos na comparacao (src/pages/crm/LeadsLimbo.tsx)
 
-Adicionar duas colunas novas entre "Tags" e "Status":
-- **Criado em** - formatado como `dd/MM/yy`
-- **Ult. Mov.** - formatado como `dd/MM/yy`
+No `runComparison`, extrair `created_at` e `lost_at` do `rawData` e passa-los para `excelRows`.
 
-Ambas exibirao um tracinho ("--") caso nao haja dados (leads nao encontrados).
+### 3. Adicionar campos no LimboRow (src/hooks/useLimboLeads.ts)
 
-### 3. Persistencia
+Adicionar `excelCreatedAt` e `excelLostAt` ao tipo `LimboRow` e ao input de `compareExcelWithLocal`.
 
-Os novos campos `localCreatedAt` e `localUpdatedAt` serao incluidos automaticamente no sessionStorage junto com o restante do LimboRow, sem necessidade de alterar a logica de persistencia.
+### 4. Exibir na tabela (src/pages/crm/LeadsLimbo.tsx)
+
+As colunas "Criado em" e "Ult. Mov." passam a usar `row.excelCreatedAt` e `row.excelLostAt` em vez dos campos locais. A formatacao tentara parsear a data e exibir como `dd/MM/yy`.
+
+### 5. Remover campos locais desnecessarios
+
+Remover `localCreatedAt` e `localUpdatedAt` do LimboRow e da query, ja que nao serao mais usados para exibicao (podem ser mantidos se houver outro uso, mas no contexto atual nao ha).
 
 ## Arquivos modificados
-- `src/hooks/useLimboLeads.ts` - Adicionar `updated_at` na query, campos no LimboRow e no compareExcelWithLocal
-- `src/pages/crm/LeadsLimbo.tsx` - Adicionar duas colunas na tabela com formatacao de data
+- `src/pages/crm/LeadsLimbo.tsx` - Expandir ColumnKeys, auto-map, extrair dados no runComparison, atualizar colunas da tabela
+- `src/hooks/useLimboLeads.ts` - Adicionar `excelCreatedAt` e `excelLostAt` ao LimboRow e ao compareExcelWithLocal
