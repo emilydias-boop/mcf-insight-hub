@@ -1,88 +1,49 @@
 
 
-# Auto-vincular employees com tabela SDR por email
+# Corrigir employees sem profile_id e auto-vincular SDR
 
-## Problema atual
-Quando um colaborador e cadastrado no RH (employees) e tem um usuario do sistema (profile), o vinculo com a tabela `sdr` (necessario para metas, fechamento, dashboard) precisa ser feito manualmente. Isso causa colaboradores "fantasmas" sem metas configuradas.
+## Problema
+6 colaboradores ativos no RH possuem usuarios no sistema (profiles), mas o campo `profile_id` na tabela `employees` esta vazio. Sem esse vinculo, o trigger automatico nao dispara e o SDR nao e vinculado.
 
-## Solucao: Trigger automatico no banco de dados
+## Solucao
 
-Criar um trigger na tabela `employees` que, ao detectar um `profile_id` preenchido (novo insert ou update), automaticamente:
+### 1. Correcao imediata dos dados
+Atualizar o `profile_id` dos 6 employees com base no email do profile. Isso vai disparar o trigger `trg_auto_link_employee_sdr` que ja existe e automaticamente vincular ou criar os registros na tabela `sdr`.
 
-1. Busca o email do profile na tabela `profiles`
-2. Procura um registro existente na tabela `sdr` com o mesmo email
-3. Se encontrar: atualiza `employees.sdr_id` com o ID encontrado
-4. Se nao encontrar: cria um novo registro na `sdr` com:
-   - `name`: nome do employee
-   - `email`: email do profile
-   - `squad`: derivado do departamento (mapeamento interno)
-   - `role_type`: derivado do cargo_catalogo.role_sistema (se disponivel) ou 'sdr' como padrao
-   - `active`: true
-   - `meta_diaria`: 7 (padrao)
-   - `user_id`: o profile_id do employee
-
-Isso elimina qualquer passo manual: basta cadastrar o colaborador no RH e vincular ao usuario do sistema.
-
-## Tambem atualizar o edge function `create-user`
-
-O edge function `create-user` ja cria employee e profile, mas nao cria o registro `sdr`. Adicionar essa logica apos a criacao do employee, usando os mesmos criterios do trigger.
-
-## Correcao imediata dos dados existentes
-
-Executar uma query de correcao para vincular os employees que ja possuem profile mas estao sem `sdr_id`:
-- Alexsandro, Claudia e Thobson: ja possuem registros na `sdr` com emails correspondentes, so precisam do `sdr_id` atualizado
-- Mateus Macedo e outros com profile mas sem `sdr`: criar registros automaticamente
-
-## Secao tecnica
-
-### 1. Migration SQL - Trigger `auto_link_sdr_on_profile`
-
+Mapeamento:
 ```text
-Funcao: auto_link_employee_sdr()
-Trigger: BEFORE INSERT OR UPDATE OF profile_id ON employees
-
-Logica:
-  IF NEW.profile_id IS NOT NULL AND (OLD.profile_id IS NULL OR NEW.profile_id != OLD.profile_id) THEN
-    1. Buscar email do profile
-    2. Buscar sdr existente por email
-    3. Se encontrar -> NEW.sdr_id = sdr.id
-    4. Se nao encontrar -> INSERT na sdr, NEW.sdr_id = novo ID
-    5. Mapear departamento para squad:
-       'BU - Incorporador 50K' -> 'incorporador'
-       'BU - Consorcio' -> 'consorcio'
-       'BU - Credito' -> 'credito'
-       'BU - Leilao' -> 'leilao'
-    6. Buscar role_sistema do cargo_catalogo se disponivel
-  END IF
+Evellyn Vieira dos Santos     -> profile 5ac53d91 (evellyn.santos@...)
+Robert Roger Santos Gusmao    -> profile f12d079b (robert.gusmao@...)
+Juliana de Oliveira Cavalheiro -> profile 5646fafc (juliana.oliveira@...)
+Mari Dias                     -> profile ed0ce5b6 (mari.dias@...)
+Matheus William Alves Elpidio -> profile d27c71c8 (matheus.alves@...)
+Stephany Martins Vieira Soares-> profile fe247e45 (stephany.soares@...)
 ```
 
-### 2. Migration SQL - Correcao dos dados existentes
+### 2. Trigger adicional para auto-preencher profile_id
+Criar um segundo trigger na tabela `employees` que, ao inserir um novo colaborador, busca automaticamente um profile com email correspondente e preenche o `profile_id`. Assim, o fluxo completo fica:
 
 ```text
-UPDATE employees e
-SET sdr_id = s.id
-FROM profiles p
-JOIN sdr s ON LOWER(s.email) = LOWER(p.email)
-WHERE e.profile_id = p.id
-  AND e.sdr_id IS NULL
-  AND e.status = 'ativo'
+Cadastro no RH (insert employee)
+  -> Trigger 1: busca profile por email -> preenche profile_id
+    -> Trigger 2 (ja existe): detecta profile_id -> vincula/cria SDR
 ```
 
-Para employees com profile mas sem registro na `sdr`, criar os registros e vincular.
+Tambem criar um trigger na tabela `profiles` que, ao criar um novo profile, busca employees sem profile_id com email correspondente e faz o vinculo automatico. Isso cobre o cenario inverso (usuario criado antes do cadastro no RH).
 
-### 3. Edge function `create-user` - Adicionar criacao do SDR
+### Secao tecnica
 
-Apos criar o employee (linha ~172), adicionar logica para criar registro na `sdr`:
+**Migration SQL**:
 
-```text
-- Mapear squad do departamento do cargo
-- Determinar role_type do cargo.role_sistema
-- Inserir na sdr com name, email, squad, role_type, active, meta_diaria, user_id
-- Atualizar employees.sdr_id com o novo ID
-```
+1. Update dos 6 employees com profile_id correto (dispara trigger existente)
 
-### Arquivos afetados
-- 1 nova migration SQL (trigger + correcao de dados)
-- `supabase/functions/create-user/index.ts` (adicionar criacao do SDR)
+2. Funcao `auto_match_employee_profile()`: trigger BEFORE INSERT on employees
+   - Busca na tabela profiles por email correspondente ao campo employees.email (derivado do nome ou do cargo)
+   - Na verdade, como employees nao tem campo email, buscar pelo nome (`full_name` no profile vs `nome_completo` no employee) usando ILIKE
 
-Nenhuma alteracao no frontend necessaria - o vinculo sera automatico.
+3. Funcao `auto_match_profile_to_employee()`: trigger AFTER INSERT on profiles
+   - Busca employees sem profile_id com nome correspondente
+   - Atualiza profile_id, o que dispara o trigger de SDR
+
+**Nenhuma alteracao no frontend** - tudo resolvido via banco de dados.
+
