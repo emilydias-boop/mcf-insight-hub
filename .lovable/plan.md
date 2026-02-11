@@ -1,37 +1,55 @@
 
+# Corrigir SDR e Closer R1 - Causa raiz encontrada
 
-# Corrigir SDR e Closer R1 no drawer da Agenda R2
+## Problema real
+A query de R1 meetings no `useR2MeetingsExtended.ts` busca **todos** os R1 meetings com `.limit(500)`, mas existem **610+ R1 meetings** no banco. Isso significa que muitos R1 meetings relevantes ficam de fora, resultando em:
+- SDR mostrando "—" ou caindo no fallback do `deal.owner_id` (que e o Closer apos transferencia)
+- Closer R1 mostrando "—"
 
-## Problema
-No "Historico do Funil" do drawer R2:
-1. **SDR** mostra o dono atual do deal (`deal.owner_id`) que apos transferencia vira o Closer
-2. **Closer R1** as vezes aparece como "—" quando deveria mostrar nome e data
+Exemplo concreto: Henrique mota Welter tem R1 com `booked_by = c1ede6ed` (Leticia Nunes), mas essa R1 nao esta nos 500 resultados.
 
 ## Solucao
-Alterar `src/hooks/useR2MeetingsExtended.ts` para derivar o SDR a partir do `booked_by` da R1 (quem agendou), em vez do `deal.owner_id`.
+Alterar a query de R1 para buscar **diretamente pela tabela `meeting_slot_attendees`** filtrada pelos `dealIds` conhecidos, em vez de buscar todos os R1 meetings com limite arbitrario.
 
 ## Secao tecnica
 
 ### Arquivo: `src/hooks/useR2MeetingsExtended.ts`
 
-**1. Adicionar `booked_by` na query de R1** (linha 138):
-- Mudar `attendees:meeting_slot_attendees(deal_id, notes)` para `attendees:meeting_slot_attendees(deal_id, notes, booked_by)`
+**Substituir a query de R1** (linhas 132-164):
 
-**2. Criar mapa `r1SdrMap`** (apos linha 159):
-- Mapear `deal_id -> booked_by` (UUID) do R1
-- Dentro do forEach dos r1Meetings, salvar `att.booked_by` no mapa
-
-**3. Coletar booked_by UUIDs do R1 para buscar profiles** (linha 163):
-- Adicionar os UUIDs do `r1SdrMap` ao array `bookedByIds` para que sejam buscados no `profilesById`
-
-**4. Substituir logica do SDR** (linhas 219-222):
-- Em vez de usar `deal.owner_id`, usar `r1SdrMap[dealId]` com lookup no `profilesById`
-- Fallback para `deal.owner_id` se nao houver R1 booked_by
-
+Em vez de:
 ```text
-Antes:  deal.owner_id -> profilesByEmail -> SDR (incorreto)
-Depois: R1.attendee.booked_by -> profilesById -> SDR (correto)
-        Fallback: deal.owner_id
+supabase.from('meeting_slots')
+  .select(...)
+  .eq('meeting_type', 'r1')
+  .limit(500)
 ```
 
-Nenhuma alteracao no componente `R2MeetingDetailDrawer.tsx` - ele ja exibe `meeting.sdr.name` e `meeting.r1_closer` corretamente.
+Usar:
+```text
+supabase.from('meeting_slot_attendees')
+  .select(`
+    deal_id,
+    notes,
+    booked_by,
+    meeting_slot:meeting_slots!inner(
+      id,
+      scheduled_at,
+      meeting_type,
+      closer:closers!meeting_slots_closer_id_fkey(id, name)
+    )
+  `)
+  .in('deal_id', dealIds)
+  .eq('meeting_slot.meeting_type', 'r1')
+  .order('created_at', { ascending: false })
+```
+
+Isso garante:
+1. Busca apenas os R1 meetings dos deals relevantes (sem limite arbitrario)
+2. Obtem `booked_by` do attendee (SDR correto)
+3. Obtem `closer` e `scheduled_at` do meeting_slot (Closer R1 correto)
+4. Funciona independente de quantos R1 meetings existem no banco
+
+**Adaptar o processamento** dos resultados para o novo formato de resposta (attendee-centric em vez de meeting-centric).
+
+Nenhum outro arquivo precisa ser alterado.
