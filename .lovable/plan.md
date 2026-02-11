@@ -1,100 +1,37 @@
 
 
-# Fix: "new row violates row-level security policy" on Strategic Documents
+# Corrigir calculo de No-Show para SDRs
 
-## Root Cause
+## Mudanca
 
-The RLS policies created for `bu_strategic_documents` table and `bu-strategic-documents` storage bucket check roles via `auth.users.raw_app_meta_data -> 'roles'`, but this project stores roles in the `user_roles` table. The `raw_app_meta_data` field is empty for all users, so every policy check fails.
+Alterar a formula de No-Show de `Agendamentos - R1 Realizada` para `R1 Agendada - R1 Realizada`.
 
-## Solution
+**Esclarecimento importante**: `contract_paid` ja esta incluido em `R1 Realizada` (junto com `completed` e `refunded`), entao a formula `R1 Agendada - (Realizadas + Contrato Pago)` equivale a `R1 Agendada - R1 Realizada` no sistema atual.
 
-Replace all RLS policies on both the table and storage bucket to use the existing `public.has_role(auth.uid(), role)` security definer function, which correctly queries the `user_roles` table.
+## Onde alterar
 
-## Database Migration
+### 1. RPC `get_sdr_metrics_from_agenda` (banco de dados)
 
-### 1. Drop and recreate policies on `bu_strategic_documents`
-
-- **INSERT policy**: Use `has_role()` to check for admin, manager, or coordenador
-- **SELECT policy**: Admin/manager see all; coordenador sees only their BU (using `profiles.squad`)
-- **DELETE policy**: Owner can delete their own, admin/manager can delete any
-
-### 2. Drop and recreate storage policies on `bu-strategic-documents` bucket
-
-- **INSERT (upload)**: `has_role()` check for admin/manager/coordenador
-- **SELECT (view)**: `has_role()` check for admin/manager/coordenador
-- **DELETE**: `has_role()` check for admin/manager + owner check
-
-## Technical Details
-
-SQL migration will:
-
+Linha 74 da funcao atual:
 ```text
--- Drop existing broken policies
-DROP POLICY "coordenador_plus_insert_strategic_docs" ON public.bu_strategic_documents;
-DROP POLICY "coordenador_plus_select_strategic_docs" ON public.bu_strategic_documents;
-DROP POLICY "owner_or_admin_delete_strategic_docs" ON public.bu_strategic_documents;
+-- ATUAL:
+'no_shows', GREATEST(0, COALESCE(agendamentos, 0) - COALESCE(r1_realizada, 0))
 
--- Recreate using has_role()
-CREATE POLICY "insert_strategic_docs" ON public.bu_strategic_documents
-FOR INSERT TO authenticated
-WITH CHECK (
-  has_role(auth.uid(), 'admin') OR
-  has_role(auth.uid(), 'manager') OR
-  has_role(auth.uid(), 'coordenador')
-);
-
-CREATE POLICY "select_strategic_docs" ON public.bu_strategic_documents
-FOR SELECT TO authenticated
-USING (
-  has_role(auth.uid(), 'admin') OR
-  has_role(auth.uid(), 'manager') OR
-  (has_role(auth.uid(), 'coordenador') AND bu = ANY(
-    SELECT unnest(squad) FROM profiles WHERE id = auth.uid()
-  ))
-);
-
-CREATE POLICY "delete_strategic_docs" ON public.bu_strategic_documents
-FOR DELETE TO authenticated
-USING (
-  uploaded_by = auth.uid() OR
-  has_role(auth.uid(), 'admin') OR
-  has_role(auth.uid(), 'manager')
-);
-
--- Same pattern for storage.objects policies on bucket 'bu-strategic-documents'
-DROP POLICY "coordenador_plus_upload_strategic_docs" ON storage.objects;
-DROP POLICY "coordenador_plus_view_strategic_docs" ON storage.objects;
-DROP POLICY "owner_or_admin_delete_strategic_docs_storage" ON storage.objects;
-
-CREATE POLICY "upload_strategic_docs" ON storage.objects
-FOR INSERT TO authenticated
-WITH CHECK (
-  bucket_id = 'bu-strategic-documents' AND (
-    has_role(auth.uid(), 'admin') OR
-    has_role(auth.uid(), 'manager') OR
-    has_role(auth.uid(), 'coordenador')
-  )
-);
-
-CREATE POLICY "view_strategic_docs" ON storage.objects
-FOR SELECT TO authenticated
-USING (
-  bucket_id = 'bu-strategic-documents' AND (
-    has_role(auth.uid(), 'admin') OR
-    has_role(auth.uid(), 'manager') OR
-    has_role(auth.uid(), 'coordenador')
-  )
-);
-
-CREATE POLICY "delete_strategic_docs_storage" ON storage.objects
-FOR DELETE TO authenticated
-USING (
-  bucket_id = 'bu-strategic-documents' AND (
-    has_role(auth.uid(), 'admin') OR
-    has_role(auth.uid(), 'manager')
-  )
-);
+-- NOVO:
+'no_shows', GREATEST(0, COALESCE(r1_agendada, 0) - COALESCE(r1_realizada, 0))
 ```
 
-No code changes needed -- only the database policies need to be fixed.
+### 2. Nenhuma alteracao no frontend
+
+O frontend (`SdrSummaryTable`, `useTeamMeetingsData`, `TeamGoalsPanel`) ja consome o campo `no_shows` direto da RPC. Ao corrigir a fonte, todos os paineis atualizam automaticamente.
+
+## Impacto
+
+- **Painel SDR** (`/crm/reunioes-equipe`): coluna No-show e porcentagem serao recalculadas
+- **KPI cards**: Taxa de No-Show sera baseada em reunioes agendadas para o periodo
+- **Fechamento SDR**: metricas vindas da mesma RPC serao ajustadas
+- **Pagina individual do SDR**: mesma correcao aplicada
+
+## Complexidade
+Alteracao de 1 linha em 1 migracao SQL. Zero alteracoes no codigo frontend.
 
