@@ -9,13 +9,14 @@ import { ptBR } from 'date-fns/locale';
 interface CrossPipelineHistoryProps {
   contactId: string | undefined;
   currentDealId: string;
+  dealName?: string;
 }
 
-export const CrossPipelineHistory = ({ contactId, currentDealId }: CrossPipelineHistoryProps) => {
+export const CrossPipelineHistory = ({ contactId, currentDealId, dealName }: CrossPipelineHistoryProps) => {
   const [isOpen, setIsOpen] = useState(true);
-  const { data: deals, isLoading } = useContactDeals(contactId, currentDealId);
+  const { data: deals, isLoading } = useContactDeals(contactId, currentDealId, dealName);
 
-  if (!contactId || isLoading || !deals || deals.length === 0) return null;
+  if (isLoading || !deals || deals.length === 0) return null;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
