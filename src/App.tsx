@@ -61,6 +61,7 @@ import AuditoriaAgendamentos from "./pages/crm/AuditoriaAgendamentos";
 import Atendimentos from "./pages/crm/Atendimentos";
 import Agenda from "./pages/crm/Agenda";
 import DealsOrfaos from "./pages/crm/DealsOrfaos";
+import LeadsLimbo from "./pages/crm/LeadsLimbo";
 import ContatosDuplicados from "./pages/crm/ContatosDuplicados";
 import AgendaMetricas from "./pages/crm/AgendaMetricas";
 import AgendaR2 from "./pages/crm/AgendaR2";
@@ -210,6 +211,7 @@ const App = () => (
                 <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
                 <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
                 <Route path="deals-orfaos" element={<DealsOrfaos />} />
+                <Route path="leads-limbo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsLimbo /></RoleGuard>} />
                 <Route path="contatos-duplicados" element={<ContatosDuplicados />} />
                 <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
                 <Route path="pos-reuniao" element={<PosReuniao />} />
@@ -351,6 +353,7 @@ const App = () => (
                 <Route path="importar-negocios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ImportarNegocios /></RoleGuard>} />
                 <Route path="importar-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ImportarHistorico /></RoleGuard>} />
                 <Route path="deals-orfaos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DealsOrfaos /></RoleGuard>} />
+                <Route path="leads-limbo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsLimbo /></RoleGuard>} />
                 <Route path="contatos-duplicados" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ContatosDuplicados /></RoleGuard>} />
                 <Route path="auditoria-agendamentos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AuditoriaAgendamentos /></RoleGuard>} />
                 <Route path="webhooks" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Webhooks /></RoleGuard>} />
