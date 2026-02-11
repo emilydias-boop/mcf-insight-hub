@@ -47,8 +47,8 @@ const AUTO_MAP_HINTS: Record<ColumnKey, string[]> = {
   stage: ['estagio', 'estágio', 'stage', 'etapa', 'status', 'fase'],
   value: ['valor', 'value', 'amount', 'receita'],
   owner: ['dono', 'owner', 'responsavel', 'responsável', 'sdr', 'user'],
-  created_at: ['created_at', 'criado', 'data_criacao', 'data criação', 'data de criação'],
-  lost_at: ['lost_at', 'perdido', 'ultima_mov', 'última movimentação', 'last_move', 'ult mov'],
+  created_at: ['created_at', 'createdat', 'criado', 'data_criacao', 'data criação', 'data de criação', 'data_de_criacao', 'created', 'dt_criacao', 'criado_em', 'criado em', 'data criacao'],
+  lost_at: ['lost_at', 'lostat', 'perdido', 'ultima_mov', 'última movimentação', 'last_move', 'ult mov', 'ult_mov', 'lost', 'data_perda', 'ultima movimentacao', 'última mov', 'ultima_movimentacao', 'updated_at', 'updatedat', 'atualizado'],
 };
 
 function autoMapColumns(headers: string[]): Record<ColumnKey, string> {
@@ -57,7 +57,9 @@ function autoMapColumns(headers: string[]): Record<ColumnKey, string> {
 
   for (const key of COLUMN_KEYS) {
     const hints = AUTO_MAP_HINTS[key];
-    const idx = normalizedHeaders.findIndex(h => hints.some(hint => h.includes(hint)));
+    // Try exact match first, then includes
+    let idx = normalizedHeaders.findIndex(h => hints.some(hint => h === hint));
+    if (idx < 0) idx = normalizedHeaders.findIndex(h => hints.some(hint => h.includes(hint)));
     if (idx >= 0) mapping[key] = headers[idx];
   }
   return mapping;
@@ -264,8 +266,8 @@ export default function LeadsLimbo() {
       stage: String(row[columnMapping.stage] || ''),
       value: columnMapping.value ? parseFloat(String(row[columnMapping.value]).replace(/[^\d.,]/g, '').replace(',', '.')) || null : null,
       owner: String(row[columnMapping.owner] || ''),
-      created_at: columnMapping.created_at ? String(row[columnMapping.created_at] || '') : '',
-      lost_at: columnMapping.lost_at ? String(row[columnMapping.lost_at] || '') : '',
+      created_at: columnMapping.created_at && columnMapping.created_at !== '__none__' ? String(row[columnMapping.created_at] || '') : '',
+      lost_at: columnMapping.lost_at && columnMapping.lost_at !== '__none__' ? String(row[columnMapping.lost_at] || '') : '',
     }));
 
     const compared = compareExcelWithLocal(excelRows, localDeals);
