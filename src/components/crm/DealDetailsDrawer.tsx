@@ -94,7 +94,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
             <SdrCompactHeader deal={deal} contact={contact} />
             
             {/* ===== CONTEÚDO PRINCIPAL ===== */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
               
               {/* ===== ALERTA DE REEMBOLSO ===== */}
               {(deal.custom_fields as any)?.reembolso_solicitado && (
@@ -136,7 +136,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               <LeadJourneyCard dealId={dealId} dealCreatedAt={deal.created_at} />
               
               {/* ===== HISTÓRICO CROSS-PIPELINE ===== */}
-              <CrossPipelineHistory contactId={deal.contact_id} currentDealId={deal.id} />
+              <CrossPipelineHistory contactId={deal.contact_id} currentDealId={deal.id} dealName={deal.name} />
               
               {/* ===== MOTIVO DE PERDA (apenas para stages de perda) ===== */}
               {stageInfo.isLostStage && (
