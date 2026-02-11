@@ -43,6 +43,9 @@ export interface CompletedMeeting {
   stage_id: string;
   stage_name: string;
   updated_at: string;
+  meeting_date: string;
+  region: string;
+  renda: string;
 }
 
 export interface Proposal {
@@ -93,6 +96,7 @@ export function useRealizadas() {
           stage_id,
           updated_at,
           owner_id,
+          custom_fields,
           crm_contacts (name, phone, email),
           crm_stages (stage_name),
           crm_origins (name)
@@ -114,21 +118,56 @@ export function useRealizadas() {
         proposalDealIds = (proposals || []).map(p => p.deal_id).filter(Boolean) as string[];
       }
 
-      return (data || [])
-        .filter(d => !proposalDealIds.includes(d.id))
-        .map(d => ({
+      const filteredDeals = (data || []).filter(d => !proposalDealIds.includes(d.id));
+
+      // Fetch meeting dates for these deals
+      const filteredDealIds = filteredDeals.map(d => d.id);
+      let meetingByDeal: Record<string, string> = {};
+      if (filteredDealIds.length > 0) {
+        const { data: attendees } = await supabase
+          .from('meeting_slot_attendees')
+          .select('deal_id, meeting_slot_id, meeting_slots (scheduled_at)')
+          .in('deal_id', filteredDealIds);
+        (attendees || []).forEach(a => {
+          if (a.deal_id) {
+            const scheduledAt = (a.meeting_slots as any)?.scheduled_at;
+            if (scheduledAt) meetingByDeal[a.deal_id] = scheduledAt;
+          }
+        });
+      }
+
+      // Resolve closer names from owner_id (email)
+      const ownerEmails = [...new Set(filteredDeals.map(d => d.owner_id).filter(Boolean) as string[])];
+      let closerByEmail: Record<string, string> = {};
+      if (ownerEmails.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('email, full_name')
+          .in('email', ownerEmails);
+        (profiles || []).forEach(p => {
+          if (p.email && p.full_name) closerByEmail[p.email] = p.full_name;
+        });
+      }
+
+      return filteredDeals.map(d => {
+        const cf = (d.custom_fields as any) || {};
+        return {
           deal_id: d.id,
           deal_name: d.name || '',
           contact_name: (d.crm_contacts as any)?.name || '',
           contact_phone: (d.crm_contacts as any)?.phone || '',
           contact_email: (d.crm_contacts as any)?.email || '',
-          closer_name: d.owner_id || '',
+          closer_name: (d.owner_id && closerByEmail[d.owner_id]) || d.owner_id || '',
           origin_name: (d.crm_origins as any)?.name || '',
           origin_id: d.origin_id || '',
           stage_id: d.stage_id || '',
           stage_name: (d.crm_stages as any)?.stage_name || '',
           updated_at: d.updated_at || '',
-        })) as CompletedMeeting[];
+          meeting_date: meetingByDeal[d.id] || '',
+          region: cf.estado || '',
+          renda: cf.faixa_de_renda || '',
+        };
+      }) as CompletedMeeting[];
     },
   });
 }

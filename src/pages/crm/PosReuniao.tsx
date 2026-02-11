@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2, Search, CalendarIcon } from 'lucide-react';
 import { ProposalModal } from '@/components/consorcio/ProposalModal';
 import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
@@ -15,6 +19,7 @@ import {
 } from '@/hooks/useConsorcioPostMeeting';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 export default function PosReuniao() {
   const [activeTab, setActiveTab] = useState('realizadas');
@@ -43,6 +48,42 @@ function RealizadasTab() {
   const [semSucessoTarget, setSemSucessoTarget] = useState<CompletedMeeting | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
 
+  // Filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [pipelineFilter, setPipelineFilter] = useState('all');
+  const [closerFilter, setCloserFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
+
+  const closerOptions = useMemo(() => {
+    const names = [...new Set(realizadas.map(r => r.closer_name).filter(Boolean))];
+    return names.sort();
+  }, [realizadas]);
+
+  const filtered = useMemo(() => {
+    return realizadas.filter(r => {
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const matchName = (r.contact_name || r.deal_name || '').toLowerCase().includes(term);
+        const matchPhone = (r.contact_phone || '').toLowerCase().includes(term);
+        if (!matchName && !matchPhone) return false;
+      }
+      if (pipelineFilter !== 'all' && r.origin_name !== pipelineFilter) return false;
+      if (closerFilter !== 'all' && r.closer_name !== closerFilter) return false;
+      if (dateFrom || dateTo) {
+        const mDate = r.meeting_date ? new Date(r.meeting_date) : null;
+        if (!mDate) return false;
+        if (dateFrom && mDate < dateFrom) return false;
+        if (dateTo) {
+          const end = new Date(dateTo);
+          end.setHours(23, 59, 59, 999);
+          if (mDate > end) return false;
+        }
+      }
+      return true;
+    });
+  }, [realizadas, searchTerm, pipelineFilter, closerFilter, dateFrom, dateTo]);
+
   if (isLoading) return <LoadingState />;
 
   return (
@@ -50,43 +91,117 @@ function RealizadasTab() {
       <CardHeader>
         <CardTitle className="text-base">Reuniões Realizadas — Aguardando Ação</CardTitle>
       </CardHeader>
-      <CardContent>
-        {realizadas.length === 0 ? (
+      <CardContent className="space-y-4">
+        {/* Filters */}
+        <div className="flex flex-wrap gap-3">
+          <div className="relative w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar nome ou telefone..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Select value={pipelineFilter} onValueChange={setPipelineFilter}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Pipeline" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas Pipelines</SelectItem>
+              <SelectItem value="Viver de Aluguel">Viver de Aluguel</SelectItem>
+              <SelectItem value="Efeito Alavanca">Efeito Alavanca</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={closerFilter} onValueChange={setCloserFilter}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Closer" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Closers</SelectItem>
+              {closerOptions.map(c => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className={cn("w-[200px] justify-start text-left font-normal", !dateFrom && "text-muted-foreground")}>
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {dateFrom ? format(dateFrom, 'dd/MM/yyyy') : 'Data início'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus className="p-3 pointer-events-auto" />
+            </PopoverContent>
+          </Popover>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className={cn("w-[200px] justify-start text-left font-normal", !dateTo && "text-muted-foreground")}>
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {dateTo ? format(dateTo, 'dd/MM/yyyy') : 'Data fim'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={dateTo} onSelect={setDateTo} initialFocus className="p-3 pointer-events-auto" />
+            </PopoverContent>
+          </Popover>
+          {(searchTerm || pipelineFilter !== 'all' || closerFilter !== 'all' || dateFrom || dateTo) && (
+            <Button variant="ghost" size="sm" onClick={() => { setSearchTerm(''); setPipelineFilter('all'); setCloserFilter('all'); setDateFrom(undefined); setDateTo(undefined); }}>
+              Limpar filtros
+            </Button>
+          )}
+        </div>
+
+        {filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Nenhuma reunião realizada pendente de ação.</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Contato</TableHead>
-                <TableHead>Telefone</TableHead>
-                <TableHead>Pipeline</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {realizadas.map(r => (
-                <TableRow key={r.deal_id} className="cursor-pointer" onClick={() => setSelectedDealId(r.deal_id)}>
-                  <TableCell className="font-medium">
-                    {r.contact_name || r.deal_name}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{r.contact_phone || '—'}</TableCell>
-                  <TableCell><Badge variant="outline" className="text-xs">{r.origin_name}</Badge></TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {r.updated_at ? format(new Date(r.updated_at), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
-                  </TableCell>
-                  <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
-                    <Button size="sm" onClick={() => setProposalTarget(r)}>
-                      <Send className="h-3 w-3 mr-1" /> Proposta
-                    </Button>
-                    <Button size="sm" variant="destructive" onClick={() => setSemSucessoTarget(r)}>
-                      <XCircle className="h-3 w-3 mr-1" /> Sem Sucesso
-                    </Button>
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Contato</TableHead>
+                  <TableHead>Telefone</TableHead>
+                  <TableHead>Pipeline / Stage</TableHead>
+                  <TableHead>Data Reunião</TableHead>
+                  <TableHead>Região</TableHead>
+                  <TableHead>Renda</TableHead>
+                  <TableHead>Closer</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filtered.map(r => (
+                  <TableRow key={r.deal_id} className="cursor-pointer" onClick={() => setSelectedDealId(r.deal_id)}>
+                    <TableCell className="font-medium">
+                      {r.contact_name || r.deal_name}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{r.contact_phone || '—'}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        <Badge variant="outline" className="text-xs w-fit">{r.origin_name}</Badge>
+                        <span className="text-xs text-muted-foreground">{r.stage_name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                      {r.meeting_date
+                        ? format(new Date(r.meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                        : r.updated_at
+                          ? format(new Date(r.updated_at), 'dd/MM/yyyy', { locale: ptBR })
+                          : '—'}
+                    </TableCell>
+                    <TableCell className="text-sm">{r.region || '—'}</TableCell>
+                    <TableCell className="text-sm">{r.renda || '—'}</TableCell>
+                    <TableCell className="text-sm">{r.closer_name || '—'}</TableCell>
+                    <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
+                      <Button size="sm" onClick={() => setProposalTarget(r)}>
+                        <Send className="h-3 w-3 mr-1" /> Proposta
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => setSemSucessoTarget(r)}>
+                        <XCircle className="h-3 w-3 mr-1" /> Sem Sucesso
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
 
         {proposalTarget && (
