@@ -26,6 +26,7 @@ export function useInsideSalesDeals() {
             origin_id,
             clint_id,
             created_at,
+            updated_at,
             crm_contacts!crm_deals_contact_id_fkey (
               id,
               name,
@@ -101,6 +102,9 @@ export interface LimboRow {
   localContactName?: string;
   localContactEmail?: string;
   localContactPhone?: string;
+  // Datas
+  localCreatedAt?: string;
+  localUpdatedAt?: string;
   // Para atribuição
   assignedSdrEmail?: string;
   assignedCloserName?: string;
@@ -169,6 +173,8 @@ export function compareExcelWithLocal(
       localContactName: contact?.name || '',
       localContactEmail: contact?.email || '',
       localContactPhone: contact?.phone || '',
+      localCreatedAt: match.created_at || '',
+      localUpdatedAt: match.updated_at || '',
     };
   });
 }

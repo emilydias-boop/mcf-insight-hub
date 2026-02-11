@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Upload, FileSpreadsheet, Search, Users, UserCheck, UserX, Download, Inbox, Eye } from 'lucide-react';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -713,6 +714,8 @@ export default function LeadsLimbo() {
                   <TableHead>Email</TableHead>
                   <TableHead>Telefone</TableHead>
                   <TableHead>Tags</TableHead>
+                  <TableHead>Criado em</TableHead>
+                  <TableHead>Ult. Mov.</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Dono Atual</TableHead>
                   <TableHead className="w-10"></TableHead>
@@ -742,6 +745,12 @@ export default function LeadsLimbo() {
                       <TableCell>
                         <StageTag stage={row.excelStage || row.localStage || ''} />
                       </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {row.localCreatedAt ? format(new Date(row.localCreatedAt), 'dd/MM/yy') : '--'}
+                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {row.localUpdatedAt ? format(new Date(row.localUpdatedAt), 'dd/MM/yy') : '--'}
+                      </TableCell>
                       <TableCell>
                         {row.status === 'com_dono' && <Badge className="bg-emerald-500/20 text-emerald-700 hover:bg-emerald-500/30">Com Dono</Badge>}
                         {row.status === 'sem_dono' && <Badge className="bg-amber-500/20 text-amber-700 hover:bg-amber-500/30">Sem Dono</Badge>}
@@ -758,7 +767,7 @@ export default function LeadsLimbo() {
                 })}
                 {paged.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       Nenhum resultado encontrado
                     </TableCell>
                   </TableRow>
