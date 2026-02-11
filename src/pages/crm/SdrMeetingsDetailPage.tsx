@@ -15,7 +15,7 @@ import { SdrRankingBlock } from "@/components/sdr/SdrRankingBlock";
 import { SdrLeadsTable } from "@/components/sdr/SdrLeadsTable";
 import { SdrDealsTable } from "@/components/sdr/SdrDealsTable";
 import { MeetingDetailsDrawer } from "@/components/sdr/MeetingDetailsDrawer";
-import { GhostCasesBySdr } from "@/components/sdr/GhostCasesBySdr";
+
 import { useSdrDetailData } from "@/hooks/useSdrDetailData";
 import { useSdrDeals } from "@/hooks/useSdrDeals";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
@@ -148,12 +148,6 @@ export default function SdrMeetingsDetailPage() {
             metrics={sdrMetrics}
             teamAverages={teamAverages}
             isLoading={isLoading}
-          />
-
-          {/* Ghost Cases Section */}
-          <GhostCasesBySdr
-            sdrEmail={sdrEmail}
-            sdrName={sdrInfo?.name}
           />
 
           {/* Charts and Ranking */}

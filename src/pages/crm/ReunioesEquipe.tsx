@@ -25,7 +25,7 @@ import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
 import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTable";
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
-import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
+
 import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
@@ -191,8 +191,6 @@ export default function ReunioesEquipe() {
     endDate: weekEndDate,
   });
 
-  // Ghost appointments data
-  const { data: ghostCountBySdr } = useGhostCountBySdr();
 
   // Fetch all SDRs for meta_diaria
   const { data: allSdrsData } = useSdrsAll();
@@ -569,7 +567,7 @@ export default function ReunioesEquipe() {
             <SdrSummaryTable
               data={filteredBySDR}
               isLoading={isLoading}
-              ghostCountBySdr={ghostCountBySdr}
+              
               disableNavigation={isRestrictedRole}
               sdrMetaMap={sdrMetaMap}
               diasUteisNoPeriodo={diasUteisNoPeriodo}
