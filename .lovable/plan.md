@@ -1,56 +1,36 @@
 
+# Adicionar Data de Criacao e Ultima Movimentacao na Tabela do Limbo
 
-# Corrigir Atribuicao de Leads no Limbo: Incluir Mudanca de Stage
+## O que sera feito
 
-## Problema
-Atualmente, ao atribuir leads no Leads em Limbo, o sistema apenas atualiza o `owner_id` e `owner_profile_id`. Porem, os leads precisam tambem ser movidos para a stage correta (ex: "Novo Lead") para ficarem visiveis no Kanban do SDR que recebeu.
-
-## Solucao
-Alterar a mutation `useAssignLimboOwner` para tambem atualizar o `stage_id` do deal para "Novo Lead" da pipeline correspondente ao atribuir.
+Adicionar duas novas colunas na tabela de resultados do Leads em Limbo:
+1. **Criado em** - data de criacao do deal no sistema (`crm_deals.created_at`)
+2. **Ult. Mov.** - data da ultima atualizacao/movimentacao do deal (`crm_deals.updated_at`)
 
 ## Implementacao
 
-### Arquivo: `src/hooks/useLimboLeads.ts`
+### 1. Buscar os dados (src/hooks/useLimboLeads.ts)
 
-Modificar a funcao `useAssignLimboOwner` para:
+A query de `useInsideSalesDeals` ja busca `created_at`. Sera adicionado tambem `updated_at` na query do Supabase.
 
-1. Receber um parametro opcional `stageId` (stage de destino)
-2. Se nao fornecido, usar o stage "Novo Lead" da Pipeline Inside Sales como padrao (`cf4a369c-c4a6-4299-933d-5ae3dcc39d4b`)
-3. Incluir `stage_id` no update junto com `owner_id` e `owner_profile_id`
-4. Registrar atividade de `stage_change` alem da mudanca de owner
+O tipo `LimboRow` recebera dois novos campos opcionais:
+- `localCreatedAt?: string`
+- `localUpdatedAt?: string`
 
-```typescript
-// Mutation atualizada
-mutationFn: async ({ dealIds, ownerEmail, ownerProfileId, stageId }: {
-  dealIds: string[];
-  ownerEmail: string;
-  ownerProfileId: string;
-  stageId?: string;
-}) => {
-  const NOVO_LEAD_STAGE = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b';
-  const targetStage = stageId || NOVO_LEAD_STAGE;
-  const batchSize = 50;
+A funcao `compareExcelWithLocal` passara esses campos do deal local para o LimboRow quando houver match.
 
-  for (let i = 0; i < dealIds.length; i += batchSize) {
-    const batch = dealIds.slice(i, i + batchSize);
-    const { error } = await supabase
-      .from('crm_deals')
-      .update({
-        owner_id: ownerEmail,
-        owner_profile_id: ownerProfileId,
-        stage_id: targetStage,
-      })
-      .in('id', batch);
-    if (error) throw error;
-  }
-  return { count: dealIds.length };
-}
-```
+### 2. Exibir na tabela (src/pages/crm/LeadsLimbo.tsx)
 
-### Arquivo: `src/pages/crm/LeadsLimbo.tsx`
+Adicionar duas colunas novas entre "Tags" e "Status":
+- **Criado em** - formatado como `dd/MM/yy`
+- **Ult. Mov.** - formatado como `dd/MM/yy`
 
-Nenhuma alteracao necessaria na chamada, pois o `stageId` e opcional e o padrao ja sera "Novo Lead". Porem, sera adicionado um texto informativo no botao/barra indicando que os leads serao movidos para "Novo Lead".
+Ambas exibirao um tracinho ("--") caso nao haja dados (leads nao encontrados).
 
-## Resumo das mudancas
-- **`src/hooks/useLimboLeads.ts`**: Adicionar `stage_id` ao update da mutation, com valor padrao "Novo Lead" da Pipeline Inside Sales
-- **`src/pages/crm/LeadsLimbo.tsx`**: Adicionar indicacao visual de que leads serao movidos para "Novo Lead" ao atribuir
+### 3. Persistencia
+
+Os novos campos `localCreatedAt` e `localUpdatedAt` serao incluidos automaticamente no sessionStorage junto com o restante do LimboRow, sem necessidade de alterar a logica de persistencia.
+
+## Arquivos modificados
+- `src/hooks/useLimboLeads.ts` - Adicionar `updated_at` na query, campos no LimboRow e no compareExcelWithLocal
+- `src/pages/crm/LeadsLimbo.tsx` - Adicionar duas colunas na tabela com formatacao de data
