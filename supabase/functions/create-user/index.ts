@@ -185,6 +185,80 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Auto-create SDR record for the new user
+    // Check if SDR already exists by email
+    const { data: existingSdr } = await supabaseAdmin
+      .from("sdr")
+      .select("id")
+      .ilike("email", email)
+      .maybeSingle();
+
+    if (!existingSdr) {
+      // Determine squad from cargo department
+      let sdrSquad = "credito";
+      let sdrRoleType = "sdr";
+
+      if (cargo_id) {
+        const { data: cargoData } = await supabaseAdmin
+          .from("cargos_catalogo")
+          .select("area, role_sistema")
+          .eq("id", cargo_id)
+          .maybeSingle();
+
+        if (cargoData) {
+          const area = (cargoData.area || "").toLowerCase();
+          if (area.includes("incorporador") || area.includes("50k")) sdrSquad = "incorporador";
+          else if (area.includes("consorcio") || area.includes("consórcio")) sdrSquad = "consorcio";
+          else if (area.includes("credito") || area.includes("crédito")) sdrSquad = "credito";
+          else if (area.includes("leilao") || area.includes("leilão")) sdrSquad = "leilao";
+
+          if (cargoData.role_sistema && cargoData.role_sistema.toLowerCase().includes("closer")) {
+            sdrRoleType = "closer";
+          }
+        }
+      }
+
+      const { data: newSdr, error: sdrError } = await supabaseAdmin
+        .from("sdr")
+        .insert({
+          name: full_name,
+          email: email,
+          squad: sdrSquad,
+          role_type: sdrRoleType,
+          active: true,
+          meta_diaria: 7,
+          user_id: newUser.user.id,
+        })
+        .select("id")
+        .single();
+
+      if (sdrError) {
+        console.error("Error creating SDR record:", sdrError);
+      } else if (newSdr) {
+        console.log(`SDR record created with ID: ${newSdr.id}`);
+        // Link employee to SDR if employee exists
+        const { error: linkError } = await supabaseAdmin
+          .from("employees")
+          .update({ sdr_id: newSdr.id })
+          .eq("user_id", newUser.user.id);
+        
+        if (linkError) {
+          console.error("Error linking employee to SDR:", linkError);
+        }
+      }
+    } else {
+      console.log(`SDR record already exists for email: ${email}`);
+      // Link existing SDR to employee if not linked
+      const { error: linkError } = await supabaseAdmin
+        .from("employees")
+        .update({ sdr_id: existingSdr.id })
+        .eq("user_id", newUser.user.id);
+      
+      if (linkError) {
+        console.error("Error linking existing SDR to employee:", linkError);
+      }
+    }
+
     // Update profile with full_name (trigger might not catch it from metadata)
     const { error: nameUpdateError } = await supabaseAdmin
       .from("profiles")
