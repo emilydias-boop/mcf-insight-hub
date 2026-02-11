@@ -32,7 +32,7 @@ import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
 import { PipelineSelector } from "@/components/crm/PipelineSelector";
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
-import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
+
 import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
@@ -249,7 +249,7 @@ export default function ConsorcioPainelEquipe() {
   const { teamKPIs: weekKPIs } = useTeamMeetingsData({ startDate: weekStartDate, endDate: weekEndDate, squad: BU_SQUAD });
   const { teamKPIs: monthKPIs } = useTeamMeetingsData({ startDate: monthStartDate, endDate: monthEndDate, squad: BU_SQUAD });
 
-  const { data: ghostCountBySdr } = useGhostCountBySdr();
+  
   const { data: allSdrsData } = useSdrsAll();
   const { data: activeSdrsList } = useSdrsFromSquad(BU_SQUAD);
 
