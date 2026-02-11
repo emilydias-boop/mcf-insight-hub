@@ -1,232 +1,56 @@
 
-# Persistir Dados da Comparacao no Leads em Limbo
+
+# Corrigir Atribuicao de Leads no Limbo: Incluir Mudanca de Stage
 
 ## Problema
-Ao sair da página `/crm/leads-limbo` e voltar, todos os resultados da comparação são perdidos porque estão armazenados apenas em estado React (`useState`), que é resetado quando o componente desmonta.
+Atualmente, ao atribuir leads no Leads em Limbo, o sistema apenas atualiza o `owner_id` e `owner_profile_id`. Porem, os leads precisam tambem ser movidos para a stage correta (ex: "Novo Lead") para ficarem visiveis no Kanban do SDR que recebeu.
 
-## Solução
-Implementar persistência automática usando `sessionStorage` do navegador. Os dados permanecem salvos enquanto a aba está aberta e são limpidos automaticamente ao fechar a aba do navegador (mantendo a segurança).
+## Solucao
+Alterar a mutation `useAssignLimboOwner` para tambem atualizar o `stage_id` do deal para "Novo Lead" da pipeline correspondente ao atribuir.
 
-## O que será persistido
-1. `results` - Array com todos os LimboRow da comparação
-2. `step` - Etapa atual (upload, mapping, results)
-3. `statusFilter`, `stageFilter`, `ownerFilter` - Filtros ativos
-4. `page`, `pageSize` - Posição na paginação
-5. `columnMapping` - Mapeamento de colunas usado na comparação
-6. `savedAt` - Timestamp para validação de expiração
+## Implementacao
 
-## O que NÃO será persistido (por performance/segurança)
-- `rawData` e `headers` - Dados brutos da planilha (muito grandes)
-- `selectedIds`, `selectCount`, `assignSdrEmail` - Dados temporários de atribuição
-- `selectedLead` - Popup aberto temporariamente
+### Arquivo: `src/hooks/useLimboLeads.ts`
 
-## Implementação Técnica
+Modificar a funcao `useAssignLimboOwner` para:
+
+1. Receber um parametro opcional `stageId` (stage de destino)
+2. Se nao fornecido, usar o stage "Novo Lead" da Pipeline Inside Sales como padrao (`cf4a369c-c4a6-4299-933d-5ae3dcc39d4b`)
+3. Incluir `stage_id` no update junto com `owner_id` e `owner_profile_id`
+4. Registrar atividade de `stage_change` alem da mudanca de owner
+
+```typescript
+// Mutation atualizada
+mutationFn: async ({ dealIds, ownerEmail, ownerProfileId, stageId }: {
+  dealIds: string[];
+  ownerEmail: string;
+  ownerProfileId: string;
+  stageId?: string;
+}) => {
+  const NOVO_LEAD_STAGE = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b';
+  const targetStage = stageId || NOVO_LEAD_STAGE;
+  const batchSize = 50;
+
+  for (let i = 0; i < dealIds.length; i += batchSize) {
+    const batch = dealIds.slice(i, i + batchSize);
+    const { error } = await supabase
+      .from('crm_deals')
+      .update({
+        owner_id: ownerEmail,
+        owner_profile_id: ownerProfileId,
+        stage_id: targetStage,
+      })
+      .in('id', batch);
+    if (error) throw error;
+  }
+  return { count: dealIds.length };
+}
+```
 
 ### Arquivo: `src/pages/crm/LeadsLimbo.tsx`
 
-#### 1. Criar funções helper de persistência
-```typescript
-// No topo do arquivo, fora do componente
-const STORAGE_KEY = 'limbo-comparison-data';
-const STORAGE_EXPIRY_HOURS = 24;
+Nenhuma alteracao necessaria na chamada, pois o `stageId` e opcional e o padrao ja sera "Novo Lead". Porem, sera adicionado um texto informativo no botao/barra indicando que os leads serao movidos para "Novo Lead".
 
-interface PersistenceData {
-  results: LimboRow[];
-  step: Step;
-  statusFilter: StatusFilter;
-  stageFilter: string;
-  ownerFilter: string;
-  page: number;
-  pageSize: number;
-  columnMapping: Record<ColumnKey, string>;
-  savedAt: string;
-}
-
-function saveToStorage(data: PersistenceData) {
-  try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (e) {
-    console.warn('Failed to save to sessionStorage', e);
-  }
-}
-
-function loadFromStorage(): PersistenceData | null {
-  try {
-    const stored = sessionStorage.getItem(STORAGE_KEY);
-    if (!stored) return null;
-    
-    const data = JSON.parse(stored) as PersistenceData;
-    const savedTime = new Date(data.savedAt);
-    const now = new Date();
-    const hoursDiff = (now.getTime() - savedTime.getTime()) / (1000 * 60 * 60);
-    
-    // Se passou de 24h, descartar
-    if (hoursDiff > STORAGE_EXPIRY_HOURS) {
-      sessionStorage.removeItem(STORAGE_KEY);
-      return null;
-    }
-    
-    return data;
-  } catch (e) {
-    console.warn('Failed to load from sessionStorage', e);
-    return null;
-  }
-}
-
-function clearStorage() {
-  sessionStorage.removeItem(STORAGE_KEY);
-}
-```
-
-#### 2. Inicializar estados com lazy initialization
-Alterar os `useState` para ler do storage na inicialização:
-
-```typescript
-// Em vez de:
-// const [results, setResults] = useState<LimboRow[]>([]);
-
-// Fazer assim:
-const [results, setResults] = useState<LimboRow[]>(() => {
-  const stored = loadFromStorage();
-  return stored?.results || [];
-});
-
-const [step, setStep] = useState<Step>(() => {
-  const stored = loadFromStorage();
-  return stored?.step || 'upload';
-});
-
-const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
-  const stored = loadFromStorage();
-  return stored?.statusFilter || 'todos';
-});
-
-const [stageFilter, setStageFilter] = useState<string>(() => {
-  const stored = loadFromStorage();
-  return stored?.stageFilter || 'todos';
-});
-
-const [ownerFilter, setOwnerFilter] = useState<string>(() => {
-  const stored = loadFromStorage();
-  return stored?.ownerFilter || 'todos';
-});
-
-const [page, setPage] = useState<number>(() => {
-  const stored = loadFromStorage();
-  return stored?.page || 0;
-});
-
-const [pageSize, setPageSize] = useState<number>(() => {
-  const stored = loadFromStorage();
-  return stored?.pageSize || 50;
-});
-
-const [columnMapping, setColumnMapping] = useState<Record<ColumnKey, string>>(() => {
-  const stored = loadFromStorage();
-  return stored?.columnMapping || { name: '', email: '', phone: '', stage: '', value: '', owner: '' };
-});
-```
-
-#### 3. Adicionar useEffect para salvar após comparação
-Após `runComparison`, salvar os resultados automaticamente:
-
-```typescript
-useEffect(() => {
-  if (step === 'results' && results.length > 0) {
-    saveToStorage({
-      results,
-      step,
-      statusFilter,
-      stageFilter,
-      ownerFilter,
-      page,
-      pageSize,
-      columnMapping,
-      savedAt: new Date().toISOString(),
-    });
-  }
-}, [results, step, statusFilter, stageFilter, ownerFilter, page, pageSize, columnMapping]);
-```
-
-#### 4. Salvar ao filtro mudar (opcional, mas recomendado)
-```typescript
-useEffect(() => {
-  if (step === 'results' && results.length > 0) {
-    saveToStorage({
-      results,
-      step,
-      statusFilter,
-      stageFilter,
-      ownerFilter,
-      page,
-      pageSize,
-      columnMapping,
-      savedAt: new Date().toISOString(),
-    });
-  }
-}, [statusFilter, stageFilter, ownerFilter, page, pageSize]);
-```
-
-#### 5. Limpar ao clicar "Nova Comparação"
-Modificar o botão "Nova Comparação" (linha ~440):
-
-```typescript
-<Button 
-  variant="outline" 
-  size="sm" 
-  onClick={() => { 
-    clearStorage();  // Adicionar esta linha
-    setStep('upload'); 
-    setResults([]); 
-    setColumnMapping({ name: '', email: '', phone: '', stage: '', value: '', owner: '' });
-    setStatusFilter('todos');
-    setStageFilter('todos');
-    setOwnerFilter('todos');
-    setPage(0);
-  }}
->
-  Nova Comparação
-</Button>
-```
-
-#### 6. Adicionar botão "Limpar Dados Salvos" (opcional)
-Pode ser adicionado na seção de botões do topo (linha ~431-443):
-
-```typescript
-<div className="flex gap-2">
-  <Button 
-    variant="ghost" 
-    size="sm" 
-    onClick={() => {
-      clearStorage();
-      setResults([]);
-      setStep('upload');
-      toast.success('Dados salvos foram limpos');
-    }}
-  >
-    Limpar Cache
-  </Button>
-  {/* ... outros botões ... */}
-</div>
-```
-
-## Fluxo do usuário final
-
-1. **Upload + Mapeamento + Comparação**: Dados são salvos no sessionStorage após a comparação
-2. **Navegação**: Usuário sai da página para outra seção (ex: CRM > Negócios)
-3. **Retorno**: Volta para `/crm/leads-limbo`
-4. **Restauração Automática**: Resultados e filtros aparecem imediatamente (pula upload/mapping)
-5. **Nova Comparação**: Clica "Nova Comparação" e storage é limpo, voltando ao upload
-
-## Benefícios
-
-- ✅ Dados persistem mesmo saindo da página
-- ✅ Seguro: apenas sessionStorage (limpa ao fechar a aba)
-- ✅ Expiração automática após 24h
-- ✅ Performance: sem requisições desnecessárias
-- ✅ UX: não precisa re-fazer a comparação
-- ✅ Limpo ao clicar "Nova Comparação"
-
-## Arquivos modificados
-- `src/pages/crm/LeadsLimbo.tsx` - Adicionar helper functions, lazy init dos estados, useEffect de sincronização, e modificar botão "Nova Comparação"
-
+## Resumo das mudancas
+- **`src/hooks/useLimboLeads.ts`**: Adicionar `stage_id` ao update da mutation, com valor padrao "Novo Lead" da Pipeline Inside Sales
+- **`src/pages/crm/LeadsLimbo.tsx`**: Adicionar indicacao visual de que leads serao movidos para "Novo Lead" ao atribuir
