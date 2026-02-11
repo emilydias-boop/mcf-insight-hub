@@ -1,59 +1,36 @@
 
-# Corrigir Parsing de Datas do Excel (Serial Numbers)
+# Corrigir Mapeamento de Colunas de Data (created_at / lost_at)
 
 ## Problema
-O Excel armazena datas internamente como numeros seriais (dias desde 01/01/1900). Ao exportar para CSV/XLSX, algumas colunas vem como numeros (ex: `45388.52553240741`) em vez de strings de data formatadas. O `new Date()` do JavaScript nao entende esse formato, resultando em "Invalid Date".
+As colunas "Criado em" e "Ult. Mov." aparecem como "--" porque o auto-mapeamento nao esta encontrando as colunas correspondentes na planilha. Os hints atuais nao cobrem os nomes exatos usados no arquivo Excel (provavelmente "created_at" e "lost_at" ou variacoes).
+
+## Causa Raiz
+A funcao `autoMapColumns` usa `h.includes(hint)` para comparar, mas os nomes das colunas na planilha podem ter formatos diferentes dos hints configurados. Alem disso, se o auto-map falha e o usuario nao mapeia manualmente, o valor fica vazio e nenhuma data e extraida.
 
 ## Solucao
-Criar uma funcao auxiliar `parseExcelDate` que detecta se o valor e um numero serial do Excel e o converte para uma data valida. Se ja for uma string de data (ex: `25/11/2024 20:55:19`), parsear normalmente.
-
-## Implementacao
 
 ### Arquivo: `src/pages/crm/LeadsLimbo.tsx`
 
-Adicionar funcao utilitaria antes do componente:
+1. **Expandir hints de auto-mapeamento** para cobrir mais variacoes:
 
-```typescript
-function parseExcelDate(value: string): Date | null {
-  if (!value || value === '') return null;
-  
-  // Caso 1: Numero serial do Excel (ex: 45388.52553240741)
-  const num = Number(value);
-  if (!isNaN(num) && num > 30000 && num < 60000) {
-    // Excel epoch: 01/01/1900, mas com bug do "leap year 1900"
-    // Subtrair 25569 dias para converter para Unix epoch, multiplicar por 86400000 ms
-    const date = new Date((num - 25569) * 86400000);
-    if (!isNaN(date.getTime())) return date;
-  }
-  
-  // Caso 2: Data no formato DD/MM/YYYY HH:mm:ss ou DD/MM/YYYY
-  const brMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
-  if (brMatch) {
-    const [, day, month, year, hour, min, sec] = brMatch;
-    return new Date(+year, +month - 1, +day, +(hour || 0), +(min || 0), +(sec || 0));
-  }
-  
-  // Caso 3: Tentar parse nativo
-  const d = new Date(value);
-  return isNaN(d.getTime()) ? null : d;
-}
+```
+created_at: ['created_at', 'createdat', 'criado', 'data_criacao', 'data criação',
+             'data de criação', 'data_de_criacao', 'created', 'dt_criacao', 'criado_em',
+             'criado em', 'data criacao']
+lost_at: ['lost_at', 'lostat', 'perdido', 'ultima_mov', 'última movimentação',
+          'last_move', 'ult mov', 'ult_mov', 'lost', 'data_perda', 'ultima movimentacao',
+          'última mov', 'ultima_movimentacao', 'updated_at', 'updatedat', 'atualizado']
 ```
 
-Atualizar as duas `TableCell` que exibem as datas para usar essa funcao:
+2. **Melhorar a logica de match** na funcao `autoMapColumns`: alem de `includes`, tambem verificar igualdade exata (apos normalizacao) para evitar falsos negativos quando o nome da coluna e exatamente o hint.
 
-```typescript
-// Criado em
-{row.excelCreatedAt ? (() => {
-  const d = parseExcelDate(row.excelCreatedAt);
-  return d ? format(d, 'dd/MM/yy') : '--';
-})() : '--'}
+3. **Tratar `__none__` como vazio** no `runComparison`: se o usuario selecionar "Nao mapear", o valor `__none__` nao deve ser usado como nome de coluna.
 
-// Ult. Mov.
-{row.excelLostAt ? (() => {
-  const d = parseExcelDate(row.excelLostAt);
-  return d ? format(d, 'dd/MM/yy') : '--';
-})() : '--'}
-```
+### Detalhes Tecnicos
+
+- Na funcao `autoMapColumns`, adicionar match por igualdade exata antes do `includes`
+- No `runComparison`, verificar `columnMapping.created_at && columnMapping.created_at !== '__none__'` antes de extrair o valor
+- Mesma verificacao para `lost_at`
 
 ## Arquivo modificado
-- `src/pages/crm/LeadsLimbo.tsx` - Adicionar `parseExcelDate` e atualizar renderizacao das colunas de data
+- `src/pages/crm/LeadsLimbo.tsx`
