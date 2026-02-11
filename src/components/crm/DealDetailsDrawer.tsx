@@ -73,7 +73,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
   
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="bg-card border-border w-full sm:max-w-2xl overflow-hidden p-0">
+      <SheetContent className="bg-card border-border w-full sm:max-w-2xl overflow-hidden p-0 flex flex-col">
         {isLoading ? (
           <div className="space-y-4 p-4">
             <div className="space-y-2">
