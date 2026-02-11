@@ -136,20 +136,27 @@ export function useRealizadas() {
         });
       }
 
-      // Resolve closer names from owner_id (email)
-      const ownerEmails = [...new Set(filteredDeals.map(d => d.owner_id).filter(Boolean) as string[])];
-      let closerByEmail: Record<string, string> = {};
-      if (ownerEmails.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('email, full_name')
-          .in('email', ownerEmails);
-        (profiles || []).forEach(p => {
-          if (p.email && p.full_name) closerByEmail[p.email] = p.full_name;
-        });
-      }
+      // Fetch consorcio closers only
+      const { data: consorcioClosers } = await supabase
+        .from('closers')
+        .select('name, email')
+        .eq('bu', 'consorcio')
+        .eq('is_active', true);
 
-      return filteredDeals.map(d => {
+      const closerEmailSet = new Set(
+        (consorcioClosers || []).map(c => c.email?.toLowerCase()).filter(Boolean)
+      );
+      const closerNameByEmail: Record<string, string> = {};
+      (consorcioClosers || []).forEach(c => {
+        if (c.email) closerNameByEmail[c.email.toLowerCase()] = c.name;
+      });
+
+      // Filter deals to only those owned by consorcio closers
+      const consorcioDeals = filteredDeals.filter(d =>
+        d.owner_id && closerEmailSet.has(d.owner_id.toLowerCase())
+      );
+
+      return consorcioDeals.map(d => {
         const cf = (d.custom_fields as any) || {};
         return {
           deal_id: d.id,
@@ -157,7 +164,7 @@ export function useRealizadas() {
           contact_name: (d.crm_contacts as any)?.name || '',
           contact_phone: (d.crm_contacts as any)?.phone || '',
           contact_email: (d.crm_contacts as any)?.email || '',
-          closer_name: (d.owner_id && closerByEmail[d.owner_id]) || d.owner_id || '',
+          closer_name: (d.owner_id && closerNameByEmail[d.owner_id.toLowerCase()]) || d.owner_id || '',
           origin_name: (d.crm_origins as any)?.name || '',
           origin_id: d.origin_id || '',
           stage_id: d.stage_id || '',
