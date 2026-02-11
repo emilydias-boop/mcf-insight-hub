@@ -178,14 +178,15 @@ export function useAssignLimboOwner() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ dealIds, ownerEmail, ownerProfileId }: { dealIds: string[]; ownerEmail: string; ownerProfileId: string }) => {
-      // Atualizar em lotes de 50
+    mutationFn: async ({ dealIds, ownerEmail, ownerProfileId, stageId }: { dealIds: string[]; ownerEmail: string; ownerProfileId: string; stageId?: string }) => {
+      const NOVO_LEAD_STAGE = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b';
+      const targetStage = stageId || NOVO_LEAD_STAGE;
       const batchSize = 50;
       for (let i = 0; i < dealIds.length; i += batchSize) {
         const batch = dealIds.slice(i, i + batchSize);
         const { error } = await supabase
           .from('crm_deals')
-          .update({ owner_id: ownerEmail, owner_profile_id: ownerProfileId })
+          .update({ owner_id: ownerEmail, owner_profile_id: ownerProfileId, stage_id: targetStage })
           .in('id', batch);
         if (error) throw error;
       }
