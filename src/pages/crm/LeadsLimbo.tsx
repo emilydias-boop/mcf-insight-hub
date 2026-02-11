@@ -94,6 +94,7 @@ export default function LeadsLimbo() {
   const [ownerFilter, setOwnerFilter] = useState<string>('todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selectCount, setSelectCount] = useState('');
   const [assignSdrEmail, setAssignSdrEmail] = useState('');
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState<number>(50);
@@ -212,13 +213,46 @@ export default function LeadsLimbo() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === filtered.filter(r => r.status === 'sem_dono').length) {
-      setSelectedIds(new Set());
+    const pageStart = page * pageSize;
+    const pageIndices = paged
+      .map((r, i) => ({ r, globalIdx: showAll ? i : pageStart + i }))
+      .filter(({ r }) => r.status === 'sem_dono' && r.localDealId);
+
+    const allPageSelected = pageIndices.length > 0 && pageIndices.every(({ globalIdx }) => selectedIds.has(globalIdx));
+
+    if (allPageSelected) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        pageIndices.forEach(({ globalIdx }) => next.delete(globalIdx));
+        return next;
+      });
     } else {
-      const ids = new Set<number>();
-      filtered.forEach((r, i) => { if (r.status === 'sem_dono' && r.localDealId) ids.add(i); });
-      setSelectedIds(ids);
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        pageIndices.forEach(({ globalIdx }) => next.add(globalIdx));
+        return next;
+      });
     }
+  };
+
+  const selectByCount = (count: number) => {
+    const ids = new Set<number>();
+    let added = 0;
+    for (let i = 0; i < filtered.length && added < count; i++) {
+      if (filtered[i].status === 'sem_dono' && filtered[i].localDealId) {
+        ids.add(i);
+        added++;
+      }
+    }
+    setSelectedIds(ids);
+  };
+
+  const selectAllFiltered = () => {
+    const ids = new Set<number>();
+    filtered.forEach((r, i) => {
+      if (r.status === 'sem_dono' && r.localDealId) ids.add(i);
+    });
+    setSelectedIds(ids);
   };
 
   // Assign selected leads
@@ -510,28 +544,55 @@ export default function LeadsLimbo() {
         </Select>
       </div>
 
-      {/* Bulk assign */}
-      {selectedIds.size > 0 && (
-        <Card className="border-primary bg-primary/5">
-          <CardContent className="py-3 px-4 flex items-center gap-4">
-            <span className="text-sm font-medium text-foreground">{selectedIds.size} leads selecionados</span>
-            <Select value={assignSdrEmail} onValueChange={setAssignSdrEmail}>
-              <SelectTrigger className="w-56">
-                <SelectValue placeholder="Selecionar SDR" />
-              </SelectTrigger>
-              <SelectContent>
-                {sdrs?.map(s => (
-                  <SelectItem key={s.id} value={s.email}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button size="sm" onClick={handleBulkAssign} disabled={assignMutation.isPending}>
-              {assignMutation.isPending ? 'Atribuindo...' : `Atribuir ${selectedIds.size} leads`}
+      {/* Selection controls */}
+      <Card>
+        <CardContent className="py-3 px-4 flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min={1}
+              placeholder="Qtd"
+              value={selectCount}
+              onChange={e => setSelectCount(e.target.value)}
+              className="w-20 h-8 text-sm"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const count = parseInt(selectCount);
+                if (!count || count <= 0) { toast.error('Digite uma quantidade válida'); return; }
+                selectByCount(count);
+              }}
+            >
+              Selecionar
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>Limpar</Button>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+          <Button size="sm" variant="outline" onClick={selectAllFiltered}>
+            Selecionar todos filtrados ({filtered.filter(r => r.status === 'sem_dono' && r.localDealId).length})
+          </Button>
+          {selectedIds.size > 0 && (
+            <>
+              <div className="h-4 w-px bg-border" />
+              <span className="text-sm font-medium text-foreground">{selectedIds.size} selecionados</span>
+              <Select value={assignSdrEmail} onValueChange={setAssignSdrEmail}>
+                <SelectTrigger className="w-56">
+                  <SelectValue placeholder="Selecionar SDR" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sdrs?.map(s => (
+                    <SelectItem key={s.id} value={s.email}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button size="sm" onClick={handleBulkAssign} disabled={assignMutation.isPending}>
+                {assignMutation.isPending ? 'Atribuindo...' : `Atribuir ${selectedIds.size} leads`}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setSelectedIds(new Set()); setSelectCount(''); }}>Limpar</Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Table */}
       <Card>
@@ -542,7 +603,13 @@ export default function LeadsLimbo() {
                 <TableRow>
                   <TableHead className="w-10">
                     <Checkbox
-                      checked={selectedIds.size > 0 && selectedIds.size === filtered.filter(r => r.status === 'sem_dono').length}
+                      checked={(() => {
+                        const pageStart = page * pageSize;
+                        const pageIndices = paged
+                          .map((r, i) => ({ r, globalIdx: showAll ? i : pageStart + i }))
+                          .filter(({ r }) => r.status === 'sem_dono' && r.localDealId);
+                        return pageIndices.length > 0 && pageIndices.every(({ globalIdx }) => selectedIds.has(globalIdx));
+                      })()}
                       onCheckedChange={toggleSelectAll}
                     />
                   </TableHead>
