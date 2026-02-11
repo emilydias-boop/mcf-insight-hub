@@ -1,44 +1,73 @@
 
-# Corrigir filtros, adicionar paginacao e contador na aba Realizadas
+# Historico Cross-Pipeline e Enriquecimento do Drawer para Consorcio
 
-## Problemas encontrados
+## Problema
+Quando o closer abre o drawer de um lead (ex: Guilherme Machado), so ve informacoes do deal atual. Mas o lead pode ter passado por varias pipelines (Incorporador, Efeito Alavanca, Gerentes de Relacionamento, etc.) e ter historico rico em cada uma. O closer precisa ver TUDO sobre o lead.
 
-### 1. Filtros de pipeline nao funcionam
-Os valores no Select estao hardcoded como "Viver de Aluguel" e "Efeito Alavanca", mas os nomes reais no banco sao:
-- `PIPELINE - INSIDE SALES - VIVER DE ALUGUEL`
-- `Efeito Alavanca + Clube`
+## Dados reais encontrados
+O lead "Guilherme Machado" tem 6 deals em pipelines diferentes:
+- Efeito Alavanca + Clube (R1 Realizada)
+- Efeito Alavanca + Clube (VENDA REALIZADA 50K)
+- PIPELINE INSIDE SALES (Venda realizada)
+- GERENTES DE RELACIONAMENTO (MCF Credito - Construcao)
+- GERENTES DE RELACIONAMENTO (Base 50K)
+- Contrato Pago (sem pipeline)
 
-O filtro compara `r.origin_name !== pipelineFilter` que nunca bate.
+O campo `contact_id` permite agrupar todos esses deals e mostrar o historico completo.
 
-### 2. Quantidade de leads (~21) esta correta
-Os dados do banco confirmam: existem 237 deals no stage R1 Realizada, porem:
-- 108 nao tem owner (owner_id nulo)
-- 44 pertencem a Jessica Bellini (nao e closer de consorcio)
-- 40 pertencem a Cleiton (nao e closer de consorcio)
-- Apenas 21 pertencem a Thobson (unico closer de consorcio com deals)
-- Apos excluir deals com proposta, restam exatamente 21
+## Solucao
 
-Isso esta correto dado o filtro por closers do consorcio. Se quiser ver todos os deals independente do closer, precisaria remover esse filtro (decidido na implementacao anterior).
+### 1. Novo hook: `useContactDeals.ts`
+Busca todos os deals do mesmo `contact_id`, excluindo o deal atual. Retorna lista com pipeline, stage, data de criacao e custom_fields de cada deal.
 
-### 3. Falta paginacao e contador
+```
+Query: crm_deals where contact_id = X and id != currentDealId
+Select: id, name, created_at, owner_id, custom_fields,
+        crm_origins(name), crm_stages(stage_name, color)
+Order: created_at desc
+```
 
-## O que sera feito
+### 2. Novo componente: `CrossPipelineHistory.tsx`
+Card colapsavel (aberto por default) mostrando todos os outros deals do contato:
+- Titulo: "Historico em Outras Pipelines (X)"
+- Para cada deal:
+  - Pipeline (origin_name) com badge colorido
+  - Stage atual com cor
+  - Data de entrada
+  - Owner/responsavel
+- Se nao houver outros deals, nao renderiza o componente
 
-### Arquivo: `src/pages/crm/PosReuniao.tsx`
+### 3. Enriquecer o header do drawer com dados do custom_fields
+Adicionar no `SdrCompactHeader.tsx`:
+- Regiao/Estado: `custom_fields.estado`
+- Faixa de renda: `custom_fields.faixa_de_renda`
+- Exibidos como badges adicionais no header
 
-1. **Corrigir valores do filtro de pipeline**: Usar os nomes reais do banco:
-   - "PIPELINE - INSIDE SALES - VIVER DE ALUGUEL"
-   - "Efeito Alavanca + Clube"
+### 4. Integrar no `DealDetailsDrawer.tsx`
+Inserir o `CrossPipelineHistory` logo apos o `LeadJourneyCard`, antes do bloco de qualificacao. Isso posiciona o historico cross-pipeline em destaque para o closer.
 
-2. **Adicionar contador**: Mostrar no titulo "Reunioes Realizadas -- Aguardando Acao (21)" com o total de deals filtrados
+## Secao tecnica
 
-3. **Adicionar paginacao**: Seguindo o mesmo padrao usado em `/consorcio` (Index.tsx):
-   - Estado `currentPage` e `itemsPerPage` (default 20)
-   - `totalPages = Math.ceil(filtered.length / itemsPerPage)`
-   - `paginatedData = filtered.slice(start, start + itemsPerPage)`
-   - Componente de paginacao com Previous/Next e numeros de pagina
-   - Select para trocar items por pagina (10, 20, 50)
-   - Texto "Mostrando X-Y de Z resultados"
-   - Reset de pagina para 1 ao mudar filtros
+### Arquivo novo: `src/hooks/useContactDeals.ts`
+- Hook `useContactDeals(contactId, excludeDealId)` 
+- Query na tabela `crm_deals` filtrando por `contact_id`, excluindo `id = excludeDealId`
+- Inclui joins com `crm_origins(name)` e `crm_stages(stage_name, color)`
+- Retorna array tipado com os campos necessarios
 
-1 arquivo modificado.
+### Arquivo novo: `src/components/crm/CrossPipelineHistory.tsx`
+- Recebe `contactId` e `currentDealId` como props
+- Usa `useContactDeals` para buscar dados
+- Renderiza um `Collapsible` com lista de deals
+- Cada deal mostra: pipeline badge, stage badge com cor, data formatada
+- Clicavel para abrir o deal no drawer (troca o dealId)
+
+### Arquivo modificado: `src/components/crm/SdrCompactHeader.tsx`
+- Extrair `custom_fields.estado` e `custom_fields.faixa_de_renda` do deal
+- Adicionar 2 badges adicionais na area de chips (Regiao e Renda)
+- Icones: MapPin para regiao (ja importado), DollarSign para renda
+
+### Arquivo modificado: `src/components/crm/DealDetailsDrawer.tsx`
+- Importar e renderizar `CrossPipelineHistory` apos `LeadJourneyCard`
+- Passar `contactId={deal.contact_id}` e `currentDealId={deal.id}`
+
+Total: 2 arquivos novos, 2 arquivos modificados. Nenhuma mudanca de banco de dados.
