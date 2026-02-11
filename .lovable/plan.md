@@ -1,36 +1,67 @@
 
-# Corrigir Mapeamento de Colunas de Data (created_at / lost_at)
+# Remover Tudo Relacionado a Agendamento Fantasma (Ghost Appointments)
 
-## Problema
-As colunas "Criado em" e "Ult. Mov." aparecem como "--" porque o auto-mapeamento nao esta encontrando as colunas correspondentes na planilha. Os hints atuais nao cobrem os nomes exatos usados no arquivo Excel (provavelmente "created_at" e "lost_at" ou variacoes).
+## Resumo
 
-## Causa Raiz
-A funcao `autoMapColumns` usa `h.includes(hint)` para comparar, mas os nomes das colunas na planilha podem ter formatos diferentes dos hints configurados. Alem disso, se o auto-map falha e o usuario nao mapeia manualmente, o valor fica vazio e nenhuma data e extraida.
+Remover completamente todos os componentes, hooks, edge functions, rotas e referencias relacionadas a "agendamento fantasma" / "ghost appointments", sem afetar o restante do sistema.
 
-## Solucao
+## Arquivos a DELETAR
 
-### Arquivo: `src/pages/crm/LeadsLimbo.tsx`
+1. **`src/hooks/useGhostAppointments.ts`** - Hook principal com todos os hooks de ghost audit
+2. **`src/hooks/useGhostCountBySdr.ts`** - Hook de contagem de ghost por SDR
+3. **`src/components/sdr/GhostAppointmentsAlert.tsx`** - Componente de alerta (nao esta sendo usado em nenhuma pagina, mas existe)
+4. **`src/components/sdr/GhostCasesBySdr.tsx`** - Componente de casos ghost por SDR
+5. **`supabase/functions/detect-ghost-appointments/`** - Edge function de deteccao
 
-1. **Expandir hints de auto-mapeamento** para cobrir mais variacoes:
+## Arquivos a MODIFICAR
 
-```
-created_at: ['created_at', 'createdat', 'criado', 'data_criacao', 'data criação',
-             'data de criação', 'data_de_criacao', 'created', 'dt_criacao', 'criado_em',
-             'criado em', 'data criacao']
-lost_at: ['lost_at', 'lostat', 'perdido', 'ultima_mov', 'última movimentação',
-          'last_move', 'ult mov', 'ult_mov', 'lost', 'data_perda', 'ultima movimentacao',
-          'última mov', 'ultima_movimentacao', 'updated_at', 'updatedat', 'atualizado']
-```
+### 1. `src/pages/crm/AuditoriaAgendamentos.tsx`
+- A pagina tem 2 abas: "Fraude/Ghost" e "Duplicatas Webhook"
+- Remover toda a aba "Fraude/Ghost" (stats, filtros, tabela, sheet de detalhes)
+- Remover imports de `useGhostAppointments`
+- Manter a aba "Duplicatas Webhook" (`DuplicatesTab`) como conteudo unico da pagina (sem tabs)
+- Simplificar o titulo para "Auditoria - Duplicatas"
 
-2. **Melhorar a logica de match** na funcao `autoMapColumns`: alem de `includes`, tambem verificar igualdade exata (apos normalizacao) para evitar falsos negativos quando o nome da coluna e exatamente o hint.
+### 2. `src/components/sdr/SdrSummaryTable.tsx`
+- Remover import de `GhostCountBySdr` e `Ghost` icon
+- Remover prop `ghostCountBySdr` da interface e do componente
+- Remover a coluna inteira do ghost (header com icone Ghost + celula com badge/tooltip/link)
+- Remover variaveis `ghostData`, `hasGhostCases`, `hasCritical`, `hasHigh` do map
 
-3. **Tratar `__none__` como vazio** no `runComparison`: se o usuario selecionar "Nao mapear", o valor `__none__` nao deve ser usado como nome de coluna.
+### 3. `src/pages/crm/ReunioesEquipe.tsx`
+- Remover import de `useGhostCountBySdr`
+- Remover `const { data: ghostCountBySdr } = useGhostCountBySdr()`
+- Remover prop `ghostCountBySdr={ghostCountBySdr}` do `SdrSummaryTable`
 
-### Detalhes Tecnicos
+### 4. `src/pages/bu-consorcio/PainelEquipe.tsx`
+- Remover import de `useGhostCountBySdr`
+- Remover `const { data: ghostCountBySdr } = useGhostCountBySdr()`
+- Remover prop `ghostCountBySdr={ghostCountBySdr}` de qualquer `SdrSummaryTable`
 
-- Na funcao `autoMapColumns`, adicionar match por igualdade exata antes do `includes`
-- No `runComparison`, verificar `columnMapping.created_at && columnMapping.created_at !== '__none__'` antes de extrair o valor
-- Mesma verificacao para `lost_at`
+### 5. `src/pages/crm/SdrMeetingsDetailPage.tsx`
+- Remover import de `GhostCasesBySdr`
+- Remover o bloco `<GhostCasesBySdr sdrEmail={...} sdrName={...} />`
 
-## Arquivo modificado
-- `src/pages/crm/LeadsLimbo.tsx`
+### 6. `src/pages/CRM.tsx`
+- Remover o item de navegacao `auditoria-agendamentos` / "Auditoria" e o import do icone `Shield`
+
+### 7. `src/App.tsx`
+- Remover a rota `<Route path="auditoria-agendamentos" ... />`
+- Remover o import de `AuditoriaAgendamentos`
+
+## O que NAO sera afetado
+
+- A tabela `ghost_appointments_audit` no banco de dados permanece (sem risco de perda de dados)
+- O componente `DuplicatesTab` continua existindo em `src/components/audit/DuplicatesTab.tsx`
+- Todas as demais funcionalidades do CRM, Agenda, SDR, etc. permanecem intactas
+- Nenhum outro hook ou componente depende dos arquivos removidos
+
+## Secao Tecnica
+
+A remocao e segura porque:
+- `useGhostAppointments.ts` e `useGhostCountBySdr.ts` sao hooks isolados que so acessam a tabela `ghost_appointments_audit`
+- `GhostAppointmentsAlert` nao e importado em nenhuma pagina (componente orfao)
+- `GhostCasesBySdr` so e usado em `SdrMeetingsDetailPage`
+- A coluna ghost no `SdrSummaryTable` e puramente visual e opcional (prop opcional)
+- A edge function `detect-ghost-appointments` opera de forma isolada
+- A pagina de Auditoria pode ser mantida com a aba de Duplicatas, ou removida inteiramente junto com a rota -- optarei por **manter** a pagina simplificada com apenas Duplicatas, a menos que voce prefira remover
