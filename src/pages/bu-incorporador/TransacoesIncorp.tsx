@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Filter, Users } from 'lucide-react';
+import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Filter, Users, Rocket } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
@@ -23,6 +23,7 @@ import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { TransactionFormDialog } from '@/components/incorporador/TransactionFormDialog';
 import { IncorporadorTransactionDrawer } from '@/components/incorporador/IncorporadorTransactionDrawer';
 import { ProductFilterSheet } from '@/components/incorporador/ProductFilterSheet';
+import { BulkLaunchTagDialog } from '@/components/incorporador/BulkLaunchTagDialog';
 import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
@@ -58,6 +59,8 @@ export default function TransacoesIncorp() {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [productFilterOpen, setProductFilterOpen] = useState(false);
   const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
+  const [bulkLaunchOpen, setBulkLaunchOpen] = useState(false);
+  const [saleOriginFilter, setSaleOriginFilter] = useState<string>('all');
 
   const deleteMutation = useDeleteTransaction();
   
@@ -122,13 +125,23 @@ export default function TransacoesIncorp() {
   
   // Filtrar por closer (via matching com attendees - email, telefone ou linked_attendee_id)
   const filteredByCloser = useMemo(() => {
-    if (selectedCloserId === 'all') return transactions;
+    let txs = transactions;
+    
+    // Filter by sale_origin
+    if (saleOriginFilter !== 'all') {
+      if (saleOriginFilter === 'uncategorized') {
+        txs = txs.filter(t => !t.sale_origin);
+      } else {
+        txs = txs.filter(t => t.sale_origin === saleOriginFilter);
+      }
+    }
+    
+    if (selectedCloserId === 'all') return txs;
     
     const closerAttendees = attendees.filter((a: any) => 
       a.meeting_slots?.closer_id === selectedCloserId
     );
     
-    // IDs dos attendees do closer (para matching direto por linked_attendee_id)
     const closerAttendeeIds = new Set(
       closerAttendees.map((a: any) => a.id)
     );
@@ -145,20 +158,17 @@ export default function TransacoesIncorp() {
         .filter((p: string) => p.length >= 8)
     );
     
-    return transactions.filter(t => {
+    return txs.filter(t => {
       const txEmail = (t.customer_email || '').toLowerCase();
       const txPhone = (t.customer_phone || '').replace(/\D/g, '');
       
-      // Match por email ou telefone
       const emailMatch = closerEmails.has(txEmail);
       const phoneMatch = txPhone.length >= 8 && closerPhones.has(txPhone);
-      
-      // Match por linked_attendee_id (vendas intermediadas manualmente vinculadas)
       const linkedMatch = t.linked_attendee_id && closerAttendeeIds.has(t.linked_attendee_id);
       
       return emailMatch || phoneMatch || linkedMatch;
     });
-  }, [transactions, selectedCloserId, attendees]);
+  }, [transactions, selectedCloserId, attendees, saleOriginFilter]);
 
   // Agrupa transações por compra (parent + order bumps)
   const transactionGroups = useMemo(() => {
@@ -198,6 +208,7 @@ export default function TransacoesIncorp() {
     setEndDate(undefined);
     setSelectedProducts([]);
     setSelectedCloserId('all');
+    setSaleOriginFilter('all');
     setCurrentPage(1);
   };
 
@@ -296,6 +307,10 @@ export default function TransacoesIncorp() {
             <p className="text-muted-foreground">Todas as vendas da plataforma Hubla</p>
           </div>
           <div className="flex gap-2">
+            <Button size="sm" onClick={() => setBulkLaunchOpen(true)} variant="outline">
+              <Rocket className="h-4 w-4 mr-2" />
+              Marcar Launch
+            </Button>
             <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Nova Transação
@@ -360,6 +375,25 @@ export default function TransacoesIncorp() {
                         {closer.name}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-full sm:w-40">
+                <label className="text-sm font-medium mb-2 block">Origem</label>
+                <Select value={saleOriginFilter} onValueChange={(v) => {
+                  setSaleOriginFilter(v);
+                  setCurrentPage(1);
+                }}>
+                  <SelectTrigger>
+                    <Rocket className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="launch">🚀 Lançamento</SelectItem>
+                    <SelectItem value="closer">Closer</SelectItem>
+                    <SelectItem value="outside">Outside</SelectItem>
+                    <SelectItem value="uncategorized">Sem categoria</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -583,6 +617,12 @@ export default function TransacoesIncorp() {
             setSelectedProducts(products);
             setCurrentPage(1);
           }}
+        />
+
+        <BulkLaunchTagDialog
+          open={bulkLaunchOpen}
+          onOpenChange={setBulkLaunchOpen}
+          onSuccess={() => refetch()}
         />
     </div>
   );

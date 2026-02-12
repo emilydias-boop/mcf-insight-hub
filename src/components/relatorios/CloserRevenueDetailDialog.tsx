@@ -23,6 +23,7 @@ interface Transaction {
   installment_number: number | null;
   gross_override?: number | null;
   reference_price?: number | null;
+  sale_origin?: string | null;
 }
 
 interface AttendeeMatch {
@@ -65,6 +66,7 @@ export function CloserRevenueDetailDialog({
   endDate,
 }: CloserRevenueDetailDialogProps) {
   const isUnassigned = closerId === '__unassigned__';
+  const isLaunch = closerId === '__launch__';
   // Previous month data for comparison
   const prevMonthFilters = useMemo(() => {
     if (!startDate || !endDate) return { startDate: undefined, endDate: undefined };
@@ -201,7 +203,7 @@ export function CloserRevenueDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={isUnassigned ? "max-w-4xl max-h-[90vh] overflow-y-auto" : "max-w-2xl max-h-[85vh] overflow-y-auto"}>
+       <DialogContent className={isUnassigned ? "max-w-4xl max-h-[90vh] overflow-y-auto" : "max-w-2xl max-h-[85vh] overflow-y-auto"}>
         <DialogHeader>
           <DialogTitle className="text-lg">{closerName}</DialogTitle>
           <DialogDescription>
@@ -209,6 +211,7 @@ export function CloserRevenueDetailDialog({
               ? `${formatDate(startDate)} — ${formatDate(endDate)}`
               : 'Período selecionado'}
             {isUnassigned && ' • Diagnóstico de transações não atribuídas'}
+            {isLaunch && ' • Vendas provenientes de lançamentos'}
           </DialogDescription>
         </DialogHeader>
 
