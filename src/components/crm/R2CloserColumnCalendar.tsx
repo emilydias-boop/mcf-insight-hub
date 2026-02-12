@@ -111,22 +111,36 @@ export function R2CloserColumnCalendar({
     return getMeetingsForSlot(closerId, hour, minute).length === 0;
   };
 
-  // Filter time slots to only show times that have at least one configured slot
+  // Filter time slots to only show configured times AND times with existing meetings
   const timeSlots = useMemo(() => {
-    if (!configuredSlotsMap) return ALL_TIME_SLOTS;
-    
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    const dateSlots = configuredSlotsMap[dateStr];
     
-    if (!dateSlots || Object.keys(dateSlots).length === 0) {
-      return []; // No configured slots for this date
+    // 1. Configured times
+    const configuredTimes = new Set<string>();
+    if (configuredSlotsMap) {
+      const dateSlots = configuredSlotsMap[dateStr];
+      if (dateSlots) {
+        Object.keys(dateSlots).forEach(t => configuredTimes.add(t));
+      }
     }
     
-    // Get all configured times
-    const configuredTimes = new Set(Object.keys(dateSlots));
+    // 2. Times with existing meetings (even if not configured)
+    meetings.forEach(m => {
+      const meetingTime = parseISO(m.scheduled_at);
+      if (isSameDay(meetingTime, selectedDate)) {
+        const timeStr = format(meetingTime, 'HH:mm');
+        configuredTimes.add(timeStr);
+      }
+    });
+    
+    if (configuredTimes.size === 0 && !configuredSlotsMap) {
+      return ALL_TIME_SLOTS;
+    }
+    
+    if (configuredTimes.size === 0) return [];
     
     return ALL_TIME_SLOTS.filter(slot => configuredTimes.has(slot.label));
-  }, [configuredSlotsMap, selectedDate]);
+  }, [configuredSlotsMap, selectedDate, meetings]);
 
   // Contador de leads (attendees) agendados por closer no dia
   const dailyLeadCounts = useMemo(() => {
