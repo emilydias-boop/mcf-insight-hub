@@ -8,6 +8,7 @@ import { formatCurrency, formatDate } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 import { useAllHublaTransactions } from '@/hooks/useAllHublaTransactions';
 import { subMonths } from 'date-fns';
+import { UnassignedTransactionsDetailPanel } from './UnassignedTransactionsDetailPanel';
 
 interface Transaction {
   id: string;
@@ -40,6 +41,7 @@ interface CloserRevenueDetailDialogProps {
   transactions: Transaction[];
   globalFirstIds: Set<string>;
   attendees: AttendeeMatch[];
+  closers?: { id: string; name: string }[];
   startDate?: Date;
   endDate?: Date;
 }
@@ -58,9 +60,11 @@ export function CloserRevenueDetailDialog({
   transactions,
   globalFirstIds,
   attendees,
+  closers = [],
   startDate,
   endDate,
 }: CloserRevenueDetailDialogProps) {
+  const isUnassigned = closerId === '__unassigned__';
   // Previous month data for comparison
   const prevMonthFilters = useMemo(() => {
     if (!startDate || !endDate) return { startDate: undefined, endDate: undefined };
@@ -197,15 +201,26 @@ export function CloserRevenueDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className={isUnassigned ? "max-w-4xl max-h-[90vh] overflow-y-auto" : "max-w-2xl max-h-[85vh] overflow-y-auto"}>
         <DialogHeader>
           <DialogTitle className="text-lg">{closerName}</DialogTitle>
           <DialogDescription>
             {startDate && endDate
               ? `${formatDate(startDate)} — ${formatDate(endDate)}`
               : 'Período selecionado'}
+            {isUnassigned && ' • Diagnóstico de transações não atribuídas'}
           </DialogDescription>
         </DialogHeader>
+
+        {isUnassigned ? (
+          <UnassignedTransactionsDetailPanel
+            transactions={transactions}
+            globalFirstIds={globalFirstIds}
+            attendees={attendees}
+            closers={closers}
+          />
+        ) : (
+        <>
 
         {/* KPI Grid */}
         <div className="grid grid-cols-2 gap-3">
@@ -385,6 +400,8 @@ export function CloserRevenueDetailDialog({
             </TableBody>
           </Table>
         </div>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );
