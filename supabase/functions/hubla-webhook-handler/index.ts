@@ -248,10 +248,76 @@ interface CRMContactData {
 // CONSTANTE: Origin canônico para todos os leads A010
 const PIPELINE_INSIDE_SALES_ORIGIN = 'PIPELINE INSIDE SALES';
 
+// ============= HELPER: Verificar se é parceiro existente =============
+async function checkIfPartner(supabase: any, email: string | null): Promise<{isPartner: boolean, product: string | null}> {
+  if (!email) return { isPartner: false, product: null };
+  
+  const PARTNER_PRODUCTS = ['A001', 'A002', 'A003', 'A004', 'A009'];
+  
+  const { data: transactions } = await supabase
+    .from('hubla_transactions')
+    .select('product_name')
+    .ilike('customer_email', email)
+    .eq('sale_status', 'completed')
+    .limit(50);
+  
+  if (!transactions?.length) return { isPartner: false, product: null };
+  
+  for (const tx of transactions) {
+    const name = (tx.product_name || '').toUpperCase();
+    for (const code of PARTNER_PRODUCTS) {
+      if (name.includes(code)) {
+        return { isPartner: true, product: code };
+      }
+    }
+    if (name.includes('INCORPORADOR') && !name.includes('CONTRATO') && !name.includes('A010')) {
+      return { isPartner: true, product: 'MCF Incorporador' };
+    }
+    if (name.includes('ANTICRISE') && !name.includes('CONTRATO')) {
+      return { isPartner: true, product: 'Anticrise' };
+    }
+  }
+  
+  return { isPartner: false, product: null };
+}
+
 async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Promise<void> {
   if (!data.email && !data.phone) {
     console.log('[CRM] Sem email ou telefone, pulando criação de contato');
     return;
+  }
+  
+  // === VERIFICAÇÃO DE PARCEIRO: Bloquear reentrada no fluxo ===
+  const partnerCheck = await checkIfPartner(supabase, data.email);
+  if (partnerCheck.isPartner) {
+    console.log(`[CRM] 🚫 PARCEIRO DETECTADO: ${data.email} - Produto: ${partnerCheck.product}. Bloqueando entrada no fluxo.`);
+    
+    // Buscar contact_id se existir
+    let contactId: string | null = null;
+    if (data.email) {
+      const { data: contact } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', data.email)
+        .limit(1)
+        .maybeSingle();
+      contactId = contact?.id || null;
+    }
+    
+    // Registrar em partner_returns
+    await supabase.from('partner_returns').insert({
+      contact_id: contactId,
+      contact_email: data.email,
+      contact_name: data.name,
+      partner_product: partnerCheck.product,
+      return_source: 'hubla_a010',
+      return_product: data.productName,
+      return_value: data.value || 0,
+      blocked: true,
+    });
+    
+    console.log(`[CRM] Retorno de parceiro registrado em partner_returns`);
+    return; // NÃO criar/atualizar deal
   }
   
   // Normalizar telefone

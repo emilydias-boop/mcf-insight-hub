@@ -62,6 +62,7 @@ import Atendimentos from "./pages/crm/Atendimentos";
 import Agenda from "./pages/crm/Agenda";
 import DealsOrfaos from "./pages/crm/DealsOrfaos";
 import LeadsLimbo from "./pages/crm/LeadsLimbo";
+import RetornosParceiros from "./pages/crm/RetornosParceiros";
 import ContatosDuplicados from "./pages/crm/ContatosDuplicados";
 import AgendaMetricas from "./pages/crm/AgendaMetricas";
 import AgendaR2 from "./pages/crm/AgendaR2";
@@ -355,6 +356,7 @@ const App = () => (
                 <Route path="deals-orfaos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DealsOrfaos /></RoleGuard>} />
                 <Route path="leads-limbo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsLimbo /></RoleGuard>} />
                 <Route path="contatos-duplicados" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ContatosDuplicados /></RoleGuard>} />
+                <Route path="retornos-parceiros" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><RetornosParceiros /></RoleGuard>} />
                 
                 <Route path="webhooks" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Webhooks /></RoleGuard>} />
                 <Route path="configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConfiguracoesCRM /></RoleGuard>} />

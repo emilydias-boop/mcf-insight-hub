@@ -6051,6 +6051,65 @@ export type Database = {
           },
         ]
       }
+      partner_returns: {
+        Row: {
+          blocked: boolean
+          contact_email: string | null
+          contact_id: string | null
+          contact_name: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          original_deal_id: string | null
+          partner_product: string
+          return_product: string | null
+          return_source: string
+          return_value: number | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+        }
+        Insert: {
+          blocked?: boolean
+          contact_email?: string | null
+          contact_id?: string | null
+          contact_name?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          original_deal_id?: string | null
+          partner_product: string
+          return_product?: string | null
+          return_source: string
+          return_value?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Update: {
+          blocked?: boolean
+          contact_email?: string | null
+          contact_id?: string | null
+          contact_name?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          original_deal_id?: string | null
+          partner_product?: string
+          return_product?: string | null
+          return_source?: string
+          return_value?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_returns_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pipeline_permissions: {
         Row: {
           can_edit: boolean | null
