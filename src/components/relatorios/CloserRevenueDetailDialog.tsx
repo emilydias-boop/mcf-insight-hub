@@ -30,7 +30,7 @@ interface AttendeeMatch {
   id: string;
   attendee_phone: string | null;
   deal_id: string | null;
-  meeting_slots: { closer_id: string | null } | null;
+  meeting_slots: { closer_id: string | null; scheduled_at: string | null } | null;
   crm_deals: { crm_contacts: { email: string | null; phone: string | null } | null } | null;
 }
 
