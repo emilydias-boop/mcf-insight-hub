@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar, ExternalLink } from 'lucide-react';
 import { QuickScheduleModal } from './QuickScheduleModal';
 import { useClosersWithAvailability } from '@/hooks/useAgendaData';
+import { useCRMBasePath, useActiveBU } from '@/hooks/useActiveBU';
 
 interface SdrScheduleDialogProps {
   open: boolean;
@@ -30,8 +31,10 @@ export function SdrScheduleDialog({
   onScheduled,
 }: SdrScheduleDialogProps) {
   const navigate = useNavigate();
+  const basePath = useCRMBasePath();
+  const activeBU = useActiveBU();
   const [showQuickSchedule, setShowQuickSchedule] = useState(false);
-  const { data: closers = [] } = useClosersWithAvailability();
+  const { data: closers = [] } = useClosersWithAvailability(activeBU);
   
   const handleScheduleHere = () => {
     onOpenChange(false);
@@ -46,7 +49,7 @@ export function SdrScheduleDialog({
     if (initialNotes) {
       params.set('notes', encodeURIComponent(initialNotes));
     }
-    navigate(`/crm/agenda?${params.toString()}`);
+    navigate(`${basePath}/agenda?${params.toString()}`);
   };
   
   const handleQuickScheduleClose = (isOpen: boolean) => {
