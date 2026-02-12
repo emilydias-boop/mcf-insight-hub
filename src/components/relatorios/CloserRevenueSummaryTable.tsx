@@ -240,6 +240,7 @@ export function CloserRevenueSummaryTable({
           transactions={selectedTxs}
           globalFirstIds={globalFirstIds}
           attendees={attendees}
+          closers={closers}
           startDate={startDate}
           endDate={endDate}
         />
