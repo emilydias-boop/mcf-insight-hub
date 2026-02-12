@@ -1,59 +1,32 @@
 
 
-# Excluir Vendas Outside do Faturamento por Closer
+# Corrigir Link do Google Meet Abrindo 404
 
 ## Problema
 
-A tabela "Faturamento por Closer" atribui todas as transacoes ao closer baseado apenas no match de email/telefone com a agenda. Isso inclui vendas **Outside** (leads que pagaram ANTES da reuniao de R1), inflando os numeros de transacoes e faturamento de cada closer.
+O link salvo no banco de dados esta sem o prefixo `https://` (exemplo: `meet.google.com/dqc-hdem-tgr`). Quando o `window.open()` recebe um link sem protocolo, o navegador interpreta como um caminho relativo da aplicacao, resultando em `https://seu-app.lovable.app/meet.google.com/...` -- que gera o erro 404.
 
 ## Solucao
 
-Adicionar deteccao de Outside na logica de atribuicao da tabela. Transacoes Outside serao separadas em colunas dedicadas, mantendo a visibilidade sem poluir as metricas de desempenho real.
+Adicionar uma normalizacao simples no `handleOpenVideoConference` e no `handleCopyLink` para garantir que o link sempre tenha `https://` antes de abrir ou copiar.
 
-## Mudancas
+## Mudanca
 
-### 1. Detectar Outside na atribuicao (CloserRevenueSummaryTable.tsx)
+**Arquivo**: `src/components/crm/AgendaMeetingDrawer.tsx`
 
-Quando uma transacao faz match com um closer por email/telefone, verificar se a data da venda (`sale_date`) e anterior a data da reuniao mais antiga desse lead com o closer (`scheduled_at` do attendee correspondente). Se for, classificar como Outside.
-
-Para isso, o componente precisa receber as datas das reunioes dos attendees. A informacao ja esta parcialmente disponivel via `attendees` (que contem `meeting_slots`), mas falta o campo `scheduled_at`.
-
-### 2. Expandir dados do attendee
-
-Atualizar a query que alimenta o `attendees` no `SalesReportPanel.tsx` para incluir `scheduled_at` do `meeting_slots`, permitindo a comparacao de datas.
-
-### 3. Adicionar colunas Outside na tabela
-
-Adicionar duas colunas ao "Faturamento por Closer":
-- **Outside** - contagem de transacoes Outside por closer
-- **Fat. Outside** - faturamento bruto dessas transacoes
-
-Esses valores ficam separados das metricas regulares do closer.
-
-### 4. Logica de separacao
+Adicionar uma funcao auxiliar que normaliza o link:
 
 ```text
-Para cada transacao com match de closer:
-  1. Buscar o attendee correspondente (por email/telefone)
-  2. Comparar sale_date da transacao com scheduled_at da reuniao
-  3. Se sale_date < scheduled_at -> Outside (nao conta em Transacoes/Bruto/Liquido regulares)
-  4. Se sale_date >= scheduled_at -> Venda normal (conta normalmente)
+function ensureProtocol(url: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return 'https://' + url;
+}
 ```
 
-## Detalhes Tecnicos
+Aplicar nos dois handlers:
+- `handleOpenVideoConference`: `window.open(ensureProtocol(videoConferenceLink), '_blank')`
+- `handleCopyLink`: `navigator.clipboard.writeText(ensureProtocol(videoConferenceLink))`
+- Mensagem WhatsApp: usar `ensureProtocol(videoConferenceLink)` no template
 
-### Arquivos a modificar
+Tambem aplicar no componente `MeetingLinkShare.tsx` que tem logica similar de abertura de link.
 
-1. **`src/components/relatorios/SalesReportPanel.tsx`** - Incluir `scheduled_at` na query de attendees
-2. **`src/components/relatorios/CloserRevenueSummaryTable.tsx`** - Adicionar logica de deteccao Outside na atribuicao, novas colunas na tabela, e separar os totais
-3. **`src/components/relatorios/CloserRevenueDetailDialog.tsx`** - Marcar transacoes Outside no detalhe
-
-### Interface AttendeeMatch atualizada
-
-Adicionar `meeting_slots.scheduled_at` ao tipo `AttendeeMatch` para que a data da reuniao esteja disponivel na logica de comparacao.
-
-### Resultado esperado
-
-- Numeros dos closers refletem apenas vendas reais (pos-reuniao)
-- Vendas Outside ficam visiveis em colunas separadas
-- Total geral da tabela continua batendo com o faturamento total do periodo
