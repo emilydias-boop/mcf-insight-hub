@@ -1,85 +1,98 @@
 
-# Análise Detalhada de "Sem Closer" + Dashboard de Diagnóstico
+# Categorizar Vendas de Lancamento ("Launch")
 
-## Problema
-Transações "Sem closer" (75% dos casos) representam vendas que não puderam ser atribuídas a nenhum closer R1. A causa pode ser:
-1. **Falha de Código**: Não conseguiu fazer match de email/telefone por divergência de dados
-2. **Legítimo**: Cliente nunca teve reunião R1 (vendas diretas, A010, etc.)
+## Contexto
 
-Atualmente não há forma de distinguir entre os dois casos.
+Leads que vieram de lancamentos (lives do marketing) compram contrato e parceria fora do fluxo normal de closer R1. Por isso, aparecem como "Sem closer" nos relatorios. A identificacao ja existe parcialmente:
 
-## Solução em 2 Partes
+- **Tags no CRM**: Deals possuem tags como `Launch`, `DZAM1-Lead Launch`, `Lead Launch 2404.01`
+- **Tag `Lead-Lancamento`**: Ja utilizada pelo sistema de distribuicao de leads (`distribute-leads-list`)
+- **UTM Campaign**: Presente em algumas transacoes da Hubla
+- **Produto especifico**: Alguns launches podem ter produtos distintos
 
-### Parte 1: Detalhar a Modal "Sem Closer" (UI)
+## Solucao
 
-Modificar o `CloserRevenueDetailDialog` para quando `closerId === '__unassigned__'`, mostrar:
+### 1. Adicionar coluna `sale_origin` na tabela `hubla_transactions`
 
-1. **Tabela de Transações "Sem Closer"** com colunas:
-   - Email (com badge de warning se vazio)
-   - Telefone (com badge de warning se vazio)
-   - Produto
-   - Valor Bruto
-   - Status
+Nova coluna para categorizar a origem da venda:
 
-2. **Filtros para diagnóstico**:
-   - Agrupar por "Motivo da Não-Atribuição":
-     - ✗ Sem Email (badge em vermelho)
-     - ✗ Sem Telefone (badge em vermelho)
-     - ⚠ Email + Telefone vazios (crítico)
-     - ℹ Email/Telefone presente mas sem match
-
-3. **Cards de KPI** para "Sem Closer":
-   - Total de transações
-   - Valor que deixou de ser atribuído
-   - % com dados faltando (email/telefone)
-   - % com dados presentes mas sem match
-
-### Parte 2: Hook de Análise de Diagnóstico
-
-Criar hook `useUnassignedTransactionsDiagnosis.ts` que categoriza cada transação:
-
-```typescript
-interface UnassignedTransactionDiagnosis {
-  reason: 'missing_email' | 'missing_phone' | 'both_missing' | 'no_match';
-  transaction: Transaction;
-  hasCloserInCRM?: boolean; // se encontrou no CRM mas não matching
-  suggestedCloser?: string; // fuzzy match do telefone/email
-}
+```text
+sale_origin TEXT DEFAULT NULL
+-- Valores possiveis: 'launch', 'closer', 'direct', 'outside', NULL (nao categorizado)
 ```
 
-O hook fará:
-1. Para cada transação "Sem closer":
-   - Verificar se email/telefone está vazio → categoriza como "missing"
-   - Se tem dados, fazer fuzzy match contra todos os contacts no CRM → categoriza como "no_match"
-   - Se encontrou contact no CRM mas sem closer vinculado → adiciona nota "contact existe mas sem reunion"
+### 2. Funcao de deteccao de Launch via CRM tags
 
-### Parte 3: Análise Adicional na Modal
+Ao atribuir transacoes nos relatorios, alem do match por email/telefone com attendees, o sistema verifica se o deal do lead possui tags de lancamento. A logica:
 
-Dentro da modal de "Sem Closer", ao clicar em uma transação:
-- Mostrar um drawer com:
-  - **Dados Brutos**: Email, Telefone exatos como vieram da Hubla
-  - **Matching Manual**: Campo para buscar/sugerir um closer
-  - **Histórico CRM**: Se existe contato/deal no CRM, mostrar links
-  - **Ação**: Botão para "Atribuir Manualmente" ao closer (salva em `linked_attendee_id`)
+1. Buscar deals no CRM cujo contato tem o mesmo email da transacao
+2. Verificar se alguma tag contem "Launch" ou "Lead Launch" ou "Lead-Lancamento"
+3. Se sim, categorizar como `sale_origin = 'launch'`
 
-## Benefícios
+### 3. Interface de categorizacao em massa
 
-1. **Visibilidade**: Entender exatamente por que uma venda não foi atribuída
-2. **Data Quality**: Identificar erros de input (emails/telefones inválidos)
-3. **Resolução**: Permitir atribuição manual com um clique
-4. **Auditoria**: Registrar quem fez a atribuição e quando
+Na pagina de Transacoes (`/bu-incorporador/transacoes`), adicionar:
 
-## Ordem de Implementação
+- **Filtro por origem**: Dropdown com "Todos", "Launch", "Closer", "Direto", "Sem categoria"
+- **Acao em massa**: Selecionar multiplas transacoes e marcar como "Launch"
+- **Upload de lista**: Botao para importar lista de emails do marketing e marcar automaticamente como Launch
 
-1. Criar `useUnassignedTransactionsDiagnosis.ts` com lógica de categorização
-2. Estender `CloserRevenueDetailDialog` para mostrar detalhamento quando `closerId === '__unassigned__'`
-3. Adicionar tabela de transações com filtros e razão de não-atribuição
-4. Adicionar drawer de detalhe ao clicar em uma transação
-5. Opcional: Criar página `/bu-incorporador/diagnostico-sem-closer` para visão consolidada de todos os períodos
+### 4. Separacao nos relatorios
 
-## Arquivos a Criar
-- `src/hooks/useUnassignedTransactionsDiagnosis.ts`
-- `src/components/relatorios/UnassignedTransactionsDetailPanel.tsx`
+Na tabela `CloserRevenueSummaryTable`, adicionar uma linha "Launch" separada de "Sem closer":
 
-## Arquivos a Modificar
-- `src/components/relatorios/CloserRevenueDetailDialog.tsx` (adicionar condicional para "Sem Closer")
+```text
+Closer      | Transacoes | Bruto    | % Total
+Cristiane   | 12         | R$ 50k   | 30%
+Thayna      | 8          | R$ 35k   | 20%
+Launch      | 15         | R$ 60k   | 35%  <-- Nova linha
+Sem closer  | 5          | R$ 25k   | 15%  <-- Reduzido
+```
+
+### 5. Deteccao automatica nos webhooks
+
+Atualizar os webhooks para detectar lancamento ao processar transacoes:
+- Verificar tags do deal do lead
+- Verificar utm_campaign com palavras-chave de launch
+- Se detectado, preencher `sale_origin = 'launch'`
+
+## Detalhes Tecnicos
+
+### Migracao SQL
+
+```sql
+ALTER TABLE hubla_transactions 
+ADD COLUMN sale_origin TEXT DEFAULT NULL;
+
+CREATE INDEX idx_hubla_transactions_sale_origin 
+ON hubla_transactions(sale_origin);
+```
+
+### Arquivos a criar
+- `src/components/incorporador/BulkLaunchTagDialog.tsx` -- Dialog para marcar transacoes em massa como Launch (upload de lista de emails)
+
+### Arquivos a modificar
+- `src/components/relatorios/CloserRevenueSummaryTable.tsx` -- Separar "Launch" de "Sem closer" usando tags do CRM
+- `src/components/relatorios/CloserRevenueDetailDialog.tsx` -- Condicional para mostrar detalhes de Launch
+- `src/pages/bu-incorporador/TransacoesIncorp.tsx` -- Adicionar filtro por sale_origin e acao em massa
+- `src/hooks/useAllHublaTransactions.ts` -- Incluir sale_origin nos dados retornados
+- `supabase/functions/hubla-webhook-handler/index.ts` -- Preencher sale_origin ao processar transacao
+
+### Logica de atribuicao no relatorio (CloserRevenueSummaryTable)
+
+```text
+Para cada transacao:
+  1. Match por email/telefone com attendee R1 → atribui ao closer
+  2. Se nao matchou, verificar se deal do lead tem tag "Launch" → categoriza como Launch
+  3. Se nao tem tag, fica como "Sem closer"
+```
+
+A verificacao de tags sera feita com uma query adicional que busca deals com tags de lancamento e cruza por email do contato, sem necessidade de alterar a estrutura existente de attendees.
+
+### Ordem de implementacao
+
+1. Migracao: adicionar coluna `sale_origin`
+2. Atualizar `CloserRevenueSummaryTable` para separar Launch de Sem closer
+3. Criar dialog de categorizacao em massa
+4. Adicionar filtro na pagina de Transacoes
+5. Atualizar webhook para deteccao automatica
