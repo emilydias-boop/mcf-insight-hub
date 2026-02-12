@@ -517,6 +517,39 @@ async function handleContactDeleted(supabase: any, data: any) {
 
 // ============= HANDLERS DE DEALS =============
 
+// ============= HELPER: Verificar se é parceiro existente =============
+async function checkIfPartner(supabase: any, email: string | null): Promise<{isPartner: boolean, product: string | null}> {
+  if (!email) return { isPartner: false, product: null };
+  
+  const PARTNER_PRODUCTS = ['A001', 'A002', 'A003', 'A004', 'A009'];
+  
+  const { data: transactions } = await supabase
+    .from('hubla_transactions')
+    .select('product_name')
+    .ilike('customer_email', email)
+    .eq('sale_status', 'completed')
+    .limit(50);
+  
+  if (!transactions?.length) return { isPartner: false, product: null };
+  
+  for (const tx of transactions) {
+    const name = (tx.product_name || '').toUpperCase();
+    for (const code of PARTNER_PRODUCTS) {
+      if (name.includes(code)) {
+        return { isPartner: true, product: code };
+      }
+    }
+    if (name.includes('INCORPORADOR') && !name.includes('CONTRATO') && !name.includes('A010')) {
+      return { isPartner: true, product: 'MCF Incorporador' };
+    }
+    if (name.includes('ANTICRISE') && !name.includes('CONTRATO')) {
+      return { isPartner: true, product: 'Anticrise' };
+    }
+  }
+  
+  return { isPartner: false, product: null };
+}
+
 async function handleDealCreated(supabase: any, data: any) {
   console.log('[DEAL.CREATED] Processing deal:', data.deal?.name || data.name);
   console.log('[DEAL.CREATED] Full payload:', JSON.stringify(data, null, 2));
@@ -525,6 +558,38 @@ async function handleDealCreated(supabase: any, data: any) {
   const contactData = data.contact || {};
   const originName = data.deal_origin || data.origin?.name;
   const ownerName = dealData.user || data.deal_user;
+
+  // === VERIFICAÇÃO DE PARCEIRO: Bloquear reentrada no fluxo ===
+  const contactEmail = contactData.email || data.contact_email;
+  if (contactEmail) {
+    const partnerCheck = await checkIfPartner(supabase, contactEmail);
+    if (partnerCheck.isPartner) {
+      console.log(`[DEAL.CREATED] 🚫 PARCEIRO DETECTADO: ${contactEmail} - Produto: ${partnerCheck.product}. Bloqueando criação.`);
+      
+      let contactId: string | null = null;
+      const { data: contact } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', contactEmail)
+        .limit(1)
+        .maybeSingle();
+      contactId = contact?.id || null;
+      
+      await supabase.from('partner_returns').insert({
+        contact_id: contactId,
+        contact_email: contactEmail,
+        contact_name: contactData.name || data.contact_name,
+        partner_product: partnerCheck.product,
+        return_source: 'clint_deal_created',
+        return_product: dealData.name || data.deal_name,
+        return_value: dealData.value || data.deal_value || 0,
+        blocked: true,
+      });
+      
+      console.log(`[DEAL.CREATED] Retorno de parceiro registrado em partner_returns`);
+      return { action: 'blocked', reason: 'partner_detected', product: partnerCheck.product };
+    }
+  }
 
   // 1. Buscar ou criar contato pelo email
   let contactId = null;
@@ -1036,6 +1101,28 @@ async function handleDealStageChanged(supabase: any, data: any) {
 
   // 2.4. Se ainda não achou e temos contactId, criar o deal
   if (!dealId && contactId) {
+    // === VERIFICAÇÃO DE PARCEIRO antes de criar deal ===
+    const contactEmail = contactData.email || data.contact_email;
+    if (contactEmail) {
+      const partnerCheck = await checkIfPartner(supabase, contactEmail);
+      if (partnerCheck.isPartner) {
+        console.log(`[DEAL.STAGE_CHANGED] 🚫 PARCEIRO DETECTADO: ${contactEmail} - Produto: ${partnerCheck.product}. Bloqueando criação.`);
+        
+        await supabase.from('partner_returns').insert({
+          contact_id: contactId,
+          contact_email: contactEmail,
+          contact_name: contactData.name || data.contact_name,
+          partner_product: partnerCheck.product,
+          return_source: 'clint_stage_changed',
+          return_product: newStageName,
+          return_value: data.deal?.value || data.deal_value || 0,
+          blocked: true,
+        });
+        
+        return { action: 'blocked', reason: 'partner_detected', product: partnerCheck.product };
+      }
+    }
+    
     console.log('[DEAL.STAGE_CHANGED] Deal not found, creating new deal');
     
     const dealName = data.deal?.name || data.contact?.name || contactData.name || 'Deal via webhook';
