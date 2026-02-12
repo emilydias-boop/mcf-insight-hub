@@ -426,6 +426,29 @@ Deno.serve(async (req) => {
       saleDate = new Date().toISOString()
     }
 
+    // ===== DEDUPLICAÇÃO: Verificar se já existe registro Hubla equivalente =====
+    let countInDashboard = true
+    const saleDateObj = new Date(saleDate)
+    const saleDateStr = saleDateObj.toISOString().split('T')[0] // YYYY-MM-DD
+
+    const { data: existingHubla } = await supabase
+      .from('hubla_transactions')
+      .select('id, net_value')
+      .eq('source', 'hubla')
+      .ilike('customer_email', body.email.toLowerCase())
+      .gte('sale_date', `${saleDateStr}T00:00:00`)
+      .lte('sale_date', `${saleDateStr}T23:59:59`)
+      .gte('product_price', valorBruto * 0.95)
+      .lte('product_price', valorBruto * 1.05)
+      .gt('net_value', 0)
+      .limit(1)
+      .maybeSingle()
+
+    if (existingHubla) {
+      console.log('⚠️ Registro Hubla equivalente encontrado! Marcando Make como count_in_dashboard=false:', existingHubla.id)
+      countInDashboard = false
+    }
+
     // Prepare transaction data
     const transactionData = {
       hubla_id: hublaId,
@@ -440,8 +463,8 @@ Deno.serve(async (req) => {
       event_type: 'invoice.payment_succeeded',
       sale_status: 'completed',
       source: 'make',
-      count_in_dashboard: true,
-      raw_data: { ...body, valor_corrigido: valorCorrigido, valor_original_make: valorOriginalMake }
+      count_in_dashboard: countInDashboard,
+      raw_data: { ...body, valor_corrigido: valorCorrigido, valor_original_make: valorOriginalMake, deduplicated: !countInDashboard }
     }
 
     console.log('💾 Inserting transaction:', JSON.stringify(transactionData, null, 2))
