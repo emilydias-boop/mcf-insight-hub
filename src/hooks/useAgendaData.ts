@@ -1460,13 +1460,13 @@ export async function syncDealStageFromAgenda(
         ? ['No-Show R2', 'No-Show Closer', 'NO-SHOW R2', 'No-show R2']
         : ['No-Show', 'NO-SHOW', 'No-show', 'NoShow'],
       'rescheduled': meetingType === 'r2'
-        ? ['Reunião 02 Agendada', 'Reunião 2 Agendada', 'R2 Agendada', 'REUNIÃO 2 AGENDADA']
+        ? ['Reunião 02 Agendada', 'Reunião 02 Agendado', 'Reunião 2 Agendada', 'R2 Agendada', 'REUNIÃO 2 AGENDADA']
         : ['Reunião 01 Agendada', 'Reunião 1 Agendada', 'R1 Agendada', 'REUNIÃO 1 AGENDADA'],
       'completed': meetingType === 'r2' 
         ? ['Reunião 02 Realizada', 'Reunião 2 Realizada', 'R2 Realizada', 'REUNIÃO 2 REALIZADA']
         : ['Reunião 01 Realizada', 'Reunião 1 Realizada', 'R1 Realizada', 'REUNIÃO 1 REALIZADA'],
       'contract_paid': ['Contrato Pago', 'CONTRATO PAGO', 'Contrato pago'],
-      'r2_scheduled': ['Reunião 02 Agendada', 'Reunião 2 Agendada', 'R2 Agendada', 'REUNIÃO 2 AGENDADA'],
+      'r2_scheduled': ['Reunião 02 Agendada', 'Reunião 02 Agendado', 'Reunião 2 Agendada', 'R2 Agendada', 'REUNIÃO 2 AGENDADA'],
     };
 
     const targetStageNames = stageNameMap[agendaStatus];
