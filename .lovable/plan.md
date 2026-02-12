@@ -1,32 +1,42 @@
 
-
-# Corrigir Link do Google Meet Abrindo 404
+# Corrigir Erros ao Atualizar Cotas e Editar Parcelas
 
 ## Problema
 
-O link salvo no banco de dados esta sem o prefixo `https://` (exemplo: `meet.google.com/dqc-hdem-tgr`). Quando o `window.open()` recebe um link sem protocolo, o navegador interpreta como um caminho relativo da aplicacao, resultando em `https://seu-app.lovable.app/meet.google.com/...` -- que gera o erro 404.
+Dois bugs causados por campos extras (que nao existem no banco de dados) sendo enviados nas chamadas de update do Supabase:
+
+1. **"Erro ao atualizar carta"**: O campo `inicio_segunda_parcela` e incluido no objeto de update, mas essa coluna NAO existe na tabela `consortium_cards`. A funcao de criacao remove esse campo antes de inserir (linha 191), mas a funcao de update nao faz o mesmo.
+
+2. **"Erro ao atualizar parcela"**: O campo `recalcularDemais` e passado diretamente para o `updateInstallment.mutateAsync(data)`, e dentro do hook, o spread `{ id, ...updateData }` inclui `recalcularDemais` no objeto enviado ao Supabase, que rejeita por nao existir na tabela `consortium_installments`.
 
 ## Solucao
 
-Adicionar uma normalizacao simples no `handleOpenVideoConference` e no `handleCopyLink` para garantir que o link sempre tenha `https://` antes de abrir ou copiar.
+### 1. Corrigir `useUpdateConsorcioCard` (src/hooks/useConsorcio.ts)
 
-## Mudanca
-
-**Arquivo**: `src/components/crm/AgendaMeetingDrawer.tsx`
-
-Adicionar uma funcao auxiliar que normaliza o link:
+Destruturar `inicio_segunda_parcela` junto com `partners` antes de enviar ao Supabase:
 
 ```text
-function ensureProtocol(url: string): string {
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return 'https://' + url;
-}
+// Antes (linha 304):
+async ({ id, partners, ...cardData })
+
+// Depois:
+async ({ id, partners, inicio_segunda_parcela, ...cardData })
 ```
 
-Aplicar nos dois handlers:
-- `handleOpenVideoConference`: `window.open(ensureProtocol(videoConferenceLink), '_blank')`
-- `handleCopyLink`: `navigator.clipboard.writeText(ensureProtocol(videoConferenceLink))`
-- Mensagem WhatsApp: usar `ensureProtocol(videoConferenceLink)` no template
+### 2. Corrigir `handleSaveInstallment` (src/components/consorcio/ConsorcioCardDrawer.tsx)
 
-Tambem aplicar no componente `MeetingLinkShare.tsx` que tem logica similar de abertura de link.
+Remover `recalcularDemais` do objeto antes de passar para `updateInstallment.mutateAsync`:
 
+```text
+// Antes (linha 183):
+await updateInstallment.mutateAsync(data);
+
+// Depois:
+const { recalcularDemais, ...installmentData } = data;
+await updateInstallment.mutateAsync(installmentData);
+```
+
+## Arquivos a modificar
+
+1. **`src/hooks/useConsorcio.ts`** - Linha 304: adicionar `inicio_segunda_parcela` na desestruturacao
+2. **`src/components/consorcio/ConsorcioCardDrawer.tsx`** - Linha 181-183: separar `recalcularDemais` antes do mutateAsync
