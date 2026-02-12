@@ -5214,6 +5214,7 @@ export type Database = {
           product_type: string | null
           raw_data: Json | null
           sale_date: string
+          sale_origin: string | null
           sale_status: string | null
           source: string | null
           subtotal_cents: number | null
@@ -5247,6 +5248,7 @@ export type Database = {
           product_type?: string | null
           raw_data?: Json | null
           sale_date: string
+          sale_origin?: string | null
           sale_status?: string | null
           source?: string | null
           subtotal_cents?: number | null
@@ -5280,6 +5282,7 @@ export type Database = {
           product_type?: string | null
           raw_data?: Json | null
           sale_date?: string
+          sale_origin?: string | null
           sale_status?: string | null
           source?: string | null
           subtotal_cents?: number | null
