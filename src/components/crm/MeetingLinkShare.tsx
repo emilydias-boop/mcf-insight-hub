@@ -12,6 +12,11 @@ interface MeetingLinkShareProps {
   contactName?: string;
 }
 
+const ensureProtocol = (url: string): string => {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return 'https://' + url;
+};
+
 export function MeetingLinkShare({
   meetingLink,
   closerName,
@@ -19,6 +24,7 @@ export function MeetingLinkShare({
   contactPhone,
   contactName,
 }: MeetingLinkShareProps) {
+  const safeMeetingLink = meetingLink ? ensureProtocol(meetingLink) : '';
   const [copied, setCopied] = useState(false);
   const [sendingWhatsapp, setSendingWhatsapp] = useState(false);
 
@@ -44,7 +50,7 @@ Sua reunião foi confirmada para:
 🕐 ${formattedTime}
 
 Acesse pelo link abaixo:
-🔗 ${meetingLink}
+🔗 ${safeMeetingLink}
 
 Até lá! 👋`;
 
@@ -91,8 +97,8 @@ Até lá! 👋`;
   };
 
   const handleOpenLink = () => {
-    if (meetingLink) {
-      window.open(meetingLink, '_blank');
+    if (safeMeetingLink) {
+      window.open(safeMeetingLink, '_blank');
     }
   };
 

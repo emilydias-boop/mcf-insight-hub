@@ -378,17 +378,21 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     });
   };
 
+  const ensureProtocol = (url: string): string => {
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return 'https://' + url;
+  };
+
   const handleCopyLink = () => {
     if (videoConferenceLink) {
-      navigator.clipboard.writeText(videoConferenceLink);
+      navigator.clipboard.writeText(ensureProtocol(videoConferenceLink));
       toast.success('Link copiado!');
     }
   };
 
   const handleOpenVideoConference = () => {
     if (videoConferenceLink) {
-      console.log('Opening video conference:', videoConferenceLink);
-      window.open(videoConferenceLink, '_blank');
+      window.open(ensureProtocol(videoConferenceLink), '_blank');
     } else {
       toast.error('Link de videoconferência não disponível.');
     }
@@ -403,8 +407,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
       return;
     }
     
+    const safeLink = ensureProtocol(videoConferenceLink);
     const message = encodeURIComponent(
-      `Olá ${name}! 👋\n\nSegue o link para nossa reunião (${formattedDateParam} às ${formattedTimeParam}):\n\n🔗 ${videoConferenceLink}\n\nÉ só clicar no link no horário agendado!\n\nAguardo você!`
+      `Olá ${name}! 👋\n\nSegue o link para nossa reunião (${formattedDateParam} às ${formattedTimeParam}):\n\n🔗 ${safeLink}\n\nÉ só clicar no link no horário agendado!\n\nAguardo você!`
     );
     window.open(`https://wa.me/55${formattedPhone}?text=${message}`, '_blank');
   };
