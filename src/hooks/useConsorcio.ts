@@ -301,9 +301,10 @@ export function useUpdateConsorcioCard() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, partners, ...cardData }: Partial<ConsorcioCard> & { 
+    mutationFn: async ({ id, partners, inicio_segunda_parcela, ...cardData }: Partial<ConsorcioCard> & { 
       id: string; 
-      partners?: Array<{ nome: string; cpf: string; renda?: number }> 
+      partners?: Array<{ nome: string; cpf: string; renda?: number }>;
+      inicio_segunda_parcela?: string;
     }) => {
       // 0. Check if tipo_produto is changing - need to recalculate commissions
       let shouldRecalculateCommissions = false;
