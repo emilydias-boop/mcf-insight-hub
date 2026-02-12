@@ -1,73 +1,59 @@
 
 
-# Corrigir Duplicacao de Transacoes Make + Hubla
+# Excluir Vendas Outside do Faturamento por Closer
 
 ## Problema
 
-Quando uma venda de parceria ocorre, **dois webhooks** disparam simultaneamente:
-1. **Hubla** cria: `A009 - MCF INCORPORADOR COMPLETO + THE CLUB` com `net_value = 16.680,45`
-2. **Make** cria: `Parceria` com `net_value = 16.680,45` (copiado do registro Hubla pela logica de correcao de valor)
+A tabela "Faturamento por Closer" atribui todas as transacoes ao closer baseado apenas no match de email/telefone com a agenda. Isso inclui vendas **Outside** (leads que pagaram ANTES da reuniao de R1), inflando os numeros de transacoes e faturamento de cada closer.
 
-O resultado: o Liquido Total aparece **dobrado** (R$ 1.128.876,83 vs o valor real).
+## Solucao
 
-## Causa Raiz
+Adicionar deteccao de Outside na logica de atribuicao da tabela. Transacoes Outside serao separadas em colunas dedicadas, mantendo a visibilidade sem poluir as metricas de desempenho real.
 
-A RPC `get_all_hubla_transactions` retorna ambos os registros sem deduplicacao. O webhook `webhook-make-parceria` nao verifica se ja existe um registro Hubla para o mesmo cliente/data/valor antes de inserir.
+## Mudancas
 
-## Solucao (duas camadas)
+### 1. Detectar Outside na atribuicao (CloserRevenueSummaryTable.tsx)
 
-### 1. Deduplicacao na RPC (efeito imediato)
+Quando uma transacao faz match com um closer por email/telefone, verificar se a data da venda (`sale_date`) e anterior a data da reuniao mais antiga desse lead com o closer (`scheduled_at` do attendee correspondente). Se for, classificar como Outside.
 
-Atualizar a funcao `get_all_hubla_transactions` para excluir transacoes `source = 'make'` quando ja existe uma transacao `source = 'hubla'` para o mesmo `customer_email`, mesma data (mesmo dia) e valor bruto similar (margem de 5%).
+Para isso, o componente precisa receber as datas das reunioes dos attendees. A informacao ja esta parcialmente disponivel via `attendees` (que contem `meeting_slots`), mas falta o campo `scheduled_at`.
 
-Logica SQL:
+### 2. Expandir dados do attendee
 
-```text
-AND NOT EXISTS (
-  SELECT 1 FROM hubla_transactions h2
-  WHERE h2.source = 'hubla'
-    AND h2.customer_email = ht.customer_email
-    AND h2.sale_date::date = ht.sale_date::date
-    AND h2.product_price BETWEEN ht.product_price * 0.95 AND ht.product_price * 1.05
-    AND h2.net_value > 0
-)
--- Aplicado apenas quando ht.source = 'make'
-```
+Atualizar a query que alimenta o `attendees` no `SalesReportPanel.tsx` para incluir `scheduled_at` do `meeting_slots`, permitindo a comparacao de datas.
 
-### 2. Deduplicacao no webhook (prevencao futura)
+### 3. Adicionar colunas Outside na tabela
 
-Atualizar `webhook-make-parceria` para verificar se ja existe um registro Hubla antes de inserir. Se encontrar, marcar o registro Make com `count_in_dashboard = false` em vez de nao inserir (para manter rastreabilidade).
+Adicionar duas colunas ao "Faturamento por Closer":
+- **Outside** - contagem de transacoes Outside por closer
+- **Fat. Outside** - faturamento bruto dessas transacoes
 
-### 3. Correcao dos dados existentes
+Esses valores ficam separados das metricas regulares do closer.
 
-Executar um UPDATE para marcar as transacoes Make duplicadas existentes com `count_in_dashboard = false`:
+### 4. Logica de separacao
 
 ```text
-UPDATE hubla_transactions make_tx
-SET count_in_dashboard = false
-WHERE make_tx.source = 'make'
-  AND make_tx.product_category = 'parceria'
-  AND EXISTS (
-    SELECT 1 FROM hubla_transactions hubla_tx
-    WHERE hubla_tx.source = 'hubla'
-      AND hubla_tx.customer_email = make_tx.customer_email
-      AND hubla_tx.sale_date::date = make_tx.sale_date::date
-      AND hubla_tx.product_price BETWEEN make_tx.product_price * 0.95
-                                     AND make_tx.product_price * 1.05
-      AND hubla_tx.net_value > 0
-  );
+Para cada transacao com match de closer:
+  1. Buscar o attendee correspondente (por email/telefone)
+  2. Comparar sale_date da transacao com scheduled_at da reuniao
+  3. Se sale_date < scheduled_at -> Outside (nao conta em Transacoes/Bruto/Liquido regulares)
+  4. Se sale_date >= scheduled_at -> Venda normal (conta normalmente)
 ```
 
 ## Detalhes Tecnicos
 
 ### Arquivos a modificar
 
-- **Migracao SQL**: Atualizar RPC `get_all_hubla_transactions` com clausula NOT EXISTS para excluir duplicatas Make
-- **Migracao SQL**: UPDATE para corrigir dados existentes (marcar duplicatas como `count_in_dashboard = false`)
-- **`supabase/functions/webhook-make-parceria/index.ts`**: Adicionar verificacao pre-insercao -- se Hubla ja processou o mesmo email+data+valor, marcar `count_in_dashboard = false`
+1. **`src/components/relatorios/SalesReportPanel.tsx`** - Incluir `scheduled_at` na query de attendees
+2. **`src/components/relatorios/CloserRevenueSummaryTable.tsx`** - Adicionar logica de deteccao Outside na atribuicao, novas colunas na tabela, e separar os totais
+3. **`src/components/relatorios/CloserRevenueDetailDialog.tsx`** - Marcar transacoes Outside no detalhe
 
-### Ordem de implementacao
+### Interface AttendeeMatch atualizada
 
-1. Migracao SQL com UPDATE corretivo + RPC atualizada (resolve o problema imediatamente para dados existentes e futuros)
-2. Atualizar webhook Make para prevenir duplicatas futuras na fonte
+Adicionar `meeting_slots.scheduled_at` ao tipo `AttendeeMatch` para que a data da reuniao esteja disponivel na logica de comparacao.
 
+### Resultado esperado
+
+- Numeros dos closers refletem apenas vendas reais (pos-reuniao)
+- Vendas Outside ficam visiveis em colunas separadas
+- Total geral da tabela continua batendo com o faturamento total do periodo
