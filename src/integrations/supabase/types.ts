@@ -9131,6 +9131,7 @@ export type Database = {
           product_price: number
           reference_price: number
           sale_date: string
+          sale_origin: string
           sale_status: string
           source: string
           total_installments: number
@@ -9204,6 +9205,7 @@ export type Database = {
           product_price: number
           reference_price: number
           sale_date: string
+          sale_origin: string
           sale_status: string
           source: string
           total_installments: number

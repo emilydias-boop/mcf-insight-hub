@@ -32,6 +32,7 @@ interface Transaction {
   installment_number: number | null;
   gross_override?: number | null;
   reference_price?: number | null;
+  sale_origin?: string | null;
 }
 
 interface CloserRevenueSummaryTableProps {
@@ -84,6 +85,8 @@ export function CloserRevenueSummaryTable({
     const txMap = new Map<string, Transaction[]>();
     let unassigned = { count: 0, gross: 0, net: 0 };
     const unassignedTxs: Transaction[] = [];
+    let launch = { count: 0, gross: 0, net: 0 };
+    const launchTxs: Transaction[] = [];
     
     for (const tx of transactions) {
       const txEmail = (tx.customer_email || '').toLowerCase();
@@ -117,10 +120,18 @@ export function CloserRevenueSummaryTable({
       }
       
       if (!matched) {
-        unassigned.count++;
-        unassigned.gross += gross;
-        unassigned.net += net;
-        unassignedTxs.push(tx);
+        // Check if it's a launch transaction (by sale_origin field)
+        if (tx.sale_origin === 'launch') {
+          launch.count++;
+          launch.gross += gross;
+          launch.net += net;
+          launchTxs.push(tx);
+        } else {
+          unassigned.count++;
+          unassigned.gross += gross;
+          unassigned.net += net;
+          unassignedTxs.push(tx);
+        }
       }
     }
     
@@ -132,6 +143,11 @@ export function CloserRevenueSummaryTable({
       }))
       .filter((r) => r.count > 0)
       .sort((a, b) => b.gross - a.gross);
+    
+    if (launch.count > 0) {
+      rows.push({ id: '__launch__', name: 'Lançamento', ...launch });
+      txMap.set('__launch__', launchTxs);
+    }
     
     if (unassigned.count > 0) {
       rows.push({ id: '__unassigned__', name: 'Sem closer', ...unassigned });
@@ -177,21 +193,15 @@ export function CloserRevenueSummaryTable({
               {summaryData.rows.map((row) => (
                 <TableRow key={row.name}>
                   <TableCell>
-                    {row.id !== '__unassigned__' ? (
-                      <button
-                        className="font-medium text-left hover:underline cursor-pointer text-primary"
-                        onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
-                      >
-                        {row.name}
-                      </button>
-                    ) : (
-                      <button
-                        className="font-medium text-left hover:underline cursor-pointer text-muted-foreground"
-                        onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
-                      >
-                        {row.name}
-                      </button>
-                    )}
+                    <button
+                      className={`font-medium text-left hover:underline cursor-pointer ${
+                        row.id === '__unassigned__' ? 'text-muted-foreground' : 
+                        row.id === '__launch__' ? 'text-amber-500' : 'text-primary'
+                      }`}
+                      onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
+                    >
+                      {row.id === '__launch__' ? '🚀 ' : ''}{row.name}
+                    </button>
                   </TableCell>
                   <TableCell className="text-right">{row.count}</TableCell>
                   <TableCell className="text-right font-mono">
