@@ -179,8 +179,9 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   };
 
   const handleSaveInstallment = async (data: UpdateInstallmentData) => {
-    // Save the edited installment first
-    await updateInstallment.mutateAsync(data);
+    // Save the edited installment first (remove recalcularDemais before sending to DB)
+    const { recalcularDemais, ...installmentData } = data;
+    await updateInstallment.mutateAsync(installmentData);
     
     // If recalculating subsequent installments from parcela 1
     if (data.recalcularDemais && card?.installments) {
