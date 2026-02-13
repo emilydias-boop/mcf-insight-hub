@@ -1,44 +1,98 @@
 
-# Corrigir Atribuicao de Vendas e Outside - Bug na Query de Attendees
+# Plano: Três Melhorias para Atribuição de Vendas e Diagnóstico
 
-## Problema Raiz
+## 1. Análise Detalhada do "Sem Closer" com Diagnóstico de Produtos
 
-A query de attendees em `SalesReportPanel.tsx` (linhas 128-144) filtra apenas por `status = 'contract_paid'`:
+### Objetivo
+Mostrar composição das 194 transações "Sem closer" - quais produtos, quantos, por que não foram atribuídos.
 
-```
-.eq('status', 'contract_paid')
-.gte('contract_paid_at', startDate)
-```
+### Implementação
+- **Arquivo**: Criar novo componente `src/components/relatorios/UnassignedTransactionsDetailPanel.tsx`
+- **Hook existente**: Reutilizar `useUnassignedTransactionsDiagnosis` que já categoriza falhas:
+  - `both_missing`: Sem email E sem telefone
+  - `missing_email`: Apenas email faltando
+  - `missing_phone`: Apenas telefone faltando
+  - `no_match`: Tem dados mas não encontra no CRM
+- **Dados exibidos**:
+  1. **KPI Cards**: Total, por categoria de falha
+  2. **Tabela filtrável**: Lista de 194 transações com:
+     - Produto (product_name, product_category)
+     - Contato (email/telefone disponível)
+     - Razão da falha
+     - Closer sugerido (se contacto existe no CRM)
+- **Integração**: Adicionar drawer/modal ao clicar em "Sem closer" na tabela principal
 
-Isso retorna apenas **317 registros** dos **1.479 attendees** no periodo. Os outros 1.162 (completed, scheduled, no_show) sao ignorados, impedindo:
+---
 
-1. **Match com closer**: Vendas de clientes que tiveram reuniao "completed" nao sao atribuidas ao closer
-2. **Outside detection**: Impossivel detectar se a venda foi antes da reuniao se o attendee nao aparece na lista
-3. **Resultado visivel**: Apenas 2 outsides detectados (Julio) quando deveria haver dezenas
+## 2. Categoria Automática de "Renovação" (Renovacao)
 
-## Solucao
+### Objetivo
+Separar renovações como linha própria, similar a A010 e Vitalício, evitando que fiquem misturadas com parcerias.
 
-### Arquivo: `src/components/relatorios/SalesReportPanel.tsx`
+### Implementação
+- **Arquivo**: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
+- **Lógica**: Adicionar nova verificação no `useMemo` entre A010 e Vitalício:
+  ```
+  if (tx.product_category === 'renovacao') {
+    renovacao.count++
+    renovacao.gross += gross
+    renovacao.net += net
+    renovacaoTxs.push(tx)
+    continue
+  }
+  ```
+- **UI**: Adicionar ícone 🔄 e cor teal (como padrão de "categoria automática")
+- **Ordem na tabela**: Launch → A010 → Renovacao → Vitalício → Closers → Sem closer
+- **Observação**: Produto já identificado no `product_configurations` com `product_category = 'renovacao'`, basta interceptar no fluxo
 
-Alterar a query de attendees (linhas 128-141) para buscar TODOS os attendees R1 no periodo, sem filtro de status:
+---
 
-**Antes:**
-```
-.eq('status', 'contract_paid')
-.gte('contract_paid_at', startDate)
-```
+## 3. Paginação na Query de Attendees para Evitar Limite de 1000 rows
 
-**Depois:**
-- Remover `.eq('status', 'contract_paid')` e `.gte('contract_paid_at', startDate)`
-- Filtrar por `meeting_slots.scheduled_at` no periodo (usando o filtro `!inner` que ja existe)
-- Adicionar `.gte('meeting_slots.scheduled_at', startDate)` e `.lte('meeting_slots.scheduled_at', endDate)`
-- Remover filtro de status cancelado para nao perder matches
+### Problema
+Query `attendees-for-sales-matching` em `SalesReportPanel.tsx` bate no limite padrão de 1000 rows do PostgREST. Para períodos longos (ex: Jan-Feb = 1.484 registros), dados são perdidos.
 
-Tambem expandir o lookback: buscar attendees com `scheduled_at` ate 30 dias ANTES do periodo selecionado, para capturar outsides onde a venda esta no periodo mas a reuniao foi agendada antes.
+### Implementação
+- **Arquivo**: `src/components/relatorios/SalesReportPanel.tsx`
+- **Padrão**: Implementar "batch fetching" similar ao usado em `useCourseCRM` e outros hooks
+  1. Detectar quando resultado tem 1000 linhas (indicativo de limite atingido)
+  2. Dividir período em lotes (ex: 1 semana por vez) OU usar `.range(0, 1000)` + `.range(1000, 2000)` em sequência
+  3. Concatenar resultados de todos os lotes em um único array
+- **Código**:
+  ```typescript
+  // Ao invés de query única:
+  const allAttendees: AttendeeMatch[] = [];
+  let offset = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+  
+  while (hasMore) {
+    const { data, count } = await query
+      .range(offset, offset + pageSize - 1);
+    
+    if (!data || data.length < pageSize) hasMore = false;
+    allAttendees.push(...data);
+    offset += pageSize;
+  }
+  ```
+- **Otimização**: Considerar dividir por data ao invés de offset (mais eficiente com índices)
 
-### Resultado Esperado
+---
 
-- De 317 para ~1.479 attendees disponiveis para matching
-- Closers recebem credito por TODAS as vendas de seus clientes (completed, no_show, scheduled)
-- Outside detection funciona corretamente: vendas com `sale_date < scheduled_at` aparecem nas colunas Outside
-- "Sem closer" diminui significativamente (mais matches encontrados)
+## Sequência de Implementação
+
+1. **Renovacao** (mais simples, apenas copiar padrão existente)
+2. **Paginação de attendees** (afeta os dados base, fazer antes do diagnóstico)
+3. **Diagnóstico "Sem Closer"** (depende dos dados de attendees estarem completos)
+
+## Resultado Esperado
+
+- ✅ Renovações isoladas em linha própria (visibilidade clara)
+- ✅ Attendees completos (até 1.500+ registros) carregando sem truncamento
+- ✅ Painel de diagnóstico mostrando: 194 "Sem closer" divididos por:
+  - Quantos têm email missing (ex: 45)
+  - Quantos têm telefone missing (ex: 67)
+  - Quantos têm ambos (ex: 28)
+  - Quantos têm dados mas sem match (ex: 54)
+  - Sugestões de closer para cada
+
