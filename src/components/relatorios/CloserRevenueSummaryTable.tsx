@@ -129,7 +129,8 @@ export function CloserRevenueSummaryTable({
       const net = tx.net_value || 0;
       
       // 1. Launch sales
-      if (tx.sale_origin === 'launch') {
+      if (tx.sale_origin === 'launch' || 
+          (tx.product_name && tx.product_name.toLowerCase().includes('contrato mcf'))) {
         launch.count++;
         launch.gross += gross;
         launch.net += net;
