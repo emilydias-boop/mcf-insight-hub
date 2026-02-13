@@ -114,32 +114,34 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     crm_deals: { crm_contacts: { email: string | null; phone: string | null } | null } | null;
   }
 
-  // Attendees para matching com closers
+  // Attendees para matching com closers - busca TODOS os R1 no período (não apenas contract_paid)
+  // Inclui lookback de 30 dias antes do período para capturar outsides
   const { data: attendees = [] } = useQuery<AttendeeMatch[]>({
     queryKey: ['attendees-for-sales-matching', dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     queryFn: async (): Promise<AttendeeMatch[]> => {
       if (!dateRange?.from) return [];
       
-      const startDate = dateRange.from.toISOString();
+      // Lookback de 30 dias antes do início do período para capturar outsides
+      const lookbackDate = new Date(dateRange.from);
+      lookbackDate.setDate(lookbackDate.getDate() - 30);
+      const startDate = lookbackDate.toISOString();
+      
       const endDate = dateRange.to 
         ? new Date(new Date(dateRange.to).setHours(23, 59, 59, 999)).toISOString()
-        : undefined;
+        : new Date(new Date(dateRange.from).setHours(23, 59, 59, 999)).toISOString();
       
-      let query = supabase
+      // Buscar TODOS os attendees R1 no período (por scheduled_at), sem filtro de status
+      const { data, error } = await supabase
         .from('meeting_slot_attendees')
         .select(`
           id, attendee_phone, deal_id,
           meeting_slots!inner(closer_id, scheduled_at),
           crm_deals!deal_id(crm_contacts!contact_id(email, phone))
         `)
-        .eq('status', 'contract_paid')
-        .gte('contract_paid_at', startDate);
+        .eq('meeting_slots.meeting_type', 'r1')
+        .gte('meeting_slots.scheduled_at', startDate)
+        .lte('meeting_slots.scheduled_at', endDate);
       
-      if (endDate) {
-        query = query.lte('contract_paid_at', endDate);
-      }
-      
-      const { data, error } = await query;
       if (error) throw error;
       return (data || []) as unknown as AttendeeMatch[];
     },
