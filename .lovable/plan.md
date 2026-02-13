@@ -1,88 +1,45 @@
 
 
-# Plano: Separar categorias no "Faturamento por Closer"
+# Corrigir Atribuicao de Contratos aos Closers
 
-## Problema Atual
+## Diagnostico
 
-A linha "Sem closer" (1.547 transacoes) mistura categorias completamente diferentes:
+A linha "Contrato" (273 transacoes / R$ 128k) esta isolando vendas que deveriam ser creditadas aos closers. Dados de janeiro:
 
-| Categoria | Transacoes | Natureza |
-|-----------|-----------|----------|
-| A010 (Consultoria) | ~2.238 | Funil de entrada automatico (R$ 47), nao depende de closer |
-| ACESSO VITALICIO | ~616 | Order bump automatico (R$ 57), nao depende de closer |
-| A000 - Contrato | ~449 | Contrato de adesao (R$ 497), pre-venda |
-| A005 - MCF P2 | ~44 | Parte 2 da parceria, deveria estar no closer |
-| A009/A001 parceria | ~16 | Vendas via Make/Asaas, deveriam estar no closer |
-| Parceria generica | ~112 | Vendas Make, deveriam estar no closer |
+- **886 transacoes** de contrato no total
+- **73** sao de lancamento (ja vao para a linha Lancamento)
+- Das **813 restantes**, **480 clientes (88%)** possuem match com closer na agenda
+- Apenas **66 clientes (~12%)** nao possuem nenhum match
 
-## Solucao em 2 Frentes
+O problema: na hierarquia atual, `product_category === 'contrato'` intercepta TODAS as transacoes antes de tentar o match com closer. Contratos sao vendas reais fechadas por closers (R$ 497 de adesao), diferente de A010 (R$ 47 automatico) ou Vitalicio (order bump).
 
-### Frente 1: Separar A010 como linha propria (como Lancamento)
+## Solucao
 
-No `CloserRevenueSummaryTable.tsx`, adicionar uma linha dedicada para A010, similar ao tratamento de "Lancamento":
+Remover a verificacao de `product_category === 'contrato'` da hierarquia de auto-categorizacao no `CloserRevenueSummaryTable.tsx`. Contratos passarao pelo fluxo normal de match com closers:
 
-- Antes de tentar match com closers, verificar se `product_category === 'a010'`
-- Redirecionar para linha "A010 - Funil" com icone/cor propria
-- Isso remove ~2.238 transacoes do "Sem closer"
+```text
+Hierarquia atualizada:
+1. sale_origin === 'launch' -> Lancamento (mantem)
+2. product_category === 'a010' -> A010 - Funil (mantem)
+3. product_category === 'ob_vitalicio' -> Vitalicio (mantem)
+4. REMOVIDO: product_category === 'contrato' (nao intercepta mais)
+5. Match por email/telefone com closer -> Closer X (contratos caem aqui)
+6. Sem match -> Sem closer (so os ~12% sem agenda)
+```
 
-### Frente 2: Corrigir dados no banco
-
-**2a. Sincronizar `product_category` em `hubla_transactions`:**
-- 449 transacoes "A000 - Contrato" ainda tem `product_category = 'incorporador'` na tabela de transacoes (a migration so corrigiu `product_configurations`)
-- Atualizar para `product_category = 'contrato'`
-
-**2b. Tambem separar Contrato e Vitalicio como linhas proprias:**
-- `product_category = 'contrato'` -> Linha "Contrato" (pre-venda, R$ 497)
-- `product_category = 'ob_vitalicio'` -> Linha "Vitalicio" (order bump)
-
-Isso deixa o "Sem closer" apenas com vendas reais que falharam na atribuicao (parceria, A009, A001, A005 P2) - que sao as que de fato precisam de investigacao.
-
-## Detalhes Tecnicos
+## Mudancas no Codigo
 
 ### Arquivo: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
 
-Adicionar 3 novas categorias automaticas alem de "Lancamento":
+- Remover o bloco de verificacao `product_category === 'contrato'` (linhas ~134-140)
+- Remover o acumulador `contrato` e suas variaveis (`contratoRow`, `contratoTxs`, `__contrato__`)
+- Remover a entrada de "Contrato" da lista `autoCategories`
+- Remover a estilizacao da linha Contrato no JSX (cor verde-esmeralda e icone)
 
-```text
-Hierarquia de roteamento (antes do match com closer):
-1. sale_origin === 'launch' -> Lancamento
-2. product_category === 'a010' -> A010 - Funil
-3. product_category === 'contrato' -> Contrato
-4. product_category === 'ob_vitalicio' -> Vitalicio
-5. Match por email/telefone com closer -> Closer X
-6. Sem match -> Sem closer (agora so vendas reais nao atribuidas)
-```
+## Resultado Esperado
 
-Mudancas no useMemo:
-- Criar 3 novos acumuladores (a010Row, contratoRow, vitalicioRow) com IDs especiais (`__a010__`, `__contrato__`, `__vitalicio__`)
-- Adicionar verificacao de `product_category` logo apos o check de `sale_origin`
-- Estilizar cada linha com cor/icone distinto na tabela
-
-### Migracao SQL
-
-```sql
--- Sincronizar product_category em hubla_transactions para A000 - Contrato
-UPDATE hubla_transactions
-SET product_category = 'contrato'
-WHERE product_name LIKE 'A000 - Contrato%'
-  AND product_category != 'contrato';
-
-UPDATE hubla_transactions
-SET product_category = 'contrato'
-WHERE product_name = '000 - Contrato'
-  AND product_category != 'contrato';
-```
-
-### Resultado Esperado
-
-Antes:
-- Sem closer: 1.547 transacoes / R$ 701k
-
-Depois:
-- A010 - Funil: ~2.242 txs / ~R$ 105k (separado)
-- Contrato: ~532 txs / ~R$ 264k (separado)
-- Vitalicio: ~621 txs / ~R$ 77k (separado)
-- Sem closer: ~150 txs / ~R$ 255k (so vendas reais nao atribuidas - parcerias, A009, P2)
-
-O "Sem closer" residual passa a ser acionavel: sao vendas de parceria/A009/P2 que realmente precisam de vinculo manual com um closer.
-
+- ~240 transacoes de contrato serao redistribuidas para as linhas dos closers (Cristiane, Julio, Thayna, etc.)
+- ~33 transacoes sem match permanecem em "Sem closer"
+- Closers passam a receber credito correto por seus contratos
+- Vendas "Outside" de contrato (sale_date < scheduled_at) aparecerao nas colunas Outside
+- A linha "Contrato" desaparece da tabela
