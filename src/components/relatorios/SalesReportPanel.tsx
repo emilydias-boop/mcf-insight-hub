@@ -130,20 +130,37 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
         ? new Date(new Date(dateRange.to).setHours(23, 59, 59, 999)).toISOString()
         : new Date(new Date(dateRange.from).setHours(23, 59, 59, 999)).toISOString();
       
-      // Buscar TODOS os attendees R1 no período (por scheduled_at), sem filtro de status
-      const { data, error } = await supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          id, attendee_phone, deal_id,
-          meeting_slots!inner(closer_id, scheduled_at),
-          crm_deals!deal_id(crm_contacts!contact_id(email, phone))
-        `)
-        .eq('meeting_slots.meeting_type', 'r1')
-        .gte('meeting_slots.scheduled_at', startDate)
-        .lte('meeting_slots.scheduled_at', endDate);
+      // Buscar TODOS os attendees R1 no período com paginação para evitar limite de 1000 rows
+      const allAttendees: AttendeeMatch[] = [];
+      let offset = 0;
+      const pageSize = 1000;
+      let hasMore = true;
       
-      if (error) throw error;
-      return (data || []) as unknown as AttendeeMatch[];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('meeting_slot_attendees')
+          .select(`
+            id, attendee_phone, deal_id,
+            meeting_slots!inner(closer_id, scheduled_at),
+            crm_deals!deal_id(crm_contacts!contact_id(email, phone))
+          `)
+          .eq('meeting_slots.meeting_type', 'r1')
+          .gte('meeting_slots.scheduled_at', startDate)
+          .lte('meeting_slots.scheduled_at', endDate)
+          .range(offset, offset + pageSize - 1);
+        
+        if (error) throw error;
+        const batch = (data || []) as unknown as AttendeeMatch[];
+        allAttendees.push(...batch);
+        
+        if (batch.length < pageSize) {
+          hasMore = false;
+        } else {
+          offset += pageSize;
+        }
+      }
+      
+      return allAttendees;
     },
     enabled: !!dateRange?.from,
   });
