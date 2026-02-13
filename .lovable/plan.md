@@ -1,45 +1,44 @@
 
+# Corrigir Atribuicao de Vendas e Outside - Bug na Query de Attendees
 
-# Corrigir Atribuicao de Contratos aos Closers
+## Problema Raiz
 
-## Diagnostico
+A query de attendees em `SalesReportPanel.tsx` (linhas 128-144) filtra apenas por `status = 'contract_paid'`:
 
-A linha "Contrato" (273 transacoes / R$ 128k) esta isolando vendas que deveriam ser creditadas aos closers. Dados de janeiro:
+```
+.eq('status', 'contract_paid')
+.gte('contract_paid_at', startDate)
+```
 
-- **886 transacoes** de contrato no total
-- **73** sao de lancamento (ja vao para a linha Lancamento)
-- Das **813 restantes**, **480 clientes (88%)** possuem match com closer na agenda
-- Apenas **66 clientes (~12%)** nao possuem nenhum match
+Isso retorna apenas **317 registros** dos **1.479 attendees** no periodo. Os outros 1.162 (completed, scheduled, no_show) sao ignorados, impedindo:
 
-O problema: na hierarquia atual, `product_category === 'contrato'` intercepta TODAS as transacoes antes de tentar o match com closer. Contratos sao vendas reais fechadas por closers (R$ 497 de adesao), diferente de A010 (R$ 47 automatico) ou Vitalicio (order bump).
+1. **Match com closer**: Vendas de clientes que tiveram reuniao "completed" nao sao atribuidas ao closer
+2. **Outside detection**: Impossivel detectar se a venda foi antes da reuniao se o attendee nao aparece na lista
+3. **Resultado visivel**: Apenas 2 outsides detectados (Julio) quando deveria haver dezenas
 
 ## Solucao
 
-Remover a verificacao de `product_category === 'contrato'` da hierarquia de auto-categorizacao no `CloserRevenueSummaryTable.tsx`. Contratos passarao pelo fluxo normal de match com closers:
+### Arquivo: `src/components/relatorios/SalesReportPanel.tsx`
 
-```text
-Hierarquia atualizada:
-1. sale_origin === 'launch' -> Lancamento (mantem)
-2. product_category === 'a010' -> A010 - Funil (mantem)
-3. product_category === 'ob_vitalicio' -> Vitalicio (mantem)
-4. REMOVIDO: product_category === 'contrato' (nao intercepta mais)
-5. Match por email/telefone com closer -> Closer X (contratos caem aqui)
-6. Sem match -> Sem closer (so os ~12% sem agenda)
+Alterar a query de attendees (linhas 128-141) para buscar TODOS os attendees R1 no periodo, sem filtro de status:
+
+**Antes:**
+```
+.eq('status', 'contract_paid')
+.gte('contract_paid_at', startDate)
 ```
 
-## Mudancas no Codigo
+**Depois:**
+- Remover `.eq('status', 'contract_paid')` e `.gte('contract_paid_at', startDate)`
+- Filtrar por `meeting_slots.scheduled_at` no periodo (usando o filtro `!inner` que ja existe)
+- Adicionar `.gte('meeting_slots.scheduled_at', startDate)` e `.lte('meeting_slots.scheduled_at', endDate)`
+- Remover filtro de status cancelado para nao perder matches
 
-### Arquivo: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
+Tambem expandir o lookback: buscar attendees com `scheduled_at` ate 30 dias ANTES do periodo selecionado, para capturar outsides onde a venda esta no periodo mas a reuniao foi agendada antes.
 
-- Remover o bloco de verificacao `product_category === 'contrato'` (linhas ~134-140)
-- Remover o acumulador `contrato` e suas variaveis (`contratoRow`, `contratoTxs`, `__contrato__`)
-- Remover a entrada de "Contrato" da lista `autoCategories`
-- Remover a estilizacao da linha Contrato no JSX (cor verde-esmeralda e icone)
+### Resultado Esperado
 
-## Resultado Esperado
-
-- ~240 transacoes de contrato serao redistribuidas para as linhas dos closers (Cristiane, Julio, Thayna, etc.)
-- ~33 transacoes sem match permanecem em "Sem closer"
-- Closers passam a receber credito correto por seus contratos
-- Vendas "Outside" de contrato (sale_date < scheduled_at) aparecerao nas colunas Outside
-- A linha "Contrato" desaparece da tabela
+- De 317 para ~1.479 attendees disponiveis para matching
+- Closers recebem credito por TODAS as vendas de seus clientes (completed, no_show, scheduled)
+- Outside detection funciona corretamente: vendas com `sale_date < scheduled_at` aparecem nas colunas Outside
+- "Sem closer" diminui significativamente (mais matches encontrados)
