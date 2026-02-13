@@ -1,48 +1,74 @@
 
-# Adicionar "A000 - Contrato MCF" na Configuracao de Produtos
+# Plano: Corrigir Mapeamento de Produtos entre BUs
 
-## Problema
+## Diagnóstico
 
-O produto **"A000 - Contrato MCF"** (97 transacoes no banco, 41 faturas na Hubla em Janeiro) nao aparece na pagina de Vendas do Incorporador porque nao esta cadastrado na tabela `product_configurations`.
+Existem **3 categorias de problemas** nos mapeamentos de produtos:
 
-A tabela tem apenas "A000 - Contrato" (target_bu: incorporador), mas a Hubla esta gerando faturas com o nome "A000 - Contrato MCF". A RPC `get_incorporador_transactions` usa essa tabela para filtrar quais produtos pertencem ao Incorporador, entao esses contratos sao invisíveis.
+1. **Produtos Consórcio desaparecidos da `product_configurations`**
+   - "Imersão: Do Zero ao Milhão" (1.178 transações) está totalmente ausente
+   - Causa: Vendas do Consórcio aparecem como "Sem Responsável" no Incorporador
 
-## Solucao
+2. **Produtos com categorias inconsistentes na `product_configurations`**
+   - "Construir Para Alugar" tem `category = outros` (deveria ser `ob_construir_alugar`)
+   - Vários "A000 - Contrato" têm `category = incorporador` (deveria ser `contrato`)
 
-Adicionar uma nova entrada na tabela `product_configurations` para o produto "A000 - Contrato MCF" com os mesmos parametros do "A000 - Contrato" existente:
+3. **Produtos com categorias NULL na `hubla_transactions`**
+   - "A005 - MCF P2" (10 txs) e "A009 - MCF INCORPORADOR + THE CLUB" (7 txs)
+   - Causa: Não encontram match em `product_configurations` ou vinculação manual ausente
 
-- `product_name`: A000 - Contrato MCF
-- `product_code`: A000
-- `product_category`: contrato
-- `target_bu`: incorporador
-- `reference_price`: 497
-- `count_in_dashboard`: true
+## Solução em 3 Passos
+
+### 1️⃣ Registrar "Imersão: Do Zero ao Milhão" em `product_configurations`
+- `product_name`: "Imersão: Do Zero ao Milhão na Construção"
+- `product_code`: null
+- `product_category`: "imersao"
+- `target_bu`: "consorcio"
+- `reference_price`: 497 (preço médio observado)
 - `is_active`: true
+- `count_in_dashboard`: true
 
-Alem disso, corrigir a `product_category` das 97 transacoes existentes de `incorporador` para `contrato` (para manter consistencia com o "A000 - Contrato" original).
+### 2️⃣ Corrigir categorias em `product_configurations` (via UPDATE)
+- "Construir Para Alugar" → category: `ob_construir_alugar` (já é Consórcio)
+- "A000 - Contrato" → category: `contrato` (está como `incorporador`)
 
-## Alteracoes
-
-### 1. Migracao SQL (INSERT + UPDATE)
-
-```text
--- Adicionar produto na configuracao
-INSERT INTO product_configurations (product_name, product_code, product_category, target_bu, reference_price, count_in_dashboard, is_active)
-VALUES ('A000 - Contrato MCF', 'A000', 'contrato', 'incorporador', 497, true, true);
-
--- Corrigir category das transacoes existentes
-UPDATE hubla_transactions
-SET product_category = 'contrato'
-WHERE product_name = 'A000 - Contrato MCF'
-  AND product_category = 'incorporador';
-```
-
-### 2. Nenhuma alteracao de codigo
-
-A RPC e o frontend ja estao preparados para lidar com novos produtos via `product_configurations`. Basta o registro existir na tabela.
+### 3️⃣ Corrigir categorias NULL em `hubla_transactions`
+- "A005 - MCF P2" → category: `incorporador` (baseado na config)
+- "A009 - MCF INCORPORADOR + THE CLUB" → category: `incorporador`
 
 ## Resultado Esperado
+- ✅ Produtos de Consórcio não poluem mais o "Sem Responsável" do Incorporador
+- ✅ Todas as 1.178 transações de "Imersão" serão categorizadas corretamente
+- ✅ Contratos A000 terão categoria consistente
+- ✅ Relatórios de Incorporador mostram apenas produtos do Incorporador
 
-- Pagina de Vendas do Incorporador mostrara os contratos "A000 - Contrato MCF"
-- Busca por "A000 - Contrato MCF" retornara as 41+ transacoes do periodo
-- Relatorio de Faturamento por Closer incluira essas transacoes corretamente
+## SQL a Executar
+
+```sql
+-- 1. Adicionar Imersão à product_configurations (Consórcio)
+INSERT INTO product_configurations (product_name, product_code, product_category, target_bu, reference_price, count_in_dashboard, is_active)
+VALUES ('Imersão: Do Zero ao Milhão na Construção', NULL, 'imersao', 'consorcio', 497, true, true);
+
+-- 2. Corrigir categorias em product_configurations
+UPDATE product_configurations
+SET product_category = 'contrato'
+WHERE product_name LIKE 'A000 - Contrato%' AND product_category = 'incorporador';
+
+UPDATE product_configurations
+SET product_category = 'ob_construir_alugar'
+WHERE product_name = 'Construir Para Alugar' AND target_bu = 'consorcio';
+
+-- 3. Corrigir categorias NULL em hubla_transactions
+UPDATE hubla_transactions
+SET product_category = 'incorporador'
+WHERE product_name = 'A005 - MCF P2' AND product_category IS NULL;
+
+UPDATE hubla_transactions
+SET product_category = 'incorporador'
+WHERE product_name = 'A009 - MCF INCORPORADOR + THE CLUB' AND product_category IS NULL;
+```
+
+## Impacto Financeiro
+- **Imersão**: 1.178 txs × R$ 47 (preço médio) = ~R$ 55k removido de "Sem Closer"
+- **Contrato A000**: 518 txs continuam no Incorporador, categoria corrigida
+- **Total corrigido**: ~1.700 transações reclassificadas
