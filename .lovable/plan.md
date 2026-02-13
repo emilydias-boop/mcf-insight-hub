@@ -1,37 +1,53 @@
 
-
-# Corrigir Timeout no Relatório de Vendas (Meses Anteriores)
+# Corrigir Contagem de Vendas de Lancamento
 
 ## Problema
 
-A RPC `get_all_hubla_transactions` faz timeout (~41s) ao consultar meses anteriores. A causa raiz e a sub-query `EXISTS` de deduplicacao Make/Hubla que executa ~3.000 vezes por consulta, cada uma varrendo a tabela inteira via `idx_hubla_transactions_net_value` (indice irrelevante para esse filtro).
+A tabela "Faturamento por Closer" mostra apenas 4 transacoes de Lancamento (R$ 104), mas o banco de dados tem 46 transacoes com `sale_origin = 'launch'` (R$ 11.273 net) em Janeiro.
 
-## Causa Tecnica
-
-A subquery filtra por `LOWER(customer_email)`, `sale_date::date` e `source = 'hubla'`, mas nao existe indice composto para essas colunas. O Postgres faz um Index Scan no indice errado e remove ~11.769 linhas por filtro em cada iteracao.
+**Causa raiz**: O codigo primeiro tenta vincular cada transacao a um closer por email/telefone. Somente transacoes que NAO encontram nenhum closer verificam se sao de lancamento. Resultado: 42 vendas de lancamento estao sendo contabilizadas como vendas de closers.
 
 ## Solucao
 
-Criar um indice composto que cubra exatamente a subquery de deduplicacao e otimize o JOIN principal.
+Mover a verificacao de `sale_origin === 'launch'` para ANTES do loop de matching de closers. Assim, toda transacao marcada como lancamento vai direto para a linha "Lancamento", independente de o comprador ter contato com algum closer.
 
-### Migracao SQL
+## Alteracao
+
+### Arquivo: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
+
+Na funcao `useMemo` que processa as transacoes (linhas ~115-175), reorganizar a logica:
 
 ```text
--- Indice para acelerar a subquery EXISTS de deduplicacao Make/Hubla
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_hubla_dedup_email_date 
-ON hubla_transactions (source, lower(customer_email), (sale_date::date))
-WHERE net_value > 0;
+// ANTES (atual):
+for (const tx of transactions) {
+  // 1. Tenta match com closer
+  // 2. Se nao encontrou -> verifica se e lancamento
+}
 
--- Indice para acelerar o JOIN com product_configurations
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_hubla_product_name_date 
-ON hubla_transactions (product_name, sale_date)
-WHERE sale_status IN ('completed', 'refunded') 
-  AND source IN ('hubla', 'manual', 'make');
+// DEPOIS (corrigido):
+for (const tx of transactions) {
+  // 1. Se sale_origin === 'launch' -> vai para Lancamento
+  // 2. Senao -> tenta match com closer
+  // 3. Se nao encontrou -> vai para Sem closer
+}
 ```
 
-### Resultado Esperado
+Concretamente, adicionar antes do loop de closers:
 
-- A subquery EXISTS usara o indice `idx_hubla_dedup_email_date` e fara um Index Scan direto em vez de varrer ~12.000 linhas por iteracao
-- Tempo de execucao estimado cai de ~41s para menos de 1s
-- Nenhuma alteracao de codigo necessaria - apenas indices no banco de dados
+```text
+if (tx.sale_origin === 'launch') {
+  launch.count++;
+  launch.gross += gross;
+  launch.net += net;
+  launchTxs.push(tx);
+  continue;
+}
+```
 
+E remover a verificacao duplicada no bloco `if (!matched)`.
+
+## Resultado Esperado
+
+- Linha "Lancamento" mostrara ~46 transacoes em vez de 4
+- Faturamento dos closers diminuira proporcionalmente (vendas de lancamento serao removidas)
+- Totais gerais permanecem iguais
