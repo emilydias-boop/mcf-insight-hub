@@ -122,6 +122,15 @@ export function CloserRevenueSummaryTable({
       const gross = getDeduplicatedGross(tx as any, isFirst);
       const net = tx.net_value || 0;
       
+      // Launch sales go directly to Lançamento, before closer matching
+      if (tx.sale_origin === 'launch') {
+        launch.count++;
+        launch.gross += gross;
+        launch.net += net;
+        launchTxs.push(tx);
+        continue;
+      }
+      
       let matched = false;
       for (const closer of closers) {
         const contacts = closerContactMap.get(closer.id);
@@ -163,17 +172,10 @@ export function CloserRevenueSummaryTable({
       }
       
       if (!matched) {
-        if (tx.sale_origin === 'launch') {
-          launch.count++;
-          launch.gross += gross;
-          launch.net += net;
-          launchTxs.push(tx);
-        } else {
-          unassigned.count++;
-          unassigned.gross += gross;
-          unassigned.net += net;
-          unassignedTxs.push(tx);
-        }
+        unassigned.count++;
+        unassigned.gross += gross;
+        unassigned.net += net;
+        unassignedTxs.push(tx);
       }
     }
     
