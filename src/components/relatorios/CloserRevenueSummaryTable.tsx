@@ -116,6 +116,8 @@ export function CloserRevenueSummaryTable({
     const launchTxs: Transaction[] = [];
     let a010: CloserRow = { id: '__a010__', name: 'A010 - Funil', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
     const a010Txs: Transaction[] = [];
+    let renovacao: CloserRow = { id: '__renovacao__', name: 'Renovação', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
+    const renovacaoTxs: Transaction[] = [];
     let vitalicio: CloserRow = { id: '__vitalicio__', name: 'Vitalício', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
     const vitalicioTxs: Transaction[] = [];
     
@@ -144,7 +146,16 @@ export function CloserRevenueSummaryTable({
         continue;
       }
       
-      // 3. Vitalício (order bump)
+      // 3. Renovação
+      if (tx.product_category === 'renovacao') {
+        renovacao.count++;
+        renovacao.gross += gross;
+        renovacao.net += net;
+        renovacaoTxs.push(tx);
+        continue;
+      }
+      
+      // 4. Vitalício (order bump)
       if (tx.product_category === 'ob_vitalicio') {
         vitalicio.count++;
         vitalicio.gross += gross;
@@ -210,6 +221,7 @@ export function CloserRevenueSummaryTable({
     const autoCategories = [
       { row: launch, txs: launchTxs, key: '__launch__' },
       { row: a010, txs: a010Txs, key: '__a010__' },
+      { row: renovacao, txs: renovacaoTxs, key: '__renovacao__' },
       { row: vitalicio, txs: vitalicioTxs, key: '__vitalicio__' },
       { row: unassigned, txs: unassignedTxs, key: '__unassigned__' },
     ];
@@ -269,6 +281,7 @@ export function CloserRevenueSummaryTable({
                         row.id === '__unassigned__' ? 'text-muted-foreground' : 
                         row.id === '__launch__' ? 'text-amber-500' :
                         row.id === '__a010__' ? 'text-blue-400' :
+                        row.id === '__renovacao__' ? 'text-teal-400' :
                         row.id === '__vitalicio__' ? 'text-purple-400' :
                         'text-primary'
                       }`}
@@ -276,6 +289,7 @@ export function CloserRevenueSummaryTable({
                     >
                       {row.id === '__launch__' ? '🚀 ' : 
                        row.id === '__a010__' ? '📊 ' : 
+                       row.id === '__renovacao__' ? '🔄 ' :
                        row.id === '__vitalicio__' ? '♾️ ' : ''}{row.name}
                     </button>
                   </TableCell>
