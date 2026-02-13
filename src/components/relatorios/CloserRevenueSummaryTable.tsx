@@ -114,6 +114,12 @@ export function CloserRevenueSummaryTable({
     const unassignedTxs: Transaction[] = [];
     let launch: CloserRow = { id: '__launch__', name: 'Lançamento', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
     const launchTxs: Transaction[] = [];
+    let a010: CloserRow = { id: '__a010__', name: 'A010 - Funil', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
+    const a010Txs: Transaction[] = [];
+    let contrato: CloserRow = { id: '__contrato__', name: 'Contrato', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
+    const contratoTxs: Transaction[] = [];
+    let vitalicio: CloserRow = { id: '__vitalicio__', name: 'Vitalício', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
+    const vitalicioTxs: Transaction[] = [];
     
     for (const tx of transactions) {
       const txEmail = (tx.customer_email || '').toLowerCase();
@@ -122,7 +128,7 @@ export function CloserRevenueSummaryTable({
       const gross = getDeduplicatedGross(tx as any, isFirst);
       const net = tx.net_value || 0;
       
-      // Launch sales go directly to Lançamento, before closer matching
+      // 1. Launch sales
       if (tx.sale_origin === 'launch') {
         launch.count++;
         launch.gross += gross;
@@ -131,6 +137,34 @@ export function CloserRevenueSummaryTable({
         continue;
       }
       
+      // 2. A010 - Funil de entrada automático
+      if (tx.product_category === 'a010') {
+        a010.count++;
+        a010.gross += gross;
+        a010.net += net;
+        a010Txs.push(tx);
+        continue;
+      }
+      
+      // 3. Contrato (A000)
+      if (tx.product_category === 'contrato') {
+        contrato.count++;
+        contrato.gross += gross;
+        contrato.net += net;
+        contratoTxs.push(tx);
+        continue;
+      }
+      
+      // 4. Vitalício (order bump)
+      if (tx.product_category === 'ob_vitalicio') {
+        vitalicio.count++;
+        vitalicio.gross += gross;
+        vitalicio.net += net;
+        vitalicioTxs.push(tx);
+        continue;
+      }
+      
+      // 5. Match com closer
       let matched = false;
       for (const closer of closers) {
         const contacts = closerContactMap.get(closer.id);
@@ -140,7 +174,6 @@ export function CloserRevenueSummaryTable({
           (txEmail && contacts.emails.has(txEmail)) ||
           (txPhone.length >= 8 && contacts.phones.has(txPhone))
         ) {
-          // Check if Outside: sale_date < earliest scheduled_at
           const earliestMap = closerEarliestMeeting.get(closer.id);
           let earliestMeeting: string | undefined;
           if (earliestMap) {
@@ -171,6 +204,7 @@ export function CloserRevenueSummaryTable({
         }
       }
       
+      // 6. Sem closer
       if (!matched) {
         unassigned.count++;
         unassigned.gross += gross;
@@ -183,14 +217,20 @@ export function CloserRevenueSummaryTable({
       .filter((r) => r.count > 0 || r.outsideCount > 0)
       .sort((a, b) => b.gross - a.gross);
     
-    if (launch.count > 0) {
-      rows.push(launch);
-      txMap.set('__launch__', launchTxs);
-    }
+    // Categorias automáticas no final
+    const autoCategories = [
+      { row: launch, txs: launchTxs, key: '__launch__' },
+      { row: a010, txs: a010Txs, key: '__a010__' },
+      { row: contrato, txs: contratoTxs, key: '__contrato__' },
+      { row: vitalicio, txs: vitalicioTxs, key: '__vitalicio__' },
+      { row: unassigned, txs: unassignedTxs, key: '__unassigned__' },
+    ];
     
-    if (unassigned.count > 0) {
-      rows.push(unassigned);
-      txMap.set('__unassigned__', unassignedTxs);
+    for (const cat of autoCategories) {
+      if (cat.row.count > 0) {
+        rows.push(cat.row);
+        txMap.set(cat.key, cat.txs);
+      }
     }
     
     const totalGross = rows.reduce((s, r) => s + r.gross, 0);
@@ -239,11 +279,18 @@ export function CloserRevenueSummaryTable({
                     <button
                       className={`font-medium text-left hover:underline cursor-pointer ${
                         row.id === '__unassigned__' ? 'text-muted-foreground' : 
-                        row.id === '__launch__' ? 'text-amber-500' : 'text-primary'
+                        row.id === '__launch__' ? 'text-amber-500' :
+                        row.id === '__a010__' ? 'text-blue-400' :
+                        row.id === '__contrato__' ? 'text-emerald-500' :
+                        row.id === '__vitalicio__' ? 'text-purple-400' :
+                        'text-primary'
                       }`}
                       onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
                     >
-                      {row.id === '__launch__' ? '🚀 ' : ''}{row.name}
+                      {row.id === '__launch__' ? '🚀 ' : 
+                       row.id === '__a010__' ? '📊 ' : 
+                       row.id === '__contrato__' ? '📄 ' : 
+                       row.id === '__vitalicio__' ? '♾️ ' : ''}{row.name}
                     </button>
                   </TableCell>
                   <TableCell className="text-right">{row.count}</TableCell>
