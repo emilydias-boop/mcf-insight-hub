@@ -1,53 +1,88 @@
 
-# Corrigir Contagem de Vendas de Lancamento
 
-## Problema
+# Marcar Transacoes A000 do Lancamento como Launch
 
-A tabela "Faturamento por Closer" mostra apenas 4 transacoes de Lancamento (R$ 104), mas o banco de dados tem 46 transacoes com `sale_origin = 'launch'` (R$ 11.273 net) em Janeiro.
+## Problema Identificado
 
-**Causa raiz**: O codigo primeiro tenta vincular cada transacao a um closer por email/telefone. Somente transacoes que NAO encontram nenhum closer verificam se sao de lancamento. Resultado: 42 vendas de lancamento estao sendo contabilizadas como vendas de closers.
+Os contratos **A000 - Contrato MCF** vendidos pelo link de lancamento (`hub.la/iJXA3NxU83uPBplff5z9`) estao com `sale_origin = NULL` no banco. Apenas as parcerias dos 25 emails fornecidos anteriormente foram marcadas -- os A000 nao foram.
+
+**Dados atuais no banco (Janeiro):**
+- A000 sem tag: 535 transacoes
+- A000 com tag launch: 73 transacoes
+- Precisam ser marcadas: todas as transacoes dos 45 emails do Excel
 
 ## Solucao
 
-Mover a verificacao de `sale_origin === 'launch'` para ANTES do loop de matching de closers. Assim, toda transacao marcada como lancamento vai direto para a linha "Lancamento", independente de o comprador ter contato com algum closer.
+Executar um UPDATE no banco de dados para marcar como `sale_origin = 'launch'` **todas as transacoes** dos 45 emails do Excel que ainda nao estao marcadas.
 
 ## Alteracao
 
-### Arquivo: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
+### Migracao SQL
 
-Na funcao `useMemo` que processa as transacoes (linhas ~115-175), reorganizar a logica:
-
-```text
-// ANTES (atual):
-for (const tx of transactions) {
-  // 1. Tenta match com closer
-  // 2. Se nao encontrou -> verifica se e lancamento
-}
-
-// DEPOIS (corrigido):
-for (const tx of transactions) {
-  // 1. Se sale_origin === 'launch' -> vai para Lancamento
-  // 2. Senao -> tenta match com closer
-  // 3. Se nao encontrou -> vai para Sem closer
-}
-```
-
-Concretamente, adicionar antes do loop de closers:
+Um unico UPDATE que marca todas as transacoes (A000, parcerias, bumps, etc.) dos emails do Excel como launch:
 
 ```text
-if (tx.sale_origin === 'launch') {
-  launch.count++;
-  launch.gross += gross;
-  launch.net += net;
-  launchTxs.push(tx);
-  continue;
-}
+UPDATE hubla_transactions
+SET sale_origin = 'launch'
+WHERE sale_origin IS NULL
+  AND lower(customer_email) IN (
+    'olavovilela10@gmail.com',
+    'harissonoliveira27@gmail.com',
+    'sandrojuniores@hotmail.com',
+    'engenheiroyurimonteiro@gmail.com',
+    'paulo@lbastar.com.br',
+    'linofernandoviveiros@gmail.com',
+    'dil_903@hotmail.com',
+    'alexriolargo2015@outlook.com',
+    'fernandamauzer@gmail.com',
+    'shssilva2016@gmail.com',
+    'fabioacq10@gmail.com',
+    'liga.contato@gmail.com',
+    'sulymanreformas@gmail.com',
+    'drpedrohquirino@gmail.com',
+    'robson@roarquitetura.net',
+    'viniciusevertom@hotmail.com',
+    'r.966178000@gmail.com',
+    'wmplastica@gmail.com',
+    'brenolucas@gmail.com',
+    'david@dlarconstrutora.com.br',
+    'wandeeley.aragao36@gmail.com',
+    'ricardson.rocha@gmail.com',
+    'luzisilva1987@gmail.com',
+    'alessandrosantanasouza4@gmail.com',
+    'joseclerqb@gmail.com',
+    'abraopericias@gmail.com',
+    'fernandaholdorf@gmail.com',
+    'arlan_unai45@hotmail.com',
+    'thiago.vilhena@hotmail.com',
+    'lincon_ferrera@hotmail.com',
+    'jfmoveis@icloud.com',
+    'ettorifernandes94@gmail.com',
+    'gobira.thon@gmail.com',
+    'alessandro.perossi@hotmail.com',
+    'rodrigomoreira@harpiapecas.com.br',
+    'edinho.vasques@yahoo.com.br',
+    'rjcoliveira80@gmail.com',
+    'chavesjunior60@gmail.com',
+    'neynrap2017@gmail.com',
+    'americopercinato@gmail.com',
+    'wallceveras@gmail.com',
+    'pedrofmanco@outlool.com.br',
+    'thiago.c.machado@icloud.com',
+    'augusto_landiva@hotmail.com',
+    'goncalves.wesley@hotmail.com'
+  );
 ```
 
-E remover a verificacao duplicada no bloco `if (!matched)`.
+Nota: o email do Pedro Ferreira no Excel aparece como `pedrofmanco@outlool.com.br` (com typo "outlool"), diferente do email fornecido na lista anterior (`pedrofmanco@outlook.com.br`). O UPDATE usa o email exato do Excel para garantir o match.
+
+### Nenhuma alteracao de codigo
+
+O codigo do `CloserRevenueSummaryTable.tsx` ja esta correto -- prioriza `sale_origin === 'launch'` antes do matching de closers. O problema era apenas dados nao marcados no banco.
 
 ## Resultado Esperado
 
-- Linha "Lancamento" mostrara ~46 transacoes em vez de 4
-- Faturamento dos closers diminuira proporcionalmente (vendas de lancamento serao removidas)
-- Totais gerais permanecem iguais
+- Todas as transacoes dos 45 compradores do lancamento serao marcadas como `launch`
+- A linha "Lancamento" no relatorio mostrara o faturamento correto incluindo os contratos A000
+- Os totais por closer diminuirao proporcionalmente (essas vendas serao removidas dos closers)
+
