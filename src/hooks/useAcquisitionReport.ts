@@ -7,8 +7,10 @@ import { DateRange } from 'react-day-picker';
 import { BusinessUnit } from '@/hooks/useMyBU';
 
 // ---- helpers ----
-const normalizePhone = (phone: string | null | undefined): string =>
-  (phone || '').replace(/\D/g, '');
+const phoneSuffix = (phone: string | null | undefined): string => {
+  const digits = (phone || '').replace(/\D/g, '');
+  return digits.length >= 9 ? digits.slice(-9) : digits;
+};
 
 const detectChannel = (productName: string | null): string => {
   const n = (productName || '').toLowerCase();
@@ -250,12 +252,12 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
         if (!emailMap.has(email)) emailMap.set(email, []);
         emailMap.get(email)!.push(a);
       }
-      const phone = normalizePhone(a.crm_deals?.crm_contacts?.phone);
+      const phone = phoneSuffix(a.crm_deals?.crm_contacts?.phone);
       if (phone.length >= 8) {
         if (!phoneMap.has(phone)) phoneMap.set(phone, []);
         phoneMap.get(phone)!.push(a);
       }
-      const aPhone = normalizePhone(a.attendee_phone);
+      const aPhone = phoneSuffix(a.attendee_phone);
       if (aPhone.length >= 8 && aPhone !== phone) {
         if (!phoneMap.has(aPhone)) phoneMap.set(aPhone, []);
         phoneMap.get(aPhone)!.push(a);
@@ -275,7 +277,7 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
   const classified = useMemo(() => {
     return transactions.map(tx => {
       const txEmail = (tx.customer_email || '').toLowerCase().trim();
-      const txPhone = normalizePhone(tx.customer_phone);
+      const txPhone = phoneSuffix(tx.customer_phone);
       const origin = classifyOrigin(tx);
       const isAutomatic = AUTOMATIC_ORIGINS.has(origin);
 

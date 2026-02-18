@@ -45,8 +45,9 @@ interface CloserRevenueSummaryTableProps {
   endDate?: Date;
 }
 
-const normalizePhone = (phone: string | null | undefined): string => {
-  return (phone || '').replace(/\D/g, '');
+const phoneSuffix = (phone: string | null | undefined): string => {
+  const digits = (phone || '').replace(/\D/g, '');
+  return digits.length >= 9 ? digits.slice(-9) : digits;
 };
 
 interface CloserRow {
@@ -94,12 +95,22 @@ export function CloserRevenueSummaryTable({
             if (!prev || scheduledAt < prev) earliestMap.set(`e:${email}`, scheduledAt);
           }
         }
-        const phone = normalizePhone(a.crm_deals?.crm_contacts?.phone);
+        // Index crm_contacts phone
+        const phone = phoneSuffix(a.crm_deals?.crm_contacts?.phone);
         if (phone.length >= 8) {
           phones.add(phone);
           if (scheduledAt) {
             const prev = earliestMap.get(`p:${phone}`);
             if (!prev || scheduledAt < prev) earliestMap.set(`p:${phone}`, scheduledAt);
+          }
+        }
+        // Index attendee_phone as well
+        const aPhone = phoneSuffix(a.attendee_phone);
+        if (aPhone.length >= 8 && aPhone !== phone) {
+          phones.add(aPhone);
+          if (scheduledAt) {
+            const prev = earliestMap.get(`p:${aPhone}`);
+            if (!prev || scheduledAt < prev) earliestMap.set(`p:${aPhone}`, scheduledAt);
           }
         }
       }
@@ -123,7 +134,7 @@ export function CloserRevenueSummaryTable({
     
     for (const tx of transactions) {
       const txEmail = (tx.customer_email || '').toLowerCase();
-      const txPhone = normalizePhone(tx.customer_phone);
+      const txPhone = phoneSuffix(tx.customer_phone);
       const isFirst = globalFirstIds.has(tx.id);
       const gross = getDeduplicatedGross(tx as any, isFirst);
       const net = tx.net_value || 0;
