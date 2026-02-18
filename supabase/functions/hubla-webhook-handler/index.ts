@@ -1268,6 +1268,13 @@ serve(async (req) => {
         const productCategory = mapProductCategory(productName);
         const saleDate = new Date(eventData.created_at || eventData.createdAt || Date.now()).toISOString();
         
+        // CORREÇÃO: Extrair UTMs de paymentSession.utm (novo formato Hubla)
+        const paymentUtm = invoice?.paymentSession?.utm || {};
+        const utmSource = paymentUtm.source || invoice?.utm_source || eventData?.utm_source || eventData?.utmSource || null;
+        const utmMedium = paymentUtm.medium || invoice?.utm_medium || eventData?.utm_medium || eventData?.utmMedium || null;
+        const utmCampaign = paymentUtm.campaign || invoice?.utm_campaign || eventData?.utm_campaign || eventData?.utmCampaign || null;
+        const utmContent = paymentUtm.content || invoice?.utm_content || null;
+        
         const transactionData = {
           hubla_id: eventData.id || `newsale-${Date.now()}`,
           event_type: 'NewSale',
@@ -1279,9 +1286,10 @@ serve(async (req) => {
           customer_name: eventData.userName || eventData.customer?.name || eventData.customerName || null,
           customer_email: eventData.userEmail || eventData.customer?.email || eventData.customerEmail || null,
           customer_phone: eventData.userPhone || eventData.customer?.phone || eventData.customerPhone || null,
-          utm_source: eventData.utm_source || eventData.utmSource || null,
-          utm_medium: eventData.utm_medium || eventData.utmMedium || null,
-          utm_campaign: eventData.utm_campaign || eventData.utmCampaign || null,
+          utm_source: utmSource,
+          utm_medium: utmMedium,
+          utm_campaign: utmCampaign,
+          utm_content: utmContent,
           payment_method: eventData.paymentMethod || null,
           sale_date: saleDate,
           sale_status: 'completed',
@@ -1365,6 +1373,13 @@ serve(async (req) => {
           const payer = invoice?.payer || {};
           const user = body.event?.user || {};
           
+          // CORREÇÃO: Extrair UTMs de paymentSession.utm (novo formato Hubla)
+          const paymentUtm = invoice?.paymentSession?.utm || {};
+          const utmSource = paymentUtm.source || invoice?.utm_source || null;
+          const utmMedium = paymentUtm.medium || invoice?.utm_medium || null;
+          const utmCampaign = paymentUtm.campaign || invoice?.utm_campaign || null;
+          const utmContent = paymentUtm.content || invoice?.utm_content || null;
+          
           const transactionData = {
             hubla_id: invoice?.id || `invoice-${Date.now()}`,
             event_type: 'invoice.payment_succeeded',
@@ -1376,9 +1391,10 @@ serve(async (req) => {
             customer_name: `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || user.name || null,
             customer_email: payer.email || user.email || null,
             customer_phone: payer.phone || user.phone || null,
-            utm_source: null,
-            utm_medium: null,
-            utm_campaign: null,
+            utm_source: utmSource,
+            utm_medium: utmMedium,
+            utm_campaign: utmCampaign,
+            utm_content: utmContent,
             payment_method: invoice?.paymentMethod || null,
             sale_date: saleDate,
             sale_status: 'completed',
@@ -1483,6 +1499,13 @@ serve(async (req) => {
           const payer = invoice?.payer || {};
           const user = body.event?.user || {};
           
+          // CORREÇÃO: Extrair UTMs de paymentSession.utm (novo formato Hubla)
+          const paymentUtmItems = invoice?.paymentSession?.utm || {};
+          const utmSourceItems = paymentUtmItems.source || invoice.utm_source || null;
+          const utmMediumItems = paymentUtmItems.medium || invoice.utm_medium || null;
+          const utmCampaignItems = paymentUtmItems.campaign || invoice.utm_campaign || null;
+          const utmContentItems = paymentUtmItems.content || invoice.utm_content || null;
+          
           // Para offers, calcular net_value proporcional
           // Para item principal, usar o net_value calculado
           const itemNetValue = isOffer 
@@ -1500,9 +1523,10 @@ serve(async (req) => {
             customer_name: `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || invoice.customer?.name || invoice.customer_name || null,
             customer_email: payer.email || user.email || invoice.customer?.email || invoice.customer_email || null,
             customer_phone: payer.phone || user.phone || invoice.customer?.phone || invoice.customer_phone || null,
-            utm_source: invoice.utm_source || null,
-            utm_medium: invoice.utm_medium || null,
-            utm_campaign: invoice.utm_campaign || null,
+            utm_source: utmSourceItems,
+            utm_medium: utmMediumItems,
+            utm_campaign: utmCampaignItems,
+            utm_content: utmContentItems,
             payment_method: invoice.paymentMethod || invoice.payment_method || null,
             sale_date: saleDate,
             sale_status: 'completed',

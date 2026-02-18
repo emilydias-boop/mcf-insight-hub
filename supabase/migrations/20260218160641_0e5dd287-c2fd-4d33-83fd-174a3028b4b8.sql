@@ -1,0 +1,1 @@
+ALTER TABLE hubla_transactions ADD COLUMN IF NOT EXISTS utm_content TEXT;

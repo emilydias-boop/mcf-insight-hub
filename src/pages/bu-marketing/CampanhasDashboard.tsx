@@ -131,6 +131,7 @@ export default function CampanhasDashboard() {
                   <TableRow>
                     <TableHead>Campanha</TableHead>
                     <TableHead>Bloco do Anúncio</TableHead>
+                    <TableHead>Anúncio</TableHead>
                     <TableHead>Canal</TableHead>
                     <TableHead className="text-right">Leads</TableHead>
                     <TableHead className="text-right">Receita</TableHead>
@@ -144,6 +145,9 @@ export default function CampanhasDashboard() {
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate">
                         {cleanUtmValue(c.utm_medium) || "—"}
+                      </TableCell>
+                      <TableCell className="max-w-[250px] truncate">
+                        {cleanUtmValue(c.utm_content) || "—"}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-xs">
@@ -160,7 +164,7 @@ export default function CampanhasDashboard() {
                   ))}
                   {(!campaigns || campaigns.length === 0) && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
                         Nenhuma campanha encontrada no período
                       </TableCell>
