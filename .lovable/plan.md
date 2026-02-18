@@ -1,58 +1,129 @@
 
 
-# Corrigir Contratos MCF sem Tag de Lancamento no "Sem Closer"
+# Adicionar BU Marketing com Dashboard de Dados de Anuncios
 
-## Problema
+## Contexto
 
-Existem 18 transacoes em janeiro com produto "A000 - Contrato MCF" ou "Contrato MCF" que nao possuem `sale_origin = 'launch'`. A hierarquia de atribuicao verifica `sale_origin === 'launch'` como primeiro filtro, entao essas 18 transacoes passam direto, nao encontram match na agenda, e caem em "Sem closer".
+A BU Marketing foi criada no RH mas nao aparece no sidebar porque `'marketing'` nao existe como `BusinessUnit` valida no codigo. Alem disso, essa BU precisa de paginas especificas de analytics de marketing (nao apenas CRM clone).
 
-Dados no banco:
-- 73x "A000 - Contrato MCF" com `sale_origin = 'launch'` (OK)
-- 17x "A000 - Contrato MCF" com `sale_origin = NULL` (problema)
-- 1x "Contrato MCF" com `sale_origin = NULL` (problema)
+### Dados Disponiveis no Banco
 
-## Solucao
+Os dados ja existem para alimentar os dashboards:
 
-Duas acoes complementares:
+- **`hubla_transactions`**: possui campos `utm_source`, `utm_campaign`, `utm_medium` com ~3.093 registros tagueados (maioria de Facebook Ads)
+- **`daily_costs`**: gasto diario de ads (~R$13-16k/dia), campo `campaign_name` e `source`
+- **`weekly_metrics`**: metricas semanais com CPL, ROAS, ROI, leads, etc.
 
-### 1. Corrigir dados existentes (SQL manual)
+---
 
-Executar no Cloud View > Run SQL para corrigir as 18 transacoes:
+## Implementacao
 
-```sql
-UPDATE hubla_transactions
-SET sale_origin = 'launch'
-WHERE product_name ILIKE '%Contrato MCF%'
-  AND sale_origin IS NULL;
+### 1. Registrar "marketing" como BusinessUnit valida
+
+**Arquivo: `src/hooks/useMyBU.ts`**
+- Adicionar `'marketing'` ao type `BusinessUnit`
+- Adicionar ao array `BU_OPTIONS`
+
+### 2. Sidebar - Menu da BU Marketing
+
+**Arquivo: `src/components/layout/AppSidebar.tsx`**
+- Adicionar entrada "BU - Marketing" com icone `Megaphone`
+- Subitens iniciais:
+  - **Dashboard Ads** (`/bu-marketing`) - visao geral de performance
+  - **Campanhas** (`/bu-marketing/campanhas`) - analise por campanha
+  - **Documentos Estrategicos** (`/bu-marketing/documentos-estrategicos`)
+- Adicionar `marketing` ao `BU_CRM_BASE_PATH`
+- Adicionar `'marketing'` ao `buPriority` em `getCRMBasePath`
+
+### 3. Dashboard de Marketing (pagina principal)
+
+**Novo arquivo: `src/pages/bu-marketing/MarketingDashboard.tsx`**
+
+KPIs no topo:
+- Gasto Total (soma de `daily_costs` no periodo)
+- Total de Leads (contagem de `hubla_transactions` com UTM)
+- CPL (Custo por Lead = gasto / leads)
+- Receita Gerada (soma de `net_value` das transacoes com UTM)
+
+Graficos:
+- Gasto diario (line chart de `daily_costs`)
+- Leads por dia (bar chart de `hubla_transactions` agrupado por `sale_date`)
+
+### 4. Pagina de Campanhas
+
+**Novo arquivo: `src/pages/bu-marketing/CampanhasDashboard.tsx`**
+
+Tabela principal:
+- Campanha (`utm_campaign`)
+- Adset/Conjunto (`utm_medium`)
+- Leads (count)
+- Receita (sum `net_value`)
+- CPL calculado (se houver custo por campanha)
+
+Filtros:
+- Periodo (date range)
+- Fonte (`utm_source`: FB, organic, manychat, ig)
+
+Isso responde as perguntas:
+- "Qual anuncio vai melhor?" -> ranking por leads e receita
+- "Qual categoria traz mais pessoas?" -> agrupamento por adset
+- "Qual link mais usado e por qual anuncio?" -> detalhamento UTM
+
+### 5. Hook de dados
+
+**Novo arquivo: `src/hooks/useMarketingMetrics.ts`**
+- `useMarketingOverview(startDate, endDate)`: busca KPIs agregados
+- `useCampaignBreakdown(startDate, endDate)`: busca detalhamento por campanha/adset
+- Fontes: `daily_costs` + `hubla_transactions` (join por periodo)
+
+### 6. Rotas
+
+**Arquivo: `src/App.tsx`**
+- Adicionar rotas:
+
+```text
+/bu-marketing              -> MarketingDashboard
+/bu-marketing/campanhas    -> CampanhasDashboard
+/bu-marketing/documentos-estrategicos -> DocumentosEstrategicos bu="marketing"
 ```
 
-### 2. Adicionar fallback no codigo
+### 7. Contextos auxiliares
 
-No `CloserRevenueSummaryTable.tsx`, expandir a verificacao de lancamento para tambem capturar transacoes "Contrato MCF" que nao foram tagueadas:
+**Arquivo: `src/pages/crm/BUCRMLayout.tsx`**
+- Adicionar `marketing: [...]` ao `BU_VISIBLE_TABS` (caso futuramente precise de CRM)
 
-**Arquivo**: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
+**Arquivo: `src/components/relatorios/BUReportCenter.tsx`**
+- Adicionar `marketing` ao `BU_NAMES`
 
-Alterar a condicao de lancamento (linha 132):
+**Arquivo: `src/pages/admin/ConfiguracaoBU.tsx`**
+- Adicionar `{ value: 'marketing', label: 'BU - Marketing' }` ao `BU_OPTIONS`
 
-**Antes:**
-```typescript
-if (tx.sale_origin === 'launch') {
-```
+---
 
-**Depois:**
-```typescript
-if (tx.sale_origin === 'launch' || 
-    (tx.product_name && tx.product_name.toLowerCase().includes('contrato mcf'))) {
-```
+## Arquivos Novos
 
-Isso garante que:
-- Transacoes ja tagueadas continuam funcionando
-- Transacoes futuras de "Contrato MCF" sem tag tambem sao capturadas automaticamente
-- O SQL corrige os dados historicos para consistencia
+| Arquivo | Descricao |
+|---------|-----------|
+| `src/pages/bu-marketing/MarketingDashboard.tsx` | Dashboard principal com KPIs e graficos |
+| `src/pages/bu-marketing/CampanhasDashboard.tsx` | Tabela de campanhas com filtros |
+| `src/hooks/useMarketingMetrics.ts` | Hooks para buscar dados de marketing |
+
+## Arquivos Alterados
+
+| Arquivo | Alteracao |
+|---------|-----------|
+| `src/hooks/useMyBU.ts` | Adicionar `'marketing'` ao type e options |
+| `src/components/layout/AppSidebar.tsx` | Adicionar menu BU Marketing + base path |
+| `src/App.tsx` | Adicionar rotas `/bu-marketing/*` |
+| `src/pages/crm/BUCRMLayout.tsx` | Adicionar `marketing` ao `BU_VISIBLE_TABS` |
+| `src/components/relatorios/BUReportCenter.tsx` | Adicionar `marketing` ao `BU_NAMES` |
+| `src/pages/admin/ConfiguracaoBU.tsx` | Adicionar opcao marketing |
+| `src/pages/Home.tsx` | Adicionar marketing ao `BU_CONFIG` (opcional) |
 
 ## Resultado Esperado
 
-- As 18 transacoes "Contrato MCF" saem de "Sem closer" e vao para "Lancamento"
-- "Sem closer" reduz de 122 para ~104 transacoes
-- Faturamento de lancamento aumenta em ~R$ 8.449 (17x R$ 497 + valores adicionais)
+- BU Marketing aparece no sidebar para usuarios com `squad` contendo `'marketing'` (e admins)
+- Dashboard mostra gasto de ads, leads gerados, CPL e receita
+- Pagina de campanhas responde: qual anuncio performa melhor, qual adset traz mais gente
+- Tudo usando dados que ja existem no banco (sem necessidade de novas tabelas)
 
