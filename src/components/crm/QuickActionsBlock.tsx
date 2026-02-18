@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Phone, MessageCircle, ArrowRight, Loader2, XCircle, Calendar, FolderInput, Trash2 } from 'lucide-react';
+import { Phone, MessageCircle, ArrowRight, Loader2, XCircle, Calendar, CalendarClock, FolderInput, Trash2 } from 'lucide-react';
 import { useTwilio } from '@/contexts/TwilioContext';
 import { useUpdateCRMDeal, useCRMStages, useDeleteCRMDeal } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
@@ -51,6 +51,8 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
   
   const isTestDeal = deal ? isTestPipeline(deal.origin_id) : false;
   const currentStageOrder = deal?.crm_stages?.stage_order || 0;
+  const stageName = deal?.crm_stages?.stage_name?.toLowerCase() || '';
+  const isNoShowStage = stageName.includes('no-show') || stageName.includes('no_show') || stageName.includes('noshow');
   
   // Filtrar estágios futuros
   const futureStages = stages?.filter(s => s.stage_order > currentStageOrder) || [];
@@ -211,11 +213,11 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
             <Button
               size="sm"
               variant="outline"
-              className="h-8 border-blue-500/50 text-blue-600 hover:bg-blue-50"
+              className={`h-8 ${isNoShowStage ? 'border-amber-500/50 text-amber-600 hover:bg-amber-50' : 'border-blue-500/50 text-blue-600 hover:bg-blue-50'}`}
               onClick={() => setShowScheduleDialog(true)}
             >
-              <Calendar className="h-3.5 w-3.5 mr-1.5" />
-              Agendar
+              {isNoShowStage ? <CalendarClock className="h-3.5 w-3.5 mr-1.5" /> : <Calendar className="h-3.5 w-3.5 mr-1.5" />}
+              {isNoShowStage ? 'Reagendar' : 'Agendar'}
             </Button>
           </>
         )}
@@ -303,6 +305,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
         onOpenChange={setShowScheduleDialog}
         dealId={deal?.id}
         contactName={contact?.name || deal?.name}
+        isReschedule={isNoShowStage}
         onScheduled={onStageChange}
       />
       
