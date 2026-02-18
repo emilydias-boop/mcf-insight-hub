@@ -1,106 +1,67 @@
 
 
-# Dashboard de Campanhas com Analytics Completo
+# Filtros Completos no Dashboard de Campanhas
 
 ## Objetivo
 
-Transformar a pagina de Campanhas em um painel analitico completo, com:
-- KPIs totais do periodo
-- Rankings agregados por **Canal**, **Campanha**, **Bloco do Anuncio** e **Anuncio**
-- Numeros claros: Leads, Receita, Receita/Lead (ticket medio)
+Adicionar filtros por **Campanha**, **Bloco do Anuncio** e **Anuncio** alem dos filtros ja existentes (Periodo e Fonte/Canal). Isso permite cruzar dimensoes -- por exemplo, ver apenas os anuncios de uma campanha especifica.
 
-## Estrutura da Nova Pagina
+## Como vai funcionar
 
-### 1. KPIs no topo (Cards resumo)
+A area de filtros tera 4 selects (alem do periodo):
 
-4 cards com os totais do periodo filtrado:
+| Filtro | Campo | Comportamento |
+|---|---|---|
+| Canal (Fonte) | `utm_source` | Ja existe. Filtra no backend (Supabase query) |
+| Campanha | `utm_campaign` | Novo. Filtra no frontend sobre os dados carregados |
+| Bloco do Anuncio | `utm_medium` | Novo. Filtra no frontend |
+| Anuncio | `utm_content` | Novo. Filtra no frontend |
 
-| Card | Valor |
-|---|---|
-| Total de Leads | Soma de leads com UTM |
-| Receita Total | Soma de `net_value` |
-| Ticket Medio | Receita / Leads |
-| Campanhas Ativas | Quantidade distinta de campanhas |
+Os novos filtros sao aplicados no frontend (pos-query) porque os dados ja vem agrupados por todas as dimensoes. As opcoes de cada Select sao populadas dinamicamente a partir dos dados carregados, respeitando os filtros anteriores (cascata).
 
-### 2. Tabs com Rankings por Dimensao
+Tambem sera adicionado um botao "Limpar Filtros" para resetar tudo de uma vez.
 
-Usar componente `Tabs` com 4 abas:
+## Layout dos Filtros
 
-- **Por Canal** - Agrupa por `utm_source` (ex: FB, IG, Google)
-- **Por Campanha** - Agrupa por `utm_campaign`
-- **Por Bloco do Anuncio** - Agrupa por `utm_medium`
-- **Por Anuncio** - Agrupa por `utm_content`
-
-Cada aba mostra uma tabela rankeada por Leads (decrescente) com colunas:
-
-| Coluna | Descricao |
-|---|---|
-| Nome | O valor da dimensao (canal, campanha, etc.) |
-| Leads | Quantidade |
-| Receita | Soma de net_value |
-| Ticket Medio | Receita / Leads |
-| % Leads | Percentual do total |
-
-### 3. Tabela Detalhada (mantida)
-
-A tabela atual de "Ranking de Campanhas" com todas as colunas (Campanha + Bloco + Anuncio + Canal + Leads + Receita) sera mantida abaixo das tabs, como visao granular.
+```text
++--------------------------------------------------------------+
+| Periodo  [01/10/25 - 01/01/26]                               |
+|                                                               |
+| Canal       Campanha        Bloco do Anuncio    Anuncio       |
+| [Todas v]   [Todas v]       [Todos v]           [Todos v]    |
+|                                                               |
+|                                      [Limpar Filtros]         |
++--------------------------------------------------------------+
+```
 
 ## Alteracoes Tecnicas
 
-### Arquivo: `src/hooks/useMarketingMetrics.ts`
-
-Criar novo hook `useDimensionBreakdown` que recebe a dimensao (`utm_source`, `utm_campaign`, `utm_medium`, `utm_content`) e retorna dados agregados:
-
-```typescript
-interface DimensionRow {
-  name: string;
-  leads: number;
-  revenue: number;
-  ticketMedio: number;
-  percentLeads: number;
-}
-```
-
-O hook reutiliza os mesmos dados do `useCampaignBreakdown` (ja carregados), fazendo o agrupamento no frontend por dimensao selecionada.
-
 ### Arquivo: `src/pages/bu-marketing/CampanhasDashboard.tsx`
 
-1. Adicionar 4 cards KPI no topo (calculados a partir dos dados de campanhas)
-2. Adicionar componente `Tabs` com 4 abas (Canal, Campanha, Bloco, Anuncio)
-3. Cada aba renderiza uma tabela com os dados agregados por aquela dimensao
-4. Manter tabela detalhada existente abaixo
+1. Adicionar 3 novos estados: `campaignFilter`, `mediumFilter`, `contentFilter`
+2. Criar um `useMemo` chamado `filteredCampaigns` que aplica os filtros de campanha, medium e content sobre os dados retornados por `useCampaignBreakdown`
+3. Extrair as opcoes unicas de cada dimensao a partir dos dados (respeitando filtros cascata)
+4. Adicionar 3 novos `Select` na area de filtros
+5. Adicionar botao "Limpar Filtros"
+6. Atualizar todos os calculos (KPIs, tabs, tabela detalhada) para usar `filteredCampaigns` em vez de `campaigns`
 
-### Componentes usados
+### Arquivo: `src/hooks/useMarketingMetrics.ts`
 
-- `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` (ja disponivel em `@/components/ui/tabs`)
-- `Card`, `Table`, `Badge` (ja usados)
-- `formatCurrency`, `formatNumber` (ja usados)
+Sem alteracoes necessarias -- a filtragem adicional sera feita no frontend.
 
-## Layout Visual
+## Fluxo de Dados
 
-```text
-+--------------------------------------------------+
-| [Megaphone] Campanhas                             |
-| Analise por campanha, adset e fonte               |
-+--------------------------------------------------+
-| Periodo: [01/02 - 28/02]  Fonte: [Todas]         |
-+--------------------------------------------------+
-| [Leads: 1.048] [Receita: R$78k] [Ticket: R$74]  [95 campanhas] |
-+--------------------------------------------------+
-| [Canal] [Campanha] [Bloco do Anuncio] [Anuncio]  |
-|--------------------------------------------------|
-| Nome           | Leads | Receita | Ticket | %    |
-| FB             | 1.020 | R$75k   | R$74   | 97%  |
-| IG             |    28 | R$3k    | R$107  |  3%  |
-+--------------------------------------------------+
-| Ranking Detalhado (tabela atual completa)         |
-+--------------------------------------------------+
-```
+Os filtros funcionam em cascata:
+1. **Periodo + Canal** -> query no Supabase retorna dados
+2. **Campanha** -> filtra os dados no frontend; atualiza opcoes de Bloco e Anuncio
+3. **Bloco do Anuncio** -> filtra mais; atualiza opcoes de Anuncio
+4. **Anuncio** -> filtra final
+
+Quando um filtro pai muda, os filtros filhos sao resetados para "Todos".
 
 ## Arquivos Alterados
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/bu-marketing/CampanhasDashboard.tsx` | KPIs, Tabs com 4 dimensoes, tabela detalhada |
-| `src/hooks/useMarketingMetrics.ts` | Novo hook `useDimensionBreakdown` |
+| `src/pages/bu-marketing/CampanhasDashboard.tsx` | Novos filtros (Campanha, Bloco, Anuncio), cascata, botao limpar |
 
