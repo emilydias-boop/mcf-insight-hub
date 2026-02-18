@@ -1,57 +1,40 @@
 
 
-# Separar Vendas de Launch vs Inside Sales
+# Limpar Flag de Lancamento - Manter Apenas 25 Clientes
 
-## Contexto
+## Situacao Atual
 
-Atualmente, **todas** as transacoes com `sale_origin = 'launch'` vao para o bucket "Lancamento". Porem, 22 clientes marcados como launch **tambem passaram pelo funil Inside Sales** (tem R1 agendada com closer). Esses devem ser atribuidos ao closer correspondente, nao ao lancamento.
+- **587 clientes** marcados com `sale_origin = 'launch'` no banco
+- Usuario quer manter **apenas 25 emails especificos** como lancamento
+- **562 clientes** precisam ter o `sale_origin` limpo (voltando para `NULL`)
 
-**Dados de Fevereiro 2026:**
-- **69 transacoes** (22 clientes) tem R1 no CRM = devem ir para o closer (Inside Sales)
-- **107 transacoes** (34 clientes) sem R1 = lancamento puro
+## Acao
 
-## Logica Proposta
+Executar um UPDATE no banco de dados para remover `sale_origin = 'launch'` de todas as transacoes **exceto** os 25 emails listados.
 
-No `CloserRevenueSummaryTable.tsx` e `useAcquisitionReport.ts`, antes de classificar uma transacao como "Lancamento", verificar se o email/telefone do cliente tem match com algum attendee R1. Se tiver, a transacao **nao** e isolada como lancamento - ela segue o fluxo normal de atribuicao ao closer.
+## Detalhes Tecnicos
 
-```text
-// Pseudocodigo
-if (tx.sale_origin === 'launch') {
-  // Verificar se tem R1 meeting (passou pelo inside sales)
-  const hasR1Match = emailMap.has(txEmail) || phoneMap.has(txPhone);
-  if (hasR1Match) {
-    // NAO isolar como launch - deixar fluir para match com closer
-  } else {
-    // Launch puro - isolar na linha de Lancamento
-  }
-}
-```
+### 1. UPDATE no banco de dados
 
-## Alteracoes Tecnicas
+Atualizar `hubla_transactions` definindo `sale_origin = NULL` onde:
+- `sale_origin = 'launch'` 
+- `customer_email` NAO esta na lista dos 25 emails aprovados
 
-### 1. `src/components/relatorios/CloserRevenueSummaryTable.tsx`
+### 2. Garantir que os 2 emails faltantes recebam a flag
 
-**Linhas 142-149** - Modificar a condicao de launch para verificar se o cliente tem match no mapa de contatos dos closers antes de isolar:
+Na analise anterior, 2 emails da lista do usuario nao tinham a flag `launch`:
+- `chavesjunior60@gmail.com` (Junior Chaves)
+- `arlan_unai45@hotmail.com` (Arlan Rodrigues Rocha)
 
-- Mover o check de launch para DEPOIS de construir o `closerContactMap`
-- Se `sale_origin === 'launch'` MAS o email ou telefone esta no mapa de algum closer, deixar a transacao seguir para o match normal (passo 5)
-- Apenas se NAO tiver match com nenhum closer, classificar como Lancamento
+Esses serao marcados como `sale_origin = 'launch'`.
 
-### 2. `src/hooks/useAcquisitionReport.ts`
+### 3. Logica de codigo (ja implementada)
 
-**Linhas 22-24 e 276-293** - Aplicar a mesma logica:
-
-- No `classifyOrigin`, manter a classificacao como 'Lancamento' 
-- No passo de classificacao (linha 282), quando `origin === 'Lancamento'`, verificar se existe match nos mapas `emailToAttendees` ou `phoneToAttendees`
-- Se tiver match, tratar como transacao normal (nao automatica), permitindo atribuicao ao closer
-
-### 3. Contrato MCF
-
-A condicao `product_name.includes('contrato mcf')` tambem sera afetada pela mesma logica: se o cliente de um "Contrato MCF" tem R1 meeting, ele sera atribuido ao closer em vez de ir para Lancamento.
+A logica de override por R1 no `CloserRevenueSummaryTable.tsx` e `useAcquisitionReport.ts` continua funcionando para cenarios futuros. Como agora so 25 emails terao a flag, a separacao sera naturalmente mais precisa.
 
 ## Resultado Esperado
 
-- **Lancamento**: ~107 transacoes de clientes que compraram diretamente no dia 03/02 sem passar pelo funil
-- **Closers**: ~69 transacoes de clientes que vieram do launch mas passaram pelo Inside Sales (R1) e foram atendidos por closers
-- Nenhuma perda de dados - todas as transacoes continuam visiveis, apenas re-categorizadas
+- **Lancamento**: Apenas transacoes dos 25 clientes listados
+- **Demais 562 clientes**: Voltam ao fluxo normal de atribuicao (closer, sem closer, etc.)
+- Nenhum dado perdido - apenas o campo `sale_origin` e alterado
 
