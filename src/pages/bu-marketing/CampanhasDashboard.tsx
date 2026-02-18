@@ -84,12 +84,12 @@ export default function CampanhasDashboard() {
 
             <div className="space-y-1">
               <label className="text-sm font-medium">Fonte</label>
-              <Select value={sourceFilter} onValueChange={setSourceFilter}>
+              <Select value={sourceFilter || "all"} onValueChange={(val) => setSourceFilter(val === "all" ? "" : val)}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Todas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas</SelectItem>
+                  <SelectItem value="all">Todas</SelectItem>
                   {(sources || []).map((s) => (
                     <SelectItem key={s} value={s}>
                       {s}
