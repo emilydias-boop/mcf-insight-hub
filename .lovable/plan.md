@@ -1,138 +1,138 @@
 
-# Aquisicao A010 - Melhoria do Dashboard de Campanhas
 
-## Contexto Atual
+# Nova Aba "Aquisicao e Origem" na Central de Relatorios
 
-Os dados de A010 na `hubla_transactions` possuem:
-- **UTM** (source, medium, campaign, content) - preenchido em ~30% dos registros
-- **source** (hubla, kiwify, make, hubla_make_sync) - plataforma de pagamento
-- **product_name** - nome do produto
-- **Sem campo de "Oferta" ou "Origem/Parceria"** no banco
+## Objetivo
 
-O desafio: nao existe hoje como saber se uma venda veio do "VSL", da "Pagina B", do "Social Seller" ou do "YouTube Organico" automaticamente. Precisamos criar essa classificacao.
+Adicionar uma quarta aba chamada **"Aquisicao e Origem"** ao modulo de Relatorios do BU Incorporador, sem alterar as 3 abas existentes (Contratos, Vendas, Desempenho).
+
+Essa aba consolida o faturamento por **Closer**, **SDR**, **Canal**, **Outside** e **Origem/Produto** para analise semanal da diretoria.
 
 ## O que sera feito
 
-### 1. Nova tabela: `a010_link_mappings`
+### 1. Atualizar o tipo `ReportType`
 
-Tabela de configuracao para mapear UTMs e fontes em dimensoes de negocio:
+Adicionar `'acquisition'` ao tipo existente em `ReportTypeSelector.tsx` e incluir a nova opcao visual (icone + descricao) no array de opcoes.
 
-| Coluna | Tipo | Descricao |
-|---|---|---|
-| id | uuid | PK |
-| name | text | Nome do mapeamento (ex: "VSL Facebook") |
-| offer | text | Oferta (Principal, VSL, Pagina B, Instagram Story, Social Seller) |
-| origin | text | Origem/Parceria (Trafego Pago, Manychat, Social Seller, YouTube Organico, Google Ads, Instagram Ads) |
-| channel | text | Canal (Facebook, Instagram, Google, Organico, ManyChat) |
-| match_utm_source | text | Regra: utm_source contem este valor (nullable) |
-| match_utm_campaign | text | Regra: utm_campaign contem este valor (nullable) |
-| match_utm_medium | text | Regra: utm_medium contem este valor (nullable) |
-| match_source | text | Regra: campo source = valor (nullable) |
-| priority | int | Prioridade (menor = mais prioritario, para desempate) |
-| is_active | boolean | Ativo/Inativo |
-| created_at | timestamptz | |
+### 2. Incluir a nova aba no BU Incorporador
 
-As regras funcionam como filtros: uma transacao "casa" com um mapeamento quando TODOS os campos preenchidos (nao nulos) do mapeamento sao encontrados na transacao.
+No arquivo `src/pages/bu-incorporador/Relatorios.tsx`, adicionar `'acquisition'` ao array `availableReports`.
 
-### 2. Nova pagina: Configuracao de Links A010
+### 3. Criar o componente `AcquisitionReportPanel`
 
-Rota: `/bu-marketing/a010-links-config`
+Novo arquivo: `src/components/relatorios/AcquisitionReportPanel.tsx`
 
-Interface CRUD simples para gerenciar os mapeamentos:
-- Tabela listando todos os mapeamentos
-- Botao "Adicionar Mapeamento"
-- Dialog com formulario para editar: Nome, Oferta, Origem, Canal, e regras de match (utm_source, utm_campaign, etc.)
-- Botao de excluir
-- Opcoes pre-definidas nos selects de Oferta e Origem (mas permitindo texto livre)
+Este componente reaproveita a mesma logica de dados do `SalesReportPanel` (transacoes, attendees, closers, deduplicacao) e adiciona as dimensoes extras.
 
-### 3. Nova aba: "Aquisicao A010" no Dashboard de Campanhas
+**Filtros** (mesmo padrao visual):
+- Periodo (DateRange)
+- Buscar (texto)
+- Fonte (Hubla/Make)
+- Closer
+- Pipeline
+- Canal (A010/BIO/LIVE)
+- Produto/Origem (novo)
 
-Adicionar uma nova aba no `CampanhasDashboard.tsx` (ou uma nova pagina separada acessivel via sidebar) com:
+**KPI Cards** (4 cards no topo):
+- Total de Transacoes
+- Faturamento Bruto
+- Receita Liquida
+- Ticket Medio
 
-**KPI Cards:**
+**Tabelas de analise** (5 blocos):
 
-| Card | Calculo |
+| Bloco | Colunas |
 |---|---|
-| Total de Leads | Transacoes A010 no periodo |
-| Total de Vendas | Transacoes A010 com status paid/completed |
-| Receita Total | Soma net_value das vendas |
-| Ticket Medio | Receita / Vendas |
+| Faturamento por Closer | Closer, Transacoes, Fat. Bruto, Receita Liq., Ticket, % Total, Outside, Fat. Outside |
+| Faturamento por SDR | SDR, Transacoes, Fat. Bruto, Receita Liq., Ticket, % Total |
+| Faturamento por Canal | Canal, Transacoes, Fat. Bruto, Receita Liq., Ticket, % Total |
+| Faturamento Outside | Closer, Qtde Outside, Fat. Outside |
+| Faturamento por Origem/Produto | Origem, Transacoes, Fat. Bruto, Receita Liq., Ticket, % Total |
 
-**Tabela Principal - Visao Cruzada:**
+**Exportacao Excel**: Botao que exporta todas as dimensoes em abas separadas do Excel.
 
-| Canal | Oferta | Origem | Leads | Vendas | Receita | Ticket Medio | % Conversao |
-|---|---|---|---|---|---|---|---|
-| Facebook | VSL | Trafego Pago | 450 | 120 | R$5.640 | R$47 | 26.7% |
-| Instagram | Story | Manychat | 200 | 45 | R$2.115 | R$47 | 22.5% |
+### 4. Logica de classificacao por dimensao
 
-**Rankings Rapidos (tabs):**
-- Por Canal
-- Por Oferta
-- Por Origem
+**Closer**: Reutiliza a mesma logica do `CloserRevenueSummaryTable` -- match por email/telefone com attendees da agenda.
 
-**Filtros:** Canal, Oferta, Origem (selects cascata)
+**SDR**: Busca o `owner` do `crm_deal` vinculado ao attendee. O SDR e o dono do deal (quem agendou a reuniao).
 
-### 4. Insight de Escala (bloco automatico)
+**Canal**: Detectado pelo `product_name` (A010/BIO/LIVE) e complementado com `utm_source` quando disponivel.
 
-Card com analise simples baseada em regras:
-- Identifica o canal/oferta com maior taxa de conversao
-- Identifica o canal com maior receita
-- Gera frase automatica tipo: "Canal Facebook com oferta VSL tem a maior taxa de conversao (26.7%) e maior receita. Considere escalar investimento."
+**Origem/Produto**: Classificacao baseada em `product_category` e `sale_origin`:
+- Lancamento: `sale_origin = 'launch'` ou nome contendo "contrato mcf"
+- A010: `product_category = 'a010'`
+- Renovacao: `product_category = 'renovacao'`
+- Vitalicio: `product_category = 'ob_vitalicio'`
+- Contrato: `product_category = 'contrato'`
+- Outros: restante
 
-### 5. Link no Sidebar
+**Outside**: Vendas onde `sale_date < scheduled_at` do meeting (venda antes da reuniao).
 
-Adicionar ao menu BU Marketing:
-- "Aquisicao A010" (nova pagina/aba)
-- "Config Links A010" (pagina de configuracao)
+### 5. Hook de dados
+
+Novo hook: `src/hooks/useAcquisitionReport.ts`
+
+Centraliza a busca e classificacao, retornando dados prontos para cada dimensao. Reutiliza:
+- `useAllHublaTransactions` para transacoes
+- `useGestorClosers` para closers R1
+- Attendees com SDR via query estendida (incluindo `owner` do deal)
+- `get_first_transaction_ids` para deduplicacao
+
+### 6. Conectar no BUReportCenter
+
+Adicionar o render condicional para `selectedReport === 'acquisition'` no `BUReportCenter.tsx`.
 
 ## Alteracoes Tecnicas
 
 | Arquivo | Alteracao |
 |---|---|
-| **SQL Migration** | Criar tabela `a010_link_mappings` + RLS + seed com mapeamentos iniciais |
-| `src/hooks/useA010Acquisition.ts` | **Novo** - Hook que busca transacoes A010 + mapeamentos, classifica cada transacao e agrega por dimensao |
-| `src/hooks/useA010LinkMappings.ts` | **Novo** - CRUD hook para a010_link_mappings |
-| `src/pages/bu-marketing/A010AcquisitionDashboard.tsx` | **Novo** - Dashboard com KPIs, tabela cruzada, rankings por dimensao, insight de escala |
-| `src/pages/bu-marketing/A010LinkMappingsConfig.tsx` | **Novo** - Pagina de configuracao dos mapeamentos |
-| `src/components/layout/AppSidebar.tsx` | Adicionar itens "Aquisicao A010" e "Config Links" no menu Marketing |
-| `src/App.tsx` | Novas rotas |
+| `src/components/relatorios/ReportTypeSelector.tsx` | Adicionar `'acquisition'` ao tipo e ao array de opcoes |
+| `src/components/relatorios/BUReportCenter.tsx` | Adicionar render para `selectedReport === 'acquisition'` |
+| `src/pages/bu-incorporador/Relatorios.tsx` | Adicionar `'acquisition'` ao `availableReports` |
+| `src/hooks/useAcquisitionReport.ts` | **Novo** - Hook que busca transacoes + attendees + SDRs e classifica por dimensao |
+| `src/components/relatorios/AcquisitionReportPanel.tsx` | **Novo** - Painel com filtros, KPIs e 5 tabelas de analise |
 
-## Mapeamentos Iniciais (Seed)
+## Layout Visual
 
-Com base nos dados atuais do banco:
-
-| Oferta | Origem | Canal | Regra |
-|---|---|---|---|
-| Principal | Trafego Pago | Facebook | utm_source = FB |
-| Principal | Trafego Pago | Facebook | utm_source = fb |
-| Principal | Instagram Organico | Instagram | utm_source = ig |
-| Principal | Manychat | ManyChat | utm_source = manychat |
-| Principal | Organico | Organico | utm_source = organic |
-| Principal | Hubla Direto | Hubla | utm_source = hubla |
-
-Transacoes sem UTM e sem match em nenhum mapeamento aparecem como "Nao Classificado" em todas as dimensoes.
-
-## Fluxo de Dados
+Segue exatamente o padrao atual da aba "Vendas":
 
 ```text
-hubla_transactions (A010)
-        |
-        v
-a010_link_mappings (regras de match)
-        |
-        v
-Classificacao: Canal + Oferta + Origem
-        |
-        v
-Agregacao por dimensao
-        |
-        v
-KPIs + Tabela Cruzada + Rankings + Insights
+[Contratos] [Vendas] [Desempenho] [Aquisicao & Origem]  <-- nova aba
+
++-- Filtros (Card) ------------------------------------------+
+| Periodo  Buscar  Fonte  Closer  Pipeline  Canal  [Excel]   |
++------------------------------------------------------------+
+
++-- KPI Cards (4 colunas) ----------------------------------+
+| Total Transacoes | Fat. Bruto | Receita Liq. | Ticket Med |
++------------------------------------------------------------+
+
++-- Faturamento por Closer (Table) -------------------------+
+| Closer | Txns | Bruto | Liq. | Ticket | % | Outside | F.O |
++------------------------------------------------------------+
+
++-- Faturamento por SDR (Table) ----------------------------+
+| SDR | Txns | Bruto | Liq. | Ticket | %                   |
++------------------------------------------------------------+
+
++-- Faturamento por Canal (Table) --------------------------+
+| Canal | Txns | Bruto | Liq. | Ticket | %                 |
++------------------------------------------------------------+
+
++-- Faturamento Outside (Table) ----------------------------+
+| Closer | Qtde Outside | Fat. Outside                     |
++------------------------------------------------------------+
+
++-- Faturamento por Origem/Produto (Table) -----------------+
+| Origem | Txns | Bruto | Liq. | Ticket | %                |
++------------------------------------------------------------+
 ```
 
 ## Notas Importantes
 
-- O dashboard atual de Campanhas NAO sera alterado, apenas receberao novos itens no sidebar
-- As regras de mapeamento sao avaliadas por prioridade (menor numero = mais prioritario)
-- Transacoes nao classificadas ficam visiveis como "Nao Classificado" para facilitar a criacao de novos mapeamentos
-- A configuracao de mapeamentos e editavel sem codigo, via interface administrativa
+- Nenhuma funcionalidade existente sera removida ou alterada
+- A aba so aparece no BU Incorporador (as outras BUs mantem seus relatorios atuais)
+- O padrao visual e identico ao existente (cards escuros, tabelas padrao, tipografia atual)
+- Sem migracoes SQL necessarias -- todos os dados ja existem no banco
+- A logica de deduplicacao e outside segue a mesma hierarquia ja documentada
