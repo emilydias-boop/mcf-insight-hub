@@ -1,48 +1,57 @@
 
 
-# Corrigir Match por Telefone no CloserRevenueSummaryTable
+# Separar Vendas de Launch vs Inside Sales
 
-## Problema Identificado
+## Contexto
 
-A logica de matching por telefone no `CloserRevenueSummaryTable.tsx` tem duas falhas:
+Atualmente, **todas** as transacoes com `sale_origin = 'launch'` vao para o bucket "Lancamento". Porem, 22 clientes marcados como launch **tambem passaram pelo funil Inside Sales** (tem R1 agendada com closer). Esses devem ser atribuidos ao closer correspondente, nao ao lancamento.
 
-1. **Telefone do attendee ignorado**: O componente so extrai telefone de `crm_deals.crm_contacts.phone` (linha 97), mas ignora `attendee_phone` (que esta disponivel na interface, linha 16). O `useAcquisitionReport.ts` ja faz isso corretamente (linhas 258-262).
+**Dados de Fevereiro 2026:**
+- **69 transacoes** (22 clientes) tem R1 no CRM = devem ir para o closer (Inside Sales)
+- **107 transacoes** (34 clientes) sem R1 = lancamento puro
 
-2. **Sem match por sufixo**: Numeros brasileiros podem estar armazenados com ou sem codigo de pais (`55`). Exemplo: a transacao Hubla tem `+5511999887766` (normalizado: `5511999887766`) e o CRM tem `11999887766`. A comparacao exata falha. Precisamos comparar pelos ultimos 8-9 digitos (sufixo).
+## Logica Proposta
 
-## Alteracoes
-
-### Arquivo: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
-
-**Mudanca 1 - Indexar `attendee_phone` alem de `crm_contacts.phone`** (linhas 87-105):
-
-Adicionar indexacao do `attendee_phone` no loop de construcao do mapa de contatos por closer, seguindo o mesmo padrao do `useAcquisitionReport.ts`.
-
-**Mudanca 2 - Match por sufixo de telefone** (linhas 48-50 e 168-206):
-
-Criar helper `phoneSuffix(phone)` que retorna os ultimos 9 digitos do telefone normalizado. Usar esse sufixo como chave no mapa `phones` e na comparacao de transacoes. Isso garante que `5511999887766` e `11999887766` resultem no mesmo sufixo `999887766`.
+No `CloserRevenueSummaryTable.tsx` e `useAcquisitionReport.ts`, antes de classificar uma transacao como "Lancamento", verificar se o email/telefone do cliente tem match com algum attendee R1. Se tiver, a transacao **nao** e isolada como lancamento - ela segue o fluxo normal de atribuicao ao closer.
 
 ```text
-// Novo helper
-const phoneSuffix = (phone: string | null | undefined): string => {
-  const digits = (phone || '').replace(/\D/g, '');
-  return digits.length >= 9 ? digits.slice(-9) : digits;
-};
+// Pseudocodigo
+if (tx.sale_origin === 'launch') {
+  // Verificar se tem R1 meeting (passou pelo inside sales)
+  const hasR1Match = emailMap.has(txEmail) || phoneMap.has(txPhone);
+  if (hasR1Match) {
+    // NAO isolar como launch - deixar fluir para match com closer
+  } else {
+    // Launch puro - isolar na linha de Lancamento
+  }
+}
 ```
 
-**Mudanca 3 - Tambem indexar `attendee_phone` para earliest meeting map**:
+## Alteracoes Tecnicas
 
-Garantir que o mapa `earliestMap` tambem registre o sufixo do `attendee_phone` para deteccao correta de "Outside".
+### 1. `src/components/relatorios/CloserRevenueSummaryTable.tsx`
 
-### Arquivo: `src/hooks/useAcquisitionReport.ts`
+**Linhas 142-149** - Modificar a condicao de launch para verificar se o cliente tem match no mapa de contatos dos closers antes de isolar:
 
-**Mudanca 4 - Aplicar sufixo no useAcquisitionReport tambem** (linhas 253-264, 287-289):
+- Mover o check de launch para DEPOIS de construir o `closerContactMap`
+- Se `sale_origin === 'launch'` MAS o email ou telefone esta no mapa de algum closer, deixar a transacao seguir para o match normal (passo 5)
+- Apenas se NAO tiver match com nenhum closer, classificar como Lancamento
 
-Usar `phoneSuffix` em vez de `normalizePhone` nas chaves do `phoneMap` e na lookup de transacoes, para consistencia.
+### 2. `src/hooks/useAcquisitionReport.ts`
 
-## Resultado
+**Linhas 22-24 e 276-293** - Aplicar a mesma logica:
 
-- Transacoes cujo telefone Hubla difere do CRM apenas pelo prefixo `55` serao corretamente atribuidas ao closer
-- Transacoes cujo telefone esta no `attendee_phone` (mas nao no `crm_contacts.phone`) tambem serao encontradas
-- Ambos os componentes (tabela resumo e relatorio de aquisicao) usarao a mesma logica de sufixo
+- No `classifyOrigin`, manter a classificacao como 'Lancamento' 
+- No passo de classificacao (linha 282), quando `origin === 'Lancamento'`, verificar se existe match nos mapas `emailToAttendees` ou `phoneToAttendees`
+- Se tiver match, tratar como transacao normal (nao automatica), permitindo atribuicao ao closer
+
+### 3. Contrato MCF
+
+A condicao `product_name.includes('contrato mcf')` tambem sera afetada pela mesma logica: se o cliente de um "Contrato MCF" tem R1 meeting, ele sera atribuido ao closer em vez de ir para Lancamento.
+
+## Resultado Esperado
+
+- **Lancamento**: ~107 transacoes de clientes que compraram diretamente no dia 03/02 sem passar pelo funil
+- **Closers**: ~69 transacoes de clientes que vieram do launch mas passaram pelo Inside Sales (R1) e foram atendidos por closers
+- Nenhuma perda de dados - todas as transacoes continuam visiveis, apenas re-categorizadas
 
