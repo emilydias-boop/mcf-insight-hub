@@ -1,51 +1,56 @@
 
 
-# Correção: SDRs aparecem vazios na tabela
+# Correção: Atribuir SDR via `booked_by` em vez de `owner_profile_id`
 
 ## Problema
 
-Existe uma inconsistência de nomes entre duas fontes:
-- **Pre-população** usa nomes da tabela `sdr` (ex: "Jessica Martins") via `sdrProfileMap`
-- **Classificação** usa nomes da tabela `profiles.full_name` (ex: "Jessica Martins de Souza") via `sdrNameMap`
-
-Como os nomes não batem, os SDRs pre-populados ficam com 0 transações, e as transações vão para entradas com nomes diferentes que depois são descartadas (porque o `sdrProfileIds` filtra corretamente, mas o nome resolvido vem de outra fonte).
+Quando um SDR agenda uma R1 e depois o lead é transferido para o closer, o `crm_deals.owner_profile_id` muda para o closer. O relatório usa esse campo para identificar o SDR, resultando em 127 transações "Sem SDR" que na verdade tinham um SDR responsável original.
 
 ## Solução
 
-Usar `sdrProfileMap` como fonte única de nomes para SDRs válidos na etapa de classificação (passo 8), em vez de `sdrNameMap`.
+Usar `meeting_slots.booked_by` (UUID do SDR que agendou a R1) como fonte primária de atribuição do SDR, em vez de `crm_deals.owner_profile_id`. Isso é consistente com a lógica já usada nos relatórios de R2.
+
+## Alterações
 
 ### Arquivo: `src/hooks/useAcquisitionReport.ts`
 
-**Linha ~301-302** -- Resolver nome do SDR via `sdrProfileMap`:
+**1. Atualizar interface `AttendeeWithSDR`** -- adicionar `booked_by` no tipo de `meeting_slots`:
+
+```typescript
+meeting_slots: { 
+  closer_id: string | null; 
+  scheduled_at: string | null;
+  booked_by: string | null;  // <-- novo
+} | null;
+```
+
+**2. Atualizar query de attendees (passo 4)** -- incluir `booked_by` no select:
 
 ```text
 // Antes:
-const sdrName = sdrId
-  ? (sdrNameMap.get(sdrId) || 'SDR Desconhecido')
-  : (isAutomatic ? origin : 'Sem SDR');
+meeting_slots!inner(closer_id, scheduled_at)
 
 // Depois:
-const sdrName = sdrId
-  ? (sdrProfileMap.get(sdrId) || sdrNameMap.get(sdrId) || 'SDR Desconhecido')
-  : (isAutomatic ? origin : 'Sem SDR');
+meeting_slots!inner(closer_id, scheduled_at, booked_by)
 ```
 
-Isso garante que o nome usado na classificação seja o mesmo nome usado na pre-população do `sdrMap`.
-
-**Linha ~311** -- Adicionar `sdrProfileMap` nas dependências do useMemo de classificação:
+**3. Atualizar classificação (passo 8)** -- usar `booked_by` como fonte primária do SDR:
 
 ```text
 // Antes:
-}, [transactions, emailToAttendees, phoneToAttendees, closerNameMap, sdrNameMap, globalFirstIds, bu, sdrProfileIds]);
+const rawSdrId = matchedAttendee?.crm_deals?.owner_profile_id || null;
 
 // Depois:
-}, [transactions, emailToAttendees, phoneToAttendees, closerNameMap, sdrNameMap, sdrProfileMap, globalFirstIds, bu, sdrProfileIds]);
+const rawSdrId = matchedAttendee?.meeting_slots?.booked_by 
+  || matchedAttendee?.crm_deals?.owner_profile_id 
+  || null;
 ```
+
+Isso faz fallback para `owner_profile_id` caso `booked_by` esteja nulo (dados antigos), mas prioriza o SDR que realmente agendou a reunião.
 
 ## Resultado
 
-- Todos os 11 SDRs da BU incorporador aparecem na tabela
-- SDRs com vendas mostram seus valores corretamente
-- SDRs sem vendas aparecem com 0
-- "Sem SDR" agrupa transações de owners que não são SDRs da BU
+- Transações cujo lead foi transferido do SDR para o closer serão corretamente atribuídas ao SDR original
+- O numero de "Sem SDR" cairá significativamente (de ~127 para apenas as transações sem match na agenda ou de origens automáticas)
+- Consistente com a lógica de atribuição já usada nos relatórios de R2
 
