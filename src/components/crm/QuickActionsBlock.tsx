@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Phone, MessageCircle, ArrowRight, Loader2, XCircle, Calendar } from 'lucide-react';
+import { Phone, MessageCircle, ArrowRight, Loader2, XCircle, Calendar, FolderInput, Trash2 } from 'lucide-react';
 import { useTwilio } from '@/contexts/TwilioContext';
-import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
+import { useUpdateCRMDeal, useCRMStages, useDeleteCRMDeal } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
 import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from '@/lib/phoneUtils';
 import { buildWhatsAppMessage } from '@/lib/whatsappTemplates';
@@ -14,9 +14,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { MarkAsLostModal } from './MarkAsLostModal';
 import { InlineCallControls } from './InlineCallControls';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
+import { MoveToPipelineModal } from './MoveToPipelineModal';
 
 interface QuickActionsBlockProps {
   deal: any;
@@ -29,10 +40,14 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
   const updateDeal = useUpdateCRMDeal();
   const { data: stages } = useCRMStages(deal?.origin_id);
   
+  const deleteDeal = useDeleteCRMDeal();
+  
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
   const [selectedStageId, setSelectedStageId] = useState<string>('');
   const [showLostModal, setShowLostModal] = useState(false);
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   
   const isTestDeal = deal ? isTestPipeline(deal.origin_id) : false;
   const currentStageOrder = deal?.crm_stages?.stage_order || 0;
@@ -146,6 +161,16 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
     }
   };
   
+  const handleDelete = async () => {
+    try {
+      await deleteDeal.mutateAsync(deal.id);
+      setShowDeleteDialog(false);
+      onStageChange?.();
+    } catch (error) {
+      // Error handled by hook
+    }
+  };
+
   const hasPhone = extractPhoneFromDeal(deal, contact);
   
   return (
@@ -224,7 +249,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
           </>
         )}
         
-        {/* Botão Perdido - esconder quando em chamada */}
+        {/* Botões Perdido, Mover Pipeline, Excluir - esconder quando em chamada */}
         {!isInCallWithThisDeal && (
           <>
             <div className="h-4 w-px bg-border mx-1" />
@@ -236,6 +261,26 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
             >
               <XCircle className="h-3.5 w-3.5 mr-1.5" />
               Perdido
+            </Button>
+            
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={() => setShowMoveModal(true)}
+            >
+              <FolderInput className="h-3.5 w-3.5 mr-1.5" />
+              Mover Pipeline
+            </Button>
+            
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10"
+              onClick={() => setShowDeleteDialog(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              Excluir
             </Button>
           </>
         )}
@@ -260,6 +305,39 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
         contactName={contact?.name || deal?.name}
         onScheduled={onStageChange}
       />
+      
+      {/* Modal Mover Pipeline */}
+      <MoveToPipelineModal
+        open={showMoveModal}
+        onOpenChange={setShowMoveModal}
+        dealId={deal?.id}
+        dealName={deal?.name || 'Lead'}
+        currentOriginId={deal?.origin_id}
+        currentStageName={deal?.crm_stages?.stage_name}
+        onSuccess={onStageChange}
+      />
+      
+      {/* AlertDialog Excluir */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lead</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>{deal?.name || 'este lead'}</strong>? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteDeal.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
