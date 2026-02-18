@@ -104,38 +104,56 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
   const closerIdSet = useMemo(() => new Set(closers.map(c => c.id)), [closers]);
 
   // 2b. Valid SDRs for this BU
-  const { data: buSdrs = [] } = useQuery({
+  const { data: buSdrs = [] } = useQuery<{ email: string; name: string }[]>({
     queryKey: ['acquisition-bu-sdrs', bu],
     queryFn: async () => {
       if (!bu) return [];
       const { data, error } = await supabase
         .from('sdr')
-        .select('email')
+        .select('email, name')
         .eq('active', true)
         .eq('squad', bu)
         .eq('role_type', 'sdr');
       if (error) throw error;
-      return (data || []).map((s: { email: string | null }) => (s.email || '').toLowerCase().trim());
+      return (data || []).map((s: { email: string | null; name: string | null }) => ({
+        email: (s.email || '').toLowerCase().trim(),
+        name: s.name || 'Sem nome',
+      }));
     },
     enabled: !!bu,
     staleTime: 5 * 60 * 1000,
   });
 
-  // 2c. Map SDR emails to profile IDs
-  const { data: sdrProfileIds = new Set<string>() } = useQuery({
-    queryKey: ['acquisition-sdr-profile-ids', buSdrs],
+  // 2c. Map SDR emails to profile IDs and names
+  const sdrEmails = useMemo(() => buSdrs.map(s => s.email), [buSdrs]);
+  const sdrNameByEmail = useMemo(() => {
+    const m = new Map<string, string>();
+    buSdrs.forEach(s => m.set(s.email, s.name));
+    return m;
+  }, [buSdrs]);
+
+  const { data: sdrProfileMap = new Map<string, string>() } = useQuery({
+    queryKey: ['acquisition-sdr-profile-ids', sdrEmails],
     queryFn: async () => {
-      if (buSdrs.length === 0) return new Set<string>();
+      if (sdrEmails.length === 0) return new Map<string, string>();
       const { data, error } = await supabase
         .from('profiles')
         .select('id, email')
-        .in('email', buSdrs);
+        .in('email', sdrEmails);
       if (error) throw error;
-      return new Set((data || []).map((p: { id: string }) => p.id));
+      const m = new Map<string, string>();
+      (data || []).forEach((p: { id: string; email: string | null }) => {
+        const email = (p.email || '').toLowerCase().trim();
+        const name = sdrNameByEmail.get(email) || 'Sem nome';
+        m.set(p.id, name);
+      });
+      return m;
     },
-    enabled: buSdrs.length > 0,
+    enabled: sdrEmails.length > 0,
     staleTime: 5 * 60 * 1000,
   });
+
+  const sdrProfileIds = useMemo(() => new Set(sdrProfileMap.keys()), [sdrProfileMap]);
 
   // 3. First transaction IDs (dedup)
   const { data: globalFirstIds = new Set<string>() } = useQuery({
@@ -334,6 +352,13 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
     const originMap = new Map<string, { txs: number; gross: number; net: number; outsideCount: number; outsideRev: number }>();
     const outsideMap = new Map<string, { txs: number; gross: number; net: number; outsideCount: number; outsideRev: number }>();
 
+    // Pre-populate sdrMap with all valid SDRs from the BU
+    sdrProfileMap.forEach((name) => {
+      if (!sdrMap.has(name)) {
+        sdrMap.set(name, { txs: 0, gross: 0, net: 0, outsideCount: 0, outsideRev: 0 });
+      }
+    });
+
     let totalGross = 0;
     let totalNet = 0;
 
@@ -369,7 +394,7 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
       })),
       byOrigin: aggregate(originMap, totalNet),
     };
-  }, [classified]);
+  }, [classified, sdrProfileMap]);
 
   return {
     kpis,
