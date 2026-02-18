@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCreateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
+import { useActiveBU } from '@/hooks/useActiveBU';
 import { toast } from 'sonner';
 
 import {
@@ -66,6 +67,7 @@ export function DealFormDialog({
   const [open, setOpen] = useState(false);
   const createDealMutation = useCreateCRMDeal();
   const createActivityMutation = useCreateDealActivity();
+  const activeBU = useActiveBU();
 
   // Use the unified useCRMStages hook - only enabled when dialog is open
   // This prevents cache pollution with the Kanban's stages query
@@ -91,40 +93,40 @@ export function DealFormDialog({
   // Use pipeline stages if available, otherwise fall back to global
   const stages = pipelineStages.length > 0 ? pipelineStages : globalStages;
 
-  // Fetch SDRs for this origin/pipeline (two-step query to avoid join issues)
+  // Fetch SDRs/Closers filtered by active BU squad
   const { data: dealOwners = [] } = useQuery({
-    queryKey: ['deal-owners-sdr-with-email'],
+    queryKey: ['deal-owners-by-bu', activeBU],
     queryFn: async () => {
-      // 1. Buscar user_ids que têm role = 'sdr'
-      const { data: sdrRoles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role', 'sdr');
-      
-      if (rolesError) {
-        console.error('Error fetching SDR roles:', rolesError);
-        return [];
-      }
-      
-      if (!sdrRoles || sdrRoles.length === 0) return [];
-      
-      const sdrUserIds = sdrRoles.map(r => r.user_id);
-      
-      // 2. Buscar profiles desses users (incluindo email para owner_id legacy)
-      const { data: profiles, error: profilesError } = await supabase
+      // 1. Buscar profiles do squad da BU ativa (ou todos SDRs como fallback)
+      let profilesQuery = supabase
         .from('profiles')
         .select('id, full_name, email')
-        .in('id', sdrUserIds)
         .eq('access_status', 'ativo')
         .order('full_name');
-      
-      if (profilesError) {
-        console.error('Error fetching SDR profiles:', profilesError);
-        return [];
+
+      if (activeBU) {
+        profilesQuery = profilesQuery.contains('squad', [activeBU]);
       }
-      
-      return profiles || [];
+
+      const { data: profiles, error: profilesError } = await profilesQuery;
+      if (profilesError || !profiles || profiles.length === 0) return [];
+
+      const profileIds = profiles.map(p => p.id);
+
+      // 2. Buscar roles sdr/closer desses profiles
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role')
+        .in('user_id', profileIds)
+        .in('role', ['sdr', 'closer']);
+
+      if (rolesError) return [];
+
+      // 3. Retornar apenas profiles que tenham role relevante
+      const validUserIds = new Set((roles || []).map(r => r.user_id));
+      return profiles.filter(p => validUserIds.has(p.id));
     },
+    enabled: open,
   });
 
   const form = useForm<DealFormValues>({
