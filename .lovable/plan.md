@@ -1,61 +1,51 @@
 
 
-# Correção: Mostrar todos os SDRs da BU na tabela
+# Correção: SDRs aparecem vazios na tabela
 
 ## Problema
 
-A tabela "Faturamento por SDR" só mostra SDRs que tiveram pelo menos 1 transação matcheada. SDRs com 0 transações não aparecem.
+Existe uma inconsistência de nomes entre duas fontes:
+- **Pre-população** usa nomes da tabela `sdr` (ex: "Jessica Martins") via `sdrProfileMap`
+- **Classificação** usa nomes da tabela `profiles.full_name` (ex: "Jessica Martins de Souza") via `sdrNameMap`
 
-Existem 11 SDRs ativos na BU incorporador (Alex Dias, Antony Elias, Carol Correa, Caroline Souza, Evellyn Santos, Jessica Martins, Julia Caroline, Juliana Rodrigues, Leticia Nunes, Robert Gusmao, Yanca Tavares), mas só 3 aparecem na tabela.
+Como os nomes não batem, os SDRs pre-populados ficam com 0 transações, e as transações vão para entradas com nomes diferentes que depois são descartadas (porque o `sdrProfileIds` filtra corretamente, mas o nome resolvido vem de outra fonte).
 
 ## Solução
 
-Pre-popular o `sdrMap` com todos os SDRs válidos da BU (com valores zerados) ANTES de processar as transações. Assim, todos os SDRs aparecem na tabela mesmo com 0 vendas.
+Usar `sdrProfileMap` como fonte única de nomes para SDRs válidos na etapa de classificação (passo 8), em vez de `sdrNameMap`.
 
 ### Arquivo: `src/hooks/useAcquisitionReport.ts`
 
-1. Buscar nomes dos SDRs junto com os emails (já temos a query `buSdrs`, basta expandir para incluir `name`)
-2. Na construção do `sdrMap` (passo 10), inicializar com todas as entradas dos SDRs da BU com valores zerados
-3. Quando transações forem processadas, acumular nos SDRs que já existem no map
-
-### Detalhes técnicos
-
-**Query 2b** -- expandir para retornar nome e email:
+**Linha ~301-302** -- Resolver nome do SDR via `sdrProfileMap`:
 
 ```text
-// Antes: retorna apenas emails
-sdr.select('email')
+// Antes:
+const sdrName = sdrId
+  ? (sdrNameMap.get(sdrId) || 'SDR Desconhecido')
+  : (isAutomatic ? origin : 'Sem SDR');
 
-// Depois: retorna email e name
-sdr.select('email, name')
-// Retornar array de { email, name } em vez de string[]
+// Depois:
+const sdrName = sdrId
+  ? (sdrProfileMap.get(sdrId) || sdrNameMap.get(sdrId) || 'SDR Desconhecido')
+  : (isAutomatic ? origin : 'Sem SDR');
 ```
 
-**Query 2c** -- criar mapa profile_id -> nome do SDR:
+Isso garante que o nome usado na classificação seja o mesmo nome usado na pre-população do `sdrMap`.
+
+**Linha ~311** -- Adicionar `sdrProfileMap` nas dependências do useMemo de classificação:
 
 ```text
-// Criar Map<profileId, sdrName> em vez de Set<profileId>
-// Para usar no pre-populate do sdrMap
-```
+// Antes:
+}, [transactions, emailToAttendees, phoneToAttendees, closerNameMap, sdrNameMap, globalFirstIds, bu, sdrProfileIds]);
 
-**Passo 10** -- pre-popular sdrMap:
-
-```text
-// Antes do forEach(classified):
-validSdrNames.forEach((name, profileId) => {
-  sdrMap.set(name, { txs: 0, gross: 0, net: 0, outsideCount: 0, outsideRev: 0 });
-});
+// Depois:
+}, [transactions, emailToAttendees, phoneToAttendees, closerNameMap, sdrNameMap, sdrProfileMap, globalFirstIds, bu, sdrProfileIds]);
 ```
 
 ## Resultado
 
-- Tabela SDR mostra todos os 11 SDRs da BU incorporador
-- SDRs sem vendas aparecem com 0 transações e R$ 0,00
-- Permite à gestão ver quem não está vendendo
-
-## Arquivo alterado
-
-| Arquivo | Alteração |
-|---|---|
-| `src/hooks/useAcquisitionReport.ts` | Expandir query de SDRs para incluir nomes; pre-popular sdrMap com todos os SDRs da BU |
+- Todos os 11 SDRs da BU incorporador aparecem na tabela
+- SDRs com vendas mostram seus valores corretamente
+- SDRs sem vendas aparecem com 0
+- "Sem SDR" agrupa transações de owners que não são SDRs da BU
 
