@@ -17,6 +17,9 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useCampaignBreakdown, useUtmSources } from "@/hooks/useMarketingMetrics";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
+
+const cleanUtmValue = (val: string | null | undefined) =>
+  val?.replace(/\|[\d]+$/, "") || val;
 import {
   Table,
   TableBody,
@@ -127,8 +130,8 @@ export default function CampanhasDashboard() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Campanha</TableHead>
-                    <TableHead>Conjunto / Adset</TableHead>
-                    <TableHead>Fonte</TableHead>
+                    <TableHead>Bloco do Anúncio</TableHead>
+                    <TableHead>Canal</TableHead>
                     <TableHead className="text-right">Leads</TableHead>
                     <TableHead className="text-right">Receita</TableHead>
                   </TableRow>
@@ -137,10 +140,10 @@ export default function CampanhasDashboard() {
                   {(campaigns || []).map((c, i) => (
                     <TableRow key={i}>
                       <TableCell className="font-medium max-w-[300px] truncate">
-                        {c.utm_campaign || "Sem campanha"}
+                        {cleanUtmValue(c.utm_campaign) || "Sem campanha"}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate">
-                        {c.utm_medium || "—"}
+                        {cleanUtmValue(c.utm_medium) || "—"}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-xs">
