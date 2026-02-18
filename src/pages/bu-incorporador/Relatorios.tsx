@@ -6,7 +6,7 @@ export default function IncorporadorRelatorios() {
     <RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}>
       <BUReportCenter 
         bu="incorporador" 
-        availableReports={['contracts', 'sales', 'performance']} 
+        availableReports={['contracts', 'sales', 'performance', 'acquisition']} 
       />
     </RoleGuard>
   );
