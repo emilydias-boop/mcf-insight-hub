@@ -40,7 +40,8 @@ interface AttendeeWithSDR {
   deal_id: string | null;
   meeting_slots: { closer_id: string | null; scheduled_at: string | null } | null;
   crm_deals: {
-    owner: string | null;
+    owner_id: string | null;
+    owner_profile_id: string | null;
     crm_contacts: { email: string | null; phone: string | null } | null;
   } | null;
 }
@@ -104,7 +105,7 @@ export function useAcquisitionReport(dateRange: DateRange | undefined) {
           .select(`
             id, attendee_phone, deal_id,
             meeting_slots!inner(closer_id, scheduled_at),
-            crm_deals!deal_id(owner, crm_contacts!contact_id(email, phone))
+            crm_deals!deal_id(owner_id, owner_profile_id, crm_contacts!contact_id(email, phone))
           `)
           .eq('meeting_slots.meeting_type', 'r1')
           .gte('meeting_slots.scheduled_at', startDate)
@@ -125,7 +126,7 @@ export function useAcquisitionReport(dateRange: DateRange | undefined) {
   const sdrIds = useMemo(() => {
     const ids = new Set<string>();
     attendees.forEach(a => {
-      if (a.crm_deals?.owner) ids.add(a.crm_deals.owner);
+      if (a.crm_deals?.owner_profile_id) ids.add(a.crm_deals.owner_profile_id);
     });
     return Array.from(ids);
   }, [attendees]);
@@ -202,7 +203,7 @@ export function useAcquisitionReport(dateRange: DateRange | undefined) {
       const closerName = closerId ? (closerNameMap.get(closerId) || 'Closer Desconhecido') : 'Sem Closer';
       const scheduledAt = matchedAttendee?.meeting_slots?.scheduled_at || null;
       const isOutside = !!(scheduledAt && tx.sale_date && new Date(tx.sale_date) < new Date(scheduledAt));
-      const sdrId = matchedAttendee?.crm_deals?.owner || null;
+      const sdrId = matchedAttendee?.crm_deals?.owner_profile_id || null;
       const sdrName = sdrId ? (sdrNameMap.get(sdrId) || 'SDR Desconhecido') : 'Sem SDR';
       const channel = detectChannel(tx.product_name);
       const origin = classifyOrigin(tx);
