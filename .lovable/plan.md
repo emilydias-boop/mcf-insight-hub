@@ -1,83 +1,77 @@
 
 
-# Correção: Closers e SDRs não aparecem no relatório de Aquisição
+# Correção: Isolamento por BU e Redução de "Sem Closer/SDR"
 
-## Problema Identificado
+## Problemas Identificados
 
-Encontrei **2 bugs** no hook `useAcquisitionReport.ts`:
+### 1. Closers de outras BUs aparecem no relatório
+A rota `/bu-incorporador/relatorios` nao possui `BUProvider`, entao `useActiveBU()` nao retorna `'incorporador'`. O `useGestorClosers` busca closers de TODAS as BUs.
 
-### Bug 1: Coluna errada no SELECT do Supabase
-O código busca `crm_deals!deal_id(owner, ...)` mas a coluna correta é `owner_id` (não `owner`). O PostgREST silenciosamente retorna `null` para colunas inexistentes, fazendo todos os attendees ficarem sem SDR.
+Evidencia: Victoria Paz e Thobson sao closers da BU Consorcio, mas aparecem no relatorio Incorporador.
 
-### Bug 2: SDR owner_id é email, não UUID
-O campo `owner_id` da tabela `crm_deals` contém **emails** (ex: `jessica.bellini@minhacasafinanciada.com`), não UUIDs. Porém existe `owner_profile_id` que contém o UUID correto do profile. O código atual tenta buscar nomes na tabela `profiles` usando o `owner` como UUID — isso nunca funciona.
+### 2. Volume alto de "Sem Closer" e "Sem SDR" (65% das transacoes)
+O hook busca TODAS as transacoes Hubla (3.371 em fevereiro), incluindo:
+- 1.319 transacoes A010 (funil automatico, sem reuniao R1)
+- 176 transacoes de lancamento
+- Transacoes de renovacao, vitalicio, etc.
 
-Esses 2 bugs combinados fazem com que:
-- **Nenhum attendee** tenha SDR associado → tudo vira "Sem SDR"
-- **Sem attendee válido**, o match por email/telefone falha (os dados de contato vêm do `crm_contacts` via `crm_deals`) → tudo vira "Sem Closer"
+Nenhuma dessas categorias automaticas passa por reuniao, entao naturalmente nao tem closer/SDR associado. O correto e ignorar essas categorias no "Sem Closer" e contabilizar apenas as que DEVERIAM ter passado por uma reuniao.
 
-## Evidência
+### 3. Periodo esta funcionando corretamente
+O filtro de datas esta aplicado. O problema e de escopo (BU + tipo de produto), nao de periodo.
 
-Verificação direta no banco:
-- 1.520 attendees R1 existem no período (jan-fev 2026)
-- 1.238 transações Hubla têm match por email com contatos da agenda
-- Mas o hook retorna 0 matches porque o campo `owner` não existe
+## Solucao
 
-## Correção
+### Alteracao 1: Hook `useAcquisitionReport` recebe `bu` como parametro
 
-Arquivo: `src/hooks/useAcquisitionReport.ts`
+O hook passa a aceitar o parametro `bu` e faz a filtragem diretamente, sem depender de `useActiveBU`:
 
-### Alteração 1: Corrigir o SELECT (linha 107)
-
-```
-// DE:
-crm_deals!deal_id(owner, crm_contacts!contact_id(email, phone))
-
-// PARA:
-crm_deals!deal_id(owner_id, owner_profile_id, crm_contacts!contact_id(email, phone))
+```text
+export function useAcquisitionReport(dateRange, bu)
 ```
 
-### Alteração 2: Atualizar o tipo `AttendeeWithSDR` (linhas 37-46)
+### Alteracao 2: Buscar closers filtrando por BU direto no hook
 
-```
-// DE:
-crm_deals: {
-  owner: string | null;
-  crm_contacts: { ... } | null;
-} | null;
+Em vez de usar `useGestorClosers` (que depende do context), fazer query direta filtrando por `bu = 'incorporador'`:
 
-// PARA:
-crm_deals: {
-  owner_id: string | null;
-  owner_profile_id: string | null;
-  crm_contacts: { ... } | null;
-} | null;
+```text
+closers WHERE is_active = true 
+  AND (meeting_type IS NULL OR meeting_type = 'r1')
+  AND bu = {bu}
 ```
 
-### Alteração 3: Usar `owner_profile_id` para buscar nomes de SDR (linhas 127-128)
+### Alteracao 3: Filtrar attendees por closers da BU
 
-```
-// DE:
-if (a.crm_deals?.owner) ids.add(a.crm_deals.owner);
+Na classificacao (passo 8), so aceitar um match de attendee se o `closer_id` pertencer a lista de closers da BU. Isso segue o padrao ja documentado do sistema (memoria: agenda-bu-specific-filtering-logic).
 
-// PARA:
-if (a.crm_deals?.owner_profile_id) ids.add(a.crm_deals.owner_profile_id);
-```
+```text
+// Antes:
+const closerId = matchedAttendee?.meeting_slots?.closer_id || null;
 
-### Alteração 4: Usar `owner_profile_id` na classificação (linha 205)
-
-```
-// DE:
-const sdrId = matchedAttendee?.crm_deals?.owner || null;
-
-// PARA:
-const sdrId = matchedAttendee?.crm_deals?.owner_profile_id || null;
+// Depois: 
+const closerId = matchedAttendee?.meeting_slots?.closer_id || null;
+const isValidCloser = closerId && closerIdSet.has(closerId);
+// Se closer nao e da BU, ignorar o match
 ```
 
-### Resultado Esperado
+### Alteracao 4: Classificar "Sem Closer" de forma inteligente
 
-Com essas 4 correções:
-- Os 1.238+ matches por email voltam a funcionar → Closers aparecem corretamente
-- O `owner_profile_id` (UUID) casa com `profiles.id` → SDRs aparecem com nome correto
-- Transações sem match continuam como "Sem Closer" / "Sem SDR" (comportamento esperado)
+Transacoes de categorias automaticas (Lancamento, A010, Renovacao, Vitalicio) que ficam como "Sem Closer" serao reclassificadas com o nome da origem em vez de "Sem Closer". Assim a tabela de Closer mostra apenas vendas que DEVERIAM ter um closer atribuido.
+
+O campo `origin` ja classifica corretamente essas vendas. O "Sem Closer" real passa a representar apenas vendas nao-automaticas sem match na agenda — que e o que a gestao quer acompanhar.
+
+## Arquivos Alterados
+
+| Arquivo | Alteracao |
+|---|---|
+| `src/hooks/useAcquisitionReport.ts` | Receber `bu` como parametro; buscar closers diretamente filtrando por BU; criar Set de closer_ids validos; filtrar matches de attendees por BU; classificar "Sem Closer" inteligente |
+| `src/components/relatorios/AcquisitionReportPanel.tsx` | Passar `bu` ao hook |
+
+## Resultado Esperado
+
+- Closers exibidos: apenas Julio, Thayna, Cristiane Gomes, Mateus Macedo (BU incorporador)
+- Victoria Paz, Thobson (consorcio) desaparecem do relatorio
+- "Sem Closer" reduz drasticamente (apenas vendas nao-automaticas sem match)
+- SDRs exibidos correspondem apenas aos deals vinculados a closers da BU incorporador
+- Tabela de Origem continua mostrando Lancamento, A010, etc. como dimensoes separadas
 
