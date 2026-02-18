@@ -15,6 +15,7 @@ export interface CampaignRow {
   utm_campaign: string | null;
   utm_medium: string | null;
   utm_source: string | null;
+  utm_content: string | null;
   leads: number;
   revenue: number;
 }
@@ -89,7 +90,7 @@ export function useCampaignBreakdown(startDate?: Date, endDate?: Date, sourceFil
     queryFn: async (): Promise<CampaignRow[]> => {
       let query = supabase
         .from("hubla_transactions")
-        .select("utm_campaign, utm_medium, utm_source, net_value")
+        .select("utm_campaign, utm_medium, utm_source, utm_content, net_value")
         .not("utm_source", "is", null)
         .gte("sale_date", startStr)
         .lte("sale_date", endStr);
@@ -101,10 +102,10 @@ export function useCampaignBreakdown(startDate?: Date, endDate?: Date, sourceFil
       const { data, error } = await query;
       if (error) throw error;
 
-      // Group by campaign + medium
+      // Group by campaign + medium + content
       const grouped = new Map<string, CampaignRow>();
       (data || []).forEach((t) => {
-        const key = `${t.utm_campaign || "Sem campanha"}||${t.utm_medium || "Sem conjunto"}||${t.utm_source || ""}`;
+        const key = `${t.utm_campaign || "Sem campanha"}||${t.utm_medium || "Sem conjunto"}||${t.utm_source || ""}||${t.utm_content || ""}`;
         const existing = grouped.get(key);
         if (existing) {
           existing.leads += 1;
@@ -114,6 +115,7 @@ export function useCampaignBreakdown(startDate?: Date, endDate?: Date, sourceFil
             utm_campaign: t.utm_campaign,
             utm_medium: t.utm_medium,
             utm_source: t.utm_source,
+            utm_content: t.utm_content,
             leads: 1,
             revenue: t.net_value || 0,
           });

@@ -5221,6 +5221,7 @@ export type Database = {
           total_installments: number | null
           updated_at: string | null
           utm_campaign: string | null
+          utm_content: string | null
           utm_medium: string | null
           utm_source: string | null
         }
@@ -5255,6 +5256,7 @@ export type Database = {
           total_installments?: number | null
           updated_at?: string | null
           utm_campaign?: string | null
+          utm_content?: string | null
           utm_medium?: string | null
           utm_source?: string | null
         }
@@ -5289,6 +5291,7 @@ export type Database = {
           total_installments?: number | null
           updated_at?: string | null
           utm_campaign?: string | null
+          utm_content?: string | null
           utm_medium?: string | null
           utm_source?: string | null
         }
