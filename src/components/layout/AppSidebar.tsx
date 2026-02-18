@@ -207,6 +207,8 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "Dashboard Ads", url: "/bu-marketing" },
       { title: "Campanhas", url: "/bu-marketing/campanhas" },
+      { title: "Aquisição A010", url: "/bu-marketing/aquisicao-a010" },
+      { title: "Config Links A010", url: "/bu-marketing/a010-links-config" },
       { title: "Documentos Estratégicos", url: "/bu-marketing/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
