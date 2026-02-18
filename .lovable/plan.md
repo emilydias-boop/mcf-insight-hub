@@ -1,62 +1,118 @@
 
 
-# Melhorar Dashboard de Campanhas com Dados Reais da Hubla
+# Fix: UTMs nao sendo salvos desde dezembro/2025
 
-## Situacao Atual
+## Causa Raiz
 
-Os dados da Hubla chegam com 4 campos: **anuncio**, **bloco_anuncio**, **campanha** e **canal**. Porem no banco (`hubla_transactions`) so temos 3 colunas UTM:
+O webhook da Hubla mudou o formato dos dados. Os campos UTM agora ficam em `event.invoice.paymentSession.utm` (com chaves `source`, `medium`, `campaign`, `content`), mas o webhook handler procura em `invoice.utm_source`, `invoice.utm_medium`, etc. -- campos que nao existem mais.
 
-| Hubla (screenshot) | Coluna no banco | Exemplo |
-|---|---|---|
-| campanha | `utm_campaign` | `10/11/25 [CNSLTR][VENDAS]...\|120235290256460244` |
-| bloco_anuncio | `utm_medium` | `00 - ARQUITETURA\|120231443473160244` |
-| canal | `utm_source` | `FB` |
-| anuncio | **NAO EXISTE** | `ADS 005 - Se voce ganha 50k por mes\|1202352902...` |
+Resultado: **0 transacoes com UTM desde dezembro/2025** (3 meses de dados perdidos).
 
-Alem disso, os valores vem com IDs numericos longos concatenados com `|`, poluindo a tabela.
+## Dados no webhook real
 
-## Melhorias Propostas
-
-### 1. Limpar nomes na exibicao (sem alterar banco)
-
-**Arquivo: `src/pages/bu-marketing/CampanhasDashboard.tsx`**
-
-Criar funcao utilitaria para remover o ID do final dos valores UTM:
-
-```typescript
-// "10/11/25 [CNSLTR]...|120235290256460244" -> "10/11/25 [CNSLTR]..."
-const cleanUtmValue = (val: string) => val?.replace(/\|[\d]+$/, '') || val;
+```text
+event.invoice.paymentSession.utm.source    -> "FB"
+event.invoice.paymentSession.utm.medium    -> "00 - PAGEVIEW 180D|120235..."
+event.invoice.paymentSession.utm.campaign  -> "10/11/25 [CNSLTR][VENDAS]...|120235..."
+event.invoice.paymentSession.utm.content   -> "ADS 002 - qual CNPJ voce precisa...|120235..."
 ```
 
-Aplicar nas celulas de Campanha e Bloco do Anuncio na tabela.
+## Correcoes
 
-### 2. Renomear colunas para refletir terminologia da Hubla
+### 1. Webhook Handler - Extrair UTMs do caminho correto
 
-Atualizar os headers da tabela:
+**Arquivo: `supabase/functions/hubla-webhook-handler/index.ts`**
 
-| Antes | Depois |
-|---|---|
-| Campanha | Campanha |
-| Conjunto / Adset | Bloco do Anuncio |
-| Fonte | Canal |
+Antes de montar os `transactionData`, extrair UTMs de `invoice.paymentSession.utm`:
 
-### 3. (Opcional futuro) Armazenar campo "anuncio"
+```typescript
+const paymentUtm = invoice?.paymentSession?.utm || {};
+const utmSource = paymentUtm.source || invoice?.utm_source || eventData?.utm_source || eventData?.utmSource || null;
+const utmMedium = paymentUtm.medium || invoice?.utm_medium || eventData?.utm_medium || eventData?.utmMedium || null;
+const utmCampaign = paymentUtm.campaign || invoice?.utm_campaign || eventData?.utm_campaign || eventData?.utmCampaign || null;
+```
 
-O campo "anuncio" (nome do ad especifico) nao esta sendo capturado no banco. Para captura-lo seria necessario:
-- Adicionar coluna `utm_content` (ou `ad_name`) em `hubla_transactions`
-- Atualizar o webhook/importacao da Hubla para gravar esse campo
+Aplicar em **3 locais**:
 
-Isso ficaria como melhoria futura. Por enquanto, os 3 campos existentes ja respondem as perguntas principais.
+- **Linha ~1282** (NewSale): trocar para usar `utmSource/utmMedium/utmCampaign`
+- **Linha ~1379** (invoice sem items): trocar `null` para usar as variaveis extraidas
+- **Linha ~1503** (invoice com items): trocar para usar as variaveis extraidas
+
+### 2. Tambem capturar `utm_content` (campo "anuncio")
+
+**Migracao SQL**: Adicionar coluna `utm_content` em `hubla_transactions`:
+
+```sql
+ALTER TABLE hubla_transactions ADD COLUMN IF NOT EXISTS utm_content TEXT;
+```
+
+Adicionar `utm_content` nos 3 locais do webhook handler:
+
+```typescript
+const utmContent = paymentUtm.content || invoice?.utm_content || null;
+```
+
+### 3. Reprocessar webhooks de dez/2025 ate agora
+
+Apos o deploy do webhook corrigido, usar a edge function `reprocess-hubla-webhooks` (ou criar um script SQL) para preencher os UTMs das ~16.000 transacoes de dez/2025 a fev/2026. Isso pode ser feito com um UPDATE direto:
+
+```sql
+UPDATE hubla_transactions ht
+SET 
+  utm_source = COALESCE(
+    ht.raw_data->'event'->'invoice'->'paymentSession'->'utm'->>'source',
+    ht.utm_source
+  ),
+  utm_medium = COALESCE(
+    ht.raw_data->'event'->'invoice'->'paymentSession'->'utm'->>'medium',
+    ht.utm_medium
+  ),
+  utm_campaign = COALESCE(
+    ht.raw_data->'event'->'invoice'->'paymentSession'->'utm'->>'campaign',
+    ht.utm_campaign
+  ),
+  utm_content = ht.raw_data->'event'->'invoice'->'paymentSession'->'utm'->>'content'
+WHERE ht.sale_date >= '2025-12-01'
+  AND ht.utm_source IS NULL
+  AND ht.raw_data->'event'->'invoice'->'paymentSession'->'utm'->>'source' IS NOT NULL;
+```
+
+### 4. Dashboard - Periodo padrao inteligente
+
+**Arquivos: `MarketingDashboard.tsx` e `CampanhasDashboard.tsx`**
+
+Manter mes atual como padrao (vai funcionar apos reprocessamento).
+
+### 5. Coluna "Anuncio" na tabela de Campanhas
+
+**Arquivo: `CampanhasDashboard.tsx`**
+
+Adicionar coluna "Anuncio" (`utm_content`) na tabela, e atualizar o hook para buscar esse campo.
+
+**Arquivo: `useMarketingMetrics.ts`**
+
+Adicionar `utm_content` ao select e ao agrupamento de `useCampaignBreakdown`.
+
+---
 
 ## Arquivos Alterados
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/bu-marketing/CampanhasDashboard.tsx` | Funcao `cleanUtmValue`, renomear headers, aplicar limpeza nas celulas |
+| `supabase/functions/hubla-webhook-handler/index.ts` | Extrair UTMs de `paymentSession.utm` nos 3 locais |
+| `src/pages/bu-marketing/CampanhasDashboard.tsx` | Adicionar coluna "Anuncio" |
+| `src/hooks/useMarketingMetrics.ts` | Adicionar `utm_content` ao select/agrupamento |
+
+## Migracao SQL
+
+| Alteracao | SQL |
+|---|---|
+| Nova coluna | `ALTER TABLE hubla_transactions ADD COLUMN IF NOT EXISTS utm_content TEXT` |
+| Backfill dados | UPDATE com dados de `raw_data` para preencher UTMs de dez/2025+ |
 
 ## Resultado Esperado
 
-- Tabela mostra nomes limpos sem IDs numericos poluindo
-- Colunas com nomes que o time de marketing reconhece (Bloco do Anuncio, Canal)
-- Dados ficam mais legiveis e uteis para analise
-
+- Novas transacoes terao UTMs preenchidos automaticamente
+- Transacoes de dez/2025 a fev/2026 serao retroativamente preenchidas
+- Dashboard mostrara dados de todos os meses, nao apenas ate nov/2025
+- Nova coluna "Anuncio" mostrara o nome do ad especifico
