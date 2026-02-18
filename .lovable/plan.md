@@ -1,47 +1,61 @@
 
-# Correção: Tabela "Faturamento por SDR" mostra apenas SDRs da BU
+
+# Correção: Mostrar todos os SDRs da BU na tabela
 
 ## Problema
 
-O campo `owner_profile_id` do `crm_deals` pode ser qualquer pessoa que "possui" o deal -- closers, managers, SDRs de outras BUs. O sistema resolve o nome via `profiles` sem verificar se a pessoa é de fato um SDR da BU incorporador.
+A tabela "Faturamento por SDR" só mostra SDRs que tiveram pelo menos 1 transação matcheada. SDRs com 0 transações não aparecem.
 
-Nomes como "Thobson", "Jessica Bellini R2", "VINICIUS RANGEL MOTOLLO", "Caroline Aparecida Corrêa" aparecem porque são donos de deals que foram matcheados com transações, mas não são SDRs do incorporador.
+Existem 11 SDRs ativos na BU incorporador (Alex Dias, Antony Elias, Carol Correa, Caroline Souza, Evellyn Santos, Jessica Martins, Julia Caroline, Juliana Rodrigues, Leticia Nunes, Robert Gusmao, Yanca Tavares), mas só 3 aparecem na tabela.
 
 ## Solução
 
-Buscar a lista de SDRs válidos da BU (tabela `sdr`, filtrada por `squad = bu` e `role_type = 'sdr'`) e usar esse Set para filtrar os nomes na classificação. Se o `owner_profile_id` não pertencer a um SDR da BU, classificar como "Sem SDR".
+Pre-popular o `sdrMap` com todos os SDRs válidos da BU (com valores zerados) ANTES de processar as transações. Assim, todos os SDRs aparecem na tabela mesmo com 0 vendas.
 
 ### Arquivo: `src/hooks/useAcquisitionReport.ts`
 
-**Adicionar query para buscar SDRs válidos da BU:**
+1. Buscar nomes dos SDRs junto com os emails (já temos a query `buSdrs`, basta expandir para incluir `name`)
+2. Na construção do `sdrMap` (passo 10), inicializar com todas as entradas dos SDRs da BU com valores zerados
+3. Quando transações forem processadas, acumular nos SDRs que já existem no map
+
+### Detalhes técnicos
+
+**Query 2b** -- expandir para retornar nome e email:
 
 ```text
-// Nova query (após closers):
-sdr WHERE active = true AND squad = {bu} AND role_type = 'sdr'
-// Criar Set de profile_ids válidos cruzando sdr.email com profiles.email
+// Antes: retorna apenas emails
+sdr.select('email')
+
+// Depois: retorna email e name
+sdr.select('email, name')
+// Retornar array de { email, name } em vez de string[]
 ```
 
-Como a tabela `sdr` não tem `profile_id` diretamente, a abordagem mais simples é:
-1. Buscar SDRs ativos do squad (já existe o padrão em `useSdrsFromSquad`)
-2. Buscar os `profile_ids` correspondentes via email (tabela `profiles`)
-3. Criar um Set de `profile_id` válidos
-4. Na classificação (passo 8), verificar se `owner_profile_id` está no Set antes de usar o nome
-
-**Alteração na classificação (passo 8):**
+**Query 2c** -- criar mapa profile_id -> nome do SDR:
 
 ```text
-// Antes:
-const sdrId = matchedAttendee?.crm_deals?.owner_profile_id || null;
-const sdrName = sdrId ? (sdrNameMap.get(sdrId) || 'SDR Desconhecido') : (isAutomatic ? origin : 'Sem SDR');
+// Criar Map<profileId, sdrName> em vez de Set<profileId>
+// Para usar no pre-populate do sdrMap
+```
 
-// Depois:
-const rawSdrId = matchedAttendee?.crm_deals?.owner_profile_id || null;
-const sdrId = rawSdrId && validSdrProfileIds.has(rawSdrId) ? rawSdrId : null;
-const sdrName = sdrId ? (sdrNameMap.get(sdrId) || 'SDR Desconhecido') : (isAutomatic ? origin : 'Sem SDR');
+**Passo 10** -- pre-popular sdrMap:
+
+```text
+// Antes do forEach(classified):
+validSdrNames.forEach((name, profileId) => {
+  sdrMap.set(name, { txs: 0, gross: 0, net: 0, outsideCount: 0, outsideRev: 0 });
+});
 ```
 
 ## Resultado
 
-- Tabela SDR: apenas SDRs reais da BU incorporador (Jessica Martins, Claudia Carielo, Julio Caetano, etc.) e "Sem SDR"
-- Nomes como Thobson, Caroline, Vinicius desaparecem da tabela SDR
-- Deals desses owners não-SDR passam para "Sem SDR"
+- Tabela SDR mostra todos os 11 SDRs da BU incorporador
+- SDRs sem vendas aparecem com 0 transações e R$ 0,00
+- Permite à gestão ver quem não está vendendo
+
+## Arquivo alterado
+
+| Arquivo | Alteração |
+|---|---|
+| `src/hooks/useAcquisitionReport.ts` | Expandir query de SDRs para incluir nomes; pre-popular sdrMap com todos os SDRs da BU |
+
