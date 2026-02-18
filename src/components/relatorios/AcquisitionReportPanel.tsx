@@ -32,7 +32,7 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
   const {
     kpis, byCloser, bySDR, byChannel, byOutside, byOrigin,
     closers, classified, isLoading,
-  } = useAcquisitionReport(dateRange);
+  } = useAcquisitionReport(dateRange, bu);
 
   // Apply local filters on classified data to recalculate if needed
   // For simplicity the main hook already processes all; filters here are on the aggregated views
