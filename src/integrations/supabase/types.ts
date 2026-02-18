@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      a010_link_mappings: {
+        Row: {
+          channel: string
+          created_at: string
+          id: string
+          is_active: boolean
+          match_source: string | null
+          match_utm_campaign: string | null
+          match_utm_medium: string | null
+          match_utm_source: string | null
+          name: string
+          offer: string
+          origin: string
+          priority: number
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          match_source?: string | null
+          match_utm_campaign?: string | null
+          match_utm_medium?: string | null
+          match_utm_source?: string | null
+          name: string
+          offer: string
+          origin: string
+          priority?: number
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          match_source?: string | null
+          match_utm_campaign?: string | null
+          match_utm_medium?: string | null
+          match_utm_source?: string | null
+          name?: string
+          offer?: string
+          origin?: string
+          priority?: number
+        }
+        Relationships: []
+      }
       a010_sales: {
         Row: {
           created_at: string

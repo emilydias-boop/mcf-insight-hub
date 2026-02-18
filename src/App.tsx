@@ -125,6 +125,8 @@ import Home from "./pages/Home";
 import DocumentosEstrategicos from "./pages/bu-common/DocumentosEstrategicos";
 import MarketingDashboard from "./pages/bu-marketing/MarketingDashboard";
 import CampanhasDashboard from "./pages/bu-marketing/CampanhasDashboard";
+import A010AcquisitionDashboard from "./pages/bu-marketing/A010AcquisitionDashboard";
+import A010LinkMappingsConfig from "./pages/bu-marketing/A010LinkMappingsConfig";
 
 // Gerentes de Conta
 import GerenciamentoGRIndex from "./pages/gerentes-conta/Index";
@@ -301,6 +303,8 @@ const App = () => (
               {/* BU Marketing Routes */}
               <Route path="bu-marketing" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><MarketingDashboard /></RoleGuard>} />
               <Route path="bu-marketing/campanhas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CampanhasDashboard /></RoleGuard>} />
+              <Route path="bu-marketing/aquisicao-a010" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><A010AcquisitionDashboard /></RoleGuard>} />
+              <Route path="bu-marketing/a010-links-config" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><A010LinkMappingsConfig /></RoleGuard>} />
               <Route path="bu-marketing/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="marketing" /></RoleGuard>} />
               <Route path="configuracoes" element={<ResourceGuard resource="configuracoes"><Configuracoes /></ResourceGuard>} />
               <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />
