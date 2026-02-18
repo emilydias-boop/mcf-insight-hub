@@ -305,8 +305,11 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
     classified.forEach(({ closerName, sdrName, channel, origin, isOutside, gross, net }) => {
       totalGross += gross;
       totalNet += net;
-      addTo(closerMap, closerName, gross, net, isOutside);
-      addTo(sdrMap, sdrName, gross, net, isOutside);
+      // Only add non-automatic transactions to Closer and SDR tables
+      if (!AUTOMATIC_ORIGINS.has(origin)) {
+        addTo(closerMap, closerName, gross, net, isOutside);
+        addTo(sdrMap, sdrName, gross, net, isOutside);
+      }
       addTo(channelMap, channel, gross, net, isOutside);
       addTo(originMap, origin, gross, net, isOutside);
       if (isOutside) addTo(outsideMap, closerName, gross, net, true);
