@@ -1,56 +1,50 @@
 
 
-# Correção: Atribuir SDR via `booked_by` em vez de `owner_profile_id`
+# Mover e Excluir Lead do Pipeline
 
-## Problema
+## Contexto
 
-Quando um SDR agenda uma R1 e depois o lead é transferido para o closer, o `crm_deals.owner_profile_id` muda para o closer. O relatório usa esse campo para identificar o SDR, resultando em 127 transações "Sem SDR" que na verdade tinham um SDR responsável original.
+Atualmente o drawer do lead (QuickActionsBlock) permite mover para estágios futuros dentro da mesma pipeline, mas nao permite:
+- Mover para **outra pipeline/origem** (ex: mover de "PIPE LINE - INSIDE SALES" para outra)
+- **Excluir** um lead
 
-## Solução
+## Solucao
 
-Usar `meeting_slots.booked_by` (UUID do SDR que agendou a R1) como fonte primária de atribuição do SDR, em vez de `crm_deals.owner_profile_id`. Isso é consistente com a lógica já usada nos relatórios de R2.
+Adicionar dois novos botoes no `QuickActionsBlock`:
 
-## Alterações
+1. **"Mover Pipeline"** -- abre um modal com select de origens disponíveis + select de estágio destino, e atualiza `origin_id` e `stage_id` do deal
+2. **"Excluir"** -- abre um AlertDialog de confirmação e exclui o deal do banco
 
-### Arquivo: `src/hooks/useAcquisitionReport.ts`
+## Detalhes Técnicos
 
-**1. Atualizar interface `AttendeeWithSDR`** -- adicionar `booked_by` no tipo de `meeting_slots`:
+### 1. Novo componente: `src/components/crm/MoveToPipelineModal.tsx`
+- Modal com dois selects:
+  - Select de **Origem/Pipeline** (usa `useCRMOrigins()` para listar)
+  - Select de **Estágio destino** (usa `useCRMStages(selectedOriginId)` para listar estágios da origem selecionada)
+- Ao confirmar, chama `useUpdateCRMDeal` com `{ id, origin_id, stage_id }`
+- Registra atividade via `useCreateDealActivity` com tipo `pipeline_change`
 
-```typescript
-meeting_slots: { 
-  closer_id: string | null; 
-  scheduled_at: string | null;
-  booked_by: string | null;  // <-- novo
-} | null;
-```
+### 2. Hook de exclusao: adicionar `useDeleteCRMDeal` em `src/hooks/useCRMData.ts`
+- Mutation que faz `supabase.from('crm_deals').delete().eq('id', dealId)`
+- Invalida queries `['crm-deals']` ao concluir
+- Toast de sucesso/erro
 
-**2. Atualizar query de attendees (passo 4)** -- incluir `booked_by` no select:
+### 3. Atualizar `src/components/crm/QuickActionsBlock.tsx`
+- Adicionar botao "Mover Pipeline" (icone `FolderInput`) que abre o `MoveToPipelineModal`
+- Adicionar botao "Excluir" (icone `Trash2`) com `AlertDialog` de confirmacao
+- Ao excluir com sucesso, fecha o drawer via `onStageChange`
+
+### Fluxo do usuario
 
 ```text
-// Antes:
-meeting_slots!inner(closer_id, scheduled_at)
-
-// Depois:
-meeting_slots!inner(closer_id, scheduled_at, booked_by)
+Drawer do Lead
+  |
+  |-- [Mover Pipeline] --> Modal
+  |     |-- Seleciona origem destino
+  |     |-- Seleciona estagio destino
+  |     |-- Confirma --> Atualiza origin_id + stage_id + registra atividade
+  |
+  |-- [Excluir] --> AlertDialog de confirmacao
+        |-- Confirma --> Deleta deal + fecha drawer
 ```
-
-**3. Atualizar classificação (passo 8)** -- usar `booked_by` como fonte primária do SDR:
-
-```text
-// Antes:
-const rawSdrId = matchedAttendee?.crm_deals?.owner_profile_id || null;
-
-// Depois:
-const rawSdrId = matchedAttendee?.meeting_slots?.booked_by 
-  || matchedAttendee?.crm_deals?.owner_profile_id 
-  || null;
-```
-
-Isso faz fallback para `owner_profile_id` caso `booked_by` esteja nulo (dados antigos), mas prioriza o SDR que realmente agendou a reunião.
-
-## Resultado
-
-- Transações cujo lead foi transferido do SDR para o closer serão corretamente atribuídas ao SDR original
-- O numero de "Sem SDR" cairá significativamente (de ~127 para apenas as transações sem match na agenda ou de origens automáticas)
-- Consistente com a lógica de atribuição já usada nos relatórios de R2
 
