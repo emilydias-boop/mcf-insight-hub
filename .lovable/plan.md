@@ -1,56 +1,48 @@
 
 
-# Filtrar "Dono do Negocio" por BU no DealFormDialog
+# Corrigir Match por Telefone no CloserRevenueSummaryTable
 
-## Problema
+## Problema Identificado
 
-O dropdown "Dono do negocio" no dialog "Criar Novo Negocio" busca **todos** os SDRs do sistema, independentemente da Business Unit. Quando acessado pela rota `/consorcio/crm/negocios`, mostra SDRs de outras BUs (Incorporador, etc.) e nao mostra membros do squad consorcio que nao tem role `sdr`.
+A logica de matching por telefone no `CloserRevenueSummaryTable.tsx` tem duas falhas:
 
-## Causa Raiz
+1. **Telefone do attendee ignorado**: O componente so extrai telefone de `crm_deals.crm_contacts.phone` (linha 97), mas ignora `attendee_phone` (que esta disponivel na interface, linha 16). O `useAcquisitionReport.ts` ja faz isso corretamente (linhas 258-262).
 
-A query no `DealFormDialog.tsx` (linhas 95-128) busca apenas `user_roles.role = 'sdr'` globalmente, sem filtro por squad/BU.
+2. **Sem match por sufixo**: Numeros brasileiros podem estar armazenados com ou sem codigo de pais (`55`). Exemplo: a transacao Hubla tem `+5511999887766` (normalizado: `5511999887766`) e o CRM tem `11999887766`. A comparacao exata falha. Precisamos comparar pelos ultimos 8-9 digitos (sufixo).
 
-## Solucao
+## Alteracoes
 
-Adicionar consciencia de BU ao DealFormDialog, filtrando os owners pelo squad da BU ativa.
+### Arquivo: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
 
-### Alteracoes
+**Mudanca 1 - Indexar `attendee_phone` alem de `crm_contacts.phone`** (linhas 87-105):
 
-**Arquivo: `src/components/crm/DealFormDialog.tsx`**
+Adicionar indexacao do `attendee_phone` no loop de construcao do mapa de contatos por closer, seguindo o mesmo padrao do `useAcquisitionReport.ts`.
 
-1. Importar `useActiveBU` para detectar a BU da rota atual
-2. Alterar a query de `dealOwners` para:
-   - Buscar profiles que contenham a BU ativa no array `squad`
-   - Buscar roles `sdr` e `closer` (nao apenas `sdr`) para incluir closers do consorcio
-   - Fazer interseccao: profiles com squad correto E que tenham role sdr/closer
-   - Fallback: se nao houver BU ativa, manter comportamento atual (todos os SDRs)
+**Mudanca 2 - Match por sufixo de telefone** (linhas 48-50 e 168-206):
 
-Logica atualizada:
+Criar helper `phoneSuffix(phone)` que retorna os ultimos 9 digitos do telefone normalizado. Usar esse sufixo como chave no mapa `phones` e na comparacao de transacoes. Isso garante que `5511999887766` e `11999887766` resultem no mesmo sufixo `999887766`.
 
 ```text
-// 1. Buscar profiles do squad da BU ativa
-const profiles = await supabase
-  .from('profiles')
-  .select('id, full_name, email')
-  .contains('squad', [activeBU])  // filtro por BU
-  .eq('access_status', 'ativo')
-  .order('full_name');
-
-// 2. Buscar roles desses profiles (sdr + closer)
-const roles = await supabase
-  .from('user_roles')
-  .select('user_id, role')
-  .in('user_id', profileIds)
-  .in('role', ['sdr', 'closer']);
-
-// 3. Retornar apenas profiles que tenham role relevante
+// Novo helper
+const phoneSuffix = (phone: string | null | undefined): string => {
+  const digits = (phone || '').replace(/\D/g, '');
+  return digits.length >= 9 ? digits.slice(-9) : digits;
+};
 ```
 
-A queryKey incluira o `activeBU` para evitar cache cruzado entre BUs.
+**Mudanca 3 - Tambem indexar `attendee_phone` para earliest meeting map**:
 
-### Resultado
+Garantir que o mapa `earliestMap` tambem registre o sufixo do `attendee_phone` para deteccao correta de "Outside".
 
-- Na rota `/consorcio/crm/negocios`: mostra apenas SDRs/Closers do squad "consorcio"
-- Na rota `/crm/negocios` (Incorporador): mostra apenas SDRs/Closers do squad "incorporador"
-- Sem BU ativa: fallback para todos os SDRs (comportamento atual)
+### Arquivo: `src/hooks/useAcquisitionReport.ts`
+
+**Mudanca 4 - Aplicar sufixo no useAcquisitionReport tambem** (linhas 253-264, 287-289):
+
+Usar `phoneSuffix` em vez de `normalizePhone` nas chaves do `phoneMap` e na lookup de transacoes, para consistencia.
+
+## Resultado
+
+- Transacoes cujo telefone Hubla difere do CRM apenas pelo prefixo `55` serao corretamente atribuidas ao closer
+- Transacoes cujo telefone esta no `attendee_phone` (mas nao no `crm_contacts.phone`) tambem serao encontradas
+- Ambos os componentes (tabela resumo e relatorio de aquisicao) usarao a mesma logica de sufixo
 
