@@ -20,6 +20,7 @@ interface SdrScheduleDialogProps {
   contactName?: string;
   initialNotes?: string;
   onScheduled?: () => void;
+  isReschedule?: boolean;
 }
 
 export function SdrScheduleDialog({
@@ -29,6 +30,7 @@ export function SdrScheduleDialog({
   contactName,
   initialNotes,
   onScheduled,
+  isReschedule,
 }: SdrScheduleDialogProps) {
   const navigate = useNavigate();
   const basePath = useCRMBasePath();
@@ -66,13 +68,13 @@ export function SdrScheduleDialog({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-primary" />
-              Agendar Reunião
+              {isReschedule ? 'Reagendar Reunião' : 'Agendar Reunião'}
             </DialogTitle>
             <DialogDescription>
               {contactName ? (
-                <>Agendar reunião para <strong>{contactName}</strong></>
+                <>{isReschedule ? 'Reagendar' : 'Agendar'} reunião para <strong>{contactName}</strong></>
               ) : (
-                'Como deseja agendar a reunião?'
+                isReschedule ? 'Como deseja reagendar a reunião?' : 'Como deseja agendar a reunião?'
               )}
             </DialogDescription>
           </DialogHeader>
