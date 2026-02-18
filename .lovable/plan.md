@@ -1,58 +1,42 @@
 
-# Corrigir Horários do RescheduleModal (R1) para Usar Slots Configurados
+
+# Botao "Reagendar" para Leads em No-Show
 
 ## Problema
 
-O modal de reagendamento R1 (`RescheduleModal.tsx`) mostra horarios genericos hardcoded (08:00, 08:15, 08:30...) em vez dos horarios realmente configurados para o closer selecionado. O modal R2 (`R2RescheduleModal.tsx`) ja faz isso corretamente usando `useR2CloserAvailableSlots`.
+Quando o lead esta em estagio de No-Show, o botao mostra "Agendar" mas deveria mostrar "Reagendar", pois ja houve uma reuniao anterior. Sem limite de reagendamentos -- o SDR pode reagendar quantas vezes quiser. Para a meta do SDR, conta o 1o agendamento + o 1o reagendamento.
 
 ## Solucao
 
-Atualizar o `RescheduleModal` para buscar os horarios configurados do closer selecionado na tabela `closer_meeting_links`, similar ao que o R2RescheduleModal faz.
+Alteracao simples no `QuickActionsBlock.tsx`:
+
+1. Derivar flag `isNoShowStage` a partir do nome do estagio do deal
+2. Alterar o texto do botao de "Agendar" para "Reagendar" quando no-show
+3. Passar flag `isReschedule` para o `SdrScheduleDialog` para ajustar os textos do modal
 
 ## Detalhes Tecnicos
 
-### Arquivo: `src/components/crm/RescheduleModal.tsx`
+### Arquivo: `src/components/crm/QuickActionsBlock.tsx`
 
-**1. Adicionar hook de slots configurados**
+- Importar `CalendarClock` do lucide-react
+- Adicionar logica de deteccao:
 
-Usar `useCloserMeetingLinksList` do hook existente para buscar os horarios configurados do closer selecionado para o dia da semana da data selecionada:
-
-```typescript
-import { useCloserMeetingLinksList } from '@/hooks/useCloserMeetingLinks';
-import { getDay } from 'date-fns';
-
-// Dentro do componente:
-const dayOfWeek = selectedDate ? getDay(selectedDate) : undefined;
-const { data: configuredLinks, isLoading: loadingSlots } = useCloserMeetingLinksList(
-  selectedCloser || undefined,
-  dayOfWeek
-);
+```text
+const stageName = deal?.crm_stages?.stage_name?.toLowerCase() || '';
+const isNoShowStage = stageName.includes('no-show') || stageName.includes('no_show') || stageName.includes('noshow');
 ```
 
-**2. Substituir slots hardcoded por slots configurados**
+- No botao de agendar (linha 211-219):
+  - Icone: `CalendarClock` quando no-show, `Calendar` caso contrario
+  - Texto: "Reagendar" quando no-show, "Agendar" caso contrario
+  - Cor: borda amber quando no-show para diferenciar visualmente
 
-Remover o array hardcoded `timeSlots` (linhas 66-70) e usar os slots configurados:
+- Passar `isReschedule={isNoShowStage}` para o `SdrScheduleDialog`
 
-```typescript
-const availableTimeSlots = useMemo(() => {
-  if (!configuredLinks) return [];
-  return configuredLinks.map(link => link.start_time.substring(0, 5));
-}, [configuredLinks]);
-```
+### Arquivo: `src/components/crm/SdrScheduleDialog.tsx`
 
-**3. Atualizar o Select de horarios**
+- Adicionar prop `isReschedule?: boolean`
+- Alterar titulo: "Reagendar Reuniao" quando `isReschedule`
+- Alterar descricao: "Reagendar reuniao para {contactName}"
 
-- Desabilitar o select quando nao ha closer/data selecionados ou esta carregando
-- Mostrar placeholder contextual ("Selecione closer", "Selecione data", "Carregando...", "Sem horarios")
-- Adicionar indicador de loading (spinner)
-- Mostrar mensagem quando nao ha horarios configurados
-
-**4. Resetar horario ao trocar closer/data**
-
-Adicionar `useEffect` para limpar `selectedTime` quando o closer ou a data mudar, igual ao R2RescheduleModal (linha 121-123).
-
-### Resultado
-
-- O select de horarios mostrara apenas os horarios realmente configurados para aquele closer naquele dia da semana
-- Se o closer nao tem horarios configurados para o dia selecionado, aparecera uma mensagem informativa
-- Comportamento consistente com o R2RescheduleModal
+Nenhuma restricao de quantidade -- o botao estara sempre ativo independente de quantos reagendamentos ja foram feitos.
