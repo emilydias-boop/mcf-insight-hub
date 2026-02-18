@@ -23,6 +23,7 @@ const BU_OPTIONS: { value: BusinessUnit; label: string }[] = [
   { value: 'credito', label: 'BU - Crédito' },
   { value: 'projetos', label: 'BU - Projetos' },
   { value: 'leilao', label: 'BU - Leilão' },
+  { value: 'marketing', label: 'BU - Marketing' },
 ];
 
 export default function ConfiguracaoBU() {
