@@ -123,6 +123,8 @@ import ConsorcioVendas from "./pages/bu-consorcio/Vendas";
 import Chairman from "./pages/Chairman";
 import Home from "./pages/Home";
 import DocumentosEstrategicos from "./pages/bu-common/DocumentosEstrategicos";
+import MarketingDashboard from "./pages/bu-marketing/MarketingDashboard";
+import CampanhasDashboard from "./pages/bu-marketing/CampanhasDashboard";
 
 // Gerentes de Conta
 import GerenciamentoGRIndex from "./pages/gerentes-conta/Index";
@@ -295,6 +297,11 @@ const App = () => (
               
               <Route path="leilao/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="leilao" /></RoleGuard>} />
               <Route path="leilao" element={<ResourceGuard resource="leilao"><Leilao /></ResourceGuard>} />
+              
+              {/* BU Marketing Routes */}
+              <Route path="bu-marketing" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><MarketingDashboard /></RoleGuard>} />
+              <Route path="bu-marketing/campanhas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CampanhasDashboard /></RoleGuard>} />
+              <Route path="bu-marketing/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="marketing" /></RoleGuard>} />
               <Route path="configuracoes" element={<ResourceGuard resource="configuracoes"><Configuracoes /></ResourceGuard>} />
               <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />
               <Route path="admin/permissoes" element={<RoleGuard allowedRoles={['admin']}><AdminPermissoes /></RoleGuard>} />

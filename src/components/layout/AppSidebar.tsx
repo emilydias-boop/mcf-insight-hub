@@ -29,6 +29,7 @@ import {
   Crown,
   CheckSquare,
   Briefcase,
+  Megaphone,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -198,6 +199,18 @@ const menuItems: MenuItem[] = [
     ],
   },
 
+  // BU - MARKETING
+  {
+    title: "BU - Marketing",
+    icon: Megaphone,
+    requiredRoles: ["admin", "manager", "coordenador"],
+    items: [
+      { title: "Dashboard Ads", url: "/bu-marketing" },
+      { title: "Campanhas", url: "/bu-marketing/campanhas" },
+      { title: "Documentos Estratégicos", url: "/bu-marketing/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
+    ],
+  },
+
   // ===== OPERACIONAL =====
 
   // FINANCEIRO
@@ -341,12 +354,12 @@ const BU_CRM_BASE_PATH: Record<BusinessUnit, string> = {
   credito: '/bu-credito/crm',
   projetos: '/bu-projetos/crm',
   leilao: '/leilao/crm',
+  marketing: '/bu-marketing',
 };
 
 // Helper para resolver o base path do CRM baseado nas BUs do usuário
 const getCRMBasePath = (userBUs: BusinessUnit[]): string => {
-  // Prioridade para BUs específicas (não-incorporador primeiro)
-  const buPriority: BusinessUnit[] = ['consorcio', 'credito', 'projetos', 'leilao'];
+  const buPriority: BusinessUnit[] = ['consorcio', 'credito', 'projetos', 'leilao', 'marketing'];
   
   for (const bu of buPriority) {
     if (userBUs.includes(bu)) {
@@ -354,7 +367,7 @@ const getCRMBasePath = (userBUs: BusinessUnit[]): string => {
     }
   }
   
-  return '/crm'; // fallback (incorporador ou sem BU)
+  return '/crm';
 };
 
 export function AppSidebar() {

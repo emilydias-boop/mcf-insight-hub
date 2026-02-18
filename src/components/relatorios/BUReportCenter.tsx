@@ -15,6 +15,7 @@ const BU_NAMES: Record<BusinessUnit, string> = {
   credito: 'BU - Crédito',
   projetos: 'BU - Projetos',
   leilao: 'BU - Leilão',
+  marketing: 'BU - Marketing',
 };
 
 interface BUReportCenterProps {

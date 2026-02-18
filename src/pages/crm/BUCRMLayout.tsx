@@ -42,6 +42,7 @@ const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
     'visao-geral', 'contatos', 'negocios', 'atendimentos', 
     'agenda', 'configuracoes'
   ],
+  marketing: [],
 };
 
 interface BUCRMLayoutProps {
@@ -71,6 +72,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     credito: 'Crédito',
     projetos: 'Projetos',
     leilao: 'Leilão',
+    marketing: 'Marketing',
   };
   
   // Redirecionar para agenda se for role restrita
