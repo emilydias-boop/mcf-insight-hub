@@ -139,14 +139,30 @@ export function CloserRevenueSummaryTable({
       const gross = getDeduplicatedGross(tx as any, isFirst);
       const net = tx.net_value || 0;
       
-      // 1. Launch sales
+      // 1. Launch sales — but only if no R1 match (Inside Sales override)
       if (tx.sale_origin === 'launch' || 
           (tx.product_name && tx.product_name.toLowerCase().includes('contrato mcf'))) {
-        launch.count++;
-        launch.gross += gross;
-        launch.net += net;
-        launchTxs.push(tx);
-        continue;
+        // Check if this customer went through Inside Sales (has R1 meeting with a closer)
+        let hasR1Match = false;
+        for (const closer of closers) {
+          const contacts = closerContactMap.get(closer.id);
+          if (!contacts) continue;
+          if ((txEmail && contacts.emails.has(txEmail)) ||
+              (txPhone.length >= 8 && contacts.phones.has(txPhone))) {
+            hasR1Match = true;
+            break;
+          }
+        }
+        
+        if (!hasR1Match) {
+          // Pure launch — isolate
+          launch.count++;
+          launch.gross += gross;
+          launch.net += net;
+          launchTxs.push(tx);
+          continue;
+        }
+        // Has R1 match — fall through to closer attribution (step 5)
       }
       
       // 2. A010 - Funil de entrada automático
