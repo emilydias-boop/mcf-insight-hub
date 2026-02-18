@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Phone, Mail, Edit2, Check, X } from 'lucide-react';
+import { Phone, Mail, Edit2, Check, X, Pencil } from 'lucide-react';
 import { useUpdateCRMContact, useCreateCRMContact } from '@/hooks/useCRMData';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { EditLeadDialog } from './EditLeadDialog';
 
 interface SdrSummaryBlockProps {
   deal: any;
@@ -18,6 +19,7 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
   const queryClient = useQueryClient();
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneValue, setPhoneValue] = useState('');
+  const [showEditDialog, setShowEditDialog] = useState(false);
   
   const customFields = deal?.custom_fields as Record<string, any> | null;
   const originName = deal?.crm_origins?.name || customFields?.origem || 'Não informada';
@@ -69,7 +71,17 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
   
   return (
     <div className="rounded-lg border border-border bg-secondary/30 p-2">
-      <h3 className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Contato</h3>
+      <div className="flex items-center justify-between mb-1.5">
+        <h3 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Contato</h3>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-5 w-5 text-muted-foreground hover:text-primary"
+          onClick={() => setShowEditDialog(true)}
+        >
+          <Pencil className="h-3 w-3" />
+        </Button>
+      </div>
       
       {/* Layout inline compacto */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
@@ -135,6 +147,13 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
           )}
         </div>
       </div>
+      
+      <EditLeadDialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        deal={deal}
+        contact={contact}
+      />
     </div>
   );
 };
