@@ -103,6 +103,40 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
   // Set of valid closer IDs for BU filtering
   const closerIdSet = useMemo(() => new Set(closers.map(c => c.id)), [closers]);
 
+  // 2b. Valid SDRs for this BU
+  const { data: buSdrs = [] } = useQuery({
+    queryKey: ['acquisition-bu-sdrs', bu],
+    queryFn: async () => {
+      if (!bu) return [];
+      const { data, error } = await supabase
+        .from('sdr')
+        .select('email')
+        .eq('active', true)
+        .eq('squad', bu)
+        .eq('role_type', 'sdr');
+      if (error) throw error;
+      return (data || []).map((s: { email: string | null }) => (s.email || '').toLowerCase().trim());
+    },
+    enabled: !!bu,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // 2c. Map SDR emails to profile IDs
+  const { data: sdrProfileIds = new Set<string>() } = useQuery({
+    queryKey: ['acquisition-sdr-profile-ids', buSdrs],
+    queryFn: async () => {
+      if (buSdrs.length === 0) return new Set<string>();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('email', buSdrs);
+      if (error) throw error;
+      return new Set((data || []).map((p: { id: string }) => p.id));
+    },
+    enabled: buSdrs.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
   // 3. First transaction IDs (dedup)
   const { data: globalFirstIds = new Set<string>() } = useQuery({
     queryKey: ['global-first-transaction-ids'],
@@ -244,7 +278,8 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
         : (isAutomatic ? origin : 'Sem Closer');
       const scheduledAt = matchedAttendee?.meeting_slots?.scheduled_at || null;
       const isOutside = !!(scheduledAt && tx.sale_date && new Date(tx.sale_date) < new Date(scheduledAt));
-      const sdrId = matchedAttendee?.crm_deals?.owner_profile_id || null;
+      const rawSdrId = matchedAttendee?.crm_deals?.owner_profile_id || null;
+      const sdrId = rawSdrId && (!bu || sdrProfileIds.has(rawSdrId)) ? rawSdrId : null;
       const sdrName = sdrId
         ? (sdrNameMap.get(sdrId) || 'SDR Desconhecido')
         : (isAutomatic ? origin : 'Sem SDR');
@@ -255,7 +290,7 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
 
       return { tx, closerName, sdrName, channel, origin, isOutside, gross, net };
     });
-  }, [transactions, emailToAttendees, phoneToAttendees, closerNameMap, sdrNameMap, globalFirstIds]);
+  }, [transactions, emailToAttendees, phoneToAttendees, closerNameMap, sdrNameMap, globalFirstIds, bu, sdrProfileIds]);
 
   // 9. Aggregate helper
   const aggregate = (
