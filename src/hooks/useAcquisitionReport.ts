@@ -299,7 +299,7 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
       const rawSdrId = matchedAttendee?.crm_deals?.owner_profile_id || null;
       const sdrId = rawSdrId && (!bu || sdrProfileIds.has(rawSdrId)) ? rawSdrId : null;
       const sdrName = sdrId
-        ? (sdrNameMap.get(sdrId) || 'SDR Desconhecido')
+        ? (sdrProfileMap.get(sdrId) || sdrNameMap.get(sdrId) || 'SDR Desconhecido')
         : (isAutomatic ? origin : 'Sem SDR');
       const channel = detectChannel(tx.product_name);
       const isFirst = globalFirstIds.has(tx.id);
@@ -308,7 +308,7 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
 
       return { tx, closerName, sdrName, channel, origin, isOutside, gross, net };
     });
-  }, [transactions, emailToAttendees, phoneToAttendees, closerNameMap, sdrNameMap, globalFirstIds, bu, sdrProfileIds]);
+  }, [transactions, emailToAttendees, phoneToAttendees, closerNameMap, sdrNameMap, sdrProfileMap, globalFirstIds, bu, sdrProfileIds]);
 
   // 9. Aggregate helper
   const aggregate = (
