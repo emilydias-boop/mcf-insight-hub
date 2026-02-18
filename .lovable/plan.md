@@ -1,40 +1,32 @@
 
 
-# Limpar Flag de Lancamento - Manter Apenas 25 Clientes
+# Deletar Transacao Fantasma do Olavo Vilela
 
-## Situacao Atual
+## Problema
 
-- **587 clientes** marcados com `sale_origin = 'launch'` no banco
-- Usuario quer manter **apenas 25 emails especificos** como lancamento
-- **562 clientes** precisam ter o `sale_origin` limpo (voltando para `NULL`)
+A transacao com id `09cacf20-57f8-47c0-ac3c-0a99f8b06290` foi inserida pelo webhook Make como uma venda A009 do Olavo Vilela, mas essa venda **nao existe na Hubla**. Conforme a captura de tela, ele so tem 3 faturas (A004, A000, Imersao).
+
+### Dados da transacao fantasma:
+- **ID:** `09cacf20-57f8-47c0-ac3c-0a99f8b06290`
+- **Source:** `make`
+- **Hubla ID:** `make_parceria_1770141755906_olavovilel`
+- **Produto:** A009 - MCF INCORPORADOR COMPLETO + THE CLUB
+- **Net value:** R$ 143.355 (claramente incorreto)
+- **Gross override:** R$ 19.500
+- **Product price:** R$ 1.000
 
 ## Acao
 
-Executar um UPDATE no banco de dados para remover `sale_origin = 'launch'` de todas as transacoes **exceto** os 25 emails listados.
+Deletar esta unica transacao do banco de dados:
 
-## Detalhes Tecnicos
+```sql
+DELETE FROM hubla_transactions 
+WHERE id = '09cacf20-57f8-47c0-ac3c-0a99f8b06290';
+```
 
-### 1. UPDATE no banco de dados
+## Impacto
 
-Atualizar `hubla_transactions` definindo `sale_origin = NULL` onde:
-- `sale_origin = 'launch'` 
-- `customer_email` NAO esta na lista dos 25 emails aprovados
-
-### 2. Garantir que os 2 emails faltantes recebam a flag
-
-Na analise anterior, 2 emails da lista do usuario nao tinham a flag `launch`:
-- `chavesjunior60@gmail.com` (Junior Chaves)
-- `arlan_unai45@hotmail.com` (Arlan Rodrigues Rocha)
-
-Esses serao marcados como `sale_origin = 'launch'`.
-
-### 3. Logica de codigo (ja implementada)
-
-A logica de override por R1 no `CloserRevenueSummaryTable.tsx` e `useAcquisitionReport.ts` continua funcionando para cenarios futuros. Como agora so 25 emails terao a flag, a separacao sera naturalmente mais precisa.
-
-## Resultado Esperado
-
-- **Lancamento**: Apenas transacoes dos 25 clientes listados
-- **Demais 562 clientes**: Voltam ao fluxo normal de atribuicao (closer, sem closer, etc.)
-- Nenhum dado perdido - apenas o campo `sale_origin` e alterado
+- Remove R$ 143.355 de valor liquido fantasma dos relatorios
+- Remove R$ 19.500 de faturamento bruto fantasma
+- Nenhuma outra transacao do Olavo Vilela e afetada (as 3 reais permanecem)
 
