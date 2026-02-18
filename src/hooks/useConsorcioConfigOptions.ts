@@ -212,6 +212,102 @@ export function useDeleteConsorcioCategoriaOption() {
   });
 }
 
+// ============ Vendedor Options ============
+
+export interface ConsorcioVendedorOption {
+  id: string;
+  name: string;
+  display_order: number;
+  is_active: boolean;
+}
+
+export function useConsorcioVendedorOptions() {
+  return useQuery({
+    queryKey: ['consorcio-vendedor-options'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('consorcio_vendedor_options')
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order', { ascending: true });
+
+      if (error) throw error;
+      return data as ConsorcioVendedorOption[];
+    }
+  });
+}
+
+export function useCreateConsorcioVendedorOption() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: { name: string; display_order?: number }) => {
+      const { data: result, error } = await supabase
+        .from('consorcio_vendedor_options')
+        .insert({
+          name: data.name,
+          display_order: data.display_order ?? 0
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['consorcio-vendedor-options'] });
+      toast.success('Vendedor adicionado com sucesso');
+    },
+    onError: () => {
+      toast.error('Erro ao adicionar vendedor');
+    }
+  });
+}
+
+export function useUpdateConsorcioVendedorOption() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: Partial<ConsorcioVendedorOption> & { id: string }) => {
+      const { error } = await supabase
+        .from('consorcio_vendedor_options')
+        .update(data)
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['consorcio-vendedor-options'] });
+      toast.success('Vendedor atualizado');
+    },
+    onError: () => {
+      toast.error('Erro ao atualizar vendedor');
+    }
+  });
+}
+
+export function useDeleteConsorcioVendedorOption() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('consorcio_vendedor_options')
+        .update({ is_active: false })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['consorcio-vendedor-options'] });
+      toast.success('Vendedor removido');
+    },
+    onError: () => {
+      toast.error('Erro ao remover vendedor');
+    }
+  });
+}
+
 // ============ Origem Options ============
 
 export function useConsorcioOrigemOptions() {

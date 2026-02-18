@@ -43,7 +43,7 @@ import { useCreateConsorcioCard, useUpdateConsorcioCard } from '@/hooks/useConso
 import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useConsorcioProdutos, useConsorcioCreditos } from '@/hooks/useConsorcioProdutos';
-import { useConsorcioOrigemOptions, useConsorcioCategoriaOptions } from '@/hooks/useConsorcioConfigOptions';
+import { useConsorcioOrigemOptions, useConsorcioCategoriaOptions, useConsorcioVendedorOptions } from '@/hooks/useConsorcioConfigOptions';
 import { calcularParcela, getValoresTabelados } from '@/lib/consorcioCalculos';
 import { ParcelaComposicao } from './ParcelaComposicao';
 import { CondicaoPagamento, PrazoParcelas, CONDICAO_PAGAMENTO_OPTIONS, PRAZO_OPTIONS } from '@/types/consorcioProdutos';
@@ -322,19 +322,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   const condicaoPagamento = (form.watch('condicao_pagamento') || 'convencional') as CondicaoPagamento;
   const incluiSeguro = form.watch('inclui_seguro') || false;
 
-  // Fetch profiles with squad = consorcio
-  const { data: consorcioProfiles } = useQuery({
-    queryKey: ['consorcio-profiles'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .contains('squad', ['consorcio'])
-        .order('full_name');
-      if (error) throw error;
-      return data || [];
-    },
-  });
+  // Fetch vendedor options from configurable table
+  const { data: vendedorOptions = [] } = useConsorcioVendedorOptions();
 
   // Find product that matches selected code or auto-detect from credit value
   const produtoSelecionado = useMemo(() => {
@@ -1279,8 +1268,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                       <Select
                         onValueChange={(value) => {
                           field.onChange(value);
-                          const profile = consorcioProfiles?.find(p => p.id === value);
-                          form.setValue('vendedor_name', profile?.full_name || '');
+                          const vendedor = vendedorOptions.find(v => v.id === value);
+                          form.setValue('vendedor_name', vendedor?.name || '');
                         }}
                         value={field.value}
                       >
@@ -1290,24 +1279,19 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {consorcioProfiles && consorcioProfiles.length > 0 ? (
-                            consorcioProfiles.map(profile => (
-                              <SelectItem key={profile.id} value={profile.id}>
-                                {profile.full_name}
+                          {vendedorOptions.length > 0 ? (
+                            vendedorOptions.map(vendedor => (
+                              <SelectItem key={vendedor.id} value={vendedor.id}>
+                                {vendedor.name}
                               </SelectItem>
                             ))
                           ) : (
                             <div className="p-2 text-sm text-muted-foreground">
-                              Nenhum vendedor cadastrado para BU Consórcio
+                              Nenhum vendedor cadastrado. Adicione nas configurações.
                             </div>
                           )}
                         </SelectContent>
                       </Select>
-                      {(!consorcioProfiles || consorcioProfiles.length === 0) && (
-                        <p className="text-xs text-muted-foreground">
-                          Configure usuários com BU - Consórcio nas configurações de perfil.
-                        </p>
-                      )}
                     </FormItem>
                   )}
                 />
