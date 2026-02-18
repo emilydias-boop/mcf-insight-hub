@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Megaphone, Search, Users, DollarSign, Target, BarChart3 } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Megaphone, Search, Users, DollarSign, Target, BarChart3, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -129,6 +129,9 @@ export default function CampanhasDashboard() {
     to: endOfMonth(new Date()),
   });
   const [sourceFilter, setSourceFilter] = useState<string>("");
+  const [campaignFilter, setCampaignFilter] = useState<string>("");
+  const [mediumFilter, setMediumFilter] = useState<string>("");
+  const [contentFilter, setContentFilter] = useState<string>("");
 
   const { data: campaigns, isLoading } = useCampaignBreakdown(
     dateRange.from,
@@ -137,18 +140,61 @@ export default function CampanhasDashboard() {
   );
   const { data: sources } = useUtmSources(dateRange.from, dateRange.to);
 
-  const totals = useMemo(() => {
-    if (!campaigns) return { leads: 0, revenue: 0, ticket: 0, activeCampaigns: 0 };
-    const leads = campaigns.reduce((s, c) => s + c.leads, 0);
-    const revenue = campaigns.reduce((s, c) => s + c.revenue, 0);
-    const activeCampaigns = new Set(campaigns.map((c) => c.utm_campaign).filter(Boolean)).size;
-    return { leads, revenue, ticket: leads > 0 ? revenue / leads : 0, activeCampaigns };
+  // Reset child filters when parent changes
+  useEffect(() => { setCampaignFilter(""); setMediumFilter(""); setContentFilter(""); }, [sourceFilter]);
+  useEffect(() => { setMediumFilter(""); setContentFilter(""); }, [campaignFilter]);
+  useEffect(() => { setContentFilter(""); }, [mediumFilter]);
+
+  // Cascading filtered data
+  const filteredCampaigns = useMemo(() => {
+    if (!campaigns) return [];
+    let filtered = campaigns;
+    if (campaignFilter) filtered = filtered.filter(c => cleanUtmValue(c.utm_campaign) === campaignFilter);
+    if (mediumFilter) filtered = filtered.filter(c => cleanUtmValue(c.utm_medium) === mediumFilter);
+    if (contentFilter) filtered = filtered.filter(c => cleanUtmValue(c.utm_content) === contentFilter);
+    return filtered;
+  }, [campaigns, campaignFilter, mediumFilter, contentFilter]);
+
+  // Dynamic options (respecting cascade)
+  const campaignOptions = useMemo(() => {
+    if (!campaigns) return [];
+    return [...new Set(campaigns.map(c => cleanUtmValue(c.utm_campaign)).filter(Boolean) as string[])].sort();
   }, [campaigns]);
 
-  const byChannel = useMemo(() => aggregateByDimension(campaigns || [], "utm_source"), [campaigns]);
-  const byCampaign = useMemo(() => aggregateByDimension(campaigns || [], "utm_campaign"), [campaigns]);
-  const byAdSet = useMemo(() => aggregateByDimension(campaigns || [], "utm_medium"), [campaigns]);
-  const byAd = useMemo(() => aggregateByDimension(campaigns || [], "utm_content"), [campaigns]);
+  const mediumOptions = useMemo(() => {
+    let data = campaigns || [];
+    if (campaignFilter) data = data.filter(c => cleanUtmValue(c.utm_campaign) === campaignFilter);
+    return [...new Set(data.map(c => cleanUtmValue(c.utm_medium)).filter(Boolean) as string[])].sort();
+  }, [campaigns, campaignFilter]);
+
+  const contentOptions = useMemo(() => {
+    let data = campaigns || [];
+    if (campaignFilter) data = data.filter(c => cleanUtmValue(c.utm_campaign) === campaignFilter);
+    if (mediumFilter) data = data.filter(c => cleanUtmValue(c.utm_medium) === mediumFilter);
+    return [...new Set(data.map(c => cleanUtmValue(c.utm_content)).filter(Boolean) as string[])].sort();
+  }, [campaigns, campaignFilter, mediumFilter]);
+
+  const hasActiveFilters = sourceFilter || campaignFilter || mediumFilter || contentFilter;
+
+  const clearAllFilters = () => {
+    setSourceFilter("");
+    setCampaignFilter("");
+    setMediumFilter("");
+    setContentFilter("");
+  };
+
+  const totals = useMemo(() => {
+    if (!filteredCampaigns.length) return { leads: 0, revenue: 0, ticket: 0, activeCampaigns: 0 };
+    const leads = filteredCampaigns.reduce((s, c) => s + c.leads, 0);
+    const revenue = filteredCampaigns.reduce((s, c) => s + c.revenue, 0);
+    const activeCampaigns = new Set(filteredCampaigns.map((c) => c.utm_campaign).filter(Boolean)).size;
+    return { leads, revenue, ticket: leads > 0 ? revenue / leads : 0, activeCampaigns };
+  }, [filteredCampaigns]);
+
+  const byChannel = useMemo(() => aggregateByDimension(filteredCampaigns, "utm_source"), [filteredCampaigns]);
+  const byCampaign = useMemo(() => aggregateByDimension(filteredCampaigns, "utm_campaign"), [filteredCampaigns]);
+  const byAdSet = useMemo(() => aggregateByDimension(filteredCampaigns, "utm_medium"), [filteredCampaigns]);
+  const byAd = useMemo(() => aggregateByDimension(filteredCampaigns, "utm_content"), [filteredCampaigns]);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -193,21 +239,71 @@ export default function CampanhasDashboard() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-sm font-medium">Fonte</label>
+              <label className="text-sm font-medium">Canal</label>
               <Select value={sourceFilter || "all"} onValueChange={(val) => setSourceFilter(val === "all" ? "" : val)}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Todas" />
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   {(sources || []).map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Campanha</label>
+              <Select value={campaignFilter || "all"} onValueChange={(val) => setCampaignFilter(val === "all" ? "" : val)}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {campaignOptions.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Bloco do Anúncio</label>
+              <Select value={mediumFilter || "all"} onValueChange={(val) => setMediumFilter(val === "all" ? "" : val)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {mediumOptions.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Anúncio</label>
+              <Select value={contentFilter || "all"} onValueChange={(val) => setContentFilter(val === "all" ? "" : val)}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {contentOptions.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearAllFilters} className="gap-1 text-muted-foreground">
+                <X className="h-4 w-4" />
+                Limpar Filtros
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -275,7 +371,7 @@ export default function CampanhasDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(campaigns || []).map((c, i) => (
+                  {filteredCampaigns.map((c, i) => (
                     <TableRow key={i}>
                       <TableCell className="font-medium max-w-[300px] truncate">
                         {cleanUtmValue(c.utm_campaign) || "Sem campanha"}
@@ -299,7 +395,7 @@ export default function CampanhasDashboard() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {(!campaigns || campaigns.length === 0) && (
+                  {filteredCampaigns.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
