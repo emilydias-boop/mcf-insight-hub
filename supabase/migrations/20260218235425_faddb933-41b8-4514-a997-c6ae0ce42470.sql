@@ -1,0 +1,1 @@
+DELETE FROM hubla_transactions WHERE id = '09cacf20-57f8-47c0-ac3c-0a99f8b06290';
