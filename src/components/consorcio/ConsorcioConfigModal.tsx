@@ -17,9 +17,14 @@ import {
   useCreateConsorcioOrigemOption,
   useUpdateConsorcioOrigemOption,
   useDeleteConsorcioOrigemOption,
+  useConsorcioVendedorOptions,
+  useCreateConsorcioVendedorOption,
+  useUpdateConsorcioVendedorOption,
+  useDeleteConsorcioVendedorOption,
   ConsorcioTipoOption,
   ConsorcioCategoriaOption,
   ConsorcioOrigemOption,
+  ConsorcioVendedorOption,
 } from '@/hooks/useConsorcioConfigOptions';
 
 const COLOR_PRESETS = [
@@ -59,10 +64,17 @@ export function ConsorcioConfigModal({ open, onOpenChange }: ConsorcioConfigModa
   const updateOrigem = useUpdateConsorcioOrigemOption();
   const deleteOrigem = useDeleteConsorcioOrigemOption();
 
+  // Vendedor hooks
+  const { data: vendedores = [] } = useConsorcioVendedorOptions();
+  const createVendedor = useCreateConsorcioVendedorOption();
+  const updateVendedor = useUpdateConsorcioVendedorOption();
+  const deleteVendedor = useDeleteConsorcioVendedorOption();
+
   // New item states
   const [newTipo, setNewTipo] = useState({ name: '', label: '', color: '#3B82F6' });
   const [newCategoria, setNewCategoria] = useState({ name: '', label: '', color: '#3B82F6' });
   const [newOrigem, setNewOrigem] = useState({ name: '', label: '' });
+  const [newVendedor, setNewVendedor] = useState('');
 
   const handleAddTipo = () => {
     if (!newTipo.name.trim() || !newTipo.label.trim()) return;
@@ -96,6 +108,15 @@ export function ConsorcioConfigModal({ open, onOpenChange }: ConsorcioConfigModa
     setNewOrigem({ name: '', label: '' });
   };
 
+  const handleAddVendedor = () => {
+    if (!newVendedor.trim()) return;
+    createVendedor.mutate({
+      name: newVendedor.trim(),
+      display_order: vendedores.length
+    });
+    setNewVendedor('');
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -104,10 +125,11 @@ export function ConsorcioConfigModal({ open, onOpenChange }: ConsorcioConfigModa
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="tipos">Tipos</TabsTrigger>
             <TabsTrigger value="categorias">Categorias</TabsTrigger>
             <TabsTrigger value="origens">Origens</TabsTrigger>
+            <TabsTrigger value="vendedores">Vendedores</TabsTrigger>
           </TabsList>
 
           {/* Tipos Tab */}
@@ -225,6 +247,37 @@ export function ConsorcioConfigModal({ open, onOpenChange }: ConsorcioConfigModa
               </Button>
             </div>
           </TabsContent>
+
+          {/* Vendedores Tab */}
+          <TabsContent value="vendedores" className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Gerencie os vendedores responsáveis (ex: Grimaldo Neto, Diego Carielo)
+            </p>
+
+            <div className="space-y-2">
+              {vendedores.map((vendedor: ConsorcioVendedorOption) => (
+                <VendedorItem
+                  key={vendedor.id}
+                  item={vendedor}
+                  onUpdate={(data) => updateVendedor.mutate({ id: vendedor.id, ...data })}
+                  onDelete={() => deleteVendedor.mutate(vendedor.id)}
+                />
+              ))}
+            </div>
+
+            <div className="flex gap-2 items-center pt-4 border-t">
+              <Input
+                placeholder="Nome do vendedor"
+                value={newVendedor}
+                onChange={(e) => setNewVendedor(e.target.value)}
+                className="flex-1"
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddVendedor())}
+              />
+              <Button onClick={handleAddVendedor} size="icon" disabled={createVendedor.isPending}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </TabsContent>
         </Tabs>
       </DialogContent>
     </Dialog>
@@ -304,6 +357,30 @@ function OrigemItem({ item, onUpdate, onDelete }: OrigemItemProps) {
         value={label}
         onChange={(e) => setLabel(e.target.value)}
         onBlur={() => label !== item.label && onUpdate({ label })}
+        className="flex-1"
+      />
+      <Button variant="ghost" size="icon" onClick={onDelete}>
+        <Trash2 className="h-4 w-4 text-destructive" />
+      </Button>
+    </div>
+  );
+}
+
+interface VendedorItemProps {
+  item: ConsorcioVendedorOption;
+  onUpdate: (data: Partial<ConsorcioVendedorOption>) => void;
+  onDelete: () => void;
+}
+
+function VendedorItem({ item, onUpdate, onDelete }: VendedorItemProps) {
+  const [name, setName] = useState(item.name);
+
+  return (
+    <div className="flex gap-2 items-center p-2 bg-muted/50 rounded-lg">
+      <Input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={() => name !== item.name && onUpdate({ name })}
         className="flex-1"
       />
       <Button variant="ghost" size="icon" onClick={onDelete}>
