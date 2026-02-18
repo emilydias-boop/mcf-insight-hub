@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { format } from 'date-fns';
+import { useState, useEffect, useMemo } from 'react';
+import { format, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar, Clock, User, StickyNote } from 'lucide-react';
+import { Calendar, Clock, User, StickyNote, Loader2 } from 'lucide-react';
+import { useCloserMeetingLinksList } from '@/hooks/useCloserMeetingLinks';
 import {
   Dialog,
   DialogContent,
@@ -33,10 +34,26 @@ interface RescheduleModalProps {
 export function RescheduleModal({ meeting, open, onOpenChange, closers }: RescheduleModalProps) {
   const [selectedCloser, setSelectedCloser] = useState(meeting?.closer_id || '');
   const [selectedDate, setSelectedDate] = useState<Date>();
-  const [selectedTime, setSelectedTime] = useState('09:00');
+  const [selectedTime, setSelectedTime] = useState('');
   const [rescheduleNote, setRescheduleNote] = useState('');
 
   const rescheduleMeeting = useRescheduleMeeting();
+
+  const dayOfWeek = selectedDate ? getDay(selectedDate) : undefined;
+  const { data: configuredLinks, isLoading: loadingSlots } = useCloserMeetingLinksList(
+    selectedCloser || undefined,
+    dayOfWeek
+  );
+
+  const availableTimeSlots = useMemo(() => {
+    if (!configuredLinks) return [];
+    return configuredLinks.map(link => link.start_time.substring(0, 5));
+  }, [configuredLinks]);
+
+  // Reset time when closer or date changes
+  useEffect(() => {
+    setSelectedTime('');
+  }, [selectedCloser, selectedDate]);
 
   if (!meeting) return null;
 
@@ -63,11 +80,6 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
     });
   };
 
-  const timeSlots = Array.from({ length: 40 }, (_, i) => {
-    const hour = Math.floor(i / 4) + 8;
-    const minute = (i % 4) * 15;
-    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -153,17 +165,37 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
 
             <div className="space-y-2">
               <Label>Horário</Label>
-              <Select value={selectedTime} onValueChange={setSelectedTime}>
+              <Select 
+                value={selectedTime} 
+                onValueChange={setSelectedTime}
+                disabled={!selectedCloser || !selectedDate || loadingSlots}
+              >
                 <SelectTrigger>
-                  <Clock className="h-4 w-4 mr-2" />
-                  <SelectValue />
+                  {loadingSlots ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Clock className="h-4 w-4 mr-2" />
+                  )}
+                  <SelectValue placeholder={
+                    !selectedCloser ? 'Selecione closer' :
+                    !selectedDate ? 'Selecione data' :
+                    loadingSlots ? 'Carregando...' :
+                    availableTimeSlots.length === 0 ? 'Sem horários' :
+                    'Selecione'
+                  } />
                 </SelectTrigger>
                 <SelectContent>
-                  {timeSlots.map(time => (
-                    <SelectItem key={time} value={time}>
-                      {time}
-                    </SelectItem>
-                  ))}
+                  {availableTimeSlots.length === 0 ? (
+                    <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                      Nenhum horário configurado para este dia
+                    </div>
+                  ) : (
+                    availableTimeSlots.map(time => (
+                      <SelectItem key={time} value={time}>
+                        {time}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -184,7 +216,7 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
           <Button 
             className="w-full" 
             onClick={handleSubmit}
-            disabled={!selectedDate || rescheduleMeeting.isPending}
+            disabled={!selectedDate || !selectedTime || rescheduleMeeting.isPending}
           >
             {rescheduleMeeting.isPending ? 'Reagendando...' : 'Reagendar'}
           </Button>
