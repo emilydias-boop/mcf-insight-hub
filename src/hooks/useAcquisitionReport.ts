@@ -278,7 +278,17 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
     return transactions.map(tx => {
       const txEmail = (tx.customer_email || '').toLowerCase().trim();
       const txPhone = phoneSuffix(tx.customer_phone);
-      const origin = classifyOrigin(tx);
+      let origin = classifyOrigin(tx);
+      
+      // Launch override: if customer has R1 meeting (Inside Sales), don't treat as automatic
+      if (origin === 'Lançamento') {
+        const emailMatches = emailToAttendees.get(txEmail);
+        const phoneMatches = txPhone.length >= 8 ? phoneToAttendees.get(txPhone) : undefined;
+        if (emailMatches?.length || phoneMatches?.length) {
+          origin = 'Outros'; // Reclassify so it flows through closer attribution
+        }
+      }
+      
       const isAutomatic = AUTOMATIC_ORIGINS.has(origin);
 
       // find matching attendee
