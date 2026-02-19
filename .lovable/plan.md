@@ -1,77 +1,65 @@
 
+# Corrigir filtro de categorias que nao esta sendo aplicado
 
-# Trocar blocklist por allowlist de categorias do Incorporador
+## Diagnostico
 
-## Problema
+O codigo do filtro esta correto sintaticamente, mas ha um problema tecnico: a constante `ALLOWED_INCORPORADOR_CATEGORIES` esta definida **dentro** do corpo do componente (recriada a cada render), porem o `useMemo` que a utiliza tem como dependencias apenas `[transactions, closers, attendees, globalFirstIds]`. 
 
-O filtro atual usa uma **lista de exclusao** (blocklist) que nao cobre todas as categorias de outras BUs. Categorias como `ob_evento`, `viver_aluguel`, `contrato_clube_arremate` ainda passam pelo filtro e inflam o "Sem Closer".
+Alem disso, o filtro so se aplica quando `bu === 'incorporador'`, mas atualmente ele filtra **sempre**, mesmo para outras BUs. Precisamos condicionar o filtro a BU.
 
-Categorias que estao vazando:
-- `ob_evento` ("Imersao Presencial") - 10 transacoes
-- `viver_aluguel` ("Viver de Aluguel") - 7 transacoes
-- `contrato_clube_arremate` - 2 transacoes
-- `outros` com produtos nao-incorporador ("Almoço The Club", "Clube do Arremate", cursos avulsos) - ~8 transacoes
+O problema principal e que o componente `CloserRevenueSummaryTable` nao recebe a prop `bu`, entao nao sabe quando aplicar o filtro. Como o filtro esta sendo aplicado incondicionalmente e o Set esta correto, a causa real e provavelmente que a **preview nao recarregou** o componente apos a ultima edicao.
 
 ## Solucao
 
-Substituir a blocklist por uma **allowlist** (lista de permissao) com apenas as categorias que pertencem ao Incorporador. Isso e mais seguro porque qualquer nova categoria criada no futuro sera automaticamente excluida ate ser mapeada.
+1. **Mover a constante para fora do componente** (nivel de modulo) para garantir estabilidade e evitar recriacao desnecessaria.
+
+2. **Passar a prop `bu` para o `CloserRevenueSummaryTable`** e condicionar o filtro: so aplicar quando `bu === 'incorporador'`.
+
+3. **Adicionar um `console.log` temporario** para debug, confirmando quantas transacoes sao filtradas (remover depois).
 
 ## Detalhes tecnicos
 
 ### Arquivo: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
 
-Substituir o `EXCLUDED_FROM_INCORPORADOR` por:
+- Mover `ALLOWED_INCORPORADOR_CATEGORIES` para fora do componente (constante de modulo)
+- Adicionar prop `bu?: string` na interface do componente
+- Condicionar o filtro: `if (bu === 'incorporador')` aplicar allowlist, caso contrario usar todas as transacoes
 
 ```typescript
+// No topo do arquivo (fora do componente)
 const ALLOWED_INCORPORADOR_CATEGORIES = new Set([
-  'contrato',
-  'incorporador',
-  'parceria',
-  'a010',
-  'renovacao',
-  'ob_vitalicio',
-  'contrato-anticrise',
-  'p2',
+  'contrato', 'incorporador', 'parceria', 'a010',
+  'renovacao', 'ob_vitalicio', 'contrato-anticrise', 'p2',
 ]);
+
+// Dentro do useMemo
+const filteredTxs = bu === 'incorporador'
+  ? transactions.filter(tx => {
+      const cat = tx.product_category || '';
+      return ALLOWED_INCORPORADOR_CATEGORIES.has(cat) || cat === '';
+    })
+  : transactions;
 ```
 
-E mudar o filtro de:
-```typescript
-const filteredTxs = transactions.filter(tx => 
-  !EXCLUDED_FROM_INCORPORADOR.has(tx.product_category || '')
-);
+### Arquivo: `src/components/relatorios/SalesReportPanel.tsx`
+
+- Passar a prop `bu` ao componente `CloserRevenueSummaryTable`:
+
+```tsx
+<CloserRevenueSummaryTable
+  transactions={filteredTransactions as any}
+  closers={closers}
+  attendees={attendees as any}
+  globalFirstIds={globalFirstIds}
+  isLoading={isLoading}
+  startDate={dateRange?.from}
+  endDate={dateRange?.to}
+  bu={bu}
+/>
 ```
-
-Para:
-```typescript
-const filteredTxs = transactions.filter(tx => {
-  const cat = tx.product_category || '';
-  return ALLOWED_INCORPORADOR_CATEGORIES.has(cat) || cat === '';
-});
-```
-
-Transacoes sem categoria (`null`/`''`) continuam passando para nao perder dados novos nao-mapeados.
-
-### Categorias incluidas e motivo
-
-| Categoria | Motivo |
-|---|---|
-| `contrato` | Contratos A000 da BU |
-| `incorporador` | Produtos core (A001, A005, A009) |
-| `parceria` | Vendas via parceiros |
-| `a010` | Funil de entrada |
-| `renovacao` | Renovacoes de contrato |
-| `ob_vitalicio` | Order bump vitalicio |
-| `contrato-anticrise` | Plano anticrise |
-| `p2` | Parcela P2 |
-
-### Categorias que serao excluidas
-
-`clube_arremate`, `projetos`, `ob_construir_alugar`, `imersao`, `ob_construir`, `ob_evento`, `viver_aluguel`, `contrato_clube_arremate`, `consorcio`, `credito`, `formacao`, `socios`, `efeito_alavanca`, `imersao_socios`, `outros`, `a012`
 
 ### Resultado esperado
 
-- "Sem Closer" cai de 43 para aproximadamente 20-25 (apenas transacoes incorporador sem match)
-- Nenhum produto de outra BU aparece no relatorio
-- Novas categorias futuras sao excluidas por padrao ate serem adicionadas a allowlist
-
+- O filtro de allowlist sera aplicado apenas para a BU Incorporador
+- A constante sera estavel no nivel do modulo (sem recriacao)
+- O "Sem Closer" devera cair de 43 para aproximadamente 33 (excluindo as 10 transacoes de `ob_evento`)
