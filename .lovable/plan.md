@@ -1,56 +1,38 @@
 
 
-# Corrigir Calculo do Card "Liquido Total" - Dupla Contagem com Order Bumps
+# Deletar Transacoes Fantasma A001 do Juliano Cesar Franca
 
 ## Problema
 
-O fix anterior corrigiu o valor liquido **nas linhas da tabela** (dentro dos grupos), mas o card **"Liquido Total"** no topo da pagina ainda esta somando `net_value` de TODAS as transacoes individuais, incluindo o main + offers, causando dupla contagem.
+Na Hubla, o Juliano Cesar Franca (jfmoveis@icloud.com) tem apenas 2 faturas pagas:
+- A009 - MCF INCORPORADOR COMPLETO + THE CLUB (R$ 12.796,90)
+- A000 - Contrato MCF (R$ 593,88)
 
-### Onde esta o bug
+Porem, no sistema existem 3 transacoes adicionais fantasma referentes a um A001 que nunca existiu:
 
-Arquivo `src/pages/bu-incorporador/TransacoesIncorp.tsx`, linhas 186-197:
+1. **A001 refunded** (id: `d4cce494-5edc-4470-bbb7-83ca2bf6e510`) - net R$ 5.823,14
+2. **A001 newsale** (id: `9cffa1ba-59b1-465d-b93c-961bf48017f8`) - net R$ 0
+3. **Parceria Make** (id: `b7a6a98a-a6dc-4d9e-8994-01817d200b84`) - duplicata Make do A001 fantasma, net R$ 5.823,14
 
-```text
-const totals = useMemo(() => {
-  filteredByCloser.forEach(t => {
-    liquido += t.net_value || 0;   // <-- soma TODAS as transacoes, incluindo main duplicado
-  });
-  ...
-}, [filteredByCloser, globalFirstIds]);
+## Acao
+
+Deletar as 3 transacoes fantasma:
+
+```sql
+DELETE FROM hubla_transactions 
+WHERE id IN (
+  'd4cce494-5edc-4470-bbb7-83ca2bf6e510',
+  '9cffa1ba-59b1-465d-b93c-961bf48017f8',
+  'b7a6a98a-a6dc-4d9e-8994-01817d200b84'
+);
 ```
-
-O `filteredByCloser` contem as transacoes individuais (main + offers), entao o main (que ja e a soma dos offers) e somado novamente.
-
-## Solucao
-
-Alterar o calculo de `totals` para usar os **grupos ja calculados** (`transactionGroups`) em vez das transacoes individuais. Os grupos ja tem `totalNet` e `totalGross` corrigidos pelo fix anterior.
-
-### Arquivo: `src/pages/bu-incorporador/TransacoesIncorp.tsx`
-
-Alterar o `useMemo` de totals (linhas 186-197) para:
-
-```text
-const totals = useMemo(() => {
-  let bruto = 0;
-  let liquido = 0;
-
-  transactionGroups.forEach(group => {
-    bruto += group.totalGross;
-    liquido += group.totalNet;
-  });
-
-  return { count: filteredByCloser.length, bruto, liquido };
-}, [transactionGroups, filteredByCloser]);
-```
-
-Isso garante que:
-- O liquido usa a soma dos grupos (que exclui o main quando ha offers)
-- O bruto tambem usa a soma dos grupos (consistente)
-- O count continua sendo o numero total de transacoes individuais
 
 ## Impacto
 
-- O card "Liquido Total" passara a mostrar o valor correto (sem dupla contagem)
-- O card "Bruto Total" tambem sera consistente com as linhas da tabela
-- Nenhuma outra pagina e afetada (cada BU tem seu proprio calculo)
+- Remove R$ 5.823,14 de liquido fantasma (A001 refunded) e R$ 5.823,14 da duplicata Make
+- Remove R$ 14.500 de bruto fantasma (A001)
+- As 2 transacoes reais permanecem intactas:
+  - A009: net R$ 8.902,94, bruto R$ 19.500
+  - A000 Contrato: net R$ 388,10, bruto R$ 497
+- Tambem permanece a transacao Make parceria do A009 (`b40a8173-...`) que ja e tratada pela deduplicacao automatica
 
