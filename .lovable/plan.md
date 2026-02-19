@@ -1,64 +1,77 @@
 
 
-# Filtrar produtos de outras BUs no relatório do Incorporador
+# Trocar blocklist por allowlist de categorias do Incorporador
 
 ## Problema
 
-Quando `bu === 'incorporador'`, o `SalesReportPanel` usa `useAllHublaTransactions` que retorna TODAS as transações de todas as BUs. O `CloserRevenueSummaryTable` apenas isola as categorias `a010`, `renovacao` e `ob_vitalicio`, mas não exclui categorias que pertencem a outras BUs como:
+O filtro atual usa uma **lista de exclusao** (blocklist) que nao cobre todas as categorias de outras BUs. Categorias como `ob_evento`, `viver_aluguel`, `contrato_clube_arremate` ainda passam pelo filtro e inflam o "Sem Closer".
 
-- `clube_arremate` (pertence a Consórcio/Leilão)
-- `projetos` (BU Projetos)
-- `ob_construir_alugar` (pertence a Consórcio)
-- `imersao` (pertence a Consórcio)
-- `ob_construir` (verificar — está mapeado como incorporador em 1 produto, mas o usuário quer excluir)
+Categorias que estao vazando:
+- `ob_evento` ("Imersao Presencial") - 10 transacoes
+- `viver_aluguel` ("Viver de Aluguel") - 7 transacoes
+- `contrato_clube_arremate` - 2 transacoes
+- `outros` com produtos nao-incorporador ("Almoço The Club", "Clube do Arremate", cursos avulsos) - ~8 transacoes
 
-Essas transações entram no fluxo de atribuição e inflam os números de "Sem Closer" e possivelmente de closers individuais.
+## Solucao
 
-## Solução
+Substituir a blocklist por uma **allowlist** (lista de permissao) com apenas as categorias que pertencem ao Incorporador. Isso e mais seguro porque qualquer nova categoria criada no futuro sera automaticamente excluida ate ser mapeada.
 
-Adicionar um filtro de categorias excluídas no `CloserRevenueSummaryTable`, removendo transações cujo `product_category` pertence a outras BUs antes de processar a atribuição.
-
-## Detalhes técnicos
+## Detalhes tecnicos
 
 ### Arquivo: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
 
-Adicionar uma lista de categorias excluídas do Incorporador e filtrar as transações antes do loop de atribuição:
+Substituir o `EXCLUDED_FROM_INCORPORADOR` por:
 
 ```typescript
-// Categorias que pertencem a outras BUs e não devem aparecer no Incorporador
-const EXCLUDED_FROM_INCORPORADOR = new Set([
-  'clube_arremate',
-  'projetos',
-  'ob_construir_alugar',
-  'imersao',
-  'ob_construir',
-  'imersao_socios',
-  'efeito_alavanca',
-  'consorcio',
-  'credito',
-  'formacao',
-  'socios',
+const ALLOWED_INCORPORADOR_CATEGORIES = new Set([
+  'contrato',
+  'incorporador',
+  'parceria',
+  'a010',
+  'renovacao',
+  'ob_vitalicio',
+  'contrato-anticrise',
+  'p2',
 ]);
 ```
 
-No `useMemo` principal que processa as transações (por volta da linha 120), adicionar um filtro antes do loop:
-
+E mudar o filtro de:
 ```typescript
-// Filtrar transações que não pertencem à BU Incorporador
 const filteredTxs = transactions.filter(tx => 
   !EXCLUDED_FROM_INCORPORADOR.has(tx.product_category || '')
 );
 ```
 
-E usar `filteredTxs` no loop de atribuição em vez de `transactions`.
+Para:
+```typescript
+const filteredTxs = transactions.filter(tx => {
+  const cat = tx.product_category || '';
+  return ALLOWED_INCORPORADOR_CATEGORIES.has(cat) || cat === '';
+});
+```
 
-### Arquivo: `src/components/relatorios/SalesReportPanel.tsx`
+Transacoes sem categoria (`null`/`''`) continuam passando para nao perder dados novos nao-mapeados.
 
-Opcionalmente, aplicar o mesmo filtro no nível do painel para que a contagem total do relatório de Vendas também seja consistente (KPIs, tabelas de transações, etc.).
+### Categorias incluidas e motivo
+
+| Categoria | Motivo |
+|---|---|
+| `contrato` | Contratos A000 da BU |
+| `incorporador` | Produtos core (A001, A005, A009) |
+| `parceria` | Vendas via parceiros |
+| `a010` | Funil de entrada |
+| `renovacao` | Renovacoes de contrato |
+| `ob_vitalicio` | Order bump vitalicio |
+| `contrato-anticrise` | Plano anticrise |
+| `p2` | Parcela P2 |
+
+### Categorias que serao excluidas
+
+`clube_arremate`, `projetos`, `ob_construir_alugar`, `imersao`, `ob_construir`, `ob_evento`, `viver_aluguel`, `contrato_clube_arremate`, `consorcio`, `credito`, `formacao`, `socios`, `efeito_alavanca`, `imersao_socios`, `outros`, `a012`
 
 ### Resultado esperado
 
-- Transações de `clube_arremate`, `projetos`, `ob_construir_alugar`, `imersao` e `ob_construir` deixam de aparecer nos números de closers e "Sem Closer"
-- Os totais de faturamento e quantidade de transações refletem apenas produtos da BU Incorporador
-- A consistência entre Vendas e Aquisição é mantida
+- "Sem Closer" cai de 43 para aproximadamente 20-25 (apenas transacoes incorporador sem match)
+- Nenhum produto de outra BU aparece no relatorio
+- Novas categorias futuras sao excluidas por padrao ate serem adicionadas a allowlist
 
