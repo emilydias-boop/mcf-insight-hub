@@ -1,51 +1,43 @@
 
-# Corrigir Composição da BU Incorporador - Mapear Produtos Faltantes e Ajustar A010
 
-## Problema
+# Exportar Transacoes "Parceria" de Fevereiro para Excel
 
-A pagina de Vendas do Incorporador nao inclui 3 categorias de produtos que deveriam estar la, e o A010 esta com liquido inflado por conta de order bumps.
+## Objetivo
+Gerar e baixar automaticamente um arquivo CSV com todas as 81 transacoes "Parceria" do periodo 01/02 a 19/02/2026, para verificacao manual nas plataformas.
 
-### Produtos faltantes (nao mapeados na product_configurations como incorporador):
-- **OB Construir Para Alugar**: 140 vendas, R$ 11.347 liquido
-- **OB Acesso Vitalicio**: 154 vendas, R$ 7.408 liquido  
-- **Imersao Presencial** (OB Evento): 10 vendas, R$ 2.682 liquido
+## Colunas do arquivo
+O CSV tera as seguintes colunas para facilitar a conferencia:
 
-### A010 inflado:
-- Sistema mostra R$ 32.365 (684 registros) porque inclui 180 registros de order bump
-- Planilha mostra R$ 23.258 (632 vendas) contando apenas vendas "main" completed
-- Os "main completed" no sistema somam R$ 23.297 -- muito proximo do valor correto
+| Coluna | Descricao |
+|--------|-----------|
+| Cliente | Nome do cliente |
+| Email | Email do cliente |
+| Telefone | Telefone do cliente |
+| Data Venda | Data da transacao |
+| Valor Pago (Bruto Atual) | product_price - valor que o sistema usa como bruto hoje |
+| Valor Liquido | net_value recebido |
+| Parcela | Numero da parcela |
+| Total Parcelas | Total de parcelas |
+| Gross Override | Se ja tem override manual |
+| Hubla ID | ID para rastreio |
+| Produto Real | Coluna vazia para voce preencher manualmente (A001, A009, etc) |
+| Bruto Correto | Coluna vazia para voce preencher o valor bruto correto |
+| Observacoes | Coluna vazia para anotacoes |
 
-## Solucao
+## Implementacao
 
-### 1. Adicionar produtos faltantes na product_configurations (SQL Migration)
+Sera adicionada uma funcao temporaria na pagina de transacoes do Incorporador (`/bu-incorporador/transacoes`) que:
 
-Inserir os 3 produtos com `target_bu = 'incorporador'` e categorias corretas:
+1. Consulta todas as transacoes com `product_name = 'Parceria'` do periodo de fevereiro via query direta ao Supabase
+2. Formata os dados em CSV com separador ponto-e-virgula (compativel com Excel BR)
+3. Inclui as 3 colunas vazias no final para preenchimento manual
+4. Dispara o download automaticamente
 
-```text
-INSERT INTO product_configurations (product_name, target_bu, product_category)
-VALUES 
-  ('OB Construir Para Alugar', 'incorporador', 'ob_construir'),
-  ('OB Acesso Vitalício', 'incorporador', 'ob_vitalicio'),
-  ('Imersão Presencial', 'incorporador', 'ob_evento')
-ON CONFLICT (product_name) DO UPDATE 
-  SET target_bu = 'incorporador',
-      product_category = EXCLUDED.product_category;
-```
+### Detalhes Tecnicos
 
-Com isso esses produtos passam a aparecer na pagina de Vendas MCF Incorporador automaticamente (a RPC ja faz INNER JOIN com product_configurations WHERE target_bu = 'incorporador').
+- Arquivo: `src/pages/bu-incorporador/Transacoes.tsx` (ou componente equivalente da pagina)
+- Adicionar botao "Exportar Parcerias" temporario na pagina
+- Usar a mesma logica de export CSV ja existente em `src/lib/exportHelpers.ts` e `src/components/financeiro/FinanceiroTransacoes.tsx`
+- Query direta: `supabase.from('hubla_transactions').select('*').ilike('product_name', 'parceria').gte('sale_date', '2026-02-01').lt('sale_date', '2026-02-20')`
+- Encoding UTF-8 com BOM para acentos no Excel
 
-### 2. Verificar se o A010 precisa de ajuste
-
-O liquido inflado do A010 vem dos order bumps (offers). O agrupamento por compra (fix anterior) ja trata isso na tabela, mas o total no card pode estar somando os offers.
-
-**Investigacao necessaria**: Verificar se os 180 offers do A010 sao realmente order bumps (hubla_id com `-offer-`) e se o fix anterior de groupTransactionsByPurchase ja esta excluindo o main corretamente para o calculo do liquido total.
-
-Se os offers nao sao agrupados com um main (porque o A010 nao tem um produto "pai"), cada offer pode estar sendo contado individualmente no total. Nesse caso, pode ser necessario excluir os offers de A010 ou trata-los de outra forma.
-
-## Resultado Esperado
-
-Apos as mudancas:
-- OB Construir, OB Vitalicio e OB Evento aparecerao na pagina de Vendas
-- O liquido total subira em ~R$ 21.438 (soma dos 3 produtos faltantes)
-- O bruto e liquido por categoria ficarao consistentes com a planilha
-- O total geral da BU Incorporador estara mais preciso
