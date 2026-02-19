@@ -507,38 +507,77 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
     
     // 7. Criar deal usando UPSERT atômico (previne duplicação por race condition)
     if (contactId && originId) {
-      // 7.1 Herdar owner de outro deal do mesmo contato
+      // 7.1 Verificar se existe distribuição ativa para esta origin
+      let distributedOwnerId: string | null = null;
+      let distributedOwnerProfileId: string | null = null;
+      let wasDistributed = false;
+
+      try {
+        const { data: distConfig } = await supabase
+          .from('lead_distribution_config')
+          .select('id')
+          .eq('origin_id', originId)
+          .eq('is_active', true)
+          .limit(1);
+
+        if (distConfig && distConfig.length > 0) {
+          const { data: nextOwnerEmail } = await supabase.rpc('get_next_lead_owner', { p_origin_id: originId });
+          if (nextOwnerEmail) {
+            distributedOwnerId = nextOwnerEmail;
+            wasDistributed = true;
+            console.log(`[CRM][Hubla] Distribuição ativa - owner atribuído: ${distributedOwnerId}`);
+
+            // Buscar profile_id do owner distribuído
+            const { data: ownerProfile } = await supabase
+              .from('profiles')
+              .select('id')
+              .ilike('email', distributedOwnerId)
+              .maybeSingle();
+            if (ownerProfile) {
+              distributedOwnerProfileId = ownerProfile.id;
+            }
+          }
+        }
+      } catch (distError) {
+        console.error(`[CRM][Hubla] Erro ao verificar distribuição:`, distError);
+      }
+
+      // 7.2 Fallback: herdar owner de outro deal do mesmo contato
       let inheritedOwnerId: string | null = null;
       let inheritedOwnerProfileId: string | null = null;
-      const { data: dealWithOwner } = await supabase
-        .from('crm_deals')
-        .select('owner_id, owner_profile_id')
-        .eq('contact_id', contactId)
-        .not('owner_id', 'is', null)
-        .limit(1)
-        .maybeSingle();
-      
-      if (dealWithOwner?.owner_id) {
-        inheritedOwnerId = dealWithOwner.owner_id;
-        inheritedOwnerProfileId = dealWithOwner.owner_profile_id;
-        console.log(`[CRM] Owner herdado de outro deal: ${inheritedOwnerId}`);
+
+      if (!wasDistributed) {
+        const { data: dealWithOwner } = await supabase
+          .from('crm_deals')
+          .select('owner_id, owner_profile_id')
+          .eq('contact_id', contactId)
+          .not('owner_id', 'is', null)
+          .limit(1)
+          .maybeSingle();
         
-        // Se herdou owner_id mas não tem profile_id, buscar
-        if (!inheritedOwnerProfileId && inheritedOwnerId) {
-          const { data: ownerProfile } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('email', inheritedOwnerId)
-            .maybeSingle();
+        if (dealWithOwner?.owner_id) {
+          inheritedOwnerId = dealWithOwner.owner_id;
+          inheritedOwnerProfileId = dealWithOwner.owner_profile_id;
+          console.log(`[CRM] Owner herdado de outro deal: ${inheritedOwnerId}`);
           
-          if (ownerProfile) {
-            inheritedOwnerProfileId = ownerProfile.id;
-            console.log(`[CRM] Profile ID encontrado: ${inheritedOwnerProfileId}`);
+          if (!inheritedOwnerProfileId && inheritedOwnerId) {
+            const { data: ownerProfile } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('email', inheritedOwnerId)
+              .maybeSingle();
+            
+            if (ownerProfile) {
+              inheritedOwnerProfileId = ownerProfile.id;
+            }
           }
         }
       }
-      
-      // 7.2 Usar UPSERT atômico - se já existir deal para este contact_id+origin_id, ignora
+
+      const finalOwnerId = wasDistributed ? distributedOwnerId : inheritedOwnerId;
+      const finalOwnerProfileId = wasDistributed ? distributedOwnerProfileId : inheritedOwnerProfileId;
+
+      // 7.3 Usar UPSERT atômico
       const dealData = {
         clint_id: `hubla-deal-${Date.now()}-${Math.random().toString(36).substring(7)}`,
         name: `${data.name || 'Cliente'} - A010`,
@@ -546,15 +585,16 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
         contact_id: contactId,
         origin_id: originId,
         stage_id: stageId,
-        owner_id: inheritedOwnerId,
-        owner_profile_id: inheritedOwnerProfileId,
+        owner_id: finalOwnerId,
+        owner_profile_id: finalOwnerProfileId,
         product_name: data.productName,
         tags: ['A010', 'Hubla'],
         custom_fields: { 
           source: 'hubla', 
           product: data.productName,
           a010_compra: true,
-          a010_data: new Date().toISOString()
+          a010_data: new Date().toISOString(),
+          ...(wasDistributed ? { distributed: true, owner_original: inheritedOwnerId || null } : {})
         },
         data_source: 'webhook',
         stage_moved_at: new Date().toISOString()
