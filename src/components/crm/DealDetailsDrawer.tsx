@@ -15,11 +15,12 @@ import { NextActionBlockCompact } from './NextActionBlockCompact';
 import { A010JourneyCollapsible } from './A010JourneyCollapsible';
 import { QuickActionsBlock } from './QuickActionsBlock';
 import { LeadJourneyCard } from './LeadJourneyCard';
+import { LeadFullTimeline } from './LeadFullTimeline';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { QualificationSummaryCard } from './qualification/QualificationSummaryCard';
 import { LossReasonCard } from './LossReasonCard';
 import { CrossPipelineHistory } from './CrossPipelineHistory';
-import { Phone, History, StickyNote, CheckSquare, AlertTriangle } from 'lucide-react';
+import { Phone, History, StickyNote, CheckSquare, AlertTriangle, Clock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
@@ -161,8 +162,12 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               <SdrSummaryBlock deal={deal} contact={contact} />
               
               {/* ===== 5. ABAS (com scroll) ===== */}
-              <Tabs defaultValue="tarefas" className="mt-2">
-                <TabsList className="w-full grid grid-cols-4 bg-secondary">
+              <Tabs defaultValue="timeline" className="mt-2">
+                <TabsList className="w-full grid grid-cols-5 bg-secondary">
+                  <TabsTrigger value="timeline" className="text-xs">
+                    <Clock className="h-3.5 w-3.5 mr-1" />
+                    Timeline
+                  </TabsTrigger>
                   <TabsTrigger value="tarefas" className="text-xs">
                     <CheckSquare className="h-3.5 w-3.5 mr-1" />
                     Tarefas
@@ -180,6 +185,14 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                     Notas
                   </TabsTrigger>
                 </TabsList>
+                
+                <TabsContent value="timeline" className="mt-3 border rounded-lg min-h-[300px] p-2">
+                  <LeadFullTimeline
+                    dealId={deal.clint_id}
+                    dealUuid={deal.id}
+                    contactEmail={contact?.email}
+                  />
+                </TabsContent>
                 
                 <TabsContent value="tarefas" className="mt-3 border rounded-lg min-h-[300px]">
                   <DealTasksSection 
