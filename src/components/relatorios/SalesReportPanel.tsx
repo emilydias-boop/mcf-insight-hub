@@ -501,6 +501,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
         isLoading={isLoading}
         startDate={dateRange?.from}
         endDate={dateRange?.to}
+        bu={bu}
       />
       
       {/* Data Table */}

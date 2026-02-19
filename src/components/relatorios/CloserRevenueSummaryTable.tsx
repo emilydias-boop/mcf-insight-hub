@@ -43,12 +43,25 @@ interface CloserRevenueSummaryTableProps {
   isLoading?: boolean;
   startDate?: Date;
   endDate?: Date;
+  bu?: string;
 }
 
 const phoneSuffix = (phone: string | null | undefined): string => {
   const digits = (phone || '').replace(/\D/g, '');
   return digits.length >= 9 ? digits.slice(-9) : digits;
 };
+
+// Categorias permitidas da BU Incorporador (allowlist — nível de módulo)
+const ALLOWED_INCORPORADOR_CATEGORIES = new Set([
+  'contrato',
+  'incorporador',
+  'parceria',
+  'a010',
+  'renovacao',
+  'ob_vitalicio',
+  'contrato-anticrise',
+  'p2',
+]);
 
 interface CloserRow {
   id: string;
@@ -68,27 +81,20 @@ export function CloserRevenueSummaryTable({
   isLoading,
   startDate,
   endDate,
+  bu,
 }: CloserRevenueSummaryTableProps) {
   const [selectedCloser, setSelectedCloser] = useState<{ id: string; name: string } | null>(null);
 
-  // Categorias permitidas da BU Incorporador (allowlist)
-  const ALLOWED_INCORPORADOR_CATEGORIES = new Set([
-    'contrato',
-    'incorporador',
-    'parceria',
-    'a010',
-    'renovacao',
-    'ob_vitalicio',
-    'contrato-anticrise',
-    'p2',
-  ]);
-
   const { summaryData, closerTransactionsMap } = useMemo(() => {
-    // Filtrar apenas transações que pertencem à BU Incorporador
-    const filteredTxs = transactions.filter(tx => {
-      const cat = tx.product_category || '';
-      return ALLOWED_INCORPORADOR_CATEGORIES.has(cat) || cat === '';
-    });
+    // Filtrar apenas transações que pertencem à BU Incorporador (allowlist)
+    const filteredTxs = bu === 'incorporador'
+      ? transactions.filter(tx => {
+          const cat = tx.product_category || '';
+          return ALLOWED_INCORPORADOR_CATEGORIES.has(cat) || cat === '';
+        })
+      : transactions;
+
+    console.log(`[CloserRevenueSummaryTable] bu=${bu}, total=${transactions.length}, afterFilter=${filteredTxs.length}`);
 
     // Build contact map with earliest scheduled_at per closer+contact
     const closerContactMap = new Map<string, { emails: Set<string>; phones: Set<string> }>();
@@ -289,7 +295,7 @@ export function CloserRevenueSummaryTable({
       summaryData: { rows, totalGross, totalNet, totalCount, totalOutsideCount, totalOutsideGross },
       closerTransactionsMap: txMap,
     };
-  }, [transactions, closers, attendees, globalFirstIds]);
+  }, [transactions, closers, attendees, globalFirstIds, bu]);
 
   if (isLoading || summaryData.rows.length === 0) return null;
 
