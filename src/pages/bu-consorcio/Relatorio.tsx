@@ -6,7 +6,7 @@ export default function ConsorcioRelatorios() {
     <RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}>
       <BUReportCenter 
         bu="consorcio" 
-        availableReports={['sales', 'performance']} 
+        availableReports={['contracts', 'sales', 'performance', 'acquisition']} 
       />
     </RoleGuard>
   );
