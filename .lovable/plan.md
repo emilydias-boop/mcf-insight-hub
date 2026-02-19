@@ -1,42 +1,53 @@
 
-# Corrigir filtro de BU no relatório de Vendas (Faturamento por Closer)
+# Corrigir R1 Agendada no Painel Consorcio
 
-## Problema
-Victoria Paz e Joao Pedro (closers da BU Consorcio) estao aparecendo no relatorio de Vendas do Incorporador. Isso acontece porque a pagina `/bu-incorporador/relatorios` nao usa o `BUProvider`, entao o hook `useGestorClosers` nao consegue identificar a BU ativa e retorna closers de todas as BUs.
+## Problema confirmado
 
-## Causa raiz
-1. `IncorporadorRelatorios` passa `bu="incorporador"` para `BUReportCenter`
-2. `BUReportCenter` passa `bu` para `SalesReportPanel`
-3. `SalesReportPanel` recebe `bu` mas chama `useGestorClosers('r1')` sem informar a BU
-4. `useGestorClosers` usa `useActiveBU()` que, sem `BUProvider`, retorna null ou a BU do perfil do usuario
-5. Para admin, `activeBU` pode ser null, entao nenhum filtro de BU e aplicado e closers de todas as BUs sao retornados
+A formula atual de R1 Agendada esta errada em todos os periodos:
+
+- **Dia**: `totalRealizadas(0) + totalNoShows(1) + pendentesHoje(30)` = **31**, quando o correto e **1** (apenas 1 reuniao agendada para hoje por SDRs do consorcio)
+- **Semana/Mes**: `totalRealizadas + totalNoShows` = ignora reunioes pendentes, mas pelo menos nao soma pendentes de outras BUs
+
+O `useMeetingsPendentesHoje()` conta pendentes de TODAS as BUs (hoje: 28 invited + 2 rescheduled = 30), sem nenhum filtro por squad.
+
+### Dados reais de hoje (banco):
+| SDR | Agendamento (booked today) | R1 Agendada (scheduled today) | Status |
+|---|---|---|---|
+| Cleiton Lima | 0 | 1 | no_show |
+| Ithaline Clara | 1 | 0 | invited |
+
+Valores corretos para hoje: Agendamento=1, R1 Agendada=1, R1 Realizada=0, No-Show=1
 
 ## Solucao
-Envolver o conteudo do `BUReportCenter` com o `BUProvider` para que todos os hooks filhos (incluindo `useGestorClosers`) identifiquem automaticamente a BU ativa.
+
+Substituir a formula manual por `totalR1Agendada` que ja vem corretamente da RPC `get_sdr_metrics_from_agenda`, filtrada pelos SDRs do squad consorcio.
 
 ## Detalhes tecnicos
 
-### Arquivo: `src/components/relatorios/BUReportCenter.tsx`
+### Arquivo: `src/pages/bu-consorcio/PainelEquipe.tsx`
 
-Adicionar o `BUProvider` envolvendo todo o conteudo do componente:
-
-```tsx
-import { BUProvider } from '@/contexts/BUContext';
-
-export function BUReportCenter({ bu, availableReports }: BUReportCenterProps) {
-  return (
-    <BUProvider bu={bu} basePath={`/bu-${bu}/relatorios`}>
-      {/* conteudo existente */}
-    </BUProvider>
-  );
-}
+**Linha 412** - dayValues.r1Agendada:
+```
+// DE:
+r1Agendada: (dayKPIs?.totalRealizadas || 0) + (dayKPIs?.totalNoShows || 0) + dayPendentes,
+// PARA:
+r1Agendada: dayKPIs?.totalR1Agendada || 0,
 ```
 
-Isso garante que:
-- `useActiveBU()` retorne `"incorporador"` dentro de todos os paineis de relatorio
-- `useGestorClosers` filtre automaticamente por `bu = 'incorporador'`
-- Victoria Paz e Joao Pedro (bu = consorcio) sejam excluidos
-- Funciona para todas as BUs, nao apenas Incorporador
+**Linha 423** - weekValues.r1Agendada:
+```
+// DE:
+r1Agendada: (weekKPIs?.totalRealizadas || 0) + (weekKPIs?.totalNoShows || 0),
+// PARA:
+r1Agendada: weekKPIs?.totalR1Agendada || 0,
+```
 
-### Nenhuma outra mudanca necessaria
-O `useGestorClosers` ja tem a logica de filtro por BU (linha 36-38). So falta o contexto ser fornecido corretamente.
+**Linha 434** - monthValues.r1Agendada:
+```
+// DE:
+r1Agendada: (monthKPIs?.totalRealizadas || 0) + (monthKPIs?.totalNoShows || 0),
+// PARA:
+r1Agendada: monthKPIs?.totalR1Agendada || 0,
+```
+
+Essas 3 alteracoes garantem que R1 Agendada use a fonte de verdade (RPC filtrada por squad) em vez de formulas manuais com dados de outras BUs.
