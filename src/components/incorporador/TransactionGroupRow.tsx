@@ -374,8 +374,21 @@ export function groupTransactionsByPurchase(
     }
   });
 
-  // Ordena allTransactions: principal primeiro, depois bumps
+  // Segunda passagem: recalcular totais para grupos com orderBumps
+  // O main da Hubla tem net = soma de todos os offers, então somar main + offers duplica
   groups.forEach(group => {
+    if (group.orderBumps.length > 0) {
+      // Recalcular totalNet usando apenas os offers (exclui o main que é o "carrinho total")
+      group.totalNet = group.orderBumps.reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+
+      // Recalcular totalGross usando apenas os offers (o main tem product_price inflado do carrinho)
+      group.totalGross = group.orderBumps.reduce((sum, tx) => {
+        const isFirst = globalFirstIds.has(tx.id);
+        return sum + getDeduplicatedGross(tx, isFirst);
+      }, 0);
+    }
+
+    // Ordena allTransactions: principal primeiro, depois bumps
     group.allTransactions.sort((a, b) => {
       const aIsBump = a.hubla_id?.includes('-offer-') ? 1 : 0;
       const bIsBump = b.hubla_id?.includes('-offer-') ? 1 : 0;
