@@ -409,7 +409,7 @@ export default function ConsorcioPainelEquipe() {
 
   const dayValues = useMemo(() => ({
     agendamento: dayKPIs?.totalAgendamentos || 0,
-    r1Agendada: (dayKPIs?.totalRealizadas || 0) + (dayKPIs?.totalNoShows || 0) + dayPendentes,
+    r1Agendada: dayKPIs?.totalR1Agendada || 0,
     r1Realizada: dayKPIs?.totalRealizadas || 0,
     noShow: dayKPIs?.totalNoShows || 0,
     contrato: dayKPIs?.totalContratos || 0,
@@ -420,7 +420,7 @@ export default function ConsorcioPainelEquipe() {
 
   const weekValues = useMemo(() => ({
     agendamento: weekKPIs?.totalAgendamentos || 0,
-    r1Agendada: (weekKPIs?.totalRealizadas || 0) + (weekKPIs?.totalNoShows || 0),
+    r1Agendada: weekKPIs?.totalR1Agendada || 0,
     r1Realizada: weekKPIs?.totalRealizadas || 0,
     noShow: weekKPIs?.totalNoShows || 0,
     contrato: weekKPIs?.totalContratos || 0,
@@ -431,7 +431,7 @@ export default function ConsorcioPainelEquipe() {
 
   const monthValues = useMemo(() => ({
     agendamento: monthKPIs?.totalAgendamentos || 0,
-    r1Agendada: (monthKPIs?.totalRealizadas || 0) + (monthKPIs?.totalNoShows || 0),
+    r1Agendada: monthKPIs?.totalR1Agendada || 0,
     r1Realizada: monthKPIs?.totalRealizadas || 0,
     noShow: monthKPIs?.totalNoShows || 0,
     contrato: monthKPIs?.totalContratos || 0,
