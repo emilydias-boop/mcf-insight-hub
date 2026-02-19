@@ -668,10 +668,37 @@ async function handleDealCreated(supabase: any, data: any) {
     }
   }
 
-  // 4. Owner (usuário responsável) - salvar EMAIL diretamente para consistência com Clint
-  // O deal_user vem como email no formato: "julia.caroline@minhacasafinanciada.com"
-  const ownerId = ownerName || null;
-  console.log('[DEAL.CREATED] Owner (email):', ownerId);
+  // 4. Owner - verificar distribuição ativa antes de usar deal_user do Clint
+  const originalOwner = ownerName || null;
+  let ownerId = originalOwner;
+
+  if (originId) {
+    try {
+      const { data: distConfig } = await supabase
+        .from('lead_distribution_config')
+        .select('id')
+        .eq('origin_id', originId)
+        .eq('is_active', true)
+        .limit(1);
+
+      if (distConfig && distConfig.length > 0) {
+        const { data: nextOwner, error: distError } = await supabase
+          .rpc('get_next_lead_owner', { p_origin_id: originId });
+
+        if (!distError && nextOwner) {
+          ownerId = nextOwner;
+          console.log('[DEAL.CREATED] Distribuição ativa - owner via distribuição:', ownerId, '(original Clint:', originalOwner, ')');
+        } else {
+          console.log('[DEAL.CREATED] Distribuição falhou, usando owner Clint:', originalOwner, distError);
+        }
+      } else {
+        console.log('[DEAL.CREATED] Sem distribuição ativa para origin:', originId, '- usando owner Clint:', originalOwner);
+      }
+    } catch (distErr) {
+      console.log('[DEAL.CREATED] Erro ao verificar distribuição, usando owner Clint:', originalOwner, distErr);
+    }
+  }
+  console.log('[DEAL.CREATED] Owner final (email):', ownerId);
 
   // 4.1 Buscar owner_profile_id correspondente para filtro do CRM
   let ownerProfileId: string | null = null;
@@ -702,6 +729,11 @@ async function handleDealCreated(supabase: any, data: any) {
     deal_closer: data.deal_closer,
     deal_origin: data.deal_origin || originName,
   };
+  // Salvar owner original do Clint se distribuição redirecionou
+  if (ownerId !== originalOwner && originalOwner) {
+    customFields.deal_user_original = originalOwner;
+    customFields.distributed = true;
+  }
   Object.keys(data).forEach(key => {
     if (!excludedFields.includes(key) && data[key] !== undefined && data[key] !== null) {
       customFields[key] = data[key];
