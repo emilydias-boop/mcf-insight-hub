@@ -201,9 +201,10 @@ interface ConsorcioCardFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   card?: ConsorcioCardWithDetails | null;
+  duplicateFrom?: Partial<import('@/types/consorcio').ConsorcioCard> | null;
 }
 
-export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFormProps) {
+export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: ConsorcioCardFormProps) {
   const [activeTab, setActiveTab] = useState('dados');
   const [loadingCep, setLoadingCep] = useState(false);
   const [loadingCepComercial, setLoadingCepComercial] = useState(false);
@@ -529,6 +530,74 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
           transferido_de: card.transferido_de || undefined,
           observacoes: card.observacoes || undefined,
         });
+      } else if (duplicateFrom) {
+        // Duplicate mode - pre-fill personal data, leave cota fields empty
+        const d = duplicateFrom;
+        form.reset({
+          tipo_pessoa: (d.tipo_pessoa as 'pf' | 'pj') || 'pf',
+          categoria: (d.categoria as 'inside' | 'life') || 'inside',
+          tipo_produto: (d.tipo_produto as 'select' | 'parcelinha') || 'select',
+          empresa_paga_parcelas: 'nao',
+          tipo_contrato: undefined,
+          parcelas_pagas_empresa: 0,
+          dia_vencimento: 10,
+          origem: (d.origem as any) || 'socio',
+          origem_detalhe: d.origem_detalhe || undefined,
+          vendedor_id: d.vendedor_id || undefined,
+          vendedor_name: d.vendedor_name || undefined,
+          partners: [],
+          // Cota fields empty
+          grupo: '',
+          cota: '',
+          valor_credito: 0,
+          prazo_meses: 0,
+          produto_codigo: 'auto',
+          condicao_pagamento: 'convencional',
+          inclui_seguro: false,
+          // Controle
+          valor_comissao: undefined,
+          e_transferencia: d.e_transferencia || false,
+          transferido_de: d.transferido_de || undefined,
+          observacoes: d.observacoes || undefined,
+          // PF
+          nome_completo: d.nome_completo || '',
+          data_nascimento: d.data_nascimento ? parseDateWithoutTimezone(d.data_nascimento) : undefined,
+          cpf: d.cpf || '',
+          rg: d.rg || '',
+          estado_civil: (d.estado_civil as any) || undefined,
+          cpf_conjuge: d.cpf_conjuge || '',
+          endereco_cep: d.endereco_cep || '',
+          endereco_rua: d.endereco_rua || '',
+          endereco_numero: d.endereco_numero || '',
+          endereco_complemento: d.endereco_complemento || '',
+          endereco_bairro: d.endereco_bairro || '',
+          endereco_cidade: d.endereco_cidade || '',
+          endereco_estado: d.endereco_estado || '',
+          telefone: d.telefone || '',
+          email: d.email || '',
+          profissao: d.profissao || '',
+          tipo_servidor: (d.tipo_servidor as any) || undefined,
+          renda: d.renda ? Number(d.renda) : undefined,
+          patrimonio: d.patrimonio ? Number(d.patrimonio) : undefined,
+          pix: d.pix || '',
+          // PJ
+          razao_social: d.razao_social || '',
+          cnpj: d.cnpj || '',
+          natureza_juridica: d.natureza_juridica || '',
+          inscricao_estadual: d.inscricao_estadual || '',
+          data_fundacao: d.data_fundacao ? parseDateWithoutTimezone(d.data_fundacao) : undefined,
+          endereco_comercial_cep: d.endereco_comercial_cep || '',
+          endereco_comercial_rua: d.endereco_comercial_rua || '',
+          endereco_comercial_numero: d.endereco_comercial_numero || '',
+          endereco_comercial_complemento: d.endereco_comercial_complemento || '',
+          endereco_comercial_bairro: d.endereco_comercial_bairro || '',
+          endereco_comercial_cidade: d.endereco_comercial_cidade || '',
+          endereco_comercial_estado: d.endereco_comercial_estado || '',
+          telefone_comercial: d.telefone_comercial || '',
+          email_comercial: d.email_comercial || '',
+          faturamento_mensal: d.faturamento_mensal ? Number(d.faturamento_mensal) : undefined,
+          num_funcionarios: d.num_funcionarios ? Number(d.num_funcionarios) : undefined,
+        });
       } else {
         // Create mode - reset to empty values
         form.reset({
@@ -587,7 +656,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
         });
       }
     }
-  }, [open, card, form]);
+  }, [open, card, duplicateFrom, form]);
 
   // Auto-set default parcelas when changing to intercalado (only for NEW cards)
   useEffect(() => {
@@ -789,7 +858,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Editar Carta de Consórcio' : 'Nova Carta de Consórcio'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar Carta de Consórcio' : duplicateFrom ? 'Duplicar Carta de Consórcio' : 'Nova Carta de Consórcio'}</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
