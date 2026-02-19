@@ -12,6 +12,7 @@ import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import { useAllHublaTransactions, TransactionFilters } from '@/hooks/useAllHublaTransactions';
+import { useTransactionsByBU } from '@/hooks/useTransactionsByBU';
 import { formatCurrency } from '@/lib/formatters';
 import * as XLSX from 'xlsx';
 import { BusinessUnit } from '@/hooks/useMyBU';
@@ -65,7 +66,24 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     selectedProducts: undefined,
   }), [dateRange]);
   
-  const { data: transactions = [], isLoading } = useAllHublaTransactions(filters);
+  const shouldUseBUFilter = bu && bu !== 'incorporador';
+  
+  const { data: allTransactions = [], isLoading: loadingAll } = useAllHublaTransactions(
+    shouldUseBUFilter ? { search: '__SKIP__' } : filters
+  );
+  
+  const buFilters: TransactionFilters = useMemo(() => ({
+    search: filters.search,
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+  }), [filters]);
+  
+  const { data: buTransactions = [], isLoading: loadingBU } = useTransactionsByBU(
+    bu || '', buFilters
+  );
+  
+  const transactions = shouldUseBUFilter ? buTransactions : allTransactions;
+  const isLoading = shouldUseBUFilter ? loadingBU : loadingAll;
   
   // Closers R1
   const { data: closers = [] } = useGestorClosers('r1');
@@ -252,6 +270,9 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   // Calculate stats from filtered data (usando deduplicação consistente com Transações/Fechamento)
   const stats = useMemo(() => {
     const totalGross = filteredTransactions.reduce((sum, t) => {
+      if (shouldUseBUFilter) {
+        return sum + (t.product_price || t.net_value || 0);
+      }
       const isFirst = globalFirstIds.has(t.id);
       return sum + getDeduplicatedGross(t, isFirst);
     }, 0);
@@ -272,7 +293,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
       'Cliente': row.customer_name || '',
       'Email': row.customer_email || '',
       'Telefone': row.customer_phone || '',
-      'Valor Bruto': getDeduplicatedGross(row, globalFirstIds.has(row.id)),
+      'Valor Bruto': shouldUseBUFilter ? (row.product_price || row.net_value || 0) : getDeduplicatedGross(row, globalFirstIds.has(row.id)),
       'Valor Líquido': row.net_value || 0,
       'Parcela': row.installment_number ? `${row.installment_number}/${row.total_installments}` : '-',
       'Status': row.sale_status || '',

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAllHublaTransactions, TransactionFilters, HublaTransaction } from './useAllHublaTransactions';
+import { useTransactionsByBU } from './useTransactionsByBU';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 import { DateRange } from 'react-day-picker';
 import { BusinessUnit } from '@/hooks/useMyBU';
@@ -74,12 +75,27 @@ interface CloserRecord {
 }
 
 export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: BusinessUnit) {
+  const shouldUseBUFilter = bu && bu !== 'incorporador';
+
   // 1. Transactions
   const txFilters: TransactionFilters = useMemo(() => ({
     startDate: dateRange?.from,
     endDate: dateRange?.to,
   }), [dateRange]);
-  const { data: transactions = [], isLoading: loadingTx } = useAllHublaTransactions(txFilters);
+  const { data: allTransactions = [], isLoading: loadingAllTx } = useAllHublaTransactions(
+    shouldUseBUFilter ? { search: '__SKIP__' } : txFilters
+  );
+  
+  const buTxFilters: TransactionFilters = useMemo(() => ({
+    startDate: dateRange?.from,
+    endDate: dateRange?.to,
+  }), [dateRange]);
+  const { data: buTransactions = [], isLoading: loadingBUTx } = useTransactionsByBU(
+    bu || '', buTxFilters
+  );
+  
+  const transactions = shouldUseBUFilter ? buTransactions : allTransactions;
+  const loadingTx = shouldUseBUFilter ? loadingBUTx : loadingAllTx;
 
   // 2. Closers — fetch directly filtered by BU
   const { data: closers = [], isLoading: loadingClosers } = useQuery<CloserRecord[]>({
@@ -318,7 +334,7 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
         : (isAutomatic ? origin : 'Sem SDR');
       const channel = detectChannel(tx.product_name);
       const isFirst = globalFirstIds.has(tx.id);
-      const gross = getDeduplicatedGross(tx, isFirst);
+      const gross = shouldUseBUFilter ? (tx.product_price || tx.net_value || 0) : getDeduplicatedGross(tx, isFirst);
       const net = tx.net_value || 0;
 
       return { tx, closerName, sdrName, channel, origin, isOutside, gross, net };
