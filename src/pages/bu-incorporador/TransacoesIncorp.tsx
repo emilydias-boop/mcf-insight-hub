@@ -245,6 +245,53 @@ export default function TransacoesIncorp() {
     toast.success('Exportação concluída!');
   };
 
+  const handleExportParcerias = async () => {
+    toast.info('Buscando transações Parceria...');
+    const { data, error } = await supabase
+      .from('hubla_transactions')
+      .select('*')
+      .ilike('product_name', 'parceria')
+      .gte('sale_date', '2026-02-01')
+      .lt('sale_date', '2026-02-20')
+      .order('sale_date', { ascending: true });
+
+    if (error) {
+      toast.error('Erro ao buscar: ' + error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast.error('Nenhuma transação Parceria encontrada');
+      return;
+    }
+
+    const headers = ['Cliente', 'Email', 'Telefone', 'Data Venda', 'Valor Pago (Bruto Atual)', 'Valor Liquido', 'Parcela', 'Total Parcelas', 'Gross Override', 'Hubla ID', 'Produto Real', 'Bruto Correto', 'Observacoes'];
+    const rows = data.map((t: any) => [
+      t.customer_name || '',
+      t.customer_email || '',
+      t.customer_phone || '',
+      t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yyyy HH:mm') : '',
+      t.product_price?.toFixed(2) || '0',
+      t.net_value?.toFixed(2) || '0',
+      t.installment_number || '1',
+      t.total_installments || '1',
+      t.gross_override?.toFixed(2) || '',
+      t.hubla_id || t.id || '',
+      '', // Produto Real - vazio para preencher
+      '', // Bruto Correto - vazio para preencher
+      '', // Observações - vazio para preencher
+    ]);
+
+    const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `parcerias-fevereiro-2026.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${data.length} transações Parceria exportadas!`);
+  };
+
   // Reset página ao mudar filtros
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
@@ -321,6 +368,10 @@ export default function TransacoesIncorp() {
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="h-4 w-4 mr-2" />
               Exportar
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExportParcerias} className="border-amber-500 text-amber-700 hover:bg-amber-50">
+              <Download className="h-4 w-4 mr-2" />
+              Exportar Parcerias
             </Button>
           </div>
         </div>
