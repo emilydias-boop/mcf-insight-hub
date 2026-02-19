@@ -16,7 +16,6 @@ import { useTransactionsByBU } from '@/hooks/useTransactionsByBU';
 import { formatCurrency } from '@/lib/formatters';
 import * as XLSX from 'xlsx';
 import { BusinessUnit } from '@/hooks/useMyBU';
-import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
@@ -85,8 +84,25 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   const transactions = shouldUseBUFilter ? buTransactions : allTransactions;
   const isLoading = shouldUseBUFilter ? loadingBU : loadingAll;
   
-  // Closers R1
-  const { data: closers = [] } = useGestorClosers('r1');
+  // Closers R1 — mesma query do useAcquisitionReport (filtrada por BU)
+  const { data: closers = [] } = useQuery({
+    queryKey: ['acquisition-closers', bu],
+    queryFn: async () => {
+      let query = supabase
+        .from('closers')
+        .select('id, name, email, color, bu')
+        .eq('is_active', true)
+        .or('meeting_type.is.null,meeting_type.eq.r1');
+      if (bu) query = query.eq('bu', bu);
+      const { data, error } = await query.order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Set de IDs válidos de closers da BU para filtrar attendees
+  const closerIdSet = useMemo(() => new Set(closers.map(c => c.id)), [closers]);
   
   // Interface para origins
   interface OriginOption {
@@ -132,14 +148,13 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     crm_deals: { crm_contacts: { email: string | null; phone: string | null } | null } | null;
   }
 
-  // Attendees para matching com closers - busca TODOS os R1 no período (não apenas contract_paid)
+  // Attendees para matching com closers — mesma queryKey do useAcquisitionReport
   // Inclui lookback de 30 dias antes do período para capturar outsides
-  const { data: attendees = [] } = useQuery<AttendeeMatch[]>({
-    queryKey: ['attendees-for-sales-matching', dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
+  const { data: rawAttendees = [] } = useQuery<AttendeeMatch[]>({
+    queryKey: ['attendees-acquisition-sdr', dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     queryFn: async (): Promise<AttendeeMatch[]> => {
       if (!dateRange?.from) return [];
       
-      // Lookback de 30 dias antes do início do período para capturar outsides
       const lookbackDate = new Date(dateRange.from);
       lookbackDate.setDate(lookbackDate.getDate() - 30);
       const startDate = lookbackDate.toISOString();
@@ -148,7 +163,6 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
         ? new Date(new Date(dateRange.to).setHours(23, 59, 59, 999)).toISOString()
         : new Date(new Date(dateRange.from).setHours(23, 59, 59, 999)).toISOString();
       
-      // Buscar TODOS os attendees R1 no período com paginação para evitar limite de 1000 rows
       const allAttendees: AttendeeMatch[] = [];
       let offset = 0;
       const pageSize = 1000;
@@ -182,6 +196,15 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     },
     enabled: !!dateRange?.from,
   });
+
+  // Filtrar attendees: apenas os cujo closer pertence à BU ativa
+  const attendees = useMemo(() => {
+    if (!bu || closerIdSet.size === 0) return rawAttendees;
+    return rawAttendees.filter(a => {
+      const closerId = a.meeting_slots?.closer_id;
+      return closerId && closerIdSet.has(closerId);
+    });
+  }, [rawAttendees, bu, closerIdSet]);
   
   // Dados filtrados
   const filteredTransactions = useMemo(() => {
