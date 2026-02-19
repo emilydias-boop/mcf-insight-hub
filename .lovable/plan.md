@@ -1,36 +1,44 @@
 
-# Corrigir "Pendentes Hoje" no Painel Consorcio
 
-## Problema
+# Alinhar colunas da tabela Closer com a tabela SDR no Painel Consorcio
 
-O KPI "Pendentes Hoje" mostra **30** quando deveria mostrar **0** (a unica reuniao de consorcio hoje ja virou no-show).
+## Situacao atual
 
-O hook `useMeetingsPendentesHoje()` consulta `meeting_slot_attendees` sem nenhum filtro de BU/squad, contando pendentes de TODAS as Business Units (Incorporador, Consorcio, etc.).
+**SDR (correto):** SDR | Meta | Agendamento | R1 Agendada | R1 Realizada | No-show | Proposta Env. | Taxa Venda | Taxa Conv.
 
-## Solucao
+**Closer (atual):** Closer | R1 Agendada | Outside | R1 Realizada | No-show | Taxa No-Show | Contrato Pago | R2 Agendada | Taxa Conv.
 
-Calcular "Pendentes Hoje" a partir dos dados ja filtrados por squad que vem de `useTeamMeetingsData(squad='consorcio')`:
+## Objetivo
 
-```
-pendentesConsorcio = dayKPIs.totalR1Agendada - dayKPIs.totalRealizadas - dayKPIs.totalNoShows
-```
+Closer deve mostrar as mesmas colunas que SDR:
+**Closer | R1 Agendada | R1 Realizada | No-show | Proposta Env. | Contrato Pago | Taxa Venda | Taxa Conv.**
 
-Para hoje: `1 - 0 - 1 = 0` pendentes (correto).
+Nota: "Meta" e "Agendamento" nao se aplicam a closers (sao metricas de produtividade SDR). "Outside", "Taxa No-Show" e "R2 Agendada" serao removidos. "Proposta Env." e "Taxa Venda" (Contratos/Realizadas) serao adicionados.
 
 ## Detalhes tecnicos
 
-### Arquivo: `src/pages/bu-consorcio/PainelEquipe.tsx`
+### Criar componente `ConsorcioCloserSummaryTable` 
 
-1. **Remover import** de `useMeetingsPendentesHoje` (linha 40)
-2. **Remover chamada** `const { data: pendentesHoje } = useMeetingsPendentesHoje()` (linha 280)
-3. **Remover** `const dayPendentes = pendentesHoje ?? 0` (linha 408)
-4. **Calcular pendentes filtrado** a partir de `dayKPIs`:
-```tsx
-const pendentesHojeConsorcio = Math.max(0,
-  (dayKPIs?.totalR1Agendada || 0) - (dayKPIs?.totalRealizadas || 0) - (dayKPIs?.totalNoShows || 0)
-);
-```
-5. **Passar valor correto** ao `TeamKPICards`:
-```tsx
-pendentesHoje={pendentesHojeConsorcio}
-```
+Novo arquivo: `src/components/sdr/ConsorcioCloserSummaryTable.tsx`
+
+Colunas:
+- Closer (nome)
+- R1 Agendada (badge azul)
+- R1 Realizada (verde)
+- No-show (vermelho, com % entre parenteses)
+- Proposta Env. (badge roxo - recebido via props, dados do pipeline)
+- Contrato Pago (amber)
+- Taxa Venda (Contratos / Realizadas x 100)
+- Taxa Conv. (Realizadas / Agendadas x 100)
+- Chevron de navegacao
+
+Props: aceitar `propostasEnviadasByCloser` (Map de closer_id para contagem de propostas).
+
+### Atualizar `PainelEquipe.tsx`
+
+1. Importar `ConsorcioCloserSummaryTable` no lugar de `CloserSummaryTable`
+2. Calcular `propostasEnviadasByCloser` a partir dos dados de pipeline (deals na stage de "Proposta Enviada" agrupados por closer)
+3. Passar os dados para o novo componente
+
+O componente CloserSummaryTable original nao sera alterado (e usado por outras BUs).
+
