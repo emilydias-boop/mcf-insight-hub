@@ -13,7 +13,8 @@ import {
   Trash2,
   Settings,
   Search,
-  RefreshCw
+  RefreshCw,
+  Copy
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -146,6 +147,7 @@ export default function ConsorcioPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [configOpen, setConfigOpen] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [duplicatingCard, setDuplicatingCard] = useState<Partial<ConsorcioCard> | null>(null);
 
   const { data: employees } = useConsorcioEmployees();
   const { data: tipoOptions = [] } = useConsorcioTipoOptions();
@@ -244,6 +246,61 @@ export default function ConsorcioPage() {
 
   const handleDeleteCard = async (cardId: string) => {
     await deleteCard.mutateAsync(cardId);
+  };
+
+  const handleDuplicateCard = (card: ConsorcioCard) => {
+    const personalData: Partial<ConsorcioCard> = {
+      tipo_pessoa: card.tipo_pessoa,
+      categoria: card.categoria,
+      origem: card.origem,
+      origem_detalhe: card.origem_detalhe,
+      vendedor_id: card.vendedor_id,
+      vendedor_name: card.vendedor_name,
+      tipo_produto: card.tipo_produto,
+      observacoes: card.observacoes,
+      // PF
+      nome_completo: card.nome_completo,
+      cpf: card.cpf,
+      rg: card.rg,
+      data_nascimento: card.data_nascimento,
+      estado_civil: card.estado_civil,
+      cpf_conjuge: card.cpf_conjuge,
+      endereco_cep: card.endereco_cep,
+      endereco_rua: card.endereco_rua,
+      endereco_numero: card.endereco_numero,
+      endereco_complemento: card.endereco_complemento,
+      endereco_bairro: card.endereco_bairro,
+      endereco_cidade: card.endereco_cidade,
+      endereco_estado: card.endereco_estado,
+      telefone: card.telefone,
+      email: card.email,
+      profissao: card.profissao,
+      tipo_servidor: card.tipo_servidor,
+      renda: card.renda,
+      patrimonio: card.patrimonio,
+      pix: card.pix,
+      // PJ
+      razao_social: card.razao_social,
+      cnpj: card.cnpj,
+      natureza_juridica: card.natureza_juridica,
+      inscricao_estadual: card.inscricao_estadual,
+      data_fundacao: card.data_fundacao,
+      endereco_comercial_cep: card.endereco_comercial_cep,
+      endereco_comercial_rua: card.endereco_comercial_rua,
+      endereco_comercial_numero: card.endereco_comercial_numero,
+      endereco_comercial_complemento: card.endereco_comercial_complemento,
+      endereco_comercial_bairro: card.endereco_comercial_bairro,
+      endereco_comercial_cidade: card.endereco_comercial_cidade,
+      endereco_comercial_estado: card.endereco_comercial_estado,
+      telefone_comercial: card.telefone_comercial,
+      email_comercial: card.email_comercial,
+      faturamento_mensal: card.faturamento_mensal,
+      num_funcionarios: card.num_funcionarios,
+      e_transferencia: card.e_transferencia,
+      transferido_de: card.transferido_de,
+    };
+    setDuplicatingCard(personalData);
+    setFormOpen(true);
   };
 
   const handleExportCSV = () => {
@@ -647,6 +704,17 @@ export default function ConsorcioPage() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            title="Duplicar carta"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicateCard(card);
+                            }}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button 
@@ -763,9 +831,13 @@ export default function ConsorcioPage() {
         open={formOpen} 
         onOpenChange={(open) => {
           setFormOpen(open);
-          if (!open) setEditingCard(null);
+          if (!open) {
+            setEditingCard(null);
+            setDuplicatingCard(null);
+          }
         }}
         card={editingCard}
+        duplicateFrom={duplicatingCard}
       />
 
       {/* Details Drawer */}
