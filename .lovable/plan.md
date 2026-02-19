@@ -1,38 +1,42 @@
 
-# Correcao: Erro ao criar carta de consorcio
+# Corrigir filtro de BU no relatório de Vendas (Faturamento por Closer)
 
-## Diagnostico
+## Problema
+Victoria Paz e Joao Pedro (closers da BU Consorcio) estao aparecendo no relatorio de Vendas do Incorporador. Isso acontece porque a pagina `/bu-incorporador/relatorios` nao usa o `BUProvider`, entao o hook `useGestorClosers` nao consegue identificar a BU ativa e retorna closers de todas as BUs.
 
-O erro nos logs do Postgres e claro:
-
-```
-insert or update on table "consortium_cards" violates foreign key constraint "consortium_cards_vendedor_id_fkey"
-```
-
-**Causa raiz:** A coluna `vendedor_id` na tabela `consortium_cards` tem uma foreign key apontando para a tabela `profiles`. Porem, o formulario envia IDs da tabela `consorcio_vendedor_options` (tabela de configuracao de vendedores). Esses IDs sao UUIDs diferentes e nao existem em `profiles`, causando a violacao de FK.
-
-Exemplo:
-- ID do vendedor "Joao Pedro" em `consorcio_vendedor_options`: `0789a02a-a280-4965-814f-ff9bef58720c`
-- Esse ID nao existe na tabela `profiles`, entao o INSERT falha
+## Causa raiz
+1. `IncorporadorRelatorios` passa `bu="incorporador"` para `BUReportCenter`
+2. `BUReportCenter` passa `bu` para `SalesReportPanel`
+3. `SalesReportPanel` recebe `bu` mas chama `useGestorClosers('r1')` sem informar a BU
+4. `useGestorClosers` usa `useActiveBU()` que, sem `BUProvider`, retorna null ou a BU do perfil do usuario
+5. Para admin, `activeBU` pode ser null, entao nenhum filtro de BU e aplicado e closers de todas as BUs sao retornados
 
 ## Solucao
+Envolver o conteudo do `BUReportCenter` com o `BUProvider` para que todos os hooks filhos (incluindo `useGestorClosers`) identifiquem automaticamente a BU ativa.
 
-Remover a foreign key constraint `consortium_cards_vendedor_id_fkey` que liga `vendedor_id` a `profiles`. A coluna continua como UUID nullable, mas sem a restricao que impede o uso dos IDs de `consorcio_vendedor_options`.
+## Detalhes tecnicos
 
-## Detalhes Tecnicos
+### Arquivo: `src/components/relatorios/BUReportCenter.tsx`
 
-### Migracao SQL
+Adicionar o `BUProvider` envolvendo todo o conteudo do componente:
 
-```sql
-ALTER TABLE consortium_cards 
-DROP CONSTRAINT consortium_cards_vendedor_id_fkey;
+```tsx
+import { BUProvider } from '@/contexts/BUContext';
+
+export function BUReportCenter({ bu, availableReports }: BUReportCenterProps) {
+  return (
+    <BUProvider bu={bu} basePath={`/bu-${bu}/relatorios`}>
+      {/* conteudo existente */}
+    </BUProvider>
+  );
+}
 ```
 
-Isso e seguro porque:
-- A coluna `vendedor_id` ja e nullable (nao quebra dados existentes)
-- O campo `vendedor_name` continua guardando o nome como texto (redundancia util)
-- Nenhum outro codigo depende dessa FK para JOINs com `profiles`
-- A tabela `consorcio_vendedor_options` e a fonte correta desses IDs
+Isso garante que:
+- `useActiveBU()` retorne `"incorporador"` dentro de todos os paineis de relatorio
+- `useGestorClosers` filtre automaticamente por `bu = 'incorporador'`
+- Victoria Paz e Joao Pedro (bu = consorcio) sejam excluidos
+- Funciona para todas as BUs, nao apenas Incorporador
 
-### Nenhuma mudanca no frontend
-O formulario ja funciona corretamente - o problema e exclusivamente a constraint no banco.
+### Nenhuma outra mudanca necessaria
+O `useGestorClosers` ja tem a logica de filtro por BU (linha 36-38). So falta o contexto ser fornecido corretamente.
