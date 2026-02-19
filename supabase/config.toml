@@ -269,3 +269,6 @@ verify_jwt = false
 
 [functions.process-deal-replication]
 verify_jwt = false
+
+[functions.backfill-construir-alugar]
+verify_jwt = false
