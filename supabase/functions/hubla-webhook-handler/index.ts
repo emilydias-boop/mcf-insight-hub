@@ -992,16 +992,19 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
 
 // ============= CONSÓRCIO: Configuração e Função de Criação de Deals =============
 const CONSORCIO_ORIGIN_ID = '7d7b1cb5-2a44-4552-9eff-c3b798646b78';
+const VIVER_ALUGUEL_ORIGIN_ID = '4e2b810a-6782-4ce9-9c0d-10d04c018636';
 const STAGE_CLUBE_ARREMATE = 'bf370a4f-1476-4933-8c70-01a38cfdb34f';
 const STAGE_RENOVACAO_HUBLA = '3e545cd2-4214-4510-9ec4-dfcc6eccede8';
+const STAGE_VIVER_ALUGUEL_NOVO_LEAD = '2c69bf1d-94d5-4b6d-928d-dcf12da2d78c';
 
 const CONSORCIO_STAGE_MAP: Record<string, string> = {
   'clube_arremate': STAGE_CLUBE_ARREMATE,
   'contrato_clube_arremate': STAGE_CLUBE_ARREMATE,
   'renovacao': STAGE_RENOVACAO_HUBLA,
+  'ob_construir_alugar': STAGE_VIVER_ALUGUEL_NOVO_LEAD,
 };
 
-const CONSORCIO_PRODUCT_CATEGORIES = ['clube_arremate', 'contrato_clube_arremate', 'renovacao'];
+const CONSORCIO_PRODUCT_CATEGORIES = ['clube_arremate', 'contrato_clube_arremate', 'renovacao', 'ob_construir_alugar'];
 
 interface ConsorcioDealData {
   email: string | null;
@@ -1064,6 +1067,11 @@ async function createDealForConsorcioProduct(supabase: any, data: ConsorcioDealD
       }
     }
     
+    // Determinar origin_id correto baseado na categoria
+    const originId = data.productCategory === 'ob_construir_alugar' 
+      ? VIVER_ALUGUEL_ORIGIN_ID 
+      : CONSORCIO_ORIGIN_ID;
+    
     // 4. Se não encontrou, criar novo contato
     if (!contactId) {
       const { data: newContact, error: contactError } = await supabase
@@ -1073,8 +1081,10 @@ async function createDealForConsorcioProduct(supabase: any, data: ConsorcioDealD
           name: data.name || 'Cliente Consórcio',
           email: data.email,
           phone: normalizedPhone,
-          origin_id: CONSORCIO_ORIGIN_ID,
-          tags: [data.productCategory, 'Hubla', 'Consórcio'],
+          origin_id: originId,
+          tags: data.productCategory === 'ob_construir_alugar' 
+            ? ['Construir-Alugar', 'Hubla'] 
+            : [data.productCategory, 'Hubla', 'Consórcio'],
           custom_fields: { source: 'hubla_consorcio', product: data.productName }
         })
         .select('id')
@@ -1101,6 +1111,7 @@ async function createDealForConsorcioProduct(supabase: any, data: ConsorcioDealD
       .select('id, origin_id, name')
       .eq('contact_id', contactId)
       .neq('origin_id', CONSORCIO_ORIGIN_ID)
+      .neq('origin_id', VIVER_ALUGUEL_ORIGIN_ID)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -1110,12 +1121,12 @@ async function createDealForConsorcioProduct(supabase: any, data: ConsorcioDealD
       console.log(`🏦 [CONSÓRCIO] Deal existente para vincular: ${linkedDealId} (${existingDeal.name})`);
     }
     
-    // 6. Verificar se já existe deal no pipeline Consórcio para evitar duplicação
+    // 6. Verificar se já existe deal no pipeline correto para evitar duplicação
     const { data: dealInConsorcio } = await supabase
       .from('crm_deals')
       .select('id, custom_fields, tags, value')
       .eq('contact_id', contactId)
-      .eq('origin_id', CONSORCIO_ORIGIN_ID)
+      .eq('origin_id', originId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -1156,7 +1167,7 @@ async function createDealForConsorcioProduct(supabase: any, data: ConsorcioDealD
       name: `${data.name || 'Cliente'} - ${data.productName}`,
       value: data.value || 0,
       contact_id: contactId,
-      origin_id: CONSORCIO_ORIGIN_ID,
+      origin_id: originId,
       stage_id: stageId,
       product_name: data.productName,
       tags: [data.productCategory.replace(/_/g, '-'), 'Hubla', 'Consórcio'],
