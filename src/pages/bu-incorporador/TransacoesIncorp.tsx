@@ -186,15 +186,14 @@ export default function TransacoesIncorp() {
   const totals = useMemo(() => {
     let bruto = 0;
     let liquido = 0;
-    
-    filteredByCloser.forEach(t => {
-      const isFirst = globalFirstIds.has(t.id);
-      bruto += getDeduplicatedGross(t, isFirst);
-      liquido += t.net_value || 0;
+
+    transactionGroups.forEach(group => {
+      bruto += group.totalGross;
+      liquido += group.totalNet;
     });
-    
+
     return { count: filteredByCloser.length, bruto, liquido };
-  }, [filteredByCloser, globalFirstIds]);
+  }, [transactionGroups, filteredByCloser]);
 
   // Handlers
   const handleRefresh = async () => {
