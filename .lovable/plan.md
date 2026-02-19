@@ -1,32 +1,65 @@
 
+# Corrigir Contagem Duplicada de Liquido em Grupos com Order Bumps
 
-# Deletar Transacao Fantasma do Olavo Vilela
+## Problema Identificado
 
-## Problema
+Quando a Hubla envia uma compra com multiplos itens (offers), ela cria:
+- **Main** (hubla_id base): Valor total do carrinho (net = soma de todos os offers)
+- **Offer-1, Offer-2, etc.**: Itens individuais com seus net values proprios
 
-A transacao com id `09cacf20-57f8-47c0-ac3c-0a99f8b06290` foi inserida pelo webhook Make como uma venda A009 do Olavo Vilela, mas essa venda **nao existe na Hubla**. Conforme a captura de tela, ele so tem 3 faturas (A004, A000, Imersao).
+O sistema esta somando o net do main + net dos offers, causando **duplicacao do valor liquido**.
 
-### Dados da transacao fantasma:
-- **ID:** `09cacf20-57f8-47c0-ac3c-0a99f8b06290`
-- **Source:** `make`
-- **Hubla ID:** `make_parceria_1770141755906_olavovilel`
-- **Produto:** A009 - MCF INCORPORADOR COMPLETO + THE CLUB
-- **Net value:** R$ 143.355 (claramente incorreto)
-- **Gross override:** R$ 19.500
-- **Product price:** R$ 1.000
+### Exemplo concreto (Breno Salgado):
+- Main A009: net R$ 16.501,52 (= carrinho total)
+- Offer-1 A009: net R$ 15.325,03
+- Offer-2 Clube: net R$ 1.176,49
+- **Soma dos offers = R$ 16.501,52** (igual ao main!)
+- **Sistema mostra:** R$ 31.826,55 (main + offer-1, pois offer-2 esta filtrado por categoria)
 
-## Acao
+## Solucao
 
-Deletar esta unica transacao do banco de dados:
+### 1. Alterar `groupTransactionsByPurchase` em `TransactionGroupRow.tsx`
 
-```sql
-DELETE FROM hubla_transactions 
-WHERE id = '09cacf20-57f8-47c0-ac3c-0a99f8b06290';
+Quando um grupo tem offers (order bumps), **excluir o net_value do main** do calculo de `totalNet`, pois o main ja e a soma dos offers.
+
+Logica:
+- Se o grupo tem orderBumps, o `totalNet` deve somar apenas os nets dos offers (que sao o detalhamento)
+- Se o grupo nao tem orderBumps, usar o net do main normalmente
+
+Na pratica, a mudanca e: ao calcular `totalNet`, se a transacao e o main E existem offers no grupo, nao somar o net do main.
+
+### 2. Ajustar calculo do Bruto no grupo
+
+Mesma logica para o bruto: o main tem `product_price = 20.997` (carrinho total), mas o bruto deveria ser baseado apenas no produto principal (A009 = R$ 19.500). Como os offers ja tem os precos individuais corretos, usar os offers para o calculo de bruto quando existirem.
+
+### 3. Impacto no Liquido Total da pagina
+
+O card "Liquido Total" usa a soma dos `totalNet` de todos os grupos, entao sera automaticamente corrigido.
+
+## Detalhes Tecnicos
+
+### Arquivo: `src/components/incorporador/TransactionGroupRow.tsx`
+
+Na funcao `groupTransactionsByPurchase` (linhas 333-387), alterar a logica de soma:
+
+```text
+ANTES:
+  group.totalNet += tx.net_value || 0;  // Soma TUDO
+
+DEPOIS:
+  // Ao final do agrupamento, recalcular totalNet:
+  // Se grupo tem offers, somar apenas os nets dos offers
+  // Se nao tem offers, usar o net do main
 ```
 
-## Impacto
+Implementacao em duas fases:
+1. Primeira passagem: agrupar normalmente (como hoje)
+2. Segunda passagem: para cada grupo com orderBumps, recalcular `totalNet` = soma dos nets dos offers (excluindo o main)
 
-- Remove R$ 143.355 de valor liquido fantasma dos relatorios
-- Remove R$ 19.500 de faturamento bruto fantasma
-- Nenhuma outra transacao do Olavo Vilela e afetada (as 3 reais permanecem)
+Para o bruto, mesma abordagem: recalcular `totalGross` usando apenas os offers quando existirem, para evitar o preco inflado do carrinho total.
 
+## Resultado Esperado
+
+- Breno Salgado: Liquido do grupo A009 passara de R$ 31.826,55 para R$ 16.501,52 (ou soma dos offers visiveis)
+- Bruto Total corrigido proporcionalmente
+- Todos os outros clientes com order bumps tambem serao corrigidos automaticamente
