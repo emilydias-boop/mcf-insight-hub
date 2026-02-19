@@ -28,7 +28,7 @@ import { Target, Settings2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConsorcioSdrSummaryTable } from "@/components/sdr/ConsorcioSdrSummaryTable";
 import { useConsorcioPipelineMetricsBySdr } from "@/hooks/useConsorcioPipelineMetricsBySdr";
-import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
+import { ConsorcioCloserSummaryTable } from "@/components/sdr/ConsorcioCloserSummaryTable";
 import { PipelineSelector } from "@/components/crm/PipelineSelector";
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
@@ -735,9 +735,10 @@ export default function ConsorcioPainelEquipe() {
               propostasEnviadasBySdr={propostasData}
             />
           ) : (
-            <CloserSummaryTable
+            <ConsorcioCloserSummaryTable
               data={closerMetrics}
               isLoading={closerLoading}
+              propostasEnviadasByCloser={propostasData}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
                 const params = new URLSearchParams();
                 params.set("preset", datePreset);
