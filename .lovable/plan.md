@@ -1,33 +1,38 @@
 
 
-# Deletar Registro Duplicado do Make - Julio Cesar del Nero
+# Duplicar Pessoa para Nova Carta de Consorcio
 
-## Acao
-Deletar permanentemente o registro com ID `1cdcdf3e-4773-4764-a47d-4a6b3778f134` da tabela `hubla_transactions`.
+## Objetivo
+Adicionar um botao "Duplicar" na coluna de acoes de cada carta na tabela de consorcio. Ao clicar, o formulario de nova carta abre pre-preenchido com todos os dados pessoais (PF ou PJ) da carta selecionada, permitindo criar rapidamente uma nova carta para a mesma pessoa.
 
-## Registro a ser deletado
+## Como vai funcionar
 
-| Campo | Valor |
-|-------|-------|
-| ID | 1cdcdf3e-4773-4764-a47d-4a6b3778f134 |
-| Cliente | Julio Cesar del Nero |
-| Produto (errado) | A009 - MCF INCORPORADOR COMPLETO + THE CLUB |
-| Bruto | R$ 19.500 |
-| Liquido | R$ 16.245 |
-| Source | make |
-| Hubla ID | make_parceria_1770931038984_juliodelne |
+1. Um novo icone de "Copiar" aparece na coluna "Acoes" de cada linha, ao lado dos botoes existentes (Visualizar, Editar, Excluir)
+2. Ao clicar, o formulario "Adicionar Cota" abre com os dados pessoais copiados
+3. Campos da cota (grupo, cota, valor credito, data contratacao, etc.) ficam vazios para preenchimento
+4. Campos pessoais ja vem preenchidos (nome, CPF, endereco, telefone, email, etc.)
 
-## Motivo
-O webhook Make mapeou incorretamente a compra como A009 (R$ 19.500), quando o cliente adquiriu apenas A001 (R$ 14.500) + order bumps. Os registros corretos ja existem via Hubla.
+## Campos que serao copiados
 
-## Implementacao Tecnica
-Executar um `DELETE` direto na tabela `hubla_transactions` usando o ID do registro.
+**PF**: nome_completo, cpf, rg, data_nascimento, estado_civil, cpf_conjuge, endereco completo, telefone, email, profissao, tipo_servidor, renda, patrimonio, pix
 
-```text
-DELETE FROM hubla_transactions WHERE id = '1cdcdf3e-4773-4764-a47d-4a6b3778f134';
-```
+**PJ**: razao_social, cnpj, natureza_juridica, inscricao_estadual, data_fundacao, endereco comercial completo, telefone_comercial, email_comercial, faturamento_mensal, num_funcionarios
 
-## Impacto
-- Remove R$ 19.500 de bruto e R$ 16.245 de liquido dos totais
-- Os registros corretos da Hubla (A001 + bumps) permanecem intactos
+**Outros copiados**: tipo_pessoa, categoria, origem, vendedor, tipo_produto, observacoes
+
+## Campos que NAO serao copiados (ficam em branco)
+grupo, cota, valor_credito, prazo_meses, data_contratacao, dia_vencimento, parcelas_pagas_empresa, tipo_contrato, valor_comissao
+
+## Detalhes Tecnicos
+
+### Arquivo: `src/pages/bu-consorcio/Index.tsx`
+- Adicionar novo estado `duplicatingCard` (similar ao `editingCard`)
+- Criar funcao `handleDuplicateCard(card)` que monta um objeto parcial com os dados pessoais
+- Adicionar botao com icone `Copy` na coluna de acoes
+- Passar o card "duplicado" para o `ConsorcioCardForm` sem o `id` (para que seja tratado como criacao, nao edicao)
+
+### Arquivo: `src/components/consorcio/ConsorcioCardForm.tsx`
+- Adicionar nova prop opcional `duplicateFrom?: ConsorcioCard | null`
+- Quando `duplicateFrom` esta presente (e `card` nao), o formulario abre em modo criacao mas com os campos pessoais pre-preenchidos
+- O titulo do dialog mostra "Duplicar Carta" ao inves de "Nova Carta"
 
