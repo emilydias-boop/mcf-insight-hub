@@ -71,7 +71,27 @@ export function CloserRevenueSummaryTable({
 }: CloserRevenueSummaryTableProps) {
   const [selectedCloser, setSelectedCloser] = useState<{ id: string; name: string } | null>(null);
 
+  // Categorias que pertencem a outras BUs e não devem aparecer no Incorporador
+  const EXCLUDED_FROM_INCORPORADOR = new Set([
+    'clube_arremate',
+    'projetos',
+    'ob_construir_alugar',
+    'imersao',
+    'ob_construir',
+    'imersao_socios',
+    'efeito_alavanca',
+    'consorcio',
+    'credito',
+    'formacao',
+    'socios',
+  ]);
+
   const { summaryData, closerTransactionsMap } = useMemo(() => {
+    // Filtrar transações que não pertencem à BU Incorporador
+    const filteredTxs = transactions.filter(tx => 
+      !EXCLUDED_FROM_INCORPORADOR.has(tx.product_category || '')
+    );
+
     // Build contact map with earliest scheduled_at per closer+contact
     const closerContactMap = new Map<string, { emails: Set<string>; phones: Set<string> }>();
     // Map: closerId -> email/phone -> earliest scheduled_at
@@ -132,7 +152,7 @@ export function CloserRevenueSummaryTable({
     let vitalicio: CloserRow = { id: '__vitalicio__', name: 'Vitalício', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
     const vitalicioTxs: Transaction[] = [];
     
-    for (const tx of transactions) {
+    for (const tx of filteredTxs) {
       const txEmail = (tx.customer_email || '').toLowerCase();
       const txPhone = phoneSuffix(tx.customer_phone);
       const isFirst = globalFirstIds.has(tx.id);
