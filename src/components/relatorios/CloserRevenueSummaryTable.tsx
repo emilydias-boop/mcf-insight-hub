@@ -71,26 +71,24 @@ export function CloserRevenueSummaryTable({
 }: CloserRevenueSummaryTableProps) {
   const [selectedCloser, setSelectedCloser] = useState<{ id: string; name: string } | null>(null);
 
-  // Categorias que pertencem a outras BUs e não devem aparecer no Incorporador
-  const EXCLUDED_FROM_INCORPORADOR = new Set([
-    'clube_arremate',
-    'projetos',
-    'ob_construir_alugar',
-    'imersao',
-    'ob_construir',
-    'imersao_socios',
-    'efeito_alavanca',
-    'consorcio',
-    'credito',
-    'formacao',
-    'socios',
+  // Categorias permitidas da BU Incorporador (allowlist)
+  const ALLOWED_INCORPORADOR_CATEGORIES = new Set([
+    'contrato',
+    'incorporador',
+    'parceria',
+    'a010',
+    'renovacao',
+    'ob_vitalicio',
+    'contrato-anticrise',
+    'p2',
   ]);
 
   const { summaryData, closerTransactionsMap } = useMemo(() => {
-    // Filtrar transações que não pertencem à BU Incorporador
-    const filteredTxs = transactions.filter(tx => 
-      !EXCLUDED_FROM_INCORPORADOR.has(tx.product_category || '')
-    );
+    // Filtrar apenas transações que pertencem à BU Incorporador
+    const filteredTxs = transactions.filter(tx => {
+      const cat = tx.product_category || '';
+      return ALLOWED_INCORPORADOR_CATEGORIES.has(cat) || cat === '';
+    });
 
     // Build contact map with earliest scheduled_at per closer+contact
     const closerContactMap = new Map<string, { emails: Set<string>; phones: Set<string> }>();
