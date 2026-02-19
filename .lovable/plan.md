@@ -1,65 +1,85 @@
 
-# Corrigir filtro de categorias que nao esta sendo aplicado
 
-## Diagnostico
+# Corrigir deal duplicado do Kayo — vincular R1 ao deal da Juliana
 
-O codigo do filtro esta correto sintaticamente, mas ha um problema tecnico: a constante `ALLOWED_INCORPORADOR_CATEGORIES` esta definida **dentro** do corpo do componente (recriada a cada render), porem o `useMemo` que a utiliza tem como dependencias apenas `[transactions, closers, attendees, globalFirstIds]`. 
+## Situacao atual
 
-Alem disso, o filtro so se aplica quando `bu === 'incorporador'`, mas atualmente ele filtra **sempre**, mesmo para outras BUs. Precisamos condicionar o filtro a BU.
+O lead Kayo possui **2 deals** na mesma pipeline INSIDE SALES:
 
-O problema principal e que o componente `CloserRevenueSummaryTable` nao recebe a prop `bu`, entao nao sabe quando aplicar o filtro. Como o filtro esta sendo aplicado incondicionalmente e o Set esta correto, a causa real e provavelmente que a **preview nao recarregou** o componente apos a ultima edicao.
+```text
+Deal da Juliana (91dd2342) - "Novo Lead" - criado 13:58
+Deal da Caroline (fe454fec) - "Reuniao 01 Agendada" - criado 13:49
+```
 
-## Solucao
+A Juliana agendou a R1 com o closer Mateus Macedo, porem o meeting ficou vinculado ao deal da Caroline (o mais antigo). O deal da Juliana, que e o correto, permanece parado em "Novo Lead".
 
-1. **Mover a constante para fora do componente** (nivel de modulo) para garantir estabilidade e evitar recriacao desnecessaria.
+## Correcao necessaria (SQL)
 
-2. **Passar a prop `bu` para o `CloserRevenueSummaryTable`** e condicionar o filtro: so aplicar quando `bu === 'incorporador'`.
+Executar 3 comandos no SQL Editor do Supabase:
 
-3. **Adicionar um `console.log` temporario** para debug, confirmando quantas transacoes sao filtradas (remover depois).
+**1. Mover o meeting para o deal da Juliana:**
 
-## Detalhes tecnicos
+```sql
+UPDATE meeting_slot_attendees
+SET deal_id = '91dd2342-f23d-4550-b4f7-2f7d99b79e54'
+WHERE id = '48574cdf-6984-4b89-b857-3fe1a9853e6e';
+```
 
-### Arquivo: `src/components/relatorios/CloserRevenueSummaryTable.tsx`
+**2. Atualizar o stage do deal da Juliana para "Reuniao 01 Agendada":**
 
-- Mover `ALLOWED_INCORPORADOR_CATEGORIES` para fora do componente (constante de modulo)
-- Adicionar prop `bu?: string` na interface do componente
-- Condicionar o filtro: `if (bu === 'incorporador')` aplicar allowlist, caso contrario usar todas as transacoes
+```sql
+UPDATE crm_deals
+SET stage_id = 'a8365215-fd31-4bdc-bbe7-77100fa39e53',
+    stage_moved_at = NOW(),
+    updated_at = NOW()
+WHERE id = '91dd2342-f23d-4550-b4f7-2f7d99b79e54';
+```
+
+**3. Marcar o deal da Caroline como Perdido (duplicata):**
+
+```sql
+UPDATE crm_deals
+SET stage_id = 'e7e92406-998d-4554-bfd0-770d9857df4a',
+    stage_moved_at = NOW(),
+    updated_at = NOW()
+WHERE id = 'fe454fec-306e-4150-9fc7-c8cb34618926';
+```
+
+## Prevencao futura
+
+Alem da correcao manual, atualizar o webhook `webhook-lead-receiver` para impedir criacao de deals duplicados quando ja existe um deal ativo para o mesmo contato na mesma pipeline criado recentemente (janela de 24h). Isso evita que o mesmo lead entre duas vezes por timing de webhooks.
+
+### Arquivo: `supabase/functions/webhook-lead-receiver/index.ts`
+
+Antes da insercao do deal, adicionar verificacao:
 
 ```typescript
-// No topo do arquivo (fora do componente)
-const ALLOWED_INCORPORADOR_CATEGORIES = new Set([
-  'contrato', 'incorporador', 'parceria', 'a010',
-  'renovacao', 'ob_vitalicio', 'contrato-anticrise', 'p2',
-]);
+// Verificar deal duplicado recente (mesma pipeline, mesmo contato, ultimas 24h)
+const { data: recentDeal } = await supabase
+  .from('crm_deals')
+  .select('id')
+  .eq('contact_id', contactId)
+  .eq('origin_id', originId)
+  .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+  .maybeSingle();
 
-// Dentro do useMemo
-const filteredTxs = bu === 'incorporador'
-  ? transactions.filter(tx => {
-      const cat = tx.product_category || '';
-      return ALLOWED_INCORPORADOR_CATEGORIES.has(cat) || cat === '';
-    })
-  : transactions;
+if (recentDeal) {
+  console.log('[WEBHOOK] Deal duplicado detectado, ignorando:', recentDeal.id);
+  return new Response(JSON.stringify({
+    success: true,
+    action: 'skipped',
+    reason: 'duplicate_deal_recent',
+    existing_deal_id: recentDeal.id,
+  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+}
 ```
 
-### Arquivo: `src/components/relatorios/SalesReportPanel.tsx`
+### Arquivo: `supabase/functions/webhook-live-leads/index.ts`
 
-- Passar a prop `bu` ao componente `CloserRevenueSummaryTable`:
+A mesma verificacao ja existe parcialmente (checa `contact_id` + `origin_id`), mas sem janela de tempo. O codigo atual ja previne duplicatas para LIVE leads.
 
-```tsx
-<CloserRevenueSummaryTable
-  transactions={filteredTransactions as any}
-  closers={closers}
-  attendees={attendees as any}
-  globalFirstIds={globalFirstIds}
-  isLoading={isLoading}
-  startDate={dateRange?.from}
-  endDate={dateRange?.to}
-  bu={bu}
-/>
-```
+## Resultado esperado
 
-### Resultado esperado
-
-- O filtro de allowlist sera aplicado apenas para a BU Incorporador
-- A constante sera estavel no nivel do modulo (sem recriacao)
-- O "Sem Closer" devera cair de 43 para aproximadamente 33 (excluindo as 10 transacoes de `ob_evento`)
+- O deal da Juliana (`91dd2342`) passa para "Reuniao 01 Agendada" com o meeting R1 vinculado
+- O deal da Caroline (`fe454fec`) e marcado como Perdido
+- Futuros webhooks duplicados sao bloqueados automaticamente pela janela de 24h
