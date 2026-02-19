@@ -1,55 +1,69 @@
 
-# Backfill Retroativo - Leads "Construir para Alugar" nos ultimos 15 dias
+# Distribuicao de Leads via Clint Webhook
 
-## Situacao Atual
-- **152 compradores unicos** de "Construir para Alugar" desde 04/02/2026
-- **Nenhum** possui deal no pipeline "INSIDE SALES - VIVER DE ALUGUEL"
-- A automacao foi implantada hoje, entao todas as compras anteriores ficaram sem deal no CRM
+## Problema
+O `clint-webhook-handler` recebe ~85% dos leads mas ignora a configuracao de distribuicao da tela. Ele usa diretamente o `deal_user` (email) que vem do Clint, por isso o Robert nunca recebe leads.
 
 ## Solucao
-Criar uma Edge Function temporaria `backfill-construir-alugar` que:
+Modificar a funcao `handleDealCreated` no `clint-webhook-handler` para consultar a tabela `lead_distribution_config` antes de definir o owner. Se houver distribuicao ativa para aquela origin, usar `get_next_lead_owner()` em vez do owner do Clint.
 
-1. Busca todos os compradores unicos de `hubla_transactions` com categoria `ob_construir_alugar` ou `ob_construir` desde 04/02
-2. Para cada comprador:
-   - Verifica se ja existe contato no CRM (por email ou telefone)
-   - Se nao existe, cria novo contato com origin "Viver de Aluguel"
-   - Verifica se ja existe deal no pipeline Viver de Aluguel
-   - Se nao existe, cria deal no estagio "NOVO LEAD"
-   - Tags: `Construir-Alugar`, `Hubla`
-3. Suporta modo `dry_run` para verificar antes de executar
-4. Retorna relatorio completo de quantos foram criados, ja existiam, ou falharam
+## Onde a mudanca acontece
 
-## Constantes utilizadas
-- Origin ID (Viver de Aluguel): `4e2b810a-6782-4ce9-9c0d-10d04c018636`
-- Stage ID (Novo Lead): `2c69bf1d-94d5-4b6d-928d-dcf12da2d78c`
+### Arquivo: `supabase/functions/clint-webhook-handler/index.ts`
 
-## Detalhes Tecnicos
+**Trecho afetado: linhas 670-691** (entre resolver a origin e criar o deal)
 
-### Novo arquivo: `supabase/functions/backfill-construir-alugar/index.ts`
-
-A funcao segue a mesma logica da `createDealForConsorcioProduct` do webhook handler:
-
-1. Busca transacoes com `SELECT DISTINCT ON (customer_email)` para deduplicar
-2. Para cada comprador, reutiliza contato existente ou cria novo
-3. Verifica duplicacao de deal antes de inserir
-4. Retorna JSON com resumo: `{ total, created, skipped, errors }`
-
-### Fluxo de execucao
-
+Logica atual:
 ```text
-1. Chamar a funcao com POST (dry_run: true) para preview
-2. Verificar o relatorio
-3. Chamar novamente com POST (dry_run: false) para executar
-4. Recarregar pagina do CRM para ver os novos leads
+originId resolvido
+  |
+  v
+ownerId = deal_user do Clint (fixo)
+  |
+  v
+Busca profile_id do owner
+  |
+  v
+Cria deal com esse owner
 ```
 
-### Campos do deal criado
-- `name`: "Nome do Cliente - Construir Para Alugar"
-- `origin_id`: 4e2b810a (Viver de Aluguel)
-- `stage_id`: 2c69bf1d (Novo Lead)
-- `tags`: ['Construir-Alugar', 'Hubla', 'Backfill']
-- `custom_fields`: source, product, sale_date
-- `data_source`: 'backfill'
+Logica nova:
+```text
+originId resolvido
+  |
+  v
+Verifica se existe distribuicao ativa para essa origin_id
+  |
+  +--> SIM: chama get_next_lead_owner(origin_id) --> ownerId = resultado
+  |
+  +--> NAO: ownerId = deal_user do Clint (comportamento atual)
+  |
+  v
+Busca profile_id do owner
+  |
+  v
+Cria deal com esse owner
+```
 
-## Apos execucao
-A funcao pode ser deletada pois e de uso unico. Os novos webhooks ja criam deals automaticamente com a mudanca implantada anteriormente.
+### Codigo a ser adicionado (entre linhas 669 e 671)
+
+Apos resolver a `originId`, antes de definir o `ownerId`:
+
+1. Consultar `lead_distribution_config` filtrando por `origin_id` e `is_active = true`
+2. Se existirem registros, chamar `supabase.rpc('get_next_lead_owner', { p_origin_id: originId })`
+3. Usar o resultado como `ownerId` (email), guardando o `deal_user` original nos `custom_fields` para rastreabilidade
+4. Se nao existirem registros, manter o `deal_user` do Clint como hoje
+
+### Preservacao do owner original
+
+O `deal_user` original do Clint sera salvo em `custom_fields.deal_user_original` para auditoria, garantindo que se possa rastrear de onde o lead veio antes da redistribuicao.
+
+### Nenhuma mudanca no frontend
+
+A tela de configuracao de distribuicao ja funciona. A unica mudanca e no backend para que o Clint respeite essa configuracao.
+
+### Impacto esperado
+
+- Robert passara a receber leads na proporcao configurada na tela (junto com os outros SDRs)
+- Contadores da tela de distribuicao refletirao todos os leads, incluindo os do Clint
+- Se a distribuicao for desativada para uma origin, o comportamento volta ao normal
