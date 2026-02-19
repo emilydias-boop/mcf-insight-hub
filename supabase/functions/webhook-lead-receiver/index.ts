@@ -203,12 +203,14 @@ serve(async (req) => {
       console.log('[WEBHOOK-RECEIVER] Novo contato criado:', contactId);
     }
 
-    // 8. Check for existing deal
+    // 8. Check for existing deal (duplicata recente nas últimas 24h)
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: existingDeal } = await supabase
       .from('crm_deals')
       .select('id')
       .eq('contact_id', contactId)
       .eq('origin_id', endpoint.origin_id)
+      .gte('created_at', twentyFourHoursAgo)
       .maybeSingle();
 
     if (existingDeal) {
