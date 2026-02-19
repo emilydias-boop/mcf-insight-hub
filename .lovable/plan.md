@@ -1,22 +1,18 @@
 
 
-# Corrigir role_type de Luis Felipe na tabela SDR
+# Atualizar role_type de Luis Felipe para "closer"
 
 ## Problema
 
-Luis Felipe (`luis.felipe@minhacasafinanciada.com`) aparece na tabela de SDRs porque seu `role_type` esta como `'sdr'` na tabela `sdr`. Ele e Supervisor e faz R1 ocasionalmente.
+Luis Felipe continua aparecendo como SDR porque a alteracao no banco de dados ainda nao foi executada. Ele e Supervisor e faz R1 ocasionalmente.
 
 ## Solucao
 
-Atualizar o registro dele na tabela `sdr` de `role_type = 'sdr'` para `role_type = 'closer'`.
-
-Isso fara com que:
-- Ele **saia** da tabela de SDRs (que filtra por `role_type = 'sdr'`)
-- Ele **apareca** na tabela de Closers (onde suas R1 realizadas serao contabilizadas)
+Executar uma migracao SQL para alterar o `role_type` de `'sdr'` para `'closer'` na tabela `sdr`.
 
 ## Detalhes tecnicos
 
-Executar UPDATE na tabela `sdr`:
+Migracao SQL:
 
 ```sql
 UPDATE sdr
@@ -24,5 +20,5 @@ SET role_type = 'closer'
 WHERE email = 'luis.felipe@minhacasafinanciada.com';
 ```
 
-Nenhuma alteracao de codigo e necessaria. O hook `useSdrsFromSquad` ja filtra por `role_type = 'sdr'`, entao ao mudar para `'closer'` ele automaticamente deixa de aparecer como SDR.
+Nenhuma alteracao de codigo e necessaria. O hook `useSdrsFromSquad` filtra por `role_type = 'sdr'`, entao ao mudar para `'closer'` ele sai automaticamente da tabela de SDRs e passa a aparecer na tabela de Closers.
 
