@@ -1,43 +1,77 @@
 
 
-# Exportar Transacoes "Parceria" de Fevereiro para Excel
+# Timeline Completa do Lead no Drawer
 
 ## Objetivo
-Gerar e baixar automaticamente um arquivo CSV com todas as 81 transacoes "Parceria" do periodo 01/02 a 19/02/2026, para verificacao manual nas plataformas.
+Criar uma aba "Timeline" unificada dentro do `DealDetailsDrawer` que consolida TODAS as informacoes do lead em ordem cronologica, substituindo a necessidade de navegar entre multiplas abas para entender o historico completo.
 
-## Colunas do arquivo
-O CSV tera as seguintes colunas para facilitar a conferencia:
+## O que sera exibido (em ordem cronologica)
 
-| Coluna | Descricao |
-|--------|-----------|
-| Cliente | Nome do cliente |
-| Email | Email do cliente |
-| Telefone | Telefone do cliente |
-| Data Venda | Data da transacao |
-| Valor Pago (Bruto Atual) | product_price - valor que o sistema usa como bruto hoje |
-| Valor Liquido | net_value recebido |
-| Parcela | Numero da parcela |
-| Total Parcelas | Total de parcelas |
-| Gross Override | Se ja tem override manual |
-| Hubla ID | ID para rastreio |
-| Produto Real | Coluna vazia para voce preencher manualmente (A001, A009, etc) |
-| Bruto Correto | Coluna vazia para voce preencher o valor bruto correto |
-| Observacoes | Coluna vazia para anotacoes |
+| Evento | Fonte de Dados | Icone |
+|--------|---------------|-------|
+| Movimentacoes de estagio | `deal_activities` (stage_change) | Seta |
+| Ligacoes realizadas | `calls` | Telefone |
+| Notas manuais | `deal_activities` (note) + `attendee_notes` | Documento |
+| Reunioes agendadas/realizadas | `meeting_slot_attendees` + `meeting_slots` | Calendario |
+| Tarefas completadas | `deal_activities` (task_completed) | Check |
+| Compras/Transacoes | `hubla_transactions` (por email) | Carrinho |
+| Qualificacao | `deal_activities` (qualification_note) | Estrela |
+| Notas do Closer | `meeting_slot_attendees.closer_notes` | Mensagem |
 
 ## Implementacao
 
-Sera adicionada uma funcao temporaria na pagina de transacoes do Incorporador (`/bu-incorporador/transacoes`) que:
+### 1. Novo Hook: `useLeadFullTimeline.ts`
+Um hook que busca dados de TODAS as fontes e os unifica em uma unica lista cronologica:
 
-1. Consulta todas as transacoes com `product_name = 'Parceria'` do periodo de fevereiro via query direta ao Supabase
-2. Formata os dados em CSV com separador ponto-e-virgula (compativel com Excel BR)
-3. Inclui as 3 colunas vazias no final para preenchimento manual
-4. Dispara o download automaticamente
+```text
+interface TimelineEvent {
+  id: string;
+  type: 'stage_change' | 'call' | 'note' | 'meeting' | 'task' | 'purchase' | 'qualification';
+  title: string;
+  description: string | null;
+  date: string;
+  author: string | null;
+  metadata: Record<string, any>;
+}
+```
 
-### Detalhes Tecnicos
+Queries paralelas ao Supabase:
+- `deal_activities` - todas as atividades do deal (por deal_id e deal uuid)
+- `calls` - ligacoes vinculadas ao deal
+- `meeting_slot_attendees` + `meeting_slots` - reunioes do deal
+- `hubla_transactions` - transacoes pelo email do contato
+- `attendee_notes` - notas de attendees vinculados ao deal
 
-- Arquivo: `src/pages/bu-incorporador/Transacoes.tsx` (ou componente equivalente da pagina)
-- Adicionar botao "Exportar Parcerias" temporario na pagina
-- Usar a mesma logica de export CSV ja existente em `src/lib/exportHelpers.ts` e `src/components/financeiro/FinanceiroTransacoes.tsx`
-- Query direta: `supabase.from('hubla_transactions').select('*').ilike('product_name', 'parceria').gte('sale_date', '2026-02-01').lt('sale_date', '2026-02-20')`
-- Encoding UTF-8 com BOM para acentos no Excel
+Todas unificadas, ordenadas por data decrescente.
 
+### 2. Novo Componente: `LeadFullTimeline.tsx`
+Componente visual que renderiza a timeline como uma lista vertical com:
+- Linha vertical conectando os eventos
+- Icone colorido por tipo de evento
+- Titulo do evento
+- Descricao/detalhes expansiveis
+- Data/hora formatada
+- Autor quando disponivel
+- Badges de contexto (ex: estagio, status da ligacao, valor da compra)
+- Filtro rapido por tipo de evento no topo
+
+### 3. Adicionar Nova Aba no Drawer
+No `DealDetailsDrawer.tsx`, adicionar a aba "Timeline" como a PRIMEIRA aba (default) nas tabs existentes, mudando o grid de 4 para 5 colunas:
+
+```text
+Tabs: [Timeline] [Tarefas] [Historico] [Ligacoes] [Notas]
+```
+
+A aba Timeline recebera `dealId`, `dealUuid` e `contactEmail` como props.
+
+### Arquivos Modificados
+1. **Novo**: `src/hooks/useLeadFullTimeline.ts` - Hook de dados unificados
+2. **Novo**: `src/components/crm/LeadFullTimeline.tsx` - Componente visual da timeline
+3. **Editado**: `src/components/crm/DealDetailsDrawer.tsx` - Adicionar aba Timeline
+
+### Comportamento
+- Timeline abre expandida por padrao como primeira aba
+- Scroll infinito dentro da aba
+- Cada tipo de evento tem cor e icone distintos para facil identificacao visual
+- Eventos expansiveis para ver detalhes (notas completas, gravacoes, etc.)
+- Filtro por tipo no topo da timeline para focar em um tipo especifico
