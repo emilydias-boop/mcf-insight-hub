@@ -37,7 +37,7 @@ import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
-import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
+
 import { useSdrOutsideMetrics } from "@/hooks/useSdrOutsideMetrics";
 import { useBUPipelineMap } from "@/hooks/useBUPipelineMap";
 import { useCRMOriginsByPipeline } from "@/hooks/useCRMOriginsByPipeline";
@@ -277,7 +277,7 @@ export default function ConsorcioPainelEquipe() {
 
   // Closer metrics filtered by BU consorcio
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end, BU_SQUAD);
-  const { data: pendentesHoje } = useMeetingsPendentesHoje();
+  
   const { data: outsideData } = useSdrOutsideMetrics(start, end);
 
   // Consórcio pipeline metrics (deals by stage)
@@ -405,7 +405,9 @@ export default function ConsorcioPainelEquipe() {
     return baseData.filter(s => s.sdrEmail === sdrFilter);
   }, [datePreset, mergedBySDR, pipelineFilteredBySDR, sdrFilter]);
 
-  const dayPendentes = pendentesHoje ?? 0;
+  const pendentesHojeConsorcio = Math.max(0,
+    (dayKPIs?.totalR1Agendada || 0) - (dayKPIs?.totalRealizadas || 0) - (dayKPIs?.totalNoShows || 0)
+  );
 
   const dayValues = useMemo(() => ({
     agendamento: dayKPIs?.totalAgendamentos || 0,
@@ -416,7 +418,7 @@ export default function ConsorcioPainelEquipe() {
     r2Agendada: dayR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: dayR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: dayR2VendasKPIs?.vendasRealizadas || 0,
-  }), [dayKPIs, dayPendentes, dayR2AgendaKPIs, dayR2VendasKPIs]);
+  }), [dayKPIs, dayR2AgendaKPIs, dayR2VendasKPIs]);
 
   const weekValues = useMemo(() => ({
     agendamento: weekKPIs?.totalAgendamentos || 0,
@@ -701,7 +703,7 @@ export default function ConsorcioPainelEquipe() {
         kpis={enrichedKPIs}
         isLoading={isLoading}
         isToday={datePreset === "today"}
-        pendentesHoje={pendentesHoje}
+        pendentesHoje={pendentesHojeConsorcio}
       />
 
       {/* SDR / Closer Summary Table with Tabs */}
