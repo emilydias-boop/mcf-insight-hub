@@ -1,38 +1,51 @@
 
-
-# Deletar Transacoes Fantasma A001 do Juliano Cesar Franca
+# Corrigir Composição da BU Incorporador - Mapear Produtos Faltantes e Ajustar A010
 
 ## Problema
 
-Na Hubla, o Juliano Cesar Franca (jfmoveis@icloud.com) tem apenas 2 faturas pagas:
-- A009 - MCF INCORPORADOR COMPLETO + THE CLUB (R$ 12.796,90)
-- A000 - Contrato MCF (R$ 593,88)
+A pagina de Vendas do Incorporador nao inclui 3 categorias de produtos que deveriam estar la, e o A010 esta com liquido inflado por conta de order bumps.
 
-Porem, no sistema existem 3 transacoes adicionais fantasma referentes a um A001 que nunca existiu:
+### Produtos faltantes (nao mapeados na product_configurations como incorporador):
+- **OB Construir Para Alugar**: 140 vendas, R$ 11.347 liquido
+- **OB Acesso Vitalicio**: 154 vendas, R$ 7.408 liquido  
+- **Imersao Presencial** (OB Evento): 10 vendas, R$ 2.682 liquido
 
-1. **A001 refunded** (id: `d4cce494-5edc-4470-bbb7-83ca2bf6e510`) - net R$ 5.823,14
-2. **A001 newsale** (id: `9cffa1ba-59b1-465d-b93c-961bf48017f8`) - net R$ 0
-3. **Parceria Make** (id: `b7a6a98a-a6dc-4d9e-8994-01817d200b84`) - duplicata Make do A001 fantasma, net R$ 5.823,14
+### A010 inflado:
+- Sistema mostra R$ 32.365 (684 registros) porque inclui 180 registros de order bump
+- Planilha mostra R$ 23.258 (632 vendas) contando apenas vendas "main" completed
+- Os "main completed" no sistema somam R$ 23.297 -- muito proximo do valor correto
 
-## Acao
+## Solucao
 
-Deletar as 3 transacoes fantasma:
+### 1. Adicionar produtos faltantes na product_configurations (SQL Migration)
 
-```sql
-DELETE FROM hubla_transactions 
-WHERE id IN (
-  'd4cce494-5edc-4470-bbb7-83ca2bf6e510',
-  '9cffa1ba-59b1-465d-b93c-961bf48017f8',
-  'b7a6a98a-a6dc-4d9e-8994-01817d200b84'
-);
+Inserir os 3 produtos com `target_bu = 'incorporador'` e categorias corretas:
+
+```text
+INSERT INTO product_configurations (product_name, target_bu, product_category)
+VALUES 
+  ('OB Construir Para Alugar', 'incorporador', 'ob_construir'),
+  ('OB Acesso Vitalício', 'incorporador', 'ob_vitalicio'),
+  ('Imersão Presencial', 'incorporador', 'ob_evento')
+ON CONFLICT (product_name) DO UPDATE 
+  SET target_bu = 'incorporador',
+      product_category = EXCLUDED.product_category;
 ```
 
-## Impacto
+Com isso esses produtos passam a aparecer na pagina de Vendas MCF Incorporador automaticamente (a RPC ja faz INNER JOIN com product_configurations WHERE target_bu = 'incorporador').
 
-- Remove R$ 5.823,14 de liquido fantasma (A001 refunded) e R$ 5.823,14 da duplicata Make
-- Remove R$ 14.500 de bruto fantasma (A001)
-- As 2 transacoes reais permanecem intactas:
-  - A009: net R$ 8.902,94, bruto R$ 19.500
-  - A000 Contrato: net R$ 388,10, bruto R$ 497
-- Tambem permanece a transacao Make parceria do A009 (`b40a8173-...`) que ja e tratada pela deduplicacao automatica
+### 2. Verificar se o A010 precisa de ajuste
 
+O liquido inflado do A010 vem dos order bumps (offers). O agrupamento por compra (fix anterior) ja trata isso na tabela, mas o total no card pode estar somando os offers.
+
+**Investigacao necessaria**: Verificar se os 180 offers do A010 sao realmente order bumps (hubla_id com `-offer-`) e se o fix anterior de groupTransactionsByPurchase ja esta excluindo o main corretamente para o calculo do liquido total.
+
+Se os offers nao sao agrupados com um main (porque o A010 nao tem um produto "pai"), cada offer pode estar sendo contado individualmente no total. Nesse caso, pode ser necessario excluir os offers de A010 ou trata-los de outra forma.
+
+## Resultado Esperado
+
+Apos as mudancas:
+- OB Construir, OB Vitalicio e OB Evento aparecerao na pagina de Vendas
+- O liquido total subira em ~R$ 21.438 (soma dos 3 produtos faltantes)
+- O bruto e liquido por categoria ficarao consistentes com a planilha
+- O total geral da BU Incorporador estara mais preciso
