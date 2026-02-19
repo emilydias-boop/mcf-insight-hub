@@ -1,44 +1,70 @@
 
 
-# Alinhar colunas da tabela Closer com a tabela SDR no Painel Consorcio
+# Corrigir Relatorios do Consorcio: Adicionar abas e filtrar dados por BU
 
-## Situacao atual
+## Problema
 
-**SDR (correto):** SDR | Meta | Agendamento | R1 Agendada | R1 Realizada | No-show | Proposta Env. | Taxa Venda | Taxa Conv.
+1. A pagina de Relatorios do Consorcio so tem 2 abas (Vendas, Desempenho) quando deveria ter as 4 abas como o Incorporador (Contratos, Vendas, Desempenho, Aquisicao e Origem).
+2. Os paineis de Vendas, Contratos e Aquisicao usam o hook `useAllHublaTransactions` que busca TODAS as transacoes globais (Incorporador, Consorcio, Leilao, etc.), sem filtrar pela BU ativa. Isso faz os dados do Incorporador aparecerem no relatorio do Consorcio.
 
-**Closer (atual):** Closer | R1 Agendada | Outside | R1 Realizada | No-show | Taxa No-Show | Contrato Pago | R2 Agendada | Taxa Conv.
+## Solucao
 
-## Objetivo
+### 1. Adicionar as 4 abas ao Consorcio
 
-Closer deve mostrar as mesmas colunas que SDR:
-**Closer | R1 Agendada | R1 Realizada | No-show | Proposta Env. | Contrato Pago | Taxa Venda | Taxa Conv.**
+**Arquivo:** `src/pages/bu-consorcio/Relatorio.tsx`
 
-Nota: "Meta" e "Agendamento" nao se aplicam a closers (sao metricas de produtividade SDR). "Outside", "Taxa No-Show" e "R2 Agendada" serao removidos. "Proposta Env." e "Taxa Venda" (Contratos/Realizadas) serao adicionados.
+Alterar `availableReports` de `['sales', 'performance']` para `['contracts', 'sales', 'performance', 'acquisition']`.
+
+### 2. Filtrar transacoes por BU no SalesReportPanel
+
+**Arquivo:** `src/components/relatorios/SalesReportPanel.tsx`
+
+O painel atualmente usa `useAllHublaTransactions(filters)` que retorna transacoes de TODAS as BUs. A solucao e substituir pela chamada `useTransactionsByBU(bu, filters)` quando uma BU e informada, usando o RPC `get_hubla_transactions_by_bu` que ja existe no banco e filtra por BU.
+
+Mudancas:
+- Importar `useTransactionsByBU`
+- Quando `bu` nao for `incorporador`, usar `useTransactionsByBU(bu, filters)` em vez de `useAllHublaTransactions`
+- Para `incorporador`, manter `useAllHublaTransactions` (que ja funciona corretamente com deduplicacao)
+
+### 3. Filtrar transacoes por BU no ContractReportPanel
+
+**Arquivo:** `src/components/relatorios/ContractReportPanel.tsx`
+
+Mesma logica: quando a BU for `consorcio`, usar transacoes filtradas por BU em vez do hook global.
+
+### 4. Filtrar transacoes por BU no AcquisitionReportPanel
+
+**Arquivo:** `src/hooks/useAcquisitionReport.ts`
+
+O hook `useAcquisitionReport` ja recebe o parametro `bu` e ja filtra closers e SDRs por BU. Porem, as transacoes vem de `useAllHublaTransactions` (global). Precisa substituir por `useTransactionsByBU` quando a BU nao for `incorporador`.
+
+### 5. Filtrar closers e attendees por BU no PerformanceReportPanel
+
+**Arquivo:** `src/components/relatorios/PerformanceReportPanel.tsx`
+
+O hook `useGestorClosers` ja filtra por `activeBU` via contexto, entao os closers ja devem estar corretos quando acessado pela rota `/bu-consorcio/relatorios`. Verificar se o filtro esta funcionando.
 
 ## Detalhes tecnicos
 
-### Criar componente `ConsorcioCloserSummaryTable` 
+### Logica condicional de fonte de dados
 
-Novo arquivo: `src/components/sdr/ConsorcioCloserSummaryTable.tsx`
+```typescript
+// Em SalesReportPanel e outros:
+const shouldUseBUFilter = bu && bu !== 'incorporador';
 
-Colunas:
-- Closer (nome)
-- R1 Agendada (badge azul)
-- R1 Realizada (verde)
-- No-show (vermelho, com % entre parenteses)
-- Proposta Env. (badge roxo - recebido via props, dados do pipeline)
-- Contrato Pago (amber)
-- Taxa Venda (Contratos / Realizadas x 100)
-- Taxa Conv. (Realizadas / Agendadas x 100)
-- Chevron de navegacao
+const { data: allTransactions = [], isLoading: loadingAll } = 
+  useAllHublaTransactions(shouldUseBUFilter ? { ...filters, search: '__SKIP__' } : filters);
 
-Props: aceitar `propostasEnviadasByCloser` (Map de closer_id para contagem de propostas).
+const { data: buTransactions = [], isLoading: loadingBU } = 
+  useTransactionsByBU(bu || '', filters);
 
-### Atualizar `PainelEquipe.tsx`
+const transactions = shouldUseBUFilter ? buTransactions : allTransactions;
+const isLoading = shouldUseBUFilter ? loadingBU : loadingAll;
+```
 
-1. Importar `ConsorcioCloserSummaryTable` no lugar de `CloserSummaryTable`
-2. Calcular `propostasEnviadasByCloser` a partir dos dados de pipeline (deals na stage de "Proposta Enviada" agrupados por closer)
-3. Passar os dados para o novo componente
+Nota: Para `incorporador`, mantemos `useAllHublaTransactions` pois a logica de deduplicacao com `getDeduplicatedGross` e `get_first_transaction_ids` e especifica desse hook. Para outras BUs (consorcio, leilao, credito), usamos `useTransactionsByBU` que ja filtra pela categoria/BU no banco.
 
-O componente CloserSummaryTable original nao sera alterado (e usado por outras BUs).
+### Ajuste de metricas brutas para BUs nao-incorporador
+
+Para BUs como consorcio, a logica de "Faturamento Bruto" com `getDeduplicatedGross` (que usa preco de referencia e deduplicacao por primeiro pagamento) nao se aplica. O bruto deve ser simplesmente `product_price` ou `net_value` das transacoes. Isso sera ajustado no calculo de stats dos paineis.
 
