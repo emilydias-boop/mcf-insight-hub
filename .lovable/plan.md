@@ -1,69 +1,54 @@
 
-# Distribuicao de Leads via Clint Webhook
+
+# Aplicar Distribuicao de Leads nas Compras Diretas A010
 
 ## Problema
-O `clint-webhook-handler` recebe ~85% dos leads mas ignora a configuracao de distribuicao da tela. Ele usa diretamente o `deal_user` (email) que vem do Clint, por isso o Robert nunca recebe leads.
+A funcao `createOrUpdateCRMContact` (usada quando alguem compra A010 direto na Hubla) cria deals no pipeline "PIPELINE INSIDE SALES", mas nao passa pelo sistema de distribuicao. O owner e herdado de outro deal ou fica nulo. Robert nao recebe esses leads.
 
 ## Solucao
-Modificar a funcao `handleDealCreated` no `clint-webhook-handler` para consultar a tabela `lead_distribution_config` antes de definir o owner. Se houver distribuicao ativa para aquela origin, usar `get_next_lead_owner()` em vez do owner do Clint.
+Adicionar a mesma logica de distribuicao que foi implementada no `clint-webhook-handler` dentro da funcao `createOrUpdateCRMContact` no arquivo `supabase/functions/hubla-webhook-handler/index.ts`.
 
 ## Onde a mudanca acontece
 
-### Arquivo: `supabase/functions/clint-webhook-handler/index.ts`
+### Arquivo: `supabase/functions/hubla-webhook-handler/index.ts`
 
-**Trecho afetado: linhas 670-691** (entre resolver a origin e criar o deal)
+**Trecho afetado: linhas 509-551** (dentro de `createOrUpdateCRMContact`, secao de criacao do deal)
 
 Logica atual:
 ```text
-originId resolvido
+contactId + originId prontos
   |
   v
-ownerId = deal_user do Clint (fixo)
+Herda owner de outro deal do mesmo contato (ou null)
   |
   v
-Busca profile_id do owner
-  |
-  v
-Cria deal com esse owner
+Cria deal com owner herdado ou sem owner
 ```
 
 Logica nova:
 ```text
-originId resolvido
+contactId + originId prontos
   |
   v
 Verifica se existe distribuicao ativa para essa origin_id
   |
-  +--> SIM: chama get_next_lead_owner(origin_id) --> ownerId = resultado
+  +--> SIM: chama get_next_lead_owner(origin_id) --> owner = resultado
   |
-  +--> NAO: ownerId = deal_user do Clint (comportamento atual)
-  |
-  v
-Busca profile_id do owner
+  +--> NAO: herda owner de outro deal do mesmo contato (comportamento atual)
   |
   v
-Cria deal com esse owner
+Cria deal com owner distribuido ou herdado
 ```
 
-### Codigo a ser adicionado (entre linhas 669 e 671)
+### Detalhes da mudanca
 
-Apos resolver a `originId`, antes de definir o `ownerId`:
+1. Antes de buscar o owner herdado (linha 510), verificar se existe distribuicao ativa para `originId`
+2. Se existir, chamar `get_next_lead_owner` e usar o resultado como owner
+3. Buscar o `owner_profile_id` correspondente ao email retornado
+4. Se nao existir distribuicao, manter o comportamento atual (herdar owner de outro deal)
+5. Salvar `distributed: true` e `owner_original` nos `custom_fields` quando houver redistribuicao
 
-1. Consultar `lead_distribution_config` filtrando por `origin_id` e `is_active = true`
-2. Se existirem registros, chamar `supabase.rpc('get_next_lead_owner', { p_origin_id: originId })`
-3. Usar o resultado como `ownerId` (email), guardando o `deal_user` original nos `custom_fields` para rastreabilidade
-4. Se nao existirem registros, manter o `deal_user` do Clint como hoje
-
-### Preservacao do owner original
-
-O `deal_user` original do Clint sera salvo em `custom_fields.deal_user_original` para auditoria, garantindo que se possa rastrear de onde o lead veio antes da redistribuicao.
-
-### Nenhuma mudanca no frontend
-
-A tela de configuracao de distribuicao ja funciona. A unica mudanca e no backend para que o Clint respeite essa configuracao.
-
-### Impacto esperado
-
-- Robert passara a receber leads na proporcao configurada na tela (junto com os outros SDRs)
-- Contadores da tela de distribuicao refletirao todos os leads, incluindo os do Clint
-- Se a distribuicao for desativada para uma origin, o comportamento volta ao normal
+### Impacto
+- Compras diretas do A010 via Hubla passarao pela distribuicao configurada na tela
+- Robert passara a receber leads tanto do Clint quanto de compras diretas
+- Se a distribuicao estiver desativada, o comportamento atual e mantido (heranca de owner)
