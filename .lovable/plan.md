@@ -1,54 +1,38 @@
 
+# Correcao: Erro ao criar carta de consorcio
 
-# Aplicar Distribuicao de Leads nas Compras Diretas A010
+## Diagnostico
 
-## Problema
-A funcao `createOrUpdateCRMContact` (usada quando alguem compra A010 direto na Hubla) cria deals no pipeline "PIPELINE INSIDE SALES", mas nao passa pelo sistema de distribuicao. O owner e herdado de outro deal ou fica nulo. Robert nao recebe esses leads.
+O erro nos logs do Postgres e claro:
+
+```
+insert or update on table "consortium_cards" violates foreign key constraint "consortium_cards_vendedor_id_fkey"
+```
+
+**Causa raiz:** A coluna `vendedor_id` na tabela `consortium_cards` tem uma foreign key apontando para a tabela `profiles`. Porem, o formulario envia IDs da tabela `consorcio_vendedor_options` (tabela de configuracao de vendedores). Esses IDs sao UUIDs diferentes e nao existem em `profiles`, causando a violacao de FK.
+
+Exemplo:
+- ID do vendedor "Joao Pedro" em `consorcio_vendedor_options`: `0789a02a-a280-4965-814f-ff9bef58720c`
+- Esse ID nao existe na tabela `profiles`, entao o INSERT falha
 
 ## Solucao
-Adicionar a mesma logica de distribuicao que foi implementada no `clint-webhook-handler` dentro da funcao `createOrUpdateCRMContact` no arquivo `supabase/functions/hubla-webhook-handler/index.ts`.
 
-## Onde a mudanca acontece
+Remover a foreign key constraint `consortium_cards_vendedor_id_fkey` que liga `vendedor_id` a `profiles`. A coluna continua como UUID nullable, mas sem a restricao que impede o uso dos IDs de `consorcio_vendedor_options`.
 
-### Arquivo: `supabase/functions/hubla-webhook-handler/index.ts`
+## Detalhes Tecnicos
 
-**Trecho afetado: linhas 509-551** (dentro de `createOrUpdateCRMContact`, secao de criacao do deal)
+### Migracao SQL
 
-Logica atual:
-```text
-contactId + originId prontos
-  |
-  v
-Herda owner de outro deal do mesmo contato (ou null)
-  |
-  v
-Cria deal com owner herdado ou sem owner
+```sql
+ALTER TABLE consortium_cards 
+DROP CONSTRAINT consortium_cards_vendedor_id_fkey;
 ```
 
-Logica nova:
-```text
-contactId + originId prontos
-  |
-  v
-Verifica se existe distribuicao ativa para essa origin_id
-  |
-  +--> SIM: chama get_next_lead_owner(origin_id) --> owner = resultado
-  |
-  +--> NAO: herda owner de outro deal do mesmo contato (comportamento atual)
-  |
-  v
-Cria deal com owner distribuido ou herdado
-```
+Isso e seguro porque:
+- A coluna `vendedor_id` ja e nullable (nao quebra dados existentes)
+- O campo `vendedor_name` continua guardando o nome como texto (redundancia util)
+- Nenhum outro codigo depende dessa FK para JOINs com `profiles`
+- A tabela `consorcio_vendedor_options` e a fonte correta desses IDs
 
-### Detalhes da mudanca
-
-1. Antes de buscar o owner herdado (linha 510), verificar se existe distribuicao ativa para `originId`
-2. Se existir, chamar `get_next_lead_owner` e usar o resultado como owner
-3. Buscar o `owner_profile_id` correspondente ao email retornado
-4. Se nao existir distribuicao, manter o comportamento atual (herdar owner de outro deal)
-5. Salvar `distributed: true` e `owner_original` nos `custom_fields` quando houver redistribuicao
-
-### Impacto
-- Compras diretas do A010 via Hubla passarao pela distribuicao configurada na tela
-- Robert passara a receber leads tanto do Clint quanto de compras diretas
-- Se a distribuicao estiver desativada, o comportamento atual e mantido (heranca de owner)
+### Nenhuma mudanca no frontend
+O formulario ja funciona corretamente - o problema e exclusivamente a constraint no banco.
