@@ -20,6 +20,7 @@ interface AgendaMeetingRow {
   attendee_id: string | null;
   meeting_slot_id: string | null;
   attendee_status: string | null;
+  sdr_email: string | null;
 }
 
 interface UseSdrMeetingsFromAgendaParams {
@@ -76,7 +77,7 @@ export function useSdrMeetingsFromAgenda({
           scheduled_at: row.scheduled_at || null,
           status_atual: row.status_atual || "Reunião 01 Agendada",
           intermediador: row.intermediador || "",
-          current_owner: row.intermediador || "",
+          current_owner: row.sdr_email || row.intermediador || "",
           closer: row.closer || null,
           origin_name: row.origin_name || "",
           probability: row.probability || 0,

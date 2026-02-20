@@ -9443,6 +9443,7 @@ export type Database = {
           origin_name: string
           probability: number
           scheduled_at: string
+          sdr_email: string
           status_atual: string
           tipo: string
         }[]

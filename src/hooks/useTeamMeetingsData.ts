@@ -133,7 +133,7 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
     }
     const meetings = meetingsQuery.data || [];
     const filtered = meetings.filter(
-      m => m.intermediador?.toLowerCase() === sdrEmail.toLowerCase()
+      m => m.current_owner?.toLowerCase() === sdrEmail.toLowerCase()
     );
     return deduplicateMeetings(filtered);
   };
@@ -142,7 +142,7 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
   const allMeetings = useMemo(() => {
     const meetings = meetingsQuery.data || [];
     const filtered = meetings.filter(
-      m => validSdrEmails.has(m.intermediador?.toLowerCase() || '')
+      m => validSdrEmails.has(m.current_owner?.toLowerCase() || '')
     );
     return deduplicateMeetings(filtered);
   }, [meetingsQuery.data, validSdrEmails]);
