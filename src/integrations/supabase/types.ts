@@ -9422,57 +9422,31 @@ export type Database = {
           total_movimentacoes: number
         }[]
       }
-      get_sdr_meetings_from_agenda:
-        | {
-            Args: {
-              end_date: string
-              sdr_email_filter?: string
-              start_date: string
-            }
-            Returns: {
-              attendee_id: string
-              attendee_status: string
-              closer: string
-              contact_email: string
-              contact_name: string
-              contact_phone: string
-              data_agendamento: string
-              deal_id: string
-              deal_name: string
-              intermediador: string
-              meeting_slot_id: string
-              origin_name: string
-              probability: number
-              scheduled_at: string
-              status_atual: string
-              tipo: string
-            }[]
-          }
-        | {
-            Args: {
-              end_date: string
-              sdr_email_filter?: string
-              start_date: string
-            }
-            Returns: {
-              attendee_id: string
-              attendee_status: string
-              closer: string
-              contact_email: string
-              contact_name: string
-              contact_phone: string
-              data_agendamento: string
-              deal_id: string
-              deal_name: string
-              intermediador: string
-              meeting_slot_id: string
-              origin_name: string
-              probability: number
-              scheduled_at: string
-              status_atual: string
-              tipo: string
-            }[]
-          }
+      get_sdr_meetings_from_agenda: {
+        Args: {
+          end_date: string
+          sdr_email_filter?: string
+          start_date: string
+        }
+        Returns: {
+          attendee_id: string
+          attendee_status: string
+          closer: string
+          contact_email: string
+          contact_name: string
+          contact_phone: string
+          data_agendamento: string
+          deal_id: string
+          deal_name: string
+          intermediador: string
+          meeting_slot_id: string
+          origin_name: string
+          probability: number
+          scheduled_at: string
+          status_atual: string
+          tipo: string
+        }[]
+      }
       get_sdr_meetings_v2: {
         Args: {
           end_date: string

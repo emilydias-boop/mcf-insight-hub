@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.get_sdr_meetings_from_agenda(date, date, text);
