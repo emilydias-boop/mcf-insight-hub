@@ -270,6 +270,7 @@ const menuItems: MenuItem[] = [
     resource: "patrimonio" as any,
     items: [
       { title: "Central de Patrimônio", url: "/patrimonio", requiredRoles: ["admin", "manager", "rh"] },
+      { title: "Relatórios", url: "/patrimonio/relatorios", requiredRoles: ["admin", "manager", "rh"] },
       { title: "Meus Equipamentos", url: "/patrimonio/meus-equipamentos" },
     ],
   },

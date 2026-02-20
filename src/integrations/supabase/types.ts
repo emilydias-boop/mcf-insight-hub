@@ -462,6 +462,8 @@ export type Database = {
           ip_aceite: string | null
           storage_path: string | null
           termo_conteudo: string
+          user_agent: string | null
+          versao: number | null
         }
         Insert: {
           aceito?: boolean | null
@@ -476,6 +478,8 @@ export type Database = {
           ip_aceite?: string | null
           storage_path?: string | null
           termo_conteudo: string
+          user_agent?: string | null
+          versao?: number | null
         }
         Update: {
           aceito?: boolean | null
@@ -490,6 +494,8 @@ export type Database = {
           ip_aceite?: string | null
           storage_path?: string | null
           termo_conteudo?: string
+          user_agent?: string | null
+          versao?: number | null
         }
         Relationships: [
           {
@@ -517,11 +523,15 @@ export type Database = {
       }
       assets: {
         Row: {
+          centro_custo: string | null
           created_at: string
           created_by: string | null
           data_compra: string | null
           fornecedor: string | null
+          garantia_fim: string | null
+          garantia_inicio: string | null
           id: string
+          localizacao: string | null
           marca: string | null
           modelo: string | null
           nota_fiscal_path: string | null
@@ -535,11 +545,15 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          centro_custo?: string | null
           created_at?: string
           created_by?: string | null
           data_compra?: string | null
           fornecedor?: string | null
+          garantia_fim?: string | null
+          garantia_inicio?: string | null
           id?: string
+          localizacao?: string | null
           marca?: string | null
           modelo?: string | null
           nota_fiscal_path?: string | null
@@ -553,11 +567,15 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          centro_custo?: string | null
           created_at?: string
           created_by?: string | null
           data_compra?: string | null
           fornecedor?: string | null
+          garantia_fim?: string | null
+          garantia_inicio?: string | null
           id?: string
+          localizacao?: string | null
           marca?: string | null
           modelo?: string | null
           nota_fiscal_path?: string | null
@@ -9249,6 +9267,10 @@ export type Database = {
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
+      generate_patrimonio_number: {
+        Args: { p_tipo: Database["public"]["Enums"]["asset_type"] }
+        Returns: string
+      }
       get_all_hubla_transactions: {
         Args: {
           p_end_date?: string

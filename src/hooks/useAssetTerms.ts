@@ -95,7 +95,7 @@ export const useTermMutations = () => {
     },
   });
 
-  // Accept term
+  // Accept term with audit trail
   const acceptTerm = useMutation({
     mutationFn: async ({
       termId,
@@ -104,6 +104,36 @@ export const useTermMutations = () => {
       termId: string;
       assinaturaDigital?: string;
     }) => {
+      // Capture user agent
+      const userAgent = navigator.userAgent;
+
+      // Capture IP (best effort)
+      let ipAddress: string | null = null;
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipRes.json();
+        ipAddress = ipData.ip;
+      } catch {
+        // IP capture failed, continue without it
+      }
+
+      // Get current max version for this term's asset
+      const { data: termData } = await supabase
+        .from('asset_terms')
+        .select('asset_id')
+        .eq('id', termId)
+        .single();
+
+      let versao = 1;
+      if (termData) {
+        const { count } = await supabase
+          .from('asset_terms')
+          .select('*', { count: 'exact', head: true })
+          .eq('asset_id', termData.asset_id)
+          .eq('aceito', true);
+        versao = (count || 0) + 1;
+      }
+
       const { data, error } = await supabase
         .from('asset_terms')
         .update({
@@ -111,9 +141,12 @@ export const useTermMutations = () => {
           data_aceite: new Date().toISOString(),
           assinatura_digital: assinaturaDigital,
           bloqueado: true,
-        })
+          ip_aceite: ipAddress,
+          user_agent: userAgent,
+          versao,
+        } as any)
         .eq('id', termId)
-        .eq('bloqueado', false) // Only update if not already locked
+        .eq('bloqueado', false)
         .select()
         .single();
 

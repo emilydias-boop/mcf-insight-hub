@@ -14,9 +14,10 @@ import { AssetReturnDialog } from '@/components/patrimonio/AssetReturnDialog';
 import { AssetTransferDialog } from '@/components/patrimonio/AssetTransferDialog';
 import { AssetMaintenanceDialog } from '@/components/patrimonio/AssetMaintenanceDialog';
 import { AssetWriteOffDialog } from '@/components/patrimonio/AssetWriteOffDialog';
+import { AssetQRCode } from '@/components/patrimonio/AssetQRCode';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Edit, UserPlus, Undo2, ArrowRightLeft, Wrench, XCircle } from 'lucide-react';
+import { ArrowLeft, Edit, UserPlus, Undo2, ArrowRightLeft, Wrench, XCircle, QrCode } from 'lucide-react';
 
 const AssetDetailsPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +33,7 @@ const AssetDetailsPage = () => {
   const [transferOpen, setTransferOpen] = useState(false);
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [writeOffOpen, setWriteOffOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   if (assetLoading) {
     return (
@@ -91,6 +93,10 @@ const AssetDetailsPage = () => {
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
             <Edit className="mr-2 h-4 w-4" />
             Editar
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setQrOpen(true)}>
+            <QrCode className="mr-2 h-4 w-4" />
+            QR Code
           </Button>
           
           {canAssign && (
@@ -152,6 +158,7 @@ const AssetDetailsPage = () => {
       <AssetTransferDialog open={transferOpen} onOpenChange={setTransferOpen} asset={asset} currentAssignment={asset.current_assignment as any} />
       <AssetMaintenanceDialog open={maintenanceOpen} onOpenChange={setMaintenanceOpen} asset={asset} />
       <AssetWriteOffDialog open={writeOffOpen} onOpenChange={setWriteOffOpen} asset={asset} />
+      <AssetQRCode open={qrOpen} onOpenChange={setQrOpen} assetId={asset.id} numeroPatrimonio={asset.numero_patrimonio} />
     </div>
   );
 };

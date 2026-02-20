@@ -116,6 +116,7 @@ export const useAssetMutations = () => {
         .from('assets')
         .insert({
           ...input,
+          numero_patrimonio: 'AUTO', // Will be overwritten by DB trigger
           status: 'em_estoque',
           created_by: userData.user?.id,
         })
