@@ -1,129 +1,87 @@
 
-# Notificacoes de Documentos para Colaborador e Gestor
+# Envio de Email para Notificacoes de Documentos via Resend
 
-## Objetivo
+## Pre-requisito: Adicionar API Key
 
-Sempre que um documento for enviado (pelo colaborador ou pelo gestor), ambos devem receber um registro/notificacao no sistema via tabela `user_notifications`.
+O secret `RESEND_API_KEY` ainda nao esta configurado no projeto. Sera solicitado antes de qualquer implementacao.
 
-## Pontos de Acao Identificados
+**Importante**: O email remetente deve usar um dominio verificado no Resend (ex: `notificacoes@seudominio.com.br`). Se ainda nao validou o dominio, faca em https://resend.com/domains.
 
-Existem 6 fluxos de envio de documentos no sistema:
+---
 
-| Fluxo | Quem envia | Quem notificar |
-|-------|-----------|----------------|
-| Enviar Documento (Meu RH) | Colaborador | Gestor |
-| Enviar NFSe (Meu RH) | Colaborador | Gestor |
-| Enviar NFSe Fechamento (SDR) | Colaborador | Gestor |
-| Upload arquivo para colaborador | Gestor | Colaborador |
-| Aceite de Termo | Colaborador | Gestor |
-| Atualizar status documento | Gestor | Colaborador |
+## Implementacao
 
-## Solucao
+### 1. Adicionar secret `RESEND_API_KEY`
 
-Criar uma funcao utilitaria `notifyDocumentAction` que insere registros na tabela `user_notifications` para ambas as partes. Depois, chamar essa funcao em cada ponto de acao apos o sucesso da operacao principal.
+Solicitar ao usuario via ferramenta de adicao de secrets.
 
-A tabela `user_notifications` ja existe com a estrutura necessaria: `user_id`, `title`, `message`, `type`, `action_url`, `metadata`.
+### 2. Criar Edge Function `send-document-email`
 
-## Detalhes Tecnicos
+**Novo arquivo:** `supabase/functions/send-document-email/index.ts`
 
-### 1. Novo arquivo: `src/lib/notifyDocumentAction.ts`
-
-Funcao utilitaria que recebe:
-- `employeeId` (ID do employee)
-- `action` (tipo: "documento_enviado", "nfse_enviada", "termo_aceito", "documento_recebido", etc.)
-- `documentTitle` (nome do documento)
-- `sentBy` ("colaborador" | "gestor")
+Recebe via POST:
+- `to`: email do destinatario
+- `recipientName`: nome do destinatario
+- `subject`: titulo da notificacao
+- `message`: mensagem da notificacao
+- `action`: tipo da acao (documento_enviado, nfse_enviada, etc.)
 
 Logica:
-1. Buscar `profile_id` e `gestor_id` do employee
-2. Buscar `profile_id` do gestor (que tambem e um employee)
-3. Inserir notificacao para o colaborador (profile_id do employee)
-4. Inserir notificacao para o gestor (profile_id do gestor)
-5. Se algum dos dois nao tiver profile_id, pular silenciosamente
+1. Validar campos obrigatorios
+2. Montar HTML do email com template visual (cores da marca, logo)
+3. Enviar via Resend API (`npm:resend@4.0.0`)
+4. Retornar sucesso/erro
+
+O remetente sera configurado como `MCF Notificacoes <notificacoes@seudominio.com>` (ajustaremos com o dominio verificado).
+
+### 3. Atualizar `notifyDocumentAction.ts`
+
+Apos inserir as notificacoes no banco, buscar os emails dos destinatarios (campo `email_pessoal` ou `email_corporativo` da tabela `employees`) e disparar a Edge Function para cada um.
+
+Alteracoes:
+- Expandir o `select` do employee para incluir `email_pessoal, email_corporativo`
+- Expandir o `select` do gestor para incluir `email_pessoal, email_corporativo`
+- Apos o insert das notificacoes, chamar `supabase.functions.invoke('send-document-email', ...)` para cada destinatario que tenha email
+- O envio de email e fire-and-forget (nao bloqueia o fluxo principal)
+
+### 4. Config.toml
+
+Adicionar entrada para a nova edge function:
 
 ```text
-async function notifyDocumentAction({
-  employeeId,
-  action,
-  documentTitle,
-  sentBy
-}) {
-  // 1. Buscar employee com profile_id e gestor_id
-  const { data: emp } = await supabase
-    .from('employees')
-    .select('profile_id, gestor_id, nome_completo')
-    .eq('id', employeeId)
-    .single();
-
-  if (!emp?.gestor_id) return;
-
-  // 2. Buscar gestor profile_id
-  const { data: gestor } = await supabase
-    .from('employees')
-    .select('profile_id, nome_completo')
-    .eq('id', emp.gestor_id)
-    .single();
-
-  // 3. Montar notificacoes
-  const notifications = [];
-
-  if (emp.profile_id) {
-    notifications.push({
-      user_id: emp.profile_id,
-      title: tituloPorAcao(action, sentBy),
-      message: mensagemPorAcao(action, documentTitle, sentBy, gestor?.nome_completo, emp.nome_completo),
-      type: 'info',
-    });
-  }
-
-  if (gestor?.profile_id) {
-    notifications.push({
-      user_id: gestor.profile_id,
-      title: tituloPorAcao(action, sentBy === 'colaborador' ? 'gestor' : 'colaborador'),
-      message: mensagemPorAcao(...),
-      type: sentBy === 'colaborador' ? 'action_required' : 'info',
-    });
-  }
-
-  // 4. Inserir
-  if (notifications.length > 0) {
-    await supabase.from('user_notifications').insert(notifications);
-  }
-}
+[functions.send-document-email]
+verify_jwt = false
 ```
 
-### 2. Integrar nos 6 pontos de acao
+---
 
-**Arquivo: `src/components/meu-rh/EnviarDocumentoModal.tsx`**
-- Apos `toast.success`, chamar `notifyDocumentAction({ employeeId, action: 'documento_enviado', documentTitle, sentBy: 'colaborador' })`
-
-**Arquivo: `src/components/meu-rh/EnviarNfseModal.tsx`**
-- Apos `toast.success`, chamar `notifyDocumentAction({ employeeId, action: 'nfse_enviada', documentTitle: monthLabel, sentBy: 'colaborador' })`
-
-**Arquivo: `src/components/sdr-fechamento/EnviarNfseFechamentoModal.tsx`**
-- Apos `toast.success`, chamar `notifyDocumentAction({ employeeId, action: 'nfse_enviada', documentTitle: monthLabel, sentBy: 'colaborador' })`
-
-**Arquivo: `src/hooks/useUserFiles.ts`** (useUploadUserFile - onSuccess)
-- Apos upload bem-sucedido, buscar employee pelo `userId` e chamar notificacao com `sentBy: 'gestor'`
-
-**Arquivo: `src/hooks/useAssetTerms.ts`** (acceptTerm - onSuccess)
-- Apos aceite, chamar `notifyDocumentAction({ employeeId: data.employee_id, action: 'termo_aceito', documentTitle: numPatrimonio, sentBy: 'colaborador' })`
-
-**Arquivo: `src/hooks/useEmployees.ts`** (createDocument e updateDocument - onSuccess)
-- Chamar notificacao com `sentBy: 'gestor'`
-
-### 3. Nenhuma alteracao no banco de dados
-
-A tabela `user_notifications` ja existe com todos os campos necessarios. Nao e necessaria migracao SQL.
-
-### Arquivos afetados
+## Arquivos afetados
 
 | Arquivo | Acao |
 |---------|------|
-| `src/lib/notifyDocumentAction.ts` | **Novo** - funcao utilitaria |
-| `src/components/meu-rh/EnviarDocumentoModal.tsx` | Adicionar chamada de notificacao |
-| `src/components/meu-rh/EnviarNfseModal.tsx` | Adicionar chamada de notificacao |
-| `src/components/sdr-fechamento/EnviarNfseFechamentoModal.tsx` | Adicionar chamada de notificacao |
-| `src/hooks/useUserFiles.ts` | Adicionar notificacao no onSuccess do upload |
-| `src/hooks/useAssetTerms.ts` | Adicionar notificacao no onSuccess do aceite |
-| `src/hooks/useEmployees.ts` | Adicionar notificacao em createDocument e updateDocument |
+| Secret `RESEND_API_KEY` | Adicionar |
+| `supabase/functions/send-document-email/index.ts` | **Novo** - Edge Function de envio |
+| `supabase/config.toml` | Adicionar config da nova funcao |
+| `src/lib/notifyDocumentAction.ts` | Adicionar disparo de email apos notificacao |
+
+## Template do Email
+
+O email tera um layout limpo e profissional:
+- Fundo branco (`#ffffff`)
+- Header com nome da empresa
+- Titulo da notificacao em destaque
+- Mensagem descritiva
+- Botao "Ver no Sistema" (link para o app)
+- Footer com texto discreto
+
+## Fluxo Completo
+
+```text
+Acao do usuario (enviar doc, aceitar termo, etc.)
+  --> notifyDocumentAction()
+    --> INSERT em user_notifications (colaborador + gestor)
+    --> invoke('send-document-email') para email do colaborador
+    --> invoke('send-document-email') para email do gestor
+```
+
+Ambos recebem: notificacao no sistema + email.
