@@ -1,110 +1,129 @@
 
+# Notificacoes de Documentos para Colaborador e Gestor
 
-# Correcoes: QR Code, Termo visivel, e Termo em "Meus Arquivos"
+## Objetivo
 
-Tres problemas identificados e suas solucoes:
+Sempre que um documento for enviado (pelo colaborador ou pelo gestor), ambos devem receber um registro/notificacao no sistema via tabela `user_notifications`.
 
----
+## Pontos de Acao Identificados
 
-## Problema 1: QR Code Download nao funciona
+Existem 6 fluxos de envio de documentos no sistema:
 
-O download do QR Code usa conversao SVG-para-Canvas via Blob URL. Em muitos navegadores (especialmente Chromium), carregar um SVG de um Blob URL em uma `Image` falha silenciosamente por restricoes de seguranca (tainted canvas).
+| Fluxo | Quem envia | Quem notificar |
+|-------|-----------|----------------|
+| Enviar Documento (Meu RH) | Colaborador | Gestor |
+| Enviar NFSe (Meu RH) | Colaborador | Gestor |
+| Enviar NFSe Fechamento (SDR) | Colaborador | Gestor |
+| Upload arquivo para colaborador | Gestor | Colaborador |
+| Aceite de Termo | Colaborador | Gestor |
+| Atualizar status documento | Gestor | Colaborador |
 
-### Solucao
+## Solucao
 
-Substituir a abordagem por conversao via `data:` URL (base64) em vez de Blob URL. Isso evita problemas de CORS/tainted canvas.
+Criar uma funcao utilitaria `notifyDocumentAction` que insere registros na tabela `user_notifications` para ambas as partes. Depois, chamar essa funcao em cada ponto de acao apos o sucesso da operacao principal.
 
-### Arquivo: `src/components/patrimonio/AssetQRCode.tsx`
-
-- Alterar `handleDownload` para converter o SVG em base64 data URL em vez de Blob URL
-- Usar `btoa(encodeURIComponent(...))` ou `btoa(unescape(encodeURIComponent(...)))` para lidar com caracteres especiais
-- Manter a mesma logica de canvas para desenhar o numero do patrimonio abaixo do QR
-
----
-
-## Problema 2: Termo nao aparece na pagina "Meus Equipamentos"
-
-O termo da Emily ja foi aceito (`aceito: true`). A pagina so mostra o botao "Aceitar Termo" quando o termo nao foi aceito. Depois de aceito, nao ha nenhuma indicacao visual nem forma de visualizar o conteudo do termo.
-
-### Solucao
-
-No card do equipamento em `MyEquipmentPage.tsx`:
-
-- Quando existe um termo **aceito** para o equipamento, mostrar um badge "Termo Aceito" com botao "Ver Termo"
-- Ao clicar em "Ver Termo", abrir um dialog mostrando o conteudo do termo com as informacoes de aceite (data, IP, versao)
-- Manter o botao "Aceitar Termo" apenas para termos pendentes (comportamento atual)
-
-### Arquivo: `src/pages/patrimonio/MyEquipmentPage.tsx`
-
-- Buscar termos aceitos alem dos pendentes: `const acceptedTerm = myTerms?.find(t => t.asset_id === asset.id && t.aceito)`
-- Adicionar badge + botao "Ver Termo" no card quando `acceptedTerm` existe
-- Adicionar novo dialog para visualizacao do termo aceito (read-only)
-
----
-
-## Problema 3: Termo deve aparecer em "Meus Arquivos"
-
-O usuario espera que o Termo de Responsabilidade de equipamento apareca na secao "Meus Arquivos" junto com outros documentos (como Contrato de Trabalho). Atualmente, o aceite do termo nao cria nenhum registro na tabela `user_files`.
-
-### Solucao
-
-Alterar a mutacao `acceptTerm` em `useAssetTerms.ts` para, apos aceitar o termo com sucesso, inserir um registro na tabela `user_files` com:
-
-- `user_id`: o `profile_id` do colaborador (auth user ID)
-- `tipo`: `outro` (enum disponivel: contrato_trabalho, politica_comissao, metas, outro)
-- `titulo`: "Termo de Responsabilidade - {numero_patrimonio}"
-- `descricao`: "Termo de responsabilidade aceito em {data}"
-- `visivel_para_usuario`: true
-- `storage_url` e `storage_path`: criar um arquivo texto/markdown no bucket de storage com o conteudo do termo
-
-### Migracao de banco (opcional mas recomendada)
-
-Adicionar um novo valor ao enum `user_file_type`:
-
-```text
-ALTER TYPE user_file_type ADD VALUE 'termo_responsabilidade';
-```
-
-Isso permite filtrar e categorizar os termos corretamente nos arquivos do usuario.
-
-### Arquivos afetados:
-
-| Arquivo | Acao |
-|---------|------|
-| `src/components/patrimonio/AssetQRCode.tsx` | Corrigir download (base64 em vez de Blob URL) |
-| `src/pages/patrimonio/MyEquipmentPage.tsx` | Adicionar visualizacao de termos aceitos |
-| `src/hooks/useAssetTerms.ts` | Ao aceitar termo, salvar conteudo no storage e criar registro em `user_files` |
-| Migracao SQL | Adicionar `termo_responsabilidade` ao enum `user_file_type` |
-
----
+A tabela `user_notifications` ja existe com a estrutura necessaria: `user_id`, `title`, `message`, `type`, `action_url`, `metadata`.
 
 ## Detalhes Tecnicos
 
-### QR Code - Nova logica de download
+### 1. Novo arquivo: `src/lib/notifyDocumentAction.ts`
+
+Funcao utilitaria que recebe:
+- `employeeId` (ID do employee)
+- `action` (tipo: "documento_enviado", "nfse_enviada", "termo_aceito", "documento_recebido", etc.)
+- `documentTitle` (nome do documento)
+- `sentBy` ("colaborador" | "gestor")
+
+Logica:
+1. Buscar `profile_id` e `gestor_id` do employee
+2. Buscar `profile_id` do gestor (que tambem e um employee)
+3. Inserir notificacao para o colaborador (profile_id do employee)
+4. Inserir notificacao para o gestor (profile_id do gestor)
+5. Se algum dos dois nao tiver profile_id, pular silenciosamente
 
 ```text
-const svgData = new XMLSerializer().serializeToString(svg);
-const base64 = btoa(unescape(encodeURIComponent(svgData)));
-const dataUrl = `data:image/svg+xml;base64,${base64}`;
-img.src = dataUrl;  // Sem Blob URL = sem problemas de seguranca
+async function notifyDocumentAction({
+  employeeId,
+  action,
+  documentTitle,
+  sentBy
+}) {
+  // 1. Buscar employee com profile_id e gestor_id
+  const { data: emp } = await supabase
+    .from('employees')
+    .select('profile_id, gestor_id, nome_completo')
+    .eq('id', employeeId)
+    .single();
+
+  if (!emp?.gestor_id) return;
+
+  // 2. Buscar gestor profile_id
+  const { data: gestor } = await supabase
+    .from('employees')
+    .select('profile_id, nome_completo')
+    .eq('id', emp.gestor_id)
+    .single();
+
+  // 3. Montar notificacoes
+  const notifications = [];
+
+  if (emp.profile_id) {
+    notifications.push({
+      user_id: emp.profile_id,
+      title: tituloPorAcao(action, sentBy),
+      message: mensagemPorAcao(action, documentTitle, sentBy, gestor?.nome_completo, emp.nome_completo),
+      type: 'info',
+    });
+  }
+
+  if (gestor?.profile_id) {
+    notifications.push({
+      user_id: gestor.profile_id,
+      title: tituloPorAcao(action, sentBy === 'colaborador' ? 'gestor' : 'colaborador'),
+      message: mensagemPorAcao(...),
+      type: sentBy === 'colaborador' ? 'action_required' : 'info',
+    });
+  }
+
+  // 4. Inserir
+  if (notifications.length > 0) {
+    await supabase.from('user_notifications').insert(notifications);
+  }
+}
 ```
 
-### Aceite do Termo - Fluxo expandido
+### 2. Integrar nos 6 pontos de acao
 
-```text
-1. Aceitar termo (update asset_terms) -- ja existe
-2. Buscar profile_id do employee
-3. Salvar conteudo como .md no bucket 'user-files'
-4. Criar signed URL
-5. Inserir registro em user_files com tipo 'termo_responsabilidade'
-6. Invalidar queries ['my-files'] e ['user-files']
-```
+**Arquivo: `src/components/meu-rh/EnviarDocumentoModal.tsx`**
+- Apos `toast.success`, chamar `notifyDocumentAction({ employeeId, action: 'documento_enviado', documentTitle, sentBy: 'colaborador' })`
 
-### Visualizacao do Termo - Novo dialog em MyEquipmentPage
+**Arquivo: `src/components/meu-rh/EnviarNfseModal.tsx`**
+- Apos `toast.success`, chamar `notifyDocumentAction({ employeeId, action: 'nfse_enviada', documentTitle: monthLabel, sentBy: 'colaborador' })`
 
-```text
-- Badge verde "Aceito" no card do equipamento
-- Botao "Ver Termo" abre dialog read-only
-- Mostra conteudo do termo + metadados (data aceite, versao, IP)
-```
+**Arquivo: `src/components/sdr-fechamento/EnviarNfseFechamentoModal.tsx`**
+- Apos `toast.success`, chamar `notifyDocumentAction({ employeeId, action: 'nfse_enviada', documentTitle: monthLabel, sentBy: 'colaborador' })`
 
+**Arquivo: `src/hooks/useUserFiles.ts`** (useUploadUserFile - onSuccess)
+- Apos upload bem-sucedido, buscar employee pelo `userId` e chamar notificacao com `sentBy: 'gestor'`
+
+**Arquivo: `src/hooks/useAssetTerms.ts`** (acceptTerm - onSuccess)
+- Apos aceite, chamar `notifyDocumentAction({ employeeId: data.employee_id, action: 'termo_aceito', documentTitle: numPatrimonio, sentBy: 'colaborador' })`
+
+**Arquivo: `src/hooks/useEmployees.ts`** (createDocument e updateDocument - onSuccess)
+- Chamar notificacao com `sentBy: 'gestor'`
+
+### 3. Nenhuma alteracao no banco de dados
+
+A tabela `user_notifications` ja existe com todos os campos necessarios. Nao e necessaria migracao SQL.
+
+### Arquivos afetados
+
+| Arquivo | Acao |
+|---------|------|
+| `src/lib/notifyDocumentAction.ts` | **Novo** - funcao utilitaria |
+| `src/components/meu-rh/EnviarDocumentoModal.tsx` | Adicionar chamada de notificacao |
+| `src/components/meu-rh/EnviarNfseModal.tsx` | Adicionar chamada de notificacao |
+| `src/components/sdr-fechamento/EnviarNfseFechamentoModal.tsx` | Adicionar chamada de notificacao |
+| `src/hooks/useUserFiles.ts` | Adicionar notificacao no onSuccess do upload |
+| `src/hooks/useAssetTerms.ts` | Adicionar notificacao no onSuccess do aceite |
+| `src/hooks/useEmployees.ts` | Adicionar notificacao em createDocument e updateDocument |
