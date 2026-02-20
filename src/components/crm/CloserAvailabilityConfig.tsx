@@ -118,7 +118,7 @@ function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) 
   };
 
   const handleAdd = () => {
-    if (!addingDay || !newTime || !newLink) {
+    if (addingDay === null || addingDay === undefined || !newTime || !newLink) {
       toast.error('Preencha todos os campos');
       return;
     }
