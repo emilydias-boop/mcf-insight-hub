@@ -65,6 +65,10 @@ export interface Asset {
   nota_fiscal_path: string | null;
   status: AssetStatus;
   observacoes: string | null;
+  garantia_inicio: string | null;
+  garantia_fim: string | null;
+  localizacao: string | null;
+  centro_custo: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -106,6 +110,8 @@ export interface AssetTerm {
   assinatura_digital: string | null;
   bloqueado: boolean;
   storage_path: string | null;
+  versao: number;
+  user_agent: string | null;
   created_at: string;
 }
 
@@ -152,7 +158,6 @@ export interface AssetAssignmentWithDetails extends AssetAssignment {
 
 // Form types
 export interface CreateAssetInput {
-  numero_patrimonio: string;
   tipo: AssetType;
   marca?: string;
   modelo?: string;
@@ -161,6 +166,10 @@ export interface CreateAssetInput {
   data_compra?: string;
   fornecedor?: string;
   observacoes?: string;
+  garantia_inicio?: string;
+  garantia_fim?: string;
+  localizacao?: string;
+  centro_custo?: string;
 }
 
 export interface UpdateAssetInput extends Partial<CreateAssetInput> {

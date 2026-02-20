@@ -138,6 +138,7 @@ import GRDetail from "./pages/gerentes-conta/GRDetail";
 import PatrimonioIndex from "./pages/patrimonio/Index";
 import AssetDetailsPage from "./pages/patrimonio/AssetDetailsPage";
 import MyEquipmentPage from "./pages/patrimonio/MyEquipmentPage";
+import PatrimonioRelatorios from "./pages/patrimonio/PatrimonioRelatorios";
 
 // BU CRM Layout
 import BUCRMLayout from "./pages/crm/BUCRMLayout";
@@ -343,6 +344,7 @@ const App = () => (
               <Route path="meu-rh" element={<MeuRH />} />
               <Route path="patrimonio" element={<ResourceGuard resource="patrimonio"><PatrimonioIndex /></ResourceGuard>} />
               <Route path="patrimonio/meus-equipamentos" element={<MyEquipmentPage />} />
+              <Route path="patrimonio/relatorios" element={<ResourceGuard resource="patrimonio"><PatrimonioRelatorios /></ResourceGuard>} />
               <Route path="patrimonio/:id" element={<ResourceGuard resource="patrimonio"><AssetDetailsPage /></ResourceGuard>} />
               <Route path="sdr/minhas-reunioes" element={<RoleGuard allowedRoles={['sdr', 'closer']}><MinhasReunioes /></RoleGuard>} />
               <Route path="closer/meu-desempenho" element={<RoleGuard allowedRoles={['closer']}><MeuDesempenhoCloser /></RoleGuard>} />

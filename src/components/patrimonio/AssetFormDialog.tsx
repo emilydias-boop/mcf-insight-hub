@@ -32,7 +32,6 @@ import {
 import { Loader2, Upload } from 'lucide-react';
 
 const assetSchema = z.object({
-  numero_patrimonio: z.string().min(1, 'Número do patrimônio é obrigatório'),
   tipo: z.enum(['notebook', 'desktop', 'monitor', 'celular', 'tablet', 'impressora', 'outro'] as const),
   marca: z.string().optional(),
   modelo: z.string().optional(),
@@ -41,6 +40,10 @@ const assetSchema = z.object({
   data_compra: z.string().optional(),
   fornecedor: z.string().optional(),
   observacoes: z.string().optional(),
+  garantia_inicio: z.string().optional(),
+  garantia_fim: z.string().optional(),
+  localizacao: z.string().optional(),
+  centro_custo: z.string().optional(),
 });
 
 type AssetFormData = z.infer<typeof assetSchema>;
@@ -66,7 +69,6 @@ export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogPr
   } = useForm<AssetFormData>({
     resolver: zodResolver(assetSchema),
     defaultValues: asset ? {
-      numero_patrimonio: asset.numero_patrimonio,
       tipo: asset.tipo,
       marca: asset.marca || '',
       modelo: asset.modelo || '',
@@ -75,6 +77,10 @@ export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogPr
       data_compra: asset.data_compra || '',
       fornecedor: asset.fornecedor || '',
       observacoes: asset.observacoes || '',
+      garantia_inicio: asset.garantia_inicio || '',
+      garantia_fim: asset.garantia_fim || '',
+      localizacao: asset.localizacao || '',
+      centro_custo: asset.centro_custo || '',
     } : {
       tipo: 'notebook',
     },
@@ -122,28 +128,24 @@ export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Editar Equipamento' : 'Novo Equipamento'}</DialogTitle>
           <DialogDescription>
-            {isEdit ? 'Atualize os dados do equipamento' : 'Cadastre um novo equipamento de TI'}
+            {isEdit ? 'Atualize os dados do equipamento' : 'Cadastre um novo equipamento de TI. O número de patrimônio será gerado automaticamente.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          {/* Show patrimônio number read-only in edit mode */}
+          {isEdit && (
             <div className="space-y-2">
-              <Label htmlFor="numero_patrimonio">Número do Patrimônio *</Label>
-              <Input
-                id="numero_patrimonio"
-                {...register('numero_patrimonio')}
-                placeholder="Ex: TI-001"
-                disabled={isEdit}
-              />
-              {errors.numero_patrimonio && (
-                <p className="text-sm text-destructive">{errors.numero_patrimonio.message}</p>
-              )}
+              <Label>Número do Patrimônio</Label>
+              <Input value={asset.numero_patrimonio} disabled className="bg-muted" />
+              <p className="text-xs text-muted-foreground">Gerado automaticamente. Somente admin pode editar.</p>
             </div>
+          )}
 
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="tipo">Tipo *</Label>
               <Select value={tipo} onValueChange={(v) => setValue('tipo', v as AssetType)}>
@@ -188,6 +190,26 @@ export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogPr
             <div className="space-y-2">
               <Label htmlFor="fornecedor">Fornecedor</Label>
               <Input {...register('fornecedor')} placeholder="Nome do fornecedor" />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="localizacao">Localização</Label>
+              <Input {...register('localizacao')} placeholder="Ex: Sala 201, Andar 3" />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="centro_custo">Centro de Custo</Label>
+              <Input {...register('centro_custo')} placeholder="Ex: TI-001" />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="garantia_inicio">Garantia - Início</Label>
+              <Input type="date" {...register('garantia_inicio')} />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="garantia_fim">Garantia - Fim</Label>
+              <Input type="date" {...register('garantia_fim')} />
             </div>
           </div>
 
