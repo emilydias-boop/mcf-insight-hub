@@ -72,6 +72,29 @@ function getEmployeeEmail(emp: { email_pessoal?: string | null }): string | null
   return emp.email_pessoal || null;
 }
 
+function buildEmailHtml(subject: string, message: string): string {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+      <div style="background: #1a1a2e; padding: 24px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 20px;">MCF - Minha Casa Financiada</h1>
+      </div>
+      <div style="padding: 32px 24px;">
+        <h2 style="color: #1a1a2e; margin: 0 0 16px;">${subject}</h2>
+        <p style="color: #333; font-size: 15px; line-height: 1.6;">${message}</p>
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="https://mcf-insight-hub.lovable.app" 
+             style="background: #1a1a2e; color: #fff; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+            Ver no Sistema
+          </a>
+        </div>
+      </div>
+      <div style="background: #f5f5f5; padding: 16px 24px; text-align: center; font-size: 12px; color: #888;">
+        Este é um email automático. Por favor, não responda.
+      </div>
+    </div>
+  `;
+}
+
 async function sendDocumentEmail(
   to: string,
   recipientName: string,
@@ -80,11 +103,18 @@ async function sendDocumentEmail(
   action: DocumentAction
 ): Promise<void> {
   try {
-    await supabase.functions.invoke('send-document-email', {
-      body: { to, recipientName, subject, message, action },
+    const content = buildEmailHtml(subject, message);
+    await supabase.functions.invoke('activecampaign-send', {
+      body: {
+        email: to,
+        name: recipientName,
+        subject,
+        content,
+        tags: ['notificacao_documento', action],
+      },
     });
   } catch (err) {
-    console.error('Erro ao enviar email de documento:', err);
+    console.error('Erro ao enviar email de documento via ActiveCampaign:', err);
   }
 }
 
