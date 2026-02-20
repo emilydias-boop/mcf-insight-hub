@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { notifyDocumentAction } from "@/lib/notifyDocumentAction";
 import { Loader2, Upload } from "lucide-react";
 
 interface EnviarDocumentoModalProps {
@@ -67,6 +68,14 @@ export function EnviarDocumentoModal({
       if (updateError) throw updateError;
 
       toast.success('Documento enviado com sucesso!');
+      
+      // Notify both employee and manager
+      notifyDocumentAction({
+        employeeId,
+        action: 'documento_enviado',
+        documentTitle,
+        sentBy: 'colaborador',
+      });
       
       // Reset form
       setFile(null);

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { AssetTerm } from '@/types/patrimonio';
 import { toast } from 'sonner';
+import { notifyDocumentAction } from '@/lib/notifyDocumentAction';
 
 // Fetch terms for an employee
 export const useAssetTerms = (employeeId: string | undefined) => {
@@ -209,6 +210,24 @@ export const useTermMutations = () => {
       queryClient.invalidateQueries({ queryKey: ['my-files'] });
       queryClient.invalidateQueries({ queryKey: ['user-files'] });
       toast.success('Termo aceito com sucesso!');
+
+      // Notify both employee and manager
+      try {
+        const { data: assetInfo } = await supabase
+          .from('assets')
+          .select('numero_patrimonio')
+          .eq('id', data.asset_id)
+          .single();
+        
+        notifyDocumentAction({
+          employeeId: data.employee_id,
+          action: 'termo_aceito',
+          documentTitle: `Termo - ${assetInfo?.numero_patrimonio || 'Equipamento'}`,
+          sentBy: 'colaborador',
+        });
+      } catch {
+        // silent
+      }
     },
     onError: (error: Error) => {
       toast.error(`Erro ao aceitar termo: ${error.message}`);
