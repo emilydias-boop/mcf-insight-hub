@@ -275,3 +275,6 @@ verify_jwt = false
 
 [functions.send-document-email]
 verify_jwt = false
+
+[functions.distribute-outside-leads]
+verify_jwt = false
