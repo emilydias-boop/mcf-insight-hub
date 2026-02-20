@@ -1,72 +1,45 @@
 
-# Corrigir Travamento da Semana Customizada no Carrinho R2
+# Permitir Navegacao de Semanas com Override Ativo
 
 ## Problema
 
-Dois bugs combinados causam o travamento:
+Os botoes de navegacao (anterior, proximo, hoje) estao desabilitados quando existe um override de semana customizada. O usuario precisa navegar entre semanas mesmo com override ativo, e tambem precisa configurar um novo carrinho de terca (24/02) ate sexta (28/02) para fechar o mes.
 
-1. **Instabilidade de referencia**: O hook `useCarrinhoWeekOverride` retorna objetos `Date`, que quebram o "structural sharing" do React Query. Cada re-render recebe uma nova referencia, causando cascata de re-renders que trava a pagina.
+## Causa
 
-2. **Hooks ignoram o override**: Os hooks de dados (`useR2CarrinhoKPIs`, `useR2CarrinhoData`, `useR2ForaDoCarrinhoData`, `useR2CarrinhoVendas`) recebem `weekDate` e internamente calculam as datas via `getCustomWeekStart/End`, ignorando completamente as datas customizadas. Apenas `useR2MeetingsExtended` usa as datas do override.
+Linhas 120, 124 e 132 de `R2Carrinho.tsx` tem `disabled={!!override}`, bloqueando toda navegacao quando o override esta ativo.
 
 ## Solucao
 
-### 1. Estabilizar o hook de override (`useCarrinhoWeekOverride.ts`)
+Quando o usuario clicar nos botoes de navegacao (anterior, proximo, hoje) enquanto houver um override ativo, o sistema deve **limpar o override automaticamente** e navegar normalmente. Isso permite que o usuario saia da semana customizada a qualquer momento sem precisar abrir o dialog de configuracao.
 
-Retornar strings formatadas (`yyyy-MM-dd`) em vez de objetos `Date`. Strings sao comparaveis por valor e o React Query consegue fazer structural sharing corretamente, evitando re-renders desnecessarios.
-
-### 2. Modificar hooks para aceitar datas explicitas
-
-Alterar a assinatura dos 4 hooks de dados para aceitar `weekStart` e `weekEnd` como parametros (em vez de `weekDate`), eliminando o calculo interno via `getCustomWeekStart/End`:
-
-- `useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date)`
-- `useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?)`
-- `useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date)`
-- `useR2CarrinhoVendas(weekStart: Date, weekEnd: Date)`
-
-### 3. Atualizar R2Carrinho.tsx
-
-Calcular `weekStart`/`weekEnd` uma unica vez na pagina (considerando o override) e passar para todos os hooks.
-
-## Detalhes Tecnicos
-
-### Arquivo: `src/hooks/useCarrinhoWeekOverride.ts`
-
-- Retornar `{ start: string, end: string, label: string }` (strings ISO) em vez de `{ start: Date, end: Date, label: string }`
-- Isso garante estabilidade de referencia no React Query
-
-### Arquivo: `src/hooks/useR2CarrinhoKPIs.ts`
-
-- Mudar assinatura de `useR2CarrinhoKPIs(weekDate: Date)` para `useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date)`
-- Remover calculo interno de `getCustomWeekStart/End`
-
-### Arquivo: `src/hooks/useR2CarrinhoData.ts`
-
-- Mudar assinatura de `useR2CarrinhoData(weekDate, filter)` para `useR2CarrinhoData(weekStart, weekEnd, filter)`
-- Remover calculo interno de `getCustomWeekStart/End`
-
-### Arquivo: `src/hooks/useR2ForaDoCarrinhoData.ts`
-
-- Mudar assinatura de `useR2ForaDoCarrinhoData(weekDate)` para `useR2ForaDoCarrinhoData(weekStart, weekEnd)`
-- Remover calculo interno
-
-### Arquivo: `src/hooks/useR2CarrinhoVendas.ts`
-
-- Mudar assinatura de `useR2CarrinhoVendas(weekDate)` para `useR2CarrinhoVendas(weekStart, weekEnd)`
-- Remover calculo interno
+## Alteracao
 
 ### Arquivo: `src/pages/crm/R2Carrinho.tsx`
 
-- Converter override strings para `Date` com `parseISO` (uma vez, memoizado)
-- Passar `weekStart`/`weekEnd` para todos os hooks em vez de `weekDate`
-- Tambem ajustar `R2MetricsPanel` para receber `weekStart`/`weekEnd`
+1. Remover `disabled={!!override}` dos 3 botoes de navegacao
+2. Nos handlers `handlePrevWeek`, `handleNextWeek` e `handleToday`, adicionar logica para limpar o override se estiver ativo antes de navegar:
 
-### Arquivo: `src/components/crm/R2MetricsPanel.tsx`
+```text
+handlePrevWeek:
+  se override ativo -> removeOverride + setWeekDate para uma semana antes do override.start
+  senao -> setWeekDate(subWeeks(weekDate, 1))
 
-- Verificar se usa `weekDate` internamente e ajustar para receber `weekStart`/`weekEnd`
+handleNextWeek:
+  se override ativo -> removeOverride + setWeekDate para uma semana depois do override.start
+  senao -> setWeekDate(addWeeks(weekDate, 1))
+
+handleToday:
+  se override ativo -> removeOverride
+  setWeekDate(new Date())
+```
+
+## Sobre o Proximo Carrinho
+
+Para configurar o carrinho de terca 24/02 ate sexta 28/02 (fechando o mes), voce pode usar o mesmo botao de "Ajustar Semana" (icone de calendario) e definir as datas inicio=24/02 e fim=28/02. O dialog ja suporta isso.
 
 ## Resultado
 
-- Sem travamento: strings sao estaveis no React Query
-- Dados corretos: todos os hooks usam as datas do override quando ativo
-- KPIs, listas e metricas refletem a semana customizada corretamente
+- Botoes de navegacao sempre habilitados
+- Clicar em anterior/proximo com override ativo limpa o override e navega normalmente
+- Facil alternar entre semana customizada e navegacao padrao
