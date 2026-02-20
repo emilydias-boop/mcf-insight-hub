@@ -1,40 +1,56 @@
 
 
-# Corrigir erro "foreign key constraint crm_deals_stage_id_fkey" ao mover lead
+# Relatório de Produtos Adquiridos - BU Consórcio
 
-## Problema
+## Objetivo
 
-Ao arrastar um lead no Kanban do pipeline "Efeito Alavanca + Clube", o sistema retorna o erro:
+Adicionar uma 5a aba de relatório ("Produtos") na Central de Relatórios da BU Consórcio, que consolida todos os produtos adquiridos registrados nos deals, permitindo filtrar por período, produto e SDR, com exportação para Excel.
 
-> insert or update on table "crm_deals" violates foreign key constraint "crm_deals_stage_id_fkey"
+## O que será exibido
 
-Isso acontece porque 2 estagios desse pipeline existem na tabela `local_pipeline_stages` mas **nao foram espelhados** na tabela legada `crm_stages`. Como `crm_deals.stage_id` tem uma FK apontando para `crm_stages.id`, mover um deal para esses estagios falha.
+### KPIs no topo
+- Total de produtos registrados (quantidade)
+- Valor total dos produtos
+- Ticket médio por produto
+- Quantidade de leads com pelo menos 1 produto
 
-### Estagios faltando no espelhamento
+### Tabela detalhada
+Cada linha representa um produto registrado em um deal:
+- Lead (nome do deal)
+- Contato (nome, email, telefone do contato vinculado)
+- SDR (owner do deal)
+- Produto (label da opção)
+- Valor (R$)
+- Data de registro
 
-| ID | Nome |
-|---|---|
-| `2357df56-bfad-4c4c-b37b-c5f41ce08af6` | PRODUTOS FECHADOS |
-| `91fcdb43-0103-4f9d-881c-f5c6dabe3c97` | SEM INTERESSE |
+### Filtros
+- Periodo (date range picker)
+- Produto (select com as opções ativas)
+- Busca por nome do lead/contato
 
-## Solucao
+### Exportação Excel
+- Botão para exportar a tabela filtrada em .xlsx
 
-Executar uma migracao SQL que insere os 2 estagios ausentes na tabela `crm_stages`, usando os mesmos UUIDs da `local_pipeline_stages`. Isso restaura o espelhamento e permite que o FK seja satisfeito.
+## Detalhes Tecnicos
 
-## Detalhes tecnicos
+### 1. Novo hook: `src/hooks/useProductsAcquiredReport.ts`
+- Faz query em `deal_produtos_adquiridos` com JOIN em `crm_deals`, `crm_contacts` e `consorcio_produto_adquirido_options`
+- Filtra por `created_at` no range de datas selecionado
+- Retorna lista completa com dados do deal, contato e produto
 
-### Migracao SQL
+### 2. Novo componente: `src/components/relatorios/ProductsReportPanel.tsx`
+- Recebe `bu: BusinessUnit` como prop (seguindo o padrão existente)
+- Implementa filtros, KPIs e tabela paginada
+- Exportação Excel via `xlsx`
+- Segue o mesmo layout visual dos outros painéis (SalesReportPanel, etc.)
 
-```sql
-INSERT INTO crm_stages (id, stage_name, stage_order, is_active, origin_id)
-VALUES
-  ('2357df56-bfad-4c4c-b37b-c5f41ce08af6', 'PRODUTOS FECHADOS', 100, true, '7d7b1cb5-2a44-4552-9eff-c3b798646b78'),
-  ('91fcdb43-0103-4f9d-881c-f5c6dabe3c97', 'SEM INTERESSE', 101, true, '7d7b1cb5-2a44-4552-9eff-c3b798646b78')
-ON CONFLICT (id) DO NOTHING;
-```
+### 3. Atualizar `ReportTypeSelector.tsx`
+- Adicionar tipo `'products'` ao `ReportType` union
+- Adicionar opção com icone `Package` e descrição "Produtos adquiridos por lead"
 
-### Impacto
-- Nenhuma mudanca de codigo no frontend
-- Apenas 1 migracao SQL adicionando 2 registros
-- Corrige imediatamente o erro ao arrastar leads para "PRODUTOS FECHADOS" ou "SEM INTERESSE"
+### 4. Atualizar `BUReportCenter.tsx`
+- Importar e renderizar `ProductsReportPanel` quando `selectedReport === 'products'`
+
+### 5. Atualizar `Relatorio.tsx` (bu-consorcio)
+- Adicionar `'products'` ao array `availableReports`
 
