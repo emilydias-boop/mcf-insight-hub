@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { UserFile, UserFileType } from "@/types/user-management";
+import { notifyDocumentAction } from "@/lib/notifyDocumentAction";
 
 // Buscar arquivos de um usuário específico (modo gestor - vê todos)
 export function useUserFiles(userId: string | null) {
@@ -129,13 +130,33 @@ export function useUploadUserFile() {
 
       return data;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: async (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["user-files", variables.userId] });
       queryClient.invalidateQueries({ queryKey: ["my-files"] });
       toast({
         title: "Arquivo enviado",
         description: "O arquivo foi enviado com sucesso.",
       });
+
+      // Notify: find employee by profile_id (userId) and notify
+      try {
+        const { data: emp } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('profile_id', variables.userId)
+          .single();
+        
+        if (emp) {
+          notifyDocumentAction({
+            employeeId: emp.id,
+            action: 'arquivo_enviado',
+            documentTitle: variables.titulo,
+            sentBy: 'gestor',
+          });
+        }
+      } catch {
+        // silent
+      }
     },
     onError: (error) => {
       console.error("Erro ao enviar arquivo:", error);

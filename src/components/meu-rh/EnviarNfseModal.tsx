@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { notifyDocumentAction } from "@/lib/notifyDocumentAction";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -84,6 +85,14 @@ export function EnviarNfseModal({ open, onOpenChange, employeeId, onSuccess }: E
       if (insertError) throw insertError;
 
       toast.success('NFSe enviada com sucesso!');
+      
+      const selectedLabel = monthOptions.find(m => m.value === selectedMonth)?.label || selectedMonth;
+      notifyDocumentAction({
+        employeeId,
+        action: 'nfse_enviada',
+        documentTitle: `NFSe ${selectedLabel}`,
+        sentBy: 'colaborador',
+      });
       
       // Reset form
       setNumeroNfse('');

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, EmployeeDocument, EmployeeEvent, EmployeeNote, RhNfse } from '@/types/hr';
 import { toast } from 'sonner';
+import { notifyDocumentAction } from '@/lib/notifyDocumentAction';
 
 export function useEmployees() {
   return useQuery({
@@ -347,6 +348,15 @@ export function useEmployeeMutations() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['employee-documents', variables.employee_id] });
       toast.success('Documento adicionado');
+
+      if (variables.employee_id) {
+        notifyDocumentAction({
+          employeeId: variables.employee_id,
+          action: 'documento_recebido',
+          documentTitle: (variables.titulo as string) || 'Documento',
+          sentBy: 'gestor',
+        });
+      }
     },
     onError: (error) => {
       toast.error('Erro ao adicionar documento: ' + error.message);
@@ -365,9 +375,18 @@ export function useEmployeeMutations() {
       if (error) throw error;
       return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['employee-documents'] });
       toast.success('Documento atualizado');
+
+      if (result?.employee_id) {
+        notifyDocumentAction({
+          employeeId: result.employee_id,
+          action: 'status_atualizado',
+          documentTitle: result.titulo || 'Documento',
+          sentBy: 'gestor',
+        });
+      }
     },
     onError: (error) => {
       toast.error('Erro ao atualizar documento: ' + error.message);
