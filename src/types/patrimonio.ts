@@ -169,6 +169,7 @@ export interface CreateAssignmentInput {
   data_liberacao: string;
   data_prevista_devolucao?: string;
   items: { item_tipo: string; descricao?: string }[];
+  observacoes?: string;
 }
 
 export interface ReturnAssignmentInput {

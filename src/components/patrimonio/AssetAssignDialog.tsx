@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import { useAssignmentMutations } from '@/hooks/useAssetAssignments';
 import { useTermMutations, generateTermContent } from '@/hooks/useAssetTerms';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -30,6 +31,7 @@ export const AssetAssignDialog = ({ open, onOpenChange, asset }: AssetAssignDial
   const [dataPrevistaDevolucao, setDataPrevistaDevolucao] = useState('');
   const [selectedItems, setSelectedItems] = useState<Record<string, boolean>>({});
   const [outroDescricao, setOutroDescricao] = useState('');
+  const [observacoes, setObservacoes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { assignAsset } = useAssignmentMutations();
@@ -58,6 +60,7 @@ export const AssetAssignDialog = ({ open, onOpenChange, asset }: AssetAssignDial
         data_liberacao: dataLiberacao,
         data_prevista_devolucao: dataPrevistaDevolucao || undefined,
         items,
+        observacoes: observacoes || undefined,
       });
 
       // Generate and save term
@@ -92,6 +95,7 @@ export const AssetAssignDialog = ({ open, onOpenChange, asset }: AssetAssignDial
     setDataPrevistaDevolucao('');
     setSelectedItems({});
     setOutroDescricao('');
+    setObservacoes('');
   };
 
   return (
@@ -143,6 +147,16 @@ export const AssetAssignDialog = ({ open, onOpenChange, asset }: AssetAssignDial
                 className="mt-2"
               />
             )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Observações</Label>
+            <Textarea
+              placeholder="Observações sobre a liberação (opcional)"
+              value={observacoes}
+              onChange={e => setObservacoes(e.target.value)}
+              rows={3}
+            />
           </div>
         </div>
 
