@@ -9740,6 +9740,7 @@ export type Database = {
         | "politica_comissao"
         | "metas"
         | "outro"
+        | "termo_responsabilidade"
       user_status: "ativo" | "ferias" | "inativo" | "pendente_aprovacao"
     }
     CompositeTypes: {
@@ -10002,6 +10003,7 @@ export const Constants = {
         "politica_comissao",
         "metas",
         "outro",
+        "termo_responsabilidade",
       ],
       user_status: ["ativo", "ferias", "inativo", "pendente_aprovacao"],
     },

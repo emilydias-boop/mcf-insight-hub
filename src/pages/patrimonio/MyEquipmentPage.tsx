@@ -18,14 +18,16 @@ import {
 import { ASSET_TYPE_LABELS } from '@/types/patrimonio';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Laptop, FileCheck, AlertCircle, Loader2 } from 'lucide-react';
+import { Laptop, FileCheck, AlertCircle, Loader2, Eye, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const MyEquipmentPage = () => {
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [termDialogOpen, setTermDialogOpen] = useState(false);
+  const [viewTermDialogOpen, setViewTermDialogOpen] = useState(false);
   const [selectedTerm, setSelectedTerm] = useState<any>(null);
+  const [viewedTerm, setViewedTerm] = useState<any>(null);
   const [accepted, setAccepted] = useState(false);
 
   const { data: myAssets, isLoading: assetsLoading } = useMyAssets(employeeId || undefined);
@@ -110,7 +112,8 @@ const MyEquipmentPage = () => {
           myAssets.map((assignment: any) => {
             const asset = assignment.asset;
             if (!asset) return null;
-            const term = myTerms?.find((t: any) => t.asset_id === asset.id && !t.aceito);
+            const pendingTerm = myTerms?.find((t: any) => t.asset_id === asset.id && !t.aceito);
+            const acceptedTerm = myTerms?.find((t: any) => t.asset_id === asset.id && t.aceito);
             
             return (
               <Card key={assignment.id}>
@@ -120,7 +123,15 @@ const MyEquipmentPage = () => {
                       <Laptop className="h-4 w-4" />
                       {asset.numero_patrimonio}
                     </CardTitle>
-                    <Badge variant="outline">{ASSET_TYPE_LABELS[asset.tipo as keyof typeof ASSET_TYPE_LABELS] || asset.tipo}</Badge>
+                    <div className="flex items-center gap-2">
+                      {acceptedTerm && (
+                        <Badge variant="default">
+                          <CheckCircle2 className="mr-1 h-3 w-3" />
+                          Termo Aceito
+                        </Badge>
+                      )}
+                      <Badge variant="outline">{ASSET_TYPE_LABELS[asset.tipo as keyof typeof ASSET_TYPE_LABELS] || asset.tipo}</Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2">
@@ -137,14 +148,25 @@ const MyEquipmentPage = () => {
                       ))}
                     </div>
                   )}
-                  {term && (
+                  {pendingTerm && (
                     <Button
                       size="sm"
                       className="w-full mt-2"
-                      onClick={() => { setSelectedTerm(term); setTermDialogOpen(true); setAccepted(false); }}
+                      onClick={() => { setSelectedTerm(pendingTerm); setTermDialogOpen(true); setAccepted(false); }}
                     >
                       <FileCheck className="mr-2 h-4 w-4" />
                       Aceitar Termo
+                    </Button>
+                  )}
+                  {acceptedTerm && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full mt-2"
+                      onClick={() => { setViewedTerm(acceptedTerm); setViewTermDialogOpen(true); }}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      Ver Termo
                     </Button>
                   )}
                 </CardContent>
@@ -189,6 +211,34 @@ const MyEquipmentPage = () => {
               {acceptTerm.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Aceitar Termo
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Accepted Term Dialog */}
+      <Dialog open={viewTermDialogOpen} onOpenChange={setViewTermDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-primary" />
+              Termo de Responsabilidade
+            </DialogTitle>
+            <DialogDescription>Termo aceito - visualização somente leitura.</DialogDescription>
+          </DialogHeader>
+          {viewedTerm && (
+            <div className="space-y-4">
+              <div className="prose prose-sm max-w-none whitespace-pre-wrap border p-4 rounded-lg bg-muted/30 max-h-[400px] overflow-y-auto text-sm">
+                {viewedTerm.termo_conteudo}
+              </div>
+              <div className="border rounded-lg p-3 bg-muted/20 space-y-1 text-xs text-muted-foreground">
+                <p><strong>Data do aceite:</strong> {viewedTerm.data_aceite ? format(new Date(viewedTerm.data_aceite), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : '-'}</p>
+                <p><strong>Versão:</strong> {viewedTerm.versao || 1}</p>
+                {viewedTerm.ip_aceite && <p><strong>IP:</strong> {viewedTerm.ip_aceite}</p>}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewTermDialogOpen(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
