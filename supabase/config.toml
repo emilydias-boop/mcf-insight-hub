@@ -272,3 +272,6 @@ verify_jwt = false
 
 [functions.backfill-construir-alugar]
 verify_jwt = false
+
+[functions.send-document-email]
+verify_jwt = false

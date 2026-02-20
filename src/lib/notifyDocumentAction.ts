@@ -68,6 +68,26 @@ function getMessageForAction(
   return `Você enviou "${documentTitle}" para ${employeeName}.`;
 }
 
+function getEmployeeEmail(emp: { email_pessoal?: string | null }): string | null {
+  return emp.email_pessoal || null;
+}
+
+async function sendDocumentEmail(
+  to: string,
+  recipientName: string,
+  subject: string,
+  message: string,
+  action: DocumentAction
+): Promise<void> {
+  try {
+    await supabase.functions.invoke('send-document-email', {
+      body: { to, recipientName, subject, message, action },
+    });
+  } catch (err) {
+    console.error('Erro ao enviar email de documento:', err);
+  }
+}
+
 export async function notifyDocumentAction({
   employeeId,
   action,
@@ -75,31 +95,34 @@ export async function notifyDocumentAction({
   sentBy,
 }: NotifyDocumentActionParams): Promise<void> {
   try {
-    // 1. Fetch employee with profile_id and gestor_id
+    // 1. Fetch employee with profile_id, gestor_id, and emails
     const { data: emp } = await supabase
       .from('employees')
-      .select('profile_id, gestor_id, nome_completo')
+      .select('profile_id, gestor_id, nome_completo, email_pessoal')
       .eq('id', employeeId)
       .single();
 
     if (!emp) return;
 
-    // 2. Fetch gestor profile_id
+    // 2. Fetch gestor profile_id and emails
     let gestorProfileId: string | null = null;
     let gestorName = 'Gestor';
+    let gestorEmail: string | null = null;
 
     if (emp.gestor_id) {
       const { data: gestor } = await supabase
         .from('employees')
-        .select('profile_id, nome_completo')
+        .select('profile_id, nome_completo, email_pessoal')
         .eq('id', emp.gestor_id)
         .single();
 
       gestorProfileId = gestor?.profile_id || null;
       gestorName = gestor?.nome_completo || 'Gestor';
+      gestorEmail = gestor ? getEmployeeEmail(gestor) : null;
     }
 
     const employeeName = emp.nome_completo || 'Colaborador';
+    const employeeEmail = getEmployeeEmail(emp);
 
     // 3. Build notifications
     const notifications: Array<{
@@ -109,12 +132,17 @@ export async function notifyDocumentAction({
       type: string;
     }> = [];
 
+    const empTitle = getTitleForAction(action, sentBy === 'colaborador' ? 'self' : 'other', sentBy);
+    const empMessage = getMessageForAction(action, documentTitle, sentBy === 'colaborador' ? 'self' : 'other', sentBy, employeeName, gestorName);
+    const gestorTitle = getTitleForAction(action, sentBy === 'gestor' ? 'self' : 'other', sentBy);
+    const gestorMessage = getMessageForAction(action, documentTitle, sentBy === 'gestor' ? 'self' : 'other', sentBy, employeeName, gestorName);
+
     // Notification for the employee
     if (emp.profile_id) {
       notifications.push({
         user_id: emp.profile_id,
-        title: getTitleForAction(action, sentBy === 'colaborador' ? 'self' : 'other', sentBy),
-        message: getMessageForAction(action, documentTitle, sentBy === 'colaborador' ? 'self' : 'other', sentBy, employeeName, gestorName),
+        title: empTitle,
+        message: empMessage,
         type: sentBy === 'gestor' ? 'action_required' : 'info',
       });
     }
@@ -123,8 +151,8 @@ export async function notifyDocumentAction({
     if (gestorProfileId) {
       notifications.push({
         user_id: gestorProfileId,
-        title: getTitleForAction(action, sentBy === 'gestor' ? 'self' : 'other', sentBy),
-        message: getMessageForAction(action, documentTitle, sentBy === 'gestor' ? 'self' : 'other', sentBy, employeeName, gestorName),
+        title: gestorTitle,
+        message: gestorMessage,
         type: sentBy === 'colaborador' ? 'action_required' : 'info',
       });
     }
@@ -132,6 +160,14 @@ export async function notifyDocumentAction({
     // 4. Insert notifications
     if (notifications.length > 0) {
       await supabase.from('user_notifications').insert(notifications);
+    }
+
+    // 5. Send emails (fire-and-forget)
+    if (employeeEmail) {
+      sendDocumentEmail(employeeEmail, employeeName, empTitle, empMessage, action);
+    }
+    if (gestorEmail) {
+      sendDocumentEmail(gestorEmail, gestorName, gestorTitle, gestorMessage, action);
     }
   } catch (err) {
     // Notifications should never break the main flow
