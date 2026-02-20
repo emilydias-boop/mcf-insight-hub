@@ -37,18 +37,9 @@ const MyEquipmentPage = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('id', user.id)
-        .single();
-
-      if (profile?.email) {
-        // Avoid deep type instantiation on employees table
-        const client: any = supabase;
-        const { data: rows } = await client.from('employees').select('id').eq('email_corporativo', profile.email).limit(1);
-        setEmployeeId(rows?.[0]?.id || null);
-      }
+      const client: any = supabase;
+      const { data: rows } = await client.from('employees').select('id').eq('profile_id', user.id).limit(1);
+      setEmployeeId(rows?.[0]?.id || null);
       setLoading(false);
     };
     loadEmployeeId();
