@@ -1,31 +1,31 @@
 
-# Corrigir erro na RPC `get_sdr_meetings_from_agenda` - coluna `slot_id` nao existe
+# Corrigir coluna `slot_id` para `meeting_slot_id` na RPC
 
-## Problema encontrado
+## Problema confirmado
 
-A migração anterior criou a função RPC com `msa.slot_id`, mas a coluna real na tabela `meeting_slot_attendees` é `meeting_slot_id`. Isso causa o erro:
+A funcao `get_sdr_meetings_from_agenda` no banco de dados ainda usa `msa.slot_id`, mas a coluna real na tabela `meeting_slot_attendees` se chama `meeting_slot_id`. Isso causa o erro:
 
 ```
 ERROR: 42703: column msa.slot_id does not exist
 ```
 
-Por isso a RPC falha completamente e retorna 0 reuniões.
+A migracao de correcao anterior nao foi aplicada, entao a funcao continua quebrada.
 
-## Solução
+## Solucao
 
-Criar uma nova migração SQL que recria a função `get_sdr_meetings_from_agenda` corrigindo a referência de `msa.slot_id` para `msa.meeting_slot_id` no JOIN:
+Aplicar uma migracao SQL que recria a funcao corrigindo apenas o nome da coluna no JOIN:
 
 ```sql
--- Linha incorreta:
+-- De (incorreto):
 JOIN meeting_slots ms ON ms.id = msa.slot_id
 
--- Linha correta:
+-- Para (correto):
 JOIN meeting_slots ms ON ms.id = msa.meeting_slot_id
 ```
 
-## Detalhes técnicos
+## Detalhes tecnicos
 
-- **Arquivo**: Nova migração SQL (DROP + CREATE da função)
-- **Mudança**: Apenas 1 linha - corrigir o nome da coluna no JOIN
-- **Impacto**: Nenhuma mudança no frontend necessária, apenas a correção do SQL
-- Todo o resto da função (campos retornados, filtros, lógica) permanece igual
+- **Escopo**: Apenas 1 linha de SQL precisa mudar dentro da funcao
+- **Migracao**: DROP da funcao existente + CREATE com a coluna corrigida
+- **Frontend**: Nenhuma mudanca necessaria - o mapeamento ja esta correto desde a alteracao anterior
+- **Impacto**: Apenas a funcao `get_sdr_meetings_from_agenda` - nenhuma outra funcao e afetada
