@@ -182,10 +182,13 @@ export const useAssignmentMutations = () => {
         .eq('id', assignment.asset_id);
 
       // Register history
+      const descricao = input.observacoes
+        ? `Equipamento devolvido. Obs: ${input.observacoes}`
+        : `Equipamento devolvido`;
       await supabase.from('asset_history').insert({
         asset_id: assignment.asset_id,
         tipo_evento: 'devolucao',
-        descricao: `Equipamento devolvido`,
+        descricao,
         created_by: userData.user?.id,
       });
 
@@ -261,10 +264,13 @@ export const useAssignmentMutations = () => {
       }
 
       // Register history
+      const descricao = newInput.observacoes
+        ? `Equipamento transferido para novo colaborador. Obs: ${newInput.observacoes}`
+        : `Equipamento transferido para novo colaborador`;
       await supabase.from('asset_history').insert({
         asset_id: newInput.asset_id,
         tipo_evento: 'transferido',
-        descricao: `Equipamento transferido para novo colaborador`,
+        descricao,
         dados_novos: assignment,
         created_by: userData.user?.id,
       });

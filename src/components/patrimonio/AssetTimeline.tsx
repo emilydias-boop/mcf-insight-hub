@@ -109,10 +109,15 @@ export const AssetTimeline = ({ history, isLoading }: AssetTimelineProps) => {
                     
                     {/* Content */}
                     <div className="flex-1 pb-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium">
                           {ASSET_EVENT_LABELS[event.tipo_evento]}
                         </span>
+                        {event.profile?.full_name && (
+                          <span className="text-sm text-muted-foreground">
+                            por {event.profile.full_name}
+                          </span>
+                        )}
                         <span className="text-sm text-muted-foreground">
                           {format(new Date(event.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                         </span>

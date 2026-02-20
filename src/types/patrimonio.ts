@@ -118,6 +118,10 @@ export interface AssetHistory {
   dados_novos: Record<string, unknown> | null;
   created_at: string;
   created_by: string | null;
+  profile?: {
+    full_name: string | null;
+    email: string | null;
+  } | null;
 }
 
 // Extended types with relations
@@ -180,6 +184,7 @@ export interface ReturnAssignmentInput {
     observacao?: string 
   }[];
   novo_status: 'em_estoque' | 'em_manutencao';
+  observacoes?: string;
 }
 
 // Stats type for dashboard

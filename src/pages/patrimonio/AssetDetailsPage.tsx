@@ -2,18 +2,21 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAsset } from '@/hooks/useAssets';
 import { useAssetHistory } from '@/hooks/useAssetHistory';
+import { useAssetAssignments } from '@/hooks/useAssetAssignments';
 import { AssetInfoCard } from '@/components/patrimonio/AssetInfoCard';
 import { AssetTimeline } from '@/components/patrimonio/AssetTimeline';
 import { AssetCurrentHolder } from '@/components/patrimonio/AssetCurrentHolder';
+import { AssetAssignmentHistory } from '@/components/patrimonio/AssetAssignmentHistory';
 import { AssetStatusBadge } from '@/components/patrimonio/AssetStatusBadge';
 import { AssetFormDialog } from '@/components/patrimonio/AssetFormDialog';
 import { AssetAssignDialog } from '@/components/patrimonio/AssetAssignDialog';
 import { AssetReturnDialog } from '@/components/patrimonio/AssetReturnDialog';
+import { AssetTransferDialog } from '@/components/patrimonio/AssetTransferDialog';
 import { AssetMaintenanceDialog } from '@/components/patrimonio/AssetMaintenanceDialog';
 import { AssetWriteOffDialog } from '@/components/patrimonio/AssetWriteOffDialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Edit, UserPlus, Undo2, Wrench, XCircle } from 'lucide-react';
+import { ArrowLeft, Edit, UserPlus, Undo2, ArrowRightLeft, Wrench, XCircle } from 'lucide-react';
 
 const AssetDetailsPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -21,10 +24,12 @@ const AssetDetailsPage = () => {
   
   const { data: asset, isLoading: assetLoading } = useAsset(id);
   const { data: history, isLoading: historyLoading } = useAssetHistory(id);
+  const { data: assignments, isLoading: assignmentsLoading } = useAssetAssignments(id);
 
   const [editOpen, setEditOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [writeOffOpen, setWriteOffOpen] = useState(false);
 
@@ -58,6 +63,7 @@ const AssetDetailsPage = () => {
 
   const canAssign = asset.status === 'em_estoque';
   const canReturn = asset.status === 'em_uso' && asset.current_assignment;
+  const canTransfer = asset.status === 'em_uso' && asset.current_assignment;
   const canMaintenance = asset.status === 'em_uso' || asset.status === 'em_estoque';
   const canWriteOff = asset.status !== 'baixado';
 
@@ -81,7 +87,7 @@ const AssetDetailsPage = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
             <Edit className="mr-2 h-4 w-4" />
             Editar
@@ -91,6 +97,13 @@ const AssetDetailsPage = () => {
             <Button size="sm" onClick={() => setAssignOpen(true)}>
               <UserPlus className="mr-2 h-4 w-4" />
               Liberar
+            </Button>
+          )}
+
+          {canTransfer && (
+            <Button variant="secondary" size="sm" onClick={() => setTransferOpen(true)}>
+              <ArrowRightLeft className="mr-2 h-4 w-4" />
+              Transferir
             </Button>
           )}
           
@@ -128,6 +141,7 @@ const AssetDetailsPage = () => {
         {/* Sidebar */}
         <div className="space-y-6">
           <AssetCurrentHolder assignment={asset.current_assignment} />
+          <AssetAssignmentHistory assignments={assignments || []} isLoading={assignmentsLoading} />
         </div>
       </div>
 
@@ -135,6 +149,7 @@ const AssetDetailsPage = () => {
       <AssetFormDialog open={editOpen} onOpenChange={setEditOpen} asset={asset} />
       <AssetAssignDialog open={assignOpen} onOpenChange={setAssignOpen} asset={asset} />
       <AssetReturnDialog open={returnOpen} onOpenChange={setReturnOpen} asset={asset} />
+      <AssetTransferDialog open={transferOpen} onOpenChange={setTransferOpen} asset={asset} currentAssignment={asset.current_assignment as any} />
       <AssetMaintenanceDialog open={maintenanceOpen} onOpenChange={setMaintenanceOpen} asset={asset} />
       <AssetWriteOffDialog open={writeOffOpen} onOpenChange={setWriteOffOpen} asset={asset} />
     </div>
