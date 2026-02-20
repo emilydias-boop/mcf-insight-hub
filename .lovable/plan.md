@@ -1,47 +1,31 @@
 
-# Corrigir filtro de reunioes por SDR - campo `intermediador` retorna NOME, nao EMAIL
+# Corrigir erro na RPC `get_sdr_meetings_from_agenda` - coluna `slot_id` nao existe
 
-## Problema
+## Problema encontrado
 
-A funcao RPC `get_sdr_meetings_from_agenda` retorna o campo `intermediador` como o **nome completo** do SDR (ex: "Juliana Rodrigues dos Santos"), mas o frontend filtra comparando `intermediador` com o **email** do SDR (ex: "juliana.rodrigues@minhacasafinanciada.com"). Como nome nunca e igual a email, a tabela de reunioes fica sempre vazia.
+A migração anterior criou a função RPC com `msa.slot_id`, mas a coluna real na tabela `meeting_slot_attendees` é `meeting_slot_id`. Isso causa o erro:
 
-Exemplo do banco:
-- `intermediador` = "Juliana Rodrigues dos Santos" (vem de `COALESCE(p.full_name, p.email, '')`)
-- Frontend compara com `juliana.rodrigues@minhacasafinanciada.com` -- nunca bate
-
-## Solucao
-
-### 1. Alterar a funcao RPC (migracao SQL)
-
-Adicionar um campo `sdr_email` na tabela de retorno da funcao, retornando `p.email` diretamente. Isso permite que o frontend filtre por email sem perder o nome para exibicao.
-
-```sql
--- Adicionar ao RETURNS TABLE:
-sdr_email text
-
--- No SELECT:
-COALESCE(p.email, '') as sdr_email
+```
+ERROR: 42703: column msa.slot_id does not exist
 ```
 
-### 2. Atualizar o mapeamento no frontend
+Por isso a RPC falha completamente e retorna 0 reuniões.
 
-**Arquivo: `src/hooks/useSdrMeetingsFromAgenda.ts`**
-- Adicionar `sdr_email` na interface `AgendaMeetingRow`
-- Mapear `row.sdr_email` para um novo campo ou usar como `current_owner`
+## Solução
 
-**Arquivo: `src/hooks/useSdrMetricsV2.ts`**
-- Verificar se `MeetingV2` precisa de um campo `sdr_email` adicional
+Criar uma nova migração SQL que recria a função `get_sdr_meetings_from_agenda` corrigindo a referência de `msa.slot_id` para `msa.meeting_slot_id` no JOIN:
 
-**Arquivo: `src/hooks/useTeamMeetingsData.ts`**
-- Alterar `getMeetingsForSDR` para filtrar por `m.current_owner` (email) em vez de `m.intermediador` (nome)
-- Alterar `allMeetings` para usar o mesmo campo de email
+```sql
+-- Linha incorreta:
+JOIN meeting_slots ms ON ms.id = msa.slot_id
 
-### Detalhes tecnicos
+-- Linha correta:
+JOIN meeting_slots ms ON ms.id = msa.meeting_slot_id
+```
 
-A mudanca principal e:
-- RPC retorna `sdr_email` (email do perfil que agendou)
-- Frontend mapeia `sdr_email` para `current_owner` no `MeetingV2`
-- Filtros usam `current_owner` (email) em vez de `intermediador` (nome)
-- `intermediador` continua sendo o nome para exibicao na tabela
+## Detalhes técnicos
 
-Nenhuma outra pagina e afetada pois o campo `intermediador` continua existindo com o nome para display.
+- **Arquivo**: Nova migração SQL (DROP + CREATE da função)
+- **Mudança**: Apenas 1 linha - corrigir o nome da coluna no JOIN
+- **Impacto**: Nenhuma mudança no frontend necessária, apenas a correção do SQL
+- Todo o resto da função (campos retornados, filtros, lógica) permanece igual
