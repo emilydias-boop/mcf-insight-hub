@@ -1,56 +1,53 @@
 
+# Bloquear agendamento duplicado com regras de prazo
 
-# Relatório de Produtos Adquiridos - BU Consórcio
+## Problema
+O sistema permite agendar o mesmo lead multiplas vezes sem verificacao. Precisamos bloquear reagendamento com regras diferentes por status:
 
-## Objetivo
+- **Reuniao ativa** (scheduled/invited/rescheduled): bloqueio total
+- **No-Show**: liberado imediatamente para reagendar
+- **Realizada** (completed): prazo de 30 dias antes de permitir novo agendamento
 
-Adicionar uma 5a aba de relatório ("Produtos") na Central de Relatórios da BU Consórcio, que consolida todos os produtos adquiridos registrados nos deals, permitindo filtrar por período, produto e SDR, com exportação para Excel.
+## O que muda para o usuario
 
-## O que será exibido
+Ao tentar agendar um lead:
+- Se ja tem reuniao **pendente**: alerta vermelho "Este lead ja possui reuniao agendada para DD/MM as HH:MM. Finalize antes de reagendar." Botao desabilitado.
+- Se tem reuniao **realizada ha menos de 30 dias**: alerta amarelo "Este lead teve reuniao realizada em DD/MM. Novo agendamento liberado a partir de DD/MM." Botao desabilitado.
+- Se tem reuniao **realizada ha mais de 30 dias** ou **no-show**: sem bloqueio, agendamento normal.
 
-### KPIs no topo
-- Total de produtos registrados (quantidade)
-- Valor total dos produtos
-- Ticket médio por produto
-- Quantidade de leads com pelo menos 1 produto
+## Detalhes tecnicos
 
-### Tabela detalhada
-Cada linha representa um produto registrado em um deal:
-- Lead (nome do deal)
-- Contato (nome, email, telefone do contato vinculado)
-- SDR (owner do deal)
-- Produto (label da opção)
-- Valor (R$)
-- Data de registro
+### 1. Novo hook: `src/hooks/useCheckActiveMeeting.ts`
 
-### Filtros
-- Periodo (date range picker)
-- Produto (select com as opções ativas)
-- Busca por nome do lead/contato
+Recebe `dealId` (e opcionalmente `contactPhone`) e faz query em `meeting_slot_attendees` + `meeting_slots`:
 
-### Exportação Excel
-- Botão para exportar a tabela filtrada em .xlsx
+- Verifica se existe attendee com status `invited`/`scheduled` em slot com status `scheduled`/`rescheduled` (bloqueio total)
+- Verifica se existe attendee com status `completed` cuja `scheduled_at` esta dentro dos ultimos 30 dias (bloqueio com prazo)
+- Retorna `{ blocked: boolean; reason: string; unblockDate?: Date; activeMeetingDate?: Date }`
 
-## Detalhes Tecnicos
+### 2. Frontend - `QuickScheduleModal.tsx` (R1)
 
-### 1. Novo hook: `src/hooks/useProductsAcquiredReport.ts`
-- Faz query em `deal_produtos_adquiridos` com JOIN em `crm_deals`, `crm_contacts` e `consorcio_produto_adquirido_options`
-- Filtra por `created_at` no range de datas selecionado
-- Retorna lista completa com dados do deal, contato e produto
+Apos selecionar o deal:
+- Chamar `useCheckActiveMeeting(selectedDealId)`
+- Se `blocked`, exibir alerta (Alert component) com a mensagem e desabilitar botao de confirmar
+- Alerta vermelho para reuniao ativa, amarelo para prazo de 30 dias
 
-### 2. Novo componente: `src/components/relatorios/ProductsReportPanel.tsx`
-- Recebe `bu: BusinessUnit` como prop (seguindo o padrão existente)
-- Implementa filtros, KPIs e tabela paginada
-- Exportação Excel via `xlsx`
-- Segue o mesmo layout visual dos outros painéis (SalesReportPanel, etc.)
+### 3. Frontend - `R2QuickScheduleModal.tsx` (R2)
 
-### 3. Atualizar `ReportTypeSelector.tsx`
-- Adicionar tipo `'products'` ao `ReportType` union
-- Adicionar opção com icone `Package` e descrição "Produtos adquiridos por lead"
+Mesma logica do R1, adaptada para o modal R2.
 
-### 4. Atualizar `BUReportCenter.tsx`
-- Importar e renderizar `ProductsReportPanel` quando `selectedReport === 'products'`
+### 4. Backend guard - `calendly-create-event/index.ts`
 
-### 5. Atualizar `Relatorio.tsx` (bu-consorcio)
-- Adicionar `'products'` ao array `availableReports`
+Adicionar verificacao antes de criar o attendee:
+- Mesma logica do hook (reuniao ativa ou realizada ha menos de 30 dias)
+- Se bloqueado, retornar `{ success: false, error: "Lead ja possui reuniao ativa/recente" }`
+- Isso garante protecao mesmo se o frontend for burlado
 
+### Arquivos a criar/modificar
+
+| Arquivo | Acao |
+|---|---|
+| `src/hooks/useCheckActiveMeeting.ts` | Criar |
+| `src/components/crm/QuickScheduleModal.tsx` | Modificar - adicionar alerta |
+| `src/components/crm/R2QuickScheduleModal.tsx` | Modificar - adicionar alerta |
+| `supabase/functions/calendly-create-event/index.ts` | Modificar - guard backend |
