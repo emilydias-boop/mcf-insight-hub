@@ -34,13 +34,13 @@ async function batchedIn<T>(
 /**
  * Hook to detect "Outside" deals in the Kanban board.
  * A deal is "Outside" if its contact has a completed contract transaction
- * (hubla_transactions with product_name ILIKE '%Contrato%') with sale_date
- * BEFORE the deal's created_at date.
+ * (hubla_transactions with product_name ILIKE '%Contrato%') AND either:
+ *   - No R1 meeting exists for that deal, OR
+ *   - The contract sale_date is <= the earliest R1 meeting scheduled_at
  *
  * Returns a Map<dealId, boolean>.
  */
 export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
-  // Build a stable query key from deal ids + emails
   const keyParts = deals.map(d => `${d.id}:${d.crm_contacts?.email || ''}`).join(',');
 
   return useQuery({
@@ -49,36 +49,49 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
       const result = new Map<string, boolean>();
       if (!deals.length) return result;
 
-      // Collect unique emails
-      const emailToDealIds = new Map<string, { dealId: string; createdAt: string }[]>();
+      // 1. Collect unique emails -> deal mappings
+      const emailToDealIds = new Map<string, { dealId: string }[]>();
       for (const deal of deals) {
         const email = deal.crm_contacts?.email?.toLowerCase().trim();
-        if (!email || !deal.created_at) continue;
+        if (!email) continue;
         const existing = emailToDealIds.get(email) || [];
-        existing.push({ dealId: deal.id, createdAt: deal.created_at });
+        existing.push({ dealId: deal.id });
         emailToDealIds.set(email, existing);
       }
 
       const uniqueEmails = Array.from(emailToDealIds.keys());
       if (!uniqueEmails.length) return result;
 
-      // Fetch contract transactions (batched)
-      const contracts = await batchedIn<{
-        customer_email: string | null;
-        sale_date: string;
-      }>(
-        (chunk) =>
-          supabase
-            .from('hubla_transactions')
-            .select('customer_email, sale_date')
-            .in('customer_email', chunk)
-            .ilike('product_name', '%Contrato%')
-            .eq('sale_status', 'completed')
-            .order('sale_date', { ascending: true }),
-        uniqueEmails
-      );
+      // 2. Collect unique deal IDs for R1 meeting lookup
+      const dealIds = deals.map(d => d.id);
 
-      // Build email -> earliest contract date map
+      // 3. Fetch contract transactions AND R1 meetings in parallel
+      const [contracts, r1Attendees] = await Promise.all([
+        // Contracts (existing logic)
+        batchedIn<{ customer_email: string | null; sale_date: string }>(
+          (chunk) =>
+            supabase
+              .from('hubla_transactions')
+              .select('customer_email, sale_date')
+              .in('customer_email', chunk)
+              .ilike('product_name', '%Contrato%')
+              .eq('sale_status', 'completed')
+              .order('sale_date', { ascending: true }),
+          uniqueEmails
+        ),
+        // R1 meetings by deal_id
+        batchedIn<{ deal_id: string | null; meeting_slots: { scheduled_at: string; meeting_type: string | null } }>(
+          (chunk) =>
+            supabase
+              .from('meeting_slot_attendees')
+              .select('deal_id, meeting_slots!inner(scheduled_at, meeting_type)')
+              .in('deal_id', chunk)
+              .eq('meeting_slots.meeting_type', 'r1') as any,
+          dealIds
+        ),
+      ]);
+
+      // 4. Build email -> earliest contract date
       const earliestContract = new Map<string, Date>();
       for (const c of contracts) {
         const email = c.customer_email?.toLowerCase().trim();
@@ -90,13 +103,31 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         }
       }
 
-      // Compare: Outside = contract sale_date < deal created_at
+      // 5. Build dealId -> earliest R1 scheduled_at
+      const earliestR1 = new Map<string, Date>();
+      for (const a of r1Attendees) {
+        if (!a.deal_id) continue;
+        const slot = a.meeting_slots as any;
+        const scheduledAt = new Date(slot.scheduled_at);
+        const existing = earliestR1.get(a.deal_id);
+        if (!existing || scheduledAt < existing) {
+          earliestR1.set(a.deal_id, scheduledAt);
+        }
+      }
+
+      // 6. Determine Outside: has contract AND (no R1 OR contract <= R1)
       for (const [email, dealEntries] of emailToDealIds) {
         const contractDate = earliestContract.get(email);
+        if (!contractDate) continue; // No contract = not outside
+
         for (const entry of dealEntries) {
-          if (contractDate) {
-            const dealDate = new Date(entry.createdAt);
-            result.set(entry.dealId, contractDate < dealDate);
+          const r1Date = earliestR1.get(entry.dealId);
+          if (!r1Date) {
+            // Has contract but no R1 meeting -> Outside
+            result.set(entry.dealId, true);
+          } else {
+            // Has contract and R1 -> Outside if contract was paid before/on R1
+            result.set(entry.dealId, contractDate <= r1Date);
           }
         }
       }
