@@ -1,58 +1,64 @@
 
-# Visibilidade de Leads Outside no Kanban
+# Fix: Outside Detection Logic for Kanban Deals
 
-## Objetivo
+## Problem
 
-Permitir que a gestora (Jessica Bellini) identifique visualmente e filtre leads "Outside" no Kanban para distribui-los manualmente aos SDRs via transferencia em massa.
+The current `useOutsideDetectionForDeals` hook uses a flawed comparison: it checks if `contractDate < dealCreatedAt`. This misses cases like "Anderson Dalla Vecchia" where:
+- Deal created: Nov 24, 2025
+- Contract paid: Feb 20, 2026
+- No R1 meeting exists
 
-## Alteracoes
+Since the contract was paid AFTER the deal was created, the current logic says "not Outside". But this lead IS Outside because they paid the contract without going through an R1 meeting.
 
-### 1. Novo hook: `src/hooks/useOutsideDetectionForDeals.ts`
+## Root Cause
 
-Hook dedicado para detectar Outside em deals do Kanban. Recebe um array de deals, extrai emails dos contatos, busca `hubla_transactions` com `product_name ILIKE '%Contrato%'` e `sale_status = 'completed'`, e retorna um `Map<dealId, boolean>`.
+The Agenda's `useOutsideDetectionBatch` compares `contractDate < meetingDate`, which is correct. But the deals hook was incorrectly adapted to compare against `dealCreatedAt` instead of checking for R1 meetings.
 
-A logica: se o contato tem uma transacao de contrato com `sale_date` anterior ao `created_at` do deal, e Outside. Reutiliza a funcao `batchedInOutside` do hook existente.
+## Solution
 
-### 2. Badge "Outside" no card: `src/components/crm/DealKanbanCard.tsx`
+Update `useOutsideDetectionForDeals` to check R1 meetings from `meeting_slot_attendees` + `meeting_slots`:
 
-- Adicionar prop opcional `isOutside?: boolean`
-- Quando `true`, renderizar badge amarelo com "$" e texto "Outside" na linha de badges (junto com A010, BIO, etc.)
-- Visual: `bg-yellow-100 text-yellow-700 border-yellow-300`
+1. Fetch contract transactions for deal contact emails (existing logic)
+2. NEW: Also fetch R1 meetings for those contacts via `meeting_slot_attendees` joined with `meeting_slots` where `meeting_type = 'r1'`
+3. A deal is "Outside" if:
+   - The contact has a completed contract transaction, AND
+   - Either there's NO R1 meeting for that contact, OR the contract was paid BEFORE the earliest R1 meeting
 
-### 3. Passar dados ao board: `src/components/crm/DealKanbanBoard.tsx`
+## Technical Changes
 
-- Adicionar prop `outsideMap?: Map<string, boolean>` na interface
-- Passar `isOutside={outsideMap?.get(deal.id) || false}` para cada `DealKanbanCard`
+### File: `src/hooks/useOutsideDetectionForDeals.ts`
 
-### 4. Filtro Outside nos filtros: `src/components/crm/DealFilters.tsx`
+Update the hook's queryFn to:
 
-- Adicionar campo `outsideFilter: 'all' | 'outside_only' | 'not_outside'` ao `DealFiltersState`
-- Adicionar um Select com icone `$` na barra de filtros com opcoes: "Todos", "Apenas Outside", "Sem Outside"
+1. Keep existing contract transaction fetch (batched by email)
+2. Add a second batched query: fetch `meeting_slot_attendees` joined with `meeting_slots` to get R1 meetings for the same contact IDs
+3. Change comparison logic:
+   - Build a map of `email -> earliest R1 scheduled_at`
+   - For each deal: if has contract AND (no R1 meeting OR contractDate <= r1Date), mark as Outside
 
-### 5. Integrar tudo no Negocios: `src/pages/crm/Negocios.tsx`
+The `DealForOutsideCheck` interface needs to also include `contact_id` for querying attendees by contact.
 
-- Importar e usar `useOutsideDetectionForDeals` com os deals carregados
-- Adicionar `outsideFilter: 'all'` ao estado inicial de filtros
-- Aplicar filtro de Outside no `filteredDeals` (comparar com o mapa retornado pelo hook)
-- Passar `outsideMap` para o `DealKanbanBoard`
-- Adicionar `outsideFilter` ao `clearFilters`
+```text
+Current flow:
+  contract exists + contractDate < dealCreatedAt  -->  Outside
 
-## Fluxo da gestora
+New flow:
+  contract exists + (no R1 meeting OR contractDate <= r1ScheduledAt)  -->  Outside
+```
 
-1. Abrir Negocios na pipeline da BU Incorporador
-2. No filtro "Outside", selecionar "Apenas Outside"
-3. Ver apenas os leads Outside (com badge amarelo "$")
-4. Selecionar os leads desejados (checkboxes)
-5. Clicar "Transferir" na barra de acoes em massa
-6. Escolher o SDR destino
-7. Apos transferencia, o SDR vera esses leads no proprio Kanban
+### Data flow
 
-## Arquivos modificados
+1. Extract unique emails from deals (existing)
+2. Extract unique contact_ids from deals (new)
+3. Batch query `hubla_transactions` for contracts (existing)
+4. Batch query `meeting_slot_attendees` + `meeting_slots` for R1 meetings by contact_id (new)
+5. Build email-to-earliest-R1 map (new)
+6. Compare: Outside = has contract AND (no R1 OR contract before R1)
 
-| Arquivo | Tipo | Descricao |
-|---------|------|-----------|
-| `src/hooks/useOutsideDetectionForDeals.ts` | Novo | Hook para detectar Outside em deals |
-| `src/components/crm/DealKanbanCard.tsx` | Editar | Badge amarelo "Outside" |
-| `src/components/crm/DealKanbanBoard.tsx` | Editar | Prop `outsideMap` e repasse ao card |
-| `src/components/crm/DealFilters.tsx` | Editar | Novo filtro `outsideFilter` no state e UI |
-| `src/pages/crm/Negocios.tsx` | Editar | Integrar hook, filtro e mapa |
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/hooks/useOutsideDetectionForDeals.ts` | Fix Outside detection to check R1 meetings instead of deal created_at |
+
+No other files need changes -- the hook interface and return type remain the same (`Map<dealId, boolean>`).
