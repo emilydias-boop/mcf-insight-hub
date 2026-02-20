@@ -1,57 +1,34 @@
 
-# Envio de Email para Notificacoes de Documentos via Resend
+# Usar ActiveCampaign para Emails de Notificacao de Documentos
 
-## Pre-requisito: Adicionar API Key
-
-O secret `RESEND_API_KEY` ainda nao esta configurado no projeto. Sera solicitado antes de qualquer implementacao.
-
-**Importante**: O email remetente deve usar um dominio verificado no Resend (ex: `notificacoes@seudominio.com.br`). Se ainda nao validou o dominio, faca em https://resend.com/domains.
+Os secrets `ACTIVECAMPAIGN_API_KEY` e `ACTIVECAMPAIGN_ACCOUNT_URL` ja estao configurados no projeto. A Edge Function `activecampaign-send` tambem ja existe. Basta redirecionar o envio de emails para usar o ActiveCampaign em vez do Resend.
 
 ---
 
-## Implementacao
+## Alteracoes
 
-### 1. Adicionar secret `RESEND_API_KEY`
+### 1. Atualizar `src/lib/notifyDocumentAction.ts`
 
-Solicitar ao usuario via ferramenta de adicao de secrets.
+Trocar a funcao `sendDocumentEmail` para invocar `activecampaign-send` em vez de `send-document-email`.
 
-### 2. Criar Edge Function `send-document-email`
-
-**Novo arquivo:** `supabase/functions/send-document-email/index.ts`
-
-Recebe via POST:
-- `to`: email do destinatario
-- `recipientName`: nome do destinatario
+O payload sera adaptado para o formato que a Edge Function do ActiveCampaign espera:
+- `email`: endereco do destinatario
+- `name`: nome do destinatario
 - `subject`: titulo da notificacao
-- `message`: mensagem da notificacao
-- `action`: tipo da acao (documento_enviado, nfse_enviada, etc.)
+- `content`: HTML do email (o mesmo template visual ja usado)
+- `tags`: adicionar tag `notificacao_documento` para rastreamento no ActiveCampaign
 
-Logica:
-1. Validar campos obrigatorios
-2. Montar HTML do email com template visual (cores da marca, logo)
-3. Enviar via Resend API (`npm:resend@4.0.0`)
-4. Retornar sucesso/erro
+### 2. Mover o template HTML para `notifyDocumentAction.ts`
 
-O remetente sera configurado como `MCF Notificacoes <notificacoes@seudominio.com>` (ajustaremos com o dominio verificado).
+Como o ActiveCampaign recebe o HTML pronto no campo `content`, o template visual do email (header com marca, botao "Ver no Sistema", footer) sera montado no lado do cliente antes de enviar, dentro de uma funcao auxiliar `buildEmailHtml()`.
 
-### 3. Atualizar `notifyDocumentAction.ts`
+### 3. Nenhuma alteracao na Edge Function `activecampaign-send`
 
-Apos inserir as notificacoes no banco, buscar os emails dos destinatarios (campo `email_pessoal` ou `email_corporativo` da tabela `employees`) e disparar a Edge Function para cada um.
+A Edge Function ja aceita `email`, `name`, `subject`, `content` e `tags` -- exatamente o que precisamos. Nao precisa ser modificada.
 
-Alteracoes:
-- Expandir o `select` do employee para incluir `email_pessoal, email_corporativo`
-- Expandir o `select` do gestor para incluir `email_pessoal, email_corporativo`
-- Apos o insert das notificacoes, chamar `supabase.functions.invoke('send-document-email', ...)` para cada destinatario que tenha email
-- O envio de email e fire-and-forget (nao bloqueia o fluxo principal)
+### 4. Edge Function `send-document-email` (opcional)
 
-### 4. Config.toml
-
-Adicionar entrada para a nova edge function:
-
-```text
-[functions.send-document-email]
-verify_jwt = false
-```
+Pode ser mantida como fallback ou removida futuramente. Nenhuma alteracao necessaria agora.
 
 ---
 
@@ -59,29 +36,21 @@ verify_jwt = false
 
 | Arquivo | Acao |
 |---------|------|
-| Secret `RESEND_API_KEY` | Adicionar |
-| `supabase/functions/send-document-email/index.ts` | **Novo** - Edge Function de envio |
-| `supabase/config.toml` | Adicionar config da nova funcao |
-| `src/lib/notifyDocumentAction.ts` | Adicionar disparo de email apos notificacao |
+| `src/lib/notifyDocumentAction.ts` | Alterar para usar `activecampaign-send` com template HTML inline |
 
-## Template do Email
-
-O email tera um layout limpo e profissional:
-- Fundo branco (`#ffffff`)
-- Header com nome da empresa
-- Titulo da notificacao em destaque
-- Mensagem descritiva
-- Botao "Ver no Sistema" (link para o app)
-- Footer com texto discreto
-
-## Fluxo Completo
+## Fluxo Final
 
 ```text
 Acao do usuario (enviar doc, aceitar termo, etc.)
   --> notifyDocumentAction()
-    --> INSERT em user_notifications (colaborador + gestor)
-    --> invoke('send-document-email') para email do colaborador
-    --> invoke('send-document-email') para email do gestor
+    --> INSERT em user_notifications
+    --> invoke('activecampaign-send') para colaborador (com HTML + tag)
+    --> invoke('activecampaign-send') para gestor (com HTML + tag)
 ```
 
-Ambos recebem: notificacao no sistema + email.
+## Vantagens
+
+- Sem necessidade de verificar dominio DNS (ActiveCampaign ja esta configurado)
+- Contatos ficam registrados automaticamente no ActiveCampaign
+- Tags permitem rastrear quais contatos receberam notificacoes
+- Nenhum secret novo necessario
