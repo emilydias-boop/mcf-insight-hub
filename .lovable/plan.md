@@ -1,58 +1,72 @@
 
-# Corrigir Notas Nao Aparecendo entre R1 e R2
+# Corrigir Travamento da Semana Customizada no Carrinho R2
 
-## Problema Identificado
+## Problema
 
-O lead "Sergio Henrique da Silva" tem **dois deals diferentes** no CRM:
-- Deal R1: `6cac5fd2` (nome: "Sergio Henrique da Silva")
-- Deal R2: `2473f26f` (nome: "Sergio Henrique da Silva - Construir Para Alugar")
+Dois bugs combinados causam o travamento:
 
-Ambos compartilham o mesmo `contact_id`, mas o hook `useLeadNotes` busca notas apenas pelo `deal_id` do attendee atual. Quando o R2 consulta, ele usa o deal R2 e nao encontra os attendees do deal R1 (que contem a nota de agendamento).
+1. **Instabilidade de referencia**: O hook `useCarrinhoWeekOverride` retorna objetos `Date`, que quebram o "structural sharing" do React Query. Cada re-render recebe uma nova referencia, causando cascata de re-renders que trava a pagina.
+
+2. **Hooks ignoram o override**: Os hooks de dados (`useR2CarrinhoKPIs`, `useR2CarrinhoData`, `useR2ForaDoCarrinhoData`, `useR2CarrinhoVendas`) recebem `weekDate` e internamente calculam as datas via `getCustomWeekStart/End`, ignorando completamente as datas customizadas. Apenas `useR2MeetingsExtended` usa as datas do override.
 
 ## Solucao
 
-Alterar `useLeadNotes` para tambem buscar attendees de **todos os deals do mesmo contato**, nao apenas do deal atual.
+### 1. Estabilizar o hook de override (`useCarrinhoWeekOverride.ts`)
 
-### Arquivo: `src/hooks/useLeadNotes.ts`
+Retornar strings formatadas (`yyyy-MM-dd`) em vez de objetos `Date`. Strings sao comparaveis por valor e o React Query consegue fazer structural sharing corretamente, evitando re-renders desnecessarios.
 
-1. Receber um parametro opcional `contactId`
-2. Quando `contactId` estiver disponivel, buscar todos os `deal_id`s que pertencem a esse contato na tabela `crm_deals`
-3. Buscar todos os `attendee_id`s de todos esses deals (nao apenas o deal atual)
-4. Usar essa lista expandida para buscar notas de agendamento, closer notes, attendee notes, etc.
-5. Tambem buscar deal_activities de todos os deals relacionados ao contato
+### 2. Modificar hooks para aceitar datas explicitas
 
-### Arquivo: `src/components/crm/r2-drawer/R2NotesTab.tsx`
+Alterar a assinatura dos 4 hooks de dados para aceitar `weekStart` e `weekEnd` como parametros (em vez de `weekDate`), eliminando o calculo interno via `getCustomWeekStart/End`:
 
-Passar o `contact_id` do attendee para o hook:
+- `useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date)`
+- `useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?)`
+- `useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date)`
+- `useR2CarrinhoVendas(weekStart: Date, weekEnd: Date)`
 
-```
-useLeadNotes(attendee?.deal_id, attendee?.id, attendee?.deal?.contact_id)
-```
+### 3. Atualizar R2Carrinho.tsx
 
-O `contact_id` ja esta disponivel no objeto `attendee.deal.contact` que e carregado via join.
+Calcular `weekStart`/`weekEnd` uma unica vez na pagina (considerando o override) e passar para todos os hooks.
 
-### Logica expandida no hook
+## Detalhes Tecnicos
 
-```text
-Se contactId disponivel:
-  1. Buscar todos os deal_ids com esse contact_id
-  2. Buscar todos os attendee_ids desses deals
-  3. Usar essa lista para buscar notas de TODAS as fontes
+### Arquivo: `src/hooks/useCarrinhoWeekOverride.ts`
 
-Se nao (fallback atual):
-  1. Buscar attendee_ids apenas do deal_id fornecido
-  2. Comportamento identico ao atual
-```
+- Retornar `{ start: string, end: string, label: string }` (strings ISO) em vez de `{ start: Date, end: Date, label: string }`
+- Isso garante estabilidade de referencia no React Query
 
-## Arquivos Afetados
+### Arquivo: `src/hooks/useR2CarrinhoKPIs.ts`
 
-| Arquivo | Acao |
-|---------|------|
-| `src/hooks/useLeadNotes.ts` | Adicionar parametro `contactId` e expandir busca cross-deal |
-| `src/components/crm/r2-drawer/R2NotesTab.tsx` | Passar `contactId` ao hook |
+- Mudar assinatura de `useR2CarrinhoKPIs(weekDate: Date)` para `useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date)`
+- Remover calculo interno de `getCustomWeekStart/End`
+
+### Arquivo: `src/hooks/useR2CarrinhoData.ts`
+
+- Mudar assinatura de `useR2CarrinhoData(weekDate, filter)` para `useR2CarrinhoData(weekStart, weekEnd, filter)`
+- Remover calculo interno de `getCustomWeekStart/End`
+
+### Arquivo: `src/hooks/useR2ForaDoCarrinhoData.ts`
+
+- Mudar assinatura de `useR2ForaDoCarrinhoData(weekDate)` para `useR2ForaDoCarrinhoData(weekStart, weekEnd)`
+- Remover calculo interno
+
+### Arquivo: `src/hooks/useR2CarrinhoVendas.ts`
+
+- Mudar assinatura de `useR2CarrinhoVendas(weekDate)` para `useR2CarrinhoVendas(weekStart, weekEnd)`
+- Remover calculo interno
+
+### Arquivo: `src/pages/crm/R2Carrinho.tsx`
+
+- Converter override strings para `Date` com `parseISO` (uma vez, memoizado)
+- Passar `weekStart`/`weekEnd` para todos os hooks em vez de `weekDate`
+- Tambem ajustar `R2MetricsPanel` para receber `weekStart`/`weekEnd`
+
+### Arquivo: `src/components/crm/R2MetricsPanel.tsx`
+
+- Verificar se usa `weekDate` internamente e ajustar para receber `weekStart`/`weekEnd`
 
 ## Resultado
 
-- Notas de agendamento do R1 aparecerao no R2 (e vice-versa)
-- Notas manuais, de ligacao e qualificacao de qualquer deal do mesmo contato serao visiveis
-- Sem impacto no comportamento atual quando `contactId` nao for fornecido
+- Sem travamento: strings sao estaveis no React Query
+- Dados corretos: todos os hooks usam as datas do override quando ativo
+- KPIs, listas e metricas refletem a semana customizada corretamente
