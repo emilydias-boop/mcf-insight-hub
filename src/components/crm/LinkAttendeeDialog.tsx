@@ -37,7 +37,8 @@ interface LinkAttendeeDialogProps {
   transactionName: string;
   transactionEmail?: string;
   transactionPhone?: string;
-  weekDate: Date;
+  weekStart: Date;
+  weekEnd: Date;
 }
 
 export function LinkAttendeeDialog({
@@ -47,14 +48,15 @@ export function LinkAttendeeDialog({
   transactionName,
   transactionEmail,
   transactionPhone,
-  weekDate,
+  weekStart,
+  weekEnd,
 }: LinkAttendeeDialogProps) {
   const [search, setSearch] = useState('');
   const [searchAllWeeks, setSearchAllWeeks] = useState(false);
   const [showManualCreate, setShowManualCreate] = useState(false);
   const [selectedCloserId, setSelectedCloserId] = useState<string>('');
   
-  const { data: currentWeekAttendees = [], isLoading: isLoadingCurrent } = useR2CarrinhoData(weekDate, 'aprovados');
+  const { data: currentWeekAttendees = [], isLoading: isLoadingCurrent } = useR2CarrinhoData(weekStart, weekEnd, 'aprovados');
   const { data: allAttendees = [], isLoading: isLoadingAll } = useAllApprovedAttendees();
   const linkMutation = useLinkTransactionToAttendee();
   const createManualMutation = useCreateManualApprovedLead();

@@ -15,10 +15,11 @@ import { toast } from 'sonner';
 interface R2AprovadosListProps {
   attendees: R2CarrinhoAttendee[];
   isLoading?: boolean;
+  weekStart: Date;
   weekEnd: Date;
 }
 
-export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosListProps) {
+export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2AprovadosListProps) {
   const [copied, setCopied] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [closerFilter, setCloserFilter] = useState<string>('all');
@@ -29,7 +30,7 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
   const updateStatus = useUpdateCarrinhoStatus();
   
   // Fetch real sales data (same source as Vendas tab)
-  const { data: vendasData = [] } = useR2CarrinhoVendas(weekEnd);
+  const { data: vendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd);
   
   // Use real sales count from transactions (not manual status)
   const soldCount = vendasData.length;

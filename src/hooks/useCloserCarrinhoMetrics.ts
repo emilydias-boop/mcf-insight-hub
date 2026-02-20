@@ -10,9 +10,7 @@ export interface CloserCarrinhoMetric {
   aprovados: number;
 }
 
-export function useCloserCarrinhoMetrics(weekDate: Date) {
-  const weekStart = getCustomWeekStart(weekDate);
-  const weekEnd = getCustomWeekEnd(weekDate);
+export function useCloserCarrinhoMetrics(weekStart: Date, weekEnd: Date) {
 
   return useQuery({
     queryKey: ['closer-carrinho-metrics', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],

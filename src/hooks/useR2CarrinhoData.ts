@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -28,10 +27,7 @@ export interface R2CarrinhoAttendee {
   contract_paid_at: string | null;
 }
 
-export function useR2CarrinhoData(weekDate: Date, filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados') {
-  const weekStart = getCustomWeekStart(weekDate);
-  const weekEnd = getCustomWeekEnd(weekDate);
-
+export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados') {
   return useQuery({
     queryKey: ['r2-carrinho-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), filter],
     queryFn: async (): Promise<R2CarrinhoAttendee[]> => {

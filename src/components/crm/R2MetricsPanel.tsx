@@ -28,7 +28,8 @@ import { AddExternalSaleModal } from './AddExternalSaleModal';
 import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
 
 interface R2MetricsPanelProps {
-  weekDate: Date;
+  weekStart: Date;
+  weekEnd: Date;
 }
 
 interface MetricCardProps {
@@ -69,12 +70,10 @@ function MetricCard({ icon, label, value, color, badge, onClick }: MetricCardPro
   );
 }
 
-export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
-  const weekStart = getCustomWeekStart(weekDate);
-  const weekEnd = getCustomWeekEnd(weekDate);
-  const { data: metrics, isLoading } = useR2MetricsData(weekDate);
-  const { data: sdrCarrinhoMetrics, isLoading: sdrLoading } = useSDRCarrinhoMetrics(weekDate);
-  const { data: closerCarrinhoMetrics, isLoading: closerLoading } = useCloserCarrinhoMetrics(weekDate);
+export function R2MetricsPanel({ weekStart, weekEnd }: R2MetricsPanelProps) {
+  const { data: metrics, isLoading } = useR2MetricsData(weekStart, weekEnd);
+  const { data: sdrCarrinhoMetrics, isLoading: sdrLoading } = useSDRCarrinhoMetrics(weekStart, weekEnd);
+  const { data: closerCarrinhoMetrics, isLoading: closerLoading } = useCloserCarrinhoMetrics(weekStart, weekEnd);
 
   const handleRescheduleNoShows = () => {
     window.location.href = '/crm/agenda-r2?tab=noshows';

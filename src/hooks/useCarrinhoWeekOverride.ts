@@ -30,7 +30,8 @@ export function useCarrinhoWeekOverride() {
       const endDate = parseISO(val.end);
       if (!isValid(startDate) || !isValid(endDate)) return null;
 
-      return { start: startDate, end: endDate, label: val.label || '' };
+      // Return stable strings instead of Date objects to prevent React Query re-render loops
+      return { start: val.start, end: val.end, label: val.label || '' };
     },
   });
 

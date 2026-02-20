@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, addWeeks, subWeeks } from 'date-fns';
+import { format, addWeeks, subWeeks, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, RefreshCw, ShoppingCart, CalendarCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,22 +32,28 @@ export default function R2Carrinho() {
 
   const { override, saveOverride, removeOverride } = useCarrinhoWeekOverride();
 
-  // Use override dates if active, otherwise default
-  const weekStart = override ? override.start : getCustomWeekStart(weekDate);
-  const weekEnd = override ? override.end : getCustomWeekEnd(weekDate);
+  // Compute stable weekStart/weekEnd once, respecting override
+  const weekStart = useMemo(() => 
+    override ? parseISO(override.start) : getCustomWeekStart(weekDate),
+    [override, weekDate]
+  );
+  const weekEnd = useMemo(() => 
+    override ? parseISO(override.end) : getCustomWeekEnd(weekDate),
+    [override, weekDate]
+  );
 
   // Fetch KPIs
-  const { data: kpis, isLoading: kpisLoading, refetch: refetchKpis } = useR2CarrinhoKPIs(weekDate);
+  const { data: kpis, isLoading: kpisLoading, refetch: refetchKpis } = useR2CarrinhoKPIs(weekStart, weekEnd);
   
   // Fetch status options
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
 
   // Fetch data for each tab
-  const { data: agendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekDate, 'agendadas');
-  const { data: foraCarrinhoData = [], isLoading: foraCarrinhoLoading } = useR2ForaDoCarrinhoData(weekDate);
-  const { data: aprovadosData = [], isLoading: aprovadosLoading } = useR2CarrinhoData(weekDate, 'aprovados');
-  const { data: vendasData = [] } = useR2CarrinhoVendas(weekDate);
+  const { data: agendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekStart, weekEnd, 'agendadas');
+  const { data: foraCarrinhoData = [], isLoading: foraCarrinhoLoading } = useR2ForaDoCarrinhoData(weekStart, weekEnd);
+  const { data: aprovadosData = [], isLoading: aprovadosLoading } = useR2CarrinhoData(weekStart, weekEnd, 'aprovados');
+  const { data: vendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd);
 
   // Fetch extended meeting data for the drawer
   const { data: meetingsExtended = [] } = useR2MeetingsExtended(weekStart, weekEnd);
@@ -212,6 +218,7 @@ export default function R2Carrinho() {
           <R2AprovadosList 
             attendees={aprovadosData} 
             isLoading={aprovadosLoading}
+            weekStart={weekStart}
             weekEnd={weekEnd}
           />
         </TabsContent>
@@ -224,7 +231,7 @@ export default function R2Carrinho() {
         </TabsContent>
 
         <TabsContent value="metricas">
-          <R2MetricsPanel weekDate={weekDate} />
+          <R2MetricsPanel weekStart={weekStart} weekEnd={weekEnd} />
         </TabsContent>
       </Tabs>
 
@@ -246,7 +253,7 @@ export default function R2Carrinho() {
       <CarrinhoWeekOverrideDialog
         open={overrideDialogOpen}
         onOpenChange={setOverrideDialogOpen}
-        currentOverride={override}
+        currentOverride={override ? { start: parseISO(override.start), end: parseISO(override.end), label: override.label } : null}
         onSave={(data) => saveOverride.mutate(data)}
         onRemove={() => removeOverride.mutate()}
         isSaving={saveOverride.isPending}
