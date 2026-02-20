@@ -30,6 +30,7 @@ import {
   CheckSquare,
   Briefcase,
   Megaphone,
+  Monitor,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -260,6 +261,17 @@ const menuItems: MenuItem[] = [
     url: "/tarefas",
     icon: CheckSquare,
     requiredRoles: ["admin", "manager", "coordenador"],
+  },
+
+  // PATRIMÔNIO
+  {
+    title: "Patrimônio",
+    icon: Monitor,
+    resource: "patrimonio" as any,
+    items: [
+      { title: "Central de Patrimônio", url: "/patrimonio", requiredRoles: ["admin", "manager", "rh"] },
+      { title: "Meus Equipamentos", url: "/patrimonio/meus-equipamentos" },
+    ],
   },
 
   // GERENTES DE CONTA
