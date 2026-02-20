@@ -1,34 +1,35 @@
 
-# Adicionar Patrimonio no menu lateral (sidebar)
 
-## O que sera feito
+# Adicionar campo Observacoes ao Dialog de Liberacao
 
-Adicionar uma nova secao "Patrimonio" no menu lateral do sistema com dois links:
+## Contexto
 
-- **Central de Patrimonio** (`/patrimonio`) - para a equipe de TI cadastrar e gerenciar equipamentos (visivel para admin, manager, rh)
-- **Meus Equipamentos** (`/patrimonio/meus-equipamentos`) - para qualquer colaborador ver seus equipamentos e aceitar termos (visivel para todos)
+O fluxo completo de liberacao de equipamento ja esta implementado e funcional. A unica lacuna identificada em relacao ao requisito apresentado e a ausencia do campo **Observacoes** no dialog de liberacao.
 
-## Detalhes tecnicos
+## O que ja funciona
 
-### Arquivo a modificar
+- Botao "Liberar" aparece apenas quando status e `em_estoque`
+- Dialog com selecao de colaborador (combobox com busca)
+- Setor e cargo sao preenchidos automaticamente a partir do cadastro do colaborador
+- Data de entrega (default hoje) e data prevista de devolucao (opcional)
+- Checklist de itens (Mouse, Carregador, Headset, Teclado, Mochila, Outro)
+- Ao confirmar: status muda para `em_uso`, cria registro de movimentacao, gera termo
+- Protecao: nao permite liberar se ja houver responsavel (exige devolucao ou transferencia)
+- Card "Responsavel Atual" mostra nome, setor, cargo e "Desde: data"
+- Historico automatico registrado na timeline
 
-**`src/components/layout/AppSidebar.tsx`**
+## Alteracao necessaria
 
-1. Adicionar o icone `Monitor` na lista de imports do `lucide-react`
-2. Inserir um novo item no array `menuItems`, posicionado na area operacional (apos "Tarefas" ou "RH"), com a seguinte estrutura:
+### Arquivo: `src/components/patrimonio/AssetAssignDialog.tsx`
 
-```text
-{
-  title: "Patrimonio",
-  icon: Monitor,
-  resource: "patrimonio",
-  items: [
-    { title: "Central de Patrimonio", url: "/patrimonio", requiredRoles: ["admin", "manager", "rh"] },
-    { title: "Meus Equipamentos", url: "/patrimonio/meus-equipamentos" },
-  ],
-}
-```
+1. Adicionar estado `observacoes` ao componente
+2. Adicionar campo `Textarea` para observacoes no formulario (apos o checklist de itens)
+3. Passar as observacoes para a descricao do historico na mutation `assignAsset`, incluindo-as no campo `descricao` do registro de `asset_history`
 
-- "Central de Patrimonio" fica restrito a admin/manager/rh (equipe de TI)
-- "Meus Equipamentos" fica visivel para todos os colaboradores (sem requiredRoles)
-- O `resource: "patrimonio"` usa o sistema de permissoes existente (ResourceGuard)
+### Detalhes tecnicos
+
+- Novo estado: `const [observacoes, setObservacoes] = useState('')`
+- Componente: `Textarea` com placeholder "Observacoes sobre a liberacao (opcional)"
+- Na chamada de `assignAsset`, o campo `descricao` do historico sera complementado com as observacoes, caso preenchido
+- O campo `observacoes` do `assets` tambem sera atualizado via `updateAsset` se necessario
+
