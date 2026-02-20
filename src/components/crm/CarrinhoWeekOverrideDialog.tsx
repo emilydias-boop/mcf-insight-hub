@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CalendarIcon, Trash2, Loader2 } from 'lucide-react';
@@ -24,6 +24,14 @@ export function CarrinhoWeekOverrideDialog({ open, onOpenChange, currentOverride
   const [startDate, setStartDate] = useState<Date | undefined>(currentOverride?.start);
   const [endDate, setEndDate] = useState<Date | undefined>(currentOverride?.end);
   const [label, setLabel] = useState(currentOverride?.label || '');
+
+  useEffect(() => {
+    if (open) {
+      setStartDate(currentOverride?.start);
+      setEndDate(currentOverride?.end);
+      setLabel(currentOverride?.label || '');
+    }
+  }, [open, currentOverride]);
 
   const handleSave = () => {
     if (!startDate || !endDate) return;
