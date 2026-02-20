@@ -28,18 +28,20 @@ export default function R2Carrinho() {
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
+  const [ignoreOverride, setIgnoreOverride] = useState(false);
   const queryClient = useQueryClient();
 
   const { override, saveOverride, removeOverride } = useCarrinhoWeekOverride();
 
-  // Compute stable weekStart/weekEnd once, respecting override
+  // Compute stable weekStart/weekEnd once, respecting override only when not ignored
+  const activeOverride = override && !ignoreOverride;
   const weekStart = useMemo(() => 
-    override ? parseISO(override.start) : getCustomWeekStart(weekDate),
-    [override, weekDate]
+    activeOverride ? parseISO(override.start) : getCustomWeekStart(weekDate),
+    [activeOverride, override, weekDate]
   );
   const weekEnd = useMemo(() => 
-    override ? parseISO(override.end) : getCustomWeekEnd(weekDate),
-    [override, weekDate]
+    activeOverride ? parseISO(override.end) : getCustomWeekEnd(weekDate),
+    [activeOverride, override, weekDate]
   );
 
   // Fetch KPIs
@@ -65,23 +67,23 @@ export default function R2Carrinho() {
   }, [selectedMeetingId, meetingsExtended]);
 
   const handlePrevWeek = () => {
-    if (override) {
-      removeOverride.mutate();
+    if (activeOverride) {
+      setIgnoreOverride(true);
       setWeekDate(subWeeks(parseISO(override.start), 1));
     } else {
       setWeekDate(subWeeks(weekDate, 1));
     }
   };
   const handleNextWeek = () => {
-    if (override) {
-      removeOverride.mutate();
+    if (activeOverride) {
+      setIgnoreOverride(true);
       setWeekDate(addWeeks(parseISO(override.start), 1));
     } else {
       setWeekDate(addWeeks(weekDate, 1));
     }
   };
   const handleToday = () => {
-    if (override) removeOverride.mutate();
+    setIgnoreOverride(true);
     setWeekDate(new Date());
   };
 
@@ -271,7 +273,7 @@ export default function R2Carrinho() {
         open={overrideDialogOpen}
         onOpenChange={setOverrideDialogOpen}
         currentOverride={override ? { start: parseISO(override.start), end: parseISO(override.end), label: override.label } : null}
-        onSave={(data) => saveOverride.mutate(data)}
+        onSave={(data) => { saveOverride.mutate(data); setIgnoreOverride(false); }}
         onRemove={() => removeOverride.mutate()}
         isSaving={saveOverride.isPending}
       />
