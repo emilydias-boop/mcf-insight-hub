@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -32,6 +33,7 @@ interface AssetReturnDialogProps {
 export const AssetReturnDialog = ({ open, onOpenChange, asset, assignment }: AssetReturnDialogProps) => {
   const [novoStatus, setNovoStatus] = useState<'em_estoque' | 'em_manutencao'>('em_estoque');
   const [itemChecks, setItemChecks] = useState<Record<string, { conferido: boolean; observacao: string }>>({});
+  const [observacoes, setObservacoes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { returnAsset } = useAssignmentMutations();
@@ -62,6 +64,7 @@ export const AssetReturnDialog = ({ open, onOpenChange, asset, assignment }: Ass
           observacao: data.observacao || undefined,
         })),
         novo_status: novoStatus,
+        observacoes: observacoes || undefined,
       });
       onOpenChange(false);
     } catch {
@@ -117,6 +120,16 @@ export const AssetReturnDialog = ({ open, onOpenChange, asset, assignment }: Ass
           ) : (
             <p className="text-sm text-muted-foreground">Nenhum item registrado nesta liberação.</p>
           )}
+
+          <div className="space-y-2">
+            <Label>Observações da Devolução</Label>
+            <Textarea
+              placeholder="Observações gerais sobre a devolução (opcional)"
+              value={observacoes}
+              onChange={e => setObservacoes(e.target.value)}
+              rows={3}
+            />
+          </div>
 
           <div className="space-y-2">
             <Label>Novo Status do Equipamento</Label>
