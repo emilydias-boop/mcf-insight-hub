@@ -90,11 +90,26 @@ export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogPr
 
   const onSubmit = async (data: AssetFormData) => {
     try {
+      const cleanData = {
+        ...data,
+        marca: data.marca || null,
+        modelo: data.modelo || null,
+        numero_serie: data.numero_serie || null,
+        sistema_operacional: data.sistema_operacional || null,
+        data_compra: data.data_compra || null,
+        fornecedor: data.fornecedor || null,
+        observacoes: data.observacoes || null,
+        garantia_inicio: data.garantia_inicio || null,
+        garantia_fim: data.garantia_fim || null,
+        localizacao: data.localizacao || null,
+        centro_custo: data.centro_custo || null,
+      };
+
       let result: any;
       if (isEdit) {
-        result = await updateAsset.mutateAsync({ id: asset.id, ...data });
+        result = await updateAsset.mutateAsync({ id: asset.id, ...cleanData });
       } else {
-        result = await createAsset.mutateAsync(data as CreateAssetInput);
+        result = await createAsset.mutateAsync(cleanData as CreateAssetInput);
       }
 
       // Upload nota fiscal if selected
