@@ -22,13 +22,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useAssetMutations } from '@/hooks/useAssets';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   Asset, 
   AssetType, 
   ASSET_TYPE_LABELS,
   CreateAssetInput 
 } from '@/types/patrimonio';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Upload } from 'lucide-react';
 
 const assetSchema = z.object({
   numero_patrimonio: z.string().min(1, 'Número do patrimônio é obrigatório'),
@@ -52,6 +53,7 @@ interface AssetFormDialogProps {
 
 export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogProps) => {
   const { createAsset, updateAsset } = useAssetMutations();
+  const [notaFiscalFile, setNotaFiscalFile] = useState<File | null>(null);
   const isEdit = !!asset;
 
   const {
@@ -82,12 +84,34 @@ export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogPr
 
   const onSubmit = async (data: AssetFormData) => {
     try {
+      let result: any;
       if (isEdit) {
-        await updateAsset.mutateAsync({ id: asset.id, ...data });
+        result = await updateAsset.mutateAsync({ id: asset.id, ...data });
       } else {
-        await createAsset.mutateAsync(data as CreateAssetInput);
+        result = await createAsset.mutateAsync(data as CreateAssetInput);
       }
+
+      // Upload nota fiscal if selected
+      if (notaFiscalFile && result?.id) {
+        const filePath = `${result.id}/${notaFiscalFile.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('asset-invoices')
+          .upload(filePath, notaFiscalFile, { upsert: true });
+        
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from('asset-invoices')
+            .getPublicUrl(filePath);
+          
+          await supabase.from('assets').update({
+            nota_fiscal_path: filePath,
+            nota_fiscal_url: urlData.publicUrl,
+          }).eq('id', result.id);
+        }
+      }
+
       reset();
+      setNotaFiscalFile(null);
       onOpenChange(false);
     } catch (error) {
       // Error handled in hook
@@ -174,6 +198,26 @@ export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogPr
               placeholder="Notas adicionais sobre o equipamento"
               rows={3}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Nota Fiscal</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={e => setNotaFiscalFile(e.target.files?.[0] || null)}
+                className="file:mr-2 file:rounded file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-sm file:text-primary"
+              />
+              {notaFiscalFile && (
+                <Upload className="h-4 w-4 text-primary" />
+              )}
+            </div>
+            {asset?.nota_fiscal_url && !notaFiscalFile && (
+              <p className="text-xs text-muted-foreground">
+                Arquivo atual: <a href={asset.nota_fiscal_url} target="_blank" rel="noopener noreferrer" className="underline">Ver nota fiscal</a>
+              </p>
+            )}
           </div>
 
           <DialogFooter>
