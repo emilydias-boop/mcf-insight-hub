@@ -1,42 +1,49 @@
 
 
-# Corrigir erro PGRST203 — função duplicada `get_sdr_meetings_from_agenda`
+# Corrigir erro de tipo na funcao `get_sdr_meetings_from_agenda`
 
 ## Problema
 
-A tabela de reuniões na página "Minhas Reuniões" aparece vazia ("Nenhuma reunião encontrada") apesar dos KPIs mostrarem 69 agendamentos. O erro nos logs do console e:
+A funcao RPC `get_sdr_meetings_from_agenda` recebe `start_date` e `end_date` como `TEXT`, mas compara diretamente com uma coluna `DATE` sem fazer cast:
 
-```
-PGRST203: Could not choose the best candidate function between:
-  public.get_sdr_meetings_from_agenda(start_date => date, ...)
-  public.get_sdr_meetings_from_agenda(start_date => text, ...)
+```sql
+WHERE COALESCE(msa.booked_at, msa.created_at)::DATE BETWEEN start_date AND end_date
 ```
 
-Existem **duas versoes** da mesma funcao RPC no banco de dados, e o PostgREST nao consegue resolver qual chamar.
-
-## Causa raiz
-
-Alguem criou uma segunda versao da funcao com parametros `date` em vez de `text`. Como o PostgREST envia os parametros sem tipo explicito, ele nao consegue desambiguar entre as duas.
+Isso gera o erro: `operator does not exist: date >= text`.
 
 ## Solucao
 
-Remover a versao duplicada com parametros `date`, mantendo apenas a versao `text` que o codigo frontend ja utiliza.
-
-### SQL a executar no Supabase SQL Editor:
+Criar uma migracao SQL que recria a funcao adicionando `::DATE` nos parametros text:
 
 ```sql
-DROP FUNCTION IF EXISTS public.get_sdr_meetings_from_agenda(date, date, text);
+CREATE OR REPLACE FUNCTION public.get_sdr_meetings_from_agenda(
+  start_date text, end_date text, sdr_email_filter text DEFAULT NULL
+)
+RETURNS TABLE(...) -- mesma assinatura
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT ...
+  WHERE COALESCE(msa.booked_at, msa.created_at)::DATE 
+        BETWEEN start_date::DATE AND end_date::DATE
+    AND msa.status != 'cancelled'
+    AND msa.is_partner = false
+    AND (sdr_email_filter IS NULL OR p.email = sdr_email_filter)
+  ORDER BY COALESCE(msa.booked_at, msa.created_at) DESC;
+END;
+$$;
 ```
 
-Isso remove apenas a overload `(date, date, text)`, preservando a versao `(text, text, text)` que e a utilizada pelo hook `useSdrMeetingsFromAgenda.ts`.
+A unica mudanca e `start_date::DATE` e `end_date::DATE` na clausula `BETWEEN`.
 
-## Nenhuma alteracao de codigo necessaria
+## Nenhuma alteracao de codigo frontend necessaria
 
-O frontend (`useSdrMeetingsFromAgenda.ts`) ja envia os parametros como `text` usando `format(startDate, "yyyy-MM-dd")`, entao nenhuma modificacao de arquivo e necessaria. Basta remover a funcao duplicada no banco.
+O hook `useSdrMeetingsFromAgenda.ts` ja envia os parametros como strings no formato `yyyy-MM-dd`, que e compativel com o cast para `DATE`.
 
 ## Resultado esperado
 
-- A RPC `get_sdr_meetings_from_agenda` volta a funcionar sem ambiguidade
 - A tabela de reunioes na pagina "Minhas Reunioes" passa a exibir os leads agendados pelos SDRs
-- Os KPIs no topo continuam funcionando normalmente (usam outra RPC: `get_sdr_metrics_from_agenda`)
+- Sem impacto nos KPIs (usam RPC separada `get_sdr_metrics_from_agenda`)
 
