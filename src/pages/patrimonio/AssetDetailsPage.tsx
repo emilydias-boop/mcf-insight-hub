@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAsset } from '@/hooks/useAssets';
 import { useAssetHistory } from '@/hooks/useAssetHistory';
@@ -5,6 +6,11 @@ import { AssetInfoCard } from '@/components/patrimonio/AssetInfoCard';
 import { AssetTimeline } from '@/components/patrimonio/AssetTimeline';
 import { AssetCurrentHolder } from '@/components/patrimonio/AssetCurrentHolder';
 import { AssetStatusBadge } from '@/components/patrimonio/AssetStatusBadge';
+import { AssetFormDialog } from '@/components/patrimonio/AssetFormDialog';
+import { AssetAssignDialog } from '@/components/patrimonio/AssetAssignDialog';
+import { AssetReturnDialog } from '@/components/patrimonio/AssetReturnDialog';
+import { AssetMaintenanceDialog } from '@/components/patrimonio/AssetMaintenanceDialog';
+import { AssetWriteOffDialog } from '@/components/patrimonio/AssetWriteOffDialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Edit, UserPlus, Undo2, Wrench, XCircle } from 'lucide-react';
@@ -15,6 +21,12 @@ const AssetDetailsPage = () => {
   
   const { data: asset, isLoading: assetLoading } = useAsset(id);
   const { data: history, isLoading: historyLoading } = useAssetHistory(id);
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false);
+  const [writeOffOpen, setWriteOffOpen] = useState(false);
 
   if (assetLoading) {
     return (
@@ -70,34 +82,34 @@ const AssetDetailsPage = () => {
 
         {/* Quick Actions */}
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
             <Edit className="mr-2 h-4 w-4" />
             Editar
           </Button>
           
           {canAssign && (
-            <Button size="sm">
+            <Button size="sm" onClick={() => setAssignOpen(true)}>
               <UserPlus className="mr-2 h-4 w-4" />
               Liberar
             </Button>
           )}
           
           {canReturn && (
-            <Button variant="secondary" size="sm">
+            <Button variant="secondary" size="sm" onClick={() => setReturnOpen(true)}>
               <Undo2 className="mr-2 h-4 w-4" />
               Devolver
             </Button>
           )}
           
           {canMaintenance && (
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => setMaintenanceOpen(true)}>
               <Wrench className="mr-2 h-4 w-4" />
               Manutenção
             </Button>
           )}
           
           {canWriteOff && (
-            <Button variant="destructive" size="sm">
+            <Button variant="destructive" size="sm" onClick={() => setWriteOffOpen(true)}>
               <XCircle className="mr-2 h-4 w-4" />
               Baixa
             </Button>
@@ -118,6 +130,13 @@ const AssetDetailsPage = () => {
           <AssetCurrentHolder assignment={asset.current_assignment} />
         </div>
       </div>
+
+      {/* Dialogs */}
+      <AssetFormDialog open={editOpen} onOpenChange={setEditOpen} asset={asset} />
+      <AssetAssignDialog open={assignOpen} onOpenChange={setAssignOpen} asset={asset} />
+      <AssetReturnDialog open={returnOpen} onOpenChange={setReturnOpen} asset={asset} />
+      <AssetMaintenanceDialog open={maintenanceOpen} onOpenChange={setMaintenanceOpen} asset={asset} />
+      <AssetWriteOffDialog open={writeOffOpen} onOpenChange={setWriteOffOpen} asset={asset} />
     </div>
   );
 };
