@@ -36,6 +36,7 @@ import { differenceInDays } from 'date-fns';
 import { useDealOwnerOptions } from '@/hooks/useDealOwnerOptions';
 import { useUniqueDealTags } from '@/hooks/useUniqueDealTags';
 import { useOutsideDetectionForDeals } from '@/hooks/useOutsideDetectionForDeals';
+import { OutsideDistributionButton } from '@/components/crm/OutsideDistributionButton';
 
 const Negocios = () => {
   // Ativar notificações em tempo real para novos leads
@@ -547,6 +548,9 @@ const Negocios = () => {
           </div>
           
           <div className="flex gap-2 w-full sm:w-auto">
+            {(role === 'admin' || role === 'manager') && (
+              <OutsideDistributionButton />
+            )}
             <Button 
               variant="outline" 
               onClick={handleSync}
