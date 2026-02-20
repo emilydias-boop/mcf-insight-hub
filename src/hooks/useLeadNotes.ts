@@ -22,16 +22,38 @@ export function useLeadNotes(dealId: string | null | undefined, attendeeId: stri
       const notes: LeadNote[] = [];
       
       // =============================================
-      // Fetch ALL attendeeIds for this deal
-      // This ensures we get notes from R1, R2, etc.
+      // Cross-deal lookup: find ALL deals for the same contact
+      // This ensures notes from R1 appear in R2 and vice-versa
       // =============================================
+      let allDealIds: string[] = dealId ? [dealId] : [];
       let allAttendeeIds: string[] = [];
       
+      // Step 1: Find contact_id from current deal, then all deals for that contact
       if (dealId) {
+        const { data: currentDeal } = await supabase
+          .from('crm_deals')
+          .select('contact_id')
+          .eq('id', dealId)
+          .single();
+        
+        if (currentDeal?.contact_id) {
+          const { data: relatedDeals } = await supabase
+            .from('crm_deals')
+            .select('id')
+            .eq('contact_id', currentDeal.contact_id);
+          
+          if (relatedDeals) {
+            allDealIds = [...new Set(relatedDeals.map(d => d.id))];
+          }
+        }
+      }
+      
+      // Step 2: Fetch ALL attendeeIds across all related deals
+      if (allDealIds.length > 0) {
         const { data: allAttendees } = await supabase
           .from('meeting_slot_attendees')
           .select('id')
-          .eq('deal_id', dealId);
+          .in('deal_id', allDealIds);
         
         allAttendeeIds = (allAttendees || []).map(a => a.id);
       }
@@ -41,12 +63,12 @@ export function useLeadNotes(dealId: string | null | undefined, attendeeId: stri
         allAttendeeIds.push(attendeeId);
       }
       
-      // 1. Fetch deal activities (manual notes + qualification notes)
-      if (dealId) {
+      // 1. Fetch deal activities (manual notes + qualification notes) from ALL related deals
+      if (allDealIds.length > 0) {
         const { data: activities } = await supabase
           .from('deal_activities')
           .select('id, activity_type, description, created_at, user_id')
-          .eq('deal_id', dealId)
+          .in('deal_id', allDealIds)
           .in('activity_type', ['note', 'qualification_note'])
           .order('created_at', { ascending: false });
         
@@ -153,12 +175,12 @@ export function useLeadNotes(dealId: string | null | undefined, attendeeId: stri
         }
       }
       
-      // 4. Fetch call notes
-      if (dealId) {
+      // 4. Fetch call notes from ALL related deals
+      if (allDealIds.length > 0) {
         const { data: calls } = await supabase
           .from('calls')
           .select('id, notes, created_at, user_id')
-          .eq('deal_id', dealId)
+          .in('deal_id', allDealIds)
           .not('notes', 'is', null)
           .order('created_at', { ascending: false });
         
