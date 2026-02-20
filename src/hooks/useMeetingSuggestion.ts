@@ -107,8 +107,7 @@ export function useMeetingSuggestion({
       const date = addDays(today, dayOffset);
       const dayOfWeek = date.getDay();
       
-      // Pular domingos
-      if (dayOfWeek === 0) continue;
+      // Domingo é permitido quando houver disponibilidade configurada
 
       closers.forEach(closer => {
         // Encontrar disponibilidade para este dia da semana
