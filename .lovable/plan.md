@@ -1,45 +1,69 @@
 
-# Permitir Navegacao de Semanas com Override Ativo
+
+# Navegacao Independente do Override
 
 ## Problema
 
-Os botoes de navegacao (anterior, proximo, hoje) estao desabilitados quando existe um override de semana customizada. O usuario precisa navegar entre semanas mesmo com override ativo, e tambem precisa configurar um novo carrinho de terca (24/02) ate sexta (28/02) para fechar o mes.
+Ao clicar em "proxima semana" ou "semana anterior", o sistema **exclui a excecao do banco de dados**. Isso impede o usuario de voltar a semana customizada e perde a configuracao salva.
 
 ## Causa
 
-Linhas 120, 124 e 132 de `R2Carrinho.tsx` tem `disabled={!!override}`, bloqueando toda navegacao quando o override esta ativo.
+Os handlers `handlePrevWeek`, `handleNextWeek` e `handleToday` chamam `removeOverride.mutate()`, que deleta o registro da tabela `settings`. Alem disso, o `weekStart/weekEnd` e calculado com prioridade para o override -- entao enquanto o override existe no banco, navegar com `setWeekDate` nao tem efeito.
 
 ## Solucao
 
-Quando o usuario clicar nos botoes de navegacao (anterior, proximo, hoje) enquanto houver um override ativo, o sistema deve **limpar o override automaticamente** e navegar normalmente. Isso permite que o usuario saia da semana customizada a qualquer momento sem precisar abrir o dialog de configuracao.
+Introduzir um estado local `ignoreOverride` que permite ao usuario navegar livremente sem deletar a excecao do banco:
 
-## Alteracao
+1. Adicionar `const [ignoreOverride, setIgnoreOverride] = useState(false)`
+2. O calculo de `weekStart`/`weekEnd` passa a considerar o override apenas quando `!ignoreOverride`
+3. Botoes anterior/proximo/hoje ativam `ignoreOverride = true` e navegam normalmente (sem deletar nada do banco)
+4. O botao de "Ajustar Semana" (CalendarCog) continua abrindo o dialog para editar/remover a excecao
+5. Quando uma nova excecao e salva, resetar `ignoreOverride = false` para que o override volte a ser respeitado
 
 ### Arquivo: `src/pages/crm/R2Carrinho.tsx`
 
-1. Remover `disabled={!!override}` dos 3 botoes de navegacao
-2. Nos handlers `handlePrevWeek`, `handleNextWeek` e `handleToday`, adicionar logica para limpar o override se estiver ativo antes de navegar:
+**Adicionar estado:**
+```
+const [ignoreOverride, setIgnoreOverride] = useState(false);
+```
 
-```text
+**Alterar calculo de weekStart/weekEnd:**
+```
+const activeOverride = override && !ignoreOverride;
+const weekStart = useMemo(() =>
+  activeOverride ? parseISO(override.start) : getCustomWeekStart(weekDate),
+  [activeOverride, override, weekDate]
+);
+const weekEnd = useMemo(() =>
+  activeOverride ? parseISO(override.end) : getCustomWeekEnd(weekDate),
+  [activeOverride, override, weekDate]
+);
+```
+
+**Simplificar handlers (sem deletar override):**
+```
 handlePrevWeek:
-  se override ativo -> removeOverride + setWeekDate para uma semana antes do override.start
+  se activeOverride -> setIgnoreOverride(true) + setWeekDate(subWeeks(parseISO(override.start), 1))
   senao -> setWeekDate(subWeeks(weekDate, 1))
 
 handleNextWeek:
-  se override ativo -> removeOverride + setWeekDate para uma semana depois do override.start
+  se activeOverride -> setIgnoreOverride(true) + setWeekDate(addWeeks(parseISO(override.start), 1))
   senao -> setWeekDate(addWeeks(weekDate, 1))
 
 handleToday:
-  se override ativo -> removeOverride
+  setIgnoreOverride(true)
   setWeekDate(new Date())
 ```
 
-## Sobre o Proximo Carrinho
+**Badge de override visivel mesmo navegando:**
+Manter o indicador "Semana customizada" visivel quando `override` existe (independente de `ignoreOverride`), para o usuario saber que ainda ha uma excecao salva.
 
-Para configurar o carrinho de terca 24/02 ate sexta 28/02 (fechando o mes), voce pode usar o mesmo botao de "Ajustar Semana" (icone de calendario) e definir as datas inicio=24/02 e fim=28/02. O dialog ja suporta isso.
+**Ao salvar nova excecao no dialog:**
+Resetar `setIgnoreOverride(false)` no callback `onSave` para que a nova excecao seja imediatamente aplicada.
 
 ## Resultado
 
-- Botoes de navegacao sempre habilitados
-- Clicar em anterior/proximo com override ativo limpa o override e navega normalmente
-- Facil alternar entre semana customizada e navegacao padrao
+- Navegar entre semanas **nao exclui** a excecao do banco
+- O usuario pode ir e voltar livremente, e ao clicar no botao de calendario, a excecao ainda esta la
+- Salvar uma nova excecao a aplica imediatamente
+- Remover excecao pelo dialog continua funcionando normalmente
