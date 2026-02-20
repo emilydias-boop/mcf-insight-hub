@@ -1,8 +1,8 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { FileText, DollarSign, BarChart3, Target } from 'lucide-react';
+import { FileText, DollarSign, BarChart3, Target, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type ReportType = 'contracts' | 'sales' | 'performance' | 'acquisition';
+export type ReportType = 'contracts' | 'sales' | 'performance' | 'acquisition' | 'products';
 
 interface ReportTypeOption {
   id: ReportType;
@@ -35,6 +35,12 @@ const reportOptions: ReportTypeOption[] = [
     title: 'Aquisição & Origem',
     description: 'Faturamento por dimensão',
     icon: Target,
+  },
+  {
+    id: 'products',
+    title: 'Produtos Adquiridos',
+    description: 'Produtos adquiridos por lead',
+    icon: Package,
   },
 ];
 
