@@ -29,6 +29,7 @@ interface R2CloserAvailabilityConfigProps {
 }
 
 const DAYS_OF_WEEK = [
+  { value: 0, label: 'Domingo' },
   { value: 1, label: 'Segunda' },
   { value: 2, label: 'Terça' },
   { value: 3, label: 'Quarta' },

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format, addWeeks, subWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, RefreshCw, ShoppingCart } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, ShoppingCart, CalendarCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,15 +20,21 @@ import { useR2MeetingsExtended } from '@/hooks/useR2MeetingsExtended';
 import { R2MeetingDetailDrawer } from '@/components/crm/R2MeetingDetailDrawer';
 import { useQueryClient } from '@tanstack/react-query';
 import { useActiveBU } from '@/hooks/useActiveBU';
+import { useCarrinhoWeekOverride } from '@/hooks/useCarrinhoWeekOverride';
+import { CarrinhoWeekOverrideDialog } from '@/components/crm/CarrinhoWeekOverrideDialog';
 
 export default function R2Carrinho() {
   const [weekDate, setWeekDate] = useState(new Date());
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const weekStart = getCustomWeekStart(weekDate);
-  const weekEnd = getCustomWeekEnd(weekDate);
+  const { override, saveOverride, removeOverride } = useCarrinhoWeekOverride();
+
+  // Use override dates if active, otherwise default
+  const weekStart = override ? override.start : getCustomWeekStart(weekDate);
+  const weekEnd = override ? override.end : getCustomWeekEnd(weekDate);
 
   // Fetch KPIs
   const { data: kpis, isLoading: kpisLoading, refetch: refetchKpis } = useR2CarrinhoKPIs(weekDate);
@@ -65,7 +71,6 @@ export default function R2Carrinho() {
   };
 
   const handleReschedule = (meetingId: string) => {
-    // Open the R2 agenda with the meeting selected for rescheduling
     window.location.href = `/crm/agenda-r2?reschedule=${meetingId}`;
   };
 
@@ -97,15 +102,20 @@ export default function R2Carrinho() {
           </h1>
           <p className="text-muted-foreground">
             Gestão semanal do funil de R2
+            {override && (
+              <span className="ml-2 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 px-2 py-0.5 rounded-full">
+                ⚠️ Semana customizada{override.label ? `: ${override.label}` : ''}
+              </span>
+            )}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={handlePrevWeek}>
+          <Button variant="outline" size="icon" onClick={handlePrevWeek} disabled={!!override}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
           
-          <Button variant="outline" onClick={handleToday}>
+          <Button variant="outline" onClick={handleToday} disabled={!!override}>
             Hoje
           </Button>
           
@@ -113,8 +123,17 @@ export default function R2Carrinho() {
             {weekLabel}
           </div>
           
-          <Button variant="outline" size="icon" onClick={handleNextWeek}>
+          <Button variant="outline" size="icon" onClick={handleNextWeek} disabled={!!override}>
             <ChevronRight className="h-4 w-4" />
+          </Button>
+
+          <Button
+            variant={override ? 'default' : 'outline'}
+            size="icon"
+            onClick={() => setOverrideDialogOpen(true)}
+            title="Ajustar Semana"
+          >
+            <CalendarCog className="h-4 w-4" />
           </Button>
 
           <Button variant="outline" size="icon" onClick={handleRefresh}>
@@ -142,7 +161,7 @@ export default function R2Carrinho() {
         ))}
       </div>
 
-      {/* Tabs - Nova ordem: R2 Agendada | Fora do Carrinho | Aprovados | Vendas | Métricas */}
+      {/* Tabs */}
       <Tabs defaultValue="metricas" className="space-y-4">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="agendadas" className="flex items-center gap-2">
@@ -221,6 +240,16 @@ export default function R2Carrinho() {
             handleReschedule(selectedMeetingId);
           }
         }}
+      />
+
+      {/* Week Override Dialog */}
+      <CarrinhoWeekOverrideDialog
+        open={overrideDialogOpen}
+        onOpenChange={setOverrideDialogOpen}
+        currentOverride={override}
+        onSave={(data) => saveOverride.mutate(data)}
+        onRemove={() => removeOverride.mutate()}
+        isSaving={saveOverride.isPending}
       />
     </div>
   );
