@@ -6,6 +6,7 @@ import { ContractReportPanel } from './ContractReportPanel';
 import { SalesReportPanel } from './SalesReportPanel';
 import { PerformanceReportPanel } from './PerformanceReportPanel';
 import { AcquisitionReportPanel } from './AcquisitionReportPanel';
+import { ProductsReportPanel } from './ProductsReportPanel';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { useAuth } from '@/contexts/AuthContext';
 import { BUProvider } from '@/contexts/BUContext';
@@ -81,6 +82,10 @@ export function BUReportCenter({
         
         {selectedReport === 'acquisition' && (
           <AcquisitionReportPanel bu={bu} />
+        )}
+        
+        {selectedReport === 'products' && (
+          <ProductsReportPanel bu={bu} />
         )}
         
         {/* Empty State */}
