@@ -114,10 +114,13 @@ export const useAssignmentMutations = () => {
         .eq('id', input.asset_id);
 
       // Register history
+      const descricao = input.observacoes
+        ? `Equipamento liberado para colaborador. Obs: ${input.observacoes}`
+        : `Equipamento liberado para colaborador`;
       await supabase.from('asset_history').insert({
         asset_id: input.asset_id,
         tipo_evento: 'liberado',
-        descricao: `Equipamento liberado para colaborador`,
+        descricao,
         dados_novos: assignment,
         created_by: userData.user?.id,
       });
