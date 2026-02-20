@@ -29,6 +29,9 @@ import { useSearchDealsForSchedule, useSearchDealsByPhone, useSearchDealsByEmail
 import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2CloserAvailableSlots';
 import { useR2Bookers } from '@/hooks/useR2Bookers';
 import { R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
+import { useCheckActiveMeeting } from '@/hooks/useCheckActiveMeeting';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle, Ban } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface DealForSchedule {
@@ -216,6 +219,10 @@ export function R2QuickScheduleModal({
     // Reset R2-specific fields
     setR2Observations('');
   };
+
+  // Check for active/recent meetings to block duplicate scheduling
+  const { data: activeMeetingCheck } = useCheckActiveMeeting(selectedDeal?.id);
+  const isMeetingBlocked = activeMeetingCheck?.blocked;
 
   const isSelected = !!selectedDeal;
 
@@ -530,13 +537,27 @@ export function R2QuickScheduleModal({
               />
             </div>
 
+            {/* Active Meeting Alert */}
+            {selectedDeal && activeMeetingCheck?.blocked && (
+              <Alert variant={activeMeetingCheck.blockType === 'active' ? 'destructive' : 'default'} className={
+                activeMeetingCheck.blockType === 'cooldown' 
+                  ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300' 
+                  : ''
+              }>
+                {activeMeetingCheck.blockType === 'active' ? <Ban className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+                <AlertDescription className="text-sm">
+                  {activeMeetingCheck.reason}
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Submit */}
             <Button 
               className="w-full bg-purple-600 hover:bg-purple-700 mt-4" 
               onClick={handleSubmit}
-              disabled={!selectedDeal || !selectedCloser || !selectedDate || !selectedTime || createMeeting.isPending}
+              disabled={!selectedDeal || !selectedCloser || !selectedDate || !selectedTime || createMeeting.isPending || !!isMeetingBlocked}
             >
-              {createMeeting.isPending ? 'Agendando...' : 'Agendar R2'}
+              {createMeeting.isPending ? 'Agendando...' : isMeetingBlocked ? 'Agendamento Bloqueado' : 'Agendar R2'}
             </Button>
           </div>
         </ScrollArea>
