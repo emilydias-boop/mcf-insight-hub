@@ -65,6 +65,7 @@ interface DealKanbanCardProps {
   isSelected?: boolean;
   onSelect?: (dealId: string, selected: boolean) => void;
   salesChannel?: SalesChannel;
+  isOutside?: boolean;
 }
 
 export const DealKanbanCard = ({ 
@@ -77,6 +78,7 @@ export const DealKanbanCard = ({
   isSelected = false,
   onSelect,
   salesChannel = 'live',
+  isOutside = false,
 }: DealKanbanCardProps) => {
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice } = useTwilio();
   const { role } = useAuth();
@@ -346,6 +348,14 @@ export const DealKanbanCard = ({
               {typeof tag === "string" ? tag : tag.name}
             </Badge>
           ))}
+          {isOutside && (
+            <Badge 
+              variant="outline" 
+              className="text-[10px] px-1.5 py-0 font-semibold bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-950 dark:text-yellow-400 dark:border-yellow-700 gap-0.5"
+            >
+              $ Outside
+            </Badge>
+          )}
           {priority && <span className={priority.color}>{priority.icon}</span>}
           
           {/* Badge de Prioridade de Atividade */}
