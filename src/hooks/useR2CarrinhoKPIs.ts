@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
 import { format, startOfDay, endOfDay } from 'date-fns';
 
 export interface R2CarrinhoKPIs {
@@ -13,10 +12,7 @@ export interface R2CarrinhoKPIs {
   emAnalise: number;
 }
 
-export function useR2CarrinhoKPIs(weekDate: Date) {
-  const weekStart = getCustomWeekStart(weekDate);
-  const weekEnd = getCustomWeekEnd(weekDate);
-
+export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date) {
   return useQuery({
     queryKey: ['r2-carrinho-kpis', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
     queryFn: async (): Promise<R2CarrinhoKPIs> => {

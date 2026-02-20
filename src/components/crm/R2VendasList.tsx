@@ -68,7 +68,7 @@ const formatCurrency = (value: number | null) => {
 
 export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
   const queryClient = useQueryClient();
-  const { data: vendas = [], isLoading, refetch } = useR2CarrinhoVendas(weekStart);
+  const { data: vendas = [], isLoading, refetch } = useR2CarrinhoVendas(weekStart, weekEnd);
   const { data: unlinkedTransactions = [], isLoading: isLoadingUnlinked } = useUnlinkedTransactions(weekStart);
   const deleteTransaction = useDeleteTransaction();
 
@@ -697,7 +697,8 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
           transactionName={transactionToLink.name}
           transactionEmail={transactionToLink.email}
           transactionPhone={transactionToLink.phone}
-          weekDate={weekStart}
+          weekStart={weekStart}
+          weekEnd={weekEnd}
         />
       )}
     </div>

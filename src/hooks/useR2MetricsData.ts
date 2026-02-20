@@ -45,12 +45,9 @@ const normalizePhone = (phone: string | null): string | null => {
   return phone.replace(/\D/g, '').slice(-11);
 };
 
-export function useR2MetricsData(weekDate: Date) {
-  const weekStart = getCustomWeekStart(weekDate);
-  const weekEnd = getCustomWeekEnd(weekDate);
-
+export function useR2MetricsData(weekStart: Date, weekEnd: Date) {
   return useQuery({
-    queryKey: ['r2-metrics-data', format(weekStart, 'yyyy-MM-dd')],
+    queryKey: ['r2-metrics-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
     queryFn: async (): Promise<R2MetricsData> => {
       // 1. Get all R2 meetings for the week
       const { data: meetings, error: meetingsError } = await supabase

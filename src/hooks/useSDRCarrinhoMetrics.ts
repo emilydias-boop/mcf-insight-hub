@@ -11,9 +11,7 @@ export interface SDRCarrinhoMetric {
   aprovados: number;
 }
 
-export function useSDRCarrinhoMetrics(weekDate: Date, squad: string = 'incorporador') {
-  const weekStart = getCustomWeekStart(weekDate);
-  const weekEnd = getCustomWeekEnd(weekDate);
+export function useSDRCarrinhoMetrics(weekStart: Date, weekEnd: Date, squad: string = 'incorporador') {
 
   const sdrsQuery = useSdrsFromSquad(squad);
 

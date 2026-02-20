@@ -58,9 +58,7 @@ export interface R2CarrinhoVenda {
   original_scheduled_at?: string;
 }
 
-export function useR2CarrinhoVendas(weekDate: Date) {
-  const weekStart = getCustomWeekStart(weekDate);
-  const weekEnd = getCustomWeekEnd(weekDate);
+export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
 
   return useQuery({
     queryKey: ['r2-carrinho-vendas', weekStart.toISOString(), weekEnd.toISOString()],
