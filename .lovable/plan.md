@@ -1,29 +1,28 @@
 
-
-# Corrigir erro "invalid input syntax for type date"
+# Corrigir vinculacao do perfil na pagina "Meus Equipamentos"
 
 ## Problema
 
-Ao cadastrar um equipamento com campos de data vazios (Data de Compra, Garantia Inicio, Garantia Fim), o formulario envia strings vazias `""` para o Supabase, que rejeita porque `""` nao e uma data valida no PostgreSQL.
+A pagina `MyEquipmentPage.tsx` tenta encontrar o colaborador buscando pela coluna `email_corporativo` na tabela `employees`, mas essa coluna **nao existe**. A tabela `employees` possui `email_pessoal` e, mais importante, uma coluna `profile_id` que ja vincula diretamente o colaborador ao perfil do usuario.
+
+O resultado e que nenhum colaborador e encontrado e a pagina exibe "Seu perfil nao esta vinculado a um colaborador."
 
 ## Solucao
 
-Sanitizar os dados do formulario antes de enviar ao banco, convertendo strings vazias para `null` nos campos de data.
+Alterar a logica de busca para usar `profile_id` em vez de tentar buscar por email. Isso e mais confiavel e direto:
 
-### Arquivo: `src/components/patrimonio/AssetFormDialog.tsx`
+### Arquivo: `src/pages/patrimonio/MyEquipmentPage.tsx`
 
-No metodo `onSubmit`, antes de chamar `createAsset` ou `updateAsset`, limpar os campos de data:
+Simplificar o `useEffect` de carregamento:
 
 ```text
-const cleanData = {
-  ...data,
-  data_compra: data.data_compra || null,
-  garantia_inicio: data.garantia_inicio || null,
-  garantia_fim: data.garantia_fim || null,
-};
+Antes (incorreto):
+1. Busca user -> busca profile.email -> busca employees.email_corporativo
+
+Depois (correto):
+1. Busca user -> busca employees.profile_id = user.id
 ```
 
-Usar `cleanData` no lugar de `data` nas chamadas de mutacao. Tambem aplicar a mesma logica para outros campos opcionais de texto (marca, modelo, etc.) para consistencia -- strings vazias serao convertidas para `null` ou mantidas como string, conforme preferencia.
+Isso elimina a etapa intermediaria de buscar o email no profiles e usa a relacao direta que ja existe no banco de dados. O `profile_id` da Emily (`3e91331b-...`) ja esta corretamente preenchido no registro de employee dela.
 
-Alteracao de apenas 1 arquivo, sem impacto no banco de dados.
-
+Alteracao de apenas 1 arquivo, correcao de ~5 linhas.
