@@ -93,14 +93,13 @@ export function AgendaCalendar({
     return () => clearInterval(timer);
   }, []);
 
-  // Get days of week that will be displayed in this view
-  // Semana customizada: Sáb(6), Dom(0), Seg(1), Ter(2), Qua(3), Qui(4), Sex(5)
+  // Get days of week for data fetching (always include Sunday to check for slots)
   const daysOfWeekInView = useMemo(() => {
     const days = viewMode === 'day' 
       ? [selectedDate.getDay()]
       : viewMode === 'month'
-        ? [0, 1, 2, 3, 4, 5, 6] // All days for month view
-        : [6, 0, 1, 2, 3, 4, 5]; // Sáb=6, Dom=0, Seg=1, Ter=2, Qua=3, Qui=4, Sex=5
+        ? [0, 1, 2, 3, 4, 5, 6]
+        : [6, 0, 1, 2, 3, 4, 5];
     return days;
   }, [selectedDate, viewMode]);
 
@@ -216,6 +215,31 @@ export function AgendaCalendar({
     return slotIndex * SLOT_HEIGHT;
   }, [currentTime, timeSlots]);
   
+  // Determine if Sunday should be shown (has meetings or configured slots)
+  const includeSunday = useMemo(() => {
+    if (viewMode !== 'week') return true;
+    const sundayDate = addDays(weekStart, 1);
+    
+    // Check if any meeting is scheduled on this Sunday
+    const hasMeetings = meetings.some(m => isSameDay(parseISO(m.scheduled_at), sundayDate));
+    if (hasMeetings) return true;
+    
+    // Check R2 daily slots for this Sunday
+    if (meetingType === 'r2' && r2DailySlotsMap) {
+      const sundayStr = format(sundayDate, 'yyyy-MM-dd');
+      const sundaySlots = r2DailySlotsMap[sundayStr];
+      if (sundaySlots && Object.keys(sundaySlots).length > 0) return true;
+    }
+    
+    // Check R1 weekday slots for Sunday (day_of_week = 0)
+    if (meetingType === 'r1' && meetingLinkSlots) {
+      const sundayR1Slots = meetingLinkSlots[0];
+      if (sundayR1Slots && sundayR1Slots.length > 0) return true;
+    }
+    
+    return false;
+  }, [viewMode, weekStart, meetings, meetingType, r2DailySlotsMap, meetingLinkSlots]);
+
   const viewDays = useMemo(() => {
     if (viewMode === 'day') {
       return [selectedDate];
@@ -224,18 +248,22 @@ export function AgendaCalendar({
       const monthEnd = endOfMonth(selectedDate);
       return eachDayOfInterval({ start: monthStart, end: monthEnd });
     }
-    // Semana de trabalho: Sáb, Dom, Seg, Ter, Qua, Qui, Sex
-    // weekStart = Sábado (dia 0 da semana customizada)
-    return [
+    // Semana de trabalho: Sáb, [Dom], Seg, Ter, Qua, Qui, Sex
+    const days = [
       addDays(weekStart, 0), // Sábado
-      addDays(weekStart, 1), // Domingo
+    ];
+    if (includeSunday) {
+      days.push(addDays(weekStart, 1)); // Domingo (only when has data)
+    }
+    days.push(
       addDays(weekStart, 2), // Segunda
       addDays(weekStart, 3), // Terça
       addDays(weekStart, 4), // Quarta
       addDays(weekStart, 5), // Quinta
       addDays(weekStart, 6), // Sexta
-    ];
-  }, [selectedDate, viewMode, weekStart]);
+    );
+    return days;
+  }, [selectedDate, viewMode, weekStart, includeSunday]);
 
   // Collect all attendees for batch Outside detection
   const attendeesForOutsideCheck = useMemo(() => {
