@@ -15,7 +15,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Search, X, Calendar as CalendarIcon, Clock, Radio, Phone, Activity } from 'lucide-react';
+import { Search, X, Calendar as CalendarIcon, Clock, Radio, Phone, Activity, DollarSign } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -26,6 +26,7 @@ import { TagFilterPopover } from './TagFilterPopover';
 
 export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
 export type ActivityPriorityFilter = 'all' | 'high' | 'medium' | 'low';
+export type OutsideFilter = 'all' | 'outside_only' | 'not_outside';
 
 export interface DealFiltersState {
   search: string;
@@ -37,6 +38,7 @@ export interface DealFiltersState {
   attemptsRange: { min: number; max: number } | null;
   selectedTags: string[];
   activityPriority: ActivityPriorityFilter;
+  outsideFilter: OutsideFilter;
 }
 
 interface DealFiltersProps {
@@ -133,6 +135,7 @@ export const DealFilters = ({
     filters.attemptsRange !== null,
     filters.selectedTags.length > 0,
     filters.activityPriority !== 'all',
+    filters.outsideFilter !== 'all',
   ].filter(Boolean).length;
   
   return (
@@ -401,6 +404,37 @@ export const DealFilters = ({
             <span className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-green-500" />
               Baixa (4+ ativ.)
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      
+      {/* Filtro Outside */}
+      <Select
+        value={filters.outsideFilter}
+        onValueChange={(value) => onChange({ 
+          ...filters, 
+          outsideFilter: value as OutsideFilter 
+        })}
+      >
+        <SelectTrigger className="w-[160px]">
+          <div className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Outside" />
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos</SelectItem>
+          <SelectItem value="outside_only">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-yellow-500" />
+              Apenas Outside
+            </span>
+          </SelectItem>
+          <SelectItem value="not_outside">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-gray-400" />
+              Sem Outside
             </span>
           </SelectItem>
         </SelectContent>

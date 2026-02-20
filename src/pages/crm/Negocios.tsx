@@ -35,6 +35,7 @@ import { useActiveBU } from '@/hooks/useActiveBU';
 import { differenceInDays } from 'date-fns';
 import { useDealOwnerOptions } from '@/hooks/useDealOwnerOptions';
 import { useUniqueDealTags } from '@/hooks/useUniqueDealTags';
+import { useOutsideDetectionForDeals } from '@/hooks/useOutsideDetectionForDeals';
 
 const Negocios = () => {
   // Ativar notificações em tempo real para novos leads
@@ -56,6 +57,7 @@ const Negocios = () => {
     attemptsRange: null,
     selectedTags: [],
     activityPriority: 'all',
+    outsideFilter: 'all',
   });
   
   // Estado para seleção e transferência em massa
@@ -275,6 +277,9 @@ const Negocios = () => {
     return map;
   }, [a010StatusMap, dealsData]);
   
+  // Detectar Outside em batch para todos os deals carregados
+  const { data: outsideMap } = useOutsideDetectionForDeals(dealsData || []);
+  
   // isRestrictedRole já definido no topo do componente (linha 77)
   const handleSync = () => {
     toast.info('Sincronizando dados do Clint...');
@@ -477,10 +482,16 @@ const Negocios = () => {
             break;
         }
       }
+      // Filtro Outside
+      if (filters.outsideFilter !== 'all' && outsideMap) {
+        const isOutside = outsideMap.get(deal.id) || false;
+        if (filters.outsideFilter === 'outside_only' && !isOutside) return false;
+        if (filters.outsideFilter === 'not_outside' && isOutside) return false;
+      }
       
       return true;
     });
-  }, [dealsData, isRestrictedRole, userProfile?.email, filters, activitySummaries, a010StatusMap]);
+  }, [dealsData, isRestrictedRole, userProfile?.email, filters, activitySummaries, a010StatusMap, outsideMap]);
   
   const clearFilters = () => {
     setFilters({
@@ -493,6 +504,7 @@ const Negocios = () => {
       attemptsRange: null,
       selectedTags: [],
       activityPriority: 'all',
+      outsideFilter: 'all',
     });
   };
   
@@ -621,6 +633,7 @@ const Negocios = () => {
               onSelectAllInStage={handleSelectAllInStage}
               onClearStageSelection={handleClearStageSelection}
               channelMap={channelMap}
+              outsideMap={outsideMap}
             />
           )}
         </div>

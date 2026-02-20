@@ -40,6 +40,7 @@ interface DealKanbanBoardProps {
   onSelectAllInStage?: (dealIds: string[]) => void;
   onClearStageSelection?: (dealIds: string[]) => void;
   channelMap?: Map<string, SalesChannel>;
+  outsideMap?: Map<string, boolean>;
 }
 
 const INITIAL_VISIBLE_COUNT = 50;
@@ -54,6 +55,7 @@ export const DealKanbanBoard = ({
   onSelectAllInStage,
   onClearStageSelection,
   channelMap,
+  outsideMap,
 }: DealKanbanBoardProps) => {
   const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
@@ -328,6 +330,7 @@ export const DealKanbanBoard = ({
                                       isSelected={selectedDealIds.has(deal.id)}
                                       onSelect={onSelectionChange}
                                       salesChannel={salesChannel}
+                                      isOutside={outsideMap?.get(deal.id) || false}
                                     />
                                   )}
                                 </Draggable>
