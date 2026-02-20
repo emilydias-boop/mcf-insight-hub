@@ -64,9 +64,26 @@ export default function R2Carrinho() {
     return meetingsExtended.find(m => m.id === selectedMeetingId) || null;
   }, [selectedMeetingId, meetingsExtended]);
 
-  const handlePrevWeek = () => setWeekDate(subWeeks(weekDate, 1));
-  const handleNextWeek = () => setWeekDate(addWeeks(weekDate, 1));
-  const handleToday = () => setWeekDate(new Date());
+  const handlePrevWeek = () => {
+    if (override) {
+      removeOverride.mutate();
+      setWeekDate(subWeeks(parseISO(override.start), 1));
+    } else {
+      setWeekDate(subWeeks(weekDate, 1));
+    }
+  };
+  const handleNextWeek = () => {
+    if (override) {
+      removeOverride.mutate();
+      setWeekDate(addWeeks(parseISO(override.start), 1));
+    } else {
+      setWeekDate(addWeeks(weekDate, 1));
+    }
+  };
+  const handleToday = () => {
+    if (override) removeOverride.mutate();
+    setWeekDate(new Date());
+  };
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
@@ -117,11 +134,11 @@ export default function R2Carrinho() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={handlePrevWeek} disabled={!!override}>
+          <Button variant="outline" size="icon" onClick={handlePrevWeek}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
           
-          <Button variant="outline" onClick={handleToday} disabled={!!override}>
+          <Button variant="outline" onClick={handleToday}>
             Hoje
           </Button>
           
@@ -129,7 +146,7 @@ export default function R2Carrinho() {
             {weekLabel}
           </div>
           
-          <Button variant="outline" size="icon" onClick={handleNextWeek} disabled={!!override}>
+          <Button variant="outline" size="icon" onClick={handleNextWeek}>
             <ChevronRight className="h-4 w-4" />
           </Button>
 
