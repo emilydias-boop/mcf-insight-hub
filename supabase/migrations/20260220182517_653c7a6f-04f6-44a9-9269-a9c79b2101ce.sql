@@ -1,0 +1,1 @@
+ALTER TYPE user_file_type ADD VALUE IF NOT EXISTS 'termo_responsabilidade';

@@ -26,10 +26,9 @@ export const AssetQRCode = ({ open, onOpenChange, assetId, numeroPatrimonio }: A
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    const data = new XMLSerializer().serializeToString(svg);
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const base64 = btoa(unescape(encodeURIComponent(svgData)));
     const img = new Image();
-    const blob = new Blob([data], { type: 'image/svg+xml;charset=utf-8' });
-    const urlBlob = URL.createObjectURL(blob);
 
     img.onload = () => {
       canvas.width = 300;
@@ -48,9 +47,8 @@ export const AssetQRCode = ({ open, onOpenChange, assetId, numeroPatrimonio }: A
       a.download = `qr-${numeroPatrimonio}.png`;
       a.href = canvas.toDataURL('image/png');
       a.click();
-      URL.revokeObjectURL(urlBlob);
     };
-    img.src = urlBlob;
+    img.src = `data:image/svg+xml;base64,${base64}`;
   };
 
   const handlePrint = () => {

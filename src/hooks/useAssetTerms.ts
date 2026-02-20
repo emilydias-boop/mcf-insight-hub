@@ -153,9 +153,61 @@ export const useTermMutations = () => {
       if (error) throw error;
       return data as AssetTerm;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
+      // Save term as file in user_files
+      try {
+        // Get employee's profile_id
+        const { data: empData } = await supabase
+          .from('employees')
+          .select('profile_id, nome_completo')
+          .eq('id', data.employee_id)
+          .single();
+
+        if (empData?.profile_id) {
+          // Get asset info for filename
+          const { data: assetData } = await supabase
+            .from('assets')
+            .select('numero_patrimonio')
+            .eq('id', data.asset_id)
+            .single();
+
+          const numPatrimonio = assetData?.numero_patrimonio || 'unknown';
+          const fileName = `termo-responsabilidade-${numPatrimonio}.md`;
+          const storagePath = `${empData.profile_id}/termos/${fileName}`;
+
+          // Upload to storage
+          const blob = new Blob([data.termo_conteudo], { type: 'text/markdown' });
+          await supabase.storage
+            .from('user-files')
+            .upload(storagePath, blob, { upsert: true });
+
+          const { data: urlData } = supabase.storage
+            .from('user-files')
+            .getPublicUrl(storagePath);
+
+          // Create user_files record
+          await (supabase as any)
+            .from('user_files')
+            .insert({
+              user_id: empData.profile_id,
+              uploaded_by: empData.profile_id,
+              tipo: 'termo_responsabilidade',
+              titulo: `Termo de Responsabilidade - ${numPatrimonio}`,
+              descricao: `Termo de responsabilidade aceito em ${new Date().toLocaleDateString('pt-BR')}`,
+              file_name: fileName,
+              storage_path: storagePath,
+              storage_url: urlData?.publicUrl || storagePath,
+              visivel_para_usuario: true,
+            });
+        }
+      } catch (err) {
+        console.error('Erro ao salvar termo em arquivos:', err);
+      }
+
       queryClient.invalidateQueries({ queryKey: ['asset-terms'] });
       queryClient.invalidateQueries({ queryKey: ['asset-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['my-files'] });
+      queryClient.invalidateQueries({ queryKey: ['user-files'] });
       toast.success('Termo aceito com sucesso!');
     },
     onError: (error: Error) => {
