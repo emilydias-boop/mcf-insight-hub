@@ -20,7 +20,8 @@ import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { QualificationSummaryCard } from './qualification/QualificationSummaryCard';
 import { LossReasonCard } from './LossReasonCard';
 import { CrossPipelineHistory } from './CrossPipelineHistory';
-import { Phone, History, StickyNote, CheckSquare, AlertTriangle, Clock } from 'lucide-react';
+import { Phone, History, StickyNote, CheckSquare, AlertTriangle, Clock, Package } from 'lucide-react';
+import { DealProdutosAdquiridosTab } from './DealProdutosAdquiridosTab';
 import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
@@ -163,7 +164,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               
               {/* ===== 5. ABAS (com scroll) ===== */}
               <Tabs defaultValue="timeline" className="mt-2">
-                <TabsList className="w-full grid grid-cols-5 bg-secondary">
+                <TabsList className="w-full grid grid-cols-6 bg-secondary">
                   <TabsTrigger value="timeline" className="text-xs">
                     <Clock className="h-3.5 w-3.5 mr-1" />
                     Timeline
@@ -183,6 +184,10 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                   <TabsTrigger value="notas" className="text-xs">
                     <StickyNote className="h-3.5 w-3.5 mr-1" />
                     Notas
+                  </TabsTrigger>
+                  <TabsTrigger value="produtos" className="text-xs">
+                    <Package className="h-3.5 w-3.5 mr-1" />
+                    Produtos
                   </TabsTrigger>
                 </TabsList>
                 
@@ -216,6 +221,10 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                 
                 <TabsContent value="notas" className="mt-3">
                   <DealNotesTab dealUuid={deal.id} dealClintId={deal.clint_id} />
+                </TabsContent>
+                
+                <TabsContent value="produtos" className="mt-3 border rounded-lg min-h-[300px]">
+                  <DealProdutosAdquiridosTab dealId={deal.id} />
                 </TabsContent>
               </Tabs>
               

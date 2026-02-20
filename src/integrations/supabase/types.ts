@@ -2160,6 +2160,36 @@ export type Database = {
         }
         Relationships: []
       }
+      consorcio_produto_adquirido_options: {
+        Row: {
+          created_at: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          label: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          label: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          label?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       consorcio_produtos: {
         Row: {
           ativo: boolean | null
@@ -3715,6 +3745,45 @@ export type Database = {
           to_stage?: string | null
         }
         Relationships: []
+      }
+      deal_produtos_adquiridos: {
+        Row: {
+          created_at: string | null
+          deal_id: string
+          id: string
+          produto_option_id: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string | null
+          deal_id: string
+          id?: string
+          produto_option_id: string
+          valor?: number
+        }
+        Update: {
+          created_at?: string | null
+          deal_id?: string
+          id?: string
+          produto_option_id?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_produtos_adquiridos_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_produtos_adquiridos_produto_option_id_fkey"
+            columns: ["produto_option_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_produto_adquirido_options"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       deal_replication_logs: {
         Row: {
