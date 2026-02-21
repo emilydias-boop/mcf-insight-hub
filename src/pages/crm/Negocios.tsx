@@ -491,20 +491,22 @@ const Negocios = () => {
         if (filters.outsideFilter === 'outside_worked') {
           if (!isOutside) return false;
           const stageName = (deal as any).crm_stages?.stage_name?.toLowerCase() || '';
-          const isInNovoLead = stageName.includes('novo lead');
+          const autoStages = ['novo lead', 'contrato pago'];
+          const isInAutoStage = autoStages.some(s => stageName.includes(s));
           const summary = activitySummaries?.get(deal.id.toLowerCase().trim());
           const hasActivity = (summary?.totalActivities ?? 0) > 0;
-          // Trabalhado = saiu de Novo Lead OU tem atividades reais
-          if (isInNovoLead && !hasActivity) return false;
+          // Trabalhado = tem atividades reais OU está em estágio que implica trabalho SDR
+          if (isInAutoStage && !hasActivity) return false;
         }
         if (filters.outsideFilter === 'outside_not_worked') {
           if (!isOutside) return false;
           const stageName = (deal as any).crm_stages?.stage_name?.toLowerCase() || '';
-          const isInNovoLead = stageName.includes('novo lead');
+          const autoStages = ['novo lead', 'contrato pago'];
+          const isInAutoStage = autoStages.some(s => stageName.includes(s));
           const summary = activitySummaries?.get(deal.id.toLowerCase().trim());
           const hasActivity = (summary?.totalActivities ?? 0) > 0;
-          // Não Trabalhado = ainda em Novo Lead E sem atividades
-          if (!isInNovoLead || hasActivity) return false;
+          // Não Trabalhado = está em estágio automático E sem atividades
+          if (!isInAutoStage || hasActivity) return false;
         }
       }
       
