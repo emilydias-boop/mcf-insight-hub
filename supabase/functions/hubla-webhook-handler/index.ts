@@ -1436,6 +1436,10 @@ serve(async (req) => {
         const utmCampaign = paymentUtm.campaign || invoice?.utm_campaign || eventData?.utm_campaign || eventData?.utmCampaign || null;
         const utmContent = paymentUtm.content || invoice?.utm_content || null;
         
+        // Extrair offer_id e offer_name do webhook
+        const offerIdNewSale = eventData.groupId || eventData.products?.[0]?.offers?.[0]?.id || null;
+        const offerNameNewSale = eventData.products?.[0]?.offers?.[0]?.name || null;
+
         const transactionData = {
           hubla_id: eventData.id || `newsale-${Date.now()}`,
           event_type: 'NewSale',
@@ -1443,6 +1447,8 @@ serve(async (req) => {
           product_code: eventData.productCode || null,
           product_price: productPrice,
           product_category: productCategory,
+          offer_id: offerIdNewSale,
+          offer_name: offerNameNewSale,
           // CORREÇÃO: userName/userEmail/userPhone são os campos corretos no NewSale
           customer_name: eventData.userName || eventData.customer?.name || eventData.customerName || null,
           customer_email: eventData.userEmail || eventData.customer?.email || eventData.customerEmail || null,
@@ -1541,6 +1547,10 @@ serve(async (req) => {
           const utmCampaign = paymentUtm.campaign || invoice?.utm_campaign || null;
           const utmContent = paymentUtm.content || invoice?.utm_content || null;
           
+          // Extrair offer_id e offer_name (sem items)
+          const offerIdNoItems = body.event?.groupId || invoice?.products?.[0]?.offers?.[0]?.id || null;
+          const offerNameNoItems = invoice?.products?.[0]?.offers?.[0]?.name || null;
+
           const transactionData = {
             hubla_id: invoice?.id || `invoice-${Date.now()}`,
             event_type: 'invoice.payment_succeeded',
@@ -1549,6 +1559,8 @@ serve(async (req) => {
             product_price: grossValue,
             product_category: productCategory,
             product_type: null,
+            offer_id: offerIdNoItems,
+            offer_name: offerNameNoItems,
             customer_name: `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || user.name || null,
             customer_email: payer.email || user.email || null,
             customer_phone: payer.phone || user.phone || null,
@@ -1673,6 +1685,10 @@ serve(async (req) => {
             ? itemPrice * 0.9417 // Offers usam taxa aproximada
             : netValue;
           
+          // Extrair offer_id e offer_name do item
+          const itemOfferId = item.offer?.id || item.product?.offers?.[0]?.id || body.event?.groupId || null;
+          const itemOfferName = item.offer?.name || item.product?.offers?.[0]?.name || null;
+
           const transactionData = {
             hubla_id: hublaId,
             event_type: 'invoice.payment_succeeded',
@@ -1681,6 +1697,8 @@ serve(async (req) => {
             product_price: isOffer ? itemPrice : grossValue,
             product_category: productCategory,
             product_type: item.type || null,
+            offer_id: itemOfferId,
+            offer_name: itemOfferName,
             customer_name: `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || invoice.customer?.name || invoice.customer_name || null,
             customer_email: payer.email || user.email || invoice.customer?.email || invoice.customer_email || null,
             customer_phone: payer.phone || user.phone || invoice.customer?.phone || invoice.customer_phone || null,

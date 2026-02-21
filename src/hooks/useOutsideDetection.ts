@@ -64,7 +64,7 @@ export const useOutsideDetectionBatch = (attendees: AttendeeForCheck[]) => {
           .from('hubla_transactions')
           .select('customer_email, sale_date, product_name, product_category')
           .in('customer_email', chunk)
-          .ilike('product_name', '%Contrato%')
+          .eq('offer_id', 'pgah16gjTMdAkqUMVKGz')
           .eq('sale_status', 'completed')
           .order('sale_date', { ascending: true }),
         emails
