@@ -92,7 +92,7 @@ export function CloserColumnCalendar({
   onAddToMeeting,
   onEditHours,
 }: CloserColumnCalendarProps) {
-  const dayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
+  const dayOfWeek = selectedDate.getDay();
 
   const { activeBU } = useBUContext();
 

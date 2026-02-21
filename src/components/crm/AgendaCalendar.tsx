@@ -449,7 +449,7 @@ export function AgendaCalendar({
     }
     
     // For R1, use weekday-based slots
-    const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
+    const dayOfWeek = day.getDay();
     const slots = meetingLinkSlots?.[dayOfWeek] || [];
     return slots.some(s => s.time === timeStr);
   }, [meetingLinkSlots, r2DailySlotsMap, meetingType]);
@@ -480,7 +480,7 @@ export function AgendaCalendar({
       configuredCloserIds = slotInfo?.closerIds || [];
     } else {
       // For R1, use weekday-based slots
-      const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
+      const dayOfWeek = day.getDay();
       const slots = meetingLinkSlots?.[dayOfWeek] || [];
       const configuredSlot = slots.find(s => s.time === timeStr);
       configuredCloserIds = configuredSlot?.closerIds || [];
@@ -551,7 +551,7 @@ export function AgendaCalendar({
       }
     } else {
       // For R1, check weekday-based slots
-      const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
+      const dayOfWeek = day.getDay();
       const slots = meetingLinkSlots?.[dayOfWeek] || [];
       slots.forEach(slot => {
         slot.closerIds.forEach(id => allCloserIdsSet.add(id));
