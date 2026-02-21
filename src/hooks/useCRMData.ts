@@ -90,37 +90,10 @@ const fetchCRMStages = async (originOrGroupId?: string) => {
     console.error('Erro ao buscar stages locais:', localError);
   }
   
-  // Se tem stages locais, converter para formato compatível com crm_stages
-  if (localStages && localStages.length > 0) {
-    console.log('[useCRMStages] Found local_pipeline_stages:', localStages.length, 'for', originOrGroupId);
-    
-    // Deduplicar por nome mantendo o primeiro (menor stage_order)
-    const uniqueStages = localStages.reduce((acc: any[], stage) => {
-      if (!acc.find(s => s.name === stage.name)) {
-        acc.push(stage);
-      }
-      return acc;
-    }, []);
-    
-    return uniqueStages.map(s => ({
-      id: s.id,
-      stage_name: s.name,
-      color: s.color,
-      stage_order: s.stage_order,
-      stage_type: s.stage_type,
-      is_active: s.is_active,
-      origin_id: s.origin_id || s.group_id,
-      clint_id: `local-${s.id}`,
-      created_at: s.created_at,
-      updated_at: s.updated_at,
-    }));
-  }
+  // 3. Buscar crm_stages para mesclar com local stages
+  let crmStages: any[] = [];
   
-  console.log('[useCRMStages] No local stages found, falling back to crm_stages for', originOrGroupId);
-  
-  // 3. Fallback: buscar stages do Clint (crm_stages)
   if (isGroup) {
-    // Se é grupo, buscar todas origens filhas
     const { data: childOrigins } = await supabase
       .from('crm_origins')
       .select('id')
@@ -137,31 +110,74 @@ const fetchCRMStages = async (originOrGroupId?: string) => {
         .order('stage_order');
       
       if (error) throw error;
-      
-      // Remover duplicatas por nome (manter primeiro por stage_order)
-      const uniqueStages = data?.reduce((acc, stage) => {
-        if (!acc.find(s => s.stage_name === stage.stage_name)) {
-          acc.push(stage);
-        }
-        return acc;
-      }, [] as typeof data) || [];
-      
-      return uniqueStages;
+      crmStages = data || [];
     }
+  } else {
+    const { data, error } = await supabase
+      .from('crm_stages')
+      .select('*')
+      .eq('origin_id', originOrGroupId)
+      .eq('is_active', true)
+      .order('stage_order');
     
-    return [];
+    if (error) throw error;
+    crmStages = data || [];
   }
   
-  // Origem normal
-  const { data, error } = await supabase
-    .from('crm_stages')
-    .select('*')
-    .eq('origin_id', originOrGroupId)
-    .eq('is_active', true)
-    .order('stage_order');
+  // 4. Mesclar: local_pipeline_stages tem prioridade, mas stages que só existem em crm_stages são adicionados
+  if (localStages && localStages.length > 0) {
+    console.log('[useCRMStages] Merging local_pipeline_stages:', localStages.length, 'with crm_stages:', crmStages.length, 'for', originOrGroupId);
+    
+    // Deduplicar local stages por nome
+    const uniqueLocalStages = localStages.reduce((acc: any[], stage) => {
+      if (!acc.find(s => s.name.toLowerCase() === stage.name.toLowerCase())) {
+        acc.push(stage);
+      }
+      return acc;
+    }, []);
+    
+    // Converter local stages para formato compatível
+    const mergedStages = uniqueLocalStages.map(s => ({
+      id: s.id,
+      stage_name: s.name,
+      color: s.color,
+      stage_order: s.stage_order,
+      stage_type: s.stage_type,
+      is_active: s.is_active,
+      origin_id: s.origin_id || s.group_id,
+      clint_id: `local-${s.id}`,
+      created_at: s.created_at,
+      updated_at: s.updated_at,
+    }));
+    
+    // Adicionar stages do crm_stages que NÃO existem nos locais (dedup por nome, case-insensitive)
+    const localNames = new Set(uniqueLocalStages.map(s => s.name.toLowerCase()));
+    const maxLocalOrder = Math.max(...uniqueLocalStages.map(s => s.stage_order), -1);
+    
+    crmStages.forEach((crmStage, index) => {
+      if (!localNames.has(crmStage.stage_name.toLowerCase())) {
+        console.log('[useCRMStages] Adding CRM-only stage:', crmStage.stage_name);
+        mergedStages.push({
+          ...crmStage,
+          stage_order: maxLocalOrder + 1 + index,
+        });
+      }
+    });
+    
+    return mergedStages;
+  }
   
-  if (error) throw error;
-  return data;
+  console.log('[useCRMStages] No local stages found, using crm_stages for', originOrGroupId);
+  
+  // Deduplicar crm_stages por nome
+  const uniqueCrmStages = crmStages.reduce((acc: any[], stage) => {
+    if (!acc.find(s => s.stage_name === stage.stage_name)) {
+      acc.push(stage);
+    }
+    return acc;
+  }, []);
+  
+  return uniqueCrmStages;
 };
 
 export const useCRMStages = (originOrGroupId?: string, options?: UseCRMStagesOptions) => {

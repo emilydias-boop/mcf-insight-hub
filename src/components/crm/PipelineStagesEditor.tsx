@@ -79,7 +79,8 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
       const maxOrder = stages.length > 0 ? Math.max(...stages.map(s => s.stage_order)) : -1;
       const column = targetType === 'origin' ? 'origin_id' : 'group_id';
       
-      const { error } = await supabase
+      // 1. Criar em local_pipeline_stages
+      const { data: createdStage, error } = await supabase
         .from('local_pipeline_stages')
         .insert({
           [column]: targetId,
@@ -87,8 +88,32 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
           color: stage.color,
           stage_type: stage.stage_type,
           stage_order: maxOrder + 1,
-        });
+        })
+        .select('id')
+        .single();
       if (error) throw error;
+      
+      // 2. Espelhar em crm_stages para evitar erro de FK ao mover deals
+      if (createdStage) {
+        const originId = targetType === 'origin' ? targetId : null;
+        if (originId) {
+          const { error: mirrorError } = await supabase
+            .from('crm_stages')
+            .insert({
+              id: createdStage.id,
+              clint_id: `local-${createdStage.id}`,
+              stage_name: stage.name,
+              color: stage.color,
+              stage_order: maxOrder + 1,
+              stage_type: stage.stage_type,
+              origin_id: originId,
+              is_active: true,
+            });
+          if (mirrorError) {
+            console.warn('[PipelineStagesEditor] Erro ao espelhar em crm_stages (não-fatal):', mirrorError.message);
+          }
+        }
+      }
     },
     onSuccess: () => {
       toast.success('Etapa criada!');

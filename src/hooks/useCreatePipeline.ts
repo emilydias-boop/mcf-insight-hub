@@ -89,18 +89,38 @@ export const useCreatePipeline = () => {
         const { data: createdStages, error: stagesError } = await supabase
           .from('local_pipeline_stages')
           .insert(stagesToInsert)
-          .select('id, stage_order');
+          .select('id, stage_order, name, color, stage_type');
 
         if (stagesError) throw new Error(`Erro ao criar etapas: ${stagesError.message}`);
 
-        // Criar mapeamento: wizard stage ID → DB stage ID
-        if (createdStages) {
+        // Criar mapeamento e espelhar em crm_stages
+        if (createdStages && originId) {
           createdStages.forEach((dbStage) => {
             const wizardStage = data.stages.find(s => s.stage_order === dbStage.stage_order);
             if (wizardStage) {
               stageIdMap.set(wizardStage.id, dbStage.id);
             }
           });
+
+          // Espelhar todos os stages em crm_stages para evitar erro de FK
+          const crmMirrors = createdStages.map((s: any) => ({
+            id: s.id,
+            clint_id: `local-${s.id}`,
+            stage_name: s.name,
+            color: s.color,
+            stage_order: s.stage_order,
+            stage_type: s.stage_type,
+            origin_id: originId,
+            is_active: true,
+          }));
+
+          const { error: mirrorError } = await supabase
+            .from('crm_stages')
+            .insert(crmMirrors);
+
+          if (mirrorError) {
+            console.warn('[useCreatePipeline] Erro ao espelhar em crm_stages (não-fatal):', mirrorError.message);
+          }
         }
       }
 
