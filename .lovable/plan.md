@@ -1,46 +1,36 @@
 
-# Separar Outsides Trabalhados vs Nao Trabalhados
 
-## Contexto
+# Fix: Outside Trabalhados mostrando leads nao trabalhados
 
-Atualmente o filtro Outside tem apenas 3 opcoes: Todos, Apenas Outside, Sem Outside. Os SDRs nao conseguem distinguir quais Outsides ja foram trabalhados e quais ainda precisam de atencao.
+## Problema
+
+O campo `last_worked_at` foi preenchido em massa (provavelmente por uma migracao ou script) em `2026-02-03 19:26:44` para milhares de deals, mesmo aqueles sem nenhuma atividade real (0 calls, 0 notas, 0 whatsapp). Isso faz com que o filtro "Outside Trabalhados" mostre leads que nunca foram efetivamente trabalhados por um SDR.
+
+Exemplo: deals no estagio "Novo Lead" com `last_worked_at = 2026-02-03` e `activity_count = 0` aparecem como "trabalhados".
 
 ## Solucao
 
-Expandir o filtro Outside de 3 para 5 opcoes, usando o campo `last_worked_at` (ja existente nos deals) e a contagem de atividades (ja carregada via `activitySummaries`) para determinar se um Outside foi trabalhado.
+Remover `last_worked_at` da logica de determinacao de "trabalhado" e usar **apenas** a contagem real de atividades (`totalActivities` do `activitySummaries`).
 
-### Novas opcoes do filtro:
+### Arquivo: `src/pages/crm/Negocios.tsx`
 
-| Valor | Label | Logica |
-|-------|-------|--------|
-| `all` | Todos | Sem filtro (atual) |
-| `outside_only` | Todos Outside | Mostra todos os Outside (atual "Apenas Outside") |
-| `outside_worked` | Outside Trabalhados | Outside = true E (totalActivities > 0 OU last_worked_at nao nulo) |
-| `outside_not_worked` | Outside Nao Trabalhados | Outside = true E totalActivities = 0 E last_worked_at nulo |
-| `not_outside` | Sem Outside | Mostra apenas nao-Outside (atual) |
+Alterar as duas verificacoes (linhas ~492-501):
 
-### Arquivos a alterar
-
-**1. `src/components/crm/DealFilters.tsx`**
-- Expandir o tipo `OutsideFilter` para incluir `'outside_worked'` e `'outside_not_worked'`
-- Adicionar as novas opcoes no `Select` com icones visuais distintos (verde para trabalhados, vermelho para nao trabalhados)
-
-**2. `src/pages/crm/Negocios.tsx`**
-- Atualizar a logica de filtragem (linhas 486-491) para tratar os novos valores do filtro
-- Cruzar o `outsideMap` com `activitySummaries` e o campo `last_worked_at` do deal para determinar se foi trabalhado
-
-### Detalhes tecnicos
-
-```text
-Filtro atual:
-  outsideFilter === 'outside_only' -> isOutside === true
-  outsideFilter === 'not_outside'  -> isOutside === false
-
-Filtro novo:
-  outsideFilter === 'outside_only'       -> isOutside === true
-  outsideFilter === 'outside_worked'     -> isOutside === true E (activities > 0 OU last_worked_at)
-  outsideFilter === 'outside_not_worked' -> isOutside === true E activities === 0 E !last_worked_at
-  outsideFilter === 'not_outside'        -> isOutside === false
+De:
+```
+const hasActivity = (summary?.totalActivities ?? 0) > 0 || !!(deal as any).last_worked_at;
 ```
 
-O `activitySummaries` ja esta carregado no componente Negocios (via `useBatchDealActivitySummary`), e `last_worked_at` ja vem nos dados do deal. Nenhuma query adicional e necessaria.
+Para:
+```
+const hasActivity = (summary?.totalActivities ?? 0) > 0;
+```
+
+Isso garante que apenas deals com chamadas, notas ou mensagens reais sejam considerados "trabalhados", independente do valor de `last_worked_at`.
+
+## Impacto
+
+- Leads em "Novo Lead" sem atividades reais passam a aparecer corretamente como "Outside Nao Trabalhados"
+- Leads com pelo menos 1 atividade real continuam como "Outside Trabalhados"
+- Nenhuma query adicional necessaria - apenas remocao de uma condicao incorreta
+
