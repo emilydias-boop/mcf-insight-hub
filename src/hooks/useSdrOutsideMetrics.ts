@@ -109,7 +109,7 @@ export function useSdrOutsideMetrics(
         .from('hubla_transactions')
         .select('customer_email, sale_date')
         .in('customer_email', attendeeEmails)
-        .ilike('product_name', '%Contrato%')
+        .eq('offer_id', 'pgah16gjTMdAkqUMVKGz')
         .eq('sale_status', 'completed')
         .order('sale_date', { ascending: true });
 

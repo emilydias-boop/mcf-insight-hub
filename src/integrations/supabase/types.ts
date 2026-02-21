@@ -5362,6 +5362,8 @@ export type Database = {
           is_offer: boolean | null
           linked_attendee_id: string | null
           net_value: number | null
+          offer_id: string | null
+          offer_name: string | null
           payment_method: string | null
           product_category: string | null
           product_code: string | null
@@ -5397,6 +5399,8 @@ export type Database = {
           is_offer?: boolean | null
           linked_attendee_id?: string | null
           net_value?: number | null
+          offer_id?: string | null
+          offer_name?: string | null
           payment_method?: string | null
           product_category?: string | null
           product_code?: string | null
@@ -5432,6 +5436,8 @@ export type Database = {
           is_offer?: boolean | null
           linked_attendee_id?: string | null
           net_value?: number | null
+          offer_id?: string | null
+          offer_name?: string | null
           payment_method?: string | null
           product_category?: string | null
           product_code?: string | null

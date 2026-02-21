@@ -490,15 +490,21 @@ const Negocios = () => {
         if (filters.outsideFilter === 'not_outside' && isOutside) return false;
         if (filters.outsideFilter === 'outside_worked') {
           if (!isOutside) return false;
+          const stageName = (deal as any).crm_stages?.stage_name?.toLowerCase() || '';
+          const isInNovoLead = stageName.includes('novo lead');
           const summary = activitySummaries?.get(deal.id.toLowerCase().trim());
           const hasActivity = (summary?.totalActivities ?? 0) > 0;
-          if (!hasActivity) return false;
+          // Trabalhado = saiu de Novo Lead OU tem atividades reais
+          if (isInNovoLead && !hasActivity) return false;
         }
         if (filters.outsideFilter === 'outside_not_worked') {
           if (!isOutside) return false;
+          const stageName = (deal as any).crm_stages?.stage_name?.toLowerCase() || '';
+          const isInNovoLead = stageName.includes('novo lead');
           const summary = activitySummaries?.get(deal.id.toLowerCase().trim());
           const hasActivity = (summary?.totalActivities ?? 0) > 0;
-          if (hasActivity) return false;
+          // Não Trabalhado = ainda em Novo Lead E sem atividades
+          if (!isInNovoLead || hasActivity) return false;
         }
       }
       
