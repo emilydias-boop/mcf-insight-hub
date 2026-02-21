@@ -386,7 +386,7 @@ export function useCloserMetrics(date: Date) {
         .gte('scheduled_at', weekStart.toISOString())
         .lte('scheduled_at', weekEnd.toISOString());
 
-      const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
+      const dayOfWeek = date.getDay();
 
       const metrics: CloserMetrics[] = (closers || []).map(closer => {
         const closerAvailability = availability?.filter(a => a.closer_id === closer.id && a.day_of_week === dayOfWeek) || [];
