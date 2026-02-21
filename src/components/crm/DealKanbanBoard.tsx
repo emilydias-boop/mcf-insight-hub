@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
-import { useStagePermissions, isLostStage } from '@/hooks/useStagePermissions';
+import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
@@ -80,21 +80,11 @@ export const DealKanbanBoard = ({
     newStageName: string;
   }>({ open: false, dealId: '', dealName: '', newStageName: '' });
   
-  // Filter stages based on stage_permissions (source of truth)
-  // For SDRs, also filter lost stages unless showLostDeals is true
+  // stage_permissions is the sole source of truth for visibility
   const visibleStages = useMemo(() => {
     const activeStages = (stages || []).filter((s: any) => s.is_active);
-    
-    // Use stage_permissions as source of truth for visibility
-    const filteredByPermission = activeStages.filter((s: any) => canViewStage(s.id));
-    
-    // For SDRs, hide lost stages unless explicitly filtered
-    if (role === 'sdr' && !showLostDeals) {
-      return filteredByPermission.filter((s: any) => !isLostStage(s.stage_name));
-    }
-    
-    return filteredByPermission;
-  }, [stages, role, showLostDeals, canViewStage]);
+    return activeStages.filter((s: any) => canViewStage(s.id));
+  }, [stages, canViewStage]);
   
   // Função de ordenação por critério selecionado
   const sortDeals = useCallback((
