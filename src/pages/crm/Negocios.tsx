@@ -491,13 +491,13 @@ const Negocios = () => {
         if (filters.outsideFilter === 'outside_worked') {
           if (!isOutside) return false;
           const summary = activitySummaries?.get(deal.id.toLowerCase().trim());
-          const hasActivity = (summary?.totalActivities ?? 0) > 0 || !!(deal as any).last_worked_at;
+          const hasActivity = (summary?.totalActivities ?? 0) > 0;
           if (!hasActivity) return false;
         }
         if (filters.outsideFilter === 'outside_not_worked') {
           if (!isOutside) return false;
           const summary = activitySummaries?.get(deal.id.toLowerCase().trim());
-          const hasActivity = (summary?.totalActivities ?? 0) > 0 || !!(deal as any).last_worked_at;
+          const hasActivity = (summary?.totalActivities ?? 0) > 0;
           if (hasActivity) return false;
         }
       }
