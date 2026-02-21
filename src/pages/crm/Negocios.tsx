@@ -488,6 +488,18 @@ const Negocios = () => {
         const isOutside = outsideMap.get(deal.id) || false;
         if (filters.outsideFilter === 'outside_only' && !isOutside) return false;
         if (filters.outsideFilter === 'not_outside' && isOutside) return false;
+        if (filters.outsideFilter === 'outside_worked') {
+          if (!isOutside) return false;
+          const summary = activitySummaries?.get(deal.id.toLowerCase().trim());
+          const hasActivity = (summary?.totalActivities ?? 0) > 0 || !!(deal as any).last_worked_at;
+          if (!hasActivity) return false;
+        }
+        if (filters.outsideFilter === 'outside_not_worked') {
+          if (!isOutside) return false;
+          const summary = activitySummaries?.get(deal.id.toLowerCase().trim());
+          const hasActivity = (summary?.totalActivities ?? 0) > 0 || !!(deal as any).last_worked_at;
+          if (hasActivity) return false;
+        }
       }
       
       return true;

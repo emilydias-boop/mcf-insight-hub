@@ -26,7 +26,7 @@ import { TagFilterPopover } from './TagFilterPopover';
 
 export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
 export type ActivityPriorityFilter = 'all' | 'high' | 'medium' | 'low';
-export type OutsideFilter = 'all' | 'outside_only' | 'not_outside';
+export type OutsideFilter = 'all' | 'outside_only' | 'outside_worked' | 'outside_not_worked' | 'not_outside';
 
 export interface DealFiltersState {
   search: string;
@@ -428,7 +428,19 @@ export const DealFilters = ({
           <SelectItem value="outside_only">
             <span className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-yellow-500" />
-              Apenas Outside
+              Todos Outside
+            </span>
+          </SelectItem>
+          <SelectItem value="outside_not_worked">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-500" />
+              Outside Não Trabalhados
+            </span>
+          </SelectItem>
+          <SelectItem value="outside_worked">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500" />
+              Outside Trabalhados
             </span>
           </SelectItem>
           <SelectItem value="not_outside">
