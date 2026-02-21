@@ -867,7 +867,7 @@ export function AgendaCalendar({
   const numCloserColumns = activeClosersForDayView.length || 1;
   const gridCols = viewMode === 'day' 
     ? `grid-cols-[60px_repeat(${numCloserColumns},1fr)]`
-    : 'grid-cols-[60px_repeat(6,1fr)]';
+    : `grid-cols-[60px_repeat(${viewDays.length},1fr)]`;
   const currentTimePos = getCurrentTimePosition();
   
   
