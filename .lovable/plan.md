@@ -1,52 +1,62 @@
 
-# Fix: Erro "Preencha todos os campos" ao Adicionar Horário no Domingo
+# Fix: Horarios de Domingo Nao Aparecem na Agenda
 
 ## Causa Raiz
 
-O Domingo tem `day_of_week = 0`. Na validação do `handleAdd`:
+O banco de dados armazena Domingo como `day_of_week = 0`. Porem, o codigo em varios pontos converte Domingo de `0` para `7` antes de buscar os slots configurados:
 
-```ts
-if (!addingDay || !newTime || !newLink) {
-  toast.error('Preencha todos os campos');
-  return;
-}
+```
+const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
+const slots = meetingLinkSlots?.[dayOfWeek] || []; // meetingLinkSlots[7] = undefined!
 ```
 
-Em JavaScript, `!0` é `true`. Então quando o dia selecionado é Domingo (valor `0`), a condição `!addingDay` é avaliada como `true`, fazendo o formulário rejeitar o salvamento mesmo com todos os campos preenchidos.
+O hook `useUniqueSlotsForDays` retorna dados indexados pela chave do banco (`0` para Domingo), mas o codigo consumidor busca na chave `7`, que nao existe. Resultado: slots de Domingo nunca aparecem.
 
-O mesmo bug existe nos dois componentes de configuração:
-- `src/components/crm/CloserAvailabilityConfig.tsx` (linha 121) — usado na Agenda R1
-- `src/components/crm/R2CloserAvailabilityConfig.tsx` (linha 128) — usado na Agenda R2
+## Locais Afetados
 
-## Solução
+| Arquivo | Linha | Conversao errada |
+|---------|-------|-----------------|
+| `src/components/crm/AgendaCalendar.tsx` | 452 | `isSlotConfigured` - slots nao aparecem como configurados |
+| `src/components/crm/AgendaCalendar.tsx` | 483 | `isSlotAvailable` - slots nao aparecem como disponiveis |
+| `src/components/crm/AgendaCalendar.tsx` | 554 | `getCloserSlotsForDay` - nao gera linhas de horario para Domingo |
+| `src/components/crm/CloserColumnCalendar.tsx` | 95 | `useCloserDaySlots(7)` - busca no DB com `day_of_week = 7`, retorna vazio |
+| `src/hooks/useAgendaData.ts` | 389 | Metricas de Domingo usam dia 7 |
 
-Trocar a verificação de `!addingDay` por `addingDay === null || addingDay === undefined`, que é a verificação correta para "nenhum dia selecionado" sem confundir o valor `0` com `false`.
+## Solucao
 
-### CloserAvailabilityConfig.tsx — linha 121
+Remover a conversao `0 -> 7` em todos os pontos. Domingo deve permanecer como `0`, consistente com o banco de dados e com `getDay()` do JavaScript.
 
-```ts
-// ANTES (bugado)
-if (!addingDay || !newTime || !newLink) {
+### Mudancas
 
-// DEPOIS (correto)
-if (addingDay === null || addingDay === undefined || !newTime || !newLink) {
+**AgendaCalendar.tsx** - 3 linhas (452, 483, 554):
+```
+// ANTES
+const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
+
+// DEPOIS
+const dayOfWeek = day.getDay();
 ```
 
-### R2CloserAvailabilityConfig.tsx — linha 128
+**CloserColumnCalendar.tsx** - 1 linha (95):
+```
+// ANTES
+const dayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
 
-```ts
-// ANTES (bugado)
-if (!addingDay || !newTime || !newLink) {
-
-// DEPOIS (correto)
-if (addingDay === null || addingDay === undefined || !newTime || !newLink) {
+// DEPOIS
+const dayOfWeek = selectedDate.getDay();
 ```
 
-## Arquivos Modificados
+**useAgendaData.ts** - 1 linha (389):
+```
+// ANTES
+const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
 
-| Arquivo | Linha | Mudança |
-|---------|-------|---------|
-| `src/components/crm/CloserAvailabilityConfig.tsx` | 121 | Corrigir validação `!addingDay` → `addingDay === null \|\| addingDay === undefined` |
-| `src/components/crm/R2CloserAvailabilityConfig.tsx` | 128 | Mesma correção |
+// DEPOIS
+const dayOfWeek = date.getDay();
+```
 
-Apenas 2 linhas alteradas — uma em cada arquivo. Nenhuma outra lógica é afetada.
+## Impacto
+
+- 5 linhas alteradas em 3 arquivos
+- Nenhuma mudanca na interface ou comportamento para dias 1-6 (segunda a sabado)
+- Domingo passa a mostrar corretamente os horarios configurados no grid da Agenda
