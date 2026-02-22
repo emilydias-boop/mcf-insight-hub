@@ -1,32 +1,33 @@
 
 
-# Correcao: Foreign Key do vendedor_id ainda aponta para profiles
+# Correcao: Funcao get_sdr_meetings_from_agenda referencia coluna inexistente
 
-## Situacao atual
+## O que esta acontecendo
 
-Confirmei agora no banco de dados que a constraint `consortium_cards_vendedor_id_fkey` ainda referencia `profiles(id)`. As migracoes propostas anteriormente nao foram aplicadas, por isso o erro continua.
+A funcao do banco `get_sdr_meetings_from_agenda` esta usando `msa.slot_id` para fazer o JOIN com `meeting_slots`, mas a coluna correta na tabela `meeting_slot_attendees` se chama `meeting_slot_id`. Isso causa o erro **"column msa.slot_id does not exist"** e impede qualquer dado de carregar na agenda -- nao e um problema de permissao.
 
 ## O que precisa ser feito
 
-Executar uma unica migracao SQL no banco:
+Uma unica alteracao na funcao do banco de dados: trocar `msa.slot_id` por `msa.meeting_slot_id` no JOIN.
 
-1. Remover a foreign key incorreta que aponta para `profiles`
-2. Criar a foreign key correta apontando para `consorcio_vendedor_options`
+Nenhum codigo frontend precisa ser alterado.
 
 ## Detalhes tecnicos
 
-```text
-ALTER TABLE consortium_cards DROP CONSTRAINT consortium_cards_vendedor_id_fkey;
+Recriar a funcao corrigindo a linha do JOIN:
 
-ALTER TABLE consortium_cards ADD CONSTRAINT consortium_cards_vendedor_id_fkey
-  FOREIGN KEY (vendedor_id) REFERENCES consorcio_vendedor_options(id)
-  ON DELETE SET NULL;
+```text
+-- Linha atual (incorreta):
+JOIN meeting_slots ms ON ms.id = msa.slot_id
+
+-- Correcao:
+JOIN meeting_slots ms ON ms.id = msa.meeting_slot_id
 ```
 
-Nenhum codigo precisa ser alterado. Apenas essa correcao no banco de dados.
+A funcao completa sera recriada com `CREATE OR REPLACE FUNCTION` mantendo toda a logica existente, apenas corrigindo essa referencia.
 
 ## Resultado esperado
 
-- Criar e editar cartas com vendedor selecionado funciona sem erro
-- Se um vendedor for removido do catalogo, as cartas ficam com vendedor em branco
+- A agenda R1 carrega normalmente para todos os usuarios, incluindo admins
+- Todos os dados de reunioes voltam a aparecer
 
