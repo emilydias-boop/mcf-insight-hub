@@ -336,10 +336,14 @@ export function useUpdateConsorcioCard() {
         }
       }
 
-      // 1. Update the card (without partners field)
+      // 1. Sanitizar campos vazios antes de enviar ao banco
+      const cleanedData = Object.fromEntries(
+        Object.entries(cardData).filter(([_, v]) => v !== '' && v !== undefined)
+      );
+
       const { error: cardError } = await supabase
         .from('consortium_cards')
-        .update(cardData)
+        .update(cleanedData)
         .eq('id', id);
 
       if (cardError) throw cardError;
@@ -400,9 +404,9 @@ export function useUpdateConsorcioCard() {
       queryClient.invalidateQueries({ queryKey: ['consortium-summary'] });
       toast.success('Carta atualizada com sucesso!');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Erro ao atualizar carta:', error);
-      toast.error('Erro ao atualizar carta');
+      toast.error(`Erro ao atualizar carta: ${error?.message || 'Erro desconhecido'}`);
     },
   });
 }
