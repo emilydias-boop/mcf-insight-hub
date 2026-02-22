@@ -1,50 +1,28 @@
 
-# Fix: Erro ao editar carta de consorcio (mesmo problema da criacao)
+
+# Fix: Foreign key invalida em vendedor_id do consortium_cards
 
 ## Problema
 
-O hook `useUpdateConsorcioCard` em `src/hooks/useConsorcio.ts` envia os dados diretamente ao Supabase sem sanitizar campos vazios (`""`). Isso causa o mesmo erro da criacao: campos UUID como `vendedor_id` recebem string vazia em vez de `null`, gerando erro de tipo invalido no banco.
+A coluna `vendedor_id` na tabela `consortium_cards` possui uma foreign key (`consortium_cards_vendedor_id_fkey`) que referencia `profiles(id)`. Porem, os vendedores sao gerenciados pela tabela independente `consorcio_vendedor_options`, cujos IDs nao existem na tabela `profiles`. Ao selecionar qualquer vendedor e salvar a carta, o banco rejeita o insert por violacao de foreign key.
 
 ## Solucao
 
-Aplicar a mesma sanitizacao que foi feita no `useCreateConsorcioCard`:
+Remover a foreign key constraint `consortium_cards_vendedor_id_fkey` da coluna `vendedor_id`. Essa coluna deve continuar existindo como campo texto/UUID livre, sem referencia a `profiles`.
 
-1. Remover campos com valor `""` ou `undefined` antes do update
-2. Melhorar mensagem de erro para exibir o detalhe do banco
+Opcionalmente, criar uma nova FK apontando para `consorcio_vendedor_options(id)` para manter integridade referencial correta — porem com `ON DELETE SET NULL` para nao quebrar cartas se um vendedor for removido.
 
 ## Alteracoes
 
-| Arquivo | Linhas | Mudanca |
-|---------|--------|---------|
-| `src/hooks/useConsorcio.ts` | 339-343 | Adicionar sanitizacao de `cardData` antes do `.update()` |
-| `src/hooks/useConsorcio.ts` | 403-405 | Melhorar mensagem de erro no `onError` |
+| Tipo | Detalhe |
+|------|---------|
+| Migracao SQL | `ALTER TABLE consortium_cards DROP CONSTRAINT consortium_cards_vendedor_id_fkey;` |
+| (Opcional) Migracao SQL | `ALTER TABLE consortium_cards ADD CONSTRAINT consortium_cards_vendedor_id_fkey FOREIGN KEY (vendedor_id) REFERENCES consorcio_vendedor_options(id) ON DELETE SET NULL;` |
 
-### Detalhe tecnico
-
-**Linha 339-343** - Adicionar sanitizacao antes do update:
-
-```typescript
-// Sanitizar campos vazios antes de enviar ao banco
-const cleanedData = Object.fromEntries(
-  Object.entries(cardData).filter(([_, v]) => v !== '' && v !== undefined)
-);
-
-const { error: cardError } = await supabase
-  .from('consortium_cards')
-  .update(cleanedData)
-  .eq('id', id);
-```
-
-**Linha 403-405** - Melhorar erro:
-
-```typescript
-onError: (error: any) => {
-  console.error('Erro ao atualizar carta:', error);
-  toast.error(`Erro ao atualizar carta: ${error?.message || 'Erro desconhecido'}`);
-},
-```
+Nenhuma alteracao de codigo e necessaria. O formulario e hooks ja estao corretos.
 
 ## Resultado
 
-- Editar carta com campos opcionais vazios nao causa erro de UUID invalido
-- Mensagem de erro mais detalhada para diagnostico futuro
+- Criar e editar cartas com vendedor selecionado funciona sem erro
+- Integridade referencial mantida contra a tabela correta (`consorcio_vendedor_options`)
+
