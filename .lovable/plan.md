@@ -1,25 +1,19 @@
 
 
-# Correcao: Foreign Key do vendedor_id apontando para tabela errada
+# Correcao: Foreign Key do vendedor_id ainda aponta para profiles
 
-## O que esta acontecendo
+## Situacao atual
 
-Quando voce seleciona um vendedor e salva a carta, o banco de dados rejeita porque ele tenta verificar se o ID do vendedor existe na tabela de **perfis de usuario** (`profiles`). Porem, os vendedores sao cadastrados em uma tabela separada (`consorcio_vendedor_options`), entao os IDs nunca vao bater.
-
-Quando voce **remove** o vendedor, o campo vai vazio e nao ha verificacao — por isso funciona sem vendedor.
+Confirmei agora no banco de dados que a constraint `consortium_cards_vendedor_id_fkey` ainda referencia `profiles(id)`. As migracoes propostas anteriormente nao foram aplicadas, por isso o erro continua.
 
 ## O que precisa ser feito
 
-Uma unica alteracao no banco de dados:
+Executar uma unica migracao SQL no banco:
 
-- Remover a referencia incorreta para a tabela `profiles`
-- Criar uma nova referencia para a tabela correta `consorcio_vendedor_options`
-
-Nenhum codigo precisa ser alterado. O formulario e os hooks ja estao corretos.
+1. Remover a foreign key incorreta que aponta para `profiles`
+2. Criar a foreign key correta apontando para `consorcio_vendedor_options`
 
 ## Detalhes tecnicos
-
-Migracao SQL a ser executada:
 
 ```text
 ALTER TABLE consortium_cards DROP CONSTRAINT consortium_cards_vendedor_id_fkey;
@@ -29,8 +23,10 @@ ALTER TABLE consortium_cards ADD CONSTRAINT consortium_cards_vendedor_id_fkey
   ON DELETE SET NULL;
 ```
 
+Nenhum codigo precisa ser alterado. Apenas essa correcao no banco de dados.
+
 ## Resultado esperado
 
 - Criar e editar cartas com vendedor selecionado funciona sem erro
-- Se um vendedor for removido do catalogo, as cartas associadas ficam com vendedor em branco (sem quebrar)
+- Se um vendedor for removido do catalogo, as cartas ficam com vendedor em branco
 
