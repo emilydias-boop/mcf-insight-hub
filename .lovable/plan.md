@@ -1,47 +1,57 @@
 
-
-# Fix: SDRs do Consorcio nao conseguem arrastar para Sem Interesse / Sem Retorno
+# Fix: Erro ao criar carta de consorcio
 
 ## Problema
 
-Os componentes `DealKanbanBoard.tsx` e `DealKanbanBoardInfinite.tsx` possuem um filtro hardcoded que esconde colunas "lost" (como "SEM INTERESSE") para SDRs:
+O formulario de criacao de carta de consorcio envia campos opcionais com valores vazios (`""`) em vez de `undefined` ou `null`. O campo mais critico e `vendedor_id`, que e do tipo UUID no banco de dados. Quando o usuario nao seleciona um vendedor, o valor `""` (string vazia) e enviado para uma coluna UUID, causando erro de tipo invalido no Supabase.
 
-```
-if (role === 'sdr' && !showLostDeals) {
-  return filteredByPermission.filter((s: any) => !isLostStage(s.stage_name));
-}
-```
-
-Esse filtro usa pattern matching em nomes como "sem interesse", "nao quer", "perdido", etc. No Consorcio, o estagio "NAO QUER - SEM INTERESSE" e capturado por esse filtro e escondido, mesmo que a tabela `stage_permissions` permita SDRs visualizar e mover para esse estagio.
-
-A `stage_permissions` ja e a fonte de verdade para permissoes. O filtro `isLostStage` e uma camada redundante e conflitante que deve ser removida.
+Outros campos opcionais como `origem_detalhe`, `vendedor_name`, `transferido_de`, `observacoes`, `pix`, etc. tambem podem ser enviados como strings vazias, o que nao causa erro de tipo mas polui os dados.
 
 ## Solucao
 
-Remover o filtro hardcoded `isLostStage` para SDRs em ambos os componentes Kanban. A visibilidade dos estagios deve ser controlada exclusivamente pela tabela `stage_permissions` (via `canViewStage`), que ja esta sendo aplicada na linha anterior do mesmo `useMemo`.
+Sanitizar os dados no hook `useCreateConsorcioCard` (arquivo `src/hooks/useConsorcio.ts`) antes de enviar ao Supabase. Converter strings vazias em `undefined` para campos opcionais, especialmente para `vendedor_id` que e UUID.
+
+Alternativamente (e mais seguro), sanitizar na construcao do `input` no formulario (`src/components/consorcio/ConsorcioCardForm.tsx`), tratando `vendedor_id` da mesma forma que outros campos opcionais.
 
 ## Alteracoes
 
 | Arquivo | Linhas | Mudanca |
 |---------|--------|---------|
-| `src/components/crm/DealKanbanBoard.tsx` | ~85-97 | Remover bloco `if (role === 'sdr' && !showLostDeals)` que filtra `isLostStage` |
-| `src/components/crm/DealKanbanBoardInfinite.tsx` | ~74-86 | Remover bloco `if (role === 'sdr' && !showLostDeals)` que filtra `isLostStage` |
+| `src/components/consorcio/ConsorcioCardForm.tsx` | 784 | `vendedor_id: data.vendedor_id \|\| undefined` (mesmo padrao usado para tipo_servidor, renda, etc.) |
+| `src/hooks/useConsorcio.ts` | 189-196 | Adicionar sanitizacao de campos antes do insert: remover chaves com valor `""` ou `undefined` do `cardData`, e converter `vendedor_id` vazio para `null` |
 
-O codigo de `visibleStages` ficara assim:
+### Detalhe tecnico
+
+No arquivo `src/components/consorcio/ConsorcioCardForm.tsx`, linha 784:
 
 ```
-const visibleStages = useMemo(() => {
-  const activeStages = (stages || []).filter((s: any) => s.is_active);
-  // stage_permissions is the sole source of truth for visibility
-  return activeStages.filter((s: any) => canViewStage(s.id));
-}, [stages, canViewStage]);
+// Antes:
+vendedor_id: data.vendedor_id,
+
+// Depois:
+vendedor_id: data.vendedor_id || undefined,
 ```
 
-As props `showLostDeals` e a importacao de `isLostStage` podem ser removidas de ambos os componentes, pois nao serao mais usadas.
+No arquivo `src/hooks/useConsorcio.ts`, adicionar sanitizacao geral no `mutationFn` antes do insert para limpar campos vazios:
+
+```typescript
+// Limpar campos string vazios e converter para null/undefined
+const cleanedData = Object.fromEntries(
+  Object.entries(cardData).filter(([_, v]) => v !== '' && v !== undefined)
+);
+```
+
+Tambem melhorar a mensagem de erro no `onError` para mostrar o detalhe do erro ao usuario (facilitar debug futuro):
+
+```typescript
+onError: (error: any) => {
+  console.error('Erro ao criar carta:', error);
+  toast.error(`Erro ao criar carta: ${error?.message || 'Erro desconhecido'}`);
+},
+```
 
 ## Resultado
 
-- SDRs do Consorcio veem e podem arrastar para "SEM INTERESSE" normalmente
-- Permissoes de visibilidade controladas exclusivamente pela tabela `stage_permissions`
-- Nenhum impacto no Inside Sales: se nao houver permissao explicita, `canViewStage` retorna `true` por padrao (comportamento atual)
-
+- Campos opcionais vazios nao sao enviados ao banco
+- `vendedor_id` vazio nao causa erro de UUID invalido
+- Mensagem de erro mais detalhada para facilitar diagnostico futuro
