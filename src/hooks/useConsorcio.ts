@@ -190,9 +190,14 @@ export function useCreateConsorcioCard() {
       // 1. Create the card
       const { partners, inicio_segunda_parcela, ...cardData } = input;
       
+      // Sanitizar campos vazios antes de enviar ao banco
+      const cleanedData = Object.fromEntries(
+        Object.entries(cardData).filter(([_, v]) => v !== '' && v !== undefined)
+      );
+      
       const { data: card, error: cardError } = await supabase
         .from('consortium_cards')
-        .insert(cardData)
+        .insert(cleanedData as any)
         .select()
         .single();
 
@@ -290,9 +295,9 @@ export function useCreateConsorcioCard() {
       queryClient.invalidateQueries({ queryKey: ['consortium-summary'] });
       toast.success('Carta de consórcio criada com sucesso!');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Erro ao criar carta:', error);
-      toast.error('Erro ao criar carta de consórcio');
+      toast.error(`Erro ao criar carta: ${error?.message || 'Erro desconhecido'}`);
     },
   });
 }
