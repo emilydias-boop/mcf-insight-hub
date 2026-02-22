@@ -2671,15 +2671,8 @@ export type Database = {
             foreignKeyName: "consortium_cards_vendedor_id_fkey"
             columns: ["vendedor_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "consorcio_vendedor_options"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "consortium_cards_vendedor_id_fkey"
-            columns: ["vendedor_id"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
           },
         ]
       }
