@@ -1,82 +1,103 @@
 
-# Alterar Semana da BU Consorcio para Segunda a Domingo
+# Ajustar Semana Segunda-Domingo em TODOS os Componentes CRM da BU Consorcio
 
-## Resumo
+## Problema
 
-Atualmente todas as BUs usam semana de Sabado a Sexta (weekStartsOn: 6). A BU Consorcio precisa passar a usar Segunda a Domingo (weekStartsOn: 1), sem afetar as demais BUs.
+A agenda e demais paginas CRM compartilhadas (Agenda R1, Agenda R2, Metricas, Reunioes Equipe, etc.) continuam usando Sabado-Sexta (`WEEK_STARTS_ON = 6`) mesmo quando acessadas pela rota `/consorcio/crm/*`. A imagem mostra a agenda comecando no Sabado 21, quando deveria comecar na Segunda 23.
+
+## Solucao
+
+Criar uma funcao helper `getWeekStartsOn(activeBU)` que retorna `1` para Consorcio e `6` para as demais BUs. Usar essa funcao em todos os componentes CRM compartilhados que calculam datas de semana.
 
 ---
 
 ## Arquivos a modificar
 
-### 1. `src/lib/businessDays.ts` - Exportar constante para Consorcio
+### 1. `src/lib/businessDays.ts` - Helper de decisao
 
-Adicionar nova constante:
+Adicionar funcao utilitaria:
 
 ```text
-export const CONSORCIO_WEEK_STARTS_ON = 1; // Segunda-feira
+export function getWeekStartsOn(activeBU: string | null): 0 | 1 | 2 | 3 | 4 | 5 | 6 {
+  if (activeBU === 'consorcio') return CONSORCIO_WEEK_STARTS_ON;
+  return WEEK_STARTS_ON;
+}
 ```
 
-Isso mantem a constante `WEEK_STARTS_ON = 6` intacta para as demais BUs.
+Isso centraliza a logica e evita repetir `if consorcio` em cada arquivo.
 
-### 2. `src/hooks/useConsorcioPipelineMetrics.ts`
+### 2. `src/pages/crm/Agenda.tsx` (Agenda R1)
 
-Trocar o import de `WEEK_STARTS_ON` por `CONSORCIO_WEEK_STARTS_ON` (valor 1).
+- Ja tem `activeBU` via `useActiveBU()`
+- Trocar `WEEK_STARTS_ON` por `getWeekStartsOn(activeBU)` nas linhas 63-64 (calculo de rangeStart/rangeEnd da semana)
 
-Linhas afetadas: 4, 76, 77 - onde calcula weekStart e weekEnd para metricas do pipeline de consorcio.
+### 3. `src/components/crm/AgendaCalendar.tsx` (Calendario visual)
 
-### 3. `src/components/consorcio/ConsorcioPeriodFilter.tsx`
+- Ja tem `activeBU` via `useBUContext()`
+- Trocar `WEEK_STARTS_ON` nas linhas 80, 121, 692 por `getWeekStartsOn(activeBU)`
+- Linha 102: trocar ordem dos dias `[6, 0, 1, 2, 3, 4, 5]` para dinamicamente calcular baseado no weekStartsOn (para Consorcio sera `[1, 2, 3, 4, 5, 6, 0]`)
 
-Trocar as chamadas `getCustomWeekStart/End` (que usam Sabado-Sexta) por `startOfWeek/endOfWeek` com `weekStartsOn: 1` (Segunda-Domingo).
+### 4. `src/pages/crm/AgendaR2.tsx` (Agenda R2)
 
-Linhas afetadas: 13, 48-49, 53-55 - nos botoes "Esta Semana" e "Semana Anterior".
+- Ja tem `activeBU` via `useActiveBU()`
+- Trocar `WEEK_STARTS_ON` nas linhas 119-120 por `getWeekStartsOn(activeBU)`
 
-### 4. `src/pages/bu-consorcio/PainelEquipe.tsx`
+### 5. `src/pages/crm/AgendaMetricas.tsx`
 
-Trocar todas as referencias `weekStartsOn: 6` e `WEEK_STARTS_ON` por `CONSORCIO_WEEK_STARTS_ON` (1).
+- Ja tem `activeBU` via `useActiveBU()`
+- Trocar `WEEK_STARTS_ON` nas linhas 22-23 por `getWeekStartsOn(activeBU)`
 
-Linhas afetadas:
-- 64-65: `ConsorcioMetricsCard` (wStart/wEnd para summary)
-- 209: `getDateRange()` preset "week"
-- 229-230: weekStartDate/weekEndDate para metricas do time
+### 6. `src/pages/crm/ReunioesEquipe.tsx`
 
-### 5. `src/hooks/useSetoresDashboard.ts`
+- Verificar se tem `activeBU`; se nao, adicionar `useActiveBU()`
+- Trocar `WEEK_STARTS_ON` nas linhas 136, 162-163 por `getWeekStartsOn(activeBU)`
 
-Este hook e compartilhado entre todas as BUs, mas os setores `efeito_alavanca` e `credito` sao especificos da BU Consorcio.
+### 7. `src/pages/crm/CloserMeetingsDetailPage.tsx`
 
-A abordagem mais segura: calcular um segundo par de datas de semana (Segunda-Domingo) especificamente para as queries de `consortium_cards` e `consortium_payments`, mantendo Sabado-Sexta para os demais setores (incorporador, projetos, leilao).
+- Adicionar `useActiveBU()` se nao tiver
+- Trocar `WEEK_STARTS_ON` nas linhas 35-36 por `getWeekStartsOn(activeBU)`
 
-Mudancas:
-- Adicionar `consorcioWeekStart` e `consorcioWeekEnd` com `weekStartsOn: 1`
-- Usar essas datas nas queries de `consortium_cards` (weekly) e `consortium_payments` (weekly) e `consortium_installments` (weekly)
-- Manter as datas originais (Sabado-Sexta) para queries de `hubla_transactions`
-- Atualizar o `semanaLabel` para mostrar o range correto por setor (ou manter o label global como Sabado-Sexta, ja que e o dashboard geral)
+### 8. `src/pages/crm/SdrMeetingsDetailPage.tsx`
+
+- Adicionar `useActiveBU()` se nao tiver
+- Trocar `WEEK_STARTS_ON` nas linhas 43 por `getWeekStartsOn(activeBU)`
+
+### 9. `src/components/crm/R2MetricsPanel.tsx`
+
+- Usa `getCustomWeekStart/End` (Sabado-Sexta)
+- Verificar se tem acesso a BU; se for consorcio, usar `startOfWeek(now, { weekStartsOn: 1 })` em vez de `getCustomWeekStart`
 
 ---
 
 ## O que NAO muda
 
-- `WEEK_STARTS_ON = 6` continua existindo e sendo usada por todas as outras BUs
-- `getCustomWeekStart/End` em `dateHelpers.ts` continua Sabado-Sexta (usado por dashboard geral, agenda, carrinho R2, etc.)
-- Hooks de Agenda (`useAgendaData`), Reunioes Equipe, SDR, Closer, Transacoes - todos continuam Sabado-Sexta
-- `useIncorporadorGrossMetrics` continua Sabado-Sexta
-
----
+- Constantes `WEEK_STARTS_ON = 6` e `CONSORCIO_WEEK_STARTS_ON = 1` permanecem
+- Paginas que nao sao CRM compartilhado (dashboard geral, financeiro, receita) continuam Sabado-Sexta
+- `dateHelpers.ts` (`getCustomWeekStart/End`) continua Sabado-Sexta para uso geral
+- `PainelEquipe.tsx` e `ConsorcioPeriodFilter.tsx` ja foram atualizados anteriormente
 
 ## Detalhes tecnicos
 
-### Constante nova em `businessDays.ts`
+### Helper `getWeekStartsOn`
+
+Recebe o `activeBU` (string | null) e retorna o valor correto para `weekStartsOn` do `date-fns`. Isso e importado em cada componente junto com os imports existentes de `businessDays.ts`.
+
+### Ordem dos dias no calendario visual
+
+Hoje o `AgendaCalendar` tem hardcoded `[6, 0, 1, 2, 3, 4, 5]` para Sabado-Domingo. Para Consorcio, precisa ser `[1, 2, 3, 4, 5, 6, 0]` (Segunda-Domingo). A logica sera:
 
 ```text
-CONSORCIO_WEEK_STARTS_ON = 1  // Segunda-feira (Monday)
+const daysOrder = Array.from({ length: 7 }, (_, i) => (weekStartsOn + i) % 7);
 ```
-
-Com `date-fns`, `startOfWeek(date, { weekStartsOn: 1 })` retorna segunda-feira e `endOfWeek(date, { weekStartsOn: 1 })` retorna domingo.
 
 ### Sequencia de implementacao
 
-1. Adicionar constante em `businessDays.ts`
-2. Atualizar `useConsorcioPipelineMetrics.ts`
-3. Atualizar `ConsorcioPeriodFilter.tsx`
-4. Atualizar `PainelEquipe.tsx`
-5. Atualizar `useSetoresDashboard.ts` (queries de consorcio)
+1. Adicionar `getWeekStartsOn()` em `businessDays.ts`
+2. Atualizar `AgendaCalendar.tsx` (componente visual compartilhado - maior impacto)
+3. Atualizar `Agenda.tsx` (pagina R1)
+4. Atualizar `AgendaR2.tsx` (pagina R2)
+5. Atualizar `AgendaMetricas.tsx`
+6. Atualizar `ReunioesEquipe.tsx`
+7. Atualizar `CloserMeetingsDetailPage.tsx`
+8. Atualizar `SdrMeetingsDetailPage.tsx`
+9. Verificar `R2MetricsPanel.tsx`
