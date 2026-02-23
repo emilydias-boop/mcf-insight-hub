@@ -1,85 +1,28 @@
 
+# Fix: R2 Scheduling Incorrectly Blocked by R1 Meeting
 
-# Fix: Distribuicao de Leads Nao Funciona para Robert (e outros)
+## Problem
 
-## Causa Raiz Identificada
+The `useCheckActiveMeeting` hook does not filter by `meeting_type`. When used in the R2 scheduling modal, it finds the completed R1 meeting and applies the 30-day cooldown, blocking R2 scheduling entirely.
 
-O Clint envia **exclusivamente** eventos `deal.stage_changed` -- foram **2107 eventos** desde fevereiro, e **ZERO** eventos `deal.created`.
+For R2, the rules should be:
+- Only check for active/completed **R2** meetings (not R1)
+- A completed R1 is expected and should not block R2
 
-A logica de distribuicao (`get_next_lead_owner`) esta **apenas** no handler `handleDealCreated`, que **nunca e executado** porque o Clint nao envia esse tipo de evento.
+## Solution
 
-Quando o `handleDealStageChanged` recebe um lead novo e nao encontra o deal no banco, ele **cria o deal diretamente** usando o `deal_user` do Clint (o owner que o Clint atribuiu), **sem consultar a distribuicao**.
+Add an optional `meetingType` parameter to the `useCheckActiveMeeting` hook, and pass `'r2'` from `R2QuickScheduleModal`.
 
-### Por que o contador mostra 28?
+### File: `src/hooks/useCheckActiveMeeting.ts`
 
-Outros webhooks (como `webhook-lead-receiver` para formularios de Lead Gratuito e `hubla-webhook-handler`) **usam** a distribuicao corretamente. Esses webhooks chamam `get_next_lead_owner`, o que incrementa o contador. Porem, a grande maioria dos leads entra pelo Clint via `deal.stage_changed`, ignorando a distribuicao.
+- Add parameter: `meetingType?: 'r1' | 'r2'`
+- When `meetingType` is provided, add `.eq('meeting_slot.meeting_type', meetingType)` to both queries (active meetings and cooldown check)
+- Update query key to include `meetingType`
 
-## Correcao
+### File: `src/components/crm/R2QuickScheduleModal.tsx`
 
-### Arquivo: `supabase/functions/clint-webhook-handler/index.ts`
+- Change call from `useCheckActiveMeeting(selectedDeal?.id)` to `useCheckActiveMeeting(selectedDeal?.id, 'r2')`
 
-Na funcao `handleDealStageChanged`, quando um deal NAO e encontrado e precisa ser criado (por volta da linha 1158), adicionar a mesma logica de distribuicao que existe no `handleDealCreated`:
+### File: `src/components/crm/QuickScheduleModal.tsx`
 
-1. Antes de criar o deal, verificar se existe `lead_distribution_config` ativa para a `origin_id`
-2. Se existir, chamar `get_next_lead_owner(origin_id)` para obter o proximo dono
-3. Usar o owner distribuido ao inves do `deal_user` do Clint
-4. Marcar `custom_fields.distributed = true` e salvar `deal_user_original`
-
-Codigo a adicionar (antes da insercao do deal na linha 1178):
-
-```typescript
-// Verificar distribuicao ativa antes de usar deal_user do Clint
-let finalOwnerEmail = ownerEmail;
-let finalOwnerProfileId = ownerProfileId;
-let wasDistributed = false;
-
-if (originId) {
-  try {
-    const { data: distConfig } = await supabase
-      .from('lead_distribution_config')
-      .select('id')
-      .eq('origin_id', originId)
-      .eq('is_active', true)
-      .limit(1);
-
-    if (distConfig && distConfig.length > 0) {
-      const { data: nextOwner, error: distError } = await supabase
-        .rpc('get_next_lead_owner', { p_origin_id: originId });
-
-      if (!distError && nextOwner) {
-        finalOwnerEmail = nextOwner;
-        wasDistributed = true;
-
-        // Resolver profile_id do owner distribuido
-        const { data: distProfile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', finalOwnerEmail)
-          .maybeSingle();
-        if (distProfile) {
-          finalOwnerProfileId = distProfile.id;
-        }
-      }
-    }
-  } catch (err) {
-    console.log('[DEAL.STAGE_CHANGED] Erro na distribuicao:', err);
-  }
-}
-```
-
-E atualizar o INSERT do deal para usar `finalOwnerEmail`/`finalOwnerProfileId` e adicionar flags de distribuicao nos custom_fields.
-
-### Tambem: Resetar contadores
-
-Apos o deploy, resetar os contadores da distribuicao para que todos os SDRs partam do zero e a distribuicao seja justa novamente. Isso pode ser feito pelo botao "Resetar Contadores" na UI.
-
-## Resumo
-
-| Item | Detalhe |
-|------|---------|
-| Problema | Clint envia apenas `deal.stage_changed`, e a distribuicao so existe em `handleDealCreated` |
-| Impacto | Robert (e potencialmente outros) nao recebe leads novos; leads vao para quem o Clint define |
-| Correcao | Adicionar logica de distribuicao ao criar deals dentro de `handleDealStageChanged` |
-| Arquivo | `supabase/functions/clint-webhook-handler/index.ts` (linhas ~1158-1209) |
-| Pos-deploy | Resetar contadores via UI |
-
+- Optionally pass `'r1'` for explicit clarity (current behavior already works since R1 is the main flow, but being explicit is safer)
