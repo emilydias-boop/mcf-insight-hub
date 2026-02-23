@@ -1,43 +1,105 @@
 
-# Adicionar Formulario de Qualificacao no DealDetailsDrawer
+# Consolidar Dados do Lead Across Pipelines
 
-## Objetivo
-Permitir abrir o formulario de qualificacao (o mesmo que aparece durante a ligacao) diretamente do drawer do lead, sem precisar estar em uma ligacao ativa.
+## Problema
 
-## Como funciona hoje
-- O formulario (`QualificationAndScheduleModal`) so abre em 2 situacoes:
-  1. Durante uma ligacao Twilio (quando o lead atende)
-  2. Ao arrastar um deal para "Sem Interesse" no Kanban
-- Nao ha como preencher a qualificacao manualmente pelo drawer do lead
+Quando um negocio e replicado para outra pipeline (ex: de Inside Sales para Consorcio ou Gerentes de Relacionamento), ele recebe um novo UUID. As abas de Timeline, Notas, Ligacoes e Historico buscam dados usando apenas o `dealUuid` atual, perdendo todas as informacoes coletadas na pipeline original.
 
-## Solucao
+O hook `useLeadNotes` ja resolve isso corretamente -- ele busca o `contact_id` do deal atual, encontra TODOS os deals do mesmo contato, e agrega notas de todos eles. Porem os demais componentes nao seguem esse padrao.
 
-### Adicionar botao "Qualificar" no QuickActionsBlock ou diretamente no DealDetailsDrawer
+## Solucao: Hook utilitario + atualizacao dos componentes
 
-**Arquivo: `src/components/crm/DealDetailsDrawer.tsx`**
+### 1. Criar hook utilitario `useContactDealIds`
 
-1. Adicionar state para controlar a abertura do modal de qualificacao
-2. Adicionar o componente `QualificationAndScheduleModal` no drawer
-3. Adicionar um botao/acao que abre o modal -- posicionado proximo as acoes rapidas existentes (Ligar, WhatsApp, Agendar)
+Novo arquivo: `src/hooks/useContactDealIds.ts`
 
-**Alteracoes especificas:**
+Dado um `dealId`, este hook:
+- Busca o `contact_id` do deal atual em `crm_deals`
+- Busca todos os deals do mesmo contato
+- Retorna um array com todos os `deal_id` (UUIDs) relacionados
 
-- Importar `QualificationAndScheduleModal`
-- Novo state: `const [showQualification, setShowQualification] = useState(false)`
-- Adicionar botao com icone `ClipboardList` no bloco de acoes rapidas (apos "Agendar")
-- Renderizar `<QualificationAndScheduleModal>` com `open={showQualification}`, passando `dealId` e `contactName`
-- Ao fechar o modal, chamar `refetchDeal()` para atualizar os dados exibidos
+Isso centraliza a logica de "encontrar todos os deals do mesmo lead" em um unico lugar reutilizavel.
 
-**Arquivo: `src/components/crm/QuickActionsBlock.tsx`** (se o botao ficar nesse componente)
+### 2. Atualizar `useLeadFullTimeline.ts` (Timeline)
 
-- Adicionar prop `onQualify` callback
-- Renderizar botao "Qualificar" com icone de formulario
+Atualmente busca atividades, calls, meetings e attendee_notes usando apenas `dealUuid` e `dealId`.
 
-O formulario reutiliza 100% do componente existente `QualificationAndScheduleModal`, que ja carrega dados salvos anteriormente e permite editar/salvar novamente.
+Alteracao:
+- Receber `contactId` como parametro adicional (ja disponivel no drawer)
+- Buscar todos os deal UUIDs do mesmo contato
+- Expandir as queries de `deal_activities`, `calls`, `meeting_slot_attendees` e `attendee_notes` para usar `.in('deal_id', allDealIds)` em vez de `.eq('deal_id', dealUuid)`
 
-## Sobre os dados salvos
+### 3. Atualizar `DealNotesTab.tsx` (aba Notas)
 
-Confirmando: **sim, todos os dados sao salvos para o lead**. Ao preencher e clicar "Salvar":
-- Os campos (profissao, renda, estado, etc.) sao salvos em `crm_deals.custom_fields`
-- O resumo e registrado em `deal_activities` como `qualification_note`
-- Esses dados aparecem na timeline e no card de qualificacao do drawer
+Atualmente busca notas manuais, agendamentos, attendee_notes e calls usando apenas `dealUuid`.
+
+Alteracao:
+- Receber `contactId` como prop
+- Buscar todos os deal IDs do contato
+- Expandir todas as queries para usar `.in('deal_id', allDealIds)`
+
+### 4. Atualizar `CallHistorySection.tsx` (aba Ligacoes)
+
+Atualmente busca calls usando `.eq('deal_id', dealId)`.
+
+Alteracao:
+- Receber `contactId` como prop (ja existe na interface mas nao e usado para cross-pipeline)
+- Buscar todos os deal IDs do contato
+- Expandir a query para `.in('deal_id', allDealIds)`
+
+### 5. Atualizar `DealHistory.tsx` (aba Historico)
+
+Atualmente busca `deal_activities` usando apenas `dealUuid` e `dealId`.
+
+Alteracao:
+- Receber `contactId` como prop
+- Buscar todos os deal IDs do contato
+- Expandir a query para buscar atividades de todos os deals relacionados
+
+### 6. Atualizar `DealDetailsDrawer.tsx`
+
+Passar `contactId` (de `deal.contact_id`) como prop para todos os componentes atualizados:
+- `LeadFullTimeline` (ja recebe `contactEmail`, adicionar `contactId`)
+- `DealNotesTab` (adicionar `contactId`)
+- `CallHistorySection` (ja tem `contactId` na interface, passar o valor correto)
+- `DealHistory` (adicionar `contactId`)
+
+## Detalhes Tecnicos
+
+**Hook `useContactDealIds` (pseudo-codigo):**
+```text
+function useContactDealIds(dealId):
+  query = useQuery(['contact-deal-ids', dealId]):
+    1. SELECT contact_id FROM crm_deals WHERE id = dealId
+    2. SELECT id FROM crm_deals WHERE contact_id = contact_id
+    3. return array de UUIDs
+  return { allDealIds, isLoading }
+```
+
+**Padrao de uso nos componentes:**
+```text
+// Antes:
+.eq('deal_id', dealUuid)
+
+// Depois:
+.in('deal_id', allDealIds)
+```
+
+**Arquivos a criar:**
+1. `src/hooks/useContactDealIds.ts`
+
+**Arquivos a modificar:**
+1. `src/hooks/useLeadFullTimeline.ts`
+2. `src/components/crm/DealNotesTab.tsx`
+3. `src/components/crm/CallHistorySection.tsx`
+4. `src/components/crm/DealHistory.tsx`
+5. `src/components/crm/DealDetailsDrawer.tsx`
+
+## Resultado Esperado
+
+Ao abrir qualquer deal de "Matheus Brigatto" em qualquer pipeline (Inside Sales, Consorcio, Gerentes de Relacionamento), o usuario vera:
+- Todas as notas de qualificacao escritas pelos SDRs
+- Todas as notas dos Closers de R1 e R2
+- Todas as ligacoes feitas em qualquer pipeline
+- Todo o historico de movimentacoes de estagio
+- Toda a timeline unificada com eventos de todas as pipelines
