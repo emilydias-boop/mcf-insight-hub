@@ -1,37 +1,82 @@
 
-# Corrigir Dados e Proteger Busca por BU no Agendamento
 
-## 1. Dados do Lead "Ailton Aparecido de Sa"
+# Corrigir Deals Sem Estágio (stage_id NULL)
 
-O deal de "Efeito Alavanca + Clube" (id: `f4895d29-305c-42b3-bb84-6400e686ff2c`) ja esta no estagio "VENDA REALIZADA 50K", que e mais avancado que "R1 Realizada". Nao e necessario corrigir o estagio desse deal.
+## Diagnóstico
 
-O deal errado (Inside Sales, id: `1f374740-392f-4cc5-8d78-3206b85a8c82`) esta em "REUNIAO 1 REALIZADA" porque foi ele que ficou vinculado ao attendee. **Nenhuma correcao de dados e necessaria** ja que o deal correto ja progrediu alem de R1 Realizada.
+O deal "Júnior Pandolfi" (email: pj.investimentosimobiliarios@outlook.com) na origem "Efeito Alavanca + Clube" tem `stage_id = NULL`. Isso faz com que ele apareça na contagem da busca ("1 oportunidade"), mas não seja exibido em nenhuma coluna do Kanban.
 
-## 2. Protecao no Codigo: Filtrar busca por BU
+Existem **73 deals** nessa mesma situação só nessa origem, e mais **1616 deals** sem origin_id/stage_id em geral.
 
-### Problema identificado
+## Causa raiz
 
-Na hora do agendamento (QuickScheduleModal), a busca por **nome** ja filtra por `originIds` da BU ativa. Porem, as buscas por **telefone** e **email** NAO aplicam esse filtro, permitindo que deals de outras BUs/pipelines aparecam nos resultados e sejam selecionados erroneamente.
+A sincronização do Clint (`sync-deals`) não encontrou o mapeamento de estágio para esses deals. A variável `stageId` ficou `null` e foi salva assim no banco.
 
-### Solucao
+## Plano
 
-Adicionar o parametro `originIds` aos hooks `useSearchDealsByPhone` e `useSearchDealsByEmail` em `src/hooks/useAgendaData.ts`, e passar esses IDs a partir do `QuickScheduleModal`.
+### 1. Corrigir dados existentes (Edge Function pontual)
 
-### Arquivo: `src/hooks/useAgendaData.ts`
+Criar uma edge function temporária `fix-null-stages` que:
+- Busca todos os deals com `stage_id IS NULL` e `origin_id IS NOT NULL`
+- Para cada origin_id, busca o primeiro estágio ativo (menor `stage_order`)
+- Atualiza os deals atribuindo esse estágio padrão
+- Retorna um relatório de quantos deals foram corrigidos por origem
 
-**`useSearchDealsByPhone`** (linha 758):
-- Adicionar parametro opcional `originIds?: string[]`
-- Ao buscar deals por `contact_id`, adicionar `.in('origin_id', originIds)` quando disponivel
+### 2. Prevenir no sync futuro
 
-**`useSearchDealsByEmail`** (linha 792):
-- Adicionar parametro opcional `originIds?: string[]`
-- Ao buscar deals por `contact_id`, adicionar `.in('origin_id', originIds)` quando disponivel
+No arquivo `supabase/functions/sync-deals/index.ts`:
+- Quando `stageId` resolver como `null` mas `originId` existir, buscar o primeiro estágio ativo da origem como fallback
+- Isso garante que novos deals sincronizados nunca fiquem sem estágio
 
-### Arquivo: `src/components/crm/QuickScheduleModal.tsx`
+### 3. Tratar no frontend (Kanban)
 
-- Passar `originIds` para `useSearchDealsByPhone(phoneQuery, originIds)`
-- Passar `originIds` para `useSearchDealsByEmail(emailQuery, originIds)`
+No `DealKanbanBoardInfinite.tsx`:
+- Adicionar uma seção "Sem estágio" no final do Kanban para deals com `stage_id = null`, caso existam
+- Isso serve como safety net para que nenhum deal fique invisível
 
-### Arquivo: `src/components/crm/R2QuickScheduleModal.tsx`
+## Detalhes técnicos
 
-- Verificar e aplicar o mesmo filtro de BU para consistencia
+### Nova Edge Function: `supabase/functions/fix-null-stages/index.ts`
+
+```
+POST /fix-null-stages
+```
+
+Lógica:
+1. Query: `SELECT DISTINCT origin_id FROM crm_deals WHERE stage_id IS NULL AND origin_id IS NOT NULL`
+2. Para cada origin_id: buscar primeiro estágio com `is_active = true ORDER BY stage_order ASC LIMIT 1`
+3. UPDATE em batch: `UPDATE crm_deals SET stage_id = ? WHERE stage_id IS NULL AND origin_id = ?`
+4. Retornar contagem de deals corrigidos
+
+### Arquivo: `supabase/functions/sync-deals/index.ts`
+
+Após a linha onde `stageId` é resolvido (linha ~231), adicionar fallback:
+
+```typescript
+// Se não encontrou stage pelo mapeamento, usar primeiro estágio da origem
+let stageId = stageData?.id || null;
+let originId = stageData?.origin_id || null;
+
+if (!stageId && originId) {
+  // Fallback: buscar primeiro estágio ativo da origem
+  const { data: defaultStage } = await supabaseClient
+    .from('crm_stages')
+    .select('id')
+    .eq('origin_id', originId)
+    .eq('is_active', true)
+    .order('stage_order', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (defaultStage) stageId = defaultStage.id;
+}
+```
+
+### Arquivo: `src/components/crm/DealKanbanBoardInfinite.tsx`
+
+Adicionar coluna "Sem Estágio" como safety net visual:
+
+```typescript
+const unstaged = deals.filter(d => !d.stage_id);
+// Renderizar como ultima coluna se unstaged.length > 0
+```
+
