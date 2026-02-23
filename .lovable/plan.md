@@ -1,84 +1,113 @@
 
+# Fix: Stages nao persistem ao excluir/reordenar no Editor de Pipeline
 
-# Fix: Notas do Lead nao aparecem no Consorcio
+## Problema
 
-## Causa Raiz
+Quando voce exclui ou reordena stages no editor de configuracao ("Etapas do Kanban"), as mudancas parecem nao funcionar porque:
 
-O deal "Matheus Brigatto" no Consorcio (`aeaea21b`) tem:
-- `contact_id = NULL`
-- `replicated_from_deal_id = NULL`
-- Nome = "Matheus Brigatto"
+1. **Excluir**: O editor deleta a stage de `local_pipeline_stages`, mas ela continua existindo em `crm_stages`. O hook `useCRMStages` que monta o Kanban faz um **merge** das duas tabelas, re-adicionando stages que foram deletadas localmente.
 
-O fallback por nome no `useContactDealIds` usa `.maybeSingle()` para buscar o contato, mas existem **4 contatos** com o nome "Matheus Brigatto" na tabela `crm_contacts`. O metodo `.maybeSingle()` retorna `null` quando encontra mais de um resultado, fazendo o hook retornar apenas o deal atual (sem notas cross-pipeline).
+2. **Reordenar**: A ordem e atualizada em `local_pipeline_stages`, mas o merge re-adiciona stages de `crm_stages` com ordem diferente, bagunando a sequencia.
 
-O contato correto e `40d3a5bb` (o unico com deals vinculados).
+3. **"Proposta Recusada" -> "Sem Sucesso"**: Essa stage (`c2c7288b`) existe em `crm_stages` mas nao em `local_pipeline_stages`. Tem 1 deal nela. Ela aparece no Kanban por causa do merge.
+
+### Dados atuais da pipeline "Efeito Alavanca + Clube"
+
+- `local_pipeline_stages`: 14 stages (sem "SEM INTERESSE", sem "SEM RETORNO", sem "EVENTOS antigos")
+- `crm_stages`: 16 stages (inclui "SEM INTERESSE", "SEM RETORNO", "PRODUTOS FECHADOS", "SEM SUCESSO" e "EVENTOS")
+
+O merge adiciona stages que so existem em `crm_stages`, ignorando as exclusoes feitas pelo usuario.
 
 ## Solucao
 
-### Arquivo: `src/hooks/useContactDealIds.ts`
+### 1. Espelhar exclusao e reordenacao em `crm_stages`
 
-Duas correcoess:
+**Arquivo:** `src/components/crm/PipelineStagesEditor.tsx`
 
-**1. Fallback por nome: trocar `.maybeSingle()` por query que prioriza contato com deals**
+**Delete mutation** (linhas 150-167):
+- Alem de deletar de `local_pipeline_stages`, marcar como `is_active = false` em `crm_stages`
+- Nao deletar de `crm_stages` porque deals podem ter FK referenciando o stage_id
 
-Em vez de buscar qualquer contato pelo nome, buscar o contato que efetivamente tenha deals vinculados. Usar `.limit(1)` e acessar `data?.[0]` em vez de `.maybeSingle()`.
+**Reorder mutation** (linhas 169-192):
+- Alem de atualizar `stage_order` em `local_pipeline_stages`, atualizar tambem em `crm_stages` (para os stages que tem espelho)
 
-Logica melhorada:
+**Update mutation** (linhas 130-148):
+- Espelhar mudanca de nome/cor/tipo em `crm_stages`
+
+### 2. Corrigir merge em `useCRMStages` para respeitar exclusoes locais
+
+**Arquivo:** `src/hooks/useCRMData.ts`
+
+Na logica de merge (linhas 127-168), quando existem `local_pipeline_stages`:
+- **Antes**: Adicionar stages de `crm_stages` que nao existem nos locais (por nome)
+- **Depois**: So adicionar stages de `crm_stages` que tem deals vinculados E nao foram explicitamente excluidas. Se uma stage esta em `crm_stages` mas nao em `local_pipeline_stages`, e tem deals, adicionar com um indicador visual. Se nao tem deals, ignorar completamente.
+
+A logica simplificada sera: quando existem stages locais, elas sao a unica fonte de verdade para a **visibilidade** do Kanban. Stages do `crm_stages` que nao estao no local so aparecem se tiverem deals (para o usuario poder mover esses deals).
+
+### 3. Limpar `crm_stages` para stages deletadas
+
+**Migration SQL**: Marcar como `is_active = false` as stages que existem em `crm_stages` mas foram removidas de `local_pipeline_stages` e nao tem deals:
+- "SEM INTERESSE" (id: `91fcdb43`) - verificar se tem deals
+- "SEM RETORNO" (id: `02642d65`) - nao esta em crm_stages, so no local
+- "PRODUTOS FECHADOS" (id: `2357df56`) - verificar deals
+
+## Detalhes Tecnicos
+
+### PipelineStagesEditor.tsx - Delete Mutation
+
 ```text
-// Antes (quebra com duplicatas):
-.ilike('name', deal.name.trim())
-.limit(1)
-.maybeSingle()
-
-// Depois (busca contato que tem deals):
-1. Buscar contatos pelo nome com .ilike()
-2. Se encontrar apenas 1, usar esse
-3. Se encontrar varios, buscar qual tem deals vinculados
-4. Usar o primeiro com deals, ou o primeiro da lista como fallback
+// Antes: so deleta de local_pipeline_stages
+// Depois: 
+1. Deletar de local_pipeline_stages
+2. UPDATE crm_stages SET is_active = false WHERE id = stageId
+   (nao-fatal, apenas log de warning)
 ```
 
-**2. Adicionar Fallback #3: busca por email/telefone via crm_contacts**
-
-Se o deal nao tem `contact_id` nem `replicated_from_deal_id`, e o nome nao resolve, tentar buscar pelo email do contato (se disponivel via o drawer).
-
-### Detalhes Tecnicos
-
-No `useContactDealIds.ts`, a secao de fallback por nome (linhas 38-47) sera substituida por:
+### PipelineStagesEditor.tsx - Reorder Mutation
 
 ```text
-// Fallback 2: match by deal name - handle duplicates
-if (!resolvedContactId && deal?.name) {
-  const { data: contacts } = await supabase
-    .from('crm_contacts')
-    .select('id')
-    .ilike('name', deal.name.trim());
-  
-  if (contacts?.length === 1) {
-    resolvedContactId = contacts[0].id;
-  } else if (contacts && contacts.length > 1) {
-    // Multiple contacts with same name - find which has deals
-    const contactIds = contacts.map(c => c.id);
-    const { data: dealsForContacts } = await supabase
-      .from('crm_deals')
-      .select('contact_id')
-      .in('contact_id', contactIds)
-      .limit(1);
-    resolvedContactId = dealsForContacts?.[0]?.contact_id || contacts[0].id;
+// Antes: so atualiza stage_order em local_pipeline_stages
+// Depois:
+1. Atualizar stage_order em local_pipeline_stages
+2. Para cada stage, tentar UPDATE crm_stages SET stage_order = X WHERE id = stageId
+   (nao-fatal)
+```
+
+### PipelineStagesEditor.tsx - Update Mutation
+
+```text
+// Antes: so atualiza em local_pipeline_stages
+// Depois:
+1. Atualizar em local_pipeline_stages  
+2. UPDATE crm_stages SET stage_name = name, color = color WHERE id = stageId
+   (nao-fatal)
+```
+
+### useCRMData.ts - Merge Logic
+
+```text
+// Antes (linha 153-165):
+// Adicionar stages do crm_stages que NAO existem nos locais
+crmStages.forEach((crmStage) => {
+  if (!localNames.has(crmStage.stage_name.toLowerCase())) {
+    mergedStages.push(crmStage);
   }
-}
+});
+
+// Depois:
+// Quando existem local stages, elas sao a UNICA fonte de verdade
+// NAO re-adicionar stages de crm_stages
+// Isso garante que excluir/reordenar no editor funcione
 ```
-
-## Arquivos a Modificar
-
-1. `src/hooks/useContactDealIds.ts` - Corrigir fallback por nome para lidar com contatos duplicados
 
 ## Resultado Esperado
 
-Ao abrir "Matheus Brigatto" no Consorcio, o hook vai:
-1. Ver que `contact_id` e null
-2. Ver que `replicated_from_deal_id` e null
-3. Buscar contatos com nome "Matheus Brigatto" -> encontra 4
-4. Buscar qual deles tem deals -> encontra `40d3a5bb`
-5. Buscar todos os deals de `40d3a5bb` -> encontra 3 deals (Inside Sales + 2 replicados)
-6. Retornar todos os IDs, permitindo que as notas de agendamento e qualificacao aparecam
+- Excluir uma stage no editor a remove do Kanban imediatamente
+- Reordenar stages no editor reflete no Kanban
+- Stages com deals vinculados que foram excluidas: os deals ficam "sem coluna visivel" ate serem movidos - o usuario precisa mover esses deals antes de excluir
+- A "SEM SUCESSO" que tem 1 deal continuara visivel ate o deal ser movido
 
+## Arquivos a Modificar
+
+1. `src/components/crm/PipelineStagesEditor.tsx` - Espelhar delete/reorder/update em crm_stages
+2. `src/hooks/useCRMData.ts` - Parar de re-adicionar stages deletadas no merge
