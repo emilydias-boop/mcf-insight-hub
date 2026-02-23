@@ -14,9 +14,10 @@ import { MeetingSlot } from '@/hooks/useAgendaData';
 interface MeetingSearchPanelProps {
   closerId: string;
   onSelectMeeting: (meeting: MeetingSlot) => void;
+  isConsorcio?: boolean;
 }
 
-export function MeetingSearchPanel({ closerId, onSelectMeeting }: MeetingSearchPanelProps) {
+export function MeetingSearchPanel({ closerId, onSelectMeeting, isConsorcio = false }: MeetingSearchPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const { data: results = [], isLoading } = useSearchPastMeetings(searchQuery, closerId);
   const markContractPaid = useMarkContractPaid();
@@ -144,21 +145,23 @@ export function MeetingSearchPanel({ closerId, onSelectMeeting }: MeetingSearchP
                       </div>
                     </div>
                     <div className="flex items-center gap-1 ml-2">
-                      {result.attendeeStatus === 'contract_paid' ? (
-                        <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30">
-                          ✅ Pago
-                        </Badge>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="default"
-                          className="h-8 w-8 p-0 bg-amber-500 hover:bg-amber-600"
-                          onClick={() => handleMarkPaid(result)}
-                          disabled={markContractPaid.isPending}
-                          title="Marcar Contrato Pago"
-                        >
-                          <DollarSign className="h-4 w-4" />
-                        </Button>
+                      {!isConsorcio && (
+                        result.attendeeStatus === 'contract_paid' ? (
+                          <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30">
+                            ✅ Pago
+                          </Badge>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-8 w-8 p-0 bg-amber-500 hover:bg-amber-600"
+                            onClick={() => handleMarkPaid(result)}
+                            disabled={markContractPaid.isPending}
+                            title="Marcar Contrato Pago"
+                          >
+                            <DollarSign className="h-4 w-4" />
+                          </Button>
+                        )
                       )}
                       <Button
                         size="sm"
@@ -185,7 +188,7 @@ export function MeetingSearchPanel({ closerId, onSelectMeeting }: MeetingSearchP
 
         {searchQuery.length === 0 && (
           <div className="text-center py-4 text-xs text-muted-foreground">
-            Busque leads para marcar como "Contrato Pago"
+            {isConsorcio ? 'Busque reuniões realizadas para follow-up' : 'Busque leads para marcar como "Contrato Pago"'}
           </div>
         )}
       </CardContent>

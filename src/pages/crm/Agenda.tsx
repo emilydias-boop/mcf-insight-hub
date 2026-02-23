@@ -345,7 +345,9 @@ export default function Agenda() {
               <SelectItem value="completed">Realizadas</SelectItem>
               <SelectItem value="no_show">No-show</SelectItem>
               <SelectItem value="canceled">Canceladas</SelectItem>
-              <SelectItem value="contract_paid">Contrato Pago</SelectItem>
+              {activeBU !== 'consorcio' && (
+                <SelectItem value="contract_paid">Contrato Pago</SelectItem>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -374,6 +376,7 @@ export default function Agenda() {
           <MeetingSearchPanel
             closerId={myCloser.id}
             onSelectMeeting={setSelectedMeeting}
+            isConsorcio={activeBU === 'consorcio'}
           />
         </div>
       )}
