@@ -99,6 +99,15 @@ export function CloserColumnCalendar({
   // Buscar horários reais configurados em closer_meeting_links (apenas R1)
   const { data: daySlots = [] } = useCloserDaySlots(dayOfWeek, 'r1');
 
+  // Filtrar closers que têm slot configurado ou reunião agendada neste dia
+  const visibleClosers = useMemo(() => {
+    return closers.filter(closer => {
+      const hasConfiguredSlot = daySlots.some(s => s.closer_id === closer.id);
+      const hasMeeting = meetings.some(m => m.closer_id === closer.id);
+      return hasConfiguredSlot || hasMeeting;
+    });
+  }, [closers, daySlots, meetings]);
+
   // Coletar todos os attendees para detecção batch de Outside
   const attendeesForOutsideCheck = useMemo(() => {
     return meetings.flatMap(m => 
@@ -252,7 +261,7 @@ export function CloserColumnCalendar({
       {/* Header with closer names */}
       <div
         className="grid border-b bg-muted/50 sticky top-0 z-10"
-        style={{ gridTemplateColumns: `80px repeat(${closers.length}, 1fr)` }}
+        style={{ gridTemplateColumns: `80px repeat(${visibleClosers.length}, 1fr)` }}
       >
         <div className="p-3 text-center text-xs font-medium text-muted-foreground border-r flex items-center justify-center gap-1">
           <span>{format(selectedDate, "EEE dd/MM", { locale: ptBR })}</span>
@@ -266,7 +275,7 @@ export function CloserColumnCalendar({
             </button>
           )}
         </div>
-        {closers.map((closer) => {
+        {visibleClosers.map((closer) => {
           const leadCount = dailyLeadCounts[closer.id] || 0;
           return (
             <div key={closer.id} className="p-2 text-center border-l">
@@ -299,7 +308,7 @@ export function CloserColumnCalendar({
             <div
               key={idx}
               className={cn("grid border-b last:border-b-0", isCurrentSlot && "bg-primary/10")}
-              style={{ gridTemplateColumns: `80px repeat(${closers.length}, 1fr)` }}
+              style={{ gridTemplateColumns: `80px repeat(${visibleClosers.length}, 1fr)` }}
             >
               <div
                 className={cn(
@@ -310,7 +319,7 @@ export function CloserColumnCalendar({
                 {timeStr}
               </div>
 
-              {closers.map((closer) => {
+              {visibleClosers.map((closer) => {
                 const slotMeetings = getMeetingsForSlot(closer.id, slot);
                 const hasMeetings = slotMeetings.length > 0;
                 // Combinar attendees de todos os meetings no mesmo slot
