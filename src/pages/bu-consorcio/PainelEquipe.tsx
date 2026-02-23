@@ -29,6 +29,7 @@ import { Target, Settings2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConsorcioSdrSummaryTable } from "@/components/sdr/ConsorcioSdrSummaryTable";
 import { useConsorcioPipelineMetricsBySdr } from "@/hooks/useConsorcioPipelineMetricsBySdr";
+import { useConsorcioProdutosFechadosBySdr } from "@/hooks/useConsorcioProdutosFechadosBySdr";
 import { ConsorcioCloserSummaryTable } from "@/components/sdr/ConsorcioCloserSummaryTable";
 import { PipelineSelector } from "@/components/crm/PipelineSelector";
 
@@ -285,6 +286,7 @@ export default function ConsorcioPainelEquipe() {
   const pipelineMetrics = useConsorcioPipelineMetrics();
   const produtosFechados = useConsorcioProdutosFechadosMetrics();
   const { data: propostasData } = useConsorcioPipelineMetricsBySdr(start, end);
+  const { data: produtosFechadosBySdr } = useConsorcioProdutosFechadosBySdr(start, end);
   
   // Consórcio team targets
   const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
@@ -706,6 +708,7 @@ export default function ConsorcioPainelEquipe() {
               sdrMetaMap={sdrMetaMap}
               diasUteisNoPeriodo={diasUteisNoPeriodo}
               propostasEnviadasBySdr={propostasData}
+              propostasFechadasBySdr={produtosFechadosBySdr}
             />
           ) : (
             <ConsorcioCloserSummaryTable

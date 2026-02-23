@@ -14,6 +14,7 @@ interface ConsorcioSdrSummaryTableProps {
   sdrMetaMap?: Map<string, number>;
   diasUteisNoPeriodo?: number;
   propostasEnviadasBySdr?: Map<string, number>;
+  propostasFechadasBySdr?: Map<string, number>;
 }
 
 export function ConsorcioSdrSummaryTable({
@@ -23,6 +24,7 @@ export function ConsorcioSdrSummaryTable({
   sdrMetaMap,
   diasUteisNoPeriodo,
   propostasEnviadasBySdr,
+  propostasFechadasBySdr,
 }: ConsorcioSdrSummaryTableProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -68,8 +70,8 @@ export function ConsorcioSdrSummaryTable({
                   Proposta Env.
                 </span>
               </TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">Proposta Fech.</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa Venda</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
           </TableHeader>
@@ -80,6 +82,7 @@ export function ConsorcioSdrSummaryTable({
               const bateuMeta = row.agendamentos >= metaPeriodo;
 
               const propostas = propostasEnviadasBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
+              const fechadas = propostasFechadasBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
 
               // Taxa Venda = Contratos / R1 Realizada
               const taxaVenda = row.r1Realizada > 0
@@ -88,16 +91,6 @@ export function ConsorcioSdrSummaryTable({
               const taxaVendaColor = taxaVenda >= 20
                 ? 'text-green-400'
                 : taxaVenda >= 10
-                  ? 'text-amber-400'
-                  : 'text-red-400';
-
-              // Taxa Conv. = R1 Realizada / R1 Agendada
-              const taxaConv = row.r1Agendada > 0
-                ? (row.r1Realizada / row.r1Agendada) * 100
-                : 0;
-              const taxaConvColor = taxaConv >= 70
-                ? 'text-green-400'
-                : taxaConv >= 40
                   ? 'text-amber-400'
                   : 'text-red-400';
 
@@ -110,6 +103,7 @@ export function ConsorcioSdrSummaryTable({
                 : noShowPct <= 35
                   ? 'text-amber-400'
                   : 'text-red-400';
+
 
               return (
                 <TableRow
@@ -157,10 +151,12 @@ export function ConsorcioSdrSummaryTable({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <span className={`font-medium ${taxaVendaColor}`}>{taxaVenda.toFixed(1)}%</span>
+                    <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/30">
+                      {fechadas}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <span className={`font-medium ${taxaConvColor}`}>{taxaConv.toFixed(1)}%</span>
+                    <span className={`font-medium ${taxaVendaColor}`}>{taxaVenda.toFixed(1)}%</span>
                   </TableCell>
                   {!disableNavigation && (
                     <TableCell>
