@@ -458,7 +458,7 @@ export function QuickScheduleModal({
   }, [slotAvailability, selectedTime]);
 
   // Check for active/recent meetings to block duplicate scheduling
-  const { data: activeMeetingCheck, isLoading: checkingActiveMeeting } = useCheckActiveMeeting(selectedDeal?.id);
+  const { data: activeMeetingCheck, isLoading: checkingActiveMeeting } = useCheckActiveMeeting(selectedDeal?.id, 'r1');
   const isMeetingBlocked = activeMeetingCheck?.blocked && !isCoordinatorOrAbove;
 
   const isSelected = !!selectedDeal;
