@@ -1,82 +1,85 @@
 
 
-# Corrigir Deals Sem Estágio (stage_id NULL)
+# Fix: Distribuicao de Leads Nao Funciona para Robert (e outros)
 
-## Diagnóstico
+## Causa Raiz Identificada
 
-O deal "Júnior Pandolfi" (email: pj.investimentosimobiliarios@outlook.com) na origem "Efeito Alavanca + Clube" tem `stage_id = NULL`. Isso faz com que ele apareça na contagem da busca ("1 oportunidade"), mas não seja exibido em nenhuma coluna do Kanban.
+O Clint envia **exclusivamente** eventos `deal.stage_changed` -- foram **2107 eventos** desde fevereiro, e **ZERO** eventos `deal.created`.
 
-Existem **73 deals** nessa mesma situação só nessa origem, e mais **1616 deals** sem origin_id/stage_id em geral.
+A logica de distribuicao (`get_next_lead_owner`) esta **apenas** no handler `handleDealCreated`, que **nunca e executado** porque o Clint nao envia esse tipo de evento.
 
-## Causa raiz
+Quando o `handleDealStageChanged` recebe um lead novo e nao encontra o deal no banco, ele **cria o deal diretamente** usando o `deal_user` do Clint (o owner que o Clint atribuiu), **sem consultar a distribuicao**.
 
-A sincronização do Clint (`sync-deals`) não encontrou o mapeamento de estágio para esses deals. A variável `stageId` ficou `null` e foi salva assim no banco.
+### Por que o contador mostra 28?
 
-## Plano
+Outros webhooks (como `webhook-lead-receiver` para formularios de Lead Gratuito e `hubla-webhook-handler`) **usam** a distribuicao corretamente. Esses webhooks chamam `get_next_lead_owner`, o que incrementa o contador. Porem, a grande maioria dos leads entra pelo Clint via `deal.stage_changed`, ignorando a distribuicao.
 
-### 1. Corrigir dados existentes (Edge Function pontual)
+## Correcao
 
-Criar uma edge function temporária `fix-null-stages` que:
-- Busca todos os deals com `stage_id IS NULL` e `origin_id IS NOT NULL`
-- Para cada origin_id, busca o primeiro estágio ativo (menor `stage_order`)
-- Atualiza os deals atribuindo esse estágio padrão
-- Retorna um relatório de quantos deals foram corrigidos por origem
+### Arquivo: `supabase/functions/clint-webhook-handler/index.ts`
 
-### 2. Prevenir no sync futuro
+Na funcao `handleDealStageChanged`, quando um deal NAO e encontrado e precisa ser criado (por volta da linha 1158), adicionar a mesma logica de distribuicao que existe no `handleDealCreated`:
 
-No arquivo `supabase/functions/sync-deals/index.ts`:
-- Quando `stageId` resolver como `null` mas `originId` existir, buscar o primeiro estágio ativo da origem como fallback
-- Isso garante que novos deals sincronizados nunca fiquem sem estágio
+1. Antes de criar o deal, verificar se existe `lead_distribution_config` ativa para a `origin_id`
+2. Se existir, chamar `get_next_lead_owner(origin_id)` para obter o proximo dono
+3. Usar o owner distribuido ao inves do `deal_user` do Clint
+4. Marcar `custom_fields.distributed = true` e salvar `deal_user_original`
 
-### 3. Tratar no frontend (Kanban)
-
-No `DealKanbanBoardInfinite.tsx`:
-- Adicionar uma seção "Sem estágio" no final do Kanban para deals com `stage_id = null`, caso existam
-- Isso serve como safety net para que nenhum deal fique invisível
-
-## Detalhes técnicos
-
-### Nova Edge Function: `supabase/functions/fix-null-stages/index.ts`
-
-```
-POST /fix-null-stages
-```
-
-Lógica:
-1. Query: `SELECT DISTINCT origin_id FROM crm_deals WHERE stage_id IS NULL AND origin_id IS NOT NULL`
-2. Para cada origin_id: buscar primeiro estágio com `is_active = true ORDER BY stage_order ASC LIMIT 1`
-3. UPDATE em batch: `UPDATE crm_deals SET stage_id = ? WHERE stage_id IS NULL AND origin_id = ?`
-4. Retornar contagem de deals corrigidos
-
-### Arquivo: `supabase/functions/sync-deals/index.ts`
-
-Após a linha onde `stageId` é resolvido (linha ~231), adicionar fallback:
+Codigo a adicionar (antes da insercao do deal na linha 1178):
 
 ```typescript
-// Se não encontrou stage pelo mapeamento, usar primeiro estágio da origem
-let stageId = stageData?.id || null;
-let originId = stageData?.origin_id || null;
+// Verificar distribuicao ativa antes de usar deal_user do Clint
+let finalOwnerEmail = ownerEmail;
+let finalOwnerProfileId = ownerProfileId;
+let wasDistributed = false;
 
-if (!stageId && originId) {
-  // Fallback: buscar primeiro estágio ativo da origem
-  const { data: defaultStage } = await supabaseClient
-    .from('crm_stages')
-    .select('id')
-    .eq('origin_id', originId)
-    .eq('is_active', true)
-    .order('stage_order', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (defaultStage) stageId = defaultStage.id;
+if (originId) {
+  try {
+    const { data: distConfig } = await supabase
+      .from('lead_distribution_config')
+      .select('id')
+      .eq('origin_id', originId)
+      .eq('is_active', true)
+      .limit(1);
+
+    if (distConfig && distConfig.length > 0) {
+      const { data: nextOwner, error: distError } = await supabase
+        .rpc('get_next_lead_owner', { p_origin_id: originId });
+
+      if (!distError && nextOwner) {
+        finalOwnerEmail = nextOwner;
+        wasDistributed = true;
+
+        // Resolver profile_id do owner distribuido
+        const { data: distProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', finalOwnerEmail)
+          .maybeSingle();
+        if (distProfile) {
+          finalOwnerProfileId = distProfile.id;
+        }
+      }
+    }
+  } catch (err) {
+    console.log('[DEAL.STAGE_CHANGED] Erro na distribuicao:', err);
+  }
 }
 ```
 
-### Arquivo: `src/components/crm/DealKanbanBoardInfinite.tsx`
+E atualizar o INSERT do deal para usar `finalOwnerEmail`/`finalOwnerProfileId` e adicionar flags de distribuicao nos custom_fields.
 
-Adicionar coluna "Sem Estágio" como safety net visual:
+### Tambem: Resetar contadores
 
-```typescript
-const unstaged = deals.filter(d => !d.stage_id);
-// Renderizar como ultima coluna se unstaged.length > 0
-```
+Apos o deploy, resetar os contadores da distribuicao para que todos os SDRs partam do zero e a distribuicao seja justa novamente. Isso pode ser feito pelo botao "Resetar Contadores" na UI.
+
+## Resumo
+
+| Item | Detalhe |
+|------|---------|
+| Problema | Clint envia apenas `deal.stage_changed`, e a distribuicao so existe em `handleDealCreated` |
+| Impacto | Robert (e potencialmente outros) nao recebe leads novos; leads vao para quem o Clint define |
+| Correcao | Adicionar logica de distribuicao ao criar deals dentro de `handleDealStageChanged` |
+| Arquivo | `supabase/functions/clint-webhook-handler/index.ts` (linhas ~1158-1209) |
+| Pos-deploy | Resetar contadores via UI |
 
