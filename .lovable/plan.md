@@ -1,35 +1,37 @@
 
 
-# Adaptar Agenda do Closer de Consorcio: "R1 Realizada" ao inves de "Contrato Pago"
+# Ocultar Closers Sem Horario Configurado no Dia
 
-## Contexto
+## Problema
 
-No Consorcio, closers nao vendem "contrato pago". Uma reuniao realizada pode gerar uma proposta enviada/fechada. O painel de busca e o filtro de status na agenda mostram "Contrato Pago", o que nao se aplica a esta BU.
+Na visualizacao "Por Closer" da agenda, closers que nao tem nenhum horario configurado para o dia selecionado ainda aparecem como colunas vazias, ocupando espaco desnecessario.
 
-## Mudancas
+## Solucao
 
-### 1. `src/components/crm/MeetingSearchPanel.tsx`
+Filtrar a lista de `closers` dentro do componente `CloserColumnCalendar` para exibir apenas aqueles que possuem pelo menos um slot configurado no `daySlots` para o dia da semana **OU** que possuem reunioes agendadas para aquele dia.
 
-Adicionar prop opcional `isConsorcio?: boolean` para adaptar o comportamento:
+## Detalhes tecnicos
 
-- **Texto placeholder**: Trocar "Busque leads para marcar como 'Contrato Pago'" por "Busque reunioes realizadas para follow-up"
-- **Botao de acao**: Quando `isConsorcio`, esconder o botao de "Marcar Contrato Pago" (icone $), pois nao faz sentido. Mostrar apenas o botao de "Ver detalhes" (chevron).
-- **Badge "Pago"**: Quando `isConsorcio`, nao mostrar o badge "Pago" - mostrar o status normal do attendee.
+### Arquivo: `src/components/crm/CloserColumnCalendar.tsx`
 
-### 2. `src/pages/crm/Agenda.tsx`
+Adicionar um `useMemo` apos o carregamento de `daySlots` que filtra os closers:
 
-- Passar `isConsorcio={activeBU === 'consorcio'}` para o `MeetingSearchPanel`
-- No filtro de status (Select), quando `activeBU === 'consorcio'`, esconder a opcao "Contrato Pago" pois nao se aplica
+```typescript
+const visibleClosers = useMemo(() => {
+  return closers.filter(closer => {
+    // Closer tem slot configurado para este dia
+    const hasConfiguredSlot = daySlots.some(s => s.closer_id === closer.id);
+    // Closer tem reuniao agendada neste dia
+    const hasMeeting = meetings.some(m => m.closer_id === closer.id);
+    return hasConfiguredSlot || hasMeeting;
+  });
+}, [closers, daySlots, meetings]);
+```
 
-### 3. `src/hooks/useSearchPastMeetings.ts`
+Substituir todas as referencias a `closers` no render (header e grid) por `visibleClosers`.
 
-Nenhuma mudanca necessaria - o hook ja busca reunioes com status `completed` e `no_show`, que e exatamente o que precisamos para o Consorcio.
-
-## Resultado visual
-
-No painel "Buscar Reunioes Passadas" para closers de Consorcio:
-- Texto: "Busque reunioes realizadas para follow-up"
-- Resultados mostram nome, data, telefone e status (Realizada/No-show)
-- Apenas botao de "Ver detalhes" (sem botao $)
-- Filtro de status sem opcao "Contrato Pago"
+Isso garante que:
+- Closers com horarios configurados aparecem normalmente
+- Closers com reunioes agendadas (mesmo sem horario configurado) continuam visiveis
+- Closers sem nenhum dos dois ficam ocultos
 
