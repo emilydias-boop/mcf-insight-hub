@@ -1174,6 +1174,47 @@ async function handleDealStageChanged(supabase: any, data: any) {
       }
       console.log('[DEAL.STAGE_CHANGED] Owner lookup:', ownerEmail, '->', ownerProfileId);
     }
+
+    // === DISTRIBUIÇÃO DE LEADS ===
+    let finalOwnerEmail = ownerEmail;
+    let finalOwnerProfileId = ownerProfileId;
+    let wasDistributed = false;
+
+    if (originId) {
+      try {
+        const { data: distConfig } = await supabase
+          .from('lead_distribution_config')
+          .select('id')
+          .eq('origin_id', originId)
+          .eq('is_active', true)
+          .limit(1);
+
+        if (distConfig && distConfig.length > 0) {
+          console.log('[DEAL.STAGE_CHANGED] Distribution config found for origin:', originId);
+          const { data: nextOwner, error: distError } = await supabase
+            .rpc('get_next_lead_owner', { p_origin_id: originId });
+
+          if (!distError && nextOwner) {
+            finalOwnerEmail = nextOwner;
+            wasDistributed = true;
+            console.log('[DEAL.STAGE_CHANGED] Distributed to:', finalOwnerEmail, '(original:', ownerEmail, ')');
+
+            const { data: distProfile } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('email', finalOwnerEmail)
+              .maybeSingle();
+            if (distProfile) {
+              finalOwnerProfileId = distProfile.id;
+            }
+          } else {
+            console.log('[DEAL.STAGE_CHANGED] Distribution failed, using original owner:', distError);
+          }
+        }
+      } catch (err) {
+        console.log('[DEAL.STAGE_CHANGED] Erro na distribuicao, usando owner original:', err);
+      }
+    }
     
     const { data: newDeal, error: createError } = await supabase
       .from('crm_deals')
@@ -1183,14 +1224,19 @@ async function handleDealStageChanged(supabase: any, data: any) {
         contact_id: contactId,
         stage_id: newStage.id,
         origin_id: originId,
-        owner_id: ownerEmail,
-        owner_profile_id: ownerProfileId,
+        owner_id: finalOwnerEmail,
+        owner_profile_id: finalOwnerProfileId,
         value: dealValue,
         custom_fields: {
           deal_user: data.deal_user,
           deal_user_name: data.deal_user_name,
           deal_closer: data.deal_closer,
           deal_origin: data.deal_origin || originName,
+          ...(wasDistributed ? {
+            distributed: true,
+            deal_user_original: ownerEmail,
+            distributed_at: new Date().toISOString(),
+          } : {}),
         },
         data_source: 'webhook',
         stage_moved_at: new Date().toISOString()
