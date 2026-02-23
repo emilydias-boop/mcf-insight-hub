@@ -2074,6 +2074,7 @@ export type Database = {
           created_by: string | null
           grupo: string
           id: string
+          numero_aplicado: string | null
           numero_base: string
           numero_loteria: string
           periodo: string
@@ -2086,6 +2087,7 @@ export type Database = {
           created_by?: string | null
           grupo: string
           id?: string
+          numero_aplicado?: string | null
           numero_base: string
           numero_loteria: string
           periodo: string
@@ -2098,6 +2100,7 @@ export type Database = {
           created_by?: string | null
           grupo?: string
           id?: string
+          numero_aplicado?: string | null
           numero_base?: string
           numero_loteria?: string
           periodo?: string

@@ -8,10 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
-import { Search, Eye, Target, Dices, Calculator, AlertTriangle } from 'lucide-react';
+import { Search, Eye, Target, Dices, Calculator, AlertTriangle, Info } from 'lucide-react';
 import { useContemplationCards, useGruposDisponiveis, useRegistrarConsultaLoteria } from '@/hooks/useContemplacao';
 import { ConsorcioCard } from '@/types/consorcio';
-import { classificarCotasPorLoteria, extrairNumeroBase, getCorZona, type CotaClassificada } from '@/lib/contemplacao';
+import { classificarCotasPorLoteria, extrairNumeroBase, getCorZona, type CotaClassificada, type ResultadoFallback } from '@/lib/contemplacao';
 import { VerificarSorteioModal } from './VerificarSorteioModal';
 import { LanceModal } from './LanceModal';
 import { ContemplationDetailsDrawer } from './ContemplationDetailsDrawer';
@@ -35,6 +35,7 @@ export function ContemplationTab() {
   const [consultaPeriodo, setConsultaPeriodo] = useState('');
   const [consultaNumero, setConsultaNumero] = useState('');
   const [resultados, setResultados] = useState<CotaClassificada[] | null>(null);
+  const [fallbackInfo, setFallbackInfo] = useState<ResultadoFallback | null>(null);
   const [consultaAtiva, setConsultaAtiva] = useState(false);
 
   // Modal state
@@ -52,11 +53,11 @@ export function ContemplationTab() {
   const handleCalcular = () => {
     if (!consultaGrupo || !consultaPeriodo || !consultaNumero || !cards) return;
 
-    const classificados = classificarCotasPorLoteria(consultaNumero, cards);
+    const { classificados, fallback } = classificarCotasPorLoteria(consultaNumero, cards);
     setResultados(classificados);
+    setFallbackInfo(fallback);
     setConsultaAtiva(true);
 
-    const numeroBase = extrairNumeroBase(consultaNumero);
     const cotasMatch = classificados.filter(c => c.zona === 'match_sorteio').length;
     const cotasZona50 = classificados.filter(c => c.zona === 'zona_50').length;
     const cotasZona100 = classificados.filter(c => c.zona === 'zona_100').length;
@@ -65,7 +66,8 @@ export function ContemplationTab() {
       grupo: consultaGrupo,
       periodo: consultaPeriodo,
       numeroLoteria: consultaNumero,
-      numeroBase,
+      numeroBase: fallback.numeroBase,
+      numeroAplicado: String(fallback.numeroAplicado),
       cotasMatch,
       cotasZona50,
       cotasZona100,
@@ -74,6 +76,7 @@ export function ContemplationTab() {
 
   const handleLimpar = () => {
     setResultados(null);
+    setFallbackInfo(null);
     setConsultaAtiva(false);
   };
 
@@ -166,21 +169,34 @@ export function ContemplationTab() {
       )}
 
       {/* Summary badges */}
-      {consultaAtiva && resultados && (
-        <div className="flex items-center gap-3 flex-wrap">
-          <Badge className="bg-emerald-600 text-white">
-            Match Sorteio: {resultados.filter(r => r.zona === 'match_sorteio').length}
-          </Badge>
-          <Badge className="bg-blue-600 text-white">
-            Zona ±50: {resultados.filter(r => r.zona === 'zona_50').length}
-          </Badge>
-          <Badge className="bg-yellow-500 text-white">
-            Zona ±100: {resultados.filter(r => r.zona === 'zona_100').length}
-          </Badge>
-          <span className="text-sm text-muted-foreground">
-            Número base: {extrairNumeroBase(consultaNumero)}
-          </span>
-        </div>
+      {consultaAtiva && resultados && fallbackInfo && (
+        <>
+          {fallbackInfo.fallbackAplicado && (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                O número base <strong>{fallbackInfo.numeroBase}</strong> está fora do range do grupo. {fallbackInfo.motivoFallback}.
+              </AlertDescription>
+            </Alert>
+          )}
+          <div className="flex items-center gap-3 flex-wrap">
+            <Badge className="bg-emerald-600 text-white">
+              Match Sorteio: {resultados.filter(r => r.zona === 'match_sorteio').length}
+            </Badge>
+            <Badge className="bg-blue-600 text-white">
+              Zona ±50: {resultados.filter(r => r.zona === 'zona_50').length}
+            </Badge>
+            <Badge className="bg-yellow-500 text-white">
+              Zona ±100: {resultados.filter(r => r.zona === 'zona_100').length}
+            </Badge>
+            <span className="text-sm text-muted-foreground">
+              Número base (5 dígitos): {fallbackInfo.numeroBase}
+            </span>
+            <span className="text-sm font-medium">
+              Número aplicado: {fallbackInfo.numeroAplicado}
+            </span>
+          </div>
+        </>
       )}
 
       {/* Results table */}

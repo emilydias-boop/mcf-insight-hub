@@ -1,0 +1,1 @@
+ALTER TABLE public.consorcio_consulta_loteria ADD COLUMN numero_aplicado text;
