@@ -2065,6 +2065,45 @@ export type Database = {
           },
         ]
       }
+      consorcio_consulta_loteria: {
+        Row: {
+          cotas_match: number
+          cotas_zona_100: number
+          cotas_zona_50: number
+          created_at: string
+          created_by: string | null
+          grupo: string
+          id: string
+          numero_base: string
+          numero_loteria: string
+          periodo: string
+        }
+        Insert: {
+          cotas_match?: number
+          cotas_zona_100?: number
+          cotas_zona_50?: number
+          created_at?: string
+          created_by?: string | null
+          grupo: string
+          id?: string
+          numero_base: string
+          numero_loteria: string
+          periodo: string
+        }
+        Update: {
+          cotas_match?: number
+          cotas_zona_100?: number
+          cotas_zona_50?: number
+          created_at?: string
+          created_by?: string | null
+          grupo?: string
+          id?: string
+          numero_base?: string
+          numero_loteria?: string
+          periodo?: string
+        }
+        Relationships: []
+      }
       consorcio_creditos: {
         Row: {
           ativo: boolean | null

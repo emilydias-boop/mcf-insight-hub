@@ -4,13 +4,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, Filter, Eye, Target, Dices } from 'lucide-react';
-import { useContemplationCards, type ContemplationFilters } from '@/hooks/useContemplacao';
-import { useConsorcioEmployees } from '@/hooks/useEmployees';
-import { useConsorcioTipoOptions } from '@/hooks/useConsorcioConfigOptions';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Label } from '@/components/ui/label';
+import { Search, Eye, Target, Dices, Calculator, AlertTriangle } from 'lucide-react';
+import { useContemplationCards, useGruposDisponiveis, useRegistrarConsultaLoteria } from '@/hooks/useContemplacao';
 import { ConsorcioCard } from '@/types/consorcio';
+import { classificarCotasPorLoteria, extrairNumeroBase, getCorZona, type CotaClassificada } from '@/lib/contemplacao';
 import { VerificarSorteioModal } from './VerificarSorteioModal';
 import { LanceModal } from './LanceModal';
 import { ContemplationDetailsDrawer } from './ContemplationDetailsDrawer';
@@ -29,103 +30,160 @@ function getContemplationBadge(card: ConsorcioCard) {
 }
 
 export function ContemplationTab() {
-  const [search, setSearch] = useState('');
-  const [grupo, setGrupo] = useState('todos');
-  const [statusContemplacao, setStatusContemplacao] = useState('todos');
-  const [tipoProduto, setTipoProduto] = useState('todos');
-  const [vendedor, setVendedor] = useState('todos');
+  // Consultation fields
+  const [consultaGrupo, setConsultaGrupo] = useState('');
+  const [consultaPeriodo, setConsultaPeriodo] = useState('');
+  const [consultaNumero, setConsultaNumero] = useState('');
+  const [resultados, setResultados] = useState<CotaClassificada[] | null>(null);
+  const [consultaAtiva, setConsultaAtiva] = useState(false);
 
+  // Modal state
   const [selectedCard, setSelectedCard] = useState<ConsorcioCard | null>(null);
   const [sorteioOpen, setSorteioOpen] = useState(false);
   const [lanceOpen, setLanceOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
-  const filters: ContemplationFilters = {
-    search: search || undefined,
-    grupo: grupo !== 'todos' ? grupo : undefined,
-    status: statusContemplacao !== 'todos' ? statusContemplacao : undefined,
-    tipoProduto: tipoProduto !== 'todos' ? tipoProduto : undefined,
-    vendedorId: vendedor !== 'todos' ? vendedor : undefined,
+  const { data: grupos = [] } = useGruposDisponiveis();
+  const { data: cards, isLoading } = useContemplationCards({
+    grupo: consultaGrupo || undefined,
+  });
+  const registrarConsulta = useRegistrarConsultaLoteria();
+
+  const handleCalcular = () => {
+    if (!consultaGrupo || !consultaPeriodo || !consultaNumero || !cards) return;
+
+    const classificados = classificarCotasPorLoteria(consultaNumero, cards);
+    setResultados(classificados);
+    setConsultaAtiva(true);
+
+    const numeroBase = extrairNumeroBase(consultaNumero);
+    const cotasMatch = classificados.filter(c => c.zona === 'match_sorteio').length;
+    const cotasZona50 = classificados.filter(c => c.zona === 'zona_50').length;
+    const cotasZona100 = classificados.filter(c => c.zona === 'zona_100').length;
+
+    registrarConsulta.mutate({
+      grupo: consultaGrupo,
+      periodo: consultaPeriodo,
+      numeroLoteria: consultaNumero,
+      numeroBase,
+      cotasMatch,
+      cotasZona50,
+      cotasZona100,
+    });
   };
 
-  const { data: cards, isLoading } = useContemplationCards(filters);
-  const { data: employees } = useConsorcioEmployees();
-  const { data: tipoOptions = [] } = useConsorcioTipoOptions();
+  const handleLimpar = () => {
+    setResultados(null);
+    setConsultaAtiva(false);
+  };
 
-  const uniqueGrupos = useMemo(() => {
-    if (!cards) return [];
-    return [...new Set(cards.map(c => c.grupo))].sort((a, b) => Number(a) - Number(b));
-  }, [cards]);
+  const displayCards = useMemo(() => {
+    if (consultaAtiva && resultados) {
+      return resultados;
+    }
+    return null;
+  }, [consultaAtiva, resultados]);
 
   const openSorteio = (card: ConsorcioCard) => { setSelectedCard(card); setSorteioOpen(true); };
   const openLance = (card: ConsorcioCard) => { setSelectedCard(card); setLanceOpen(true); };
   const openDetails = (card: ConsorcioCard) => { setSelectedCard(card); setDetailsOpen(true); };
 
+  const canCalculate = consultaGrupo && consultaPeriodo && consultaNumero.length >= 5;
+
   return (
     <div className="space-y-4">
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Nome, CPF, CNPJ, cota..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 w-64"
-          />
+      {/* Consultation section */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Calculator className="h-5 w-5" />
+            Consulta por Sorteio da Loteria Federal
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div className="space-y-2">
+              <Label>Grupo *</Label>
+              <Select value={consultaGrupo} onValueChange={setConsultaGrupo}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o grupo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {grupos.map(g => (
+                    <SelectItem key={g} value={g}>{g}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Assembleia / Período *</Label>
+              <Input
+                placeholder="MM/AAAA"
+                value={consultaPeriodo}
+                onChange={(e) => setConsultaPeriodo(e.target.value)}
+                maxLength={7}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Número da Loteria Federal *</Label>
+              <Input
+                placeholder="012345"
+                value={consultaNumero}
+                onChange={(e) => setConsultaNumero(e.target.value.replace(/\D/g, ''))}
+                maxLength={10}
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={handleCalcular}
+                disabled={!canCalculate || isLoading}
+                className="flex-1"
+              >
+                <Calculator className="h-4 w-4 mr-2" />
+                Calcular possibilidades
+              </Button>
+              {consultaAtiva && (
+                <Button variant="outline" onClick={handleLimpar}>
+                  Limpar
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Legal disclaimer */}
+      {consultaAtiva && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Esta é uma previsão baseada no número da Loteria Federal e proximidade das cotas. A contemplação real depende da assembleia da Embracon e dos lances realizados.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Summary badges */}
+      {consultaAtiva && resultados && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <Badge className="bg-emerald-600 text-white">
+            Match Sorteio: {resultados.filter(r => r.zona === 'match_sorteio').length}
+          </Badge>
+          <Badge className="bg-blue-600 text-white">
+            Zona ±50: {resultados.filter(r => r.zona === 'zona_50').length}
+          </Badge>
+          <Badge className="bg-yellow-500 text-white">
+            Zona ±100: {resultados.filter(r => r.zona === 'zona_100').length}
+          </Badge>
+          <span className="text-sm text-muted-foreground">
+            Número base: {extrairNumeroBase(consultaNumero)}
+          </span>
         </div>
+      )}
 
-        <Filter className="h-4 w-4 text-muted-foreground" />
-
-        <Select value={grupo} onValueChange={setGrupo}>
-          <SelectTrigger className="w-28">
-            <SelectValue placeholder="Grupo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Grupo</SelectItem>
-            {uniqueGrupos.map(g => (
-              <SelectItem key={g} value={g}>{g}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={statusContemplacao} onValueChange={setStatusContemplacao}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Contemplação" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="nao_contemplado">Não contemplada</SelectItem>
-            <SelectItem value="contemplado">Contemplada</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={tipoProduto} onValueChange={setTipoProduto}>
-          <SelectTrigger className="w-28">
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Tipo</SelectItem>
-            {tipoOptions.map(opt => (
-              <SelectItem key={opt.id} value={opt.name}>{opt.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={vendedor} onValueChange={setVendedor}>
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="Vendedor" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Vendedor</SelectItem>
-            {employees?.map(emp => (
-              <SelectItem key={emp.id} value={emp.id}>{emp.nome_completo}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Table */}
+      {/* Results table */}
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -139,6 +197,12 @@ export function ContemplationTab() {
                 <TableHead>Tipo</TableHead>
                 <TableHead>Status Cota</TableHead>
                 <TableHead>Contemplação</TableHead>
+                {consultaAtiva && (
+                  <>
+                    <TableHead>Categoria de Chance</TableHead>
+                    <TableHead>Recomendação de Lance</TableHead>
+                  </>
+                )}
                 <TableHead className="w-32">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -146,10 +210,60 @@ export function ContemplationTab() {
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={9}><Skeleton className="h-10 w-full" /></TableCell>
+                    <TableCell colSpan={consultaAtiva ? 11 : 9}><Skeleton className="h-10 w-full" /></TableCell>
                   </TableRow>
                 ))
-              ) : cards && cards.length > 0 ? (
+              ) : consultaAtiva && displayCards ? (
+                displayCards.length > 0 ? (
+                  displayCards.map(({ card, zona, distancia, categoriaLabel, recomendacaoLance }) => {
+                    const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
+                    const doc = card.tipo_pessoa === 'pf' ? card.cpf : card.cnpj;
+                    return (
+                      <TableRow key={card.id}>
+                        <TableCell className="font-medium">{displayName || '-'}</TableCell>
+                        <TableCell className="text-xs font-mono">{doc || '-'}</TableCell>
+                        <TableCell className="text-center">{card.grupo}</TableCell>
+                        <TableCell className="text-center font-medium">{card.cota}</TableCell>
+                        <TableCell className="text-right">
+                          R$ {Number(card.valor_credito).toLocaleString('pt-BR')}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize text-xs">{card.tipo_produto}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize text-xs">{card.status}</Badge>
+                        </TableCell>
+                        <TableCell>{getContemplationBadge(card)}</TableCell>
+                        <TableCell>
+                          <Badge className={`${getCorZona(zona)} text-xs`}>
+                            {categoriaLabel} ({distancia})
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm font-medium">{recomendacaoLance}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="icon" title="Ver detalhes" onClick={() => openDetails(card)}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" title="Verificar sorteio" onClick={() => openSorteio(card)}>
+                              <Dices className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" title="Simular lance" onClick={() => openLance(card)}>
+                              <Target className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
+                      Nenhuma cota encontrada nas zonas de chance para este número
+                    </TableCell>
+                  </TableRow>
+                )
+              ) : !consultaAtiva && cards && cards.length > 0 ? (
                 cards.map(card => {
                   const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
                   const doc = card.tipo_pessoa === 'pf' ? card.cpf : card.cnpj;
@@ -188,7 +302,7 @@ export function ContemplationTab() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
-                    Nenhuma cota encontrada
+                    {consultaGrupo ? 'Nenhuma cota encontrada' : 'Selecione um grupo para visualizar as cotas ou faça uma consulta por número da loteria'}
                   </TableCell>
                 </TableRow>
               )}

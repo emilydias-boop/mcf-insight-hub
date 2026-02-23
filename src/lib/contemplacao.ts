@@ -132,3 +132,88 @@ export const MOTIVO_CONTEMPLACAO_OPTIONS = [
   { value: 'lance', label: 'Lance Livre' },
   { value: 'lance_fixo', label: 'Lance Fixo' },
 ] as const;
+
+// --- Simulador por Loteria Federal (regras Embracon) ---
+
+export type ZonaChance = 'match_sorteio' | 'zona_50' | 'zona_100' | 'fora';
+
+export interface CotaClassificada {
+  card: import('@/types/consorcio').ConsorcioCard;
+  zona: ZonaChance;
+  distancia: number;
+  recomendacaoLance: string;
+  categoriaLabel: string;
+}
+
+/**
+ * Extrai os últimos 5 dígitos de um número (regra Embracon)
+ */
+export function extrairNumeroBase(numero: string): string {
+  const apenasNumeros = numero.replace(/\D/g, '');
+  return apenasNumeros.slice(-5).padStart(5, '0');
+}
+
+/**
+ * Classifica cotas em zonas de chance baseado no número da Loteria Federal
+ * Retorna apenas cotas dentro das zonas (match, ±50, ±100), ordenadas por proximidade
+ */
+export function classificarCotasPorLoteria(
+  numeroLoteria: string,
+  cards: import('@/types/consorcio').ConsorcioCard[]
+): CotaClassificada[] {
+  const numeroBase = extrairNumeroBase(numeroLoteria);
+  const nBase = parseInt(numeroBase, 10);
+
+  const resultados: CotaClassificada[] = [];
+
+  for (const card of cards) {
+    const cotaNum = parseInt(card.cota.replace(/\D/g, ''), 10);
+    if (isNaN(cotaNum)) continue;
+
+    const distancia = Math.abs(cotaNum - nBase);
+
+    let zona: ZonaChance;
+    let recomendacaoLance: string;
+    let categoriaLabel: string;
+
+    if (distancia === 0) {
+      zona = 'match_sorteio';
+      recomendacaoLance = 'Contemplação por sorteio';
+      categoriaLabel = 'Match Sorteio';
+    } else if (distancia <= 50) {
+      zona = 'zona_50';
+      recomendacaoLance = 'Até 25%';
+      categoriaLabel = 'Zona ±50';
+    } else if (distancia <= 100) {
+      zona = 'zona_100';
+      recomendacaoLance = 'Até 50%';
+      categoriaLabel = 'Zona ±100';
+    } else {
+      continue; // fora das zonas
+    }
+
+    resultados.push({ card, zona, distancia, recomendacaoLance, categoriaLabel });
+  }
+
+  // Ordenar: match primeiro, depois zona 50, depois zona 100, e por distância
+  const zonaOrder: Record<ZonaChance, number> = { match_sorteio: 0, zona_50: 1, zona_100: 2, fora: 3 };
+  resultados.sort((a, b) => zonaOrder[a.zona] - zonaOrder[b.zona] || a.distancia - b.distancia);
+
+  return resultados;
+}
+
+/**
+ * Retorna cor do badge baseado na zona de chance
+ */
+export function getCorZona(zona: ZonaChance): string {
+  switch (zona) {
+    case 'match_sorteio':
+      return 'bg-emerald-600 text-white';
+    case 'zona_50':
+      return 'bg-blue-600 text-white';
+    case 'zona_100':
+      return 'bg-yellow-500 text-white';
+    default:
+      return 'bg-muted text-muted-foreground';
+  }
+}
