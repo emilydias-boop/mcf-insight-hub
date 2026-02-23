@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Phone, MessageCircle, ArrowRight, Loader2, XCircle, Calendar, CalendarClock, FolderInput, Trash2 } from 'lucide-react';
+import { Phone, MessageCircle, ArrowRight, Loader2, XCircle, Calendar, CalendarClock, FolderInput, Trash2, ClipboardList } from 'lucide-react';
 import { useTwilio } from '@/contexts/TwilioContext';
 import { useUpdateCRMDeal, useCRMStages, useDeleteCRMDeal } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
@@ -33,9 +33,10 @@ interface QuickActionsBlockProps {
   deal: any;
   contact: any;
   onStageChange?: () => void;
+  onQualify?: () => void;
 }
 
-export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActionsBlockProps) => {
+export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify }: QuickActionsBlockProps) => {
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice, callStatus, currentCallDealId } = useTwilio();
   const updateDeal = useUpdateCRMDeal();
   const { data: stages } = useCRMStages(deal?.origin_id);
@@ -219,6 +220,19 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
               {isNoShowStage ? <CalendarClock className="h-3.5 w-3.5 mr-1.5" /> : <Calendar className="h-3.5 w-3.5 mr-1.5" />}
               {isNoShowStage ? 'Reagendar' : 'Agendar'}
             </Button>
+            
+            {/* Botão Qualificar */}
+            {onQualify && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 border-purple-500/50 text-purple-600 hover:bg-purple-50"
+                onClick={onQualify}
+              >
+                <ClipboardList className="h-3.5 w-3.5 mr-1.5" />
+                Qualificar
+              </Button>
+            )}
           </>
         )}
         

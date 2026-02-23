@@ -18,6 +18,7 @@ import { LeadJourneyCard } from './LeadJourneyCard';
 import { LeadFullTimeline } from './LeadFullTimeline';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { QualificationSummaryCard } from './qualification/QualificationSummaryCard';
+import { QualificationAndScheduleModal } from './QualificationAndScheduleModal';
 import { LossReasonCard } from './LossReasonCard';
 import { CrossPipelineHistory } from './CrossPipelineHistory';
 import { Phone, History, StickyNote, CheckSquare, AlertTriangle, Clock, Package } from 'lucide-react';
@@ -43,6 +44,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
   // State para modal de agendamento
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [leadSummaryForSchedule, setLeadSummaryForSchedule] = useState('');
+  const [showQualification, setShowQualification] = useState(false);
   
   const isLoading = dealLoading || contactLoading;
   
@@ -123,6 +125,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                 deal={deal} 
                 contact={contact}
                 onStageChange={() => refetchDeal()}
+                onQualify={() => setShowQualification(true)}
               />
               
               {/* ===== 3. PRÓXIMA AÇÃO (compacta) ===== */}
@@ -241,6 +244,19 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
           </div>
         )}
       </SheetContent>
+      
+      {/* Modal de qualificação manual */}
+      {dealId && (
+        <QualificationAndScheduleModal
+          open={showQualification}
+          onOpenChange={(open) => {
+            setShowQualification(open);
+            if (!open) refetchDeal();
+          }}
+          dealId={dealId}
+          contactName={contact?.name}
+        />
+      )}
       
       {/* Modal de agendamento para SDR */}
       {dealId && (
