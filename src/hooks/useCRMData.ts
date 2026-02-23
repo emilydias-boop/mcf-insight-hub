@@ -150,19 +150,9 @@ const fetchCRMStages = async (originOrGroupId?: string) => {
       updated_at: s.updated_at,
     }));
     
-    // Adicionar stages do crm_stages que NÃO existem nos locais (dedup por nome, case-insensitive)
-    const localNames = new Set(uniqueLocalStages.map(s => s.name.toLowerCase()));
-    const maxLocalOrder = Math.max(...uniqueLocalStages.map(s => s.stage_order), -1);
-    
-    crmStages.forEach((crmStage, index) => {
-      if (!localNames.has(crmStage.stage_name.toLowerCase())) {
-        console.log('[useCRMStages] Adding CRM-only stage:', crmStage.stage_name);
-        mergedStages.push({
-          ...crmStage,
-          stage_order: maxLocalOrder + 1 + index,
-        });
-      }
-    });
+    // Quando existem local stages, elas são a ÚNICA fonte de verdade para visibilidade.
+    // NÃO re-adicionar stages de crm_stages que foram excluídas localmente.
+    console.log('[useCRMStages] Local stages are source of truth. NOT re-adding CRM-only stages.');
     
     return mergedStages;
   }
