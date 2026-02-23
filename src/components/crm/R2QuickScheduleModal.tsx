@@ -26,6 +26,8 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { R2CloserWithAvailability, useCreateR2Meeting } from '@/hooks/useR2AgendaData';
 import { useSearchDealsForSchedule, useSearchDealsByPhone, useSearchDealsByEmail } from '@/hooks/useAgendaData';
+import { useActiveBU } from '@/hooks/useActiveBU';
+import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
 import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2CloserAvailableSlots';
 import { useR2Bookers } from '@/hooks/useR2Bookers';
 import { R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
@@ -102,9 +104,14 @@ export function R2QuickScheduleModal({
   // R2-specific fields
   const [r2Observations, setR2Observations] = useState<string>('');
 
-  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery);
-  const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery);
-  const { data: emailSearchResults = [], isLoading: searchingEmail } = useSearchDealsByEmail(emailQuery);
+  // BU filtering
+  const activeBU = useActiveBU();
+  const { data: originIds } = useBUOriginIds(activeBU);
+
+  const buOriginIds = originIds && originIds.length > 0 ? originIds : undefined;
+  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery, buOriginIds);
+  const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery, buOriginIds);
+  const { data: emailSearchResults = [], isLoading: searchingEmail } = useSearchDealsByEmail(emailQuery, buOriginIds);
   const createMeeting = useCreateR2Meeting();
   const { data: r2Bookers = [] } = useR2Bookers();
 

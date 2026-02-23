@@ -755,9 +755,9 @@ export function useMarkContractPaid() {
 // ============ Quick Schedule Hooks ============
 
 // Search deals by phone number directly
-export function useSearchDealsByPhone(phoneQuery: string) {
+export function useSearchDealsByPhone(phoneQuery: string, originIds?: string[]) {
   return useQuery({
-    queryKey: ['schedule-search-phone', phoneQuery],
+    queryKey: ['schedule-search-phone', phoneQuery, originIds],
     queryFn: async () => {
   const digits = phoneQuery.replace(/\D/g, '');
     if (digits.length < 6) return [];
@@ -772,11 +772,17 @@ export function useSearchDealsByPhone(phoneQuery: string) {
       if (!contacts || contacts.length === 0) return [];
 
       // Buscar deals dos contatos encontrados
-      const { data: deals } = await supabase
+      let dealsQuery = supabase
         .from('crm_deals')
         .select(`id, name, tags, contact:crm_contacts(id, name, phone, email), stage:crm_stages(id, stage_name)`)
-        .in('contact_id', contacts.map(c => c.id))
-        .limit(10);
+        .in('contact_id', contacts.map(c => c.id));
+
+      // Filtrar por origin_id se especificado (proteção por BU)
+      if (originIds && originIds.length > 0) {
+        dealsQuery = dealsQuery.in('origin_id', originIds);
+      }
+
+      const { data: deals } = await dealsQuery.limit(10);
 
       // Normalizar contact e stage (podem vir como array)
       return (deals || []).map(deal => ({
@@ -789,9 +795,9 @@ export function useSearchDealsByPhone(phoneQuery: string) {
   });
 }
 
-export function useSearchDealsByEmail(emailQuery: string) {
+export function useSearchDealsByEmail(emailQuery: string, originIds?: string[]) {
   return useQuery({
-    queryKey: ['schedule-search-email', emailQuery],
+    queryKey: ['schedule-search-email', emailQuery, originIds],
     queryFn: async () => {
       if (emailQuery.length < 3) return [];
 
@@ -805,11 +811,17 @@ export function useSearchDealsByEmail(emailQuery: string) {
       if (!contacts || contacts.length === 0) return [];
 
       // Buscar deals dos contatos encontrados
-      const { data: deals } = await supabase
+      let dealsQuery = supabase
         .from('crm_deals')
         .select(`id, name, tags, contact:crm_contacts(id, name, phone, email), stage:crm_stages(id, stage_name)`)
-        .in('contact_id', contacts.map(c => c.id))
-        .limit(10);
+        .in('contact_id', contacts.map(c => c.id));
+
+      // Filtrar por origin_id se especificado (proteção por BU)
+      if (originIds && originIds.length > 0) {
+        dealsQuery = dealsQuery.in('origin_id', originIds);
+      }
+
+      const { data: deals } = await dealsQuery.limit(10);
 
       // Normalizar contact e stage (podem vir como array)
       return (deals || []).map(deal => ({
