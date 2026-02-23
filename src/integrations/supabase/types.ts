@@ -2154,6 +2154,53 @@ export type Database = {
           },
         ]
       }
+      consorcio_lance_history: {
+        Row: {
+          card_id: string
+          chance_classificacao: string
+          created_at: string
+          created_by: string | null
+          id: string
+          observacao: string | null
+          percentual_lance: number
+          posicao_estimada: number | null
+          salvo: boolean
+          valor_lance: number
+        }
+        Insert: {
+          card_id: string
+          chance_classificacao?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          observacao?: string | null
+          percentual_lance: number
+          posicao_estimada?: number | null
+          salvo?: boolean
+          valor_lance: number
+        }
+        Update: {
+          card_id?: string
+          chance_classificacao?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          observacao?: string | null
+          percentual_lance?: number
+          posicao_estimada?: number | null
+          salvo?: boolean
+          valor_lance?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_lance_history_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_origem_options: {
         Row: {
           created_at: string | null
@@ -2551,6 +2598,50 @@ export type Database = {
             columns: ["deal_id"]
             isOneToOne: false
             referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consorcio_sorteio_history: {
+        Row: {
+          card_id: string
+          contemplado: boolean
+          created_at: string
+          created_by: string | null
+          data_assembleia: string
+          distancia: number
+          id: string
+          numero_sorteado: string
+          observacao: string | null
+        }
+        Insert: {
+          card_id: string
+          contemplado?: boolean
+          created_at?: string
+          created_by?: string | null
+          data_assembleia: string
+          distancia?: number
+          id?: string
+          numero_sorteado: string
+          observacao?: string | null
+        }
+        Update: {
+          card_id?: string
+          contemplado?: boolean
+          created_at?: string
+          created_by?: string | null
+          data_assembleia?: string
+          distancia?: number
+          id?: string
+          numero_sorteado?: string
+          observacao?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_sorteio_history_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
             referencedColumns: ["id"]
           },
         ]
