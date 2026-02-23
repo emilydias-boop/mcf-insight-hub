@@ -228,8 +228,24 @@ Deno.serve(async (req) => {
         for (const deal of batch) {
           const contactId = deal.contact_id ? contactMap.get(deal.contact_id) || null : null;
           const stageData = deal.stage_id ? stageMap.get(deal.stage_id) || null : null;
-          const stageId = stageData?.id || null;
+          let stageId = stageData?.id || null;
           const originId = stageData?.origin_id || null;
+
+          // Fallback: se não encontrou stage pelo mapeamento, usar primeiro estágio ativo da origem
+          if (!stageId && originId) {
+            const { data: defaultStage } = await supabase
+              .from('crm_stages')
+              .select('id')
+              .eq('origin_id', originId)
+              .eq('is_active', true)
+              .order('stage_order', { ascending: true })
+              .limit(1)
+              .maybeSingle();
+            if (defaultStage) {
+              stageId = defaultStage.id;
+              console.log(`🔄 Fallback stage para deal ${deal.id}: ${stageId}`);
+            }
+          }
 
           // Extrair owner_id: priorizar deal.user?.email (formato correto do Clint)
           const ownerId = deal.user?.email || deal.owner_id || null;
