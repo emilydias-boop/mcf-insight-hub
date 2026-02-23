@@ -11,6 +11,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2, Search, CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ProposalModal } from '@/components/consorcio/ProposalModal';
 import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
+import { AcceptProposalModal } from '@/components/consorcio/AcceptProposalModal';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
   useRealizadas, useProposals, useSemSucesso,
