@@ -22,6 +22,7 @@ import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { ConsorcioGoalsMatrixTable, ConsorcioMetricRow } from "@/components/sdr/ConsorcioGoalsMatrixTable";
 import { useConsorcioPipelineMetrics } from "@/hooks/useConsorcioPipelineMetrics";
+import { useConsorcioProdutosFechadosMetrics } from "@/hooks/useConsorcioProdutosFechadosMetrics";
 import { useSdrTeamTargets } from "@/hooks/useSdrTeamTargets";
 import { TeamGoalsEditModal } from "@/components/sdr/TeamGoalsEditModal";
 import { Target, Settings2 } from "lucide-react";
@@ -282,6 +283,7 @@ export default function ConsorcioPainelEquipe() {
 
   // Consórcio pipeline metrics (deals by stage)
   const pipelineMetrics = useConsorcioPipelineMetrics();
+  const produtosFechados = useConsorcioProdutosFechadosMetrics();
   const { data: propostasData } = useConsorcioPipelineMetricsBySdr(start, end);
   
   // Consórcio team targets
@@ -471,52 +473,23 @@ export default function ConsorcioPainelEquipe() {
         week: { value: weekValues.noShow, target: getTargetValue('noshow_semana') },
         month: { value: monthValues.noShow, target: getTargetValue('noshow_mes') },
       },
-      // Viver de Aluguel pipeline
+      // Proposta Enviada (standalone)
       {
         label: 'Proposta Enviada',
-        pipelineGroup: 'Viver de Aluguel',
         day: { value: pm.day.propostaEnviada, target: getTargetValue('proposta_enviada_dia') },
         week: { value: pm.week.propostaEnviada, target: getTargetValue('proposta_enviada_semana') },
         month: { value: pm.month.propostaEnviada, target: getTargetValue('proposta_enviada_mes') },
       },
-      {
-        label: 'Contrato Pago',
-        pipelineGroup: 'Viver de Aluguel',
-        day: { value: pm.day.contratoPago, target: getTargetValue('contrato_dia') },
-        week: { value: pm.week.contratoPago, target: getTargetValue('contrato_semana') },
-        month: { value: pm.month.contratoPago, target: getTargetValue('contrato_mes') },
-      },
-      {
-        label: 'Venda Realizada',
-        pipelineGroup: 'Viver de Aluguel',
-        day: { value: pm.day.vendaRealizada, target: getTargetValue('venda_realizada_dia') },
-        week: { value: pm.week.vendaRealizada, target: getTargetValue('venda_realizada_semana') },
-        month: { value: pm.month.vendaRealizada, target: getTargetValue('venda_realizada_mes') },
-      },
-      // Efeito Alavanca + Clube pipeline
-      {
-        label: 'Aguardando Doc',
-        pipelineGroup: 'Efeito Alavanca + Clube',
-        day: { value: pm.day.aguardandoDoc, target: getTargetValue('aguardando_doc_dia') },
-        week: { value: pm.week.aguardandoDoc, target: getTargetValue('aguardando_doc_semana') },
-        month: { value: pm.month.aguardandoDoc, target: getTargetValue('aguardando_doc_mes') },
-      },
-      {
-        label: 'Carta Sócios Fechada',
-        pipelineGroup: 'Efeito Alavanca + Clube',
-        day: { value: pm.day.cartaSociosFechada, target: getTargetValue('carta_fechada_dia') },
-        week: { value: pm.week.cartaSociosFechada, target: getTargetValue('carta_fechada_semana') },
-        month: { value: pm.month.cartaSociosFechada, target: getTargetValue('carta_fechada_mes') },
-      },
-      {
-        label: 'Aporte Holding',
-        pipelineGroup: 'Efeito Alavanca + Clube',
-        day: { value: pm.day.aporteHolding, target: getTargetValue('aporte_dia') },
-        week: { value: pm.week.aporteHolding, target: getTargetValue('aporte_semana') },
-        month: { value: pm.month.aporteHolding, target: getTargetValue('aporte_mes') },
-      },
+      // Produtos Fechados (dynamic from DB)
+      ...produtosFechados.products.map((prod) => ({
+        label: prod.label,
+        pipelineGroup: 'Produtos Fechados',
+        day: { value: prod.day, target: 0 },
+        week: { value: prod.week, target: 0 },
+        month: { value: prod.month, target: 0 },
+      })),
     ];
-  }, [dayValues, weekValues, monthValues, pipelineMetrics, consorcioTargets]);
+  }, [dayValues, weekValues, monthValues, pipelineMetrics, consorcioTargets, produtosFechados]);
 
   const handlePresetChange = (preset: DatePreset) => {
     setDatePreset(preset);
