@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAddDealNote } from '@/hooks/useNextAction';
 import { useContactDealIds } from '@/hooks/useContactDealIds';
-import { Send, StickyNote, User, Calendar, Phone, MessageCircle, ArrowRightLeft } from 'lucide-react';
+import { Send, StickyNote, User, Calendar, Phone, MessageCircle, ArrowRightLeft, ClipboardList, UserCheck } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -17,7 +17,7 @@ interface DealNotesTabProps {
   contactId?: string | null;
 }
 
-type NoteType = 'manual' | 'scheduling' | 'attendee' | 'reschedule' | 'call';
+type NoteType = 'manual' | 'scheduling' | 'attendee' | 'reschedule' | 'call' | 'qualification' | 'closer';
 
 interface CombinedNote {
   id: string;
@@ -35,7 +35,9 @@ const NOTE_STYLES: Record<NoteType, { bg: string; border: string; color: string;
   scheduling: { bg: 'bg-amber-500/10', border: 'border-amber-500/30', color: 'text-amber-600', label: 'Agendamento' },
   attendee: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', color: 'text-blue-600', label: 'Nota do Closer' },
   reschedule: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', color: 'text-yellow-600', label: 'Reagendamento' },
-  call: { bg: 'bg-green-500/10', border: 'border-green-500/30', color: 'text-green-600', label: 'Ligação' }
+  call: { bg: 'bg-green-500/10', border: 'border-green-500/30', color: 'text-green-600', label: 'Ligação' },
+  qualification: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', color: 'text-purple-600', label: 'Qualificação' },
+  closer: { bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', color: 'text-indigo-600', label: 'Pós-Reunião' },
 };
 
 const NOTE_ICONS: Record<NoteType, React.ReactNode> = {
@@ -43,7 +45,9 @@ const NOTE_ICONS: Record<NoteType, React.ReactNode> = {
   scheduling: <Calendar className="h-3 w-3" />,
   attendee: <MessageCircle className="h-3 w-3" />,
   reschedule: <ArrowRightLeft className="h-3 w-3" />,
-  call: <Phone className="h-3 w-3" />
+  call: <Phone className="h-3 w-3" />,
+  qualification: <ClipboardList className="h-3 w-3" />,
+  closer: <UserCheck className="h-3 w-3" />,
 };
 
 export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabProps) => {
@@ -57,18 +61,18 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
   const { data: allNotes, isLoading } = useQuery({
     queryKey: ['all-deal-notes', uniqueIds],
     queryFn: async () => {
-      // 1. Notas manuais (deal_activities) - ALL deals cross-pipeline
+      // 1. Notas manuais + qualificação (deal_activities) - ALL deals cross-pipeline
       const { data: manualNotes } = await supabase
         .from('deal_activities')
-        .select('id, description, created_at, metadata')
+        .select('id, description, created_at, metadata, activity_type')
         .in('deal_id', uniqueIds)
-        .eq('activity_type', 'note');
+        .in('activity_type', ['note', 'qualification_note']);
       
-      // 2. Notas de agendamento (meeting_slot_attendees) - ALL deals
+      // 2. Notas de agendamento + closer_notes (meeting_slot_attendees) - ALL deals
       const { data: attendees } = await supabase
         .from('meeting_slot_attendees')
         .select(`
-          id, notes, created_at, booked_by,
+          id, notes, closer_notes, created_at, booked_by,
           meeting_slots(meeting_type, scheduled_at, closers(name))
       `)
         .in('deal_id', uniqueIds);
@@ -78,19 +82,14 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
       const { data: attendeeNotes } = attendeeIds.length > 0 
         ? await supabase
             .from('attendee_notes')
-            .select(`
-              id, note, note_type, created_at, created_by
-            `)
+            .select('id, note, note_type, created_at, created_by')
             .in('attendee_id', attendeeIds)
         : { data: [] };
       
       // Buscar perfis dos criadores de attendee_notes
       const creatorIds = attendeeNotes?.map(n => n.created_by).filter(Boolean) as string[] || [];
       const { data: creatorProfiles } = creatorIds.length > 0
-        ? await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .in('id', creatorIds)
+        ? await supabase.from('profiles').select('id, full_name').in('id', creatorIds)
         : { data: [] };
       
       const creatorMap = new Map<string, string>();
@@ -99,10 +98,7 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
       // Buscar perfis dos booked_by
       const bookedByIds = attendees?.map(a => a.booked_by).filter(Boolean) as string[] || [];
       const { data: bookedByProfiles } = bookedByIds.length > 0
-        ? await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .in('id', bookedByIds)
+        ? await supabase.from('profiles').select('id, full_name').in('id', bookedByIds)
         : { data: [] };
       
       const bookedByMap = new Map<string, string>();
@@ -118,10 +114,7 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
       // Buscar perfis dos usuários de calls
       const callUserIds = callNotes?.map(c => c.user_id).filter(Boolean) as string[] || [];
       const { data: callUserProfiles } = callUserIds.length > 0
-        ? await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .in('id', callUserIds)
+        ? await supabase.from('profiles').select('id, full_name').in('id', callUserIds)
         : { data: [] };
       
       const callUserMap = new Map<string, string>();
@@ -129,16 +122,18 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
       
       // Combinar todas as fontes
       const combined: CombinedNote[] = [
-        // Notas manuais
+        // Notas manuais + qualificação
         ...(manualNotes || []).map(n => ({
           id: n.id,
           content: n.description || '',
           created_at: n.created_at!,
-          type: 'manual' as const,
-          author: (n.metadata as Record<string, any>)?.author || 'Usuário'
+          type: (n.activity_type === 'qualification_note' ? 'qualification' : 'manual') as NoteType,
+          author: (n.metadata as Record<string, any>)?.sdr_name 
+            || (n.metadata as Record<string, any>)?.author 
+            || 'Usuário'
         })),
         
-        // Notas de agendamento
+        // Notas de agendamento (SDR notes)
         ...(attendees || [])
           .filter(a => a.notes?.trim())
           .map(a => {
@@ -149,6 +144,22 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
               created_at: a.created_at!,
               type: 'scheduling' as const,
               author: bookedByMap.get(a.booked_by!) || 'SDR',
+              meetingType: slots?.meeting_type?.toUpperCase(),
+              closerName: slots?.closers?.name
+            };
+          }),
+        
+        // Notas pós-reunião do closer (closer_notes)
+        ...(attendees || [])
+          .filter(a => (a as any).closer_notes?.trim())
+          .map(a => {
+            const slots = a.meeting_slots as any;
+            return {
+              id: `closer-${a.id}`,
+              content: (a as any).closer_notes!,
+              created_at: a.created_at!,
+              type: 'closer' as const,
+              author: slots?.closers?.name || 'Closer',
               meetingType: slots?.meeting_type?.toUpperCase(),
               closerName: slots?.closers?.name
             };
@@ -186,7 +197,6 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
   
   const handleAddNote = async () => {
     if (!newNote.trim() || !dealUuid) return;
-    
     await addNote.mutateAsync({ dealId: dealUuid, note: newNote.trim() });
     setNewNote('');
   };
@@ -239,6 +249,8 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
               let label = style.label;
               if (note.type === 'scheduling' && note.meetingType) {
                 label = `${note.meetingType}${note.closerName ? `: ${note.closerName}` : ''}`;
+              } else if (note.type === 'closer' && note.closerName) {
+                label = `Pós-Reunião: ${note.closerName}`;
               } else if (note.type === 'call' && note.outcome) {
                 label = `Ligação - ${note.outcome}`;
               }

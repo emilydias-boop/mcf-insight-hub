@@ -4,7 +4,10 @@ import { supabase } from '@/integrations/supabase/client';
 /**
  * Given a dealId (UUID), resolves the contact_id and fetches ALL deal IDs
  * for that same contact across all pipelines.
- * This enables cross-pipeline data consolidation.
+ * 
+ * Fallback logic when contact_id is NULL:
+ * 1. Try replicated_from_deal_id chain
+ * 2. Try matching contact by deal name
  */
 export function useContactDealIds(dealId: string | undefined, contactId?: string | null) {
   return useQuery({
@@ -16,10 +19,32 @@ export function useContactDealIds(dealId: string | undefined, contactId?: string
       if (!resolvedContactId && dealId) {
         const { data: deal } = await supabase
           .from('crm_deals')
-          .select('contact_id')
+          .select('contact_id, replicated_from_deal_id, name')
           .eq('id', dealId)
           .maybeSingle();
+        
         resolvedContactId = deal?.contact_id;
+
+        // Fallback 1: follow replicated_from_deal_id chain
+        if (!resolvedContactId && deal?.replicated_from_deal_id) {
+          const { data: sourceDeal } = await supabase
+            .from('crm_deals')
+            .select('contact_id')
+            .eq('id', deal.replicated_from_deal_id)
+            .maybeSingle();
+          resolvedContactId = sourceDeal?.contact_id;
+        }
+
+        // Fallback 2: match by deal name in crm_contacts
+        if (!resolvedContactId && deal?.name) {
+          const { data: contact } = await supabase
+            .from('crm_contacts')
+            .select('id')
+            .ilike('name', deal.name.trim())
+            .limit(1)
+            .maybeSingle();
+          resolvedContactId = contact?.id;
+        }
       }
 
       if (!resolvedContactId) return dealId ? [dealId] : [];
@@ -38,9 +63,11 @@ export function useContactDealIds(dealId: string | undefined, contactId?: string
         ids.add(d.id);
         if (d.clint_id) ids.add(d.clint_id);
       }
+      // Ensure the current dealId is always included
+      if (dealId) ids.add(dealId);
       return Array.from(ids);
     },
     enabled: !!dealId || !!contactId,
-    staleTime: 60000, // Cache for 1 minute
+    staleTime: 60000,
   });
 }
