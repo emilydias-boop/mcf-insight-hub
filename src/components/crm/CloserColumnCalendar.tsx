@@ -161,9 +161,18 @@ export function CloserColumnCalendar({
     // Verificar se o closer tem este horário configurado
     if (!isSlotConfigured(closerId, slotTime)) return false;
 
-    // Verificar se já existe reunião nesse slot para este closer
-    const hasMeetings = getMeetingsForSlot(closerId, slotTime);
-    return hasMeetings.length === 0;
+    // Buscar max_leads_per_slot do closer
+    const closer = closers.find(c => c.id === closerId);
+    const maxLeads = closer?.max_leads_per_slot || 4;
+
+    // Contar total de attendees no slot
+    const slotMeetings = getMeetingsForSlot(closerId, slotTime);
+    const totalAttendees = slotMeetings.reduce(
+      (sum, m) => sum + (m.attendees?.length || 0),
+      0
+    );
+
+    return totalAttendees < maxLeads;
   };
 
   const getMeetingsForSlot = (closerId: string, slotTime: Date) => {
