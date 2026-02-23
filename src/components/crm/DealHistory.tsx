@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { RefreshCw } from 'lucide-react';
+import { useContactDealIds } from '@/hooks/useContactDealIds';
 import {
   ArrowRight,
   Phone,
@@ -24,6 +25,7 @@ import {
 interface DealHistoryProps {
   dealId: string;
   dealUuid?: string;
+  contactId?: string | null;
   limit?: number;
 }
 
@@ -40,56 +42,37 @@ const activityIcons: Record<string, any> = {
   next_action_scheduled: Bell,
 };
 
-export const DealHistory = ({ dealId, dealUuid, limit }: DealHistoryProps) => {
+export const DealHistory = ({ dealId, dealUuid, contactId, limit }: DealHistoryProps) => {
   const [showAll, setShowAll] = useState(false);
+  const { data: allDealIds = [] } = useContactDealIds(dealUuid || dealId, contactId);
+  
+  // Combine all IDs for querying
+  const uniqueIds = [...new Set([...allDealIds, dealId, dealUuid].filter(Boolean))];
   
   // Helper para obter nome de quem fez a movimentação
   const getMovedByName = (activity: any) => {
-    // Prioridade 1: metadata do webhook Clint
-    if (activity.metadata?.deal_user_name) {
-      return activity.metadata.deal_user_name;
-    }
-    // Prioridade 2: metadata de movimentação manual
-    if (activity.metadata?.moved_by_name) {
-      return activity.metadata.moved_by_name;
-    }
-    // Prioridade 3: email do usuário que moveu
-    if (activity.metadata?.moved_by_email) {
-      return activity.metadata.moved_by_email;
-    }
-    if (activity.metadata?.deal_user) {
-      return activity.metadata.deal_user;
-    }
-    // Fallback: perfil do usuário logado que criou
+    if (activity.metadata?.deal_user_name) return activity.metadata.deal_user_name;
+    if (activity.metadata?.moved_by_name) return activity.metadata.moved_by_name;
+    if (activity.metadata?.moved_by_email) return activity.metadata.moved_by_email;
+    if (activity.metadata?.deal_user) return activity.metadata.deal_user;
     return activity.profiles?.full_name;
   };
   
   const { data: activities = [], isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ['deal-activities', dealId, dealUuid],
+    queryKey: ['deal-activities', uniqueIds],
     queryFn: async () => {
-      console.log('[DealHistory] Buscando atividades para dealId:', dealId, 'dealUuid:', dealUuid);
-      
-      // Busca por clint_id OU uuid do Supabase para compatibilidade com dados históricos
-      const orConditions = [`deal_id.eq.${dealId}`];
-      if (dealUuid && dealUuid !== dealId) {
-        orConditions.push(`deal_id.eq.${dealUuid}`);
-      }
+      const orFilter = uniqueIds.map(id => `deal_id.eq.${id}`).join(',');
       
       const { data, error } = await supabase
         .from('deal_activities')
         .select('*')
-        .or(orConditions.join(','))
+        .or(orFilter)
         .order('created_at', { ascending: false });
       
-      if (error) {
-        console.error('[DealHistory] Erro na query:', error);
-        throw error;
-      }
-      
-      console.log('[DealHistory] Atividades encontradas:', data?.length || 0);
+      if (error) throw error;
       return data;
     },
-    enabled: !!dealId,
+    enabled: uniqueIds.length > 0,
   });
   
   const displayedActivities = limit && !showAll 

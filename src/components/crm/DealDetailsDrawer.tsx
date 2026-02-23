@@ -199,6 +199,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                     dealId={deal.clint_id}
                     dealUuid={deal.id}
                     contactEmail={contact?.email}
+                    contactId={deal.contact_id}
                   />
                 </TabsContent>
                 
@@ -215,15 +216,15 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                 </TabsContent>
                 
                 <TabsContent value="atividades" className="mt-3">
-                  <DealHistory dealId={deal.clint_id} dealUuid={deal.id} limit={5} />
+                  <DealHistory dealId={deal.clint_id} dealUuid={deal.id} contactId={deal.contact_id} limit={5} />
                 </TabsContent>
                 
                 <TabsContent value="ligacoes" className="mt-3">
-                  <CallHistorySection dealId={deal.id} />
+                  <CallHistorySection dealId={deal.id} contactId={deal.contact_id} />
                 </TabsContent>
                 
                 <TabsContent value="notas" className="mt-3">
-                  <DealNotesTab dealUuid={deal.id} dealClintId={deal.clint_id} />
+                  <DealNotesTab dealUuid={deal.id} dealClintId={deal.clint_id} contactId={deal.contact_id} />
                 </TabsContent>
                 
                 <TabsContent value="produtos" className="mt-3 border rounded-lg min-h-[300px]">
