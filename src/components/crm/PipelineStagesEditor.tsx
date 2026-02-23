@@ -130,11 +130,27 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
   // Update stage mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<LocalStage> & { id: string }) => {
+      // 1. Atualizar em local_pipeline_stages
       const { error } = await supabase
         .from('local_pipeline_stages')
         .update(updates)
         .eq('id', id);
       if (error) throw error;
+
+      // 2. Espelhar em crm_stages (não-fatal)
+      const crmUpdates: any = {};
+      if (updates.name) crmUpdates.stage_name = updates.name;
+      if (updates.color) crmUpdates.color = updates.color;
+      if (updates.stage_type) crmUpdates.stage_type = updates.stage_type;
+      if (Object.keys(crmUpdates).length > 0) {
+        const { error: mirrorError } = await supabase
+          .from('crm_stages')
+          .update(crmUpdates)
+          .eq('id', id);
+        if (mirrorError) {
+          console.warn('[PipelineStagesEditor] Erro ao espelhar update em crm_stages:', mirrorError.message);
+        }
+      }
     },
     onSuccess: () => {
       toast.success('Etapa atualizada!');
@@ -150,11 +166,21 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
   // Delete stage mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      // 1. Deletar de local_pipeline_stages
       const { error } = await supabase
         .from('local_pipeline_stages')
         .delete()
         .eq('id', id);
       if (error) throw error;
+
+      // 2. Marcar como is_active = false em crm_stages (não-fatal, preserva FK)
+      const { error: mirrorError } = await supabase
+        .from('crm_stages')
+        .update({ is_active: false })
+        .eq('id', id);
+      if (mirrorError) {
+        console.warn('[PipelineStagesEditor] Erro ao desativar em crm_stages:', mirrorError.message);
+      }
     },
     onSuccess: () => {
       toast.success('Etapa removida!');
@@ -175,11 +201,21 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
       }));
 
       for (const update of updates) {
+        // 1. Atualizar em local_pipeline_stages
         const { error } = await supabase
           .from('local_pipeline_stages')
           .update({ stage_order: update.stage_order })
           .eq('id', update.id);
         if (error) throw error;
+
+        // 2. Espelhar ordem em crm_stages (não-fatal)
+        const { error: mirrorError } = await supabase
+          .from('crm_stages')
+          .update({ stage_order: update.stage_order })
+          .eq('id', update.id);
+        if (mirrorError) {
+          console.warn('[PipelineStagesEditor] Erro ao espelhar reorder em crm_stages:', mirrorError.message);
+        }
       }
     },
     onSuccess: () => {
