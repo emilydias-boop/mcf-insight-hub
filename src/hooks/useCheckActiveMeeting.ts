@@ -14,26 +14,31 @@ export interface ActiveMeetingCheck {
   closerName?: string;
 }
 
-export function useCheckActiveMeeting(dealId: string | undefined) {
+export function useCheckActiveMeeting(dealId: string | undefined, meetingType?: 'r1' | 'r2') {
   return useQuery({
-    queryKey: ['check-active-meeting', dealId],
+    queryKey: ['check-active-meeting', dealId, meetingType],
     queryFn: async (): Promise<ActiveMeetingCheck> => {
       if (!dealId) return { blocked: false, blockType: null, reason: '' };
 
       // 1. Check for active meetings (invited/scheduled in scheduled/rescheduled slots)
-      const { data: activeAttendees, error: activeError } = await supabase
+      let activeQuery = supabase
         .from('meeting_slot_attendees')
         .select(`
           id, status,
           meeting_slot:meeting_slots!inner(
-            id, scheduled_at, status,
+            id, scheduled_at, status, meeting_type,
             closer:closers!meeting_slots_closer_id_fkey(name)
           )
         `)
         .eq('deal_id', dealId)
         .in('status', ['invited', 'scheduled'])
-        .in('meeting_slot.status', ['scheduled', 'rescheduled'])
-        .limit(1);
+        .in('meeting_slot.status', ['scheduled', 'rescheduled']);
+
+      if (meetingType) {
+        activeQuery = activeQuery.eq('meeting_slot.meeting_type', meetingType);
+      }
+
+      const { data: activeAttendees, error: activeError } = await activeQuery.limit(1);
 
       if (activeError) {
         console.error('Error checking active meetings:', activeError);
@@ -58,18 +63,24 @@ export function useCheckActiveMeeting(dealId: string | undefined) {
       // 2. Check for completed meetings within cooldown period
       const cooldownStart = addDays(new Date(), -COOLDOWN_DAYS);
 
-      const { data: recentCompleted, error: completedError } = await supabase
+      let cooldownQuery = supabase
         .from('meeting_slot_attendees')
         .select(`
           id, status,
           meeting_slot:meeting_slots!inner(
-            id, scheduled_at, status,
+            id, scheduled_at, status, meeting_type,
             closer:closers!meeting_slots_closer_id_fkey(name)
           )
         `)
         .eq('deal_id', dealId)
         .eq('status', 'completed')
-        .gte('meeting_slot.scheduled_at', cooldownStart.toISOString())
+        .gte('meeting_slot.scheduled_at', cooldownStart.toISOString());
+
+      if (meetingType) {
+        cooldownQuery = cooldownQuery.eq('meeting_slot.meeting_type', meetingType);
+      }
+
+      const { data: recentCompleted, error: completedError } = await cooldownQuery
         .order('meeting_slot(scheduled_at)', { ascending: false })
         .limit(1);
 

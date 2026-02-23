@@ -228,7 +228,7 @@ export function R2QuickScheduleModal({
   };
 
   // Check for active/recent meetings to block duplicate scheduling
-  const { data: activeMeetingCheck } = useCheckActiveMeeting(selectedDeal?.id);
+  const { data: activeMeetingCheck } = useCheckActiveMeeting(selectedDeal?.id, 'r2');
   const isMeetingBlocked = activeMeetingCheck?.blocked;
 
   const isSelected = !!selectedDeal;
