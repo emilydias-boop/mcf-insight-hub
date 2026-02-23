@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from 'date-fns';
-import { WEEK_STARTS_ON } from '@/lib/businessDays';
+import { CONSORCIO_WEEK_STARTS_ON } from '@/lib/businessDays';
 
 // Stage IDs for Efeito Alavanca + Clube pipeline (origin 7d7b1cb5)
 const EFEITO_ALAVANCA_STAGES = {
@@ -73,8 +73,8 @@ export function useConsorcioPipelineMetrics(): ConsorcioPipelineMetrics {
 
   const dayStart = format(startOfDay(today), "yyyy-MM-dd'T'HH:mm:ss");
   const dayEnd = format(endOfDay(today), "yyyy-MM-dd'T'HH:mm:ss");
-  const weekStart = format(startOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON }), "yyyy-MM-dd'T'HH:mm:ss");
-  const weekEnd = format(endOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON }), "yyyy-MM-dd'T'HH:mm:ss");
+  const weekStart = format(startOfWeek(todayNormalized, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON }), "yyyy-MM-dd'T'HH:mm:ss");
+  const weekEnd = format(endOfWeek(todayNormalized, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON }), "yyyy-MM-dd'T'HH:mm:ss");
   const monthStart = format(startOfMonth(today), "yyyy-MM-dd'T'HH:mm:ss");
   const monthEnd = format(endOfMonth(today), "yyyy-MM-dd'T'HH:mm:ss");
 

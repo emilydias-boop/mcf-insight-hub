@@ -42,8 +42,10 @@ const SETOR_CONFIG: { id: SetorData['id']; nome: string; icone: LucideIcon }[] =
   { id: 'leilao', nome: 'MCF Leilão', icone: Gavel },
 ];
 
-// Week starts on Saturday (6)
+// Week starts on Saturday (6) for most BUs
 const WEEK_STARTS_ON = 6;
+// Consórcio BU uses Monday-Sunday
+const CONSORCIO_WEEK_STARTS_ON = 1;
 
 export function useSetoresDashboard() {
   const today = new Date();
@@ -54,6 +56,9 @@ export function useSetoresDashboard() {
   // Calculate period boundaries
   const weekStart = startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
   const weekEnd = endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
+  // Consórcio-specific week (Monday-Sunday) for consortium_cards, consortium_payments, consortium_installments
+  const consorcioWeekStart = startOfWeek(today, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON });
+  const consorcioWeekEnd = endOfWeek(today, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON });
   const monthStart = startOfMonth(today);
   const monthEnd = endOfMonth(today);
   const yearStart = startOfYear(today);
@@ -61,6 +66,8 @@ export function useSetoresDashboard() {
 
   const weekStartStr = formatDateForDB(weekStart);
   const weekEndStr = formatDateForDB(weekEnd);
+  const consorcioWeekStartStr = formatDateForDB(consorcioWeekStart);
+  const consorcioWeekEndStr = formatDateForDB(consorcioWeekEnd);
   const monthStartStr = formatDateForDB(monthStart);
   const monthEndStr = formatDateForDB(monthEnd);
   const yearStartStr = formatDateForDB(yearStart);
@@ -71,7 +78,7 @@ export function useSetoresDashboard() {
   const mesLabel = `Mês ${mesNome.charAt(0).toUpperCase() + mesNome.slice(1)}`;
 
   const query = useQuery({
-    queryKey: ['setores-dashboard', weekStartStr, monthStartStr, yearStartStr],
+    queryKey: ['setores-dashboard', weekStartStr, consorcioWeekStartStr, monthStartStr, yearStartStr],
     queryFn: async (): Promise<{ 
       setores: SetorData[]; 
       semanaLabel: string; 
@@ -119,12 +126,12 @@ export function useSetoresDashboard() {
           .select('product_category, net_value')
           .gte('created_at', yearStartStr)
           .lte('created_at', yearEndStr + 'T23:59:59'),
-        // Consortium payments - Weekly (for credito sector)
+        // Consortium payments - Weekly (for credito sector) - uses Consórcio week (Mon-Sun)
         supabase
           .from('consortium_payments')
           .select('valor_comissao, data_interface')
-          .gte('data_interface', weekStartStr)
-          .lte('data_interface', weekEndStr),
+          .gte('data_interface', consorcioWeekStartStr)
+          .lte('data_interface', consorcioWeekEndStr),
         // Consortium payments - Monthly
         supabase
           .from('consortium_payments')
@@ -137,13 +144,13 @@ export function useSetoresDashboard() {
           .select('valor_comissao, data_interface')
           .gte('data_interface', yearStartStr)
           .lte('data_interface', yearEndStr),
-        // Inside consortium cards - Weekly (for Efeito Alavanca)
+        // Inside consortium cards - Weekly (for Efeito Alavanca) - uses Consórcio week (Mon-Sun)
         supabase
           .from('consortium_cards')
           .select('id, valor_credito')
           .eq('categoria', 'inside')
-          .gte('data_contratacao', weekStartStr)
-          .lte('data_contratacao', weekEndStr),
+          .gte('data_contratacao', consorcioWeekStartStr)
+          .lte('data_contratacao', consorcioWeekEndStr),
         // Inside consortium cards - Monthly
         supabase
           .from('consortium_cards')
@@ -158,13 +165,13 @@ export function useSetoresDashboard() {
           .eq('categoria', 'inside')
           .gte('data_contratacao', yearStartStr)
           .lte('data_contratacao', yearEndStr),
-        // Inside installments - Weekly (sum valor_comissao from cards' installments)
+        // Inside installments - Weekly (sum valor_comissao from cards' installments) - uses Consórcio week (Mon-Sun)
         supabase
           .from('consortium_installments')
           .select('valor_comissao, consortium_cards!inner(categoria, data_contratacao)')
           .eq('consortium_cards.categoria', 'inside')
-          .gte('consortium_cards.data_contratacao', weekStartStr)
-          .lte('consortium_cards.data_contratacao', weekEndStr),
+          .gte('consortium_cards.data_contratacao', consorcioWeekStartStr)
+          .lte('consortium_cards.data_contratacao', consorcioWeekEndStr),
         // Inside installments - Monthly
         supabase
           .from('consortium_installments')

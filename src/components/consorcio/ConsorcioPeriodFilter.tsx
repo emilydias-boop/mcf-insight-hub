@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format, startOfMonth, endOfMonth, subMonths, subWeeks } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, subWeeks, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CalendarIcon, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,8 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { getCustomWeekStart, getCustomWeekEnd, addCustomWeeks } from '@/lib/dateHelpers';
+import { CONSORCIO_WEEK_STARTS_ON } from '@/lib/businessDays';
+import { addWeeks } from 'date-fns';
 
 export interface DateRangeFilter {
   startDate: Date | undefined;
@@ -45,14 +46,15 @@ export function ConsorcioPeriodFilter({ value, onChange }: ConsorcioPeriodFilter
 
     switch (periodId) {
       case 'this-week':
-        startDate = getCustomWeekStart(now);
-        endDate = getCustomWeekEnd(now);
+        startDate = startOfWeek(now, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON });
+        endDate = endOfWeek(now, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON });
+        endDate = endOfWeek(now, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON });
         label = `${format(startDate, 'dd/MM')} - ${format(endDate, 'dd/MM')}`;
         break;
       case 'last-week':
-        const lastWeek = addCustomWeeks(now, -1);
-        startDate = getCustomWeekStart(lastWeek);
-        endDate = getCustomWeekEnd(lastWeek);
+        const lastWeek = addWeeks(now, -1);
+        startDate = startOfWeek(lastWeek, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON });
+        endDate = endOfWeek(lastWeek, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON });
         label = `${format(startDate, 'dd/MM')} - ${format(endDate, 'dd/MM')}`;
         break;
       case 'this-month':

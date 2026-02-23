@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, startOfYear, endOfYear, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
-import { WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
+import { CONSORCIO_WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
 import { Calendar, Users, Download, Briefcase, TrendingUp } from "lucide-react";
 import { SetorRow } from "@/components/dashboard/SetorRow";
 import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
@@ -61,8 +61,8 @@ function ConsorcioMetricsCard({ onEditGoals, canEdit }: { onEditGoals?: () => vo
   // Calculate date ranges for all cards (not just inside)
   const today = new Date();
   const todayNorm = startOfDay(today);
-  const wStart = startOfWeek(todayNorm, { weekStartsOn: 6 });
-  const wEnd = endOfWeek(todayNorm, { weekStartsOn: 6 });
+  const wStart = startOfWeek(todayNorm, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON });
+  const wEnd = endOfWeek(todayNorm, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON });
   const mStart = startOfMonth(today);
   const mEnd = endOfMonth(today);
   const yStart = startOfYear(today);
@@ -206,7 +206,7 @@ export default function ConsorcioPainelEquipe() {
         return { start: startOfDay(today), end: endOfDay(today) };
       case "week": {
         const todayNormalized = startOfDay(today);
-        return { start: startOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON }), end: endOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON }) };
+        return { start: startOfWeek(todayNormalized, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON }), end: endOfWeek(todayNormalized, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON }) };
       }
       case "month":
         return { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) };
@@ -226,8 +226,8 @@ export default function ConsorcioPainelEquipe() {
   const dayStart = startOfDay(today);
   const dayEnd = endOfDay(today);
   const todayNormalized = startOfDay(today);
-  const weekStartDate = startOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON });
-  const weekEndDate = endOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON });
+  const weekStartDate = startOfWeek(todayNormalized, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON });
+  const weekEndDate = endOfWeek(todayNormalized, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON });
   const monthStartDate = startOfMonth(today);
   const monthEndDate = endOfMonth(today);
 

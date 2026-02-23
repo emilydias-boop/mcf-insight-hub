@@ -2,6 +2,7 @@ import { addDays, getDay, format, parse, isWeekend, startOfWeek, endOfWeek, star
 
 // Constante global: semana começa no sábado (6) e termina na sexta-feira
 export const WEEK_STARTS_ON = 6;
+export const CONSORCIO_WEEK_STARTS_ON = 1; // Segunda-feira (Monday) - usado apenas pela BU Consórcio
 
 // Feriados nacionais fixos (MM-DD)
 const FERIADOS_FIXOS = [
