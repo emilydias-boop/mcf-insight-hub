@@ -1,124 +1,112 @@
 
-# Simulador de Contemplacao por Loteria Federal
+# Fallback do Numero Base para Consulta por Loteria Federal
 
 ## Resumo
 
-Transformar a aba "Contemplacao" de uma lista estatica para um simulador baseado no numero da Loteria Federal, classificando cotas em zonas de chance (match direto, +/-50, +/-100) com recomendacoes de lance.
+Quando o numero base (ultimos 5 digitos) esta fora do range de cotas do grupo, o sistema deve automaticamente reduzir os digitos (4, 3, 2, 1) ate encontrar um candidato valido. Hoje retorna "nenhuma cota encontrada", o que esta incorreto.
 
 ---
 
 ## O que muda
 
-A aba mantem a tabela existente e todos os modais/acoes atuais, mas ganha:
-
-1. Uma secao de consulta no topo (Grupo + Periodo + Numero da Loteria)
-2. Logica de classificacao em 3 zonas (Embracon)
-3. Duas novas colunas na tabela (Categoria de Chance + Recomendacao de Lance)
-4. Registro de cada consulta no banco (auditoria)
-5. Aviso legal no topo dos resultados
+1. Nova funcao de fallback em `contemplacao.ts` que testa candidatos por reducao de digitos
+2. O range maximo do grupo e determinado dinamicamente a partir das cotas existentes no banco (maior numero de cota do grupo)
+3. A UI mostra transparencia: numero informado, numero aplicado e motivo do fallback
+4. O registro de auditoria salva o numero aplicado alem do numero base original
 
 ---
 
-## Parte 1 - Migration SQL
+## Parte 1 - Logica de fallback (`src/lib/contemplacao.ts`)
 
-Criar tabela `consorcio_consulta_loteria` para registrar cada consulta:
-- id (uuid PK)
-- grupo (text)
-- periodo (text) -- ex: "2026-02" ou data da assembleia
-- numero_loteria (text) -- numero informado pelo usuario
-- numero_base (text) -- ultimos 5 digitos calculados
-- cotas_match (integer) -- quantas cotas deram match direto
-- cotas_zona_50 (integer) -- quantas na zona +/-50
-- cotas_zona_100 (integer) -- quantas na zona +/-100
-- created_by (uuid FK auth.users)
-- created_at (timestamptz default now())
+Nova funcao `calcularNumeroAplicado`:
 
-RLS: autenticados podem inserir e ler.
+```text
+Entrada: numeroLoteria = "25648", cotas do grupo (array de numeros)
 
----
+Passo 1: Determinar max_cota do grupo (maior numero de cota existente)
+Passo 2: Gerar candidatos por reducao:
+  - base_5 = ultimos 5 digitos = 25648
+  - base_4 = ultimos 4 digitos = 5648
+  - base_3 = ultimos 3 digitos = 648
+  - base_2 = ultimos 2 digitos = 48
+  - base_1 = ultimo 1 digito  = 8
 
-## Parte 2 - Atualizar `contemplacao.ts`
+Passo 3: Para cada candidato (na ordem 5 -> 4 -> 3 -> 2 -> 1):
+  - Se candidato >= 1 E candidato <= max_cota: aceitar
+  - Senao: proximo candidato
 
-Adicionar nova funcao `classificarCotasPorLoteria`:
-- Recebe: numero da loteria (string), lista de cotas (ConsorcioCard[])
-- Extrai ultimos 5 digitos do numero (nao 4 como a funcao atual)
-- Para cada cota, calcula distancia numerica entre o numero da cota e o numero base
-- Classifica em:
-  - **Match Sorteio**: distancia == 0
-  - **Zona +/-50**: distancia <= 50
-  - **Zona +/-100**: distancia <= 100
-  - **Fora**: distancia > 100
-- Retorna array com cota + zona + recomendacao de lance, ordenado por zona
+Retorno:
+  - numeroAplicado: string (ex: "648")
+  - numeroBase: string (ex: "25648")
+  - fallbackAplicado: boolean
+  - motivoFallback: string (ex: "25648 e 5648 fora do range (max: 5000), usando 648")
+  - candidatosTestados: string[] (para debug)
+```
+
+Atualizar `classificarCotasPorLoteria` para usar o `numeroAplicado` em vez do `numeroBase` direto.
 
 ---
 
-## Parte 3 - Atualizar `useContemplacao.ts`
+## Parte 2 - Atualizar a UI (`ContemplationTab.tsx`)
 
-Adicionar:
-- `useRegistrarConsultaLoteria()`: mutation para salvar consulta na tabela de auditoria
-- Manter `useContemplationCards` existente (usada para buscar cotas do grupo selecionado)
+### Na barra de resumo (badges), trocar de:
+"Numero base: 25648"
+
+### Para:
+- Numero base (5 digitos): 25648
+- Numero aplicado: 648
+- Motivo: "5648 fora do range (max: 5000)"
+
+Quando nao houver fallback (numero base ja valido), mostrar apenas:
+- Numero aplicado: 25648
+
+### Mensagem de fallback
+Exibir um Alert adicional (tipo info) quando o fallback for aplicado, explicando:
+"O numero base 25648 esta fora do range do grupo (max: XXXX). O sistema aplicou reducao automatica e esta usando o numero 648."
 
 ---
 
-## Parte 4 - Reescrever `ContemplationTab.tsx`
+## Parte 3 - Atualizar auditoria
 
-### Nova secao no topo: "Consulta por Sorteio da Loteria Federal"
-- Card com 3 campos lado a lado:
-  - **Grupo** (Select obrigatorio, carregado de grupos existentes via query)
-  - **Assembleia / Periodo** (input mes/ano, formato MM/AAAA)
-  - **Numero da Loteria Federal** (input numerico, placeholder "012345")
-- Botao "Calcular possibilidades"
+No `useRegistrarConsultaLoteria`, passar tambem o `numeroAplicado` para salvar no registro.
+Adicionar coluna `numero_aplicado` na tabela `consorcio_consulta_loteria` (migration).
 
-### Comportamento ao clicar "Calcular possibilidades"
-1. Busca todas as cotas do grupo selecionado via `useContemplationCards`
-2. Aplica `classificarCotasPorLoteria` no frontend
-3. Filtra tabela para mostrar apenas cotas com match, zona 50 ou zona 100
-4. Salva consulta em `consorcio_consulta_loteria`
+---
 
-### Aviso legal
-Alert acima da tabela apos consulta:
-"Esta e uma previsao baseada no numero da Loteria Federal e proximidade das cotas. A contemplacao real depende da assembleia da Embracon e dos lances realizados."
+## Parte 4 - Determinar max_cota do grupo
 
-### Tabela atualizada
-Manter todas as colunas atuais + adicionar 2 novas:
-- **Categoria de Chance**: Badge colorido (Match Sorteio / Zona +/-50 / Zona +/-100)
-- **Recomendacao de Lance**: Texto (Contemplacao por sorteio / Ate 25% / Ate 50%)
+Em vez de configuracao manual por grupo, o sistema calcula automaticamente:
+- max_cota = maior numero de cota encontrada no grupo selecionado (via query existente)
+- Isso e derivado dos dados ja carregados em `cards`
 
-Ordenacao: Match direto primeiro, depois Zona 50, depois Zona 100.
-
-Quando nao houver consulta ativa, mostrar todas as cotas normalmente (comportamento atual).
-
-### Acoes existentes mantidas
-Botoes Ver detalhes, Verificar sorteio e Simular lance continuam funcionando.
+Se futuramente for necessario configuracao manual, pode ser adicionado sem quebrar esta logica.
 
 ---
 
 ## Detalhes tecnicos
 
 ### Arquivos a modificar
-1. `src/lib/contemplacao.ts` -- adicionar `classificarCotasPorLoteria` e tipos
-2. `src/hooks/useContemplacao.ts` -- adicionar `useRegistrarConsultaLoteria` e query de grupos
-3. `src/components/consorcio/ContemplationTab.tsx` -- reescrever com secao de consulta
+1. `src/lib/contemplacao.ts` - Adicionar `calcularNumeroAplicado()` e atualizar `classificarCotasPorLoteria()` para receber max_cota e aplicar fallback
+2. `src/components/consorcio/ContemplationTab.tsx` - Usar nova funcao, exibir info de fallback na UI, passar numero aplicado para auditoria
+3. `src/hooks/useContemplacao.ts` - Adicionar campo `numeroAplicado` no mutation de registro
 
-### Arquivo a criar
-1. Migration SQL para `consorcio_consulta_loteria`
+### Migration SQL
+- Adicionar coluna `numero_aplicado text` na tabela `consorcio_consulta_loteria`
 
-### Logica de classificacao (funcao pura, sem banco)
+### Tipos novos em `contemplacao.ts`
+
 ```text
-entrada: numero_loteria = "012345", cotas do grupo 7253
-numero_base = 12345 (ultimos 5 digitos)
-
-Para cada cota:
-  distancia = |cota_numero - numero_base|
-
-  se distancia == 0 -> Match Sorteio, "Contemplacao por sorteio"
-  se distancia <= 50 -> Zona +-50, "Ate 25%"
-  se distancia <= 100 -> Zona +-100, "Ate 50%"
-  senao -> excluir da lista
+interface ResultadoFallback {
+  numeroBase: string         -- ultimos 5 digitos originais
+  numeroAplicado: number     -- numero efetivamente usado
+  fallbackAplicado: boolean
+  motivoFallback: string     -- explicacao legivel
+  candidatosTestados: { candidato: number, valido: boolean, motivo: string }[]
+}
 ```
 
 ### Sequencia de implementacao
-1. Migration SQL (tabela consorcio_consulta_loteria)
-2. Atualizar `contemplacao.ts` com nova funcao de classificacao
-3. Atualizar `useContemplacao.ts` com mutation de registro
-4. Reescrever `ContemplationTab.tsx` com secao de consulta + tabela atualizada
+1. Migration SQL (adicionar coluna numero_aplicado)
+2. Atualizar `contemplacao.ts` com funcao de fallback
+3. Atualizar `ContemplationTab.tsx` com exibicao de fallback
+4. Atualizar hook de auditoria
