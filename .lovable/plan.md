@@ -1,112 +1,82 @@
 
-# Fallback do Numero Base para Consulta por Loteria Federal
+# Alterar Semana da BU Consorcio para Segunda a Domingo
 
 ## Resumo
 
-Quando o numero base (ultimos 5 digitos) esta fora do range de cotas do grupo, o sistema deve automaticamente reduzir os digitos (4, 3, 2, 1) ate encontrar um candidato valido. Hoje retorna "nenhuma cota encontrada", o que esta incorreto.
+Atualmente todas as BUs usam semana de Sabado a Sexta (weekStartsOn: 6). A BU Consorcio precisa passar a usar Segunda a Domingo (weekStartsOn: 1), sem afetar as demais BUs.
 
 ---
 
-## O que muda
+## Arquivos a modificar
 
-1. Nova funcao de fallback em `contemplacao.ts` que testa candidatos por reducao de digitos
-2. O range maximo do grupo e determinado dinamicamente a partir das cotas existentes no banco (maior numero de cota do grupo)
-3. A UI mostra transparencia: numero informado, numero aplicado e motivo do fallback
-4. O registro de auditoria salva o numero aplicado alem do numero base original
+### 1. `src/lib/businessDays.ts` - Exportar constante para Consorcio
 
----
-
-## Parte 1 - Logica de fallback (`src/lib/contemplacao.ts`)
-
-Nova funcao `calcularNumeroAplicado`:
+Adicionar nova constante:
 
 ```text
-Entrada: numeroLoteria = "25648", cotas do grupo (array de numeros)
-
-Passo 1: Determinar max_cota do grupo (maior numero de cota existente)
-Passo 2: Gerar candidatos por reducao:
-  - base_5 = ultimos 5 digitos = 25648
-  - base_4 = ultimos 4 digitos = 5648
-  - base_3 = ultimos 3 digitos = 648
-  - base_2 = ultimos 2 digitos = 48
-  - base_1 = ultimo 1 digito  = 8
-
-Passo 3: Para cada candidato (na ordem 5 -> 4 -> 3 -> 2 -> 1):
-  - Se candidato >= 1 E candidato <= max_cota: aceitar
-  - Senao: proximo candidato
-
-Retorno:
-  - numeroAplicado: string (ex: "648")
-  - numeroBase: string (ex: "25648")
-  - fallbackAplicado: boolean
-  - motivoFallback: string (ex: "25648 e 5648 fora do range (max: 5000), usando 648")
-  - candidatosTestados: string[] (para debug)
+export const CONSORCIO_WEEK_STARTS_ON = 1; // Segunda-feira
 ```
 
-Atualizar `classificarCotasPorLoteria` para usar o `numeroAplicado` em vez do `numeroBase` direto.
+Isso mantem a constante `WEEK_STARTS_ON = 6` intacta para as demais BUs.
+
+### 2. `src/hooks/useConsorcioPipelineMetrics.ts`
+
+Trocar o import de `WEEK_STARTS_ON` por `CONSORCIO_WEEK_STARTS_ON` (valor 1).
+
+Linhas afetadas: 4, 76, 77 - onde calcula weekStart e weekEnd para metricas do pipeline de consorcio.
+
+### 3. `src/components/consorcio/ConsorcioPeriodFilter.tsx`
+
+Trocar as chamadas `getCustomWeekStart/End` (que usam Sabado-Sexta) por `startOfWeek/endOfWeek` com `weekStartsOn: 1` (Segunda-Domingo).
+
+Linhas afetadas: 13, 48-49, 53-55 - nos botoes "Esta Semana" e "Semana Anterior".
+
+### 4. `src/pages/bu-consorcio/PainelEquipe.tsx`
+
+Trocar todas as referencias `weekStartsOn: 6` e `WEEK_STARTS_ON` por `CONSORCIO_WEEK_STARTS_ON` (1).
+
+Linhas afetadas:
+- 64-65: `ConsorcioMetricsCard` (wStart/wEnd para summary)
+- 209: `getDateRange()` preset "week"
+- 229-230: weekStartDate/weekEndDate para metricas do time
+
+### 5. `src/hooks/useSetoresDashboard.ts`
+
+Este hook e compartilhado entre todas as BUs, mas os setores `efeito_alavanca` e `credito` sao especificos da BU Consorcio.
+
+A abordagem mais segura: calcular um segundo par de datas de semana (Segunda-Domingo) especificamente para as queries de `consortium_cards` e `consortium_payments`, mantendo Sabado-Sexta para os demais setores (incorporador, projetos, leilao).
+
+Mudancas:
+- Adicionar `consorcioWeekStart` e `consorcioWeekEnd` com `weekStartsOn: 1`
+- Usar essas datas nas queries de `consortium_cards` (weekly) e `consortium_payments` (weekly) e `consortium_installments` (weekly)
+- Manter as datas originais (Sabado-Sexta) para queries de `hubla_transactions`
+- Atualizar o `semanaLabel` para mostrar o range correto por setor (ou manter o label global como Sabado-Sexta, ja que e o dashboard geral)
 
 ---
 
-## Parte 2 - Atualizar a UI (`ContemplationTab.tsx`)
+## O que NAO muda
 
-### Na barra de resumo (badges), trocar de:
-"Numero base: 25648"
-
-### Para:
-- Numero base (5 digitos): 25648
-- Numero aplicado: 648
-- Motivo: "5648 fora do range (max: 5000)"
-
-Quando nao houver fallback (numero base ja valido), mostrar apenas:
-- Numero aplicado: 25648
-
-### Mensagem de fallback
-Exibir um Alert adicional (tipo info) quando o fallback for aplicado, explicando:
-"O numero base 25648 esta fora do range do grupo (max: XXXX). O sistema aplicou reducao automatica e esta usando o numero 648."
-
----
-
-## Parte 3 - Atualizar auditoria
-
-No `useRegistrarConsultaLoteria`, passar tambem o `numeroAplicado` para salvar no registro.
-Adicionar coluna `numero_aplicado` na tabela `consorcio_consulta_loteria` (migration).
-
----
-
-## Parte 4 - Determinar max_cota do grupo
-
-Em vez de configuracao manual por grupo, o sistema calcula automaticamente:
-- max_cota = maior numero de cota encontrada no grupo selecionado (via query existente)
-- Isso e derivado dos dados ja carregados em `cards`
-
-Se futuramente for necessario configuracao manual, pode ser adicionado sem quebrar esta logica.
+- `WEEK_STARTS_ON = 6` continua existindo e sendo usada por todas as outras BUs
+- `getCustomWeekStart/End` em `dateHelpers.ts` continua Sabado-Sexta (usado por dashboard geral, agenda, carrinho R2, etc.)
+- Hooks de Agenda (`useAgendaData`), Reunioes Equipe, SDR, Closer, Transacoes - todos continuam Sabado-Sexta
+- `useIncorporadorGrossMetrics` continua Sabado-Sexta
 
 ---
 
 ## Detalhes tecnicos
 
-### Arquivos a modificar
-1. `src/lib/contemplacao.ts` - Adicionar `calcularNumeroAplicado()` e atualizar `classificarCotasPorLoteria()` para receber max_cota e aplicar fallback
-2. `src/components/consorcio/ContemplationTab.tsx` - Usar nova funcao, exibir info de fallback na UI, passar numero aplicado para auditoria
-3. `src/hooks/useContemplacao.ts` - Adicionar campo `numeroAplicado` no mutation de registro
-
-### Migration SQL
-- Adicionar coluna `numero_aplicado text` na tabela `consorcio_consulta_loteria`
-
-### Tipos novos em `contemplacao.ts`
+### Constante nova em `businessDays.ts`
 
 ```text
-interface ResultadoFallback {
-  numeroBase: string         -- ultimos 5 digitos originais
-  numeroAplicado: number     -- numero efetivamente usado
-  fallbackAplicado: boolean
-  motivoFallback: string     -- explicacao legivel
-  candidatosTestados: { candidato: number, valido: boolean, motivo: string }[]
-}
+CONSORCIO_WEEK_STARTS_ON = 1  // Segunda-feira (Monday)
 ```
 
+Com `date-fns`, `startOfWeek(date, { weekStartsOn: 1 })` retorna segunda-feira e `endOfWeek(date, { weekStartsOn: 1 })` retorna domingo.
+
 ### Sequencia de implementacao
-1. Migration SQL (adicionar coluna numero_aplicado)
-2. Atualizar `contemplacao.ts` com funcao de fallback
-3. Atualizar `ContemplationTab.tsx` com exibicao de fallback
-4. Atualizar hook de auditoria
+
+1. Adicionar constante em `businessDays.ts`
+2. Atualizar `useConsorcioPipelineMetrics.ts`
+3. Atualizar `ConsorcioPeriodFilter.tsx`
+4. Atualizar `PainelEquipe.tsx`
+5. Atualizar `useSetoresDashboard.ts` (queries de consorcio)
