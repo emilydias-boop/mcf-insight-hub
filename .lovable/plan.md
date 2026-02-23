@@ -1,105 +1,82 @@
 
-# Consolidar Dados do Lead Across Pipelines
+# Consolidar TODAS as Notas do Lead Cross-Pipeline
 
-## Problema
+## Problemas Identificados
 
-Quando um negocio e replicado para outra pipeline (ex: de Inside Sales para Consorcio ou Gerentes de Relacionamento), ele recebe um novo UUID. As abas de Timeline, Notas, Ligacoes e Historico buscam dados usando apenas o `dealUuid` atual, perdendo todas as informacoes coletadas na pipeline original.
+### Problema 1: Deals sem `contact_id`
+O deal "Matheus Brigatto" no Consorcio (pipeline "Efeito Alavanca + Clube") tem `contact_id = NULL`. Sem esse vinculo, o hook `useContactDealIds` nao consegue encontrar os deals relacionados de outras pipelines.
 
-O hook `useLeadNotes` ja resolve isso corretamente -- ele busca o `contact_id` do deal atual, encontra TODOS os deals do mesmo contato, e agrega notas de todos eles. Porem os demais componentes nao seguem esse padrao.
+Dados no banco:
+- Inside Sales (`c3254b39`): `contact_id = 40d3a5bb` -- TEM vinculo
+- Consorcio (`aeaea21b`): `contact_id = NULL` -- SEM vinculo
+- Consorcio replicado (`0b16bbd1`): `contact_id = 40d3a5bb` -- TEM vinculo
 
-## Solucao: Hook utilitario + atualizacao dos componentes
+Isso afeta **3.311 de 3.743 deals** na pipeline "Efeito Alavanca + Clube" e **299 de 2.293** em "Viver de Aluguel".
 
-### 1. Criar hook utilitario `useContactDealIds`
+### Problema 2: `DealNotesTab` nao busca todas as fontes de notas
+O componente atualmente busca apenas:
+- `deal_activities` com `activity_type = 'note'` (notas manuais)
+- `meeting_slot_attendees.notes` (notas de agendamento do SDR)
+- `attendee_notes` (notas do closer)
+- `calls.notes` (notas de ligacao)
 
-Novo arquivo: `src/hooks/useContactDealIds.ts`
+**Faltam:**
+- `deal_activities` com `activity_type = 'qualification_note'` (notas de qualificacao)
+- `meeting_slot_attendees.closer_notes` (notas pos-reuniao do closer)
 
-Dado um `dealId`, este hook:
-- Busca o `contact_id` do deal atual em `crm_deals`
-- Busca todos os deals do mesmo contato
-- Retorna um array com todos os `deal_id` (UUIDs) relacionados
+## Solucao
 
-Isso centraliza a logica de "encontrar todos os deals do mesmo lead" em um unico lugar reutilizavel.
+### 1. Fallback por email/telefone no `useContactDealIds`
+Quando o deal nao tem `contact_id`, buscar o contato pelo nome do deal ou fazer lookup reverso via `crm_contacts` por email/telefone. Alternativamente, usar `replicated_from_deal_id` para rastrear o deal original.
 
-### 2. Atualizar `useLeadFullTimeline.ts` (Timeline)
+**Arquivo:** `src/hooks/useContactDealIds.ts`
 
-Atualmente busca atividades, calls, meetings e attendee_notes usando apenas `dealUuid` e `dealId`.
-
-Alteracao:
-- Receber `contactId` como parametro adicional (ja disponivel no drawer)
-- Buscar todos os deal UUIDs do mesmo contato
-- Expandir as queries de `deal_activities`, `calls`, `meeting_slot_attendees` e `attendee_notes` para usar `.in('deal_id', allDealIds)` em vez de `.eq('deal_id', dealUuid)`
-
-### 3. Atualizar `DealNotesTab.tsx` (aba Notas)
-
-Atualmente busca notas manuais, agendamentos, attendee_notes e calls usando apenas `dealUuid`.
-
-Alteracao:
-- Receber `contactId` como prop
-- Buscar todos os deal IDs do contato
-- Expandir todas as queries para usar `.in('deal_id', allDealIds)`
-
-### 4. Atualizar `CallHistorySection.tsx` (aba Ligacoes)
-
-Atualmente busca calls usando `.eq('deal_id', dealId)`.
-
-Alteracao:
-- Receber `contactId` como prop (ja existe na interface mas nao e usado para cross-pipeline)
-- Buscar todos os deal IDs do contato
-- Expandir a query para `.in('deal_id', allDealIds)`
-
-### 5. Atualizar `DealHistory.tsx` (aba Historico)
-
-Atualmente busca `deal_activities` usando apenas `dealUuid` e `dealId`.
-
-Alteracao:
-- Receber `contactId` como prop
-- Buscar todos os deal IDs do contato
-- Expandir a query para buscar atividades de todos os deals relacionados
-
-### 6. Atualizar `DealDetailsDrawer.tsx`
-
-Passar `contactId` (de `deal.contact_id`) como prop para todos os componentes atualizados:
-- `LeadFullTimeline` (ja recebe `contactEmail`, adicionar `contactId`)
-- `DealNotesTab` (adicionar `contactId`)
-- `CallHistorySection` (ja tem `contactId` na interface, passar o valor correto)
-- `DealHistory` (adicionar `contactId`)
-
-## Detalhes Tecnicos
-
-**Hook `useContactDealIds` (pseudo-codigo):**
+Logica atualizada:
 ```text
-function useContactDealIds(dealId):
-  query = useQuery(['contact-deal-ids', dealId]):
-    1. SELECT contact_id FROM crm_deals WHERE id = dealId
-    2. SELECT id FROM crm_deals WHERE contact_id = contact_id
-    3. return array de UUIDs
-  return { allDealIds, isLoading }
+1. Se tem contactId -> usa direto
+2. Se nao, busca contact_id do deal
+3. Se contact_id = null, tenta:
+   a. Buscar via replicated_from_deal_id (se deal foi replicado)
+   b. Buscar contato pelo nome do deal em crm_contacts
+4. Com o contact_id resolvido, busca todos os deals
 ```
 
-**Padrao de uso nos componentes:**
-```text
-// Antes:
-.eq('deal_id', dealUuid)
+### 2. Adicionar `qualification_note` e `closer_notes` no `DealNotesTab`
+**Arquivo:** `src/components/crm/DealNotesTab.tsx`
 
-// Depois:
-.in('deal_id', allDealIds)
-```
+Alteracoes:
+- Na query de `deal_activities`, incluir `qualification_note` alem de `note`:
+  `.in('activity_type', ['note', 'qualification_note'])`
+- Adicionar tipo `qualification` ao `NoteType` e seus estilos/icones
+- Buscar `closer_notes` do `meeting_slot_attendees` (campo separado de `notes`)
+- Adicionar tipo `closer` ao `NoteType` para notas pos-reuniao
 
-**Arquivos a criar:**
-1. `src/hooks/useContactDealIds.ts`
+Novos tipos de nota:
+- `qualification`: fundo roxo, icone ClipboardList, label "Qualificacao"
+- `closer`: fundo indigo, icone UserCheck, label "Pos-Reuniao"
 
-**Arquivos a modificar:**
-1. `src/hooks/useLeadFullTimeline.ts`
-2. `src/components/crm/DealNotesTab.tsx`
-3. `src/components/crm/CallHistorySection.tsx`
-4. `src/components/crm/DealHistory.tsx`
-5. `src/components/crm/DealDetailsDrawer.tsx`
+### 3. Corrigir deals existentes sem `contact_id` (migracao de dados)
+Para os 3.311 deals sem `contact_id`, criar uma migracao SQL que:
+- Busca deals com `replicated_from_deal_id` que tem `contact_id`
+- Busca pelo nome do deal em `crm_contacts`
+- Atualiza o `contact_id` nos deals orfaos
+
+Isso e feito via migration SQL para corrigir dados historicos.
+
+## Arquivos a Modificar
+
+1. `src/hooks/useContactDealIds.ts` - Adicionar fallback por `replicated_from_deal_id` e nome
+2. `src/components/crm/DealNotesTab.tsx` - Adicionar `qualification_note`, `closer_notes`, e novos tipos visuais
+3. Migration SQL - Corrigir deals existentes sem `contact_id`
 
 ## Resultado Esperado
 
-Ao abrir qualquer deal de "Matheus Brigatto" em qualquer pipeline (Inside Sales, Consorcio, Gerentes de Relacionamento), o usuario vera:
-- Todas as notas de qualificacao escritas pelos SDRs
-- Todas as notas dos Closers de R1 e R2
-- Todas as ligacoes feitas em qualquer pipeline
-- Todo o historico de movimentacoes de estagio
-- Toda a timeline unificada com eventos de todas as pipelines
+Ao abrir qualquer deal em qualquer pipeline, o usuario vera:
+- Notas manuais de todas as pipelines
+- Notas de qualificacao dos SDRs
+- Notas pos-reuniao dos Closers
+- Notas de agendamento
+- Notas de ligacao
+- Notas de attendees (reagendamento, etc.)
+
+Tudo consolidado independente de qual pipeline o deal esta.
