@@ -204,3 +204,48 @@ export function useMarcarContemplada() {
     onError: (e: any) => toast.error(e.message),
   });
 }
+
+export function useRegistrarConsultaLoteria() {
+  return useMutation({
+    mutationFn: async (params: {
+      grupo: string;
+      periodo: string;
+      numeroLoteria: string;
+      numeroBase: string;
+      cotasMatch: number;
+      cotasZona50: number;
+      cotasZona100: number;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('consorcio_consulta_loteria' as any)
+        .insert({
+          grupo: params.grupo,
+          periodo: params.periodo,
+          numero_loteria: params.numeroLoteria,
+          numero_base: params.numeroBase,
+          cotas_match: params.cotasMatch,
+          cotas_zona_50: params.cotasZona50,
+          cotas_zona_100: params.cotasZona100,
+          created_by: user?.id,
+        });
+      if (error) throw error;
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+}
+
+export function useGruposDisponiveis() {
+  return useQuery({
+    queryKey: ['consorcio-grupos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('consortium_cards')
+        .select('grupo')
+        .order('grupo', { ascending: true });
+      if (error) throw error;
+      const unique = [...new Set((data || []).map((d: any) => d.grupo))].sort((a, b) => Number(a) - Number(b));
+      return unique as string[];
+    },
+  });
+}
