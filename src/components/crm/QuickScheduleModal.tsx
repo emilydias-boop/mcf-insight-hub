@@ -227,8 +227,8 @@ export function QuickScheduleModal({
   } | null>(null);
 
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery, originIds && originIds.length > 0 ? originIds : undefined);
-  const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery);
-  const { data: emailSearchResults = [], isLoading: searchingEmail } = useSearchDealsByEmail(emailQuery);
+  const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery, originIds && originIds.length > 0 ? originIds : undefined);
+  const { data: emailSearchResults = [], isLoading: searchingEmail } = useSearchDealsByEmail(emailQuery, originIds && originIds.length > 0 ? originIds : undefined);
   const { data: weeklyLeads = [], isLoading: weeklyLeadsLoading } = useSearchWeeklyMeetingLeads(weeklyStatusFilter, closerIdsForBU);
   const createMeeting = useCreateMeeting();
   const sendNotification = useSendMeetingNotification();
