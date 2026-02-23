@@ -1,37 +1,37 @@
 
+# Corrigir Dados e Proteger Busca por BU no Agendamento
 
-# Ocultar Closers Sem Horario Configurado no Dia
+## 1. Dados do Lead "Ailton Aparecido de Sa"
 
-## Problema
+O deal de "Efeito Alavanca + Clube" (id: `f4895d29-305c-42b3-bb84-6400e686ff2c`) ja esta no estagio "VENDA REALIZADA 50K", que e mais avancado que "R1 Realizada". Nao e necessario corrigir o estagio desse deal.
 
-Na visualizacao "Por Closer" da agenda, closers que nao tem nenhum horario configurado para o dia selecionado ainda aparecem como colunas vazias, ocupando espaco desnecessario.
+O deal errado (Inside Sales, id: `1f374740-392f-4cc5-8d78-3206b85a8c82`) esta em "REUNIAO 1 REALIZADA" porque foi ele que ficou vinculado ao attendee. **Nenhuma correcao de dados e necessaria** ja que o deal correto ja progrediu alem de R1 Realizada.
 
-## Solucao
+## 2. Protecao no Codigo: Filtrar busca por BU
 
-Filtrar a lista de `closers` dentro do componente `CloserColumnCalendar` para exibir apenas aqueles que possuem pelo menos um slot configurado no `daySlots` para o dia da semana **OU** que possuem reunioes agendadas para aquele dia.
+### Problema identificado
 
-## Detalhes tecnicos
+Na hora do agendamento (QuickScheduleModal), a busca por **nome** ja filtra por `originIds` da BU ativa. Porem, as buscas por **telefone** e **email** NAO aplicam esse filtro, permitindo que deals de outras BUs/pipelines aparecam nos resultados e sejam selecionados erroneamente.
 
-### Arquivo: `src/components/crm/CloserColumnCalendar.tsx`
+### Solucao
 
-Adicionar um `useMemo` apos o carregamento de `daySlots` que filtra os closers:
+Adicionar o parametro `originIds` aos hooks `useSearchDealsByPhone` e `useSearchDealsByEmail` em `src/hooks/useAgendaData.ts`, e passar esses IDs a partir do `QuickScheduleModal`.
 
-```typescript
-const visibleClosers = useMemo(() => {
-  return closers.filter(closer => {
-    // Closer tem slot configurado para este dia
-    const hasConfiguredSlot = daySlots.some(s => s.closer_id === closer.id);
-    // Closer tem reuniao agendada neste dia
-    const hasMeeting = meetings.some(m => m.closer_id === closer.id);
-    return hasConfiguredSlot || hasMeeting;
-  });
-}, [closers, daySlots, meetings]);
-```
+### Arquivo: `src/hooks/useAgendaData.ts`
 
-Substituir todas as referencias a `closers` no render (header e grid) por `visibleClosers`.
+**`useSearchDealsByPhone`** (linha 758):
+- Adicionar parametro opcional `originIds?: string[]`
+- Ao buscar deals por `contact_id`, adicionar `.in('origin_id', originIds)` quando disponivel
 
-Isso garante que:
-- Closers com horarios configurados aparecem normalmente
-- Closers com reunioes agendadas (mesmo sem horario configurado) continuam visiveis
-- Closers sem nenhum dos dois ficam ocultos
+**`useSearchDealsByEmail`** (linha 792):
+- Adicionar parametro opcional `originIds?: string[]`
+- Ao buscar deals por `contact_id`, adicionar `.in('origin_id', originIds)` quando disponivel
 
+### Arquivo: `src/components/crm/QuickScheduleModal.tsx`
+
+- Passar `originIds` para `useSearchDealsByPhone(phoneQuery, originIds)`
+- Passar `originIds` para `useSearchDealsByEmail(emailQuery, originIds)`
+
+### Arquivo: `src/components/crm/R2QuickScheduleModal.tsx`
+
+- Verificar e aplicar o mesmo filtro de BU para consistencia
