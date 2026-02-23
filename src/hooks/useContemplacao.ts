@@ -212,6 +212,7 @@ export function useRegistrarConsultaLoteria() {
       periodo: string;
       numeroLoteria: string;
       numeroBase: string;
+      numeroAplicado?: string;
       cotasMatch: number;
       cotasZona50: number;
       cotasZona100: number;
@@ -224,6 +225,7 @@ export function useRegistrarConsultaLoteria() {
           periodo: params.periodo,
           numero_loteria: params.numeroLoteria,
           numero_base: params.numeroBase,
+          numero_aplicado: params.numeroAplicado || null,
           cotas_match: params.cotasMatch,
           cotas_zona_50: params.cotasZona50,
           cotas_zona_100: params.cotasZona100,

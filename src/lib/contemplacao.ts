@@ -145,6 +145,14 @@ export interface CotaClassificada {
   categoriaLabel: string;
 }
 
+export interface ResultadoFallback {
+  numeroBase: string;
+  numeroAplicado: number;
+  fallbackAplicado: boolean;
+  motivoFallback: string;
+  candidatosTestados: { candidato: number; valido: boolean; motivo: string }[];
+}
+
 /**
  * Extrai os últimos 5 dígitos de um número (regra Embracon)
  */
@@ -154,22 +162,67 @@ export function extrairNumeroBase(numero: string): string {
 }
 
 /**
- * Classifica cotas em zonas de chance baseado no número da Loteria Federal
- * Retorna apenas cotas dentro das zonas (match, ±50, ±100), ordenadas por proximidade
+ * Calcula o número aplicado com fallback por redução de dígitos.
+ * Testa 5 → 4 → 3 → 2 → 1 dígitos até encontrar um dentro do range do grupo.
+ */
+export function calcularNumeroAplicado(
+  numeroLoteria: string,
+  maxCota: number
+): ResultadoFallback {
+  const apenasNumeros = numeroLoteria.replace(/\D/g, '');
+  const numeroBase = apenasNumeros.slice(-5).padStart(5, '0');
+  const candidatosTestados: ResultadoFallback['candidatosTestados'] = [];
+  const invalidosNomes: string[] = [];
+
+  for (let digitos = 5; digitos >= 1; digitos--) {
+    const candidatoStr = apenasNumeros.slice(-digitos);
+    const candidato = parseInt(candidatoStr, 10);
+
+    if (candidato >= 1 && candidato <= maxCota) {
+      candidatosTestados.push({ candidato, valido: true, motivo: 'dentro do range' });
+      const fallbackAplicado = digitos < 5;
+      const motivoFallback = fallbackAplicado
+        ? `${invalidosNomes.join(' e ')} fora do range (max: ${maxCota}), usando ${candidato}`
+        : '';
+      return { numeroBase, numeroAplicado: candidato, fallbackAplicado, motivoFallback, candidatosTestados };
+    } else {
+      const motivo = candidato < 1 ? 'menor que 1' : `maior que max_cota (${maxCota})`;
+      candidatosTestados.push({ candidato, valido: false, motivo });
+      invalidosNomes.push(String(candidato));
+    }
+  }
+
+  return {
+    numeroBase,
+    numeroAplicado: parseInt(numeroBase, 10),
+    fallbackAplicado: false,
+    motivoFallback: 'Nenhum candidato válido encontrado',
+    candidatosTestados,
+  };
+}
+
+/**
+ * Classifica cotas em zonas de chance baseado no número da Loteria Federal.
+ * Aplica fallback automático por redução de dígitos quando o número está fora do range.
  */
 export function classificarCotasPorLoteria(
   numeroLoteria: string,
   cards: import('@/types/consorcio').ConsorcioCard[]
-): CotaClassificada[] {
-  const numeroBase = extrairNumeroBase(numeroLoteria);
-  const nBase = parseInt(numeroBase, 10);
+): { classificados: CotaClassificada[]; fallback: ResultadoFallback } {
+  let maxCota = 0;
+  for (const card of cards) {
+    const cotaNum = parseInt(card.cota.replace(/\D/g, ''), 10);
+    if (!isNaN(cotaNum) && cotaNum > maxCota) maxCota = cotaNum;
+  }
+  if (maxCota === 0) maxCota = 9999;
 
+  const fallback = calcularNumeroAplicado(numeroLoteria, maxCota);
+  const nBase = fallback.numeroAplicado;
   const resultados: CotaClassificada[] = [];
 
   for (const card of cards) {
     const cotaNum = parseInt(card.cota.replace(/\D/g, ''), 10);
     if (isNaN(cotaNum)) continue;
-
     const distancia = Math.abs(cotaNum - nBase);
 
     let zona: ZonaChance;
@@ -189,17 +242,15 @@ export function classificarCotasPorLoteria(
       recomendacaoLance = 'Até 50%';
       categoriaLabel = 'Zona ±100';
     } else {
-      continue; // fora das zonas
+      continue;
     }
-
     resultados.push({ card, zona, distancia, recomendacaoLance, categoriaLabel });
   }
 
-  // Ordenar: match primeiro, depois zona 50, depois zona 100, e por distância
   const zonaOrder: Record<ZonaChance, number> = { match_sorteio: 0, zona_50: 1, zona_100: 2, fora: 3 };
   resultados.sort((a, b) => zonaOrder[a.zona] - zonaOrder[b.zona] || a.distancia - b.distancia);
 
-  return resultados;
+  return { classificados: resultados, fallback };
 }
 
 /**
