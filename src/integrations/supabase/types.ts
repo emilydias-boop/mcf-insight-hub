@@ -2184,6 +2184,204 @@ export type Database = {
         }
         Relationships: []
       }
+      consorcio_pending_registrations: {
+        Row: {
+          aceite_date: string | null
+          categoria: string | null
+          cnpj: string | null
+          condicao_pagamento: string | null
+          consortium_card_id: string | null
+          cota: string | null
+          cpf: string | null
+          cpf_conjuge: string | null
+          created_at: string
+          created_by: string | null
+          data_contratacao: string | null
+          data_fundacao: string | null
+          deal_id: string | null
+          dia_vencimento: number | null
+          e_transferencia: boolean | null
+          email: string | null
+          email_comercial: string | null
+          empresa_paga_parcelas: string | null
+          endereco_cep: string | null
+          endereco_comercial: string | null
+          endereco_comercial_cep: string | null
+          endereco_completo: string | null
+          faturamento_mensal: number | null
+          grupo: string | null
+          id: string
+          inclui_seguro: boolean | null
+          inicio_segunda_parcela: string | null
+          inscricao_estadual: string | null
+          natureza_juridica: string | null
+          nome_completo: string | null
+          num_funcionarios: number | null
+          observacoes: string | null
+          origem: string | null
+          origem_detalhe: string | null
+          parcelas_pagas_empresa: number | null
+          patrimonio: number | null
+          pix: string | null
+          prazo_meses: number | null
+          produto_codigo: string | null
+          profissao: string | null
+          proposal_id: string | null
+          razao_social: string | null
+          renda: number | null
+          rg: string | null
+          socios: Json | null
+          status: string
+          telefone: string | null
+          telefone_comercial: string | null
+          tipo_contrato: string | null
+          tipo_pessoa: string
+          tipo_produto: string | null
+          transferido_de: string | null
+          updated_at: string
+          valor_comissao: number | null
+          valor_credito: number | null
+          vendedor_id: string | null
+          vendedor_name: string | null
+          vendedor_name_cota: string | null
+        }
+        Insert: {
+          aceite_date?: string | null
+          categoria?: string | null
+          cnpj?: string | null
+          condicao_pagamento?: string | null
+          consortium_card_id?: string | null
+          cota?: string | null
+          cpf?: string | null
+          cpf_conjuge?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_contratacao?: string | null
+          data_fundacao?: string | null
+          deal_id?: string | null
+          dia_vencimento?: number | null
+          e_transferencia?: boolean | null
+          email?: string | null
+          email_comercial?: string | null
+          empresa_paga_parcelas?: string | null
+          endereco_cep?: string | null
+          endereco_comercial?: string | null
+          endereco_comercial_cep?: string | null
+          endereco_completo?: string | null
+          faturamento_mensal?: number | null
+          grupo?: string | null
+          id?: string
+          inclui_seguro?: boolean | null
+          inicio_segunda_parcela?: string | null
+          inscricao_estadual?: string | null
+          natureza_juridica?: string | null
+          nome_completo?: string | null
+          num_funcionarios?: number | null
+          observacoes?: string | null
+          origem?: string | null
+          origem_detalhe?: string | null
+          parcelas_pagas_empresa?: number | null
+          patrimonio?: number | null
+          pix?: string | null
+          prazo_meses?: number | null
+          produto_codigo?: string | null
+          profissao?: string | null
+          proposal_id?: string | null
+          razao_social?: string | null
+          renda?: number | null
+          rg?: string | null
+          socios?: Json | null
+          status?: string
+          telefone?: string | null
+          telefone_comercial?: string | null
+          tipo_contrato?: string | null
+          tipo_pessoa: string
+          tipo_produto?: string | null
+          transferido_de?: string | null
+          updated_at?: string
+          valor_comissao?: number | null
+          valor_credito?: number | null
+          vendedor_id?: string | null
+          vendedor_name?: string | null
+          vendedor_name_cota?: string | null
+        }
+        Update: {
+          aceite_date?: string | null
+          categoria?: string | null
+          cnpj?: string | null
+          condicao_pagamento?: string | null
+          consortium_card_id?: string | null
+          cota?: string | null
+          cpf?: string | null
+          cpf_conjuge?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_contratacao?: string | null
+          data_fundacao?: string | null
+          deal_id?: string | null
+          dia_vencimento?: number | null
+          e_transferencia?: boolean | null
+          email?: string | null
+          email_comercial?: string | null
+          empresa_paga_parcelas?: string | null
+          endereco_cep?: string | null
+          endereco_comercial?: string | null
+          endereco_comercial_cep?: string | null
+          endereco_completo?: string | null
+          faturamento_mensal?: number | null
+          grupo?: string | null
+          id?: string
+          inclui_seguro?: boolean | null
+          inicio_segunda_parcela?: string | null
+          inscricao_estadual?: string | null
+          natureza_juridica?: string | null
+          nome_completo?: string | null
+          num_funcionarios?: number | null
+          observacoes?: string | null
+          origem?: string | null
+          origem_detalhe?: string | null
+          parcelas_pagas_empresa?: number | null
+          patrimonio?: number | null
+          pix?: string | null
+          prazo_meses?: number | null
+          produto_codigo?: string | null
+          profissao?: string | null
+          proposal_id?: string | null
+          razao_social?: string | null
+          renda?: number | null
+          rg?: string | null
+          socios?: Json | null
+          status?: string
+          telefone?: string | null
+          telefone_comercial?: string | null
+          tipo_contrato?: string | null
+          tipo_pessoa?: string
+          tipo_produto?: string | null
+          transferido_de?: string | null
+          updated_at?: string
+          valor_comissao?: number | null
+          valor_credito?: number | null
+          vendedor_id?: string | null
+          vendedor_name?: string | null
+          vendedor_name_cota?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_pending_registrations_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_pending_registrations_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_produto_adquirido_options: {
         Row: {
           created_at: string | null
@@ -2684,9 +2882,10 @@ export type Database = {
       }
       consortium_documents: {
         Row: {
-          card_id: string
+          card_id: string | null
           id: string
           nome_arquivo: string
+          pending_registration_id: string | null
           storage_path: string | null
           storage_url: string | null
           tipo: string
@@ -2694,9 +2893,10 @@ export type Database = {
           uploaded_by: string | null
         }
         Insert: {
-          card_id: string
+          card_id?: string | null
           id?: string
           nome_arquivo: string
+          pending_registration_id?: string | null
           storage_path?: string | null
           storage_url?: string | null
           tipo: string
@@ -2704,9 +2904,10 @@ export type Database = {
           uploaded_by?: string | null
         }
         Update: {
-          card_id?: string
+          card_id?: string | null
           id?: string
           nome_arquivo?: string
+          pending_registration_id?: string | null
           storage_path?: string | null
           storage_url?: string | null
           tipo?: string
@@ -2719,6 +2920,13 @@ export type Database = {
             columns: ["card_id"]
             isOneToOne: false
             referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consortium_documents_pending_registration_id_fkey"
+            columns: ["pending_registration_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_pending_registrations"
             referencedColumns: ["id"]
           },
         ]
