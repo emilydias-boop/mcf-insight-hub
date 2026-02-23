@@ -49,9 +49,8 @@ export function ConsorcioCloserSummaryTable({
       r1_agendada: acc.r1_agendada + row.r1_agendada,
       r1_realizada: acc.r1_realizada + row.r1_realizada,
       noshow: acc.noshow + row.noshow,
-      contrato_pago: acc.contrato_pago + row.contrato_pago,
     }),
-    { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0 }
+    { r1_agendada: 0, r1_realizada: 0, noshow: 0 }
   );
 
   const totalPropostas = data.reduce(
@@ -65,7 +64,7 @@ export function ConsorcioCloserSummaryTable({
   );
 
   const totalTaxaVenda = totals.r1_realizada > 0
-    ? (totals.contrato_pago / totals.r1_realizada) * 100
+    ? (totalPropostasFechadas / totals.r1_realizada) * 100
     : 0;
 
   const getTaxaColor = (taxa: number, thresholds: { green: number; amber: number }) => {
@@ -86,7 +85,6 @@ export function ConsorcioCloserSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Proposta Env.</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Proposta Fech.</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Contrato Pago</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa Venda</TableHead>
               {onCloserClick && <TableHead className="w-8" />}
             </TableRow>
@@ -96,7 +94,7 @@ export function ConsorcioCloserSummaryTable({
               const propostas = propostasEnviadasByCloser?.get(row.closer_id) || 0;
               const propostasFechadas = propostasFechadasByCloser?.get(row.closer_id) || 0;
               const taxaVenda = row.r1_realizada > 0
-                ? (row.contrato_pago / row.r1_realizada) * 100
+                ? (propostasFechadas / row.r1_realizada) * 100
                 : 0;
               const noshowPct = row.r1_agendada > 0
                 ? (row.noshow / row.r1_agendada) * 100
@@ -136,9 +134,6 @@ export function ConsorcioCloserSummaryTable({
                     <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30">
                       {propostasFechadas}
                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className="text-amber-400 font-medium">{row.contrato_pago}</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <span className={`font-medium ${getTaxaColor(taxaVenda, { green: 20, amber: 10 })}`}>
@@ -184,9 +179,6 @@ export function ConsorcioCloserSummaryTable({
                 <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30">
                   {totalPropostasFechadas}
                 </Badge>
-              </TableCell>
-              <TableCell className="text-center">
-                <span className="text-amber-400">{totals.contrato_pago}</span>
               </TableCell>
               <TableCell className="text-center">
                 <span className={`font-medium ${getTaxaColor(totalTaxaVenda, { green: 20, amber: 10 })}`}>
