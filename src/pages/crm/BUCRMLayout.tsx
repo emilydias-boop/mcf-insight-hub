@@ -109,6 +109,11 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
       allowedTabs.push('agenda-r2');
     }
     
+    // Permitir pos-reuniao para closers/SDRs (necessário para ações pós-reunião)
+    if (buVisibleTabs.includes('pos-reuniao')) {
+      allowedTabs.push('pos-reuniao');
+    }
+    
     allowedTabs.push('negocios');
     
     navItems = navItems.filter(item => allowedTabs.includes(item.key));
