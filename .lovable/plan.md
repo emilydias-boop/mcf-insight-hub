@@ -1,29 +1,35 @@
 
 
-# Remover "Contrato Pago" e Ajustar "Taxa Venda" na Tabela de Closers do Consorcio
+# Adaptar Agenda do Closer de Consorcio: "R1 Realizada" ao inves de "Contrato Pago"
 
 ## Contexto
 
-Closers de Consorcio nao vendem "contrato pago" como nas outras BUs. Eles vendem **cartas de consorcio**, e o acompanhamento e feito via "Proposta Fechada" (produtos adquiridos). Portanto, "Contrato Pago" nao faz sentido nesta tabela.
+No Consorcio, closers nao vendem "contrato pago". Uma reuniao realizada pode gerar uma proposta enviada/fechada. O painel de busca e o filtro de status na agenda mostram "Contrato Pago", o que nao se aplica a esta BU.
 
-## O que muda
+## Mudancas
 
-### Layout final da tabela
+### 1. `src/components/crm/MeetingSearchPanel.tsx`
 
-```text
-Closer | R1 Agendada | R1 Realizada | No-show | Proposta Env. | Proposta Fech. | Taxa Venda | >
-```
+Adicionar prop opcional `isConsorcio?: boolean` para adaptar o comportamento:
 
-- **Remove** a coluna "Contrato Pago" (nao se aplica ao Consorcio)
-- **Ajusta "Taxa Venda"** para usar **Proposta Fechada / R1 Realizada** (em vez de Contrato Pago / R1 Realizada)
+- **Texto placeholder**: Trocar "Busque leads para marcar como 'Contrato Pago'" por "Busque reunioes realizadas para follow-up"
+- **Botao de acao**: Quando `isConsorcio`, esconder o botao de "Marcar Contrato Pago" (icone $), pois nao faz sentido. Mostrar apenas o botao de "Ver detalhes" (chevron).
+- **Badge "Pago"**: Quando `isConsorcio`, nao mostrar o badge "Pago" - mostrar o status normal do attendee.
 
-## Detalhes tecnicos
+### 2. `src/pages/crm/Agenda.tsx`
 
-### Arquivo: `src/components/sdr/ConsorcioCloserSummaryTable.tsx`
+- Passar `isConsorcio={activeBU === 'consorcio'}` para o `MeetingSearchPanel`
+- No filtro de status (Select), quando `activeBU === 'consorcio'`, esconder a opcao "Contrato Pago" pois nao se aplica
 
-1. Remover o header "Contrato Pago"
-2. Remover as celulas de `contrato_pago` (linhas individuais e total)
-3. Remover `contrato_pago` do calculo de `totals`
-4. Alterar a formula de `taxaVenda` de `contrato_pago / r1_realizada` para `propostasFechadas / r1_realizada`
-5. Alterar `totalTaxaVenda` para usar `totalPropostasFechadas / totals.r1_realizada`
+### 3. `src/hooks/useSearchPastMeetings.ts`
+
+Nenhuma mudanca necessaria - o hook ja busca reunioes com status `completed` e `no_show`, que e exatamente o que precisamos para o Consorcio.
+
+## Resultado visual
+
+No painel "Buscar Reunioes Passadas" para closers de Consorcio:
+- Texto: "Busque reunioes realizadas para follow-up"
+- Resultados mostram nome, data, telefone e status (Realizada/No-show)
+- Apenas botao de "Ver detalhes" (sem botao $)
+- Filtro de status sem opcao "Contrato Pago"
 
