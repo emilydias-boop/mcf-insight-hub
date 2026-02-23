@@ -35,15 +35,25 @@ export function useContactDealIds(dealId: string | undefined, contactId?: string
           resolvedContactId = sourceDeal?.contact_id;
         }
 
-        // Fallback 2: match by deal name in crm_contacts
+        // Fallback 2: match by deal name - handle duplicates
         if (!resolvedContactId && deal?.name) {
-          const { data: contact } = await supabase
+          const { data: contacts } = await supabase
             .from('crm_contacts')
             .select('id')
-            .ilike('name', deal.name.trim())
-            .limit(1)
-            .maybeSingle();
-          resolvedContactId = contact?.id;
+            .ilike('name', deal.name.trim());
+          
+          if (contacts?.length === 1) {
+            resolvedContactId = contacts[0].id;
+          } else if (contacts && contacts.length > 1) {
+            // Multiple contacts with same name - find which has deals
+            const contactIds = contacts.map(c => c.id);
+            const { data: dealsForContacts } = await supabase
+              .from('crm_deals')
+              .select('contact_id')
+              .in('contact_id', contactIds)
+              .limit(1);
+            resolvedContactId = dealsForContacts?.[0]?.contact_id || contacts[0].id;
+          }
         }
       }
 
