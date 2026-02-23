@@ -4,6 +4,12 @@ import { addDays, getDay, format, parse, isWeekend, startOfWeek, endOfWeek, star
 export const WEEK_STARTS_ON = 6;
 export const CONSORCIO_WEEK_STARTS_ON = 1; // Segunda-feira (Monday) - usado apenas pela BU Consórcio
 
+// Helper: retorna o weekStartsOn correto baseado na BU ativa
+export function getWeekStartsOn(activeBU: string | null): 0 | 1 | 2 | 3 | 4 | 5 | 6 {
+  if (activeBU === 'consorcio') return CONSORCIO_WEEK_STARTS_ON as 1;
+  return WEEK_STARTS_ON as 6;
+}
+
 // Feriados nacionais fixos (MM-DD)
 const FERIADOS_FIXOS = [
   '01-01', // Ano Novo

@@ -1,7 +1,7 @@
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { format, isSameDay, parseISO, addDays, startOfWeek, startOfMonth, endOfMonth, isWithinInterval, setHours, setMinutes, eachDayOfInterval, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { WEEK_STARTS_ON } from '@/lib/businessDays';
+import { getWeekStartsOn } from '@/lib/businessDays';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { UserPlus } from 'lucide-react';
@@ -77,9 +77,10 @@ export function AgendaCalendar({
   onAddToMeeting,
   meetingType = 'r1'
 }: AgendaCalendarProps) {
-  const weekStart = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
-  const updateSchedule = useUpdateMeetingSchedule();
   const { activeBU } = useBUContext();
+  const weekStartsOn = getWeekStartsOn(activeBU);
+  const weekStart = startOfWeek(selectedDate, { weekStartsOn: weekStartsOn });
+  const updateSchedule = useUpdateMeetingSchedule();
   
   // Ref for scroll container - MUST be before any conditional returns
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -99,7 +100,7 @@ export function AgendaCalendar({
       ? [selectedDate.getDay()]
       : viewMode === 'month'
         ? [0, 1, 2, 3, 4, 5, 6]
-        : [6, 0, 1, 2, 3, 4, 5];
+        : Array.from({ length: 7 }, (_, i) => (weekStartsOn + i) % 7);
     return days;
   }, [selectedDate, viewMode]);
 
@@ -118,7 +119,7 @@ export function AgendaCalendar({
       return { start: startOfMonth(selectedDate), end: endOfMonth(selectedDate) };
     }
     // Week view
-    const start = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
+    const start = startOfWeek(selectedDate, { weekStartsOn: weekStartsOn });
     return { start, end: addDays(start, 6) };
   }, [selectedDate, viewMode]);
 
@@ -218,6 +219,9 @@ export function AgendaCalendar({
   // Determine if Sunday should be shown (has meetings or configured slots)
   const includeSunday = useMemo(() => {
     if (viewMode !== 'week') return true;
+    // For consorcio (weekStartsOn=1), Sunday is the last day and always included
+    if (weekStartsOn === 1) return true;
+    // For other BUs (weekStartsOn=6), Sunday is day index 1 from Saturday
     const sundayDate = addDays(weekStart, 1);
     
     // Check if any meeting is scheduled on this Sunday
@@ -238,7 +242,7 @@ export function AgendaCalendar({
     }
     
     return false;
-  }, [viewMode, weekStart, meetings, meetingType, r2DailySlotsMap, meetingLinkSlots]);
+  }, [viewMode, weekStart, weekStartsOn, meetings, meetingType, r2DailySlotsMap, meetingLinkSlots]);
 
   const viewDays = useMemo(() => {
     if (viewMode === 'day') {
@@ -248,20 +252,14 @@ export function AgendaCalendar({
       const monthEnd = endOfMonth(selectedDate);
       return eachDayOfInterval({ start: monthStart, end: monthEnd });
     }
-    // Semana de trabalho: Sáb, [Dom], Seg, Ter, Qua, Qui, Sex
-    const days = [
-      addDays(weekStart, 0), // Sábado
-    ];
-    if (includeSunday) {
-      days.push(addDays(weekStart, 1)); // Domingo (only when has data)
+    // Semana de trabalho: gera dias dinamicamente baseado no weekStartsOn
+    const days: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      const dayDate = addDays(weekStart, i);
+      // Skip Sunday (index 1 from Saturday start) if not needed, only for non-consorcio
+      if (!includeSunday && dayDate.getDay() === 0) continue;
+      days.push(dayDate);
     }
-    days.push(
-      addDays(weekStart, 2), // Segunda
-      addDays(weekStart, 3), // Terça
-      addDays(weekStart, 4), // Quarta
-      addDays(weekStart, 5), // Quinta
-      addDays(weekStart, 6), // Sexta
-    );
     return days;
   }, [selectedDate, viewMode, weekStart, includeSunday]);
 
@@ -689,7 +687,7 @@ export function AgendaCalendar({
   if (viewMode === 'month') {
     const monthStart = startOfMonth(selectedDate);
     const monthEnd = endOfMonth(selectedDate);
-    const startDay = startOfWeek(monthStart, { weekStartsOn: WEEK_STARTS_ON });
+    const startDay = startOfWeek(monthStart, { weekStartsOn: weekStartsOn });
     const weeks: Date[][] = [];
     let currentWeek: Date[] = [];
     let day = startDay;

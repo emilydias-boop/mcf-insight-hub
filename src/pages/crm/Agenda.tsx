@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { format, addDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { WEEK_STARTS_ON } from '@/lib/businessDays';
+import { getWeekStartsOn } from '@/lib/businessDays';
 import { CalendarDays, ChevronLeft, ChevronRight, Settings, Users, RefreshCw, Plus, Columns3, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -59,11 +59,12 @@ export default function Agenda() {
     } else if (viewMode === 'month') {
       return { rangeStart: startOfMonth(selectedDate), rangeEnd: endOfMonth(selectedDate) };
     }
-    // week (sábado a sexta)
-    const weekStart = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
-    const weekEnd = endOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
+    // week
+    const wso = getWeekStartsOn(activeBU);
+    const weekStart = startOfWeek(selectedDate, { weekStartsOn: wso });
+    const weekEnd = endOfWeek(selectedDate, { weekStartsOn: wso });
     return { rangeStart: weekStart, rangeEnd: weekEnd };
-  }, [selectedDate, viewMode]);
+  }, [selectedDate, viewMode, activeBU]);
 
   // Passar filtro de BU para buscar apenas closers da BU ativa
   const { data: closers = [], isLoading: closersLoading } = useClosersWithAvailability(activeBU);

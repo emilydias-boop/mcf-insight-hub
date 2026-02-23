@@ -3,7 +3,8 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
-import { WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
+import { WEEK_STARTS_ON, contarDiasUteis, getWeekStartsOn } from "@/lib/businessDays";
+import { useActiveBU } from "@/hooks/useActiveBU";
 import { Calendar, Users, RefreshCw, Download, Building2, Briefcase } from "lucide-react";
 import { SetorRow } from "@/components/dashboard/SetorRow";
 import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
@@ -73,6 +74,8 @@ function IncorporadorMetricsCard({ onEditGoals, canEdit }: { onEditGoals?: () =>
 
 export default function ReunioesEquipe() {
   const { role } = useAuth();
+  const activeBU = useActiveBU();
+  const wso = getWeekStartsOn(activeBU);
   const navigate = useNavigate();
   const isRestrictedRole = role === 'sdr' || role === 'closer';
   const canEditGoals = !!role && ['admin', 'manager', 'coordenador'].includes(role);
@@ -133,7 +136,7 @@ export default function ReunioesEquipe() {
         return { start: startOfDay(today), end: endOfDay(today) };
       case "week": {
         const todayNormalized = startOfDay(today);
-        return { start: startOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON }), end: endOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON }) };
+        return { start: startOfWeek(todayNormalized, { weekStartsOn: wso }), end: endOfWeek(todayNormalized, { weekStartsOn: wso }) };
       }
       case "month":
         return { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) };
@@ -159,8 +162,8 @@ export default function ReunioesEquipe() {
   
   // Week dates for week metrics (sábado a sexta)
   const todayNormalized = startOfDay(today);
-  const weekStartDate = startOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON });
-  const weekEndDate = endOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON });
+  const weekStartDate = startOfWeek(todayNormalized, { weekStartsOn: wso });
+  const weekEndDate = endOfWeek(todayNormalized, { weekStartsOn: wso });
 
   // Month dates for month metrics
   const monthStartDate = startOfMonth(today);
