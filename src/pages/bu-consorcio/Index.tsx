@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -44,6 +45,7 @@ import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer'
 import { ConsorcioConfigModal } from '@/components/consorcio/ConsorcioConfigModal';
 import { ConsorcioPeriodFilter, DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
 import { STATUS_OPTIONS, CATEGORIA_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
+import { PendingRegistrationsList } from '@/components/consorcio/PendingRegistrationsList';
 import { useConsorcioCategoriaOptions, useConsorcioOrigemOptions, useConsorcioTipoOptions } from '@/hooks/useConsorcioConfigOptions';
 import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
 import {
@@ -380,6 +382,13 @@ export default function ConsorcioPage() {
         </div>
       </div>
 
+      <Tabs defaultValue="cotas" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="cotas">Cotas</TabsTrigger>
+          <TabsTrigger value="pendentes">Cadastros Pendentes</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="cotas" className="space-y-6">
       {/* KPIs */}
       <div className="grid grid-cols-6 gap-4">
         <Card>
@@ -852,6 +861,12 @@ export default function ConsorcioPage() {
         open={configOpen} 
         onOpenChange={setConfigOpen} 
       />
+        </TabsContent>
+
+        <TabsContent value="pendentes">
+          <PendingRegistrationsList />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
