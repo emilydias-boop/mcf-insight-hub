@@ -23,6 +23,7 @@ interface LeadFullTimelineProps {
   dealId: string;
   dealUuid: string;
   contactEmail?: string | null;
+  contactId?: string | null;
 }
 
 const EVENT_CONFIG: Record<TimelineEventType, { icon: React.ElementType; color: string; bgColor: string; label: string }> = {
@@ -167,9 +168,9 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
   return null;
 }
 
-export function LeadFullTimeline({ dealId, dealUuid, contactEmail }: LeadFullTimelineProps) {
+export function LeadFullTimeline({ dealId, dealUuid, contactEmail, contactId }: LeadFullTimelineProps) {
   const [activeFilter, setActiveFilter] = useState<TimelineEventType | 'all'>('all');
-  const { data: events, isLoading } = useLeadFullTimeline({ dealId, dealUuid, contactEmail });
+  const { data: events, isLoading } = useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId });
 
   const filteredEvents = useMemo(() => {
     if (!events) return [];

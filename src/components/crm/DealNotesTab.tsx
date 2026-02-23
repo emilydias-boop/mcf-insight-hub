@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAddDealNote } from '@/hooks/useNextAction';
+import { useContactDealIds } from '@/hooks/useContactDealIds';
 import { Send, StickyNote, User, Calendar, Phone, MessageCircle, ArrowRightLeft } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -13,6 +14,7 @@ import { ptBR } from 'date-fns/locale';
 interface DealNotesTabProps {
   dealUuid: string;
   dealClintId?: string;
+  contactId?: string | null;
 }
 
 type NoteType = 'manual' | 'scheduling' | 'attendee' | 'reschedule' | 'call';
@@ -44,29 +46,32 @@ const NOTE_ICONS: Record<NoteType, React.ReactNode> = {
   call: <Phone className="h-3 w-3" />
 };
 
-export const DealNotesTab = ({ dealUuid, dealClintId }: DealNotesTabProps) => {
+export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabProps) => {
   const [newNote, setNewNote] = useState('');
   const addNote = useAddDealNote();
+  const { data: allDealIds = [] } = useContactDealIds(dealUuid, contactId);
+  
+  // Combine all IDs
+  const uniqueIds = [...new Set([...allDealIds, dealUuid, ...(dealClintId ? [dealClintId] : [])].filter(Boolean))];
   
   const { data: allNotes, isLoading } = useQuery({
-    queryKey: ['all-deal-notes', dealUuid],
+    queryKey: ['all-deal-notes', uniqueIds],
     queryFn: async () => {
-      // 1. Notas manuais (deal_activities) - busca por UUID ou clint_id (legado)
-      const dealIdFilters = dealClintId ? [dealUuid, dealClintId] : [dealUuid];
+      // 1. Notas manuais (deal_activities) - ALL deals cross-pipeline
       const { data: manualNotes } = await supabase
         .from('deal_activities')
         .select('id, description, created_at, metadata')
-        .in('deal_id', dealIdFilters)
+        .in('deal_id', uniqueIds)
         .eq('activity_type', 'note');
       
-      // 2. Notas de agendamento (meeting_slot_attendees)
+      // 2. Notas de agendamento (meeting_slot_attendees) - ALL deals
       const { data: attendees } = await supabase
         .from('meeting_slot_attendees')
         .select(`
           id, notes, created_at, booked_by,
           meeting_slots(meeting_type, scheduled_at, closers(name))
       `)
-        .eq('deal_id', dealUuid);
+        .in('deal_id', uniqueIds);
       
       // 3. Buscar attendee_notes para cada attendee encontrado
       const attendeeIds = attendees?.map(a => a.id) || [];
@@ -103,11 +108,11 @@ export const DealNotesTab = ({ dealUuid, dealClintId }: DealNotesTabProps) => {
       const bookedByMap = new Map<string, string>();
       bookedByProfiles?.forEach(p => bookedByMap.set(p.id, p.full_name || 'SDR'));
       
-      // 4. Notas de ligação (calls)
+      // 4. Notas de ligação (calls) - ALL deals
       const { data: callNotes } = await supabase
         .from('calls')
         .select('id, notes, outcome, created_at, user_id')
-        .eq('deal_id', dealUuid)
+        .in('deal_id', uniqueIds)
         .not('notes', 'is', null);
       
       // Buscar perfis dos usuários de calls
@@ -176,7 +181,7 @@ export const DealNotesTab = ({ dealUuid, dealClintId }: DealNotesTabProps) => {
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
     },
-    enabled: !!dealUuid,
+    enabled: uniqueIds.length > 0,
   });
   
   const handleAddNote = async () => {

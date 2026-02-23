@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useContactDealIds } from './useContactDealIds';
 
 export type TimelineEventType = 'stage_change' | 'call' | 'note' | 'meeting' | 'task' | 'purchase' | 'qualification' | 'closer_note';
 
@@ -17,37 +18,46 @@ interface UseLeadFullTimelineParams {
   dealId: string;
   dealUuid: string;
   contactEmail?: string | null;
+  contactId?: string | null;
 }
 
-export function useLeadFullTimeline({ dealId, dealUuid, contactEmail }: UseLeadFullTimelineParams) {
+export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId }: UseLeadFullTimelineParams) {
+  const { data: allDealIds = [dealUuid, dealId] } = useContactDealIds(dealUuid, contactId);
+
+  // Deduplicate IDs
+  const uniqueIds = [...new Set([...allDealIds, dealUuid, dealId].filter(Boolean))];
+
   return useQuery({
-    queryKey: ['lead-full-timeline', dealId, dealUuid, contactEmail],
+    queryKey: ['lead-full-timeline', uniqueIds, contactEmail],
     queryFn: async (): Promise<TimelineEvent[]> => {
       const events: TimelineEvent[] = [];
 
+      // Build OR filter for deal_activities (supports both UUID and clint_id)
+      const orFilter = uniqueIds.map(id => `deal_id.eq.${id}`).join(',');
+
       // Run all queries in parallel
       const [activitiesRes, callsRes, meetingsRes, transactionsRes, attendeeNotesRes] = await Promise.all([
-        // 1. Deal activities (stage changes, notes, tasks, qualification)
+        // 1. Deal activities (stage changes, notes, tasks, qualification) - ALL deals
         supabase
           .from('deal_activities')
           .select('*')
-          .or(`deal_id.eq.${dealUuid},deal_id.eq.${dealId}`)
+          .or(orFilter)
           .order('created_at', { ascending: false })
-          .limit(200),
+          .limit(500),
 
-        // 2. Calls
+        // 2. Calls - ALL deals
         supabase
           .from('calls')
           .select('*')
-          .eq('deal_id', dealUuid)
+          .in('deal_id', uniqueIds)
           .order('created_at', { ascending: false })
           .limit(100),
 
-        // 3. Meetings (attendees + slots)
+        // 3. Meetings (attendees + slots) - ALL deals
         supabase
           .from('meeting_slot_attendees')
           .select('*, meeting_slots(*, closers(name))')
-          .eq('deal_id', dealUuid)
+          .in('deal_id', uniqueIds)
           .order('created_at', { ascending: false })
           .limit(50),
 
@@ -61,11 +71,11 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail }: UseLeadF
               .limit(50)
           : Promise.resolve({ data: [], error: null }),
 
-        // 5. Attendee notes (via meeting_slot_attendees for this deal)
+        // 5. Attendee notes - ALL deals
         supabase
           .from('attendee_notes')
           .select('*, meeting_slot_attendees!inner(deal_id)')
-          .eq('meeting_slot_attendees.deal_id', dealUuid)
+          .in('meeting_slot_attendees.deal_id', uniqueIds)
           .order('created_at', { ascending: false })
           .limit(50),
       ]);
@@ -248,7 +258,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail }: UseLeadF
 
       return events;
     },
-    enabled: !!dealId && !!dealUuid,
+    enabled: uniqueIds.length > 0,
     staleTime: 30000,
   });
 }

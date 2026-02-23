@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Phone, Clock, User, FileText, Volume2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useContactDealIds } from '@/hooks/useContactDealIds';
 
 const SUPABASE_URL = "https://rehcfgqvigfcekiipqkc.supabase.co";
 
@@ -83,10 +84,12 @@ function getRecordingProxyUrl(recordingUrl: string): string {
 }
 
 export function CallHistorySection({ contactId, dealId }: CallHistorySectionProps) {
+  const { data: allDealIds = [] } = useContactDealIds(dealId, contactId);
+  const uniqueIds = [...new Set([...allDealIds, ...(dealId ? [dealId] : [])].filter(Boolean))];
+
   const { data: calls, isLoading } = useQuery({
-    queryKey: ['calls-history', contactId, dealId],
+    queryKey: ['calls-history', uniqueIds, contactId],
     queryFn: async (): Promise<CallRecord[]> => {
-      // Build query with type assertion since calls table is new
       let query = (supabase as any)
         .from('calls')
         .select(`
@@ -103,13 +106,13 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
           recording_url
         `)
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(50);
 
-      if (contactId) {
+      // Use .in() for cross-pipeline queries
+      if (uniqueIds.length > 0) {
+        query = query.in('deal_id', uniqueIds);
+      } else if (contactId) {
         query = query.eq('contact_id', contactId);
-      }
-      if (dealId) {
-        query = query.eq('deal_id', dealId);
       }
 
       const { data, error } = await query;
@@ -131,7 +134,7 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
         profiles: { full_name: profileMap.get(call.user_id) || null }
       }));
     },
-    enabled: !!(contactId || dealId)
+    enabled: uniqueIds.length > 0 || !!contactId
   });
 
   if (isLoading) {
