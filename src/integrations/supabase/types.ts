@@ -1739,6 +1739,8 @@ export type Database = {
       closer_blocked_dates: {
         Row: {
           blocked_date: string
+          blocked_end_time: string | null
+          blocked_start_time: string | null
           closer_id: string
           created_at: string | null
           created_by: string | null
@@ -1747,6 +1749,8 @@ export type Database = {
         }
         Insert: {
           blocked_date: string
+          blocked_end_time?: string | null
+          blocked_start_time?: string | null
           closer_id: string
           created_at?: string | null
           created_by?: string | null
@@ -1755,6 +1759,8 @@ export type Database = {
         }
         Update: {
           blocked_date?: string
+          blocked_end_time?: string | null
+          blocked_start_time?: string | null
           closer_id?: string
           created_at?: string | null
           created_by?: string | null

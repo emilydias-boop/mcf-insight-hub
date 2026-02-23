@@ -141,12 +141,22 @@ export function CloserColumnCalendar({
     return daySlots.some((s) => s.closer_id === closerId && s.start_time.slice(0, 5) === timeStr);
   };
 
-  const isSlotAvailable = (closerId: string, slotTime: Date) => {
-    // Check if date is blocked
-    const isBlocked = blockedDates.some(
+  const isSlotBlockedByTime = (closerId: string, slotTime: Date) => {
+    const slotTimeStr = format(slotTime, 'HH:mm');
+    const closerBlocks = blockedDates.filter(
       (bd) => bd.closer_id === closerId && isSameDay(parseISO(bd.blocked_date), selectedDate),
     );
-    if (isBlocked) return false;
+    return closerBlocks.some((bd) => {
+      if (!bd.blocked_start_time || !bd.blocked_end_time) return true; // full day
+      const start = bd.blocked_start_time.slice(0, 5);
+      const end = bd.blocked_end_time.slice(0, 5);
+      return slotTimeStr >= start && slotTimeStr < end;
+    });
+  };
+
+  const isSlotAvailable = (closerId: string, slotTime: Date) => {
+    // Check if date/time is blocked
+    if (isSlotBlockedByTime(closerId, slotTime)) return false;
 
     // Verificar se o closer tem este horário configurado
     if (!isSlotConfigured(closerId, slotTime)) return false;
@@ -304,9 +314,7 @@ export function CloserColumnCalendar({
                 });
                 const firstMeeting = sortedMeetings[0];
                 const available = isSlotAvailable(closer.id, slot);
-                const isBlocked = blockedDates.some(
-                  (bd) => bd.closer_id === closer.id && isSameDay(parseISO(bd.blocked_date), selectedDate),
-                );
+                const isBlocked = isSlotBlockedByTime(closer.id, slot);
 
                 return (
                   <div

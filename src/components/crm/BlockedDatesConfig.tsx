@@ -1,19 +1,19 @@
 import { useState } from 'react';
-import { format, parseISO, isSameDay } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarOff, Trash2, Plus } from 'lucide-react';
+import { CalendarOff, Trash2, Plus, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 import { 
   useBlockedDates,
   useAddBlockedDate, 
   useRemoveBlockedDate 
 } from '@/hooks/useAgendaData';
-import { cn } from '@/lib/utils';
 
 interface BlockedDatesConfigProps {
   closerId: string;
@@ -23,6 +23,9 @@ export function BlockedDatesConfig({ closerId }: BlockedDatesConfigProps) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [reason, setReason] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [useSpecificTime, setUseSpecificTime] = useState(false);
+  const [startTime, setStartTime] = useState('08:00');
+  const [endTime, setEndTime] = useState('18:00');
 
   const { data: allBlockedDates = [] } = useBlockedDates(closerId);
   const addBlockedDate = useAddBlockedDate();
@@ -37,10 +40,15 @@ export function BlockedDatesConfig({ closerId }: BlockedDatesConfigProps) {
       closerId,
       date: selectedDate,
       reason: reason || undefined,
+      blocked_start_time: useSpecificTime ? startTime : undefined,
+      blocked_end_time: useSpecificTime ? endTime : undefined,
     });
     
     setSelectedDate(undefined);
     setReason('');
+    setUseSpecificTime(false);
+    setStartTime('08:00');
+    setEndTime('18:00');
     setCalendarOpen(false);
   };
 
@@ -81,6 +89,42 @@ export function BlockedDatesConfig({ closerId }: BlockedDatesConfigProps) {
             </PopoverContent>
           </Popover>
         </div>
+
+        {/* Toggle for specific time */}
+        <div className="flex items-center justify-between">
+          <Label htmlFor="specific-time" className="flex items-center gap-2 text-sm cursor-pointer">
+            <Clock className="h-4 w-4" />
+            Bloquear horário específico
+          </Label>
+          <Switch
+            id="specific-time"
+            checked={useSpecificTime}
+            onCheckedChange={setUseSpecificTime}
+          />
+        </div>
+
+        {/* Time inputs */}
+        {useSpecificTime && (
+          <div className="flex gap-2 items-center">
+            <div className="flex-1">
+              <Label className="text-xs text-muted-foreground">Início</Label>
+              <Input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              />
+            </div>
+            <span className="text-muted-foreground mt-5">até</span>
+            <div className="flex-1">
+              <Label className="text-xs text-muted-foreground">Fim</Label>
+              <Input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
         
         <Input
           placeholder="Motivo (opcional)"
@@ -117,6 +161,13 @@ export function BlockedDatesConfig({ closerId }: BlockedDatesConfigProps) {
                   <div>
                     <div className="text-sm font-medium">
                       {format(parseISO(bd.blocked_date), "dd 'de' MMMM, yyyy", { locale: ptBR })}
+                      {bd.blocked_start_time && bd.blocked_end_time ? (
+                        <span className="text-xs text-muted-foreground ml-2">
+                          {bd.blocked_start_time.slice(0, 5)} até {bd.blocked_end_time.slice(0, 5)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground ml-2">(Dia inteiro)</span>
+                      )}
                     </div>
                     {bd.reason && (
                       <div className="text-xs text-muted-foreground">{bd.reason}</div>

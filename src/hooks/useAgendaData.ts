@@ -109,6 +109,8 @@ export interface BlockedDate {
   closer_id: string;
   blocked_date: string;
   reason: string | null;
+  blocked_start_time: string | null;
+  blocked_end_time: string | null;
   created_at: string;
 }
 
@@ -497,14 +499,22 @@ export function useAddBlockedDate() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ closerId, date, reason }: { closerId: string; date: Date; reason?: string }) => {
+    mutationFn: async ({ closerId, date, reason, blocked_start_time, blocked_end_time }: { 
+      closerId: string; 
+      date: Date; 
+      reason?: string;
+      blocked_start_time?: string;
+      blocked_end_time?: string;
+    }) => {
       const { error } = await supabase
         .from('closer_blocked_dates')
         .insert({
           closer_id: closerId,
           blocked_date: format(date, 'yyyy-MM-dd'),
           reason,
-        });
+          blocked_start_time: blocked_start_time || null,
+          blocked_end_time: blocked_end_time || null,
+        } as any);
 
       if (error) throw error;
     },
