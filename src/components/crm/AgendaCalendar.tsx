@@ -58,7 +58,7 @@ const STATUS_BADGE_STYLES: Record<string, { label: string; className: string }> 
   contract_paid: { label: 'Contrato Pago', className: 'bg-emerald-600 text-white' },
 };
 
-const SLOT_HEIGHT = 40; // px per 15-min slot (matches h-[40px] in grid cells)
+const SLOT_HEIGHT = 48; // px per 15-min slot (matches h-[48px] in grid cells)
 const MAX_MEETINGS_PER_SLOT = 999; // No limit on meetings per slot
 
 import { Settings, Plus, ArrowRightLeft, DollarSign, UserCircle } from 'lucide-react';
@@ -917,9 +917,9 @@ export function AgendaCalendar({
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="border rounded-lg overflow-hidden bg-card">
+      <div className="border rounded-lg overflow-hidden bg-card overflow-x-auto">
         {/* Time slots grid - 30min intervals with sticky header */}
-        <div ref={scrollContainerRef} className="max-h-[600px] overflow-y-auto relative">
+        <div ref={scrollContainerRef} className="max-h-[calc(100vh-280px)] overflow-y-auto relative">
           {/* Header with days - sticky inside scroll container */}
           <div className={cn('grid border-b bg-muted/50 sticky top-0 z-20', gridCols)}>
             <div className="min-w-[60px] w-[60px] flex-shrink-0 h-[52px] flex flex-col items-center justify-center text-xs font-medium text-muted-foreground border-r bg-muted/30 gap-0.5">
@@ -978,7 +978,7 @@ export function AgendaCalendar({
                 <div
                   key={day.toISOString()}
                   className={cn(
-                    'h-[52px] flex flex-col items-center justify-center border-l bg-muted/50',
+                    'h-[52px] flex flex-col items-center justify-center border-l bg-muted/50 min-w-[140px]',
                     isSameDay(day, new Date()) && 'bg-primary/10'
                   )}
                 >
@@ -1265,7 +1265,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                             }
                           }}
                           className={cn(
-                            'h-[40px] border-l relative overflow-visible',
+                            'h-[48px] border-l relative overflow-visible min-w-[140px]',
                             isSameDay(day, new Date()) && 'bg-primary/5',
                             isCurrent && 'bg-primary/15 ring-1 ring-primary/30',
                             snapshot.isDraggingOver && !isSlotFull && 'bg-primary/20',
@@ -1306,7 +1306,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                       }}
                                       className={cn(
                                         "rounded font-medium flex items-center justify-center gap-0.5 border border-dashed hover:opacity-80 transition-all h-full",
-                                        isCompact ? "text-[8px]" : "text-[9px]"
+                                        isCompact ? "text-[9px]" : "text-[10px]"
                                       )}
                                       style={{ 
                                         backgroundColor: `${closerColor}15`,
@@ -1314,8 +1314,8 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                         color: closerColor,
                                       }}
                                     >
-                                      <Plus className={cn(isCompact ? "h-2.5 w-2.5" : "h-3 w-3")} />
-                                      {isCompact ? firstName.charAt(0) : firstName}
+                                      <Plus className={cn(isCompact ? "h-3 w-3" : "h-3 w-3")} />
+                                      {isCompact ? firstName.split(' ')[0] : firstName}
                                     </button>
                                   );
                                 })}
@@ -1418,9 +1418,9 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                           {isCompact ? (
                                             <div className="flex flex-col h-full p-0.5 overflow-hidden">
                                               {/* Header: Bolinha + Horário + Closer */}
-                                              <div className="flex items-center gap-1 text-[9px] mb-0.5">
+                                              <div className="flex items-center gap-1 text-[10px] mb-0.5">
                                                 <div
-                                                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                                                   style={{ backgroundColor: closerColor }}
                                                 />
                                                 <span className="font-semibold">
@@ -1442,7 +1442,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                 return (
                                                   <div className="space-y-0 flex-1 overflow-hidden">
                                                     {displayAttendees.slice(0, maxToShow).map(att => (
-                                                      <div key={att.id} className="text-[9px] truncate flex items-center gap-0.5">
+                                                      <div key={att.id} className="text-[10px] truncate flex items-center gap-0.5">
                                                         {att.meetingSdr && (
                                                           <>
                                                             <span className="text-muted-foreground font-semibold">
@@ -1456,7 +1456,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                         </span>
                                                         {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
                                                           <span className={cn(
-                                                            "text-[8px] font-bold",
+                                                            "text-[9px] font-bold",
                                                             ATTENDEE_STATUS_CONFIG[att.status].colorClass
                                                           )}>
                                                             {ATTENDEE_STATUS_CONFIG[att.status].shortLabel}
@@ -1465,7 +1465,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                       </div>
                                                     ))}
                                                     {remainingCount > 0 && (
-                                                      <span className="text-[8px] text-muted-foreground">+{remainingCount}</span>
+                                                      <span className="text-[9px] text-muted-foreground">+{remainingCount}</span>
                                                     )}
                                                   </div>
                                                 );
