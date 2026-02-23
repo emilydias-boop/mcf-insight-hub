@@ -1,175 +1,124 @@
 
-
-# Modulo de Contemplacao - Nova Aba no Controle Consorcio
+# Simulador de Contemplacao por Loteria Federal
 
 ## Resumo
 
-Mover a logica de contemplacao (sorteio + lance) para uma aba exclusiva "Contemplacao" dentro do Controle Consorcio, com suporte a filtros, tabela de cotas, historico de sorteios/lances e acoes rapidas por cota.
+Transformar a aba "Contemplacao" de uma lista estatica para um simulador baseado no numero da Loteria Federal, classificando cotas em zonas de chance (match direto, +/-50, +/-100) com recomendacoes de lance.
+
+---
+
+## O que muda
+
+A aba mantem a tabela existente e todos os modais/acoes atuais, mas ganha:
+
+1. Uma secao de consulta no topo (Grupo + Periodo + Numero da Loteria)
+2. Logica de classificacao em 3 zonas (Embracon)
+3. Duas novas colunas na tabela (Categoria de Chance + Recomendacao de Lance)
+4. Registro de cada consulta no banco (auditoria)
+5. Aviso legal no topo dos resultados
+
+---
 
 ## Parte 1 - Migration SQL
 
-Criar duas tabelas de historico para rastrear todas as verificacoes e lances ao longo do tempo.
+Criar tabela `consorcio_consulta_loteria` para registrar cada consulta:
+- id (uuid PK)
+- grupo (text)
+- periodo (text) -- ex: "2026-02" ou data da assembleia
+- numero_loteria (text) -- numero informado pelo usuario
+- numero_base (text) -- ultimos 5 digitos calculados
+- cotas_match (integer) -- quantas cotas deram match direto
+- cotas_zona_50 (integer) -- quantas na zona +/-50
+- cotas_zona_100 (integer) -- quantas na zona +/-100
+- created_by (uuid FK auth.users)
+- created_at (timestamptz default now())
 
-### Tabela `consorcio_sorteio_history`
-- id (uuid, PK)
-- card_id (uuid, FK consortium_cards)
-- numero_sorteado (text)
-- contemplado (boolean)
-- distancia (integer)
-- data_assembleia (date)
-- observacao (text, nullable)
-- created_by (uuid, FK auth.users)
-- created_at (timestamptz)
-
-### Tabela `consorcio_lance_history`
-- id (uuid, PK)
-- card_id (uuid, FK consortium_cards)
-- percentual_lance (numeric)
-- valor_lance (numeric)
-- chance_classificacao (text) -- baixa/media/alta/muito_alta
-- posicao_estimada (integer, nullable)
-- observacao (text, nullable)
-- salvo (boolean, default false) -- diferencia simulacao de lance registrado
-- created_by (uuid, FK auth.users)
-- created_at (timestamptz)
-
-### RLS
-- Usuarios autenticados podem inserir
-- Admin/manager/coordenador podem ler e deletar todos
-- Closers podem ler todos (contemplacao e visivel)
-
-Nenhuma coluna nova em `consortium_cards` pois `numero_contemplacao`, `data_contemplacao`, `motivo_contemplacao`, `valor_lance`, `percentual_lance` ja existem.
+RLS: autenticados podem inserir e ler.
 
 ---
 
-## Parte 2 - Nova aba "Contemplacao" no Index.tsx
+## Parte 2 - Atualizar `contemplacao.ts`
 
-Adicionar terceira aba ao sistema de tabs existente:
-- Cotas
-- Cadastros Pendentes
-- **Contemplacao** (nova)
-
----
-
-## Parte 3 - Componente `ContemplationTab.tsx`
-
-### Filtros no topo
-- Busca por nome/CPF/CNPJ/cota (texto livre)
-- Grupo (select)
-- Status da cota (ativo/contemplado)
-- Tipo produto (select/parcelinha)
-- Vendedor responsavel (select)
-- Periodo (mes/ano)
-
-### Tabela principal
-Colunas:
-- Nome / Razao Social
-- CPF / CNPJ
-- Grupo
-- N. Cota
-- Valor do Credito
-- Tipo (Select/Parcelinha)
-- Status da cota
-- Status contemplacao (badge colorido: Nao contemplada / Contemplada por sorteio / Contemplada por lance / Aguardando resultado)
-- Acoes: Ver detalhes | Verificar sorteio | Simular/Registrar lance
+Adicionar nova funcao `classificarCotasPorLoteria`:
+- Recebe: numero da loteria (string), lista de cotas (ConsorcioCard[])
+- Extrai ultimos 5 digitos do numero (nao 4 como a funcao atual)
+- Para cada cota, calcula distancia numerica entre o numero da cota e o numero base
+- Classifica em:
+  - **Match Sorteio**: distancia == 0
+  - **Zona +/-50**: distancia <= 50
+  - **Zona +/-100**: distancia <= 100
+  - **Fora**: distancia > 100
+- Retorna array com cota + zona + recomendacao de lance, ordenado por zona
 
 ---
 
-## Parte 4 - Modal `VerificarSorteioModal.tsx`
+## Parte 3 - Atualizar `useContemplacao.ts`
 
-Abre ao clicar "Verificar sorteio" em uma cota.
-
-- Exibe dados da cota (grupo, cota, credito) no topo
-- Input: Numero sorteado
-- Input: Data da assembleia (date picker)
-- Botao "Verificar"
-- Resultado: mostra se contemplado, distancia, mensagem (reutiliza `verificarContemplacao` de `contemplacao.ts`)
-- Se contemplado: botao "Confirmar Contemplacao por Sorteio" que:
-  - Atualiza `consortium_cards` (status='contemplado', motivo_contemplacao='sorteio', numero_contemplacao, data_contemplacao)
-  - Insere em `consorcio_sorteio_history`
-- Sempre salva em `consorcio_sorteio_history` (contemplado ou nao) para manter historico
+Adicionar:
+- `useRegistrarConsultaLoteria()`: mutation para salvar consulta na tabela de auditoria
+- Manter `useContemplationCards` existente (usada para buscar cotas do grupo selecionado)
 
 ---
 
-## Parte 5 - Modal `LanceModal.tsx`
+## Parte 4 - Reescrever `ContemplationTab.tsx`
 
-Abre ao clicar "Simular/Registrar lance" em uma cota.
+### Nova secao no topo: "Consulta por Sorteio da Loteria Federal"
+- Card com 3 campos lado a lado:
+  - **Grupo** (Select obrigatorio, carregado de grupos existentes via query)
+  - **Assembleia / Periodo** (input mes/ano, formato MM/AAAA)
+  - **Numero da Loteria Federal** (input numerico, placeholder "012345")
+- Botao "Calcular possibilidades"
 
-- Exibe dados da cota (grupo, cota, credito) no topo
-- Input: Percentual do lance (%) -- calcula valor automaticamente
-- Input: Valor do lance (R$) -- calcula percentual automaticamente (bidirecional)
-- Input: Observacao (textarea, opcional)
-- Botao "Simular" -- reutiliza `simularChanceLance` de `contemplacao.ts`
-- Resultado da simulacao: classificacao (badge), mensagem, posicao estimada
-- Botao "Salvar Lance" -- insere em `consorcio_lance_history` com salvo=true
-- Botao "Registrar Contemplacao por Lance" (visivel se chance alta/muito_alta):
-  - Atualiza `consortium_cards` (status='contemplado', motivo_contemplacao='lance', valor_lance, percentual_lance, data_contemplacao)
-  - Insere em `consorcio_lance_history`
+### Comportamento ao clicar "Calcular possibilidades"
+1. Busca todas as cotas do grupo selecionado via `useContemplationCards`
+2. Aplica `classificarCotasPorLoteria` no frontend
+3. Filtra tabela para mostrar apenas cotas com match, zona 50 ou zona 100
+4. Salva consulta em `consorcio_consulta_loteria`
 
----
+### Aviso legal
+Alert acima da tabela apos consulta:
+"Esta e uma previsao baseada no numero da Loteria Federal e proximidade das cotas. A contemplacao real depende da assembleia da Embracon e dos lances realizados."
 
-## Parte 6 - Drawer `ContemplationDetailsDrawer.tsx`
+### Tabela atualizada
+Manter todas as colunas atuais + adicionar 2 novas:
+- **Categoria de Chance**: Badge colorido (Match Sorteio / Zona +/-50 / Zona +/-100)
+- **Recomendacao de Lance**: Texto (Contemplacao por sorteio / Ate 25% / Ate 50%)
 
-Abre ao clicar "Ver detalhes".
+Ordenacao: Match direto primeiro, depois Zona 50, depois Zona 100.
 
-### Secao 1: Dados da cota (read-only)
-- Grupo, Cota, Credito, Tipo, Responsavel, Status
+Quando nao houver consulta ativa, mostrar todas as cotas normalmente (comportamento atual).
 
-### Secao 2: Status contemplacao atual
-- Badge com status + detalhes se contemplada
-
-### Secao 3: Historico de sorteios
-- Tabela com: Data assembleia | Numero sorteado | Contemplado? | Distancia | Registrado por
-- Fonte: `consorcio_sorteio_history`
-
-### Secao 4: Historico de lances
-- Tabela com: Data | Percentual | Valor | Classificacao | Observacao | Registrado por
-- Fonte: `consorcio_lance_history`
-
-### Botoes rapidos
-- Verificar sorteio (abre VerificarSorteioModal)
-- Registrar lance (abre LanceModal)
-- Marcar como contemplada (manual, com dropdown de motivo -- permissao admin/manager)
+### Acoes existentes mantidas
+Botoes Ver detalhes, Verificar sorteio e Simular lance continuam funcionando.
 
 ---
 
-## Parte 7 - Hook `useContemplacao.ts`
+## Detalhes tecnicos
 
-- `useContemplationCards(filters)`: query em `consortium_cards` com filtros (grupo, status, tipo, vendedor, busca)
-- `useVerificarSorteio()`: mutation que insere em `consorcio_sorteio_history` e, se contemplado, atualiza `consortium_cards`
-- `useRegistrarLance()`: mutation que insere em `consorcio_lance_history` e opcionalmente atualiza `consortium_cards`
-- `useSorteioHistory(cardId)`: query em `consorcio_sorteio_history`
-- `useLanceHistory(cardId)`: query em `consorcio_lance_history`
-- `useMarcarContemplada()`: mutation para marcar manualmente como contemplada
+### Arquivos a modificar
+1. `src/lib/contemplacao.ts` -- adicionar `classificarCotasPorLoteria` e tipos
+2. `src/hooks/useContemplacao.ts` -- adicionar `useRegistrarConsultaLoteria` e query de grupos
+3. `src/components/consorcio/ContemplationTab.tsx` -- reescrever com secao de consulta
 
----
+### Arquivo a criar
+1. Migration SQL para `consorcio_consulta_loteria`
 
-## Parte 8 - Limpeza
+### Logica de classificacao (funcao pura, sem banco)
+```text
+entrada: numero_loteria = "012345", cotas do grupo 7253
+numero_base = 12345 (ultimos 5 digitos)
 
-O componente `ContemplationCard.tsx` continuara existindo dentro do `ConsorcioCardDrawer` como visualizacao rapida, mas as acoes de contemplacao agora serao redirecionadas para a aba dedicada ou executadas diretamente de la.
+Para cada cota:
+  distancia = |cota_numero - numero_base|
 
----
+  se distancia == 0 -> Match Sorteio, "Contemplacao por sorteio"
+  se distancia <= 50 -> Zona +-50, "Ate 25%"
+  se distancia <= 100 -> Zona +-100, "Ate 50%"
+  senao -> excluir da lista
+```
 
-## Arquivos a criar
-
-1. `supabase/migrations/XXXX_consorcio_contemplacao_history.sql`
-2. `src/components/consorcio/ContemplationTab.tsx`
-3. `src/components/consorcio/VerificarSorteioModal.tsx`
-4. `src/components/consorcio/LanceModal.tsx`
-5. `src/components/consorcio/ContemplationDetailsDrawer.tsx`
-6. `src/hooks/useContemplacao.ts`
-
-## Arquivos a modificar
-
-1. `src/pages/bu-consorcio/Index.tsx` -- adicionar aba "Contemplacao"
-
-## Sequencia de implementacao
-
-1. Migration SQL (tabelas de historico + RLS)
-2. Hook `useContemplacao.ts`
-3. Componente `ContemplationTab.tsx` (filtros + tabela)
-4. Modal `VerificarSorteioModal.tsx`
-5. Modal `LanceModal.tsx`
-6. Drawer `ContemplationDetailsDrawer.tsx`
-7. Integrar aba no `Index.tsx`
-
+### Sequencia de implementacao
+1. Migration SQL (tabela consorcio_consulta_loteria)
+2. Atualizar `contemplacao.ts` com nova funcao de classificacao
+3. Atualizar `useContemplacao.ts` com mutation de registro
+4. Reescrever `ContemplationTab.tsx` com secao de consulta + tabela atualizada
