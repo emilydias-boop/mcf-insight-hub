@@ -1,52 +1,36 @@
 
 
-# Remover Efeito Alavanca e Viver de Aluguel, Adicionar "Produtos Fechados" Dinamico
+# Adicionar "Proposta Fechada" e Ajustar Taxas na Tabela de SDRs do Consorcio
 
-## O que muda
+## Resumo
 
-A matriz de metas ficara assim:
+Na tabela de SDRs do Painel de Equipe do Consorcio, sera feito:
+
+1. **Adicionar coluna "Proposta Fechada"** - Total de produtos adquiridos (soma de Holding + Reverter + Aporte Holding, etc.) por SDR no periodo
+2. **Remover coluna "Taxa Conv."** - Pois a Taxa Venda ja cumpre esse papel
+3. **Manter "Taxa Venda"** - Contratos / R1 Realizada (logica atual)
+
+## Layout final da tabela
 
 ```text
-METRICA              | DIA  | SEMANA | MES
-------------------------------------------
-Agendamento          |  ... |  ...   | ...
-R1 Agendada          |  ... |  ...   | ...
-R1 Realizada         |  ... |  ...   | ...
-No-Show              |  ... |  ...   | ...
-Proposta Enviada     |  ... |  ...   | ...
---- PRODUTOS FECHADOS ---
-Holding              |  ... |  ...   | ...
-Reverter             |  ... |  ...   | ...
-Aporte Holding       |  ... |  ...   | ...
+SDR | Meta | Agendamento | R1 Agendada | R1 Realizada | No-show | Proposta Env. | Proposta Fechada | Taxa Venda | >
 ```
 
-- Remove completamente "Viver de Aluguel" (Contrato Pago, Venda Realizada)
-- Remove completamente "Efeito Alavanca + Clube" (Aguardando Doc, Carta Socios, Aporte)
-- Mantem "Proposta Enviada" como metrica avulsa (sem grupo)
-- Adiciona grupo "Produtos Fechados" com linhas dinamicas baseadas nos produtos cadastrados em `consorcio_produto_adquirido_options`
-- Novos produtos adicionados via modal de configuracao aparecem automaticamente
+## Arquivos a modificar
 
-## Arquivos
+### 1. `src/components/sdr/ConsorcioSdrSummaryTable.tsx`
 
-### 1. Novo: `src/hooks/useConsorcioProdutosFechadosMetrics.ts`
+- Adicionar prop `propostasFechadasBySdr?: Map<string, number>` na interface
+- Adicionar coluna "Proposta Fechada" no header (entre "Proposta Env." e "Taxa Venda")
+- Renderizar o valor com Badge similar ao de Proposta Env.
+- Remover coluna "Taxa Conv." (header e celula)
 
-Hook que:
-- Busca produtos ativos de `consorcio_produto_adquirido_options`
-- Busca registros de `deal_produtos_adquiridos` do mes atual
-- Filtra client-side por dia/semana (segunda-domingo)/mes
-- Retorna array de `{ id, label, day, week, month }` com contagem por produto
+### 2. `src/pages/bu-consorcio/PainelEquipe.tsx`
 
-### 2. Atualizar: `src/hooks/useConsorcioPipelineMetrics.ts`
+- Criar query para buscar contagem de `deal_produtos_adquiridos` por SDR (owner do deal) no periodo selecionado
+- Passar o novo Map como prop `propostasFechadasBySdr` para o `ConsorcioSdrSummaryTable`
 
-- Remover stages de Viver de Aluguel (`contratoPago`, `vendaRealizada`) e de Efeito Alavanca (`aguardandoDoc`, `cartaSociosFechada`, `aporteHolding`, `cartaAporte`)
-- Manter apenas `propostaEnviada` na interface e na query
-- Simplificar `PeriodCounts` para ter apenas `propostaEnviada`
+### Dados de "Proposta Fechada"
 
-### 3. Atualizar: `src/pages/bu-consorcio/PainelEquipe.tsx`
-
-- Importar o novo hook `useConsorcioProdutosFechadosMetrics`
-- Remover linhas 474-517 (Viver de Aluguel + Efeito Alavanca)
-- Manter "Proposta Enviada" sem `pipelineGroup`
-- Adicionar linhas dinamicas do hook, cada uma com `pipelineGroup: 'Produtos Fechados'`
-- Targets inicialmente 0 (sem meta), podendo ser expandido futuramente
+A contagem sera feita com join entre `deal_produtos_adquiridos` e `crm_deals` para obter o `owner_id` (email do SDR), agrupando por SDR e contando o total de produtos adquiridos no periodo filtrado.
 
