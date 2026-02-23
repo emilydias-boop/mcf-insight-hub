@@ -1,38 +1,29 @@
 
-# Adicionar "Proposta Fechada" e Remover "Taxa Conv." na Tabela de Closers
 
-## Resumo
+# Remover "Contrato Pago" e Ajustar "Taxa Venda" na Tabela de Closers do Consorcio
 
-Aplicar as mesmas alteracoes feitas na tabela de SDRs agora na tabela de Closers:
+## Contexto
 
-1. **Adicionar coluna "Proposta Fech."** - Total de produtos adquiridos por Closer no periodo
-2. **Remover coluna "Taxa Conv."** - Redundante com Taxa Venda
+Closers de Consorcio nao vendem "contrato pago" como nas outras BUs. Eles vendem **cartas de consorcio**, e o acompanhamento e feito via "Proposta Fechada" (produtos adquiridos). Portanto, "Contrato Pago" nao faz sentido nesta tabela.
 
-## Layout final da tabela de Closers
+## O que muda
+
+### Layout final da tabela
 
 ```text
-Closer | R1 Agendada | R1 Realizada | No-show | Proposta Env. | Proposta Fech. | Contrato Pago | Taxa Venda | >
+Closer | R1 Agendada | R1 Realizada | No-show | Proposta Env. | Proposta Fech. | Taxa Venda | >
 ```
 
-## Arquivos a modificar
+- **Remove** a coluna "Contrato Pago" (nao se aplica ao Consorcio)
+- **Ajusta "Taxa Venda"** para usar **Proposta Fechada / R1 Realizada** (em vez de Contrato Pago / R1 Realizada)
 
-### 1. Novo hook: `src/hooks/useConsorcioProdutosFechadosByCloser.ts`
+## Detalhes tecnicos
 
-Criar hook que:
-- Busca `deal_produtos_adquiridos` no periodo
-- Para cada registro, busca o `deal_id` correspondente em `meeting_slot_attendees` para encontrar o `closer_id` via `meeting_slots`
-- Retorna `Map<closer_id, count>`
+### Arquivo: `src/components/sdr/ConsorcioCloserSummaryTable.tsx`
 
-### 2. `src/components/sdr/ConsorcioCloserSummaryTable.tsx`
+1. Remover o header "Contrato Pago"
+2. Remover as celulas de `contrato_pago` (linhas individuais e total)
+3. Remover `contrato_pago` do calculo de `totals`
+4. Alterar a formula de `taxaVenda` de `contrato_pago / r1_realizada` para `propostasFechadas / r1_realizada`
+5. Alterar `totalTaxaVenda` para usar `totalPropostasFechadas / totals.r1_realizada`
 
-- Adicionar prop `propostasFechadasByCloser?: Map<string, number>`
-- Adicionar coluna "Proposta Fech." no header (entre "Proposta Env." e "Contrato Pago")
-- Renderizar o valor com Badge (estilo verde similar ao SDR)
-- Remover coluna "Taxa Conv." (header, celulas individuais e total)
-- Remover calculo de `totalTaxaConv` e `taxaConv`
-
-### 3. `src/pages/bu-consorcio/PainelEquipe.tsx`
-
-- Importar `useConsorcioProdutosFechadosByCloser`
-- Chamar o hook com as datas do periodo selecionado
-- Passar o resultado como prop `propostasFechadasByCloser` para `ConsorcioCloserSummaryTable`
