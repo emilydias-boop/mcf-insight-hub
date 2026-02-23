@@ -114,6 +114,11 @@ export const DealKanbanBoardInfinite = ({
     );
   }, [deals]);
 
+  // Safety net: deals sem stage_id
+  const unstagedDeals = useMemo(() => {
+    return deals.filter(deal => deal && deal.id && deal.name && !deal.stage_id);
+  }, [deals]);
+
   const handleDealClick = (dealId: string) => {
     setSelectedDealId(dealId);
     setDrawerOpen(true);
@@ -262,6 +267,32 @@ export const DealKanbanBoardInfinite = ({
               </div>
             );
           })}
+          
+          {/* Coluna "Sem Estágio" como safety net */}
+          {unstagedDeals.length > 0 && (
+            <div className="flex-shrink-0 w-[280px] h-full">
+              <Card className="h-full flex flex-col">
+                <CardHeader className="flex-shrink-0 bg-destructive/10">
+                  <CardTitle className="text-sm font-medium flex items-center justify-between">
+                    <span>⚠️ Sem Estágio</span>
+                    <Badge variant="destructive">{unstagedDeals.length}</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {unstagedDeals.map((deal, index) => (
+                    <DealKanbanCard
+                      key={deal.id}
+                      deal={deal}
+                      isDragging={false}
+                      provided={undefined as any}
+                      onClick={() => handleDealClick(deal.id)}
+                      activitySummary={activitySummaries?.get(deal.id.toLowerCase().trim())}
+                    />
+                  ))}
+                </div>
+              </Card>
+            </div>
+          )}
           
           {/* Sentinel para scroll infinito */}
           <div ref={sentinelRef} className="flex-shrink-0 w-1 h-full" />
