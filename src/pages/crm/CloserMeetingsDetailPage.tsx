@@ -2,7 +2,8 @@ import { useState, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { WEEK_STARTS_ON } from "@/lib/businessDays";
+import { getWeekStartsOn } from "@/lib/businessDays";
+import { useActiveBU } from "@/hooks/useActiveBU";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,6 +19,8 @@ export default function CloserMeetingsDetailPage() {
   const { closerId } = useParams<{ closerId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const activeBU = useActiveBU();
+  const wso = getWeekStartsOn(activeBU);
 
   // Parse date range from query params
   const preset = searchParams.get("preset") || "month";
@@ -32,8 +35,8 @@ export default function CloserMeetingsDetailPage() {
     }
     if (preset === "week") {
       return {
-        startDate: startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON }),
-        endDate: endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON }),
+        startDate: startOfWeek(today, { weekStartsOn: wso }),
+        endDate: endOfWeek(today, { weekStartsOn: wso }),
       };
     }
     if (preset === "custom") {

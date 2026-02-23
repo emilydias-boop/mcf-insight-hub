@@ -2,7 +2,8 @@ import { useState, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { WEEK_STARTS_ON } from "@/lib/businessDays";
+import { getWeekStartsOn } from "@/lib/businessDays";
+import { useActiveBU } from "@/hooks/useActiveBU";
 import { RefreshCw, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +26,8 @@ export default function SdrMeetingsDetailPage() {
   const { sdrEmail } = useParams<{ sdrEmail: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const activeBU = useActiveBU();
+  const wso = getWeekStartsOn(activeBU);
   
   // Parse date range from query params
   const preset = searchParams.get("preset") || "month";
@@ -40,7 +43,7 @@ export default function SdrMeetingsDetailPage() {
       return { startDate: startOfDay(today), endDate: endOfDay(today) };
     }
     if (preset === "week") {
-      return { startDate: startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON }), endDate: endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON }) };
+      return { startDate: startOfWeek(today, { weekStartsOn: wso }), endDate: endOfWeek(today, { weekStartsOn: wso }) };
     }
     if (preset === "custom") {
       const start = searchParams.get("start");

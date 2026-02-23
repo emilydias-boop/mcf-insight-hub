@@ -14,7 +14,7 @@ import {
   subMonths,
   isSameDay,
 } from "date-fns";
-import { WEEK_STARTS_ON } from "@/lib/businessDays";
+import { getWeekStartsOn } from "@/lib/businessDays";
 import { ptBR } from "date-fns/locale";
 import {
   Calendar as CalendarIcon,
@@ -114,11 +114,13 @@ export default function AgendaR2() {
     switch (viewMode) {
       case "day":
         return { rangeStart: selectedDate, rangeEnd: selectedDate };
-      case "week":
+      case "week": {
+        const wso = getWeekStartsOn(activeBU);
         return {
-          rangeStart: startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON }),
-          rangeEnd: endOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON }),
+          rangeStart: startOfWeek(selectedDate, { weekStartsOn: wso }),
+          rangeEnd: endOfWeek(selectedDate, { weekStartsOn: wso }),
         };
+      }
       case "month":
         return {
           rangeStart: startOfMonth(selectedDate),
