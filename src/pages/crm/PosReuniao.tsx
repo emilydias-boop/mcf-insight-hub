@@ -15,7 +15,7 @@ import { AcceptProposalModal } from '@/components/consorcio/AcceptProposalModal'
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
   useRealizadas, useProposals, useSemSucesso,
-  useConfirmarAceite, useRetomarContato,
+  useRetomarContato,
   type CompletedMeeting, type Proposal, type SemSucessoDeal,
 } from '@/hooks/useConsorcioPostMeeting';
 import { format } from 'date-fns';
@@ -295,9 +295,9 @@ function RealizadasTab() {
 // ─── Propostas Tab ───────────────────────────────────────────
 function PropostasTab() {
   const { data: propostas = [], isLoading } = useProposals();
-  const confirmarAceite = useConfirmarAceite();
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+  const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
 
   if (isLoading) return <LoadingState />;
 
@@ -345,8 +345,7 @@ function PropostasTab() {
                       <>
                         <Button
                           size="sm"
-                          onClick={() => confirmarAceite.mutate({ proposal_id: p.id })}
-                          disabled={confirmarAceite.isPending}
+                          onClick={() => setAcceptTarget(p)}
                         >
                           <CheckCircle className="h-3 w-3 mr-1" /> Aceite
                         </Button>
@@ -381,6 +380,17 @@ function PropostasTab() {
             contactName={semSucessoTarget.contact_name}
             originId={semSucessoTarget.origin_id}
             proposalId={semSucessoTarget.id}
+          />
+        )}
+
+        {acceptTarget && (
+          <AcceptProposalModal
+            open={!!acceptTarget}
+            onOpenChange={o => !o && setAcceptTarget(null)}
+            proposalId={acceptTarget.id}
+            dealId={acceptTarget.deal_id}
+            contactName={acceptTarget.contact_name || acceptTarget.deal_name}
+            vendedorName=""
           />
         )}
 
