@@ -1,52 +1,43 @@
 
-# Corrigir "Leads por Reunião" no Calendário R1
+# Adicionar Formulario de Qualificacao no DealDetailsDrawer
 
-## Problema
+## Objetivo
+Permitir abrir o formulario de qualificacao (o mesmo que aparece durante a ligacao) diretamente do drawer do lead, sem precisar estar em uma ligacao ativa.
 
-O slider "Leads por Reunião" salva corretamente o valor `max_leads_per_slot` no banco de dados, mas a lógica de disponibilidade do calendário **ignora esse valor**.
-
-Atualmente, a funcao `isSlotAvailable` em `CloserColumnCalendar.tsx` (linha 166) faz:
-
-```text
-return hasMeetings.length === 0;
-```
-
-Ou seja, se ja existe **qualquer** reuniao no horario, o slot e marcado como indisponivel -- independentemente de quantos leads foram configurados como maximo.
+## Como funciona hoje
+- O formulario (`QualificationAndScheduleModal`) so abre em 2 situacoes:
+  1. Durante uma ligacao Twilio (quando o lead atende)
+  2. Ao arrastar um deal para "Sem Interesse" no Kanban
+- Nao ha como preencher a qualificacao manualmente pelo drawer do lead
 
 ## Solucao
 
-Alterar a verificacao para considerar o `max_leads_per_slot` do closer:
+### Adicionar botao "Qualificar" no QuickActionsBlock ou diretamente no DealDetailsDrawer
 
-```text
-// Em vez de: hasMeetings.length === 0
-// Usar: total de attendees no slot < max_leads_per_slot do closer
-```
+**Arquivo: `src/components/crm/DealDetailsDrawer.tsx`**
 
-### Detalhes Tecnicos
+1. Adicionar state para controlar a abertura do modal de qualificacao
+2. Adicionar o componente `QualificationAndScheduleModal` no drawer
+3. Adicionar um botao/acao que abre o modal -- posicionado proximo as acoes rapidas existentes (Ligar, WhatsApp, Agendar)
 
-**Arquivo:** `src/components/crm/CloserColumnCalendar.tsx`
+**Alteracoes especificas:**
 
-**Alteracao na funcao `isSlotAvailable` (linhas 157-167):**
+- Importar `QualificationAndScheduleModal`
+- Novo state: `const [showQualification, setShowQualification] = useState(false)`
+- Adicionar botao com icone `ClipboardList` no bloco de acoes rapidas (apos "Agendar")
+- Renderizar `<QualificationAndScheduleModal>` com `open={showQualification}`, passando `dealId` e `contactName`
+- Ao fechar o modal, chamar `refetchDeal()` para atualizar os dados exibidos
 
-1. Buscar o closer correspondente ao `closerId` para obter o `max_leads_per_slot`
-2. Contar o total de attendees (nao de meetings) no slot -- pois uma reuniao pode ter multiplos attendees
-3. Comparar esse total com `max_leads_per_slot` do closer
-4. Retornar `true` se ainda ha capacidade
+**Arquivo: `src/components/crm/QuickActionsBlock.tsx`** (se o botao ficar nesse componente)
 
-Logica atualizada (pseudo-codigo):
-```text
-isSlotAvailable(closerId, slotTime):
-  se bloqueado -> false
-  se nao configurado -> false
-  closer = closers.find(c => c.id === closerId)
-  maxLeads = closer.max_leads_per_slot ou 4
-  meetingsNoSlot = getMeetingsForSlot(closerId, slotTime)
-  totalAttendees = soma de attendees de todos os meetings no slot
-  return totalAttendees < maxLeads
-```
+- Adicionar prop `onQualify` callback
+- Renderizar botao "Qualificar" com icone de formulario
 
-**Impacto visual no calendario:**
-- Quando `max_leads_per_slot = 1` (como na screenshot): comportamento atual, um lead por horario
-- Quando `max_leads_per_slot > 1`: o botao "+" de agendar continua visivel mesmo quando ja existe uma reuniao, ate atingir o limite
+O formulario reutiliza 100% do componente existente `QualificationAndScheduleModal`, que ja carrega dados salvos anteriormente e permite editar/salvar novamente.
 
-**Nenhuma alteracao de banco de dados necessaria** -- os dados ja estao corretos, apenas a logica do frontend precisa ser ajustada.
+## Sobre os dados salvos
+
+Confirmando: **sim, todos os dados sao salvos para o lead**. Ao preencher e clicar "Salvar":
+- Os campos (profissao, renda, estado, etc.) sao salvos em `crm_deals.custom_fields`
+- O resumo e registrado em `deal_activities` como `qualification_note`
+- Esses dados aparecem na timeline e no card de qualificacao do drawer
