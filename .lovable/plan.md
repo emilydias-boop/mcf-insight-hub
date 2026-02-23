@@ -1,82 +1,84 @@
 
-# Consolidar TODAS as Notas do Lead Cross-Pipeline
 
-## Problemas Identificados
+# Fix: Notas do Lead nao aparecem no Consorcio
 
-### Problema 1: Deals sem `contact_id`
-O deal "Matheus Brigatto" no Consorcio (pipeline "Efeito Alavanca + Clube") tem `contact_id = NULL`. Sem esse vinculo, o hook `useContactDealIds` nao consegue encontrar os deals relacionados de outras pipelines.
+## Causa Raiz
 
-Dados no banco:
-- Inside Sales (`c3254b39`): `contact_id = 40d3a5bb` -- TEM vinculo
-- Consorcio (`aeaea21b`): `contact_id = NULL` -- SEM vinculo
-- Consorcio replicado (`0b16bbd1`): `contact_id = 40d3a5bb` -- TEM vinculo
+O deal "Matheus Brigatto" no Consorcio (`aeaea21b`) tem:
+- `contact_id = NULL`
+- `replicated_from_deal_id = NULL`
+- Nome = "Matheus Brigatto"
 
-Isso afeta **3.311 de 3.743 deals** na pipeline "Efeito Alavanca + Clube" e **299 de 2.293** em "Viver de Aluguel".
+O fallback por nome no `useContactDealIds` usa `.maybeSingle()` para buscar o contato, mas existem **4 contatos** com o nome "Matheus Brigatto" na tabela `crm_contacts`. O metodo `.maybeSingle()` retorna `null` quando encontra mais de um resultado, fazendo o hook retornar apenas o deal atual (sem notas cross-pipeline).
 
-### Problema 2: `DealNotesTab` nao busca todas as fontes de notas
-O componente atualmente busca apenas:
-- `deal_activities` com `activity_type = 'note'` (notas manuais)
-- `meeting_slot_attendees.notes` (notas de agendamento do SDR)
-- `attendee_notes` (notas do closer)
-- `calls.notes` (notas de ligacao)
-
-**Faltam:**
-- `deal_activities` com `activity_type = 'qualification_note'` (notas de qualificacao)
-- `meeting_slot_attendees.closer_notes` (notas pos-reuniao do closer)
+O contato correto e `40d3a5bb` (o unico com deals vinculados).
 
 ## Solucao
 
-### 1. Fallback por email/telefone no `useContactDealIds`
-Quando o deal nao tem `contact_id`, buscar o contato pelo nome do deal ou fazer lookup reverso via `crm_contacts` por email/telefone. Alternativamente, usar `replicated_from_deal_id` para rastrear o deal original.
+### Arquivo: `src/hooks/useContactDealIds.ts`
 
-**Arquivo:** `src/hooks/useContactDealIds.ts`
+Duas correcoess:
 
-Logica atualizada:
+**1. Fallback por nome: trocar `.maybeSingle()` por query que prioriza contato com deals**
+
+Em vez de buscar qualquer contato pelo nome, buscar o contato que efetivamente tenha deals vinculados. Usar `.limit(1)` e acessar `data?.[0]` em vez de `.maybeSingle()`.
+
+Logica melhorada:
 ```text
-1. Se tem contactId -> usa direto
-2. Se nao, busca contact_id do deal
-3. Se contact_id = null, tenta:
-   a. Buscar via replicated_from_deal_id (se deal foi replicado)
-   b. Buscar contato pelo nome do deal em crm_contacts
-4. Com o contact_id resolvido, busca todos os deals
+// Antes (quebra com duplicatas):
+.ilike('name', deal.name.trim())
+.limit(1)
+.maybeSingle()
+
+// Depois (busca contato que tem deals):
+1. Buscar contatos pelo nome com .ilike()
+2. Se encontrar apenas 1, usar esse
+3. Se encontrar varios, buscar qual tem deals vinculados
+4. Usar o primeiro com deals, ou o primeiro da lista como fallback
 ```
 
-### 2. Adicionar `qualification_note` e `closer_notes` no `DealNotesTab`
-**Arquivo:** `src/components/crm/DealNotesTab.tsx`
+**2. Adicionar Fallback #3: busca por email/telefone via crm_contacts**
 
-Alteracoes:
-- Na query de `deal_activities`, incluir `qualification_note` alem de `note`:
-  `.in('activity_type', ['note', 'qualification_note'])`
-- Adicionar tipo `qualification` ao `NoteType` e seus estilos/icones
-- Buscar `closer_notes` do `meeting_slot_attendees` (campo separado de `notes`)
-- Adicionar tipo `closer` ao `NoteType` para notas pos-reuniao
+Se o deal nao tem `contact_id` nem `replicated_from_deal_id`, e o nome nao resolve, tentar buscar pelo email do contato (se disponivel via o drawer).
 
-Novos tipos de nota:
-- `qualification`: fundo roxo, icone ClipboardList, label "Qualificacao"
-- `closer`: fundo indigo, icone UserCheck, label "Pos-Reuniao"
+### Detalhes Tecnicos
 
-### 3. Corrigir deals existentes sem `contact_id` (migracao de dados)
-Para os 3.311 deals sem `contact_id`, criar uma migracao SQL que:
-- Busca deals com `replicated_from_deal_id` que tem `contact_id`
-- Busca pelo nome do deal em `crm_contacts`
-- Atualiza o `contact_id` nos deals orfaos
+No `useContactDealIds.ts`, a secao de fallback por nome (linhas 38-47) sera substituida por:
 
-Isso e feito via migration SQL para corrigir dados historicos.
+```text
+// Fallback 2: match by deal name - handle duplicates
+if (!resolvedContactId && deal?.name) {
+  const { data: contacts } = await supabase
+    .from('crm_contacts')
+    .select('id')
+    .ilike('name', deal.name.trim());
+  
+  if (contacts?.length === 1) {
+    resolvedContactId = contacts[0].id;
+  } else if (contacts && contacts.length > 1) {
+    // Multiple contacts with same name - find which has deals
+    const contactIds = contacts.map(c => c.id);
+    const { data: dealsForContacts } = await supabase
+      .from('crm_deals')
+      .select('contact_id')
+      .in('contact_id', contactIds)
+      .limit(1);
+    resolvedContactId = dealsForContacts?.[0]?.contact_id || contacts[0].id;
+  }
+}
+```
 
 ## Arquivos a Modificar
 
-1. `src/hooks/useContactDealIds.ts` - Adicionar fallback por `replicated_from_deal_id` e nome
-2. `src/components/crm/DealNotesTab.tsx` - Adicionar `qualification_note`, `closer_notes`, e novos tipos visuais
-3. Migration SQL - Corrigir deals existentes sem `contact_id`
+1. `src/hooks/useContactDealIds.ts` - Corrigir fallback por nome para lidar com contatos duplicados
 
 ## Resultado Esperado
 
-Ao abrir qualquer deal em qualquer pipeline, o usuario vera:
-- Notas manuais de todas as pipelines
-- Notas de qualificacao dos SDRs
-- Notas pos-reuniao dos Closers
-- Notas de agendamento
-- Notas de ligacao
-- Notas de attendees (reagendamento, etc.)
+Ao abrir "Matheus Brigatto" no Consorcio, o hook vai:
+1. Ver que `contact_id` e null
+2. Ver que `replicated_from_deal_id` e null
+3. Buscar contatos com nome "Matheus Brigatto" -> encontra 4
+4. Buscar qual deles tem deals -> encontra `40d3a5bb`
+5. Buscar todos os deals de `40d3a5bb` -> encontra 3 deals (Inside Sales + 2 replicados)
+6. Retornar todos os IDs, permitindo que as notas de agendamento e qualificacao aparecam
 
-Tudo consolidado independente de qual pipeline o deal esta.
