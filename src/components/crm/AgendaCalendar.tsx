@@ -216,33 +216,45 @@ export function AgendaCalendar({
     return slotIndex * SLOT_HEIGHT;
   }, [currentTime, timeSlots]);
   
-  // Determine if Sunday should be shown (has meetings or configured slots)
-  const includeSunday = useMemo(() => {
-    if (viewMode !== 'week') return true;
-    // For consorcio (weekStartsOn=1), Sunday is the last day and always included
-    if (weekStartsOn === 1) return true;
-    // For other BUs (weekStartsOn=6), Sunday is day index 1 from Saturday
-    const sundayDate = addDays(weekStart, 1);
+  // Determine which days have content (slots or meetings) - hide empty days in week view
+  const daysWithContent = useMemo(() => {
+    if (viewMode !== 'week') return null; // Only filter in week view
     
-    // Check if any meeting is scheduled on this Sunday
-    const hasMeetings = meetings.some(m => isSameDay(parseISO(m.scheduled_at), sundayDate));
-    if (hasMeetings) return true;
+    const contentDays = new Set<number>(); // stores index offset from weekStart (0-6)
     
-    // Check R2 daily slots for this Sunday
-    if (meetingType === 'r2' && r2DailySlotsMap) {
-      const sundayStr = format(sundayDate, 'yyyy-MM-dd');
-      const sundaySlots = r2DailySlotsMap[sundayStr];
-      if (sundaySlots && Object.keys(sundaySlots).length > 0) return true;
+    for (let i = 0; i < 7; i++) {
+      const dayDate = addDays(weekStart, i);
+      const dayOfWeek = dayDate.getDay();
+      const dateStr = format(dayDate, 'yyyy-MM-dd');
+      
+      // Check if any meeting is scheduled on this day
+      const hasMeetings = meetings.some(m => isSameDay(parseISO(m.scheduled_at), dayDate));
+      if (hasMeetings) { contentDays.add(i); continue; }
+      
+      // Check R1 weekday slots
+      if (meetingType === 'r1' && meetingLinkSlots) {
+        const r1Slots = meetingLinkSlots[dayOfWeek];
+        if (r1Slots && r1Slots.length > 0) { contentDays.add(i); continue; }
+      }
+      
+      // Check R2 daily slots
+      if (meetingType === 'r2' && r2DailySlotsMap) {
+        const r2Slots = r2DailySlotsMap[dateStr];
+        if (r2Slots && Object.keys(r2Slots).length > 0) { contentDays.add(i); continue; }
+      }
     }
     
-    // Check R1 weekday slots for Sunday (day_of_week = 0)
-    if (meetingType === 'r1' && meetingLinkSlots) {
-      const sundayR1Slots = meetingLinkSlots[0];
-      if (sundayR1Slots && sundayR1Slots.length > 0) return true;
+    // Fallback: if NO days have content, show weekdays (Mon-Fri) to avoid empty agenda
+    if (contentDays.size === 0) {
+      for (let i = 0; i < 7; i++) {
+        const dayDate = addDays(weekStart, i);
+        const dow = dayDate.getDay();
+        if (dow >= 1 && dow <= 5) contentDays.add(i);
+      }
     }
     
-    return false;
-  }, [viewMode, weekStart, weekStartsOn, meetings, meetingType, r2DailySlotsMap, meetingLinkSlots]);
+    return contentDays;
+  }, [viewMode, weekStart, meetings, meetingType, r2DailySlotsMap, meetingLinkSlots]);
 
   const viewDays = useMemo(() => {
     if (viewMode === 'day') {
@@ -252,16 +264,14 @@ export function AgendaCalendar({
       const monthEnd = endOfMonth(selectedDate);
       return eachDayOfInterval({ start: monthStart, end: monthEnd });
     }
-    // Semana de trabalho: gera dias dinamicamente baseado no weekStartsOn
+    // Week view: filter days based on content
     const days: Date[] = [];
     for (let i = 0; i < 7; i++) {
-      const dayDate = addDays(weekStart, i);
-      // Skip Sunday (index 1 from Saturday start) if not needed, only for non-consorcio
-      if (!includeSunday && dayDate.getDay() === 0) continue;
-      days.push(dayDate);
+      if (daysWithContent && !daysWithContent.has(i)) continue;
+      days.push(addDays(weekStart, i));
     }
     return days;
-  }, [selectedDate, viewMode, weekStart, includeSunday]);
+  }, [selectedDate, viewMode, weekStart, daysWithContent]);
 
   // Collect all attendees for batch Outside detection
   const attendeesForOutsideCheck = useMemo(() => {
