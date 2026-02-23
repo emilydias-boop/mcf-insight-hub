@@ -1,47 +1,54 @@
 
-# Melhoria da Visualizacao do Calendario da Agenda
+# Bloqueio de Horario Especifico em Datas Bloqueadas
 
-## Problema
+## Resumo
 
-A visualizacao "Calendario" na semana mostra 6-7 colunas de dias, cada uma subdividida em sub-colunas por closer. Isso resulta em:
-- Cards de reunioes minusculos e ilegíveis (texto de 8-10px em colunas muito estreitas)
-- Botoes de "Agendar" (+) praticamente invisiveis
-- Altura do container limitada a 600px, desperdicando espaco da tela
-- Dificuldade geral de leitura e interacao
+Atualmente, ao bloquear uma data, o dia inteiro fica indisponivel. A proposta e permitir opcionalmente informar um horario especifico (ex: "14:00"), de modo que apenas aquele slot fique bloqueado em vez do dia todo.
 
-## Solucao Proposta
+## O que muda
 
-### 1. Aumentar altura do container de scroll
-- Trocar `max-h-[600px]` por `max-h-[calc(100vh-280px)]` para aproveitar toda a tela disponivel
+### 1. Banco de dados
+Adicionar duas colunas opcionais na tabela `closer_blocked_dates`:
+- `blocked_start_time` (TIME, nullable) -- horario de inicio do bloqueio
+- `blocked_end_time` (TIME, nullable) -- horario de fim do bloqueio
 
-### 2. Garantir largura minima por coluna de dia
-- Adicionar `min-w-[140px]` em cada coluna de dia para evitar que fiquem estreitas demais
-- Adicionar `overflow-x-auto` no container para permitir scroll horizontal quando necessario (em telas menores)
+Quando ambas forem NULL, o bloqueio continua valendo para o dia inteiro (comportamento atual preservado).
 
-### 3. Aumentar a altura dos slots de tempo
-- Aumentar `SLOT_HEIGHT` de 40px para 48px, dando mais espaco vertical para os cards de reuniao
+### 2. Interface (BlockedDatesConfig.tsx)
+- Adicionar um toggle/checkbox "Bloquear horario especifico" abaixo do seletor de data
+- Quando ativado, mostrar dois campos de horario (inicio e fim) usando inputs tipo time
+- Na lista de datas bloqueadas, exibir o horario ao lado da data quando for um bloqueio parcial (ex: "23 de fevereiro, 2026 - 14:00 ate 15:00")
+- Quando for dia inteiro, mostrar "(Dia inteiro)" ao lado da data
 
-### 4. Melhorar legibilidade dos cards de reuniao
-- Aumentar fontes minimas: de 9px para 10px no modo compacto, de 10px para 11px no modo normal
-- Aumentar o tamanho das bolinhas de cor do closer de 1.5px/2px para 2.5px/3px
+### 3. Hook de dados (useAgendaData.ts)
+- Atualizar a interface `BlockedDate` para incluir `blocked_start_time` e `blocked_end_time`
+- Atualizar `useAddBlockedDate` para enviar os campos de horario opcionais
 
-### 5. Melhorar botoes de slot disponivel
-- Aumentar a fonte dos botoes de agendar de 8-9px para 10px
-- Mostrar sempre o primeiro nome do closer (em vez de so a inicial no modo compacto)
+### 4. Logica de disponibilidade (CloserColumnCalendar.tsx)
+- Atualizar as verificacoes de bloqueio para considerar o horario:
+  - Se `blocked_start_time` e `blocked_end_time` forem NULL: bloqueia o dia inteiro (como hoje)
+  - Se tiverem valor: bloqueia apenas os slots cujo horario esteja dentro do intervalo
 
 ## Detalhes Tecnicos
 
-Arquivo a modificar: `src/components/crm/AgendaCalendar.tsx`
+**Migracao SQL:**
+```text
+ALTER TABLE closer_blocked_dates 
+  ADD COLUMN blocked_start_time TIME,
+  ADD COLUMN blocked_end_time TIME;
+```
 
-Alteracoes principais:
+**Logica de verificacao de bloqueio (pseudo-codigo):**
+```text
+Para cada blocked_date do closer na data selecionada:
+  Se blocked_start_time == NULL -> dia inteiro bloqueado
+  Senao -> bloqueado apenas se horario do slot >= blocked_start_time 
+           E horario do slot < blocked_end_time
+```
 
-1. **Linha 61**: `SLOT_HEIGHT = 40` para `SLOT_HEIGHT = 48`
-2. **Linha 922**: `max-h-[600px]` para `max-h-[calc(100vh-280px)]`
-3. **Linhas 976-995** (header das colunas de dia no week view): adicionar `min-w-[140px]`
-4. **Linhas 1267-1276** (celulas do grid semanal): adicionar `min-w-[140px]`
-5. **Linha 920**: adicionar `overflow-x-auto` no container pai
-6. **Linhas 1307-1309** (botao de agendar compacto): aumentar tamanho de fonte
-7. **Linhas 1418-1432** (card compacto header): aumentar fontes de 9px para 10px
-8. **Linhas 1444-1465** (card compacto participantes): aumentar fontes de 9px para 10px
-
-Nenhuma alteracao no banco de dados e necessaria.
+**Arquivos a modificar:**
+1. Nova migracao SQL (adicionar colunas)
+2. `src/integrations/supabase/types.ts` (tipos atualizados automaticamente)
+3. `src/hooks/useAgendaData.ts` (interface BlockedDate + mutacao)
+4. `src/components/crm/BlockedDatesConfig.tsx` (UI com campos de horario)
+5. `src/components/crm/CloserColumnCalendar.tsx` (logica de disponibilidade)
