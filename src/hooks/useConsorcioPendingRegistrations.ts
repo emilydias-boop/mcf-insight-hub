@@ -146,23 +146,39 @@ export function useCreatePendingRegistration() {
 
   return useMutation({
     mutationFn: async (input: CreatePendingRegistrationInput) => {
+      // Validar que o usuário está autenticado
+      if (!user?.id) {
+        throw new Error('Usuário não autenticado. Faça login novamente.');
+      }
+
       const { documents, ...registrationData } = input;
 
-      // 1. Create pending registration
+      // 1. Atualizar proposta para 'aceita' PRIMEIRO (operação segura)
+      const { error: proposalError } = await supabase
+        .from('consorcio_proposals')
+        .update({ status: 'aceita', aceite_date: new Date().toISOString().split('T')[0] })
+        .eq('id', input.proposal_id);
+
+      if (proposalError) throw proposalError;
+
+      // 2. Criar registro pendente (se falhar, o botão "Cadastrar Cota" permite retentar)
       const { data: registration, error: regError } = await supabase
         .from('consorcio_pending_registrations')
         .insert({
           ...registrationData,
           aceite_date: new Date().toISOString().split('T')[0],
-          created_by: user?.id,
+          created_by: user.id,
           status: 'aguardando_abertura',
         } as any)
         .select()
         .single();
 
-      if (regError) throw regError;
+      if (regError) {
+        console.error('Erro ao criar registro pendente:', regError);
+        throw new Error('Proposta aceita, mas erro ao criar cadastro pendente: ' + regError.message);
+      }
 
-      // 2. Upload documents linked to pending_registration_id
+      // 3. Upload documents linked to pending_registration_id
       if (documents && documents.length > 0) {
         for (const doc of documents) {
           const fileExt = doc.file.name.split('.').pop();
@@ -189,16 +205,10 @@ export function useCreatePendingRegistration() {
               nome_arquivo: doc.file.name,
               storage_path: fileName,
               storage_url: urlData?.signedUrl || '',
-              uploaded_by: user?.id,
+              uploaded_by: user.id,
             } as any);
         }
       }
-
-      // 3. Update proposal status to 'aceita'
-      await supabase
-        .from('consorcio_proposals')
-        .update({ status: 'aceita', aceite_date: new Date().toISOString().split('T')[0] })
-        .eq('id', input.proposal_id);
 
       return registration;
     },
