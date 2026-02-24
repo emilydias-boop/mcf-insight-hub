@@ -1,46 +1,47 @@
 
 
-## Corrigir fluxo de propostas aceitas sem cadastro pendente
+## Corrigir propostas aceitas sem cadastro pendente
 
 ### Diagnostico
 
-As 2 propostas (Joao Ferreira dos Santos - R$ 240.000 e Kleber Donizetti Teixeira - R$ 500.000) estao com `status = 'aceita'` na tabela `consorcio_proposals`, porem **nenhum registro** foi criado na tabela `consorcio_pending_registrations` (esta vazia). Isso indica que o aceite foi feito por um caminho que so atualizou o status da proposta sem passar pelo modal de cadastro completo (`AcceptProposalModal`).
+As 2 propostas (Joao Ferreira - R$ 240.000 e Kleber Donizetti - R$ 500.000) estao com `status = 'aceita'` na tabela `consorcio_proposals`, porem a tabela `consorcio_pending_registrations` esta completamente vazia. Isso indica que o INSERT do registro pendente falhou silenciosamente (provavelmente por RLS) enquanto a proposta ja foi marcada como aceita.
 
-Alem disso, o botao "Cadastrar Cota" que aparece para propostas aceitas direciona para `/consorcio?prefill_deal=...&prefill_proposal=...`, mas esses parametros nao sao consumidos pela pagina de Consorcio, entao o botao nao faz nada util.
+**Causa raiz:** A politica RLS de INSERT na tabela `consorcio_pending_registrations` exige `auth.uid() = created_by`. Se por algum motivo o `user?.id` estava null ou diferente, o INSERT falha e o erro deveria impedir a atualizacao da proposta. No entanto, o problema ja ocorreu e os dados estao inconsistentes.
 
-### Solucao
+### Solucao em 2 partes
 
-Alterar o botao "Cadastrar Cota" para reabrir o `AcceptProposalModal` (que cria o cadastro pendente) em vez de redirecionar para uma URL que nao funciona.
+**Parte 1: Corrigir os dados existentes**
 
-### Alteracoes
+Inserir manualmente os 2 registros pendentes para as propostas aceitas que ficaram orfas, usando os dados dos deals associados.
 
-**`src/pages/crm/PosReuniao.tsx`**
-
-1. Trocar o botao "Cadastrar Cota" (que era um link `<a>`) por um botao que abre o `AcceptProposalModal` com os dados da proposta aceita
-2. Na secao de acoes da tabela (linhas 357-362), substituir:
-
-```
-// ANTES: link que nao funciona
-{p.status === 'aceita' && !p.consortium_card_id && (
-  <Button size="sm" variant="outline" asChild>
-    <a href={`/consorcio?prefill_deal=...`}>
-      Cadastrar Cota
-    </a>
-  </Button>
-)}
-```
-
-```
-// DEPOIS: reabrir o modal de cadastro
-{p.status === 'aceita' && !p.consortium_card_id && (
-  <Button size="sm" variant="outline" onClick={() => setAcceptTarget(p)}>
-    Cadastrar Cota
-  </Button>
-)}
+Executar SQL:
+```text
+INSERT INTO consorcio_pending_registrations (proposal_id, deal_id, tipo_pessoa, status, created_by)
+SELECT 
+  p.id as proposal_id,
+  p.deal_id,
+  'pf' as tipo_pessoa,
+  'aguardando_abertura' as status,
+  p.created_by
+FROM consorcio_proposals p
+WHERE p.status = 'aceita' 
+  AND p.consortium_card_id IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM consorcio_pending_registrations r WHERE r.proposal_id = p.id
+  );
 ```
 
-Isso permite que o usuario clique em "Cadastrar Cota", preencha os dados do cliente e documentos no modal, e o sistema crie corretamente o registro em `consorcio_pending_registrations`.
+Isso criara os registros que faltam e eles aparecerao em "Cadastros Pendentes". Os dados do cliente (nome, CPF, etc.) ficarao vazios, mas o gestor podera preencher ao abrir a cota, ou o closer podera reabrir o modal "Cadastrar Cota" para completar.
+
+**Parte 2: Evitar que isso aconteca novamente**
+
+No `useCreatePendingRegistration` (`src/hooks/useConsorcioPendingRegistrations.ts`), inverter a ordem das operacoes: primeiro atualizar a proposta para 'aceita', e so depois inserir o registro pendente. Assim, se o INSERT falhar, a proposta ja esta aceita e o botao "Cadastrar Cota" permite retentar. Alem disso, adicionar um `try/catch` mais robusto e verificar que `user?.id` existe antes de prosseguir.
+
+Alteracoes no arquivo `src/hooks/useConsorcioPendingRegistrations.ts`:
+1. Adicionar validacao: se `user?.id` for null, lancar erro claro
+2. Garantir que o registro pendente e criado com `created_by` preenchido
+3. Adicionar log de erro mais claro caso o INSERT falhe
 
 ### Resultado
 
-As 2 propostas aceitas vao exibir o botao "Cadastrar Cota" que abre o mesmo modal de aceite, permitindo preencher os dados e gerar o cadastro pendente que aparecera na aba "Cadastros Pendentes" do Controle Consorcio.
+Os 2 cadastros pendentes aparecerao na aba "Cadastros Pendentes" do Controle Consorcio. O gestor podera clicar em "Abrir Cadastro" para completar os dados da cota. Futuros aceites terao protecao contra falhas silenciosas.
