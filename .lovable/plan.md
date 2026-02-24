@@ -1,39 +1,46 @@
 
 
-## Adicionar busca de lead na Agenda R1
+## Corrigir fluxo de propostas aceitas sem cadastro pendente
 
-### O que sera feito
+### Diagnostico
 
-Adicionar um campo de busca "Buscar lead..." na area de filtros da Agenda R1 (`src/pages/crm/Agenda.tsx`), identico ao que ja existe na Agenda R2, permitindo localizar reunioes por nome, telefone ou email do participante.
+As 2 propostas (Joao Ferreira dos Santos - R$ 240.000 e Kleber Donizetti Teixeira - R$ 500.000) estao com `status = 'aceita'` na tabela `consorcio_proposals`, porem **nenhum registro** foi criado na tabela `consorcio_pending_registrations` (esta vazia). Isso indica que o aceite foi feito por um caminho que so atualizou o status da proposta sem passar pelo modal de cadastro completo (`AcceptProposalModal`).
+
+Alem disso, o botao "Cadastrar Cota" que aparece para propostas aceitas direciona para `/consorcio?prefill_deal=...&prefill_proposal=...`, mas esses parametros nao sao consumidos pela pagina de Consorcio, entao o botao nao faz nada util.
+
+### Solucao
+
+Alterar o botao "Cadastrar Cota" para reabrir o `AcceptProposalModal` (que cria o cadastro pendente) em vez de redirecionar para uma URL que nao funciona.
 
 ### Alteracoes
 
-**`src/pages/crm/Agenda.tsx`**
+**`src/pages/crm/PosReuniao.tsx`**
 
-1. Importar `Search` do `lucide-react` e `Input` do `@/components/ui/input`
-2. Adicionar estado `searchTerm` (string, inicialmente vazio)
-3. Na area de filtros (linha ~313, ao lado dos selects de closer e status), adicionar o campo de busca:
-   - Input com icone de lupa, placeholder "Buscar lead...", largura 200px
-4. No `filteredMeetings` useMemo (linhas 96-119), adicionar filtro por `searchTerm`:
-   - Se `searchTerm` tiver 2+ caracteres, filtrar reunioes onde algum attendee tenha nome, telefone ou email correspondente (mesma logica da R2)
-
-### Logica de busca (igual a R2)
+1. Trocar o botao "Cadastrar Cota" (que era um link `<a>`) por um botao que abre o `AcceptProposalModal` com os dados da proposta aceita
+2. Na secao de acoes da tabela (linhas 357-362), substituir:
 
 ```
-if (searchTerm.length >= 2) {
-  const search = searchTerm.toLowerCase();
-  const searchDigits = searchTerm.replace(/\D/g, '');
-  result = result.filter(m =>
-    m.attendees?.some(att => {
-      const name = (att.attendee_name || '').toLowerCase();
-      const phone = (att.attendee_phone || '').replace(/\D/g, '');
-      return name.includes(search) || 
-             (searchDigits.length >= 2 && phone.includes(searchDigits));
-    })
-  );
-}
+// ANTES: link que nao funciona
+{p.status === 'aceita' && !p.consortium_card_id && (
+  <Button size="sm" variant="outline" asChild>
+    <a href={`/consorcio?prefill_deal=...`}>
+      Cadastrar Cota
+    </a>
+  </Button>
+)}
 ```
+
+```
+// DEPOIS: reabrir o modal de cadastro
+{p.status === 'aceita' && !p.consortium_card_id && (
+  <Button size="sm" variant="outline" onClick={() => setAcceptTarget(p)}>
+    Cadastrar Cota
+  </Button>
+)}
+```
+
+Isso permite que o usuario clique em "Cadastrar Cota", preencha os dados do cliente e documentos no modal, e o sistema crie corretamente o registro em `consorcio_pending_registrations`.
 
 ### Resultado
 
-O usuario podera digitar o nome ou telefone de um lead na Agenda R1 e ver apenas as reunioes correspondentes no calendario, lista ou visao por closer.
+As 2 propostas aceitas vao exibir o botao "Cadastrar Cota" que abre o mesmo modal de aceite, permitindo preencher os dados e gerar o cadastro pendente que aparecera na aba "Cadastros Pendentes" do Controle Consorcio.
