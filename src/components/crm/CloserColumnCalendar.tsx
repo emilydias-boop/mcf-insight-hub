@@ -135,13 +135,25 @@ export function CloserColumnCalendar({
 
   const { data: partnerData = {} } = usePartnerProductDetectionBatch(attendeesForPartnerCheck);
   const timeSlots = useMemo(() => {
-    const uniqueTimes = [...new Set(daySlots.map((s) => s.start_time))].sort();
+    // Horários dos slots configurados
+    const configuredTimes = daySlots.map((s) => s.start_time.slice(0, 5));
 
+    // Horários de reuniões existentes (podem estar em slots removidos)
+    const meetingTimes = meetings
+      .map((m) => {
+        const d = parseISO(m.scheduled_at);
+        if (!isSameDay(d, selectedDate)) return null;
+        return format(d, "HH:mm");
+      })
+      .filter(Boolean) as string[];
+
+    // Unir e ordenar
+    const uniqueTimes = [...new Set([...configuredTimes, ...meetingTimes])].sort();
     return uniqueTimes.map((timeStr) => {
       const [hour, minute] = timeStr.split(":").map(Number);
       return setMinutes(setHours(selectedDate, hour), minute);
     });
-  }, [daySlots, selectedDate]);
+  }, [daySlots, meetings, selectedDate]);
 
   // Verificar se um closer tem horário configurado para este slot
   const isSlotConfigured = (closerId: string, slotTime: Date) => {
