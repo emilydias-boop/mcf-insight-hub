@@ -1,47 +1,35 @@
 
 
-## Corrigir propostas aceitas sem cadastro pendente
+## Corrigir dados vazios nos Cadastros Pendentes
 
-### Diagnostico
+### Problema
 
-As 2 propostas (Joao Ferreira - R$ 240.000 e Kleber Donizetti - R$ 500.000) estao com `status = 'aceita'` na tabela `consorcio_proposals`, porem a tabela `consorcio_pending_registrations` esta completamente vazia. Isso indica que o INSERT do registro pendente falhou silenciosamente (provavelmente por RLS) enquanto a proposta ja foi marcada como aceita.
+Os 2 registros foram criados na tabela `consorcio_pending_registrations` pela migration, mas apenas com os campos minimos (`proposal_id`, `deal_id`, `tipo_pessoa`, `status`, `created_by`). Os dados do cliente (nome, telefone, email, vendedor, data aceite) ficaram vazios porque a migration nao os incluiu.
 
-**Causa raiz:** A politica RLS de INSERT na tabela `consorcio_pending_registrations` exige `auth.uid() = created_by`. Se por algum motivo o `user?.id` estava null ou diferente, o INSERT falha e o erro deveria impedir a atualizacao da proposta. No entanto, o problema ja ocorreu e os dados estao inconsistentes.
+### Solucao
 
-### Solucao em 2 partes
+Executar UPDATE nos 2 registros existentes, preenchendo os dados a partir do contato (`crm_contacts`) e do deal (`crm_deals`) associados:
 
-**Parte 1: Corrigir os dados existentes**
+**Registro 1 - Joao Ferreira dos Santos:**
+- `nome_completo`: "Joao Ferreira dos Santos"
+- `telefone`: "85 98894-6554"
+- `email`: "ferreiramsf@gmail.com"
+- `vendedor_name`: "Joao Pedro Martins Vieira"
+- `aceite_date`: "2026-02-23"
 
-Inserir manualmente os 2 registros pendentes para as propostas aceitas que ficaram orfas, usando os dados dos deals associados.
+**Registro 2 - Kleber Donizetti Teixeira:**
+- `nome_completo`: "Kleber Donizetti Teixeira"
+- `telefone`: "12982341050"
+- `email`: "kleber.teixeira@icloud.com"
+- `vendedor_name`: "Joao Pedro Martins Vieira"
+- `aceite_date`: "2026-02-23"
 
-Executar SQL:
-```text
-INSERT INTO consorcio_pending_registrations (proposal_id, deal_id, tipo_pessoa, status, created_by)
-SELECT 
-  p.id as proposal_id,
-  p.deal_id,
-  'pf' as tipo_pessoa,
-  'aguardando_abertura' as status,
-  p.created_by
-FROM consorcio_proposals p
-WHERE p.status = 'aceita' 
-  AND p.consortium_card_id IS NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM consorcio_pending_registrations r WHERE r.proposal_id = p.id
-  );
-```
+### Alteracao adicional no codigo
 
-Isso criara os registros que faltam e eles aparecerao em "Cadastros Pendentes". Os dados do cliente (nome, CPF, etc.) ficarao vazios, mas o gestor podera preencher ao abrir a cota, ou o closer podera reabrir o modal "Cadastrar Cota" para completar.
+Modificar o hook `usePendingRegistrations` (`src/hooks/useConsorcioPendingRegistrations.ts`) no trecho da query de listagem para, quando `nome_completo` estiver vazio, fazer fallback para o nome do contato do deal associado. Isso evita que cadastros futuros criados sem dados do cliente fiquem completamente em branco na lista.
 
-**Parte 2: Evitar que isso aconteca novamente**
+### Detalhes tecnicos
 
-No `useCreatePendingRegistration` (`src/hooks/useConsorcioPendingRegistrations.ts`), inverter a ordem das operacoes: primeiro atualizar a proposta para 'aceita', e so depois inserir o registro pendente. Assim, se o INSERT falhar, a proposta ja esta aceita e o botao "Cadastrar Cota" permite retentar. Alem disso, adicionar um `try/catch` mais robusto e verificar que `user?.id` existe antes de prosseguir.
+- Usar o insert tool do Supabase para executar os 2 UPDATEs (dados existentes, nao e schema)
+- Modificar a query do `usePendingRegistrations` para fazer LEFT JOIN com `crm_deals` e `crm_contacts` como fallback
 
-Alteracoes no arquivo `src/hooks/useConsorcioPendingRegistrations.ts`:
-1. Adicionar validacao: se `user?.id` for null, lancar erro claro
-2. Garantir que o registro pendente e criado com `created_by` preenchido
-3. Adicionar log de erro mais claro caso o INSERT falhe
-
-### Resultado
-
-Os 2 cadastros pendentes aparecerao na aba "Cadastros Pendentes" do Controle Consorcio. O gestor podera clicar em "Abrir Cadastro" para completar os dados da cota. Futuros aceites terao protecao contra falhas silenciosas.
