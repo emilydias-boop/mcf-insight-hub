@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
+import { parseChecklistPF } from '@/lib/checklistParser';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Loader2, Plus, Trash2, Upload, FileText, X } from 'lucide-react';
@@ -29,6 +30,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import { validateCpf, validateCnpj, buscarCnpj } from '@/lib/documentUtils';
 import { buscarCep } from '@/lib/cepUtils';
 import { useCreatePendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
@@ -124,6 +126,8 @@ export function AcceptProposalModal({
   const [tipoPessoa, setTipoPessoa] = useState<'pf' | 'pj'>('pf');
   const [loadingCep, setLoadingCep] = useState(false);
   const [loadingCnpj, setLoadingCnpj] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
+  const [checklistText, setChecklistText] = useState('');
   const [pfDocuments, setPfDocuments] = useState<File[]>([]);
   const [pjDocContratoSocial, setPjDocContratoSocial] = useState<File | null>(null);
   const [pjDocRgSocios, setPjDocRgSocios] = useState<File | null>(null);
@@ -290,7 +294,42 @@ export function AcceptProposalModal({
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 {tipoPessoa === 'pf' ? (
                   <>
-                    <h3 className="font-semibold text-sm">Dados Pessoais</h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-sm">Dados Pessoais</h3>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setShowChecklist(!showChecklist)}>
+                        {showChecklist ? 'Fechar' : '📋 Colar Check-list'}
+                      </Button>
+                    </div>
+                    {showChecklist && (
+                      <div className="space-y-2 p-3 border rounded-md bg-muted/30">
+                        <Label className="text-xs text-muted-foreground">Cole o texto do check-list abaixo:</Label>
+                        <Textarea
+                          value={checklistText}
+                          onChange={e => setChecklistText(e.target.value)}
+                          rows={6}
+                          placeholder={"Nome Completo: ...\nRG: ...\nCPF: ...\nCPF Cônjuge: ...\nEndereço Residencial: ...\nCEP: ...\nTelefone: ...\nE-mail: ...\nProfissão: ...\nRenda: R$ ...\nPatrimônio: R$ ...\nChave Pix: ..."}
+                        />
+                        <Button type="button" size="sm" onClick={() => {
+                          const parsed = parseChecklistPF(checklistText);
+                          if (parsed.nome_completo) form.setValue('nome_completo', parsed.nome_completo);
+                          if (parsed.rg) form.setValue('rg', parsed.rg);
+                          if (parsed.cpf) form.setValue('cpf', formatCpf(parsed.cpf));
+                          if (parsed.cpf_conjuge) form.setValue('cpf_conjuge', formatCpf(parsed.cpf_conjuge));
+                          if (parsed.endereco_completo) form.setValue('endereco_completo', parsed.endereco_completo);
+                          if (parsed.endereco_cep) form.setValue('endereco_cep', formatCep(parsed.endereco_cep));
+                          if (parsed.telefone) form.setValue('telefone', formatPhone(parsed.telefone));
+                          if (parsed.email) form.setValue('email', parsed.email);
+                          if (parsed.profissao) form.setValue('profissao', parsed.profissao);
+                          if (parsed.renda) form.setValue('renda', parsed.renda);
+                          if (parsed.patrimonio) form.setValue('patrimonio', parsed.patrimonio);
+                          if (parsed.pix) form.setValue('pix', parsed.pix);
+                          setShowChecklist(false);
+                          setChecklistText('');
+                        }}>
+                          Preencher Campos
+                        </Button>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                       <FormField control={form.control} name="nome_completo" rules={{ required: 'Obrigatório' }} render={({ field }) => (
                         <FormItem><FormLabel>Nome Completo *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
