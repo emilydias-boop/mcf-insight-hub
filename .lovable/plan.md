@@ -1,48 +1,39 @@
 
 
-## Vincular contratos antigos e de outros contatos
+## Adicionar busca de lead na Agenda R1
 
-### Problema atual
+### O que sera feito
 
-O dialog "Vincular Contrato" tem duas limitacoes que impedem vincular esse caso:
+Adicionar um campo de busca "Buscar lead..." na area de filtros da Agenda R1 (`src/pages/crm/Agenda.tsx`), identico ao que ja existe na Agenda R2, permitindo localizar reunioes por nome, telefone ou email do participante.
 
-1. **Limite de 14 dias** - so mostra transacoes dos ultimos 14 dias
-2. **Filtro rigido** - so busca `product_category = 'contrato'`; um pagamento de R$ 397 pode ter outra categoria
+### Alteracoes
 
-### Solucao
+**`src/pages/crm/Agenda.tsx`**
 
-Adicionar um modo de **busca ampliada** no `LinkContractDialog`, permitindo buscar transacoes em todo o historico quando o usuario digitar algo no campo de busca.
+1. Importar `Search` do `lucide-react` e `Input` do `@/components/ui/input`
+2. Adicionar estado `searchTerm` (string, inicialmente vazio)
+3. Na area de filtros (linha ~313, ao lado dos selects de closer e status), adicionar o campo de busca:
+   - Input com icone de lupa, placeholder "Buscar lead...", largura 200px
+4. No `filteredMeetings` useMemo (linhas 96-119), adicionar filtro por `searchTerm`:
+   - Se `searchTerm` tiver 2+ caracteres, filtrar reunioes onde algum attendee tenha nome, telefone ou email correspondente (mesma logica da R2)
 
-**Alteracoes:**
-
-**1. `src/hooks/useUnlinkedContracts.ts`**
-- Adicionar um parametro opcional `searchAll: boolean` ao hook
-- Quando `searchAll = true`, remover o filtro de 14 dias e o filtro de `product_category`
-- Manter o filtro `linked_attendee_id IS NULL` para so mostrar transacoes ainda nao vinculadas
-- Adicionar filtro de busca server-side (por email, nome ou telefone) para performance
-
-**2. `src/components/crm/LinkContractDialog.tsx`**
-- Adicionar um toggle/checkbox "Buscar em todo o historico" abaixo do campo de busca
-- Quando ativado, o hook passa `searchAll = true` e envia o termo de busca para o servidor
-- Mostrar um aviso indicando que a busca ampliada pode retornar mais resultados
-- Exibir o `product_name` e `product_category` de cada transacao para o usuario identificar o contrato correto
-
-### Detalhes tecnicos
-
-No hook `useUnlinkedContracts`, a query ampliada ficaria:
+### Logica de busca (igual a R2)
 
 ```
-supabase
-  .from('hubla_transactions')
-  .select('id, hubla_id, customer_name, customer_email, customer_phone, sale_date, net_value, product_price, product_name, product_category')
-  .is('linked_attendee_id', null)
-  .or(`customer_email.ilike.%${search}%,customer_name.ilike.%${search}%,customer_phone.ilike.%${search}%`)
-  .order('sale_date', { ascending: false })
-  .limit(50)
+if (searchTerm.length >= 2) {
+  const search = searchTerm.toLowerCase();
+  const searchDigits = searchTerm.replace(/\D/g, '');
+  result = result.filter(m =>
+    m.attendees?.some(att => {
+      const name = (att.attendee_name || '').toLowerCase();
+      const phone = (att.attendee_phone || '').replace(/\D/g, '');
+      return name.includes(search) || 
+             (searchDigits.length >= 2 && phone.includes(searchDigits));
+    })
+  );
+}
 ```
-
-Sem filtro de data nem de categoria, mas com busca obrigatoria (minimo 3 caracteres) para evitar trazer milhares de registros.
 
 ### Resultado
 
-O usuario podera buscar qualquer transacao historica por nome, email ou telefone, identificar o pagamento de R$ 397 e vincular ao attendee correto.
+O usuario podera digitar o nome ou telefone de um lead na Agenda R1 e ver apenas as reunioes correspondentes no calendario, lista ou visao por closer.
