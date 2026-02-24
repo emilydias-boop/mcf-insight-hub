@@ -1,35 +1,53 @@
 
 
-## Corrigir dados vazios nos Cadastros Pendentes
+## Tornar os Dados do Cliente editaveis no OpenCotaModal
 
 ### Problema
 
-Os 2 registros foram criados na tabela `consorcio_pending_registrations` pela migration, mas apenas com os campos minimos (`proposal_id`, `deal_id`, `tipo_pessoa`, `status`, `created_by`). Os dados do cliente (nome, telefone, email, vendedor, data aceite) ficaram vazios porque a migration nao os incluiu.
+O modal "Abertura de Cota" exibe os dados do cliente como texto somente leitura (linhas 181-194 do OpenCotaModal.tsx). Quando os registros foram criados sem passar pelo fluxo completo do AcceptProposalModal, campos como CPF, RG, Profissao, Endereco, CEP, Renda, Patrimonio e PIX ficam vazios e nao podem ser preenchidos.
 
 ### Solucao
 
-Executar UPDATE nos 2 registros existentes, preenchendo os dados a partir do contato (`crm_contacts`) e do deal (`crm_deals`) associados:
+Modificar o `OpenCotaModal` para que a secao "Dados do Cliente" use campos de input editaveis (em vez de texto estatico) quando os valores estiverem vazios. Ao submeter o formulario, esses dados serao salvos junto com os dados da cota.
 
-**Registro 1 - Joao Ferreira dos Santos:**
-- `nome_completo`: "Joao Ferreira dos Santos"
-- `telefone`: "85 98894-6554"
-- `email`: "ferreiramsf@gmail.com"
-- `vendedor_name`: "Joao Pedro Martins Vieira"
-- `aceite_date`: "2026-02-23"
+### Alteracoes
 
-**Registro 2 - Kleber Donizetti Teixeira:**
-- `nome_completo`: "Kleber Donizetti Teixeira"
-- `telefone`: "12982341050"
-- `email`: "kleber.teixeira@icloud.com"
-- `vendedor_name`: "Joao Pedro Martins Vieira"
-- `aceite_date`: "2026-02-23"
+**`src/components/consorcio/OpenCotaModal.tsx`**
 
-### Alteracao adicional no codigo
+1. Adicionar campos de formulario ao `useForm` para os dados do cliente PF: `nome_completo`, `cpf`, `rg`, `profissao`, `telefone`, `email`, `endereco_completo`, `endereco_cep`, `renda`, `patrimonio`, `pix`
 
-Modificar o hook `usePendingRegistrations` (`src/hooks/useConsorcioPendingRegistrations.ts`) no trecho da query de listagem para, quando `nome_completo` estiver vazio, fazer fallback para o nome do contato do deal associado. Isso evita que cadastros futuros criados sem dados do cliente fiquem completamente em branco na lista.
+2. Substituir a secao read-only "Dados do Cliente" (linhas 176-243) por campos de input pre-preenchidos com os dados existentes do registration. Os campos que ja tem valor aparecerao preenchidos mas editaveis; os vazios aparecerao em branco para preenchimento.
+
+3. Usar `useEffect` para popular os campos do formulario quando o `registration` carregar:
+```
+useEffect(() => {
+  if (registration) {
+    form.setValue('cliente_nome', registration.nome_completo || '');
+    form.setValue('cliente_cpf', registration.cpf || '');
+    form.setValue('cliente_rg', registration.rg || '');
+    // ... demais campos
+  }
+}, [registration]);
+```
+
+4. No `onSubmit`, incluir os dados do cliente no payload enviado ao `useOpenCota`, que ja recebe o `registration` e pode fazer UPDATE na tabela `consorcio_pending_registrations` antes de criar a cota.
+
+**`src/hooks/useConsorcioPendingRegistrations.ts`** (hook `useOpenCota`)
+
+5. Modificar a mutation `useOpenCota` para aceitar dados do cliente atualizados no payload e fazer um UPDATE na tabela `consorcio_pending_registrations` com os campos do cliente antes de prosseguir com a criacao da cota em `consortium_cards`.
+
+### Fluxo resultante
+
+1. Gestor abre "Abertura de Cota" para Kleber Donizetti
+2. Ve os campos pre-preenchidos (Nome, Telefone, Email) e os campos vazios (CPF, RG, etc.)
+3. Preenche os campos faltantes
+4. Preenche os dados da cota (Categoria, Grupo, Valor, etc.)
+5. Clica em "Abrir Cota"
+6. O sistema salva os dados do cliente e cria a cota normalmente
 
 ### Detalhes tecnicos
 
-- Usar o insert tool do Supabase para executar os 2 UPDATEs (dados existentes, nao e schema)
-- Modificar a query do `usePendingRegistrations` para fazer LEFT JOIN com `crm_deals` e `crm_contacts` como fallback
-
+- Os campos do cliente serao adicionados ao mesmo `useForm` existente, com prefixo `cliente_` para nao conflitar com os campos da cota
+- Campos obrigatorios: `cliente_nome`, `cliente_cpf`, `cliente_telefone`, `cliente_email`
+- Campos opcionais: `cliente_rg`, `cliente_profissao`, `cliente_endereco_completo`, `cliente_endereco_cep`, `cliente_renda`, `cliente_patrimonio`, `cliente_pix`
+- Reutilizar as funcoes de formatacao (`formatCpf`, `formatPhone`, `formatCep`) ja existentes no `AcceptProposalModal`
