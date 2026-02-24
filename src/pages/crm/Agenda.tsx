@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { format, addDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getWeekStartsOn } from '@/lib/businessDays';
-import { CalendarDays, ChevronLeft, ChevronRight, Settings, Users, RefreshCw, Plus, Columns3, BarChart3 } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Settings, Users, RefreshCw, Plus, Columns3, BarChart3, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
 import { AgendaCalendar, ViewMode } from '@/components/crm/AgendaCalendar';
 import { MeetingsList } from '@/components/crm/MeetingsList';
 import { CloserAvailabilityConfig } from '@/components/crm/CloserAvailabilityConfig';
@@ -48,6 +49,7 @@ export default function Agenda() {
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [meetingToReschedule, setMeetingToReschedule] = useState<MeetingSlot | null>(null);
   const [preselectedCloserId, setPreselectedCloserId] = useState<string | undefined>();
+  const [searchTerm, setSearchTerm] = useState('');
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -115,8 +117,20 @@ export default function Agenda() {
     if (statusFilter) {
       result = result.filter(m => m.status === statusFilter);
     }
+    if (searchTerm.length >= 2) {
+      const search = searchTerm.toLowerCase();
+      const searchDigits = searchTerm.replace(/\D/g, '');
+      result = result.filter(m =>
+        m.attendees?.some(att => {
+          const name = (att.attendee_name || '').toLowerCase();
+          const phone = (att.attendee_phone || '').replace(/\D/g, '');
+          return name.includes(search) || 
+                 (searchDigits.length >= 2 && phone.includes(searchDigits));
+        })
+      );
+    }
     return result;
-  }, [meetings, closerFilter, statusFilter, isCloser, myCloser?.id]);
+  }, [meetings, closerFilter, statusFilter, searchTerm, isCloser, myCloser?.id]);
 
   const handlePrev = () => {
     if (viewMode === 'day') {
@@ -311,6 +325,15 @@ export default function Agenda() {
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar lead..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 w-[180px] sm:w-[200px] h-9 text-xs sm:text-sm"
+            />
+          </div>
           {!isCloser && (
             <Select value={closerFilter || 'all'} onValueChange={(v) => setCloserFilter(v === 'all' ? null : v)}>
               <SelectTrigger className="w-[140px] sm:w-[180px] text-xs sm:text-sm">
