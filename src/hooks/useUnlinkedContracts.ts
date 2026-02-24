@@ -11,18 +11,45 @@ export interface UnlinkedContract {
   sale_date: string;
   net_value: number | null;
   product_price: number | null;
+  product_name?: string | null;
+  product_category?: string | null;
+}
+
+interface UseUnlinkedContractsOptions {
+  searchAll?: boolean;
+  search?: string;
 }
 
 /**
- * Hook to fetch unlinked contract transactions (product_category = 'contrato')
- * from the last 14 days that have no linked_attendee_id
+ * Hook to fetch unlinked contract transactions.
+ * Default: product_category = 'contrato', last 14 days.
+ * searchAll mode: no date/category filter, server-side search (min 3 chars).
  */
-export function useUnlinkedContracts() {
+export function useUnlinkedContracts(options: UseUnlinkedContractsOptions = {}) {
+  const { searchAll = false, search = '' } = options;
   const twoWeeksAgo = subDays(new Date(), 14);
+  const trimmedSearch = search.trim();
 
   return useQuery({
-    queryKey: ['unlinked-contracts'],
+    queryKey: ['unlinked-contracts', searchAll, trimmedSearch],
     queryFn: async () => {
+      if (searchAll) {
+        // Expanded search: no date/category filter, server-side search required
+        if (trimmedSearch.length < 3) return [] as UnlinkedContract[];
+
+        const { data, error } = await supabase
+          .from('hubla_transactions')
+          .select('id, hubla_id, customer_name, customer_email, customer_phone, sale_date, net_value, product_price, product_name, product_category')
+          .is('linked_attendee_id', null)
+          .or(`customer_email.ilike.%${trimmedSearch}%,customer_name.ilike.%${trimmedSearch}%,customer_phone.ilike.%${trimmedSearch}%`)
+          .order('sale_date', { ascending: false })
+          .limit(50);
+
+        if (error) throw error;
+        return (data || []) as UnlinkedContract[];
+      }
+
+      // Default: last 14 days, contrato only
       const { data, error } = await supabase
         .from('hubla_transactions')
         .select('id, hubla_id, customer_name, customer_email, customer_phone, sale_date, net_value, product_price')
@@ -34,7 +61,7 @@ export function useUnlinkedContracts() {
       if (error) throw error;
       return (data || []) as UnlinkedContract[];
     },
-    refetchInterval: 60000, // 1 minuto
+    refetchInterval: 60000,
     staleTime: 10000,
   });
 }
