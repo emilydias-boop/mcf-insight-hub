@@ -68,7 +68,8 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
           scheduled_at,
           meeting_slot_attendees (
             id,
-            status
+            status,
+            is_partner
           )
         `)
         .eq('closer_id', closerId)
@@ -89,6 +90,9 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         const attendees = slot.meeting_slot_attendees || [];
         
         attendees.forEach((att: any) => {
+          // Skip partners from metrics
+          if (att.is_partner) return;
+          
           r1_alocadas++;
           
           const status = att.status?.toLowerCase();
@@ -117,6 +121,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         `)
         .eq('meeting_slot.closer_id', closerId)
         .in('status', ['contract_paid', 'refunded'])
+        .eq('is_partner', false)
         .not('contract_paid_at', 'is', null)
         .gte('contract_paid_at', `${startDate}T00:00:00`)
         .lte('contract_paid_at', `${endDate}T23:59:59`);
@@ -137,6 +142,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         `)
         .eq('meeting_slot.closer_id', closerId)
         .in('status', ['contract_paid', 'refunded'])
+        .eq('is_partner', false)
         .is('contract_paid_at', null)
         .gte('meeting_slot.scheduled_at', `${startDate}T00:00:00`)
         .lte('meeting_slot.scheduled_at', `${endDate}T23:59:59`);
@@ -172,7 +178,9 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
 
       // 7. Buscar vendas parceria de hubla_transactions
       const attendeeIds = slots?.flatMap(s => 
-        (s.meeting_slot_attendees || []).map((a: any) => a.id)
+        (s.meeting_slot_attendees || [])
+          .filter((a: any) => !a.is_partner)
+          .map((a: any) => a.id)
       ) || [];
 
       let vendas_parceria = 0;
