@@ -1,77 +1,44 @@
 
 
-## Corrigir: Reunioes desaparecem ao remover horario configurado
+## Substituir badge "Outside" por nome do produto no Consorcio
 
 ### Problema
 
-Quando um horario e removido da configuracao de disponibilidade de uma semana especifica (ex: sabado), as reunioes que ja estavam agendadas nesse horario desaparecem do calendario do gestor. Isso acontece porque o grid de horarios e construido apenas a partir dos slots configurados, ignorando reunioes existentes em horarios nao-configurados.
-
-O problema afeta duas visoes:
-
-1. **Visao "Por Closer"** (`CloserColumnCalendar.tsx`): A lista de horarios (`timeSlots`) e gerada exclusivamente a partir dos `daySlots` configurados (linha 137-144). Se o slot foi removido da configuracao, o horario inteiro desaparece do grid, levando as reunioes junto.
-
-2. **Visao "Calendario"** (`AgendaCalendar.tsx`): A funcao `getAllConfiguredClosersForDay` (linha 548) so retorna closers que tem slots configurados. Se todos os slots de um closer foram removidos para aquele dia, o closer some do grid e suas reunioes ficam invisiveis.
+No Kanban do Consorcio, o badge "$ Outside" nao agrega valor - o gestor quer ver **o que o lead comprou** (ex: "Contrato A009", "Contrato Efeito Alavanca"), nao apenas que ele e outside.
 
 ### Solucao
 
-Expandir a geracao de `timeSlots` e `closers visiveis` para incluir horarios e closers que tenham reunioes existentes, mesmo que o slot de configuracao tenha sido removido.
+Mudar o `outsideMap` de `Map<dealId, boolean>` para `Map<dealId, { isOutside: boolean; productName: string | null }>`, e no card do Kanban, quando a BU for Consorcio, exibir o nome do produto em vez de "$ Outside".
 
 ### Alteracoes
 
-**`src/components/crm/CloserColumnCalendar.tsx`**
+**`src/hooks/useOutsideDetectionForDeals.ts`**
 
-Modificar o `useMemo` de `timeSlots` (linha 137-144) para tambem incluir horarios de reunioes existentes:
+- Alterar a tipagem do retorno de `Map<string, boolean>` para `Map<string, { isOutside: boolean; productName: string | null }>`
+- Na query de `hubla_transactions`, adicionar `product_name` ao `.select()`
+- Guardar o `product_name` junto com a data do contrato no map intermediario
+- No resultado final, incluir `productName` para cada deal outside
 
-```
-Antes:
-  const timeSlots = useMemo(() => {
-    const uniqueTimes = [...new Set(daySlots.map(s => s.start_time))].sort();
-    return uniqueTimes.map(timeStr => ...);
-  }, [daySlots, selectedDate]);
+**`src/components/crm/DealKanbanBoard.tsx`**
 
-Depois:
-  const timeSlots = useMemo(() => {
-    // Horarios dos slots configurados
-    const configuredTimes = daySlots.map(s => s.start_time.slice(0, 5));
-    
-    // Horarios de reunioes existentes (podem estar em slots removidos)
-    const meetingTimes = meetings.map(m => {
-      const d = parseISO(m.scheduled_at);
-      if (!isSameDay(d, selectedDate)) return null;
-      return format(d, 'HH:mm');
-    }).filter(Boolean);
-    
-    // Unir e ordenar
-    const uniqueTimes = [...new Set([...configuredTimes, ...meetingTimes])].sort();
-    return uniqueTimes.map(timeStr => {
-      const [hour, minute] = timeStr.split(':').map(Number);
-      return setMinutes(setHours(selectedDate, hour), minute);
-    });
-  }, [daySlots, meetings, selectedDate]);
-```
+- Atualizar tipagem de `outsideMap` para o novo formato
+- Passar `outsideInfo` (com `productName`) para `DealKanbanCard` em vez de apenas `isOutside`
 
-**`src/components/crm/AgendaCalendar.tsx`**
+**`src/components/crm/DealKanbanCard.tsx`**
 
-Modificar `getAllConfiguredClosersForDay` (linha 548-570) para tambem incluir closers que tenham reunioes no dia, mesmo sem slots configurados:
+- Alterar prop `isOutside` para `outsideInfo?: { isOutside: boolean; productName: string | null }`
+- No badge, se `productName` existir, mostrar o nome do produto (ex: "Contrato A009") em vez de "$ Outside"
+- Manter o estilo amarelo para indicar visualmente que e uma compra pre-existente
 
-```
-Antes:
-  // So busca closers dos slots configurados
-  
-Depois:
-  // Buscar closers dos slots configurados (logica existente)
-  // + Adicionar closers que tenham reunioes nesse dia
-  const dayMeetings = filteredMeetings.filter(m => 
-    isSameDay(parseISO(m.scheduled_at), day)
-  );
-  dayMeetings.forEach(m => {
-    if (m.closer_id) allCloserIdsSet.add(m.closer_id);
-  });
-```
+**`src/pages/crm/Negocios.tsx`**
+
+- Ajustar a leitura do `outsideMap` para o novo formato nas partes de filtro (onde faz `outsideMap.get(deal.id)`)
+- O filtro de Outside continua funcionando, usando `outsideInfo.isOutside`
 
 ### Resultado esperado
 
-- Reunioes agendadas em horarios que foram removidos da configuracao continuarao visiveis no calendario
-- Os horarios aparecerao como linhas no grid (sem o botao "+Agendar", ja que nao estao configurados)
-- O closer aparecera como coluna no dia, mesmo sem slots configurados, se tiver reunioes
-- A funcionalidade de remover horarios continua funcionando normalmente para slots futuros vazios
+- BU Incorporador: Badge mostra o nome do produto comprado (ex: "$ Contrato MCF") - mais informativo
+- BU Consorcio: Badge mostra o nome do produto comprado (ex: "$ Contrato Efeito Alavanca")
+- Filtros de Outside continuam funcionando normalmente
+- Se o product_name nao estiver disponivel, fallback para "$ Outside" como antes
+
