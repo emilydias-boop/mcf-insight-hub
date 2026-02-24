@@ -93,24 +93,26 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
         .single();
       if (error) throw error;
       
-      // 2. Espelhar em crm_stages para evitar erro de FK ao mover deals
+      // 2. Espelhar em crm_stages (OBRIGATÓRIO para evitar erro de FK ao mover deals)
       if (createdStage) {
         const originId = targetType === 'origin' ? targetId : null;
         if (originId) {
           const { error: mirrorError } = await supabase
             .from('crm_stages')
-            .insert({
+            .upsert({
               id: createdStage.id,
               clint_id: `local-${createdStage.id}`,
               stage_name: stage.name,
               color: stage.color,
               stage_order: maxOrder + 1,
-              stage_type: stage.stage_type,
               origin_id: originId,
               is_active: true,
-            });
+            }, { onConflict: 'id' });
           if (mirrorError) {
-            console.warn('[PipelineStagesEditor] Erro ao espelhar em crm_stages (não-fatal):', mirrorError.message);
+            // Fatal: deletar o local stage se não conseguiu espelhar
+            console.error('[PipelineStagesEditor] Erro FATAL ao espelhar em crm_stages:', mirrorError.message);
+            await supabase.from('local_pipeline_stages').delete().eq('id', createdStage.id);
+            throw new Error(`Erro ao sincronizar etapa: ${mirrorError.message}`);
           }
         }
       }

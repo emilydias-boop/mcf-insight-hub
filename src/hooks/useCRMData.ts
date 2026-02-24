@@ -587,25 +587,52 @@ export const useUpdateCRMDeal = () => {
       if (deal.stage_id && previousStageId !== deal.stage_id) {
        const now = new Date().toISOString();
        deal.stage_moved_at = now;
-       deal.last_worked_at = now; // Sync last_worked_at when stage changes
+       deal.last_worked_at = now;
       }
       
-      // Update the deal
-      const { data, error } = await supabase
-        .from('crm_deals')
-        .update(deal)
-        .eq('id', id)
-        .select(`
-          *,
-          crm_contacts(id, name, email, phone)
-        `)
-        .single();
+      // Helper to perform the actual update
+      const performUpdate = async () => {
+        const { data, error } = await supabase
+          .from('crm_deals')
+          .update(deal)
+          .eq('id', id)
+          .select(`
+            *,
+            crm_contacts(id, name, email, phone)
+          `)
+          .single();
+        
+        if (error) throw error;
+        return data;
+      };
       
-      if (error) throw error;
+      let data;
+      try {
+        data = await performUpdate();
+      } catch (error: any) {
+        // If FK error on stage_id, try to mirror the stage and retry once
+        if (
+          error?.message?.includes('crm_deals_stage_id_fkey') &&
+          deal.stage_id
+        ) {
+          console.warn('[useUpdateCRMDeal] FK error on stage_id, attempting auto-mirror for:', deal.stage_id);
+          try {
+            await supabase.functions.invoke('ensure-crm-stage-mirror', {
+              body: { stage_id: deal.stage_id },
+            });
+            // Retry once after mirroring
+            data = await performUpdate();
+          } catch (retryError: any) {
+            console.error('[useUpdateCRMDeal] Retry after mirror failed:', retryError);
+            throw new Error('Estágio inválido ou não sincronizado. Tente novamente ou contate o suporte.');
+          }
+        } else {
+          throw error;
+        }
+      }
       
       // Check if stage changed and generate tasks
       if (deal.stage_id && previousStageId !== deal.stage_id && data.origin_id) {
-        // Import dynamically to avoid circular dependencies
         const { handleStageChange } = await import('./useStageTaskGeneration');
         await handleStageChange(
           id,

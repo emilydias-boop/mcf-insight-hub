@@ -278,3 +278,6 @@ verify_jwt = false
 
 [functions.distribute-outside-leads]
 verify_jwt = false
+
+[functions.ensure-crm-stage-mirror]
+verify_jwt = false
