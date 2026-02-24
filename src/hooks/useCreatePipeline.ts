@@ -102,24 +102,24 @@ export const useCreatePipeline = () => {
             }
           });
 
-          // Espelhar todos os stages em crm_stages para evitar erro de FK
+          // Espelhar todos os stages em crm_stages (OBRIGATÓRIO para evitar erro de FK)
           const crmMirrors = createdStages.map((s: any) => ({
             id: s.id,
             clint_id: `local-${s.id}`,
             stage_name: s.name,
             color: s.color,
             stage_order: s.stage_order,
-            stage_type: s.stage_type,
             origin_id: originId,
             is_active: true,
           }));
 
           const { error: mirrorError } = await supabase
             .from('crm_stages')
-            .insert(crmMirrors);
+            .upsert(crmMirrors, { onConflict: 'id' });
 
           if (mirrorError) {
-            console.warn('[useCreatePipeline] Erro ao espelhar em crm_stages (não-fatal):', mirrorError.message);
+            console.error('[useCreatePipeline] Erro FATAL ao espelhar em crm_stages:', mirrorError.message);
+            throw new Error(`Erro ao sincronizar etapas no CRM: ${mirrorError.message}`);
           }
         }
       }
