@@ -65,7 +65,7 @@ interface DealKanbanCardProps {
   isSelected?: boolean;
   onSelect?: (dealId: string, selected: boolean) => void;
   salesChannel?: SalesChannel;
-  isOutside?: boolean;
+  outsideInfo?: { isOutside: boolean; productName: string | null };
 }
 
 export const DealKanbanCard = ({ 
@@ -78,7 +78,7 @@ export const DealKanbanCard = ({
   isSelected = false,
   onSelect,
   salesChannel = 'live',
-  isOutside = false,
+  outsideInfo,
 }: DealKanbanCardProps) => {
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice } = useTwilio();
   const { role } = useAuth();
@@ -348,12 +348,12 @@ export const DealKanbanCard = ({
               {typeof tag === "string" ? tag : tag.name}
             </Badge>
           ))}
-          {isOutside && (
+          {outsideInfo?.isOutside && (
             <Badge 
               variant="outline" 
               className="text-[10px] px-1.5 py-0 font-semibold bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-950 dark:text-yellow-400 dark:border-yellow-700 gap-0.5"
             >
-              $ Outside
+              {outsideInfo.productName ? `$ ${outsideInfo.productName}` : '$ Outside'}
             </Badge>
           )}
           {priority && <span className={priority.color}>{priority.icon}</span>}

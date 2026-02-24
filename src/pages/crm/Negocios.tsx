@@ -485,7 +485,7 @@ const Negocios = () => {
       }
       // Filtro Outside
       if (filters.outsideFilter !== 'all' && outsideMap) {
-        const isOutside = outsideMap.get(deal.id) || false;
+        const isOutside = outsideMap.get(deal.id)?.isOutside || false;
         if (filters.outsideFilter === 'outside_only' && !isOutside) return false;
         if (filters.outsideFilter === 'not_outside' && isOutside) return false;
         if (filters.outsideFilter === 'outside_worked') {

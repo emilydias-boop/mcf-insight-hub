@@ -45,8 +45,8 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
 
   return useQuery({
     queryKey: ['outside-detection-deals', keyParts],
-    queryFn: async (): Promise<Map<string, boolean>> => {
-      const result = new Map<string, boolean>();
+    queryFn: async (): Promise<Map<string, { isOutside: boolean; productName: string | null }>> => {
+      const result = new Map<string, { isOutside: boolean; productName: string | null }>();
       if (!deals.length) return result;
 
       // 1. Collect unique emails -> deal mappings
@@ -68,11 +68,11 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
       // 3. Fetch contract transactions AND R1 meetings in parallel
       const [contracts, r1Attendees] = await Promise.all([
         // Contracts (existing logic)
-        batchedIn<{ customer_email: string | null; sale_date: string }>(
+        batchedIn<{ customer_email: string | null; sale_date: string; product_name: string | null }>(
           (chunk) =>
             supabase
               .from('hubla_transactions')
-              .select('customer_email, sale_date')
+              .select('customer_email, sale_date, product_name')
               .in('customer_email', chunk)
               .in('product_category', ['contrato', 'incorporador'])
               .ilike('product_name', '%contrato%')
@@ -92,15 +92,15 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         ),
       ]);
 
-      // 4. Build email -> earliest contract date
-      const earliestContract = new Map<string, Date>();
+      // 4. Build email -> earliest contract date + product name
+      const earliestContract = new Map<string, { date: Date; productName: string | null }>();
       for (const c of contracts) {
         const email = c.customer_email?.toLowerCase().trim();
         if (!email) continue;
         const saleDate = new Date(c.sale_date);
         const existing = earliestContract.get(email);
-        if (!existing || saleDate < existing) {
-          earliestContract.set(email, saleDate);
+        if (!existing || saleDate < existing.date) {
+          earliestContract.set(email, { date: saleDate, productName: c.product_name });
         }
       }
 
@@ -118,17 +118,20 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
 
       // 6. Determine Outside: has contract AND (no R1 OR contract <= R1)
       for (const [email, dealEntries] of emailToDealIds) {
-        const contractDate = earliestContract.get(email);
-        if (!contractDate) continue; // No contract = not outside
+        const contractInfo = earliestContract.get(email);
+        if (!contractInfo) continue; // No contract = not outside
 
         for (const entry of dealEntries) {
           const r1Date = earliestR1.get(entry.dealId);
           if (!r1Date) {
             // Has contract but no R1 meeting -> Outside
-            result.set(entry.dealId, true);
+            result.set(entry.dealId, { isOutside: true, productName: contractInfo.productName });
           } else {
             // Has contract and R1 -> Outside if contract was paid before/on R1
-            result.set(entry.dealId, contractDate <= r1Date);
+            const isOutside = contractInfo.date <= r1Date;
+            if (isOutside) {
+              result.set(entry.dealId, { isOutside: true, productName: contractInfo.productName });
+            }
           }
         }
       }
