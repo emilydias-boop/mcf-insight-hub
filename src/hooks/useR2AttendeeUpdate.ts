@@ -16,6 +16,8 @@ interface UpdateAttendeeData {
     meeting_link?: string | null;
     is_decision_maker?: boolean | null;
     decision_maker_type?: string | null;
+    attendee_name?: string | null;
+    attendee_phone?: string | null;
   };
 }
 
