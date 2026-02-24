@@ -1,98 +1,89 @@
 
 
-## Duas melhorias no fluxo de cadastro de cota
+## Adicionar "Colar Check-list" para Pessoa Juridica
 
-### Problema 1: Dados do AcceptProposalModal nao aparecem no OpenCotaModal
+### O que sera feito
 
-O fluxo ja esta correto no codigo: quando o closer preenche o AcceptProposalModal, os dados sao salvos na tabela `consorcio_pending_registrations` e o OpenCotaModal le dessa mesma tabela. O problema das 2 propostas especificas (Joao Ferreira e Kleber Donizetti) foi que elas foram inseridas manualmente sem os dados do cliente.
+Adicionar o mesmo botao "Colar Check-list" que ja existe na secao PF, agora tambem na secao PJ do AcceptProposalModal (e do OpenCotaModal). Ao colar o texto padrao de check-list PJ, o sistema extrai automaticamente os dados e preenche os campos do formulario.
 
-Para futuros cadastros, o fluxo funciona corretamente. Porem, ha um campo que falta no OpenCotaModal: o campo `cpf_conjuge` nao esta sendo exibido. Vou adiciona-lo.
+### Formato suportado
 
-### Problema 2: Funcao de auto-preenchimento por texto (checklist)
-
-Adicionar um botao "Colar Check-list" no AcceptProposalModal que abre um campo de texto. O usuario cola o texto padrao de check-list e o sistema extrai automaticamente os dados usando regex, preenchendo os campos do formulario.
-
-Formato suportado:
 ```text
-Nome Completo: Evandro Moreira da Silva
-RG: 1.956.525 - SSP/ES
-CPF: 096.559.837-30
-CPF Conjuge (se casado): 022.569.441-74
-Endereco Residencial: SHTN, trecho 2, ...
-CEP: 70.800-230
-Telefone: 61 99644-7743
-E-mail: evandroms7744@gmail.com
-Profissao: Servidor Publico
-Renda: R$ 47.000,00
-Patrimonio: R$ 3.800.000,00
-Chave Pix: 096.559.837-30
+Razao Social: PJ MANDALA PARTICIPACOES LTDA
+CNPJ: 60.386.616/0001-74
+Natureza Juridica: Sociedade Empresaria Limitada
+Inscricao Estadual: (vazio)
+Data de Fundacao: 14/04/2025
+CPF dos socios: 994.850.521-20, 016.498.241-81
+Endereco Comercial: Rua Buarque de Macedo, 1057
+CEP: 13073-010
+Telefone Comercial: (19)99957-7420
+E-mail comercial: pablo7420@yahoo.com.br
+Faturamento medio: R$50.000,00
+Numero de funcionarios: 0
+Renda dos socios: R$70.000,00
 ```
 
-### Alteracoes
+### Campos mapeados
+
+| Texto do check-list | Campo do formulario |
+|---|---|
+| Razao Social | razao_social |
+| CNPJ | cnpj |
+| Natureza Juridica | natureza_juridica |
+| Inscricao Estadual | inscricao_estadual |
+| Data de Fundacao | data_fundacao (converte dd/mm/yyyy para yyyy-mm-dd) |
+| CPF dos socios | socios[] (separa por virgula, cria 1 socio por CPF) |
+| Endereco Comercial | endereco_comercial |
+| CEP | endereco_comercial_cep |
+| Telefone Comercial | telefone_comercial |
+| E-mail comercial | email_comercial |
+| Faturamento medio | faturamento_mensal (converte R$ para numero) |
+| Numero de funcionarios | num_funcionarios |
+| Renda dos socios | renda de cada socio (divide igualmente) |
+
+### Alteracoes por arquivo
+
+**`src/lib/checklistParser.ts`**
+
+- Adicionar interface `ChecklistPJData` com os campos PJ
+- Adicionar funcao `parseChecklistPJ(text)` com regex para cada campo PJ
+- Tratamento especial para "CPF dos socios": separa por virgula e retorna array
+- Tratamento especial para "Data de Fundacao": converte de dd/mm/yyyy para yyyy-mm-dd (formato do input date)
+- Tratamento especial para "Renda dos socios": valor unico que sera dividido igualmente entre os socios
 
 **`src/components/consorcio/AcceptProposalModal.tsx`**
 
-1. Adicionar um botao "Colar Check-list" no topo da secao PF (ao lado de "Dados Pessoais")
-2. Ao clicar, mostrar um `Textarea` com placeholder explicando o formato esperado
-3. Ao colar/digitar e clicar "Preencher", executar uma funcao `parseChecklist(text)` que:
-   - Busca cada campo por regex (ex: `/Nome Completo:\s*(.+)/i`)
-   - Parseia valores monetarios (R$ 47.000,00 -> 47000)
-   - Formata CPF, telefone e CEP automaticamente
-   - Preenche os campos do formulario via `form.setValue()`
-4. Apos preencher, esconder o textarea automaticamente
-
-Campos mapeados:
-- "Nome Completo" -> `nome_completo`
-- "RG" -> `rg`
-- "CPF" -> `cpf` (formata com pontos/traco)
-- "CPF Conjuge" / "CPF Cônjuge" -> `cpf_conjuge`
-- "Endereco" / "Endereço Residencial" -> `endereco_completo`
-- "CEP" -> `endereco_cep` (formata com traco)
-- "Telefone" -> `telefone` (formata com parenteses)
-- "E-mail" / "Email" -> `email`
-- "Profissao" / "Profissão" -> `profissao`
-- "Renda" -> `renda` (converte de R$ para numero)
-- "Patrimonio" / "Patrimônio" -> `patrimonio` (converte de R$ para numero)
-- "Chave Pix" / "PIX" -> `pix`
+- Adicionar botao "Colar Check-list" ao lado de "Dados da Empresa" (linha 419), identico ao que ja existe na secao PF
+- Adicionar estado `showChecklistPJ` e `checklistTextPJ`
+- No clique de "Preencher Campos", chamar `parseChecklistPJ()` e fazer `form.setValue()` para cada campo PJ
+- Para os socios: limpar os socios existentes e adicionar um por CPF encontrado, com a renda dividida
 
 **`src/components/consorcio/OpenCotaModal.tsx`**
 
-5. Adicionar campo `cliente_cpf_conjuge` ao formulario
-6. Adicionar o mesmo botao "Colar Check-list" no OpenCotaModal (reutilizando a mesma funcao de parsing)
+- Adicionar o mesmo botao "Colar Check-list PJ" na secao PJ do OpenCotaModal (se houver secao PJ editavel)
 
 ### Detalhes tecnicos
 
-A funcao de parsing sera criada como um utilitario reutilizavel:
+A funcao `parseChecklistPJ` seguira o mesmo padrao da `parseChecklistPF` existente, processando linha a linha:
 
 ```text
-src/lib/checklistParser.ts
-
-export function parseChecklistPF(text: string): Partial<PFData> {
-  const extract = (pattern: RegExp): string => {
-    const match = text.match(pattern);
-    return match?.[1]?.trim() || '';
-  };
-  
-  const parseMoney = (value: string): number => {
-    return parseFloat(value.replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
-  };
-
-  return {
-    nome_completo: extract(/nome\s*completo:\s*(.+)/i),
-    rg: extract(/rg:\s*(.+)/i),
-    cpf: extract(/cpf:\s*(.+)/i),        // linha que NAO contem "conjuge"
-    cpf_conjuge: extract(/cpf\s*c[oô]njuge[^:]*:\s*(.+)/i),
-    endereco_completo: extract(/endere[cç]o[^:]*:\s*(.+)/i),
-    endereco_cep: extract(/cep:\s*(.+)/i),
-    telefone: extract(/telefone:\s*(.+)/i),
-    email: extract(/e-?mail:\s*(.+)/i),
-    profissao: extract(/profiss[aã]o:\s*(.+)/i),
-    renda: parseMoney(extract(/renda:\s*(.+)/i)),
-    patrimonio: parseMoney(extract(/patrim[oô]nio:\s*(.+)/i)),
-    pix: extract(/(?:chave\s*)?pix:\s*(.+)/i),
-  };
+parseChecklistPJ(text) retorna:
+{
+  razao_social: "PJ MANDALA PARTICIPACOES LTDA",
+  cnpj: "60.386.616/0001-74",
+  natureza_juridica: "Sociedade Empresaria Limitada",
+  inscricao_estadual: "",
+  data_fundacao: "2025-04-14",  // convertido de 14/04/2025
+  socios_cpfs: ["994.850.521-20", "016.498.241-81"],
+  endereco_comercial: "Rua Buarque de Macedo, 1057",
+  endereco_comercial_cep: "13073-010",
+  telefone_comercial: "(19)99957-7420",
+  email_comercial: "pablo7420@yahoo.com.br",
+  faturamento_mensal: 50000,
+  num_funcionarios: 0,
+  renda_socios: 70000
 }
 ```
 
-O regex de CPF sera tratado com cuidado para nao capturar a linha do conjuge quando buscando o CPF principal (usara negative lookahead ou processamento por linhas).
-
+Para os socios, a logica sera: se houver 2 CPFs e renda de R$70.000, cada socio recebe R$35.000. Se o usuario quiser valores diferentes, pode ajustar manualmente apos o preenchimento automatico.
