@@ -170,11 +170,19 @@ export function useCreatePendingRegistration() {
 
       if (proposalError) throw proposalError;
 
-      // 2. Criar registro pendente (se falhar, o botão "Cadastrar Cota" permite retentar)
+      // 2. Sanitizar: converter strings vazias em null para evitar erros de tipo no banco
+      const sanitized = Object.fromEntries(
+        Object.entries(registrationData).map(([key, value]) => [
+          key,
+          value === '' ? null : value,
+        ])
+      );
+
+      // 3. Criar registro pendente (se falhar, o botão "Cadastrar Cota" permite retentar)
       const { data: registration, error: regError } = await supabase
         .from('consorcio_pending_registrations')
         .insert({
-          ...registrationData,
+          ...sanitized,
           aceite_date: new Date().toISOString().split('T')[0],
           created_by: user.id,
           status: 'aguardando_abertura',
