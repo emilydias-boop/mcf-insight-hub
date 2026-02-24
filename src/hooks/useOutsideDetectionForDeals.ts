@@ -65,9 +65,9 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
       // 2. Collect unique deal IDs for R1 meeting lookup
       const dealIds = deals.map(d => d.id);
 
-      // 3. Fetch contract transactions AND R1 meetings in parallel
-      const [contracts, r1Attendees] = await Promise.all([
-        // Contracts (existing logic)
+      // 3. Fetch contract transactions, non-contract products, AND R1 meetings in parallel
+      const [contracts, nonContractProducts, r1Attendees] = await Promise.all([
+        // Contracts (existing logic - for outside detection)
         batchedIn<{ customer_email: string | null; sale_date: string; product_name: string | null }>(
           (chunk) =>
             supabase
@@ -78,6 +78,18 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
               .ilike('product_name', '%contrato%')
               .eq('sale_status', 'completed')
               .order('sale_date', { ascending: true }),
+          uniqueEmails
+        ),
+        // Non-contract products (partnership/course names to display)
+        batchedIn<{ customer_email: string | null; sale_date: string; product_name: string | null }>(
+          (chunk) =>
+            supabase
+              .from('hubla_transactions')
+              .select('customer_email, sale_date, product_name')
+              .in('customer_email', chunk)
+              .not('product_name', 'ilike', '%contrato%')
+              .eq('sale_status', 'completed')
+              .order('sale_date', { ascending: false }),
           uniqueEmails
         ),
         // R1 meetings by deal_id
@@ -104,6 +116,16 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         }
       }
 
+      // 4b. Build email -> most recent non-contract product name
+      const nonContractProductName = new Map<string, string>();
+      for (const p of nonContractProducts) {
+        const email = p.customer_email?.toLowerCase().trim();
+        if (!email || !p.product_name) continue;
+        if (!nonContractProductName.has(email)) {
+          nonContractProductName.set(email, p.product_name);
+        }
+      }
+
       // 5. Build dealId -> earliest R1 scheduled_at
       const earliestR1 = new Map<string, Date>();
       for (const a of r1Attendees) {
@@ -121,16 +143,19 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         const contractInfo = earliestContract.get(email);
         if (!contractInfo) continue; // No contract = not outside
 
+        // Prefer non-contract product name over contract name
+        const displayName = nonContractProductName.get(email) || contractInfo.productName;
+
         for (const entry of dealEntries) {
           const r1Date = earliestR1.get(entry.dealId);
           if (!r1Date) {
             // Has contract but no R1 meeting -> Outside
-            result.set(entry.dealId, { isOutside: true, productName: contractInfo.productName });
+            result.set(entry.dealId, { isOutside: true, productName: displayName });
           } else {
             // Has contract and R1 -> Outside if contract was paid before/on R1
             const isOutside = contractInfo.date <= r1Date;
             if (isOutside) {
-              result.set(entry.dealId, { isOutside: true, productName: contractInfo.productName });
+              result.set(entry.dealId, { isOutside: true, productName: displayName });
             }
           }
         }
