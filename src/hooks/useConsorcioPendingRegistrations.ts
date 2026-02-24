@@ -77,12 +77,21 @@ export function usePendingRegistrations() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('consorcio_pending_registrations')
-        .select('*')
+        .select('*, deal:crm_deals!deal_id(contact:crm_contacts!contact_id(name, email, phone), owner_id)')
         .eq('status', 'aguardando_abertura')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return (data || []) as unknown as PendingRegistration[];
+      
+      // Fallback: preencher nome/telefone/email do contato quando vazios
+      return (data || []).map((r: any) => ({
+        ...r,
+        nome_completo: r.nome_completo || r.deal?.contact?.name || null,
+        telefone: r.telefone || r.deal?.contact?.phone || null,
+        email: r.email || r.deal?.contact?.email || null,
+        vendedor_name: r.vendedor_name || r.deal?.owner_id || null,
+        deal: undefined,
+      })) as unknown as PendingRegistration[];
     },
   });
 }
