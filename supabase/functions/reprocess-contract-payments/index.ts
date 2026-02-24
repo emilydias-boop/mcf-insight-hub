@@ -105,6 +105,7 @@ serve(async (req) => {
           .gte('slot.scheduled_at', fourteenDaysAgo.toISOString())
           .in('slot.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
           .in('status', ['scheduled', 'invited', 'completed'])
+          .eq('is_partner', false)
           .order('created_at', { ascending: false });
 
         // Encontrar attendee por email do contato ou telefone
