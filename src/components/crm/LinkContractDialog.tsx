@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, DollarSign, User, Phone, Mail, Link2, Loader2 } from 'lucide-react';
+import { Search, DollarSign, User, Phone, Mail, Link2, Loader2, Package } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { useUnlinkedContracts } from '@/hooks/useUnlinkedContracts';
 import { useLinkContractToAttendee } from '@/hooks/useLinkContractToAttendee';
 
@@ -32,11 +34,18 @@ export function LinkContractDialog({
   dealId 
 }: LinkContractDialogProps) {
   const [search, setSearch] = useState('');
-  const { data: contracts = [], isLoading } = useUnlinkedContracts();
+  const [searchAll, setSearchAll] = useState(false);
+
+  const { data: contracts = [], isLoading } = useUnlinkedContracts(
+    searchAll ? { searchAll: true, search } : {}
+  );
   const linkContract = useLinkContractToAttendee();
 
-  // Filter contracts based on search
+  // Filter contracts based on search (client-side for default mode only)
   const filteredContracts = useMemo(() => {
+    // In searchAll mode, filtering is server-side
+    if (searchAll) return contracts;
+
     if (!search.trim()) return contracts;
     
     const searchLower = search.toLowerCase();
@@ -49,7 +58,7 @@ export function LinkContractDialog({
       
       return nameMatch || emailMatch || phoneMatch;
     });
-  }, [contracts, search]);
+  }, [contracts, search, searchAll]);
 
   const handleLink = (transactionId: string) => {
     linkContract.mutate(
@@ -58,6 +67,7 @@ export function LinkContractDialog({
         onSuccess: () => {
           onOpenChange(false);
           setSearch('');
+          setSearchAll(false);
         }
       }
     );
@@ -95,10 +105,27 @@ export function LinkContractDialog({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nome, email ou telefone..."
+              placeholder={searchAll ? "Buscar por nome, email ou telefone (mín. 3 caracteres)..." : "Buscar por nome, email ou telefone..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10"
+            />
+          </div>
+
+          {/* Search All Toggle */}
+          <div className="flex items-center justify-between gap-2 rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="search-all" className="text-sm font-medium cursor-pointer">
+                Buscar em todo o histórico
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Remove filtros de data e categoria
+              </p>
+            </div>
+            <Switch
+              id="search-all"
+              checked={searchAll}
+              onCheckedChange={setSearchAll}
             />
           </div>
 
@@ -108,9 +135,13 @@ export function LinkContractDialog({
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
+            ) : searchAll && search.trim().length < 3 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Digite pelo menos 3 caracteres para buscar
+              </div>
             ) : filteredContracts.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                {contracts.length === 0 
+                {!searchAll && contracts.length === 0 
                   ? 'Nenhum contrato pendente nos últimos 14 dias'
                   : 'Nenhum contrato encontrado com essa busca'}
               </div>
@@ -135,6 +166,19 @@ export function LinkContractDialog({
                           </Badge>
                         </div>
                         
+                        {/* Product info (searchAll mode) */}
+                        {searchAll && contract.product_name && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Package className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{contract.product_name}</span>
+                            {contract.product_category && (
+                              <Badge variant="outline" className="text-xs shrink-0">
+                                {contract.product_category}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+
                         {/* Email */}
                         {contract.customer_email && (
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -181,7 +225,9 @@ export function LinkContractDialog({
 
           {/* Info */}
           <p className="text-xs text-muted-foreground text-center">
-            Mostrando contratos pendentes dos últimos 14 dias
+            {searchAll 
+              ? 'Buscando em todo o histórico de transações não vinculadas'
+              : 'Mostrando contratos pendentes dos últimos 14 dias'}
           </p>
         </div>
       </DialogContent>
