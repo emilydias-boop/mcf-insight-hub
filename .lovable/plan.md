@@ -1,66 +1,29 @@
 
-# Fix: SDR/Closer de Incorporador vendo BU Consorcio na sidebar
 
-## Problema
+# Fix: SDRs nao veem lista de leads em "Minhas Reunioes"
 
-A logica de filtragem do menu lateral esta incorreta. O item "BU - Consorcio" tem:
-- `requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer"]`
-- `requiredProducts: ["consorcio"]`
+## Causa Raiz
 
-A verificacao de `requiredProducts` so acontece quando a role do usuario **NAO** esta na lista de `requiredRoles`. Como Carol e SDR e "sdr" esta na lista, o filtro de roles passa e o `requiredProducts` nunca e verificado. Resultado: qualquer SDR/Closer ve a BU Consorcio, mesmo sem ter o produto.
+A RPC `get_sdr_meetings_from_agenda` tem um erro de nome de coluna. Ela referencia `msa.is_rescheduled` mas a coluna real na tabela `meeting_slot_attendees` se chama `is_reschedule`.
 
-## Solucao
+Isso causa um erro 400 em toda chamada, e a lista de reunioes volta vazia.
 
-Modificar a logica de filtragem no `AppSidebar.tsx` para que `requiredProducts` seja verificado **sempre**, independente de a role ter passado.
+## Correcao
 
-### Arquivo: `src/components/layout/AppSidebar.tsx`
+Alterar a funcao SQL no Supabase para usar o nome correto da coluna: `is_reschedule` ao inves de `is_rescheduled`.
 
-Alterar a logica de filtragem (linhas 446-474) para:
+### Passo unico: SQL Migration
 
-```text
-1. Verificar requiredRoles normalmente
-2. Se passou no teste de roles, TAMBEM verificar requiredProducts (se existir)
-3. Se requiredProducts existe e o usuario nao tem nenhum dos produtos, ocultar o item
-```
+Executar um `ALTER FUNCTION` ou `CREATE OR REPLACE FUNCTION` para corrigir a referencia de `msa.is_rescheduled` para `msa.is_reschedule` na funcao `get_sdr_meetings_from_agenda`.
 
-Logica corrigida:
+Como nao temos o corpo completo da funcao nos arquivos do projeto, sera necessario:
 
-```typescript
-const filteredMenuItems = allMenuItems.filter((item) => {
-    // Verificacao de roles
-    if (item.requiredRoles && role && 
-        !item.requiredRoles.some(r => (allRoles as string[]).includes(r))) {
-      // Fallback: SDR/Closer pode ver se tem o produto
-      if (item.requiredProducts && ["sdr", "closer"].includes(role)) {
-        return item.requiredProducts.some((p) => myProducts.includes(p));
-      }
-      return false;
-    }
-
-    // Verificacao de produtos (NOVO - aplica sempre, nao so como fallback)
-    if (item.requiredProducts && item.requiredProducts.length > 0) {
-      if (!myProducts || !item.requiredProducts.some(p => myProducts.includes(p))) {
-        // Admin/Manager ignoram filtro de produto
-        if (!isAdmin && role !== 'manager' && role !== 'coordenador') {
-          return false;
-        }
-      }
-    }
-
-    // Verificacao de BU
-    if (item.requiredBU && item.requiredBU.length > 0) {
-      if (!myBUs || myBUs.length === 0) return false;
-      if (!myBUs.some(bu => item.requiredBU!.includes(bu))) return false;
-    }
-
-    if (isAdmin) return true;
-    if (item.resource && !canAccessResource(item.resource)) return false;
-    return true;
-});
-```
+1. Consultar a definicao atual da funcao no banco
+2. Substituir `msa.is_rescheduled` por `msa.is_reschedule`
+3. Recriar a funcao com a correcao
 
 ### Impacto
 
-- SDRs/Closers que NAO tem o produto "consorcio" (como Carol, que e de Incorporador) deixarao de ver "BU - Consorcio"
-- SDRs/Closers que TEM o produto "consorcio" continuarao vendo normalmente
-- Admin, Manager e Coordenador continuam vendo todas as BUs
+- Todas as paginas que usam `useSdrMeetingsFromAgenda` voltarao a funcionar (Minhas Reunioes, detalhe do SDR)
+- Nenhuma mudanca no frontend necessaria -- o problema e exclusivamente no banco de dados
+
