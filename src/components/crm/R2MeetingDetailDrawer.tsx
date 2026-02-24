@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
-  Phone, Calendar, CheckCircle, XCircle, 
-  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft, Pencil
+  Phone, Mail, Calendar, CheckCircle, XCircle, 
+  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft, Pencil, Edit2, Check, X
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -16,8 +17,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { R2MeetingRow, R2StatusOption, R2ThermometerOption, R2AttendeeExtended } from '@/types/r2Agenda';
-import { useRemoveR2Attendee, useCancelR2Meeting, useRestoreR2Meeting } from '@/hooks/useR2AttendeeUpdate';
+import { useRemoveR2Attendee, useCancelR2Meeting, useRestoreR2Meeting, useUpdateR2Attendee } from '@/hooks/useR2AttendeeUpdate';
 import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
+import { useUpdateCRMContact } from '@/hooks/useCRMData';
 import { RefundModal } from './RefundModal';
 import { R2QualificationTab } from './r2-drawer/R2QualificationTab';
 import { R2EvaluationTab } from './r2-drawer/R2EvaluationTab';
@@ -56,6 +58,10 @@ export function R2MeetingDetailDrawer({
   const [refundModalOpen, setRefundModalOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [attendeeToTransfer, setAttendeeToTransfer] = useState<R2AttendeeExtended | null>(null);
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [phoneValue, setPhoneValue] = useState('');
+  const [emailValue, setEmailValue] = useState('');
   
   const { role } = useAuth();
   const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
@@ -67,6 +73,8 @@ export function R2MeetingDetailDrawer({
   const removeAttendee = useRemoveR2Attendee();
   const cancelMeeting = useCancelR2Meeting();
   const restoreMeeting = useRestoreR2Meeting();
+  const updateR2Attendee = useUpdateR2Attendee();
+  const updateCRMContact = useUpdateCRMContact();
   
   const attendee = meeting?.attendees?.find(a => a.id === selectedAttendeeId) || meeting?.attendees?.[0];
 
@@ -81,7 +89,60 @@ export function R2MeetingDetailDrawer({
 
   const statusInfo = MEETING_STATUS_LABELS[meeting.status] || MEETING_STATUS_LABELS.scheduled;
   const contactPhone = attendee?.phone || attendee?.deal?.contact?.phone;
+  const contactEmail = attendee?.deal?.contact?.email;
+  const contactId = (attendee?.deal as any)?.contact_id || (attendee?.deal?.contact as any)?.id;
 
+  const handleStartEditPhone = () => {
+    setPhoneValue(contactPhone || '');
+    setEditingPhone(true);
+  };
+
+  const handleSavePhone = async () => {
+    if (!phoneValue.trim()) {
+      toast.error('Digite um número de telefone');
+      setEditingPhone(false);
+      return;
+    }
+    try {
+      // Update attendee phone
+      if (attendee) {
+        await updateR2Attendee.mutateAsync({
+          attendeeId: attendee.id,
+          updates: { attendee_phone: phoneValue }
+        });
+      }
+      // Update CRM contact phone if linked
+      if (contactId) {
+        await updateCRMContact.mutateAsync({ id: contactId, phone: phoneValue });
+      }
+      setEditingPhone(false);
+    } catch {
+      toast.error('Erro ao salvar telefone');
+    }
+  };
+
+  const handleStartEditEmail = () => {
+    setEmailValue(contactEmail || '');
+    setEditingEmail(true);
+  };
+
+  const handleSaveEmail = async () => {
+    if (!emailValue.trim()) {
+      toast.error('Digite um email');
+      setEditingEmail(false);
+      return;
+    }
+    try {
+      if (contactId) {
+        await updateCRMContact.mutateAsync({ id: contactId, email: emailValue });
+      } else {
+        toast.error('Sem contato vinculado para salvar email');
+      }
+      setEditingEmail(false);
+    } catch {
+      toast.error('Erro ao salvar email');
+    }
+  };
   // Handler para atualizar status INDIVIDUAL do participante selecionado
   const handleParticipantStatusChange = (newStatus: string) => {
     if (!attendee) return;
@@ -285,19 +346,67 @@ export function R2MeetingDetailDrawer({
                 </div>
               </div>
               
-              {contactPhone && (
-                <div className="flex items-center gap-3">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <div className="flex items-center gap-2">
-                    <a href={`tel:${contactPhone}`} className="hover:underline text-sm">
-                      {contactPhone}
-                    </a>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleWhatsApp}>
-                      <ExternalLink className="h-3 w-3" />
+              {/* Telefone editável */}
+              <div className="flex items-center gap-3">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                {editingPhone ? (
+                  <div className="flex items-center gap-1 flex-1">
+                    <Input
+                      value={phoneValue}
+                      onChange={(e) => setPhoneValue(e.target.value)}
+                      placeholder="+5511999990001"
+                      className="h-7 text-sm bg-background"
+                    />
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-primary" onClick={handleSavePhone} disabled={updateR2Attendee.isPending || updateCRMContact.isPending}>
+                      <Check className="h-3 w-3" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => setEditingPhone(false)}>
+                      <X className="h-3 w-3" />
                     </Button>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{contactPhone || 'Sem telefone'}</span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleStartEditPhone}>
+                      <Edit2 className="h-3 w-3" />
+                    </Button>
+                    {contactPhone && (
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleWhatsApp}>
+                        <ExternalLink className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Email editável */}
+              <div className="flex items-center gap-3">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                {editingEmail ? (
+                  <div className="flex items-center gap-1 flex-1">
+                    <Input
+                      value={emailValue}
+                      onChange={(e) => setEmailValue(e.target.value)}
+                      placeholder="email@exemplo.com"
+                      type="email"
+                      className="h-7 text-sm bg-background"
+                    />
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-primary" onClick={handleSaveEmail} disabled={updateCRMContact.isPending}>
+                      <Check className="h-3 w-3" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => setEditingEmail(false)}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{contactEmail || 'Sem email'}</span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleStartEditEmail}>
+                      <Edit2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Histórico do Funil */}
