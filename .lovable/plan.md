@@ -1,43 +1,41 @@
 
 
-## Corrigir contagem duplicada de leads reagendados nos KPIs R2 (mantendo historico visual)
+## Adicionar edição de telefone e email do lead no Drawer R2
 
-### Problema
+### Contexto
 
-Quando um lead da no-show e e reagendado, o sistema cria dois registros de attendee:
-1. O original com `status: 'rescheduled'` (slot antigo)
-2. Um novo com `is_reschedule: true` (novo slot)
+No drawer de detalhes R2, o telefone e email do lead são exibidos mas não podem ser editados. O telefone vem de `meeting_slot_attendees.attendee_phone` e o email vem de `crm_contacts.email` (via join no deal).
 
-Ambos sao contados nos KPIs porque o filtro atual so exclui `status !== 'cancelled'`. Isso infla o numero de "R2 Agendadas".
+### Alterações
 
-O lead **deve continuar aparecendo no slot antigo** no calendario para historico, mas **nao deve ser contado duas vezes nos KPIs**.
+**1. `src/hooks/useR2AttendeeUpdate.ts`**
+- Adicionar `attendee_name` e `attendee_phone` na interface `UpdateAttendeeData.updates` para permitir atualização direta do telefone no registro do attendee
 
-### Solucao
+**2. `src/components/crm/R2MeetingDetailDrawer.tsx`**
+- Na seção de "Meeting Info" (linhas 288-300), onde o telefone é exibido, transformar em campo editável inline (igual ao padrão usado no `SdrSummaryBlock`): ao clicar num ícone de edição, aparece um Input para editar o telefone, com botões de salvar/cancelar
+- Adicionar campo de email editável na mesma seção, abaixo do telefone
+- Para o telefone: atualizar `meeting_slot_attendees.attendee_phone` via `useUpdateR2Attendee` E `crm_contacts.phone` via `useUpdateCRMContact` (se houver contact vinculado)
+- Para o email: atualizar `crm_contacts.email` via `useUpdateCRMContact` (email só existe na tabela de contatos)
 
-Excluir attendees com `status === 'rescheduled'` **apenas nas contagens de KPIs**, sem alterar a visualizacao do calendario nem a query de dados da agenda.
+**3. `src/components/crm/r2-drawer/R2QualificationTab.tsx`** (opcional, mas consistente)
+- Nenhuma alteração necessária aqui -- a edição será no drawer principal, na seção de info do lead
 
-### Alteracoes
+### Fluxo do usuário
 
-**1. `src/hooks/useR2MeetingSlotsKPIs.ts`**
-- Linha 39-41: Adicionar `&& a.status !== "rescheduled"` ao filtro de `r2Agendadas`
-- Attendees reagendados nao contam como "agendados" pois ja foram movidos para outro slot
+1. Abre o drawer R2 do lead
+2. Na seção de informações, vê o telefone e email com ícone de edição (lápis)
+3. Clica no lápis -> campo vira editável
+4. Edita o valor -> clica em salvar (check) ou cancelar (X)
+5. Salva no banco: telefone atualiza tanto no attendee quanto no contato; email atualiza no contato
 
-**2. `src/hooks/useR2CarrinhoKPIs.ts`**
-- Linha 60-63: Filtrar attendees com `status === 'rescheduled'` do calculo de `r2Agendadas`
-- Os attendees sao contados via `m.attendees?.length` sem filtro; precisa excluir os rescheduled
+### Detalhes técnicos
 
-**3. `src/hooks/useMeetingSlotsKPIs.ts`** (R1 - mesma consistencia)
-- Linha 41-43: Adicionar `&& a.status !== "rescheduled"` ao filtro de `totalAgendadas`
+O telefone será salvo em dois lugares:
+- `meeting_slot_attendees.attendee_phone` (registro da reunião)
+- `crm_contacts.phone` (registro do contato, se existir `deal.contact`)
 
-### O que NAO muda
+O email será salvo em:
+- `crm_contacts.email` (único local onde existe)
 
-- **`useR2AgendaMeetings.ts`**: continua retornando todos os attendees (incluindo rescheduled) para que o calendario mostre o historico no slot antigo
-- **`R2CloserColumnCalendar.tsx`**: continua exibindo attendees rescheduled no slot original
-- **`useR2MeetingsExtended.ts`**: continua retornando dados completos para o drawer de detalhes
-
-### Resultado esperado
-
-- KPIs contam cada lead apenas uma vez (o registro ativo)
-- Lead reagendado continua visivel no slot antigo do calendario para consulta de historico
-- Numeros de "R2 Agendadas" refletem a realidade sem inflacao
+Será usado o `useUpdateR2Attendee` (já existente, precisa expandir a interface) para o attendee e o `useUpdateCRMContact` para o contato.
 
