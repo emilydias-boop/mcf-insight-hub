@@ -701,11 +701,22 @@ export function useMarkContractPaid() {
       // Update only the attendee status (not the meeting slot)
       // This allows other attendees in the same meeting to still appear in search
       if (attendeeId) {
+        // Verificar se o attendee é sócio antes de marcar como contract_paid
+        const { data: attendeeData } = await supabase
+          .from('meeting_slot_attendees')
+          .select('is_partner')
+          .eq('id', attendeeId)
+          .maybeSingle();
+
+        if (attendeeData?.is_partner) {
+          throw new Error('Sócios não podem ser marcados como contrato pago');
+        }
+
         const { error: attendeeError } = await supabase
           .from('meeting_slot_attendees')
           .update({ 
             status: 'contract_paid',
-            contract_paid_at: contractPaidAt // Usar data da reunião, não data atual
+            contract_paid_at: contractPaidAt
           })
           .eq('id', attendeeId);
 

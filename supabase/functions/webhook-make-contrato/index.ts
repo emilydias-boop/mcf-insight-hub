@@ -76,7 +76,8 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       .eq('meeting_slots.meeting_type', 'r1')
       .gte('meeting_slots.scheduled_at', twoWeeksAgo.toISOString())
       .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
-      .in('status', ['scheduled', 'invited', 'completed', 'rescheduled']);
+      .in('status', ['scheduled', 'invited', 'completed', 'rescheduled'])
+      .eq('is_partner', false);
 
     if (queryError) {
       console.error('🎯 [AUTO-PAGO] Erro na query:', queryError.message);

@@ -36,6 +36,17 @@ export function useLinkContractToAttendee() {
         }
       }
 
+      // VERIFICAÇÃO: Não permitir vincular contrato a sócio
+      const { data: attendeeData } = await supabase
+        .from('meeting_slot_attendees')
+        .select('is_partner')
+        .eq('id', attendeeId)
+        .maybeSingle();
+
+      if (attendeeData?.is_partner) {
+        throw new Error('Sócios não podem ser marcados como contrato pago');
+      }
+
       // 1. Link the transaction to the attendee
       const { error: txError } = await supabase
         .from('hubla_transactions')
