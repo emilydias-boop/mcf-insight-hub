@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Given a dealId (UUID), resolves the contact_id and fetches ALL deal IDs
  * for that same contact across all pipelines.
@@ -67,14 +69,14 @@ export function useContactDealIds(dealId: string | undefined, contactId?: string
 
       if (!deals || deals.length === 0) return dealId ? [dealId] : [];
 
-      // Return unique IDs (both UUID and clint_id for legacy compatibility)
+      // Return unique UUIDs only (filter out legacy clint_ids that break UUID queries)
       const ids = new Set<string>();
       for (const d of deals) {
-        ids.add(d.id);
-        if (d.clint_id) ids.add(d.clint_id);
+        if (UUID_REGEX.test(d.id)) ids.add(d.id);
+        if (d.clint_id && UUID_REGEX.test(d.clint_id)) ids.add(d.clint_id);
       }
       // Ensure the current dealId is always included
-      if (dealId) ids.add(dealId);
+      if (dealId && UUID_REGEX.test(dealId)) ids.add(dealId);
       return Array.from(ids);
     },
     enabled: !!dealId || !!contactId,
