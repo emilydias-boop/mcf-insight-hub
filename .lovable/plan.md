@@ -1,44 +1,52 @@
 
 
-## Substituir badge "Outside" por nome do produto no Consorcio
+## Duas melhorias no CRM Consorcio: Badge de produto e Reembolso
 
-### Problema
+### 1. Badge: Mostrar produto comprado (nao "A000 - Contrato")
 
-No Kanban do Consorcio, o badge "$ Outside" nao agrega valor - o gestor quer ver **o que o lead comprou** (ex: "Contrato A009", "Contrato Efeito Alavanca"), nao apenas que ele e outside.
+**Problema**: O badge "$ A000 - Contrato" mostra o nome do contrato (que e apenas a formalizacao da compra). Para a equipe de Consorcio, o que importa e saber qual produto/parceria o lead comprou (ex: A001, A009, Anticrise, Clube do Arremate).
 
-### Solucao
+**Solucao**: Quando o deal for detectado como "Outside", alem de buscar a transacao de contrato, tambem buscar a transacao de produto principal (nao-contrato) do mesmo email. O badge exibira o nome do produto real em vez do contrato.
 
-Mudar o `outsideMap` de `Map<dealId, boolean>` para `Map<dealId, { isOutside: boolean; productName: string | null }>`, e no card do Kanban, quando a BU for Consorcio, exibir o nome do produto em vez de "$ Outside".
-
-### Alteracoes
+**Alteracoes**:
 
 **`src/hooks/useOutsideDetectionForDeals.ts`**
 
-- Alterar a tipagem do retorno de `Map<string, boolean>` para `Map<string, { isOutside: boolean; productName: string | null }>`
-- Na query de `hubla_transactions`, adicionar `product_name` ao `.select()`
-- Guardar o `product_name` junto com a data do contrato no map intermediario
-- No resultado final, incluir `productName` para cada deal outside
+- Adicionar uma segunda query paralela para buscar transacoes completadas do mesmo email que NAO sejam contratos (excluindo `product_name ILIKE '%contrato%'`)
+- Para cada email com contrato (outside), buscar o produto mais recente que nao seja contrato
+- Priorizar o nome do produto nao-contrato no campo `productName` do resultado
+- Se nao houver produto nao-contrato, manter o nome do contrato como fallback
 
-**`src/components/crm/DealKanbanBoard.tsx`**
+Logica:
+```text
+1. Query existente: busca contratos (para detectar outside) -> mantem
+2. Nova query paralela: busca produtos nao-contrato do mesmo email
+3. Resultado: productName = produto nao-contrato ?? nome do contrato
+```
 
-- Atualizar tipagem de `outsideMap` para o novo formato
-- Passar `outsideInfo` (com `productName`) para `DealKanbanCard` em vez de apenas `isOutside`
+### 2. Reembolso disponivel no Drawer do Deal
 
-**`src/components/crm/DealKanbanCard.tsx`**
+**Problema**: O RefundModal existe e funciona no contexto de reunioes R2 (Agenda R2, Pending Leads), mas nao esta disponivel no Drawer do Deal no Kanban. A equipe de Consorcio precisa marcar reembolsos diretamente do Negocios.
 
-- Alterar prop `isOutside` para `outsideInfo?: { isOutside: boolean; productName: string | null }`
-- No badge, se `productName` existir, mostrar o nome do produto (ex: "Contrato A009") em vez de "$ Outside"
-- Manter o estilo amarelo para indicar visualmente que e uma compra pre-existente
+**Solucao**: Adicionar botao "Solicitar Reembolso" no `QuickActionsBlock` do Drawer. O RefundModal ja suporta `dealId` sem `meetingId` obrigatorio (tem fallback), entao basta adaptar a chamada.
 
-**`src/pages/crm/Negocios.tsx`**
+**Alteracoes**:
 
-- Ajustar a leitura do `outsideMap` para o novo formato nas partes de filtro (onde faz `outsideMap.get(deal.id)`)
-- O filtro de Outside continua funcionando, usando `outsideInfo.isOutside`
+**`src/components/crm/QuickActionsBlock.tsx`**
+
+- Importar `RefundModal`
+- Adicionar estado `showRefundModal`
+- Adicionar botao "Solicitar Reembolso" (icone RotateCcw, cor laranja) na area de acoes
+- O botao so aparece se o deal NAO tem `reembolso_solicitado` nos custom_fields
+- Passar `meetingId=""` (vazio - o modal ja lida com fallback), `dealId`, `dealName`, `originId` e `currentCustomFields`
+- Ao concluir o reembolso, chamar `onStageChange()` para atualizar o drawer
+
+**`src/components/crm/RefundModal.tsx`**
+
+- Ajustar para tornar `meetingId` opcional (atualmente obrigatorio na interface)
+- Se `meetingId` estiver vazio/nulo, pular a etapa de atualizacao do meeting/attendee e ir direto para a parte do deal (custom_fields + stage change + activity log)
 
 ### Resultado esperado
 
-- BU Incorporador: Badge mostra o nome do produto comprado (ex: "$ Contrato MCF") - mais informativo
-- BU Consorcio: Badge mostra o nome do produto comprado (ex: "$ Contrato Efeito Alavanca")
-- Filtros de Outside continuam funcionando normalmente
-- Se o product_name nao estiver disponivel, fallback para "$ Outside" como antes
-
+- **Badge**: Em vez de "$ A000 - Contrato", o card mostrara "$ A001" ou "$ Anticrise" ou "$ Clube do Arremate" - o produto real que o lead comprou
+- **Reembolso**: Ao abrir o drawer de qualquer deal no Kanban, havera um botao "Solicitar Reembolso" que abre o mesmo modal usado no R2, marcando o deal como reembolsado e movendo para "Perdido"
