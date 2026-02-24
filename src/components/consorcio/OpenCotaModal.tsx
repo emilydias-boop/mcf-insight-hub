@@ -3,6 +3,23 @@ import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, FileText, ExternalLink } from 'lucide-react';
+import { formatarCep } from '@/lib/cepUtils';
+
+// Formatting functions
+function formatCpf(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
 import {
   Dialog,
   DialogContent,
@@ -73,6 +90,19 @@ export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaMo
 
   const form = useForm({
     defaultValues: {
+      // Client data (editable)
+      cliente_nome: '',
+      cliente_cpf: '',
+      cliente_rg: '',
+      cliente_profissao: '',
+      cliente_telefone: '',
+      cliente_email: '',
+      cliente_endereco: '',
+      cliente_cep: '',
+      cliente_renda: 0,
+      cliente_patrimonio: 0,
+      cliente_pix: '',
+      // Cota data
       categoria: 'inside',
       grupo: '',
       cota: '',
@@ -98,6 +128,23 @@ export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaMo
       observacoes: '',
     },
   });
+
+  // Populate client fields when registration loads
+  useEffect(() => {
+    if (registration) {
+      form.setValue('cliente_nome', registration.nome_completo || '');
+      form.setValue('cliente_cpf', registration.cpf ? formatCpf(registration.cpf) : '');
+      form.setValue('cliente_rg', registration.rg || '');
+      form.setValue('cliente_profissao', registration.profissao || '');
+      form.setValue('cliente_telefone', registration.telefone ? formatPhone(registration.telefone) : '');
+      form.setValue('cliente_email', registration.email || '');
+      form.setValue('cliente_endereco', registration.endereco_completo || '');
+      form.setValue('cliente_cep', registration.endereco_cep || '');
+      form.setValue('cliente_renda', registration.renda || 0);
+      form.setValue('cliente_patrimonio', registration.patrimonio || 0);
+      form.setValue('cliente_pix', registration.pix || '');
+    }
+  }, [registration, form]);
 
   const valorCredito = form.watch('valor_credito');
   const prazoMeses = form.watch('prazo_meses');
@@ -137,13 +184,29 @@ export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaMo
   const onSubmit = async (data: any) => {
     if (!registration) return;
 
+    // Extract client data from form
+    const clienteData = {
+      nome_completo: data.cliente_nome || null,
+      cpf: data.cliente_cpf?.replace(/\D/g, '') || null,
+      rg: data.cliente_rg || null,
+      profissao: data.cliente_profissao || null,
+      telefone: data.cliente_telefone || null,
+      email: data.cliente_email || null,
+      endereco_completo: data.cliente_endereco || null,
+      endereco_cep: data.cliente_cep || null,
+      renda: data.cliente_renda || null,
+      patrimonio: data.cliente_patrimonio || null,
+      pix: data.cliente_pix || null,
+    };
+
     await openCota.mutateAsync({
       registrationId,
-      registration,
+      registration: { ...registration, ...clienteData },
       cotaData: {
         ...data,
         parcelas_pagas_empresa_count: data.empresa_paga_parcelas === 'sim' ? data.parcelas_pagas_empresa : 0,
       },
+      clienteData,
     });
 
     onOpenChange(false);
@@ -171,26 +234,51 @@ export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaMo
         </DialogHeader>
 
         <ScrollArea className="max-h-[75vh] pr-4">
-          <div className="space-y-6">
-            {/* Read-only client data */}
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Editable client data */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Dados do Cliente (preenchido pelo closer)</CardTitle>
+                <CardTitle className="text-sm">Dados do Cliente</CardTitle>
               </CardHeader>
               <CardContent>
                 {registration.tipo_pessoa === 'pf' ? (
-                  <div className="grid grid-cols-3 gap-3 text-sm">
-                    <div><span className="text-muted-foreground">Nome:</span> <strong>{registration.nome_completo}</strong></div>
-                    <div><span className="text-muted-foreground">CPF:</span> {registration.cpf}</div>
-                    <div><span className="text-muted-foreground">RG:</span> {registration.rg}</div>
-                    <div><span className="text-muted-foreground">Profissão:</span> {registration.profissao}</div>
-                    <div><span className="text-muted-foreground">Telefone:</span> {registration.telefone}</div>
-                    <div><span className="text-muted-foreground">Email:</span> {registration.email}</div>
-                    <div className="col-span-2"><span className="text-muted-foreground">Endereço:</span> {registration.endereco_completo}</div>
-                    <div><span className="text-muted-foreground">CEP:</span> {registration.endereco_cep}</div>
-                    <div><span className="text-muted-foreground">Renda:</span> {registration.renda ? formatCurrency(registration.renda) : '—'}</div>
-                    <div><span className="text-muted-foreground">Patrimônio:</span> {registration.patrimonio ? formatCurrency(registration.patrimonio) : '—'}</div>
-                    <div><span className="text-muted-foreground">PIX:</span> {registration.pix}</div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <FormField control={form.control} name="cliente_nome" rules={{ required: 'Obrigatório' }} render={({ field }) => (
+                      <FormItem><FormLabel>Nome Completo *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="cliente_cpf" rules={{ required: 'Obrigatório' }} render={({ field }) => (
+                      <FormItem><FormLabel>CPF *</FormLabel><FormControl><Input {...field} onChange={e => field.onChange(formatCpf(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="cliente_rg" render={({ field }) => (
+                      <FormItem><FormLabel>RG</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="cliente_profissao" render={({ field }) => (
+                      <FormItem><FormLabel>Profissão</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="cliente_telefone" rules={{ required: 'Obrigatório' }} render={({ field }) => (
+                      <FormItem><FormLabel>Telefone *</FormLabel><FormControl><Input {...field} onChange={e => field.onChange(formatPhone(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="cliente_email" rules={{ required: 'Obrigatório' }} render={({ field }) => (
+                      <FormItem><FormLabel>Email *</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <div className="col-span-2">
+                      <FormField control={form.control} name="cliente_endereco" render={({ field }) => (
+                        <FormItem><FormLabel>Endereço Completo</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                      )} />
+                    </div>
+                    <FormField control={form.control} name="cliente_cep" render={({ field }) => (
+                      <FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} onChange={e => field.onChange(formatarCep(e.target.value))} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="cliente_renda" render={({ field }) => (
+                      <FormItem><FormLabel>Renda</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="cliente_patrimonio" render={({ field }) => (
+                      <FormItem><FormLabel>Patrimônio</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="cliente_pix" render={({ field }) => (
+                      <FormItem><FormLabel>PIX</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                    )} />
                   </div>
                 ) : (
                   <div className="grid grid-cols-3 gap-3 text-sm">
@@ -250,8 +338,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaMo
                 <CardTitle className="text-sm">Dados da Cota (preencher)</CardTitle>
               </CardHeader>
               <CardContent>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <div className="space-y-4">
                     {/* Categoria + Grupo + Cota */}
                     <div className="grid grid-cols-3 gap-3">
                       <FormField control={form.control} name="categoria" rules={{ required: 'Obrigatório' }} render={({ field }) => (
@@ -475,11 +562,21 @@ export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaMo
                         Confirmar Abertura da Cota
                       </Button>
                     </div>
-                  </form>
-                </Form>
+                  </div>
               </CardContent>
             </Card>
-          </div>
+
+                    <div className="flex justify-end gap-2 pt-4">
+                      <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                        Cancelar
+                      </Button>
+                      <Button type="submit" disabled={openCota.isPending}>
+                        {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        Confirmar Abertura da Cota
+                      </Button>
+                    </div>
+            </form>
+          </Form>
         </ScrollArea>
       </DialogContent>
     </Dialog>

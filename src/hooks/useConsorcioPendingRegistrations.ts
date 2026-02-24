@@ -262,8 +262,34 @@ export function useOpenCota() {
         transferido_de?: string;
         observacoes?: string;
       };
+      clienteData?: {
+        nome_completo?: string | null;
+        cpf?: string | null;
+        rg?: string | null;
+        profissao?: string | null;
+        telefone?: string | null;
+        email?: string | null;
+        endereco_completo?: string | null;
+        endereco_cep?: string | null;
+        renda?: number | null;
+        patrimonio?: number | null;
+        pix?: string | null;
+      };
     }) => {
-      const { registration, cotaData, registrationId } = params;
+      const { registration, cotaData, registrationId, clienteData } = params;
+
+      // 0. Update client data on pending registration if provided
+      if (clienteData) {
+        const cleanClientData = Object.fromEntries(
+          Object.entries(clienteData).filter(([_, v]) => v !== '' && v !== undefined && v !== 0)
+        );
+        if (Object.keys(cleanClientData).length > 0) {
+          await supabase
+            .from('consorcio_pending_registrations')
+            .update(cleanClientData as any)
+            .eq('id', registrationId);
+        }
+      }
 
       // 1. Build consortium card data from registration (client) + cota (gestor)
       const cardInput: CreateConsorcioCardInput = {
