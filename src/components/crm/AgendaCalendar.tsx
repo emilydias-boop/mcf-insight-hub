@@ -565,9 +565,17 @@ export function AgendaCalendar({
         slot.closerIds.forEach(id => allCloserIdsSet.add(id));
       });
     }
+
+    // Também incluir closers que tenham reuniões nesse dia (mesmo sem slots configurados)
+    const dayMeetings = filteredMeetings.filter(m =>
+      isSameDay(parseISO(m.scheduled_at), day)
+    );
+    dayMeetings.forEach(m => {
+      if (m.closer_id) allCloserIdsSet.add(m.closer_id);
+    });
     
     return Array.from(allCloserIdsSet).sort();
-  }, [meetingType, r2DailySlotsMap, meetingLinkSlots]);
+  }, [meetingType, r2DailySlotsMap, meetingLinkSlots, filteredMeetings]);
 
   // Get closers that have meetings at a specific time slot
   const getMeetingClosersForSlot = useCallback((day: Date, hour: number, minute: number) => {
