@@ -35,7 +35,7 @@ const REFUND_REASONS = [
 interface RefundModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  meetingId: string;
+  meetingId?: string;
   attendeeId?: string;
   dealId: string | null;
   dealName?: string;
@@ -78,8 +78,8 @@ export function RefundModal({
     setIsSubmitting(true);
 
     try {
-      // 1. Update meeting/attendee status based on meeting type
-      if (meetingType === 'r1') {
+      // 1. Update meeting/attendee status based on meeting type (skip if no meetingId)
+      if (meetingId && meetingType === 'r1') {
         // For R1: update the specific attendee status to 'refunded'
         if (attendeeId) {
           const { error: attendeeError } = await supabase
@@ -92,7 +92,7 @@ export function RefundModal({
             throw attendeeError;
           }
         }
-      } else {
+      } else if (meetingId) {
         // For R2: update ONLY the individual attendee, NOT the slot
         if (attendeeId) {
           // Fetch the "Reembolso" status ID from r2_status_options

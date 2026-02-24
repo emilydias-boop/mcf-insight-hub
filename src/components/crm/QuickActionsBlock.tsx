@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Phone, MessageCircle, ArrowRight, Loader2, XCircle, Calendar, CalendarClock, FolderInput, Trash2, ClipboardList } from 'lucide-react';
+import { Phone, MessageCircle, ArrowRight, Loader2, XCircle, Calendar, CalendarClock, FolderInput, Trash2, ClipboardList, RotateCcw } from 'lucide-react';
 import { useTwilio } from '@/contexts/TwilioContext';
 import { useUpdateCRMDeal, useCRMStages, useDeleteCRMDeal } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
@@ -28,6 +28,7 @@ import { MarkAsLostModal } from './MarkAsLostModal';
 import { InlineCallControls } from './InlineCallControls';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { MoveToPipelineModal } from './MoveToPipelineModal';
+import { RefundModal } from './RefundModal';
 
 interface QuickActionsBlockProps {
   deal: any;
@@ -49,6 +50,9 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify }: Q
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  
+  const alreadyRefunded = deal?.custom_fields?.reembolso_solicitado === true;
   
   const isTestDeal = deal ? isTestPipeline(deal.origin_id) : false;
   const currentStageOrder = deal?.crm_stages?.stage_order || 0;
@@ -289,6 +293,18 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify }: Q
               Mover Pipeline
             </Button>
             
+            {!alreadyRefunded && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-orange-600 border-orange-500/50 hover:bg-orange-50"
+                onClick={() => setShowRefundModal(true)}
+              >
+                <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                Reembolso
+              </Button>
+            )}
+            
             <Button
               size="sm"
               variant="outline"
@@ -331,6 +347,17 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify }: Q
         dealName={deal?.name || 'Lead'}
         currentOriginId={deal?.origin_id}
         currentStageName={deal?.crm_stages?.stage_name}
+        onSuccess={onStageChange}
+      />
+      
+      {/* Modal Reembolso */}
+      <RefundModal
+        open={showRefundModal}
+        onOpenChange={setShowRefundModal}
+        dealId={deal?.id}
+        dealName={deal?.name || 'Lead'}
+        originId={deal?.origin_id}
+        currentCustomFields={deal?.custom_fields || {}}
         onSuccess={onStageChange}
       />
       
