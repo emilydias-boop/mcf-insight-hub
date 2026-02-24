@@ -59,8 +59,20 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify }: Q
   const stageName = deal?.crm_stages?.stage_name?.toLowerCase() || '';
   const isNoShowStage = stageName.includes('no-show') || stageName.includes('no_show') || stageName.includes('noshow');
   
-  // Filtrar estágios futuros
-  const futureStages = stages?.filter(s => s.stage_order > currentStageOrder) || [];
+  // Padrões de estágios que sempre devem estar disponíveis para mover
+  const ALWAYS_AVAILABLE_PATTERNS = [
+    'sem sucesso', 'sem interesse', 'não quer', 'perdido', 
+    'desistente', 'cancelado', 'reembolsado', 'a reembolsar'
+  ];
+
+  const isAlwaysAvailable = (name: string) => {
+    const lower = name.toLowerCase().trim();
+    return ALWAYS_AVAILABLE_PATTERNS.some(p => lower.includes(p));
+  };
+
+  const futureStages = stages?.filter(s => 
+    s.stage_order > currentStageOrder || isAlwaysAvailable(s.stage_name)
+  ).filter(s => s.id !== deal?.stage_id) || [];
   
   // Check if there's an active call for THIS deal
   const isInCallWithThisDeal = 
