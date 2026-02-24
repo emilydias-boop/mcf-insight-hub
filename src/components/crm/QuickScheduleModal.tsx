@@ -42,9 +42,6 @@ import {
 } from '@/hooks/useAgendaData';
 import { useSdrsByBU } from '@/hooks/useSdrFechamento';
 import { useCloserDaySlots } from '@/hooks/useCloserMeetingLinks';
-import { useCheckActiveMeeting } from '@/hooks/useCheckActiveMeeting';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle, Ban } from 'lucide-react';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
 import { cn } from '@/lib/utils';
@@ -456,10 +453,6 @@ export function QuickScheduleModal({
       count: slotAvailability.currentCount,
     };
   }, [slotAvailability, selectedTime]);
-
-  // Check for active/recent meetings to block duplicate scheduling
-  const { data: activeMeetingCheck, isLoading: checkingActiveMeeting } = useCheckActiveMeeting(selectedDeal?.id, 'r1');
-  const isMeetingBlocked = activeMeetingCheck?.blocked && !isCoordinatorOrAbove;
 
   const isSelected = !!selectedDeal;
 
@@ -1197,31 +1190,14 @@ export function QuickScheduleModal({
 
         </div>
 
-        {/* Active Meeting Alert */}
-        {selectedDeal && activeMeetingCheck?.blocked && (
-          <Alert variant={activeMeetingCheck.blockType === 'active' ? 'destructive' : 'default'} className={
-            activeMeetingCheck.blockType === 'cooldown' 
-              ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300' 
-              : ''
-          }>
-            {activeMeetingCheck.blockType === 'active' ? <Ban className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
-            <AlertDescription className="text-sm">
-              {activeMeetingCheck.reason}
-              {isCoordinatorOrAbove && (
-                <span className="block mt-1 text-xs opacity-70">(Coordenadores podem prosseguir)</span>
-              )}
-            </AlertDescription>
-          </Alert>
-        )}
-
         {/* Submit - Fixed at bottom */}
         <div className="flex-shrink-0 pt-4 border-t">
           <Button 
             className="w-full" 
             onClick={handleSubmit}
-            disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending || !!isMeetingBlocked}
+            disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending}
           >
-            {createMeeting.isPending ? 'Agendando...' : isMeetingBlocked ? 'Agendamento Bloqueado' : 'Agendar Reunião'}
+            {createMeeting.isPending ? 'Agendando...' : 'Agendar Reunião'}
           </Button>
         </div>
       </DialogContent>
