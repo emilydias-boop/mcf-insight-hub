@@ -40,7 +40,7 @@ interface DealKanbanBoardProps {
   onSelectAllInStage?: (dealIds: string[]) => void;
   onClearStageSelection?: (dealIds: string[]) => void;
   channelMap?: Map<string, SalesChannel>;
-  outsideMap?: Map<string, boolean>;
+  outsideMap?: Map<string, { isOutside: boolean; productName: string | null }>;
 }
 
 const INITIAL_VISIBLE_COUNT = 50;
@@ -320,7 +320,7 @@ export const DealKanbanBoard = ({
                                       isSelected={selectedDealIds.has(deal.id)}
                                       onSelect={onSelectionChange}
                                       salesChannel={salesChannel}
-                                      isOutside={outsideMap?.get(deal.id) || false}
+                                      outsideInfo={outsideMap?.get(deal.id)}
                                     />
                                   )}
                                 </Draggable>
