@@ -1,41 +1,47 @@
 
-
-## Corrigir erro "invalid input syntax for type date" ao criar cadastro pendente
+## Permitir SDRs moverem deals para SEM SUCESSO e SEM INTERESSE
 
 ### Problema
 
-Ao colar os dados do check-list e submeter o formulario de aceite (PF ou PJ), o sistema envia strings vazias (`""`) para campos do tipo `date` no banco de dados (como `data_fundacao` e `data_contratacao`). O PostgreSQL rejeita strings vazias como valor de data, causando o erro:
+No `QuickActionsBlock` (ações rápidas dentro do Drawer do deal), o dropdown de "Mover para estágio" filtra apenas estágios com `stage_order` MAIOR que o estágio atual:
 
 ```
-invalid input syntax for type date: ""
+const futureStages = stages?.filter(s => s.stage_order > currentStageOrder) || [];
 ```
 
-Isso acontece porque o `...registrationData` no hook `useCreatePendingRegistration` envia todos os campos diretamente para o Supabase sem sanitizar valores vazios.
+O "SEM SUCESSO" tem `stage_order: 13` e o "SEM INTERESSE" tem `stage_order: 101`. Quando o deal já está em um estágio com order >= 13 (como PRODUTOS FECHADOS, order 100), o "SEM SUCESSO" desaparece do dropdown porque 13 < 100. O SDR não consegue voltar o deal para esse estágio pelo dropdown.
 
-### Solucao
+No drag-and-drop do Kanban a movimentação funciona normalmente (não tem esse filtro), mas muitos SDRs usam o drawer para mover estágios.
 
-Sanitizar os dados antes do insert, convertendo strings vazias em `null` para todos os campos. Isso garante que campos opcionais nao preenchidos nao causem erros de tipo no banco.
+### Solução
 
-### Alteracao
+Alterar o filtro de estágios no `QuickActionsBlock` para SEMPRE incluir estágios de "perda" (SEM SUCESSO, SEM INTERESSE, Perdido) independentemente do `stage_order`, além dos estágios futuros. Isso garante que o SDR sempre consiga mover um deal para esses estágios, não importa em qual estágio o deal esteja atualmente.
 
-**`src/hooks/useConsorcioPendingRegistrations.ts`**
+### Alteração
 
-Na funcao `mutationFn` do `useCreatePendingRegistration`, antes de fazer o insert (linha 174-183), adicionar uma etapa de sanitizacao que percorre todos os campos do `registrationData` e converte strings vazias (`""`) em `null`:
+**`src/components/crm/QuickActionsBlock.tsx`**
+
+Modificar a linha do `futureStages` para incluir estágios de perda/rejeição:
 
 ```typescript
-// Sanitizar: converter strings vazias em null para evitar erros de tipo no banco
-const sanitized = Object.fromEntries(
-  Object.entries(registrationData).map(([key, value]) => [
-    key,
-    value === '' ? null : value,
-  ])
-);
+// Padrões de estágios que sempre devem estar disponíveis para mover
+const ALWAYS_AVAILABLE_PATTERNS = [
+  'sem sucesso', 'sem interesse', 'não quer', 'perdido', 
+  'desistente', 'cancelado', 'reembolsado', 'a reembolsar'
+];
+
+const isAlwaysAvailable = (stageName: string) => {
+  const lower = stageName.toLowerCase().trim();
+  return ALWAYS_AVAILABLE_PATTERNS.some(p => lower.includes(p));
+};
+
+const futureStages = stages?.filter(s => 
+  s.stage_order > currentStageOrder || isAlwaysAvailable(s.stage_name)
+).filter(s => s.id !== deal?.stage_id) || []; // excluir estágio atual
 ```
 
-Em seguida, usar `sanitized` no lugar de `registrationData` no insert.
-
-### Resultado esperado
-
-- Campos de data vazios serao enviados como `null` em vez de `""`, evitando o erro do PostgreSQL
-- Campos de texto vazios tambem serao tratados como `null`, mantendo consistencia
-- O fluxo de colar check-list e submeter o cadastro funcionara sem erros
+Essa mudança garante que:
+- Estágios futuros continuam aparecendo normalmente
+- Estágios de perda/rejeição sempre aparecem no dropdown, independente da ordem
+- O estágio atual é excluído para evitar duplicação
+- Funciona para todas as BUs (Consórcio, Incorporador, etc.)
