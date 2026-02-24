@@ -1,51 +1,45 @@
 
 
-## Problema Critico: Detecao de Outside falhando para ~98% dos contratos
+## Correcao: Socios nao devem ser marcados como contract_paid
 
-### Diagnostico
+### Problema
 
-A detecao de leads "Outside" usa o filtro `offer_id = 'pgah16gjTMdAkqUMVKGz'` em 6 arquivos. Porem, os dados de fevereiro/2026 mostram que **apenas 7 de ~380 contratos** possuem esse `offer_id`. A grande maioria tem `offer_id = NULL` (357 registros) ou outros IDs variados.
+Quando um contrato e pago, o sistema busca attendees recentes por email/telefone e marca como `contract_paid`. Porem, **nao filtra socios** (`is_partner = true`). Isso causa:
 
-O caso do Altayr e um exemplo direto: contrato pago em 21/02, reuniao R1 em 24/02, mas nao foi detectado como Outside porque seu contrato tem `offer_id = NULL`.
+- Socios sendo marcados como `contract_paid` indevidamente (encontrados 3 casos: Eduardo Benicio, Levi, Luciano)
+- Inflacao potencial de metricas de contratos pagos
 
-### Causa raiz
+### Correcao de dados
 
-Mudanca no lado do Hubla: transacoes mais recentes nao estao mais enviando o `offer_id` antigo (`pgah16gjTMdAkqUMVKGz`). O campo `product_name` e `product_category` continuam sendo preenchidos corretamente.
+Reverter os 3 socios incorretamente marcados como `contract_paid` para o status `scheduled`:
 
-### Solucao
+| Attendee | ID |
+|---|---|
+| Eduardo Benicio | `ab791ce3-e728-4138-acd4-886eae1d3060` |
+| Levi | `65ed77d1-33ad-4342-9b97-8f32204d9104` |
+| Luciano | `968ee07c-bc80-4099-adf6-fc69c44d7877` |
 
-Trocar o filtro de `offer_id` para usar `product_category` e `product_name`, que sao campos confiaveis e preenchidos consistentemente:
+Para cada um: `status = 'scheduled'`, `contract_paid_at = NULL`.
 
-**Filtro novo:**
-- `product_category IN ('contrato', 'incorporador')`
-- `product_name ILIKE '%contrato%'`
+### Correcao de logica (5 pontos de entrada)
 
-Isso cobre todos os tipos de contrato relevantes (A000 - Contrato, Contrato, Contrato - Socio MCF, A000 - Contrato MCF) e exclui automaticamente produtos de outras BUs (Efeito Alavanca, Clube do Arremate) por nao terem `product_category = 'contrato'` ou `'incorporador'`.
+Adicionar filtro `is_partner = false` (ou `is_partner IS NULL`) em todos os pontos que marcam attendees como `contract_paid`:
 
-### Arquivos a alterar (6 arquivos, mesma mudanca em todos)
+1. **`supabase/functions/hubla-webhook-handler/index.ts`** (~linha 773)
+   - Na query de attendees R1, adicionar `.eq('is_partner', false)` para excluir socios da busca de match
 
-1. **`src/hooks/useOutsideDetection.ts`** (linha 67)
-   - Remover `.eq('offer_id', 'pgah16gjTMdAkqUMVKGz')`
-   - Adicionar `.in('product_category', ['contrato', 'incorporador'])` e `.ilike('product_name', '%contrato%')`
+2. **`supabase/functions/webhook-make-contrato/index.ts`** (~linha 79)
+   - Mesma correcao: adicionar `.eq('is_partner', false)` na query de attendees
 
-2. **`src/hooks/useOutsideDetectionForDeals.ts`** (linha 77)
-   - Mesma troca de filtro
+3. **`supabase/functions/reprocess-contract-payments/index.ts`** (~linha 107)
+   - Adicionar `.eq('is_partner', false)` na query de attendees
 
-3. **`src/hooks/useSdrOutsideMetrics.ts`** (linha 112)
-   - Mesma troca de filtro
+4. **`src/hooks/useAgendaData.ts`** (funcao `useMarkContractPaid`, ~linha 703)
+   - Antes de marcar como `contract_paid`, verificar se o attendee nao e socio. Se `is_partner = true`, exibir erro e bloquear
 
-4. **`src/hooks/useR1CloserMetrics.ts`** (linha 331)
-   - Mesma troca de filtro
+5. **`src/hooks/useLinkContractToAttendee.ts`** (~linha 47)
+   - Antes de marcar como `contract_paid`, verificar se o attendee nao e socio. Se `is_partner = true`, exibir erro e bloquear
 
-5. **`supabase/functions/distribute-outside-leads/index.ts`** (linha 110)
-   - Mesma troca de filtro (Edge Function - necessita redeploy)
+### Resumo tecnico
 
-6. **Nenhuma migracao necessaria** - os campos `product_category` e `product_name` ja estao populados nos dados existentes.
-
-### Impacto esperado
-
-- Altayr e todos os outros leads com contrato pago antes da R1 passam a ser corretamente identificados como Outside.
-- O numero de Outsides detectados vai aumentar significativamente (de ~2% para 100% dos contratos reais).
-- O painel de SDRs vai refletir os numeros corretos.
-- A distribuicao automatica de leads Outside vai funcionar para todos os casos.
-
+A mudanca principal e adicionar `.eq('is_partner', false)` nas queries dos 3 webhooks/edge functions para que socios nunca sejam encontrados como candidatos a match. Nos 2 hooks do frontend, adicionar uma verificacao antes de atualizar o status.
