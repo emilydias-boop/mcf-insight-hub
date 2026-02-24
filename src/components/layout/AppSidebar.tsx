@@ -444,26 +444,29 @@ export function AppSidebar() {
 
   // Filtragem de menu items
   const filteredMenuItems = allMenuItems.filter((item) => {
-    // Se tem requiredRoles e o usuário não tem a role
+    // Verificação de roles
     if (item.requiredRoles && role && !item.requiredRoles.some(r => (allRoles as string[]).includes(r))) {
-      // Se o item tem requiredProducts, verifica se o usuário tem algum dos produtos
+      // Fallback: SDR/Closer pode ver se tem o produto
       if (item.requiredProducts && ["sdr", "closer"].includes(role)) {
         return item.requiredProducts.some((p) => myProducts.includes(p));
       }
       return false;
     }
 
+    // Verificação de produtos (aplica SEMPRE, não só como fallback)
+    if (item.requiredProducts && item.requiredProducts.length > 0) {
+      if (!myProducts || !item.requiredProducts.some(p => myProducts.includes(p))) {
+        // Admin/Manager/Coordenador ignoram filtro de produto
+        if (!isAdmin && role !== 'manager' && role !== 'coordenador') {
+          return false;
+        }
+      }
+    }
+
     // Verificação de BU - ATUALIZADO PARA ARRAY
     if (item.requiredBU && item.requiredBU.length > 0) {
-      // Se o usuário não tem BUs ou nenhuma BU do usuário está na lista permitida
-      if (!myBUs || myBUs.length === 0) {
-        return false;
-      }
-      // Verifica se alguma BU do usuário está na lista requerida
-      const hasMatchingBU = myBUs.some(bu => item.requiredBU!.includes(bu));
-      if (!hasMatchingBU) {
-        return false;
-      }
+      if (!myBUs || myBUs.length === 0) return false;
+      if (!myBUs.some(bu => item.requiredBU!.includes(bu))) return false;
     }
 
     if (isAdmin) return true;
