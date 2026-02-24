@@ -355,10 +355,8 @@ function PropostasTab() {
                       </>
                     )}
                     {p.status === 'aceita' && !p.consortium_card_id && (
-                      <Button size="sm" variant="outline" asChild>
-                        <a href={`/consorcio?prefill_deal=${p.deal_id}&prefill_proposal=${p.id}`}>
-                          <FileText className="h-3 w-3 mr-1" /> Cadastrar Cota
-                        </a>
+                      <Button size="sm" variant="outline" onClick={() => setAcceptTarget(p)}>
+                        <FileText className="h-3 w-3 mr-1" /> Cadastrar Cota
                       </Button>
                     )}
                     {p.consortium_card_id && (
