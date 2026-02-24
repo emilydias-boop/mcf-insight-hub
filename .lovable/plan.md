@@ -1,53 +1,98 @@
 
 
-## Tornar os Dados do Cliente editaveis no OpenCotaModal
+## Duas melhorias no fluxo de cadastro de cota
 
-### Problema
+### Problema 1: Dados do AcceptProposalModal nao aparecem no OpenCotaModal
 
-O modal "Abertura de Cota" exibe os dados do cliente como texto somente leitura (linhas 181-194 do OpenCotaModal.tsx). Quando os registros foram criados sem passar pelo fluxo completo do AcceptProposalModal, campos como CPF, RG, Profissao, Endereco, CEP, Renda, Patrimonio e PIX ficam vazios e nao podem ser preenchidos.
+O fluxo ja esta correto no codigo: quando o closer preenche o AcceptProposalModal, os dados sao salvos na tabela `consorcio_pending_registrations` e o OpenCotaModal le dessa mesma tabela. O problema das 2 propostas especificas (Joao Ferreira e Kleber Donizetti) foi que elas foram inseridas manualmente sem os dados do cliente.
 
-### Solucao
+Para futuros cadastros, o fluxo funciona corretamente. Porem, ha um campo que falta no OpenCotaModal: o campo `cpf_conjuge` nao esta sendo exibido. Vou adiciona-lo.
 
-Modificar o `OpenCotaModal` para que a secao "Dados do Cliente" use campos de input editaveis (em vez de texto estatico) quando os valores estiverem vazios. Ao submeter o formulario, esses dados serao salvos junto com os dados da cota.
+### Problema 2: Funcao de auto-preenchimento por texto (checklist)
+
+Adicionar um botao "Colar Check-list" no AcceptProposalModal que abre um campo de texto. O usuario cola o texto padrao de check-list e o sistema extrai automaticamente os dados usando regex, preenchendo os campos do formulario.
+
+Formato suportado:
+```text
+Nome Completo: Evandro Moreira da Silva
+RG: 1.956.525 - SSP/ES
+CPF: 096.559.837-30
+CPF Conjuge (se casado): 022.569.441-74
+Endereco Residencial: SHTN, trecho 2, ...
+CEP: 70.800-230
+Telefone: 61 99644-7743
+E-mail: evandroms7744@gmail.com
+Profissao: Servidor Publico
+Renda: R$ 47.000,00
+Patrimonio: R$ 3.800.000,00
+Chave Pix: 096.559.837-30
+```
 
 ### Alteracoes
 
+**`src/components/consorcio/AcceptProposalModal.tsx`**
+
+1. Adicionar um botao "Colar Check-list" no topo da secao PF (ao lado de "Dados Pessoais")
+2. Ao clicar, mostrar um `Textarea` com placeholder explicando o formato esperado
+3. Ao colar/digitar e clicar "Preencher", executar uma funcao `parseChecklist(text)` que:
+   - Busca cada campo por regex (ex: `/Nome Completo:\s*(.+)/i`)
+   - Parseia valores monetarios (R$ 47.000,00 -> 47000)
+   - Formata CPF, telefone e CEP automaticamente
+   - Preenche os campos do formulario via `form.setValue()`
+4. Apos preencher, esconder o textarea automaticamente
+
+Campos mapeados:
+- "Nome Completo" -> `nome_completo`
+- "RG" -> `rg`
+- "CPF" -> `cpf` (formata com pontos/traco)
+- "CPF Conjuge" / "CPF Cônjuge" -> `cpf_conjuge`
+- "Endereco" / "Endereço Residencial" -> `endereco_completo`
+- "CEP" -> `endereco_cep` (formata com traco)
+- "Telefone" -> `telefone` (formata com parenteses)
+- "E-mail" / "Email" -> `email`
+- "Profissao" / "Profissão" -> `profissao`
+- "Renda" -> `renda` (converte de R$ para numero)
+- "Patrimonio" / "Patrimônio" -> `patrimonio` (converte de R$ para numero)
+- "Chave Pix" / "PIX" -> `pix`
+
 **`src/components/consorcio/OpenCotaModal.tsx`**
 
-1. Adicionar campos de formulario ao `useForm` para os dados do cliente PF: `nome_completo`, `cpf`, `rg`, `profissao`, `telefone`, `email`, `endereco_completo`, `endereco_cep`, `renda`, `patrimonio`, `pix`
-
-2. Substituir a secao read-only "Dados do Cliente" (linhas 176-243) por campos de input pre-preenchidos com os dados existentes do registration. Os campos que ja tem valor aparecerao preenchidos mas editaveis; os vazios aparecerao em branco para preenchimento.
-
-3. Usar `useEffect` para popular os campos do formulario quando o `registration` carregar:
-```
-useEffect(() => {
-  if (registration) {
-    form.setValue('cliente_nome', registration.nome_completo || '');
-    form.setValue('cliente_cpf', registration.cpf || '');
-    form.setValue('cliente_rg', registration.rg || '');
-    // ... demais campos
-  }
-}, [registration]);
-```
-
-4. No `onSubmit`, incluir os dados do cliente no payload enviado ao `useOpenCota`, que ja recebe o `registration` e pode fazer UPDATE na tabela `consorcio_pending_registrations` antes de criar a cota.
-
-**`src/hooks/useConsorcioPendingRegistrations.ts`** (hook `useOpenCota`)
-
-5. Modificar a mutation `useOpenCota` para aceitar dados do cliente atualizados no payload e fazer um UPDATE na tabela `consorcio_pending_registrations` com os campos do cliente antes de prosseguir com a criacao da cota em `consortium_cards`.
-
-### Fluxo resultante
-
-1. Gestor abre "Abertura de Cota" para Kleber Donizetti
-2. Ve os campos pre-preenchidos (Nome, Telefone, Email) e os campos vazios (CPF, RG, etc.)
-3. Preenche os campos faltantes
-4. Preenche os dados da cota (Categoria, Grupo, Valor, etc.)
-5. Clica em "Abrir Cota"
-6. O sistema salva os dados do cliente e cria a cota normalmente
+5. Adicionar campo `cliente_cpf_conjuge` ao formulario
+6. Adicionar o mesmo botao "Colar Check-list" no OpenCotaModal (reutilizando a mesma funcao de parsing)
 
 ### Detalhes tecnicos
 
-- Os campos do cliente serao adicionados ao mesmo `useForm` existente, com prefixo `cliente_` para nao conflitar com os campos da cota
-- Campos obrigatorios: `cliente_nome`, `cliente_cpf`, `cliente_telefone`, `cliente_email`
-- Campos opcionais: `cliente_rg`, `cliente_profissao`, `cliente_endereco_completo`, `cliente_endereco_cep`, `cliente_renda`, `cliente_patrimonio`, `cliente_pix`
-- Reutilizar as funcoes de formatacao (`formatCpf`, `formatPhone`, `formatCep`) ja existentes no `AcceptProposalModal`
+A funcao de parsing sera criada como um utilitario reutilizavel:
+
+```text
+src/lib/checklistParser.ts
+
+export function parseChecklistPF(text: string): Partial<PFData> {
+  const extract = (pattern: RegExp): string => {
+    const match = text.match(pattern);
+    return match?.[1]?.trim() || '';
+  };
+  
+  const parseMoney = (value: string): number => {
+    return parseFloat(value.replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
+  };
+
+  return {
+    nome_completo: extract(/nome\s*completo:\s*(.+)/i),
+    rg: extract(/rg:\s*(.+)/i),
+    cpf: extract(/cpf:\s*(.+)/i),        // linha que NAO contem "conjuge"
+    cpf_conjuge: extract(/cpf\s*c[oô]njuge[^:]*:\s*(.+)/i),
+    endereco_completo: extract(/endere[cç]o[^:]*:\s*(.+)/i),
+    endereco_cep: extract(/cep:\s*(.+)/i),
+    telefone: extract(/telefone:\s*(.+)/i),
+    email: extract(/e-?mail:\s*(.+)/i),
+    profissao: extract(/profiss[aã]o:\s*(.+)/i),
+    renda: parseMoney(extract(/renda:\s*(.+)/i)),
+    patrimonio: parseMoney(extract(/patrim[oô]nio:\s*(.+)/i)),
+    pix: extract(/(?:chave\s*)?pix:\s*(.+)/i),
+  };
+}
+```
+
+O regex de CPF sera tratado com cuidado para nao capturar a linha do conjuge quando buscando o CPF principal (usara negative lookahead ou processamento por linhas).
+
