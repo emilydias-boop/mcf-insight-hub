@@ -74,7 +74,8 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
               .from('hubla_transactions')
               .select('customer_email, sale_date')
               .in('customer_email', chunk)
-              .eq('offer_id', 'pgah16gjTMdAkqUMVKGz')
+              .in('product_category', ['contrato', 'incorporador'])
+              .ilike('product_name', '%contrato%')
               .eq('sale_status', 'completed')
               .order('sale_date', { ascending: true }),
           uniqueEmails

@@ -107,7 +107,8 @@ serve(async (req) => {
         .from('hubla_transactions')
         .select('customer_email, sale_date, product_name')
         .in('customer_email', uniqueEmails)
-        .eq('offer_id', 'pgah16gjTMdAkqUMVKGz')
+        .in('product_category', ['contrato', 'incorporador'])
+        .ilike('product_name', '%contrato%')
         .eq('sale_status', 'completed')
         .order('sale_date', { ascending: true }),
 
