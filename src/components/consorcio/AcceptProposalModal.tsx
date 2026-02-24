@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { parseChecklistPF } from '@/lib/checklistParser';
+import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Loader2, Plus, Trash2, Upload, FileText, X } from 'lucide-react';
@@ -128,6 +128,8 @@ export function AcceptProposalModal({
   const [loadingCnpj, setLoadingCnpj] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
   const [checklistText, setChecklistText] = useState('');
+  const [showChecklistPJ, setShowChecklistPJ] = useState(false);
+  const [checklistTextPJ, setChecklistTextPJ] = useState('');
   const [pfDocuments, setPfDocuments] = useState<File[]>([]);
   const [pjDocContratoSocial, setPjDocContratoSocial] = useState<File | null>(null);
   const [pjDocRgSocios, setPjDocRgSocios] = useState<File | null>(null);
@@ -416,7 +418,50 @@ export function AcceptProposalModal({
                   </>
                 ) : (
                   <>
-                    <h3 className="font-semibold text-sm">Dados da Empresa</h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-sm">Dados da Empresa</h3>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setShowChecklistPJ(!showChecklistPJ)}>
+                        {showChecklistPJ ? 'Fechar' : '📋 Colar Check-list'}
+                      </Button>
+                    </div>
+                    {showChecklistPJ && (
+                      <div className="space-y-2 p-3 border rounded-md bg-muted/30">
+                        <Label className="text-xs text-muted-foreground">Cole o texto do check-list PJ abaixo:</Label>
+                        <Textarea
+                          value={checklistTextPJ}
+                          onChange={e => setChecklistTextPJ(e.target.value)}
+                          rows={6}
+                          placeholder={"Razão Social: ...\nCNPJ: ...\nNatureza Jurídica: ...\nInscrição Estadual: ...\nData de Fundação: dd/mm/aaaa\nCPF dos sócios: 000.000.000-00, ...\nEndereço Comercial: ...\nCEP: ...\nTelefone Comercial: ...\nE-mail comercial: ...\nFaturamento médio: R$ ...\nNúmero de funcionários: ...\nRenda dos sócios: R$ ..."}
+                        />
+                        <Button type="button" size="sm" onClick={() => {
+                          const parsed = parseChecklistPJ(checklistTextPJ);
+                          if (parsed.razao_social) form.setValue('razao_social', parsed.razao_social);
+                          if (parsed.cnpj) form.setValue('cnpj', formatCnpj(parsed.cnpj));
+                          if (parsed.natureza_juridica) form.setValue('natureza_juridica', parsed.natureza_juridica);
+                          if (parsed.inscricao_estadual !== undefined) form.setValue('inscricao_estadual', parsed.inscricao_estadual);
+                          if (parsed.data_fundacao) form.setValue('data_fundacao', parsed.data_fundacao);
+                          if (parsed.endereco_comercial) form.setValue('endereco_comercial', parsed.endereco_comercial);
+                          if (parsed.endereco_comercial_cep) form.setValue('endereco_comercial_cep', formatCep(parsed.endereco_comercial_cep));
+                          if (parsed.telefone_comercial) form.setValue('telefone_comercial', formatPhone(parsed.telefone_comercial));
+                          if (parsed.email_comercial) form.setValue('email_comercial', parsed.email_comercial);
+                          if (parsed.faturamento_mensal) form.setValue('faturamento_mensal', parsed.faturamento_mensal);
+                          if (parsed.num_funcionarios !== undefined) form.setValue('num_funcionarios', parsed.num_funcionarios);
+                          // Handle socios
+                          if (parsed.socios_cpfs && parsed.socios_cpfs.length > 0) {
+                            const rendaPorSocio = parsed.renda_socios ? Math.round((parsed.renda_socios / parsed.socios_cpfs.length) * 100) / 100 : 0;
+                            // Remove existing socios and add new ones
+                            while (socioFields.length > 0) removeSocio(0);
+                            parsed.socios_cpfs.forEach(cpf => {
+                              addSocio({ cpf: formatCpf(cpf), renda: rendaPorSocio });
+                            });
+                          }
+                          setShowChecklistPJ(false);
+                          setChecklistTextPJ('');
+                        }}>
+                          Preencher Campos
+                        </Button>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                       <FormField control={form.control} name="cnpj" rules={{ required: 'Obrigatório', validate: (v: string) => !v || validateCnpj(v) || 'CNPJ inválido' }} render={({ field }) => (
                         <FormItem>

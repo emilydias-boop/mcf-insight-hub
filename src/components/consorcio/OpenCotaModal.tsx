@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { parseChecklistPF } from '@/lib/checklistParser';
+import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
 import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -97,6 +97,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaMo
 
   const [showChecklist, setShowChecklist] = useState(false);
   const [checklistText, setChecklistText] = useState('');
+  const [showChecklistPJ, setShowChecklistPJ] = useState(false);
+  const [checklistTextPJ, setChecklistTextPJ] = useState('');
 
   const form = useForm({
     defaultValues: {
@@ -254,9 +256,13 @@ export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaMo
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm">Dados do Cliente</CardTitle>
-                  {registration.tipo_pessoa === 'pf' && (
+                  {registration.tipo_pessoa === 'pf' ? (
                     <Button type="button" variant="outline" size="sm" onClick={() => setShowChecklist(!showChecklist)}>
                       {showChecklist ? 'Fechar' : '📋 Colar Check-list'}
+                    </Button>
+                  ) : (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setShowChecklistPJ(!showChecklistPJ)}>
+                      {showChecklistPJ ? 'Fechar' : '📋 Colar Check-list PJ'}
                     </Button>
                   )}
                 </div>
@@ -334,30 +340,49 @@ export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaMo
                     )} />
                   </div>
                 ) : (
-                  <div className="grid grid-cols-3 gap-3 text-sm">
-                    <div><span className="text-muted-foreground">Razão Social:</span> <strong>{registration.razao_social}</strong></div>
-                    <div><span className="text-muted-foreground">CNPJ:</span> {registration.cnpj}</div>
-                    <div><span className="text-muted-foreground">Natureza Jurídica:</span> {registration.natureza_juridica}</div>
-                    <div><span className="text-muted-foreground">Inscrição Estadual:</span> {registration.inscricao_estadual}</div>
-                    <div><span className="text-muted-foreground">Data Fundação:</span> {registration.data_fundacao}</div>
-                    <div><span className="text-muted-foreground">Telefone:</span> {registration.telefone_comercial}</div>
-                    <div><span className="text-muted-foreground">Email:</span> {registration.email_comercial}</div>
-                    <div className="col-span-2"><span className="text-muted-foreground">Endereço:</span> {registration.endereco_comercial}</div>
-                    <div><span className="text-muted-foreground">Funcionários:</span> {registration.num_funcionarios}</div>
-                    <div><span className="text-muted-foreground">Faturamento:</span> {registration.faturamento_mensal ? formatCurrency(registration.faturamento_mensal) : '—'}</div>
-                    {registration.socios && registration.socios.length > 0 && (
-                      <div className="col-span-3">
-                        <span className="text-muted-foreground">Sócios:</span>
-                        <div className="mt-1 space-y-1">
-                          {registration.socios.map((s: any, i: number) => (
-                            <Badge key={i} variant="outline" className="mr-2">
-                              CPF: {s.cpf} — Renda: {formatCurrency(s.renda || 0)}
-                            </Badge>
-                          ))}
-                        </div>
+                  <>
+                    {showChecklistPJ && (
+                      <div className="space-y-2 p-3 border rounded-md bg-muted/30 mb-4">
+                        <Label className="text-xs text-muted-foreground">Cole o texto do check-list PJ abaixo:</Label>
+                        <Textarea
+                          value={checklistTextPJ}
+                          onChange={e => setChecklistTextPJ(e.target.value)}
+                          rows={6}
+                          placeholder={"Razão Social: ...\nCNPJ: ...\nNatureza Jurídica: ...\nInscrição Estadual: ...\nData de Fundação: dd/mm/aaaa\nCPF dos sócios: 000.000.000-00, ...\nEndereço Comercial: ...\nCEP: ...\nTelefone Comercial: ...\nE-mail comercial: ...\nFaturamento médio: R$ ...\nNúmero de funcionários: ...\nRenda dos sócios: R$ ..."}
+                        />
+                        <Button type="button" size="sm" onClick={() => {
+                          setShowChecklistPJ(false);
+                          setChecklistTextPJ('');
+                        }}>
+                          Preencher Campos
+                        </Button>
                       </div>
                     )}
-                  </div>
+                    <div className="grid grid-cols-3 gap-3 text-sm">
+                      <div><span className="text-muted-foreground">Razão Social:</span> <strong>{registration.razao_social}</strong></div>
+                      <div><span className="text-muted-foreground">CNPJ:</span> {registration.cnpj}</div>
+                      <div><span className="text-muted-foreground">Natureza Jurídica:</span> {registration.natureza_juridica}</div>
+                      <div><span className="text-muted-foreground">Inscrição Estadual:</span> {registration.inscricao_estadual}</div>
+                      <div><span className="text-muted-foreground">Data Fundação:</span> {registration.data_fundacao}</div>
+                      <div><span className="text-muted-foreground">Telefone:</span> {registration.telefone_comercial}</div>
+                      <div><span className="text-muted-foreground">Email:</span> {registration.email_comercial}</div>
+                      <div className="col-span-2"><span className="text-muted-foreground">Endereço:</span> {registration.endereco_comercial}</div>
+                      <div><span className="text-muted-foreground">Funcionários:</span> {registration.num_funcionarios}</div>
+                      <div><span className="text-muted-foreground">Faturamento:</span> {registration.faturamento_mensal ? formatCurrency(registration.faturamento_mensal) : '—'}</div>
+                      {registration.socios && registration.socios.length > 0 && (
+                        <div className="col-span-3">
+                          <span className="text-muted-foreground">Sócios:</span>
+                          <div className="mt-1 space-y-1">
+                            {registration.socios.map((s: any, i: number) => (
+                              <Badge key={i} variant="outline" className="mr-2">
+                                CPF: {s.cpf} — Renda: {formatCurrency(s.renda || 0)}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
 
                 {documents.length > 0 && (
