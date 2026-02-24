@@ -39,7 +39,7 @@ export function useMeetingSlotsKPIs(startDate: Date, endDate: Date) {
       // R1 Agendada: ALL attendees that were scheduled for the period (excludes only cancelled)
       // This keeps the count stable as meetings are marked completed/no_show
       const totalAgendadas = attendees.filter(
-        (a) => a.status !== "cancelled"
+        (a) => a.status !== "cancelled" && a.status !== "rescheduled"
       ).length;
 
       // R1 Realizada: completed OR contract_paid OR refunded (paid = meeting happened)
