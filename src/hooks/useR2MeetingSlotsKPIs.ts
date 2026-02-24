@@ -37,7 +37,7 @@ export function useR2MeetingSlotsKPIs(startDate: Date, endDate: Date) {
 
       // R2 Agendadas: ALL attendees scheduled for the period (excludes only cancelled)
       const r2Agendadas = attendees.filter(
-        (a) => a.status !== "cancelled"
+        (a) => a.status !== "cancelled" && a.status !== "rescheduled"
       ).length;
 
       // R2 Realizadas: completed OR contract_paid OR refunded

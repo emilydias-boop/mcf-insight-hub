@@ -56,11 +56,11 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date) {
 
       // ===== R2 AGENDADAS =====
       // Count ATTENDEES (not slots) in scheduled/invited/pending meetings
-      // This aligns with the "R2 Agendadas" tab
+      // Exclude rescheduled attendees to avoid double-counting reagendados
       const scheduledStatuses = ['scheduled', 'invited', 'pending'];
       const r2Agendadas = (r2Meetings || [])
         .filter(m => scheduledStatuses.includes(m.status))
-        .reduce((acc, m) => acc + (m.attendees?.length || 0), 0);
+        .reduce((acc, m) => acc + (m.attendees?.filter((a: any) => a.status !== 'rescheduled')?.length || 0), 0);
 
       // ===== R2 REALIZADAS =====
       // Count completed meetings (slots, not attendees - represents meetings held)
