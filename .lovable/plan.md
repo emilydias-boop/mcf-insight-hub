@@ -1,45 +1,51 @@
 
 
-## Problema
+## Problema Critico: Detecao de Outside falhando para ~98% dos contratos
 
-A aba "Notas" mostra "Nenhuma nota ainda" para leads que possuem `clint_id` no formato legado (ex: `hubla-deal-1769551133751-20a7cf`).
+### Diagnostico
+
+A detecao de leads "Outside" usa o filtro `offer_id = 'pgah16gjTMdAkqUMVKGz'` em 6 arquivos. Porem, os dados de fevereiro/2026 mostram que **apenas 7 de ~380 contratos** possuem esse `offer_id`. A grande maioria tem `offer_id = NULL` (357 registros) ou outros IDs variados.
+
+O caso do Altayr e um exemplo direto: contrato pago em 21/02, reuniao R1 em 24/02, mas nao foi detectado como Outside porque seu contrato tem `offer_id = NULL`.
 
 ### Causa raiz
 
-O hook `useContactDealIds` retorna tanto UUIDs quanto `clint_id` (strings que nao sao UUID). Quando esses IDs sao passados para queries do Supabase em tabelas com colunas `deal_id` do tipo UUID, a query falha com erro `22P02: invalid input syntax for type uuid`, retornando status 400 e zero resultados.
+Mudanca no lado do Hubla: transacoes mais recentes nao estao mais enviando o `offer_id` antigo (`pgah16gjTMdAkqUMVKGz`). O campo `product_name` e `product_category` continuam sendo preenchidos corretamente.
 
-Isso afeta todas as queries na aba Notas (`DealNotesTab`):
-- `deal_activities`
-- `meeting_slot_attendees`
-- `calls`
+### Solucao
 
-## Solucao
+Trocar o filtro de `offer_id` para usar `product_category` e `product_name`, que sao campos confiaveis e preenchidos consistentemente:
 
-### 1. Filtrar IDs nao-UUID no `useContactDealIds`
+**Filtro novo:**
+- `product_category IN ('contrato', 'incorporador')`
+- `product_name ILIKE '%contrato%'`
 
-No arquivo `src/hooks/useContactDealIds.ts`, antes de retornar os IDs, filtrar apenas os que sao UUIDs validos. Adicionar uma funcao auxiliar:
+Isso cobre todos os tipos de contrato relevantes (A000 - Contrato, Contrato, Contrato - Socio MCF, A000 - Contrato MCF) e exclui automaticamente produtos de outras BUs (Efeito Alavanca, Clube do Arremate) por nao terem `product_category = 'contrato'` ou `'incorporador'`.
 
-```text
-UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-```
+### Arquivos a alterar (6 arquivos, mesma mudanca em todos)
 
-Aplicar o filtro no retorno do hook para que apenas UUIDs validos sejam incluidos no array final.
+1. **`src/hooks/useOutsideDetection.ts`** (linha 67)
+   - Remover `.eq('offer_id', 'pgah16gjTMdAkqUMVKGz')`
+   - Adicionar `.in('product_category', ['contrato', 'incorporador'])` e `.ilike('product_name', '%contrato%')`
 
-### 2. Alternativa (mais segura): Filtrar no `DealNotesTab`
+2. **`src/hooks/useOutsideDetectionForDeals.ts`** (linha 77)
+   - Mesma troca de filtro
 
-Caso o `clint_id` seja necessario em outros contextos, a filtragem pode ser feita diretamente no `DealNotesTab.tsx` na linha 59 onde `uniqueIds` e construido, garantindo que apenas UUIDs validos sejam passados para as queries.
+3. **`src/hooks/useSdrOutsideMetrics.ts`** (linha 112)
+   - Mesma troca de filtro
 
-### Abordagem recomendada
+4. **`src/hooks/useR1CloserMetrics.ts`** (linha 331)
+   - Mesma troca de filtro
 
-Filtrar no `useContactDealIds.ts` (opcao 1), pois o problema afeta qualquer consumidor desse hook, nao apenas o `DealNotesTab`. Isso corrige tambem os erros 400 vistos em outras queries como `calls` e `attendee_notes`.
+5. **`supabase/functions/distribute-outside-leads/index.ts`** (linha 110)
+   - Mesma troca de filtro (Edge Function - necessita redeploy)
 
-### Arquivos a alterar
+6. **Nenhuma migracao necessaria** - os campos `product_category` e `product_name` ja estao populados nos dados existentes.
 
-- `src/hooks/useContactDealIds.ts`: Adicionar regex UUID e filtrar `clint_id` nao-UUID do array retornado (linhas 71-78).
+### Impacto esperado
 
-### Resultado esperado
-
-- A nota de agendamento (`.`) passa a aparecer na aba Notas.
-- Nenhum erro 400 por UUID invalido no console/rede.
-- Outras abas (Timeline, Historico) que usam o mesmo hook tambem param de falhar silenciosamente.
+- Altayr e todos os outros leads com contrato pago antes da R1 passam a ser corretamente identificados como Outside.
+- O numero de Outsides detectados vai aumentar significativamente (de ~2% para 100% dos contratos reais).
+- O painel de SDRs vai refletir os numeros corretos.
+- A distribuicao automatica de leads Outside vai funcionar para todos os casos.
 
