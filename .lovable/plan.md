@@ -1,66 +1,45 @@
 
-Objetivo: fazer os SDRs voltarem a ver a lista de leads em **/sdr/minhas-reunioes** com os nomes corretos.
 
-## Diagnóstico confirmado
+## Problema
 
-1. O problema atual não é mais `is_rescheduled`:
-   - Agora a RPC está quebrando com erro SQL `42703: column ms.slot_date does not exist`.
-2. A função publicada `get_sdr_meetings_from_agenda(text,text,text)` ainda usa colunas inexistentes no schema atual:
-   - `ms.slot_date`
-   - `ms.start_time`
-3. No schema real, `meeting_slots` usa:
-   - `scheduled_at` (timestamptz)
-   - não possui `slot_date` nem `start_time`.
-4. Resultado no frontend:
-   - KPIs aparecem (vem de outra RPC: `get_sdr_metrics_from_agenda`)
-   - tabela de reuniões fica vazia/sem nomes porque a RPC da lista falha em 400.
+A aba "Notas" mostra "Nenhuma nota ainda" para leads que possuem `clint_id` no formato legado (ex: `hubla-deal-1769551133751-20a7cf`).
 
-## Implementação proposta
+### Causa raiz
 
-### 1) Corrigir a função SQL `get_sdr_meetings_from_agenda`
-Criar uma nova migration para **drop + recreate** da função com o schema correto.
+O hook `useContactDealIds` retorna tanto UUIDs quanto `clint_id` (strings que nao sao UUID). Quando esses IDs sao passados para queries do Supabase em tabelas com colunas `deal_id` do tipo UUID, a query falha com erro `22P02: invalid input syntax for type uuid`, retornando status 400 e zero resultados.
 
-Ajustes na função:
-- Trocar `ms.slot_date` por `ms.scheduled_at`.
-- Trocar `ms.start_time` por `ms.scheduled_at`.
-- Manter `msa.is_reschedule` (nome correto da coluna).
-- Usar SDR de forma consistente com as métricas:
-  - join de perfil via `COALESCE(msa.booked_by, ms.booked_by)` para robustez.
-- `intermediador` com fallback:
-  - `COALESCE(profile.full_name, profile.email, '')`.
-- Filtro por SDR com comparação case-insensitive:
-  - `LOWER(profile.email) = LOWER(sdr_email_filter)`.
-- Manter exclusões:
-  - `msa.status != 'cancelled'`
-  - `COALESCE(msa.is_partner, false) = false`
-  - `ms.meeting_type = 'r1'`.
-- Ordenação por `ms.scheduled_at DESC`.
+Isso afeta todas as queries na aba Notas (`DealNotesTab`):
+- `deal_activities`
+- `meeting_slot_attendees`
+- `calls`
 
-Observação técnica:
-- `scheduled_at` deve voltar como timestamp (string no client), não `time`, para não quebrar `new Date(...)` na tabela.
+## Solucao
 
-### 2) Garantir compatibilidade com o frontend atual
-Sem alterar hooks/componentes neste passo, apenas garantir que o contrato da RPC continue trazendo os campos já consumidos:
-- `deal_id, deal_name, contact_name, contact_email, contact_phone, tipo, data_agendamento, scheduled_at, status_atual, intermediador, closer, origin_name, probability, attendee_id, meeting_slot_id, attendee_status, sdr_email`.
+### 1. Filtrar IDs nao-UUID no `useContactDealIds`
 
-### 3) Validação pós-correção
-Validar em 3 níveis:
+No arquivo `src/hooks/useContactDealIds.ts`, antes de retornar os IDs, filtrar apenas os que sao UUIDs validos. Adicionar uma funcao auxiliar:
 
-1. Banco:
-   - chamada SQL/RPC retorna 200 e linhas para um SDR conhecido.
-2. Rede no browser:
-   - `POST /rpc/get_sdr_meetings_from_agenda` sem 400.
-3. Tela:
-   - em `/sdr/minhas-reunioes`, a grade deixa de exibir “Nenhuma reunião encontrada...” e mostra os leads com nomes.
+```text
+UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+```
 
-## Critérios de aceite
+Aplicar o filtro no retorno do hook para que apenas UUIDs validos sejam incluidos no array final.
 
-- SDR consegue visualizar sua lista em “Minhas Reuniões”.
-- Nomes de lead (`contact_name`) aparecem na tabela.
-- Não existe mais erro `column ms.slot_date does not exist` no console.
-- KPI e tabela voltam a ficar coerentes operacionalmente (sem estado “cards com dados + lista vazia por erro”).
+### 2. Alternativa (mais segura): Filtrar no `DealNotesTab`
 
-## Risco e mitigação
+Caso o `clint_id` seja necessario em outros contextos, a filtragem pode ser feita diretamente no `DealNotesTab.tsx` na linha 59 onde `uniqueIds` e construido, garantindo que apenas UUIDs validos sejam passados para as queries.
 
-- Risco: nova regressão na RPC por drift de schema.
-- Mitigação: usar apenas colunas confirmadas no schema atual (`scheduled_at`, `meeting_slot_id`, `is_reschedule`) e validar imediatamente via chamada RPC real antes de encerrar.
+### Abordagem recomendada
+
+Filtrar no `useContactDealIds.ts` (opcao 1), pois o problema afeta qualquer consumidor desse hook, nao apenas o `DealNotesTab`. Isso corrige tambem os erros 400 vistos em outras queries como `calls` e `attendee_notes`.
+
+### Arquivos a alterar
+
+- `src/hooks/useContactDealIds.ts`: Adicionar regex UUID e filtrar `clint_id` nao-UUID do array retornado (linhas 71-78).
+
+### Resultado esperado
+
+- A nota de agendamento (`.`) passa a aparecer na aba Notas.
+- Nenhum erro 400 por UUID invalido no console/rede.
+- Outras abas (Timeline, Historico) que usam o mesmo hook tambem param de falhar silenciosamente.
+
