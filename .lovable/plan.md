@@ -1,90 +1,118 @@
 
 
-## Correcao: contrato duplicado sem vinculo causa falso Outside
+## Historico de Precos de Referencia por Produto
 
-### Problema
+### Problema atual
 
-A correcao anterior so funciona quando o contrato tem `linked_attendee_id` preenchido. No caso do Edilson existem 2 transacoes de contrato:
+Quando voce altera o `reference_price` de um produto na tabela `product_configurations`, o novo valor e aplicado retroativamente a TODAS as transacoes historicas. Isso porque a funcao RPC `get_all_hubla_transactions` faz JOIN com `product_configurations` e pega o `reference_price` atual.
 
-```text
-c31e5288 - Kiwify   - 24/02 20:58 - linked_attendee_id = 3a8e3764 (deal #2) ✓
-95442e91 - Manual   - 24/02 21:06 - linked_attendee_id = NULL              ✗
-```
+### Solucao: Tabela de historico de precos com vigencia
 
-O contrato manual sem vinculo continua sendo considerado para TODOS os deals do email, causando falso Outside no deal #3.
-
-### Opcoes de correcao
-
-**Opcao A - Vincular o contrato orfao manualmente (correcao pontual)**
-
-Atualizar `linked_attendee_id` do contrato `95442e91` para apontar para o mesmo attendee `3a8e3764` do deal #2. Isso resolve o caso do Edilson, mas nao previne futuros casos.
-
-**Opcao B - Melhorar a logica do hook (correcao sistemica)**
-
-Quando existem contratos vinculados E nao-vinculados para o mesmo email, e os vinculados ja apontam para outro deal, ignorar tambem os nao-vinculados que tem o mesmo `product_name` e `sale_date` proximo (duplicatas). Logica:
+Criar uma tabela `product_price_history` que registra cada alteracao de preco com data de inicio de vigencia. Na hora de calcular o bruto de uma transacao, o sistema buscara o preco que estava vigente na `sale_date` da transacao.
 
 ```text
-Para cada deal:
-  1. Filtrar contratos onde linkedDealId = null OU linkedDealId = este deal
-  2. Se existem contratos vinculados a OUTRO deal para este email,
-     e os contratos nao-vinculados tem sale_date dentro de 24h dos vinculados,
-     considerar como duplicata e IGNORAR tambem
+product_configurations (atual)          product_price_history (nova)
+┌──────────────────────────────┐        ┌──────────────────────────────────┐
+│ id                           │        │ id                               │
+│ product_name                 │        │ product_config_id (FK)           │
+│ reference_price = 16500  ←───┼──┐     │ old_price                        │
+│ ...                          │  │     │ new_price                        │
+└──────────────────────────────┘  │     │ effective_from (data de vigencia)│
+                                  │     │ changed_by (user_id)             │
+                                  │     │ created_at                       │
+                                  └─────│ ...                              │
+                                        └──────────────────────────────────┘
 ```
 
-**Opcao C - Ignorar contratos nao-vinculados quando existem vinculados (mais simples)**
+### Fluxo
 
-Se para um dado email existem contratos COM `linked_attendee_id` preenchido, entao os contratos SEM vinculo sao considerados duplicatas/orfaos e sao ignorados para fins de Outside detection. So se NENHUM contrato tiver vinculo, ai considerar todos.
+1. Ao salvar um novo `reference_price` no drawer de produto, o sistema automaticamente insere um registro em `product_price_history` com o preco antigo, preco novo, e `effective_from = NOW()`
+2. A funcao RPC `get_all_hubla_transactions` sera alterada para fazer um **lateral join** com `product_price_history`, buscando o preco vigente na `sale_date` da transacao
+3. Se nao houver historico, usa o `reference_price` atual (retrocompatibilidade)
 
-### Plano recomendado: Opcao C + limpeza de dados
+### Logica do preco vigente
 
-**1. Alterar `useOutsideDetectionForDeals.ts` (logica no passo 6)**
+Para uma transacao com `sale_date = 2026-01-15`:
+- Se existe registro de historico com `effective_from = 2026-02-01` (preco mudou para 16500)
+- E antes disso o preco era 14500
+- Entao a transacao de janeiro usa **14500** (preco anterior a mudanca)
+- Transacoes a partir de 01/02 usam **16500**
 
-Antes de filtrar contratos relevantes por deal, verificar se existem contratos vinculados para o email. Se sim, descartar os nao-vinculados:
+### Alteracoes tecnicas
 
-```typescript
-// No loop do passo 6, ANTES de filtrar por deal:
-const hasLinkedContracts = emailContracts.some(c => c.linkedDealId !== null);
-
-for (const entry of dealEntries) {
-  const relevantContracts = emailContracts.filter(c => {
-    // Se existem contratos vinculados, ignorar os nao-vinculados (duplicatas)
-    if (hasLinkedContracts && !c.linkedDealId) return false;
-    if (!c.linkedDealId) return true;
-    return c.linkedDealId === entry.dealId;
-  });
-  // ... resto da logica
-}
-```
-
-**2. Vincular contratos orfaos existentes (limpeza SQL)**
-
-Para os contratos que sao claramente duplicatas (mesmo email, mesmo valor, mesma data), vincular ao mesmo attendee:
+**1. Nova tabela `product_price_history`**
 
 ```sql
-UPDATE hubla_transactions 
-SET linked_attendee_id = '3a8e3764-bc29-42f0-8aee-735e88829f40'
-WHERE id = '95442e91-88c9-4219-9af7-16a450e39717';
+CREATE TABLE product_price_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_config_id UUID NOT NULL REFERENCES product_configurations(id),
+  old_price NUMERIC NOT NULL,
+  new_price NUMERIC NOT NULL,
+  effective_from TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  changed_by UUID REFERENCES auth.users(id),
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 ```
 
-**3. Limpeza dos deals e contatos duplicados do Edilson**
+**2. Trigger automatico na `product_configurations`**
 
-Como ja planejado anteriormente:
-- Cancelar R1 do deal #3 e mover para "Sem Interesse"
-- Consolidar os 8 contatos duplicados em 1
+Quando `reference_price` muda, insere automaticamente um registro no historico:
 
-### Secao tecnica
-
-A alteracao e no arquivo `src/hooks/useOutsideDetectionForDeals.ts`, linhas 179-212. A mudanca e adicionar uma verificacao de 2 linhas antes do loop de deals:
-
-```typescript
-const hasLinkedContracts = emailContracts.some(c => c.linkedDealId !== null);
+```sql
+CREATE FUNCTION log_price_change() RETURNS trigger AS $$
+BEGIN
+  IF OLD.reference_price IS DISTINCT FROM NEW.reference_price THEN
+    INSERT INTO product_price_history (product_config_id, old_price, new_price, effective_from)
+    VALUES (NEW.id, OLD.reference_price, NEW.reference_price, NOW());
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 ```
 
-E no filtro (linha 190-193), adicionar a condicao:
+**3. Funcao auxiliar para buscar preco vigente**
 
-```typescript
-if (hasLinkedContracts && !c.linkedDealId) return false;
+```sql
+CREATE FUNCTION get_effective_price(p_product_config_id UUID, p_sale_date TIMESTAMPTZ)
+RETURNS NUMERIC AS $$
+  -- Busca o preco que estava vigente na sale_date
+  -- Se a sale_date e anterior a TODAS as mudancas, usa old_price do primeiro registro
+  -- Se e posterior a ultima mudanca, usa reference_price atual
+  -- Senao, busca o new_price da mudanca mais recente anterior a sale_date
+$$
 ```
 
-Isso garante que contratos duplicatas sem vinculo nao gerem falso Outside quando ja existem contratos vinculados para o mesmo email.
+**4. Atualizar RPC `get_all_hubla_transactions`**
+
+Substituir `pc.reference_price` por chamada a `get_effective_price(pc.id, ht.sale_date)`.
+
+**5. Atualizar cache no frontend (`useProductPricesCache`)**
+
+O cache precisara ser ajustado: em vez de um preco unico por produto, carregara tambem o historico de precos para que `getDeduplicatedGross` possa receber o preco correto baseado na `sale_date`. Na pratica, como o preco ja vem correto do RPC (backend), o cache continua funcionando para os poucos casos de fallback.
+
+**6. UI: Exibir historico no ProductConfigDrawer**
+
+Adicionar uma secao no drawer de edicao do produto mostrando o historico de alteracoes de preco, com data, preco anterior, novo preco. Isso da visibilidade ao gestor sobre quando cada mudanca foi feita.
+
+**7. Seed: Registrar precos atuais como baseline**
+
+Inserir um registro inicial para cada produto existente com `effective_from = created_at` do produto e `old_price = new_price = reference_price` atual, para garantir que transacoes antigas continuem usando o preco correto.
+
+### Arquivos afetados
+
+| Arquivo | Alteracao |
+|---|---|
+| Migration SQL | Criar tabela, trigger, funcao `get_effective_price`, atualizar RPC |
+| `src/hooks/useProductConfigurations.ts` | Hook para buscar historico de precos |
+| `src/components/admin/ProductConfigDrawer.tsx` | Exibir historico de precos no drawer |
+| `src/hooks/useProductPricesCache.ts` | Sem mudanca significativa (preco ja vem correto do RPC) |
+| `src/lib/incorporadorPricing.ts` | Sem mudanca (usa `reference_price` que vem do RPC) |
+
+### Impacto
+
+- Transacoes **anteriores** a uma mudanca de preco manterao o preco antigo
+- Transacoes **posteriores** usarao o novo preco
+- O gestor pode ver quando e quanto mudou no historico do drawer
+- Retrocompativel: produtos sem historico continuam usando `reference_price` atual
 
