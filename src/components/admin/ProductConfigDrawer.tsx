@@ -1,5 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
@@ -63,6 +73,12 @@ export function ProductConfigDrawer({
   onOpenChange,
 }: ProductConfigDrawerProps) {
   const updateMutation = useUpdateProductConfiguration();
+  const [priceChanged, setPriceChanged] = useState(false);
+  const [effectiveFrom, setEffectiveFrom] = useState<Date>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -90,8 +106,20 @@ export function ProductConfigDrawer({
         count_in_dashboard: product.count_in_dashboard,
         notes: product.notes || "",
       });
+      setPriceChanged(false);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      setEffectiveFrom(today);
     }
   }, [product, form]);
+
+  // Watch price changes
+  const currentPrice = form.watch("reference_price");
+  useEffect(() => {
+    if (product) {
+      setPriceChanged(Number(currentPrice) !== product.reference_price);
+    }
+  }, [currentPrice, product]);
 
   const onSubmit = async (values: FormValues) => {
     if (!product) return;
@@ -108,6 +136,7 @@ export function ProductConfigDrawer({
         count_in_dashboard: values.count_in_dashboard,
         notes: values.notes || null,
       },
+      effectiveFrom: priceChanged ? effectiveFrom : undefined,
     });
 
     onOpenChange(false);
@@ -244,6 +273,40 @@ export function ProductConfigDrawer({
                 </FormItem>
               )}
             />
+
+            {priceChanged && (
+              <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 p-4 space-y-2">
+                <FormLabel className="text-sm font-medium">Vigência a partir de</FormLabel>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !effectiveFrom && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {effectiveFrom
+                        ? format(effectiveFrom, "dd/MM/yyyy", { locale: ptBR })
+                        : "Selecione uma data"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={effectiveFrom}
+                      onSelect={(date) => date && setEffectiveFrom(date)}
+                      locale={ptBR}
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+                <FormDescription className="text-xs">
+                  O novo preço será aplicado para todas as transações a partir desta data
+                </FormDescription>
+              </div>
+            )}
 
             <div className="space-y-4">
               <FormField
