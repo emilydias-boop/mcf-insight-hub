@@ -163,7 +163,8 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
         suffix = ' - quer desistir';
       }
 
-      report += `${name}\t${phone}\t${closer}${suffix}\n`;
+      const r1Closer = att.r1_closer_name || '-';
+      report += `${name}\t${phone}\t${r1Closer}\t${closer}${suffix}\n`;
     });
 
     return report;
@@ -178,13 +179,14 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
   };
 
   const handleExportExcel = () => {
-    const headers = ['#', 'Nome', 'Telefone', 'Email', 'Status', 'Closer', 'Carrinho', 'Data R2'];
+    const headers = ['#', 'Nome', 'Telefone', 'Email', 'Status', 'Closer R1', 'Closer R2', 'Carrinho', 'Data R2'];
     const rows = attendees.map((att, idx) => [
       idx + 1,
       att.attendee_name || att.deal_name || 'Sem nome',
       att.attendee_phone || att.contact_phone || '-',
       att.contact_email || '-',
       'Aprovado',
+      att.r1_closer_name || '-',
       att.closer_name || '-',
       att.carrinho_status === 'vai_comprar' ? 'Vai Comprar' :
       att.carrinho_status === 'comprou' ? 'Comprou' :
@@ -313,7 +315,8 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
               <TableHead>Nome</TableHead>
               <TableHead>Telefone</TableHead>
               <TableHead className="hidden md:table-cell">Email</TableHead>
-              <TableHead>Closer</TableHead>
+              <TableHead>Closer R1</TableHead>
+              <TableHead>Closer R2</TableHead>
               <TableHead className="hidden sm:table-cell">Data R2</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -321,7 +324,7 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
           <TableBody>
             {displayedAttendees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                   Nenhum resultado encontrado com os filtros aplicados
                 </TableCell>
               </TableRow>
@@ -364,6 +367,9 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-sm text-muted-foreground max-w-[200px] truncate">
                     {att.contact_email || '-'}
+                  </TableCell>
+                  <TableCell>
+                    <span className="truncate text-sm">{att.r1_closer_name || '-'}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
