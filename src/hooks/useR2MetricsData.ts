@@ -255,7 +255,7 @@ export function useR2MetricsData(weekStart: Date, weekEnd: Date) {
       });
       
       // Contar métricas usando leads únicos
-      const totalLeads = leadsByDeal.size;
+      // totalLeads will be calculated after counting categories below
       let desistentes = 0;
       let reprovados = 0;
       let proximaSemana = 0;
@@ -317,7 +317,10 @@ export function useR2MetricsData(weekStart: Date, weekEnd: Date) {
         }
       });
 
-      // 5. Match with Hubla transactions (parceria category) - include linked_attendee_id
+      // Total Leads = agendados pendentes + aprovados (exclui no-show, desistentes, reembolsos, reprovados, próxima semana)
+      const agendadosPendentes = leadsByDeal.size - desistentes - reprovados - reembolsosCount - proximaSemana - noShow - aprovados;
+      const totalLeads = agendadosPendentes + aprovados;
+
       const { data: hublaVendas, error: hublaError } = await supabase
         .from('hubla_transactions')
         .select('id, customer_email, customer_phone, net_value, linked_attendee_id')
@@ -462,7 +465,7 @@ export function useR2MetricsData(weekStart: Date, weekEnd: Date) {
       const reembolsos = reembolsosCount;
       
       // Leads perdidos = soma única sem duplicidade (cada lead em uma categoria)
-      const leadsPerdidosCount = desistentes + reprovados + reembolsosCount + proximaSemana + noShow;
+      const leadsPerdidosCount = desistentes + reprovados + reembolsosCount;
       const leadsPerdidosPercent = totalLeads > 0 ? (leadsPerdidosCount / totalLeads) * 100 : 0;
       
       // Leads ativos = aprovados (sincronizado com KPIs do Carrinho)
