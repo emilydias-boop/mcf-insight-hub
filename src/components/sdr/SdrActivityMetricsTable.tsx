@@ -4,14 +4,15 @@
  import { Phone, PhoneIncoming, FileText, ArrowRightLeft, MessageCircle, Users } from "lucide-react";
  import { useSdrActivityMetrics, SdrActivityMetrics } from "@/hooks/useSdrActivityMetrics";
  
- interface SdrActivityMetricsTableProps {
-   startDate: Date;
-   endDate: Date;
-   originId?: string;
- }
- 
- export function SdrActivityMetricsTable({ startDate, endDate, originId }: SdrActivityMetricsTableProps) {
-   const { data: metrics, isLoading, error } = useSdrActivityMetrics(startDate, endDate, originId);
+interface SdrActivityMetricsTableProps {
+  startDate: Date;
+  endDate: Date;
+  originId?: string;
+  squad?: string;
+}
+
+export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }: SdrActivityMetricsTableProps) {
+  const { data: metrics, isLoading, error } = useSdrActivityMetrics(startDate, endDate, originId, squad);
  
    if (error) {
      return (

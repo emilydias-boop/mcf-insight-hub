@@ -48,6 +48,7 @@ import { useCRMOriginsByPipeline } from "@/hooks/useCRMOriginsByPipeline";
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSdrsFromSquad } from "@/hooks/useSdrsFromSquad";
+import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTable";
 import { BURevenueGoalsEditModal } from "@/components/sdr/BURevenueGoalsEditModal";
 import { useConsorcioSummary } from "@/hooks/useConsorcio";
 
@@ -703,15 +704,20 @@ export default function ConsorcioPainelEquipe() {
         </CardHeader>
         <CardContent className="pt-0 px-0 sm:px-6 pb-3 sm:pb-6 overflow-x-auto">
           {activeTab === "sdrs" ? (
-            <ConsorcioSdrSummaryTable
-              data={filteredBySDR}
-              isLoading={isLoading}
-              disableNavigation={isRestrictedRole}
-              sdrMetaMap={sdrMetaMap}
-              diasUteisNoPeriodo={diasUteisNoPeriodo}
-              propostasEnviadasBySdr={propostasData}
-              propostasFechadasBySdr={produtosFechadosBySdr}
-            />
+            <>
+              <ConsorcioSdrSummaryTable
+                data={filteredBySDR}
+                isLoading={isLoading}
+                disableNavigation={isRestrictedRole}
+                sdrMetaMap={sdrMetaMap}
+                diasUteisNoPeriodo={diasUteisNoPeriodo}
+                propostasEnviadasBySdr={propostasData}
+                propostasFechadasBySdr={produtosFechadosBySdr}
+              />
+              <div className="mt-6 px-0 sm:px-0">
+                <SdrActivityMetricsTable startDate={start} endDate={end} squad="consorcio" />
+              </div>
+            </>
           ) : (
             <ConsorcioCloserSummaryTable
               data={closerMetrics}
