@@ -171,11 +171,14 @@ export function useCreatePendingRegistration() {
       if (proposalError) throw proposalError;
 
       // 2. Sanitizar: converter strings vazias em null para evitar erros de tipo no banco
+      const dateColumns = ['data_contratacao', 'data_fundacao', 'aceite_date'];
       const sanitized = Object.fromEntries(
-        Object.entries(registrationData).map(([key, value]) => [
-          key,
-          value === '' ? null : value,
-        ])
+        Object.entries(registrationData)
+          .filter(([_, value]) => value !== undefined)
+          .map(([key, value]) => [
+            key,
+            value === '' ? null : (dateColumns.includes(key) && !value) ? null : value,
+          ])
       );
 
       // 3. Criar registro pendente (se falhar, o botão "Cadastrar Cota" permite retentar)
@@ -437,12 +440,19 @@ export function useOpenCota() {
         .eq('pending_registration_id', registrationId);
 
       // 6. Update pending registration status
+      // Sanitizar cotaData: converter strings vazias em null para colunas date
+      const dateColumnsForCota = ['data_contratacao', 'data_fundacao', 'aceite_date'];
+      const cleanCotaData = Object.fromEntries(
+        Object.entries(cotaData)
+          .filter(([_, v]) => v !== undefined)
+          .map(([k, v]) => [k, (v === '' || (dateColumnsForCota.includes(k) && !v)) ? null : v])
+      );
       await supabase
         .from('consorcio_pending_registrations')
         .update({
           status: 'cota_aberta',
           consortium_card_id: card.id,
-          ...cotaData,
+          ...cleanCotaData,
         } as any)
         .eq('id', registrationId);
 

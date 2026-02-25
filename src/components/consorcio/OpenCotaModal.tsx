@@ -214,13 +214,19 @@ export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaMo
       pix: data.cliente_pix || null,
     };
 
+    // Sanitizar: remover strings vazias de campos date antes de enviar
+    const rawCotaData = {
+      ...data,
+      parcelas_pagas_empresa_count: data.empresa_paga_parcelas === 'sim' ? data.parcelas_pagas_empresa : 0,
+    };
+    const cleanCotaData = Object.fromEntries(
+      Object.entries(rawCotaData).map(([k, v]) => [k, v === '' ? null : v])
+    );
+
     await openCota.mutateAsync({
       registrationId,
       registration: { ...registration, ...clienteData },
-      cotaData: {
-        ...data,
-        parcelas_pagas_empresa_count: data.empresa_paga_parcelas === 'sim' ? data.parcelas_pagas_empresa : 0,
-      },
+      cotaData: cleanCotaData as any,
       clienteData,
     });
 

@@ -246,13 +246,21 @@ export function AcceptProposalModal({
       if (pjDocCartaoCnpj) documents.push({ file: pjDocCartaoCnpj, tipo: 'cartao_cnpj' });
     }
 
+    // Filtrar campos irrelevantes baseado no tipo de pessoa para evitar enviar strings vazias
+    const pjOnlyFields = ['razao_social', 'cnpj', 'natureza_juridica', 'inscricao_estadual', 'data_fundacao', 'faturamento_mensal', 'num_funcionarios', 'email_comercial', 'telefone_comercial', 'endereco_comercial', 'endereco_comercial_cep', 'socios'];
+    const pfOnlyFields = ['nome_completo', 'rg', 'cpf', 'cpf_conjuge', 'profissao'];
+    const fieldsToExclude = tipoPessoa === 'pf' ? pjOnlyFields : pfOnlyFields;
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([k]) => !fieldsToExclude.includes(k))
+    );
+
     await createRegistration.mutateAsync({
       proposal_id: proposalId,
       deal_id: dealId,
       tipo_pessoa: tipoPessoa,
       vendedor_name: vendedorName,
       documents,
-      ...data,
+      ...cleanData,
     });
 
     onOpenChange(false);
