@@ -231,6 +231,47 @@ serve(async (req) => {
       );
     }
 
+    // 8b. Check if email already has a deal with contract paid in the same pipeline
+    // This prevents creating new deals for leads who already purchased
+    const contactEmail = (payload.email || '').trim().toLowerCase();
+    if (contactEmail) {
+      const { data: contractPaidDeal } = await supabase
+        .from('crm_deals')
+        .select('id, name')
+        .eq('origin_id', endpoint.origin_id)
+        .in('stage_id', await getContractPaidStageIds(supabase, endpoint.origin_id))
+        .limit(1);
+
+      // Only block if we found a deal with contract paid for the same email
+      if (contractPaidDeal && contractPaidDeal.length > 0) {
+        // Verify the deal belongs to the same email by checking contact
+        const { data: paidContacts } = await supabase
+          .from('crm_deals')
+          .select('id, crm_contacts!inner(email)')
+          .eq('origin_id', endpoint.origin_id)
+          .in('id', contractPaidDeal.map(d => d.id));
+
+        const hasPaidDealForEmail = paidContacts?.some((d: any) => 
+          d.crm_contacts?.email?.toLowerCase().trim() === contactEmail
+        );
+
+        if (hasPaidDealForEmail) {
+          console.log('[WEBHOOK-RECEIVER] ⛔ Email já possui deal com contrato pago na mesma pipeline, bloqueando criação');
+          await updateEndpointMetrics(supabase, endpoint.id);
+          
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              action: 'skipped', 
+              reason: 'contract_already_paid',
+              contact_id: contactId
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    }
+
     // 9. Map custom fields
     const customFields: Record<string, unknown> = {
       source: payload.source || slug,
@@ -361,6 +402,35 @@ async function updateEndpointMetrics(supabaseClient: any, endpointId: string) {
   } catch (error) {
     console.log('[WEBHOOK-RECEIVER] Erro ao atualizar métricas:', error);
   }
+}
+
+// Get stage IDs that represent "contract paid" status
+async function getContractPaidStageIds(supabaseClient: any, originId: string): Promise<string[]> {
+  const stageIds: string[] = [];
+  
+  // Check local_pipeline_stages for contract-paid stages
+  const { data: localStages } = await supabaseClient
+    .from('local_pipeline_stages')
+    .select('id')
+    .eq('origin_id', originId)
+    .ilike('name', '%contrato%pago%');
+  
+  if (localStages) {
+    stageIds.push(...localStages.map((s: any) => s.id));
+  }
+  
+  // Also check crm_stages
+  const { data: crmStages } = await supabaseClient
+    .from('crm_stages')
+    .select('id')
+    .eq('origin_id', originId)
+    .ilike('name', '%contrato%pago%');
+  
+  if (crmStages) {
+    stageIds.push(...crmStages.map((s: any) => s.id));
+  }
+  
+  return stageIds;
 }
 
 // Normalize phone to E.164 format (+55XXXXXXXXXXX)

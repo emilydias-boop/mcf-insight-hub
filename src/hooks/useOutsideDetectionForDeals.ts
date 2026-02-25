@@ -65,14 +65,14 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
       // 2. Collect unique deal IDs for R1 meeting lookup
       const dealIds = deals.map(d => d.id);
 
-      // 3. Fetch contract transactions, non-contract products, AND R1 meetings in parallel
-      const [contracts, nonContractProducts, r1Attendees] = await Promise.all([
-        // Contracts (existing logic - for outside detection)
-        batchedIn<{ customer_email: string | null; sale_date: string; product_name: string | null }>(
+      // 3. Fetch contract transactions, non-contract products, R1 meetings, AND linked attendees in parallel
+      const [contracts, nonContractProducts, r1Attendees, linkedAttendees] = await Promise.all([
+        // Contracts (for outside detection) - now also fetch linked_attendee_id
+        batchedIn<{ customer_email: string | null; sale_date: string; product_name: string | null; linked_attendee_id: string | null }>(
           (chunk) =>
             supabase
               .from('hubla_transactions')
-              .select('customer_email, sale_date, product_name')
+              .select('customer_email, sale_date, product_name, linked_attendee_id')
               .in('customer_email', chunk)
               .in('product_category', ['contrato', 'incorporador'])
               .ilike('product_name', '%contrato%')
@@ -102,18 +102,54 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
               .eq('meeting_slots.meeting_type', 'r1') as any,
           dealIds
         ),
+        // Fetch which deal each linked_attendee_id belongs to
+        // This lets us know if a contract is linked to a DIFFERENT deal
+        batchedIn<{ id: string; deal_id: string | null }>(
+          (chunk) =>
+            supabase
+              .from('meeting_slot_attendees')
+              .select('id, deal_id')
+              .in('id', chunk),
+          // We'll filter to only linked_attendee_ids after contracts are fetched
+          // For now, pass empty - we'll do this after
+          []
+        ),
       ]);
 
+      // 3b. Now fetch the deal_ids for linked_attendee_ids from contracts
+      const linkedAttendeeIds = contracts
+        .map(c => c.linked_attendee_id)
+        .filter((id): id is string => !!id);
+      
+      const linkedAttendeeDealMap = new Map<string, string>(); // attendee_id -> deal_id
+      if (linkedAttendeeIds.length > 0) {
+        const attendeeResults = await batchedIn<{ id: string; deal_id: string | null }>(
+          (chunk) =>
+            supabase
+              .from('meeting_slot_attendees')
+              .select('id, deal_id')
+              .in('id', chunk),
+          linkedAttendeeIds
+        );
+        for (const a of attendeeResults) {
+          if (a.deal_id) {
+            linkedAttendeeDealMap.set(a.id, a.deal_id);
+          }
+        }
+      }
+
       // 4. Build email -> earliest contract date + product name
-      const earliestContract = new Map<string, { date: Date; productName: string | null }>();
+      //    BUT skip contracts that are linked to a specific deal (via linked_attendee_id)
+      //    We'll handle the linked logic per-deal in step 6
+      const contractsByEmail = new Map<string, { date: Date; productName: string | null; linkedDealId: string | null }[]>();
       for (const c of contracts) {
         const email = c.customer_email?.toLowerCase().trim();
         if (!email) continue;
         const saleDate = new Date(c.sale_date);
-        const existing = earliestContract.get(email);
-        if (!existing || saleDate < existing.date) {
-          earliestContract.set(email, { date: saleDate, productName: c.product_name });
-        }
+        const linkedDealId = c.linked_attendee_id ? (linkedAttendeeDealMap.get(c.linked_attendee_id) || null) : null;
+        const existing = contractsByEmail.get(email) || [];
+        existing.push({ date: saleDate, productName: c.product_name, linkedDealId });
+        contractsByEmail.set(email, existing);
       }
 
       // 4b. Build email -> most recent non-contract product name
@@ -139,21 +175,35 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
       }
 
       // 6. Determine Outside: has contract AND (no R1 OR contract <= R1)
+      //    NEW: Skip contracts that are linked to a DIFFERENT deal's attendee
       for (const [email, dealEntries] of emailToDealIds) {
-        const contractInfo = earliestContract.get(email);
-        if (!contractInfo) continue; // No contract = not outside
+        const emailContracts = contractsByEmail.get(email);
+        if (!emailContracts || emailContracts.length === 0) continue;
 
-        // Prefer non-contract product name over contract name
-        const displayName = nonContractProductName.get(email) || contractInfo.productName;
+        const displayName = nonContractProductName.get(email) || emailContracts[0].productName;
 
         for (const entry of dealEntries) {
+          // Filter contracts relevant to this deal:
+          // - Contract is NOT linked to any attendee (null) → applies to all deals with this email
+          // - Contract IS linked to an attendee of THIS deal → applies
+          // - Contract IS linked to an attendee of ANOTHER deal → SKIP (not outside for this deal)
+          const relevantContracts = emailContracts.filter(c => {
+            if (!c.linkedDealId) return true; // Not linked to any specific deal
+            return c.linkedDealId === entry.dealId; // Linked to THIS deal
+          });
+
+          if (relevantContracts.length === 0) continue; // All contracts belong to other deals
+
+          // Find earliest relevant contract
+          const earliestContract = relevantContracts.reduce((min, c) => c.date < min.date ? c : min, relevantContracts[0]);
+
           const r1Date = earliestR1.get(entry.dealId);
           if (!r1Date) {
             // Has contract but no R1 meeting -> Outside
             result.set(entry.dealId, { isOutside: true, productName: displayName });
           } else {
             // Has contract and R1 -> Outside if contract was paid before/on R1
-            const isOutside = contractInfo.date <= r1Date;
+            const isOutside = earliestContract.date <= r1Date;
             if (isOutside) {
               result.set(entry.dealId, { isOutside: true, productName: displayName });
             }
