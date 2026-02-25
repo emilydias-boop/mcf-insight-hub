@@ -1,37 +1,33 @@
 
 
-## Corrigir exclusao de deals (leads) no CRM
+## Corrigir duplicacao de leads no Total Leads do Carrinho R2
 
-### Problema identificado
+### Problema
 
-Ao tentar excluir um deal, a operacao falha silenciosamente por causa de restricoes de chave estrangeira (FOREIGN KEY) em 4 tabelas que referenciam `crm_deals` sem `ON DELETE CASCADE` ou `ON DELETE SET NULL`:
+No hook `useR2MetricsData.ts`, o calculo de `totalLeads` agrupa attendees por `deal_id` (linha 207), mas:
 
-1. **`meeting_slot_attendees.deal_id`** - sem acao de delete definida (RESTRICT por padrao)
-2. **`consorcio_pending_registrations.deal_id`** - sem acao de delete definida
-3. **`whatsapp_conversations.deal_id`** - sem acao de delete definida
-4. **`crm_deals.replicated_from_deal_id`** - auto-referencia sem acao de delete definida
+1. **Attendees com `status === 'rescheduled'` nao sao filtrados** - eles entram no loop de deduplicacao e, se nao tiverem `deal_id`, sao contados como leads separados (fallback `att.id` na linha 207)
+2. **Attendees sem `deal_id`** usam o proprio `att.id` como chave, gerando entradas duplicadas para o mesmo lead fisico que foi reagendado
 
-Quando um deal tem registros nessas tabelas, o Postgres rejeita o DELETE com um FK violation, mas o erro pode estar sendo engolido pelo RLS ou pela falta de tratamento adequado.
+Isso infla o `totalLeads` (e potencialmente outras metricas como no-show) com registros que ja foram substituidos por um reagendamento.
 
-### Alteracoes
+### Alteracao
 
-**1. Migracao SQL** - Alterar as 4 foreign keys para permitir exclusao:
+**`src/hooks/useR2MetricsData.ts`** - Filtrar attendees com status `rescheduled` ou `cancelled` antes de processar:
 
-- `meeting_slot_attendees.deal_id` → `ON DELETE CASCADE` (exclui attendees junto com o deal)
-- `consorcio_pending_registrations.deal_id` → `ON DELETE CASCADE`
-- `whatsapp_conversations.deal_id` → `ON DELETE SET NULL`
-- `crm_deals.replicated_from_deal_id` → `ON DELETE SET NULL`
+Na linha 206, dentro do loop `attendees.forEach(att => {`, adicionar no inicio:
 
-**2. `src/hooks/useCRMData.ts`** - Melhorar o hook `useDeleteCRMDeal`:
+```typescript
+// Skip rescheduled/cancelled attendees - they are superseded by newer records
+if (att.status === 'rescheduled' || att.status === 'cancelled') return;
+```
 
-- Adicionar invalidacao de queries relacionadas (`agenda-meetings`, `meeting-slots`, `crm-contacts-with-deals`) no `onSuccess`
-- Garantir que o drawer feche apos exclusao bem-sucedida
-
-**3. `src/components/crm/QuickActionsBlock.tsx`** - Garantir que o `handleDelete`:
-
-- Feche o drawer pai (`onOpenChange(false)`) apos exclusao bem-sucedida, para que o lead desapareca da UI
+Isso garante que:
+- Um lead reagendado 3x conta apenas 1x (o registro ativo)
+- No-shows que foram reagendados nao contam como leads separados
+- A deduplicacao por `deal_id` continua funcionando como segunda camada de seguranca
 
 ### Resultado
 
-A exclusao de deals funcionara corretamente, removendo registros dependentes e atualizando a UI (drawer fecha, listas recarregam).
+O card "Total Leads" passara a mostrar apenas leads unicos ativos, sem contar registros de reagendamento ou cancelamento.
 
