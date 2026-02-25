@@ -1,23 +1,23 @@
 
 
-## Adicionar tabela "Atividades por SDR" no Painel Equipe do Consorcio
+## Alerta de atualização do sistema
 
-### Contexto
+### Abordagem
 
-O Painel de Equipe do Incorporador ja possui uma tabela "Atividades por SDR" (`SdrActivityMetricsTable`) que mostra ligacoes, atendidas, notas, movimentos, WhatsApp, leads e lig/lead. O hook `useSdrActivityMetrics` ja aceita um parametro `squad` (default `'incorporador'`), porem o componente `SdrActivityMetricsTable` nao repassa esse parametro.
+Criar um componente global que periodicamente (a cada 60s) faz um `HEAD` request para `/index.html` comparando o `ETag` ou `Last-Modified` header. Quando detecta mudança, exibe um banner fixo no topo da tela informando que há uma nova versão disponível, com botão para recarregar a página.
 
-### Alteracoes
+### Alterações
 
-**1. `src/components/sdr/SdrActivityMetricsTable.tsx`**
-- Adicionar prop `squad?: string` na interface `SdrActivityMetricsTableProps`
-- Passar `squad` para o hook `useSdrActivityMetrics(startDate, endDate, originId, squad)`
+**1. Novo arquivo `src/components/layout/UpdateNotifier.tsx`**
+- Hook `useUpdateChecker` que a cada 60 segundos faz `fetch('/index.html', { cache: 'no-store' })` e compara o `ETag` ou o tamanho/conteúdo do response
+- Na primeira execução, salva o valor inicial como referência
+- Quando detecta diferença, seta `updateAvailable = true`
+- Renderiza um banner fixo (z-50, top-0) com mensagem "Nova versão disponível" e botão "Atualizar" que faz `window.location.reload()`
 
-**2. `src/pages/bu-consorcio/PainelEquipe.tsx`**
-- Importar `SdrActivityMetricsTable`
-- Adicionar o componente apos a Card de SDR/Closer Summary Table, visivel quando `activeTab === "sdrs"`
-- Passar `startDate={start}`, `endDate={end}`, `squad="consorcio"`
+**2. `src/App.tsx`**
+- Importar e renderizar `<UpdateNotifier />` dentro do layout principal, junto com `<Toaster />` e `<Sonner />`
 
 ### Resultado
 
-A tabela de atividades aparecera abaixo da tabela de SDRs no painel do Consorcio, filtrando apenas os SDRs da squad `consorcio`, identica visualmente a do Incorporador.
+Quando um novo deploy é feito, os usuários com a aba aberta verão um banner discreto no topo da tela pedindo para atualizar, sem perder o contexto do que estavam fazendo.
 
