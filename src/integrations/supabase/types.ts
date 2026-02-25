@@ -6944,6 +6944,47 @@ export type Database = {
         }
         Relationships: []
       }
+      product_price_history: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          effective_from: string
+          id: string
+          new_price: number
+          notes: string | null
+          old_price: number
+          product_config_id: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          effective_from?: string
+          id?: string
+          new_price: number
+          notes?: string | null
+          old_price: number
+          product_config_id: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          effective_from?: string
+          id?: string
+          new_price?: number
+          notes?: string | null
+          old_price?: number
+          product_config_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_price_history_product_config_id_fkey"
+            columns: ["product_config_id"]
+            isOneToOne: false
+            referencedRelation: "product_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           access_status: string | null
@@ -9675,6 +9716,10 @@ export type Database = {
           contact_count: number
           phone_suffix: string
         }[]
+      }
+      get_effective_price: {
+        Args: { p_product_config_id: string; p_sale_date: string }
+        Returns: number
       }
       get_first_transaction_dates: {
         Args: never
