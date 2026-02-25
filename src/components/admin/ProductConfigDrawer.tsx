@@ -36,6 +36,7 @@ import {
   ProductConfiguration,
 } from "@/hooks/useProductConfigurations";
 import { Loader2 } from "lucide-react";
+import { PriceHistorySection } from "./PriceHistorySection";
 
 const formSchema = z.object({
   product_code: z.string().nullable(),
@@ -307,6 +308,8 @@ export function ProductConfigDrawer({
                 </FormItem>
               )}
             />
+
+            <PriceHistorySection productConfigId={product?.id ?? null} />
 
             <div className="flex gap-3 pt-4">
               <Button
