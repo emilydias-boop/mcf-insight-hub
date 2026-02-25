@@ -1,57 +1,55 @@
 
 
-## Problema: Preço novo não aplica nas vendas de hoje
+## Problema: Preço não atualiza + registros duplicados
 
 ### Diagnóstico
 
-O sistema está funcionando **tecnicamente correto**, mas não da forma que você espera. O problema:
+Encontrei dois problemas:
 
-- A venda do Marcio Dyego A001 aconteceu às **16:01 UTC** (13:01 BRT) de hoje
-- Você alterou o preço de R$ 14.500 → R$ 16.500 às **21:34 UTC** (18:34 BRT) de hoje
-- O `effective_from` do trigger é `NOW()` = o momento exato da alteração
-- A função `get_effective_price` compara: `sale_date (16:01) < effective_from (21:34)` → retorna o preço **antigo** (14.500)
+**1. A data de vigência NÃO foi salva (causa raiz)**
 
-Ou seja, como a venda aconteceu **antes** da alteração de preço no mesmo dia, o sistema usa o preço anterior. O trigger grava o horário exato, não o início do dia.
+Quando você alterou o preço e escolheu a data de vigência, o frontend tentou atualizar o campo `effective_from` na tabela `product_price_history`, mas **falhou silenciosamente** porque a tabela não tem uma policy de UPDATE no banco. Só tem policies de SELECT e INSERT.
 
-### Solução: Campo "Vigência a partir de" no drawer
+Resultado: o `effective_from` ficou em `2026-02-25 21:34:13` (hora exata do trigger) em vez de `2026-02-25 00:00:00` (início do dia que você escolheu). Como a venda do Marcio foi às 16:01, o sistema entende que o preço de 16.500 só vale a partir das 21:34, e usa 14.500 para a venda das 16:01.
 
-Adicionar um campo de data no `ProductConfigDrawer` que permite ao usuário definir **a partir de quando** o novo preço vale. Por padrão, será o início do dia atual (`00:00:00 de hoje`), mas o usuário pode escolher uma data passada (ex: "01/02/2026") para retroagir o preço até aquela data.
+**2. Registros duplicados na tela**
 
-### Alterações
+O Marcio tem 3 transações A001 na Hubla (IDs diferentes, mesma hora 16:01), provavelmente vindas de fontes diferentes (hubla + make). Isso é um problema de dados, não da lógica de preço. A deduplicação visual pode estar mostrando entradas que antes eram colapsadas.
 
-**1. Formulário do ProductConfigDrawer**
-- Adicionar campo `effective_from` (date picker) que aparece somente quando o preço de referência foi alterado
-- Valor padrão: início do dia atual (meia-noite de hoje, timezone São Paulo)
-- O campo só aparece se o preço digitado for diferente do preço original do produto
+### Plano de correção
 
-**2. Hook `useUpdateProductConfiguration`**
-- Após salvar o `reference_price`, se houve mudança de preço, atualizar o `effective_from` do registro de histórico recém-criado pelo trigger
-- Isso é feito com um UPDATE na `product_price_history` logo após o save, ajustando o `effective_from` para a data escolhida pelo usuário
+**1. Adicionar policy de UPDATE na `product_price_history`** (migration SQL)
 
-**3. Lógica do trigger (sem mudança)**
-- O trigger continua criando o registro com `NOW()` automaticamente
-- O frontend faz um UPDATE subsequente no `effective_from` se o usuário escolheu uma data diferente
-
-### Fluxo do usuário
-
-```text
-1. Abre drawer do A001
-2. Muda preço de 14.500 → 16.500
-3. Aparece campo: "Vigência a partir de: [01/02/2026]" (padrão: hoje 00:00)
-4. Usuário pode ajustar para qualquer data
-5. Clica Salvar
-6. Trigger cria histórico → frontend ajusta effective_from para a data escolhida
-7. Transações de hoje agora usam 16.500
+```sql
+CREATE POLICY "Authenticated users can update price history"
+ON product_price_history FOR UPDATE
+TO authenticated
+USING (true)
+WITH CHECK (true);
 ```
 
-### Arquivos afetados
+**2. Corrigir o `effective_from` dos registros existentes do A001** (migration SQL)
+
+Atualizar os dois registros de mudança de preço (16500) para que tenham `effective_from` no início do dia 25/02:
+
+```sql
+UPDATE product_price_history 
+SET effective_from = '2026-02-25T00:00:00-03:00'
+WHERE new_price = 16500 AND old_price = 14500 
+  AND effective_from::date = '2026-02-25';
+```
+
+Após isso, `get_effective_price` vai retornar 16.500 para qualquer venda a partir de 25/02 00:00.
+
+**3. Investigar as transações duplicadas do Marcio**
+
+Verificar se as 3 transações A001 são legítimas ou duplicatas de ingestão. Se duplicatas, marcar as extras para não contar no bruto.
+
+### Seção técnica
 
 | Arquivo | Alteração |
 |---|---|
-| `src/components/admin/ProductConfigDrawer.tsx` | Adicionar date picker de vigência condicional |
-| `src/hooks/useProductConfigurations.ts` | Adicionar lógica para atualizar `effective_from` após save |
+| Migration SQL | Adicionar RLS UPDATE policy + fix `effective_from` dos registros existentes |
 
-### Caso do Marcio Dyego (correção imediata)
-
-Além da melhoria no formulário, o `gross_override` da transação do Marcio já está como `16500` (você provavelmente editou manualmente). Portanto a transação dele já mostra o valor correto via override. A mudança sistêmica vai garantir que futuras alterações de preço se apliquem corretamente sem precisar de override manual.
+A alteração é mínima: uma policy de 3 linhas + um UPDATE pontual nos dados.
 
