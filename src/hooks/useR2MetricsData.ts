@@ -204,6 +204,8 @@ export function useR2MetricsData(weekStart: Date, weekEnd: Date) {
         }> || [];
         
         attendees.forEach(att => {
+          // Skip rescheduled/cancelled attendees - they are superseded by newer records
+          if (att.status === 'rescheduled' || att.status === 'cancelled') return;
           const key = att.deal_id || att.id; // Usar attendee ID se não tiver deal_id
           const existing = leadsByDeal.get(key);
           const statusName = att.r2_status_id ? statusMap.get(att.r2_status_id) || '' : '';
