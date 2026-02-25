@@ -14,6 +14,7 @@ import { RoleGuard } from "./components/auth/RoleGuard";
 import { R2AccessGuard } from "./components/auth/R2AccessGuard";
 import { NegociosAccessGuard } from "./components/auth/NegociosAccessGuard";
 import { MainLayout } from "./components/layout/MainLayout";
+import { UpdateNotifier } from "./components/layout/UpdateNotifier";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useProductPricesCache } from "./hooks/useProductPricesCache";
 
@@ -151,6 +152,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <UpdateNotifier />
         <PriceCacheInitializer />
         <BrowserRouter>
           <AuthProvider>
