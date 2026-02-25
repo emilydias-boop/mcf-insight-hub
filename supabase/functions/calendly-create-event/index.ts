@@ -327,54 +327,7 @@ serve(async (req) => {
 
     console.log("📅 Creating meeting:", { closerId, dealId, scheduledAt, leadType });
 
-    // ============= DUPLICATE MEETING GUARD =============
-    // 1. Check for active meetings (invited/scheduled in scheduled/rescheduled slots)
-    const { data: activeAttendees } = await supabase
-      .from("meeting_slot_attendees")
-      .select("id, status, meeting_slot:meeting_slots!inner(id, scheduled_at, status)")
-      .eq("deal_id", dealId)
-      .in("status", ["invited", "scheduled"])
-      .in("meeting_slot.status", ["scheduled", "rescheduled"])
-      .limit(1);
-
-    if (activeAttendees && activeAttendees.length > 0) {
-      const slot = (activeAttendees[0] as any).meeting_slot;
-      console.log("🚫 Blocked: deal already has active meeting", { dealId, slotId: slot.id });
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: `Este lead já possui reunião ativa agendada para ${slot.scheduled_at}. Finalize antes de reagendar.` 
-        }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 2. Check for completed meetings within 30-day cooldown
-    const cooldownDate = new Date();
-    cooldownDate.setDate(cooldownDate.getDate() - 30);
-    
-    const { data: recentCompleted } = await supabase
-      .from("meeting_slot_attendees")
-      .select("id, status, meeting_slot:meeting_slots!inner(id, scheduled_at)")
-      .eq("deal_id", dealId)
-      .eq("status", "completed")
-      .gte("meeting_slot.scheduled_at", cooldownDate.toISOString())
-      .limit(1);
-
-    if (recentCompleted && recentCompleted.length > 0) {
-      const slot = (recentCompleted[0] as any).meeting_slot;
-      console.log("🚫 Blocked: deal has recent completed meeting", { dealId, scheduledAt: slot.scheduled_at });
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: `Este lead teve reunião realizada recentemente (${slot.scheduled_at}). Aguarde 30 dias para reagendar.` 
-        }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log("✅ No duplicate meeting found, proceeding...");
-    // ============= END DUPLICATE GUARD =============
+    console.log("📅 Proceeding with meeting creation...");
 
     // Get closer info
     const { data: closer, error: closerError } = await supabase
