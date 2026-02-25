@@ -112,7 +112,7 @@ export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agen
         }
       }
 
-      // Fetch R1 meetings for these deals
+      // Fetch R1 meetings for these deals (includes closer name)
       const r1Map = new Map<string, { date: string; closer_name: string | null }>();
       if (dealIds.size > 0) {
         const { data: r1Meetings } = await supabase
