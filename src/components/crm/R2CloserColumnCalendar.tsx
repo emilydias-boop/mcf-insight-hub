@@ -79,8 +79,8 @@ export function R2CloserColumnCalendar({
     );
     
     if (validMeetings.length === 0) {
-      // All are empty canceled slots - show the canceled state
-      return slotMeetings[0];
+      // All are empty canceled slots - treat as no meeting (slot is free)
+      return undefined;
     }
     
     // Prioritize non-canceled meeting for status
