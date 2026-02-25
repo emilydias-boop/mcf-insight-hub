@@ -1,43 +1,39 @@
 
 
-## Adicionar Closer de R1 no relatorio copiado e na tabela de Aprovados
+## Diagnostico: Closer R1 nao aparecendo
 
-### Problema
+### Causa
 
-O relatorio copiado na aba Aprovados mostra apenas o closer de R2. A equipe precisa ver tambem o closer de R1 para saber de qual closer veio cada lead.
+O codigo foi alterado corretamente - a query de R1 inclui o campo `closer:closers!meeting_slots_closer_id_fkey(name)` e o mapeamento preenche `r1_closer_name`.
 
-### Alteracoes
-
-**1. `src/hooks/useR2CarrinhoData.ts`**
-
-- Adicionar `r1_closer_name: string | null` ao interface `R2CarrinhoAttendee` (linha 27)
-- Alterar a query de R1 meetings (linha 117-124) para incluir o closer: `closer:closers!meeting_slots_closer_id_fkey(id, name)`
-- Mudar `r1Map` de `Map<string, string>` para `Map<string, { date: string; closer_name: string | null }>` para guardar tanto a data quanto o nome do closer de R1
-- Preencher `r1_closer_name` no objeto final (linha ~175) usando `r1Map.get(att.deal_id)?.closer_name`
-
-**2. `src/components/crm/R2AprovadosList.tsx`**
-
-- No `generateReport()` (linha 166): mudar o formato para incluir closer R1:
-  ```
-  ${name}\t${phone}\t${r1Closer}\t${closer}${suffix}
-  ```
-  Onde `r1Closer = att.r1_closer_name || '-'` e `closer` e o closer R2
-
-- Na tabela (linha 316): adicionar coluna "Closer R1" antes da coluna "Closer" (que passa a representar Closer R2)
-
-- No `handleExportExcel()` (linha 181): adicionar "Closer R1" nos headers e nos rows
-
-### Formato do relatorio copiado
+Porem, ao analisar a requisicao de rede capturada do seu navegador, ela mostra a query **antiga** (sem o campo closer):
 
 ```text
-*Carrinho 27/02*
-
-*SELECIONADOS 47*
-
-LISTA DOS QUE NÃO COMPRARAM AINDA: 47
-
-Alisson Cardoso Frota	85997168861	Ana Silva	Jessica Martins - VAI COMPRAR 🔥
+select=scheduled_at,meeting_slot_attendees!inner(deal_id)
 ```
 
-Ordem: Nome - Telefone - Closer R1 - Closer R2 - Status
+Quando deveria mostrar:
+
+```text
+select=scheduled_at,closer:closers!meeting_slots_closer_id_fkey(name),meeting_slot_attendees!inner(deal_id)
+```
+
+Isso significa que o navegador ainda esta rodando a versao anterior do codigo. A build mais recente provavelmente ainda nao foi carregada.
+
+### Acao necessaria
+
+**Nenhuma alteracao de codigo e necessaria.** O codigo ja esta correto. Basta:
+
+1. Aguardar a build atual finalizar
+2. Recarregar a pagina (Ctrl+Shift+R ou F5)
+3. Verificar se a coluna "Closer R1" agora mostra os nomes corretamente
+
+### Validacao
+
+Confirmei via SQL que os dados de R1 existem no banco - por exemplo:
+- Alisson Cardoso Frota → R1 closer existe no banco
+- Todos os 91 attendees R2 da semana possuem `deal_id` preenchido
+- As reunioes R1 correspondentes possuem `closer_id` vinculado a closers com nome
+
+O codigo atual esta mapeando corretamente esses dados. E apenas uma questao de o navegador carregar a versao atualizada.
 
