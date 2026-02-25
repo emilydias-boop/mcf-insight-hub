@@ -126,6 +126,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                 contact={contact}
                 onStageChange={() => refetchDeal()}
                 onQualify={() => setShowQualification(true)}
+                onDeleted={() => onOpenChange(false)}
               />
               
               {/* ===== 3. PRÓXIMA AÇÃO (compacta) ===== */}
