@@ -182,13 +182,17 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
 
         const displayName = nonContractProductName.get(email) || emailContracts[0].productName;
 
+        // If there are linked contracts, ignore unlinked ones (they're duplicates/orphans)
+        const hasLinkedContracts = emailContracts.some(c => c.linkedDealId !== null);
+
         for (const entry of dealEntries) {
           // Filter contracts relevant to this deal:
-          // - Contract is NOT linked to any attendee (null) → applies to all deals with this email
+          // - If linked contracts exist, skip unlinked ones (duplicates)
           // - Contract IS linked to an attendee of THIS deal → applies
-          // - Contract IS linked to an attendee of ANOTHER deal → SKIP (not outside for this deal)
+          // - Contract IS linked to an attendee of ANOTHER deal → SKIP
           const relevantContracts = emailContracts.filter(c => {
-            if (!c.linkedDealId) return true; // Not linked to any specific deal
+            if (hasLinkedContracts && !c.linkedDealId) return false; // Ignore orphan duplicates
+            if (!c.linkedDealId) return true; // No linked contracts exist, consider all
             return c.linkedDealId === entry.dealId; // Linked to THIS deal
           });
 
