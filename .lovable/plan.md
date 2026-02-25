@@ -1,23 +1,26 @@
 
 
-## Alerta de atualização do sistema
+## Remover bloqueio de agendamento duplicado da Edge Function
 
-### Abordagem
+### Problema identificado
 
-Criar um componente global que periodicamente (a cada 60s) faz um `HEAD` request para `/index.html` comparando o `ETag` ou `Last-Modified` header. Quando detecta mudança, exibe um banner fixo no topo da tela informando que há uma nova versão disponível, com botão para recarregar a página.
+O erro "Edge Function returned a non-2xx status code" ocorre porque a edge function `calendly-create-event` ainda possui uma guarda de duplicidade (linhas 330-374) que retorna HTTP 409 quando:
 
-### Alterações
+1. O deal ja possui uma reuniao ativa (status `invited`/`scheduled`)
+2. O deal teve uma reuniao `completed` nos ultimos 30 dias
 
-**1. Novo arquivo `src/components/layout/UpdateNotifier.tsx`**
-- Hook `useUpdateChecker` que a cada 60 segundos faz `fetch('/index.html', { cache: 'no-store' })` e compara o `ETag` ou o tamanho/conteúdo do response
-- Na primeira execução, salva o valor inicial como referência
-- Quando detecta diferença, seta `updateAvailable = true`
-- Renderiza um banner fixo (z-50, top-0) com mensagem "Nova versão disponível" e botão "Atualizar" que faz `window.location.reload()`
+Embora o bloqueio tenha sido removido no frontend (nos modais `QuickScheduleModal` e `R2QuickScheduleModal`), a logica de bloqueio no servidor permaneceu ativa.
 
-**2. `src/App.tsx`**
-- Importar e renderizar `<UpdateNotifier />` dentro do layout principal, junto com `<Toaster />` e `<Sonner />`
+### Alteracao
+
+**`supabase/functions/calendly-create-event/index.ts`**
+
+- Remover o bloco "DUPLICATE MEETING GUARD" (linhas 330-377), que inclui:
+  - Verificacao de `activeAttendees` com retorno 409
+  - Verificacao de `recentCompleted` com cooldown de 30 dias e retorno 409
+- Manter o log `"✅ No duplicate meeting found, proceeding..."` substituido por um simples `"📅 Proceeding with meeting creation..."`
 
 ### Resultado
 
-Quando um novo deploy é feito, os usuários com a aba aberta verão um banner discreto no topo da tela pedindo para atualizar, sem perder o contexto do que estavam fazendo.
+O agendamento via agenda do Consorcio (e qualquer outra BU) funcionara sem restricoes de duplicidade, consistente com a remocao feita no frontend.
 
