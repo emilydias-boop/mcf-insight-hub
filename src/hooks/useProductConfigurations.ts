@@ -50,9 +50,11 @@ export const useUpdateProductConfiguration = () => {
     mutationFn: async ({
       id,
       updates,
+      effectiveFrom,
     }: {
       id: string;
       updates: ProductConfigurationUpdate;
+      effectiveFrom?: Date;
     }) => {
       const { data, error } = await supabase
         .from("product_configurations")
@@ -62,10 +64,32 @@ export const useUpdateProductConfiguration = () => {
         .single();
 
       if (error) throw error;
+
+      // Se houve mudança de preço e uma data de vigência foi informada,
+      // atualiza o effective_from do registro mais recente do histórico
+      if (effectiveFrom && updates.reference_price !== undefined) {
+        // Busca o registro mais recente criado pelo trigger
+        const { data: latestHistory } = await supabase
+          .from("product_price_history")
+          .select("id")
+          .eq("product_config_id", id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (latestHistory) {
+          await supabase
+            .from("product_price_history")
+            .update({ effective_from: effectiveFrom.toISOString() })
+            .eq("id", latestHistory.id);
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["product-configurations"] });
+      queryClient.invalidateQueries({ queryKey: ["price-history"] });
       toast.success("Produto atualizado com sucesso!");
     },
     onError: (error) => {
