@@ -35,9 +35,10 @@ interface QuickActionsBlockProps {
   contact: any;
   onStageChange?: () => void;
   onQualify?: () => void;
+  onDeleted?: () => void;
 }
 
-export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify }: QuickActionsBlockProps) => {
+export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onDeleted }: QuickActionsBlockProps) => {
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice, callStatus, currentCallDealId } = useTwilio();
   const updateDeal = useUpdateCRMDeal();
   const { data: stages } = useCRMStages(deal?.origin_id);
@@ -184,6 +185,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify }: Q
     try {
       await deleteDeal.mutateAsync(deal.id);
       setShowDeleteDialog(false);
+      onDeleted?.();
       onStageChange?.();
     } catch (error) {
       // Error handled by hook
