@@ -303,7 +303,11 @@ export function ProductConfigDrawer({
                   </PopoverContent>
                 </Popover>
                 <FormDescription className="text-xs">
-                  O novo preço será aplicado para todas as transações a partir desta data
+                  Aplicar a partir de{" "}
+                  {effectiveFrom
+                    ? `${format(effectiveFrom, "dd/MM/yyyy", { locale: ptBR })} 00:00 (São Paulo)`
+                    : "..."
+                  }
                 </FormDescription>
               </div>
             )}

@@ -68,20 +68,35 @@ export const useUpdateProductConfiguration = () => {
       // Se houve mudança de preço e uma data de vigência foi informada,
       // atualiza o effective_from do registro mais recente do histórico
       if (effectiveFrom && updates.reference_price !== undefined) {
-        // Busca o registro mais recente criado pelo trigger
-        const { data: latestHistory } = await supabase
+        // Converte para início do dia em São Paulo (BRT = UTC-3)
+        const year = effectiveFrom.getFullYear();
+        const month = String(effectiveFrom.getMonth() + 1).padStart(2, '0');
+        const day = String(effectiveFrom.getDate()).padStart(2, '0');
+        const effectiveFromISO = `${year}-${month}-${day}T00:00:00-03:00`;
+
+        // Busca o registro mais recente criado pelo trigger, filtrando por new_price
+        const { data: latestHistory, error: historyFetchError } = await supabase
           .from("product_price_history")
           .select("id")
           .eq("product_config_id", id)
+          .eq("new_price", updates.reference_price)
           .order("created_at", { ascending: false })
           .limit(1)
           .single();
 
-        if (latestHistory) {
-          await supabase
+        if (historyFetchError || !latestHistory) {
+          console.error("Erro ao buscar histórico de preço:", historyFetchError);
+          toast.warning("Preço salvo, mas a vigência não foi aplicada. Registro de histórico não encontrado.");
+        } else {
+          const { error: historyUpdateError } = await supabase
             .from("product_price_history")
-            .update({ effective_from: effectiveFrom.toISOString() })
+            .update({ effective_from: effectiveFromISO })
             .eq("id", latestHistory.id);
+
+          if (historyUpdateError) {
+            console.error("Erro ao atualizar vigência:", historyUpdateError);
+            toast.warning(`Preço salvo, mas a vigência não foi aplicada: ${historyUpdateError.message}`);
+          }
         }
       }
 
