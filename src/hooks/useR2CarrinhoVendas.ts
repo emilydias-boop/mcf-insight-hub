@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
 import { endOfDay, format } from 'date-fns';
+import { getCachedPrecoReferencia } from './useProductPricesCache';
 
 // Helper para normalização consistente (apenas dígitos, últimos 11)
 const normalizeForMatch = (phone: string | null): string | null => {
@@ -9,15 +10,16 @@ const normalizeForMatch = (phone: string | null): string | null => {
   return phone.replace(/\D/g, '').slice(-11);
 };
 
-// Helper para obter preço de referência por código de produto
+// Helper para obter preço de referência dinamicamente do cache (product_configurations)
 const getProductReferencePrice = (productName: string | null): number | null => {
   if (!productName) return null;
   const upper = productName.toUpperCase();
-  if (upper.includes('A009')) return 19500;
-  if (upper.includes('A001')) return 14500;
-  if (upper.includes('A004')) return 5500;
-  if (upper.includes('A003')) return 7500;
-  if (upper.includes('A005') || upper.includes('P2')) return 0; // P2 usa valor real
+  // P2 sempre usa valor real (não tem preço de referência fixo)
+  if (upper.includes('A005') || upper.includes('P2')) return 0;
+  
+  const cached = getCachedPrecoReferencia(productName);
+  if (cached > 0) return cached;
+  
   return null;
 };
 
