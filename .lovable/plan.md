@@ -1,118 +1,57 @@
 
 
-## Historico de Precos de Referencia por Produto
+## Problema: Preço novo não aplica nas vendas de hoje
 
-### Problema atual
+### Diagnóstico
 
-Quando voce altera o `reference_price` de um produto na tabela `product_configurations`, o novo valor e aplicado retroativamente a TODAS as transacoes historicas. Isso porque a funcao RPC `get_all_hubla_transactions` faz JOIN com `product_configurations` e pega o `reference_price` atual.
+O sistema está funcionando **tecnicamente correto**, mas não da forma que você espera. O problema:
 
-### Solucao: Tabela de historico de precos com vigencia
+- A venda do Marcio Dyego A001 aconteceu às **16:01 UTC** (13:01 BRT) de hoje
+- Você alterou o preço de R$ 14.500 → R$ 16.500 às **21:34 UTC** (18:34 BRT) de hoje
+- O `effective_from` do trigger é `NOW()` = o momento exato da alteração
+- A função `get_effective_price` compara: `sale_date (16:01) < effective_from (21:34)` → retorna o preço **antigo** (14.500)
 
-Criar uma tabela `product_price_history` que registra cada alteracao de preco com data de inicio de vigencia. Na hora de calcular o bruto de uma transacao, o sistema buscara o preco que estava vigente na `sale_date` da transacao.
+Ou seja, como a venda aconteceu **antes** da alteração de preço no mesmo dia, o sistema usa o preço anterior. O trigger grava o horário exato, não o início do dia.
+
+### Solução: Campo "Vigência a partir de" no drawer
+
+Adicionar um campo de data no `ProductConfigDrawer` que permite ao usuário definir **a partir de quando** o novo preço vale. Por padrão, será o início do dia atual (`00:00:00 de hoje`), mas o usuário pode escolher uma data passada (ex: "01/02/2026") para retroagir o preço até aquela data.
+
+### Alterações
+
+**1. Formulário do ProductConfigDrawer**
+- Adicionar campo `effective_from` (date picker) que aparece somente quando o preço de referência foi alterado
+- Valor padrão: início do dia atual (meia-noite de hoje, timezone São Paulo)
+- O campo só aparece se o preço digitado for diferente do preço original do produto
+
+**2. Hook `useUpdateProductConfiguration`**
+- Após salvar o `reference_price`, se houve mudança de preço, atualizar o `effective_from` do registro de histórico recém-criado pelo trigger
+- Isso é feito com um UPDATE na `product_price_history` logo após o save, ajustando o `effective_from` para a data escolhida pelo usuário
+
+**3. Lógica do trigger (sem mudança)**
+- O trigger continua criando o registro com `NOW()` automaticamente
+- O frontend faz um UPDATE subsequente no `effective_from` se o usuário escolheu uma data diferente
+
+### Fluxo do usuário
 
 ```text
-product_configurations (atual)          product_price_history (nova)
-┌──────────────────────────────┐        ┌──────────────────────────────────┐
-│ id                           │        │ id                               │
-│ product_name                 │        │ product_config_id (FK)           │
-│ reference_price = 16500  ←───┼──┐     │ old_price                        │
-│ ...                          │  │     │ new_price                        │
-└──────────────────────────────┘  │     │ effective_from (data de vigencia)│
-                                  │     │ changed_by (user_id)             │
-                                  │     │ created_at                       │
-                                  └─────│ ...                              │
-                                        └──────────────────────────────────┘
+1. Abre drawer do A001
+2. Muda preço de 14.500 → 16.500
+3. Aparece campo: "Vigência a partir de: [01/02/2026]" (padrão: hoje 00:00)
+4. Usuário pode ajustar para qualquer data
+5. Clica Salvar
+6. Trigger cria histórico → frontend ajusta effective_from para a data escolhida
+7. Transações de hoje agora usam 16.500
 ```
-
-### Fluxo
-
-1. Ao salvar um novo `reference_price` no drawer de produto, o sistema automaticamente insere um registro em `product_price_history` com o preco antigo, preco novo, e `effective_from = NOW()`
-2. A funcao RPC `get_all_hubla_transactions` sera alterada para fazer um **lateral join** com `product_price_history`, buscando o preco vigente na `sale_date` da transacao
-3. Se nao houver historico, usa o `reference_price` atual (retrocompatibilidade)
-
-### Logica do preco vigente
-
-Para uma transacao com `sale_date = 2026-01-15`:
-- Se existe registro de historico com `effective_from = 2026-02-01` (preco mudou para 16500)
-- E antes disso o preco era 14500
-- Entao a transacao de janeiro usa **14500** (preco anterior a mudanca)
-- Transacoes a partir de 01/02 usam **16500**
-
-### Alteracoes tecnicas
-
-**1. Nova tabela `product_price_history`**
-
-```sql
-CREATE TABLE product_price_history (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_config_id UUID NOT NULL REFERENCES product_configurations(id),
-  old_price NUMERIC NOT NULL,
-  new_price NUMERIC NOT NULL,
-  effective_from TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  changed_by UUID REFERENCES auth.users(id),
-  notes TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-**2. Trigger automatico na `product_configurations`**
-
-Quando `reference_price` muda, insere automaticamente um registro no historico:
-
-```sql
-CREATE FUNCTION log_price_change() RETURNS trigger AS $$
-BEGIN
-  IF OLD.reference_price IS DISTINCT FROM NEW.reference_price THEN
-    INSERT INTO product_price_history (product_config_id, old_price, new_price, effective_from)
-    VALUES (NEW.id, OLD.reference_price, NEW.reference_price, NOW());
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-```
-
-**3. Funcao auxiliar para buscar preco vigente**
-
-```sql
-CREATE FUNCTION get_effective_price(p_product_config_id UUID, p_sale_date TIMESTAMPTZ)
-RETURNS NUMERIC AS $$
-  -- Busca o preco que estava vigente na sale_date
-  -- Se a sale_date e anterior a TODAS as mudancas, usa old_price do primeiro registro
-  -- Se e posterior a ultima mudanca, usa reference_price atual
-  -- Senao, busca o new_price da mudanca mais recente anterior a sale_date
-$$
-```
-
-**4. Atualizar RPC `get_all_hubla_transactions`**
-
-Substituir `pc.reference_price` por chamada a `get_effective_price(pc.id, ht.sale_date)`.
-
-**5. Atualizar cache no frontend (`useProductPricesCache`)**
-
-O cache precisara ser ajustado: em vez de um preco unico por produto, carregara tambem o historico de precos para que `getDeduplicatedGross` possa receber o preco correto baseado na `sale_date`. Na pratica, como o preco ja vem correto do RPC (backend), o cache continua funcionando para os poucos casos de fallback.
-
-**6. UI: Exibir historico no ProductConfigDrawer**
-
-Adicionar uma secao no drawer de edicao do produto mostrando o historico de alteracoes de preco, com data, preco anterior, novo preco. Isso da visibilidade ao gestor sobre quando cada mudanca foi feita.
-
-**7. Seed: Registrar precos atuais como baseline**
-
-Inserir um registro inicial para cada produto existente com `effective_from = created_at` do produto e `old_price = new_price = reference_price` atual, para garantir que transacoes antigas continuem usando o preco correto.
 
 ### Arquivos afetados
 
-| Arquivo | Alteracao |
+| Arquivo | Alteração |
 |---|---|
-| Migration SQL | Criar tabela, trigger, funcao `get_effective_price`, atualizar RPC |
-| `src/hooks/useProductConfigurations.ts` | Hook para buscar historico de precos |
-| `src/components/admin/ProductConfigDrawer.tsx` | Exibir historico de precos no drawer |
-| `src/hooks/useProductPricesCache.ts` | Sem mudanca significativa (preco ja vem correto do RPC) |
-| `src/lib/incorporadorPricing.ts` | Sem mudanca (usa `reference_price` que vem do RPC) |
+| `src/components/admin/ProductConfigDrawer.tsx` | Adicionar date picker de vigência condicional |
+| `src/hooks/useProductConfigurations.ts` | Adicionar lógica para atualizar `effective_from` após save |
 
-### Impacto
+### Caso do Marcio Dyego (correção imediata)
 
-- Transacoes **anteriores** a uma mudanca de preco manterao o preco antigo
-- Transacoes **posteriores** usarao o novo preco
-- O gestor pode ver quando e quanto mudou no historico do drawer
-- Retrocompativel: produtos sem historico continuam usando `reference_price` atual
+Além da melhoria no formulário, o `gross_override` da transação do Marcio já está como `16500` (você provavelmente editou manualmente). Portanto a transação dele já mostra o valor correto via override. A mudança sistêmica vai garantir que futuras alterações de preço se apliquem corretamente sem precisar de override manual.
 
