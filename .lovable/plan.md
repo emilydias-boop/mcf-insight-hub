@@ -1,33 +1,45 @@
 
 
-## Corrigir duplicacao de leads no Total Leads do Carrinho R2
+## Corrigir formulas dos KPIs "Leads do Carrinho"
 
 ### Problema
 
-No hook `useR2MetricsData.ts`, o calculo de `totalLeads` agrupa attendees por `deal_id` (linha 207), mas:
+Atualmente, `totalLeads` conta todos os attendees unicos (80), incluindo no-shows, desistentes, reembolsos, reprovados, etc. O usuario quer que as metricas reflitam:
 
-1. **Attendees com `status === 'rescheduled'` nao sao filtrados** - eles entram no loop de deduplicacao e, se nao tiverem `deal_id`, sao contados como leads separados (fallback `att.id` na linha 207)
-2. **Attendees sem `deal_id`** usam o proprio `att.id` como chave, gerando entradas duplicadas para o mesmo lead fisico que foi reagendado
-
-Isso infla o `totalLeads` (e potencialmente outras metricas como no-show) com registros que ja foram substituidos por um reagendamento.
+- **Total Leads** = agendados (sem status definido, pendentes) + aprovados
+- **No Carrinho** = aprovados
+- **Desistentes** = desistentes
+- **Reembolsos** = reembolsos
+- **Reprovados** = reprovados
+- **Proxima Semana** = proxima semana
+- **No-Show** = no-show
+- **Perdidos %** = (desistentes + reembolsos + reprovados) / total leads * 100 (sem no-show e sem proxima semana)
 
 ### Alteracao
 
-**`src/hooks/useR2MetricsData.ts`** - Filtrar attendees com status `rescheduled` ou `cancelled` antes de processar:
+**`src/hooks/useR2MetricsData.ts`**
 
-Na linha 206, dentro do loop `attendees.forEach(att => {`, adicionar no inicio:
+1. **Linha 258** - Mudar calculo de `totalLeads`: em vez de `leadsByDeal.size`, calcular como a soma dos leads que estao "agendados" (sem status de perda/no-show) + aprovados. Ou seja, contar apenas leads cujo status final e "pendente/agendado" ou "aprovado".
+
+2. **Linha 465** - Mudar formula de `leadsPerdidosPercent`:
+   - Atual: `(desistentes + reprovados + reembolsos + proximaSemana + noShow) / totalLeads`
+   - Nova: `(desistentes + reembolsos + reprovados) / totalLeads` (exclui no-show e proxima semana)
+
+Concretamente, apos o loop que conta cada categoria (linhas 278-318), calcular:
 
 ```typescript
-// Skip rescheduled/cancelled attendees - they are superseded by newer records
-if (att.status === 'rescheduled' || att.status === 'cancelled') return;
-```
+// Total Leads = agendados pendentes + aprovados (exclui no-show, desistentes, reembolsos, reprovados, proxima semana)
+const agendadosPendentes = leadsByDeal.size - desistentes - reprovados - reembolsosCount - proximaSemana - noShow - aprovados;
+const totalLeads = agendadosPendentes + aprovados;
 
-Isso garante que:
-- Um lead reagendado 3x conta apenas 1x (o registro ativo)
-- No-shows que foram reagendados nao contam como leads separados
-- A deduplicacao por `deal_id` continua funcionando como segunda camada de seguranca
+// Perdidos % = (desistentes + reembolsos + reprovados) / totalLeads
+const leadsPerdidosCount = desistentes + reprovados + reembolsosCount;
+const leadsPerdidosPercent = totalLeads > 0 ? (leadsPerdidosCount / totalLeads) * 100 : 0;
+```
 
 ### Resultado
 
-O card "Total Leads" passara a mostrar apenas leads unicos ativos, sem contar registros de reagendamento ou cancelamento.
+Os cards mostrarao:
+- **Total Leads**: apenas leads ativos (agendados pendentes + aprovados), sem contar perdidos/no-show
+- **Perdidos %**: apenas desistentes + reembolsos + reprovados, sem no-show nem proxima semana
 
