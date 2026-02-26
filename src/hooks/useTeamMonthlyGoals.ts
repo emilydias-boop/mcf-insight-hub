@@ -38,12 +38,12 @@ export const DEFAULT_GOAL_VALUES = {
   meta_valor: 1000000,
   meta_premio_ifood: 0,
   supermeta_valor: 1300000,
-  supermeta_premio_ifood: 500,
+  supermeta_premio_ifood: 0,
   ultrameta_valor: 1600000,
-  ultrameta_premio_ifood: 1000,
+  ultrameta_premio_ifood: 0,
   meta_divina_valor: 2000000,
-  meta_divina_premio_sdr: 50000,
-  meta_divina_premio_closer: 50000,
+  meta_divina_premio_sdr: 0,
+  meta_divina_premio_closer: 0,
 };
 
 // Fetch goals for a specific month and BU

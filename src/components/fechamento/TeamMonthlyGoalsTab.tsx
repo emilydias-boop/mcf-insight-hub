@@ -211,9 +211,15 @@ export function TeamMonthlyGoalsTab({ defaultBU, lockBU }: TeamMonthlyGoalsTabPr
               </div>
             )}
 
-            {existingGoal && (
+            {!isLoading && existingGoal && (
               <span className="text-xs text-green-500 bg-green-500/10 px-2 py-1 rounded">
-                Configurado
+                ✓ Configurado
+              </span>
+            )}
+
+            {!isLoading && !existingGoal && (
+              <span className="text-xs text-amber-600 bg-amber-500/10 px-2 py-1 rounded font-medium">
+                ⚠ Valores padrão — salve para confirmar
               </span>
             )}
 
