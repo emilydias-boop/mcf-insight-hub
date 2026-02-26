@@ -381,11 +381,18 @@ export function groupTransactionsByPurchase(
       // Recalcular totalNet usando apenas os offers (exclui o main que é o "carrinho total")
       group.totalNet = group.orderBumps.reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Recalcular totalGross usando apenas os offers (o main tem product_price inflado do carrinho)
-      group.totalGross = group.orderBumps.reduce((sum, tx) => {
+      // Recalcular totalGross: tenta usar apenas offers, mas se zerado, usa todos
+      // Isso evita descartar bruto válido do item principal em grupos mistos
+      const grossOffersOnly = group.orderBumps.reduce((sum, tx) => {
         const isFirst = globalFirstIds.has(tx.id);
         return sum + getDeduplicatedGross(tx, isFirst);
       }, 0);
+
+      if (grossOffersOnly > 0) {
+        group.totalGross = grossOffersOnly;
+      }
+      // Se grossOffersOnly === 0, mantém o totalGross já calculado na primeira passagem
+      // (que inclui o bruto do item principal)
     }
 
     // Ordena allTransactions: principal primeiro, depois bumps

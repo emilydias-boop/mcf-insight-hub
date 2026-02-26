@@ -183,18 +183,20 @@ export default function TransacoesIncorp() {
     return transactionGroups.slice(start, start + itemsPerPage);
   }, [transactionGroups, currentPage, itemsPerPage]);
 
-  // Totais - Bruto usa deduplicação GLOBAL (consistente com Dashboard)
+  // Totais - Bruto usa soma direta com deduplicação GLOBAL (consistente com Dashboard)
+  // Líquido usa grupos para evitar dupla contagem do carrinho (main + offers)
   const totals = useMemo(() => {
-    let bruto = 0;
-    let liquido = 0;
+    // Bruto: soma direta de cada transação com deduplicação global
+    const bruto = filteredByCloser.reduce((sum, tx) => {
+      const isFirst = globalFirstIds.has(tx.id);
+      return sum + getDeduplicatedGross(tx, isFirst);
+    }, 0);
 
-    transactionGroups.forEach(group => {
-      bruto += group.totalGross;
-      liquido += group.totalNet;
-    });
+    // Líquido: usa grupos para evitar dupla contagem do net no carrinho
+    const liquido = transactionGroups.reduce((sum, group) => sum + group.totalNet, 0);
 
     return { count: filteredByCloser.length, bruto, liquido };
-  }, [transactionGroups, filteredByCloser]);
+  }, [filteredByCloser, globalFirstIds, transactionGroups]);
 
   // Handlers
   const handleRefresh = async () => {
