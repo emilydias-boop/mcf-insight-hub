@@ -8,6 +8,7 @@ import { SdrAdjustmentForm } from "@/components/sdr-fechamento/SdrAdjustmentForm
 import { KpiEditForm } from "@/components/sdr-fechamento/KpiEditForm";
 import { IntermediacoesList } from "@/components/sdr-fechamento/IntermediacoesList";
 import { NoShowIndicator } from "@/components/sdr-fechamento/NoShowIndicator";
+import { ManualPayoutForm } from "@/components/sdr-fechamento/ManualPayoutForm";
 import { DynamicIndicatorsGrid } from "@/components/fechamento/DynamicIndicatorCard";
 import { useActiveMetricsForSdr } from "@/hooks/useActiveMetricsForSdr";
 import { useCloserAgendaMetrics } from "@/hooks/useCloserAgendaMetrics";
@@ -426,14 +427,14 @@ const FechamentoSDRDetail = () => {
                       RH
                     </Badge>
                   )}
-                  {Math.abs(calculatedVariavel.total - (payout.valor_variavel_total || 0)) > 1 && (
+                  {!employee?.fechamento_manual && Math.abs(calculatedVariavel.total - (payout.valor_variavel_total || 0)) > 1 && (
                     <Badge variant="destructive" className="text-[9px] h-4 ml-1">
                       Recalcular
                     </Badge>
                   )}
                 </div>
                 <div className="text-xl font-bold mt-1 text-primary">
-                  {formatCurrency(calculatedVariavel.total)}
+                  {formatCurrency(employee?.fechamento_manual ? (payout.valor_variavel_total || 0) : calculatedVariavel.total)}
                 </div>
               </CardContent>
             </Card>
@@ -443,14 +444,14 @@ const FechamentoSDRDetail = () => {
                 <div className="flex items-center gap-1.5 text-primary text-xs">
                   <CreditCard className="h-3.5 w-3.5" />
                   Total Conta
-                  {Math.abs((effectiveFixo + calculatedVariavel.total) - (payout.total_conta || 0)) > 1 && (
+                  {!employee?.fechamento_manual && Math.abs((effectiveFixo + calculatedVariavel.total) - (payout.total_conta || 0)) > 1 && (
                     <Badge variant="destructive" className="text-[9px] h-4 ml-1">
                       Recalcular
                     </Badge>
                   )}
                 </div>
                 <div className="text-xl font-bold mt-1 text-primary">
-                  {formatCurrency(effectiveFixo + calculatedVariavel.total)}
+                  {formatCurrency(employee?.fechamento_manual ? (payout.total_conta || 0) : (effectiveFixo + calculatedVariavel.total))}
                 </div>
               </CardContent>
             </Card>
@@ -500,23 +501,43 @@ const FechamentoSDRDetail = () => {
             </Card>
           </div>
 
-      {/* KPI Edit Form (for admin/manager) */}
-      {canEdit && (
-        <KpiEditForm
-          kpi={effectiveKpi}
-          compPlan={compPlan || null}
-          sdrId={payout.sdr_id}
-          anoMes={payout.ano_mes}
-          disabled={!canEdit}
-          onSave={handleSaveKpi}
-          isSaving={recalculateWithKpi.isPending}
-          intermediacoes={effectiveIntermediacao}
-          sdrMetaDiaria={(payout.sdr as any)?.meta_diaria || 10}
-          diasUteisMes={payout.dias_uteis_mes || 19}
-          roleType={(payout.sdr as any)?.role_type || "sdr"}
-          vendasParceria={vendasParceria}
-          metaContratosPercentual={metaContratosPercentual}
-        />
+      {/* Manual Payout Form OR KPI Edit + Indicators */}
+      {employee?.fechamento_manual ? (
+        <ManualPayoutForm payout={payout} disabled={!canEdit} />
+      ) : (
+        <>
+          {/* KPI Edit Form (for admin/manager) */}
+          {canEdit && (
+            <KpiEditForm
+              kpi={effectiveKpi}
+              compPlan={compPlan || null}
+              sdrId={payout.sdr_id}
+              anoMes={payout.ano_mes}
+              disabled={!canEdit}
+              onSave={handleSaveKpi}
+              isSaving={recalculateWithKpi.isPending}
+              intermediacoes={effectiveIntermediacao}
+              sdrMetaDiaria={(payout.sdr as any)?.meta_diaria || 10}
+              diasUteisMes={payout.dias_uteis_mes || 19}
+              roleType={(payout.sdr as any)?.role_type || "sdr"}
+              vendasParceria={vendasParceria}
+              metaContratosPercentual={metaContratosPercentual}
+            />
+          )}
+
+          {/* Dynamic Indicators Grid */}
+          <DynamicIndicatorsSection
+            sdrId={payout.sdr_id}
+            anoMes={payout.ano_mes}
+            kpi={effectiveKpi}
+            payout={payout}
+            compPlan={compPlan || null}
+            diasUteisMes={diasUteisMes}
+            sdrMetaDiaria={sdrMetaDiaria}
+            isCloser={isCloser}
+            variavelTotal={effectiveVariavel}
+          />
+        </>
       )}
 
       {/* Dynamic Indicators Grid */}

@@ -192,6 +192,49 @@ export const useAuthorizeUltrameta = () => {
   });
 };
 
+// Update Manual Payout (direct write, no edge function)
+export const useUpdateManualPayout = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ payoutId, sdrId, anoMes, data }: {
+      payoutId: string;
+      sdrId: string;
+      anoMes: string;
+      data: {
+        valor_fixo: number;
+        valor_variavel_total: number;
+        total_conta: number;
+        ifood_mensal: number;
+        ifood_ultrameta: number;
+        total_ifood: number;
+      };
+    }) => {
+      const { data: result, error } = await supabase
+        .from('sdr_month_payout')
+        .update({
+          ...data,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', payoutId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: (_, { sdrId, anoMes }) => {
+      queryClient.invalidateQueries({ queryKey: ['sdr-payout-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-payouts', anoMes] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-payouts'] });
+      toast.success('Valores do payout salvos com sucesso');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao salvar payout: ${error.message}`);
+    },
+  });
+};
+
 // Recalculate Payout and KPI together
 export const useRecalculateWithKpi = () => {
   const queryClient = useQueryClient();
