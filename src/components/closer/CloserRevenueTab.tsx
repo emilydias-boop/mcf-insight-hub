@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Search, X } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,6 +28,7 @@ const normalizePhone = (phone: string | null | undefined): string => {
 export function CloserRevenueTab({ closerId, startDate, endDate }: CloserRevenueTabProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [searchTx, setSearchTx] = useState('');
 
   const filters = useMemo(() => ({
     startDate,
@@ -94,22 +97,34 @@ export function CloserRevenueTab({ closerId, startDate, endDate }: CloserRevenue
     });
   }, [transactions, attendees]);
 
+  // Apply text search filter
+  const filteredTransactions = useMemo(() => {
+    if (!searchTx.trim()) return closerTransactions;
+    const q = searchTx.toLowerCase().trim();
+    return closerTransactions.filter((tx: any) =>
+      (tx.customer_name || '').toLowerCase().includes(q) ||
+      (tx.customer_email || '').toLowerCase().includes(q) ||
+      (tx.customer_phone || '').includes(q) ||
+      (tx.product_name || '').toLowerCase().includes(q)
+    );
+  }, [closerTransactions, searchTx]);
+
   const stats = useMemo(() => {
-    const totalGross = closerTransactions.reduce((sum, t) => {
+    const totalGross = filteredTransactions.reduce((sum, t) => {
       const isFirst = globalFirstIds.has(t.id);
       return sum + getDeduplicatedGross(t, isFirst);
     }, 0);
-    const totalNet = closerTransactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
-    const count = closerTransactions.length;
+    const totalNet = filteredTransactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
+    const count = filteredTransactions.length;
     const avgTicket = count > 0 ? totalNet / count : 0;
     return { totalGross, totalNet, count, avgTicket };
-  }, [closerTransactions, globalFirstIds]);
+  }, [filteredTransactions, globalFirstIds]);
 
-  const totalPages = Math.ceil(closerTransactions.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
   const paginatedTx = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
-    return closerTransactions.slice(start, start + itemsPerPage);
-  }, [closerTransactions, currentPage, itemsPerPage]);
+    return filteredTransactions.slice(start, start + itemsPerPage);
+  }, [filteredTransactions, currentPage, itemsPerPage]);
 
   const isLoading = txLoading || attLoading;
 
@@ -182,12 +197,25 @@ export function CloserRevenueTab({ closerId, startDate, endDate }: CloserRevenue
         </Card>
       </div>
 
-      {/* Transaction Table */}
+      {/* Search + Transaction Table */}
       <Card>
         <CardContent className="p-4">
-          {closerTransactions.length === 0 ? (
+          {/* Search bar */}
+          <div className="mb-4">
+            <div className="relative max-w-[320px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar nome, email, produto..."
+                value={searchTx}
+                onChange={(e) => { setSearchTx(e.target.value); setCurrentPage(1); }}
+                className="pl-9 h-9"
+              />
+            </div>
+          </div>
+
+          {filteredTransactions.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              Nenhuma transação atribuída a este closer no período.
+              {searchTx ? 'Nenhuma transação encontrada para a busca.' : 'Nenhuma transação atribuída a este closer no período.'}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -255,8 +283,8 @@ export function CloserRevenueTab({ closerId, startDate, endDate }: CloserRevenue
                       </SelectContent>
                     </Select>
                     <span className="text-sm text-muted-foreground">
-                      {Math.min((currentPage - 1) * itemsPerPage + 1, closerTransactions.length)}–
-                      {Math.min(currentPage * itemsPerPage, closerTransactions.length)} de {closerTransactions.length}
+                      {Math.min((currentPage - 1) * itemsPerPage + 1, filteredTransactions.length)}–
+                      {Math.min(currentPage * itemsPerPage, filteredTransactions.length)} de {filteredTransactions.length}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
