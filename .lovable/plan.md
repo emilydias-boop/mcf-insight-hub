@@ -1,23 +1,25 @@
 
-Objetivo: corrigir o **Bruto Total** da página **/bu-incorporador/transacoes** para bater com o valor real (e com o dashboard quando filtros equivalentes).
 
-Implementação:
-1) Ajustar cálculo do card de resumo em `src/pages/bu-incorporador/TransacoesIncorp.tsx`  
-- Trocar `totals.bruto` baseado em `transactionGroups` para soma direta de `filteredByCloser` usando `getDeduplicatedGross(tx, globalFirstIds.has(tx.id))`.  
-- Manter `totals.liquido` por grupos (como já está), pois o agrupamento evita dupla contagem de net no carrinho.
+## Plano: Alinhar Efeito Alavanca do Dashboard com dados do Controle Consórcio
 
-2) Corrigir regra de bruto em grupos com order bump em `src/components/incorporador/TransactionGroupRow.tsx`  
-- Em `groupTransactionsByPurchase`, na segunda passagem (`group.orderBumps.length > 0`), parar de “zerar” vendas válidas do item principal.  
-- Estratégia: calcular `grossAllTransactions` (todas as transações do grupo) e `grossOffersOnly`; usar `grossOffersOnly` somente quando ele for > 0, senão usar `grossAllTransactions`.
+### Problema
+O Dashboard "Efeito Alavanca" busca dados de `get_hubla_transactions_by_bu('consorcio')` somando `product_price` (Hubla) = **R$ 465K**. O Painel Equipe do Consórcio busca de `consortium_cards.valor_credito` = **R$ 22.9MM**. O correto é o segundo.
 
-3) Manter consistência visual e exportação  
-- Garantir que o valor do card “Bruto Total” e o total exportado continuem usando a mesma regra de deduplicação global.
+### Causa
+- **Dashboard**: usa Hubla transactions (vendas online)
+- **Painel Consórcio**: usa `useConsorcioSummary` → `consortium_cards.valor_credito` + `consortium_installments.valor_comissao`
 
-Validação:
-1) Abrir `/bu-incorporador/transacoes` com período 01/02/2026–26/02/2026 e conferir se o **Bruto Total** sobe exatamente no delta faltante (caso observado: +R$ 16.500).  
-2) Conferir o caso do grupo com `hubla_id` base `bb1c3539-2504-4e46-845d-ae9c13ad648a` (A001) para validar que o bruto não fica zerado indevidamente.  
-3) Comparar com o card mensal de **MCF Incorporador** no dashboard usando mesmo recorte de data/filtros.
+### Correção
 
-Detalhes técnicos:
-- Causa raiz: `groupTransactionsByPurchase` sobrescreve `totalGross` para “somente offers” em qualquer grupo com `-offer-*`, o que descarta bruto válido do item principal em grupos mistos.  
-- Impacto esperado: correção do bruto na página de vendas sem alterar RPCs, sem migração de banco e sem mexer em regras de deduplicação global.
+**Arquivo: `src/hooks/useSetoresDashboard.ts`**
+
+1. Remover as 3 chamadas `get_hubla_transactions_by_bu(p_bu='consorcio')` (semana/mês/ano)
+2. Substituir por 3 queries diretas a `consortium_cards` (mesma lógica de `useConsorcioSummary`):
+   - Filtrar por `data_contratacao` nos períodos semana/mês/ano (usando semana Mon-Sun do Consórcio)
+   - Somar `valor_credito` para "Total em Cartas"
+   - Buscar `consortium_installments.valor_comissao` agrupado por período para "Comissão Total"
+3. Popular os campos `comissaoSemanal`, `comissaoMensal`, `comissaoAnual` no `SetorData` do `efeito_alavanca`
+4. Manter `apuradoSemanal/Mensal/Anual` = soma de `valor_credito` (Total em Cartas)
+
+**Resultado**: Dashboard "Efeito Alavanca" mostrará os mesmos valores que o card "BU Consórcio" no Painel Equipe e o Controle Consórcio. Metas já compartilham o mesmo prefixo (`setor_efeito_alavanca`) em ambos os painéis, portanto editar em um atualiza o outro automaticamente.
+
