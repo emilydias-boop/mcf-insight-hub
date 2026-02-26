@@ -346,26 +346,42 @@ export function useCloserDetailData({
   } = useQuery({
     queryKey: ['closer-r2-leads', closerId, start, end],
     queryFn: async () => {
-      const { data: meetings, error: meetingsError } = await supabase
+      // Step 1: Get all deal_ids from R1 meetings of this closer (no period filter)
+      const { data: r1Meetings } = await supabase
         .from('meeting_slots')
+        .select('meeting_slot_attendees(deal_id)')
+        .eq('closer_id', closerId)
+        .eq('meeting_type', 'r1')
+        .neq('status', 'cancelled');
+
+      const r1DealIds = new Set<string>();
+      r1Meetings?.forEach(m => {
+        const attendees = m.meeting_slot_attendees as any[];
+        attendees?.forEach((att: any) => {
+          if (att.deal_id) r1DealIds.add(att.deal_id);
+        });
+      });
+
+      if (r1DealIds.size === 0) return [];
+
+      // Step 2: Find R2 meetings whose deal_id matches an R1 deal of this closer
+      const { data: r2Attendees, error: r2Error } = await supabase
+        .from('meeting_slot_attendees')
         .select(`
           id,
-          scheduled_at,
-          meeting_slot_attendees (
-            id,
-            status,
-            deal_id,
-            attendee_name,
-            attendee_phone,
-            booked_by
-          )
+          status,
+          deal_id,
+          attendee_name,
+          attendee_phone,
+          booked_by,
+          meeting_slot:meeting_slots!inner(id, scheduled_at, meeting_type)
         `)
-        .eq('closer_id', closerId)
-        .eq('meeting_type', 'r2')
-        .gte('scheduled_at', start)
-        .lte('scheduled_at', end);
+        .eq('meeting_slot.meeting_type', 'r2')
+        .in('deal_id', Array.from(r1DealIds))
+        .gte('meeting_slot.scheduled_at', start)
+        .lte('meeting_slot.scheduled_at', end);
 
-      if (meetingsError) throw meetingsError;
+      if (r2Error) throw r2Error;
 
       const attendeesWithDeals: {
         attendeeId: string;
@@ -377,20 +393,19 @@ export function useCloserDetailData({
         scheduledAt: string;
       }[] = [];
 
-      meetings?.forEach(meeting => {
-        meeting.meeting_slot_attendees?.forEach(att => {
-          if (att.deal_id) {
-            attendeesWithDeals.push({
-              attendeeId: att.id,
-              status: att.status,
-              dealId: att.deal_id,
-              attendeeName: att.attendee_name,
-              attendeePhone: att.attendee_phone,
-              bookedBy: att.booked_by,
-              scheduledAt: meeting.scheduled_at,
-            });
-          }
-        });
+      r2Attendees?.forEach(att => {
+        const slot = att.meeting_slot as any;
+        if (att.deal_id && slot) {
+          attendeesWithDeals.push({
+            attendeeId: att.id,
+            status: att.status,
+            dealId: att.deal_id,
+            attendeeName: att.attendee_name,
+            attendeePhone: att.attendee_phone,
+            bookedBy: att.booked_by,
+            scheduledAt: slot.scheduled_at,
+          });
+        }
       });
 
       if (attendeesWithDeals.length === 0) return [];
