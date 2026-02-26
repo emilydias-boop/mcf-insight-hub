@@ -1,26 +1,39 @@
 
 
-## Problema: Divergência entre Variável na lista e no detalhe
+## Diagnóstico da divergência R$ 2.992,50 vs R$ 1.564,50
 
 ### Causa raiz
-Existem **duas fontes de cálculo independentes** para o valor variável:
+A Edge Function `recalculate-sdr-payout` processou a Cristiane Gomes pela **branch de SDR** em vez da branch de Closer. Isso aconteceu porque, no momento da última execução, provavelmente o vínculo `employee → cargo_catalogo` ainda não existia (condição na linha 903: `isCloser && metricasAtivas.length > 0 && cargoInfo`).
 
-1. **Lista (Index.tsx)**: lê `payout.valor_variavel_total` e `payout.total_conta` diretamente do banco (valores salvos pela Edge Function `recalculate`)
-2. **Detalhe (Detail.tsx)**: **recalcula localmente** usando o hook `useCalculatedVariavel`, ignorando os valores do banco
+A branch de SDR usa lógica completamente diferente (meta_diaria × dias_úteis, compPlan.valor_meta_rpg etc.), produzindo R$ 2.992,50 em vez do valor correto de ~R$ 1.564,50 (Contratos R$ 1.249,50 + Organização R$ 315,00).
 
-O hook `useCalculatedVariavel` usa lógica diferente (ex: cálculo de meta de realizadas como 70% das agendadas reais, fontes de dados diferentes para KPIs de Closer) — produzindo R$ 1.564,50 em vez dos R$ 2.992,50 do banco.
+### Evidência
+Dados no banco confirmam:
+- `pct_reunioes_agendadas = 306.25` → resultado típico da branch SDR (agendadas/meta_diaria), **não** da branch Closer (que armazenaria pctContratos ≈ 96.1%)
+- `valor_reunioes_realizadas = 2677.5` → inclui cálculos SDR incorretos para Closer
 
-### Correção: unificar a fonte de verdade
+### Correção (2 partes)
 
-O banco (preenchido por `useSdrFechamento.recalculate`) deve ser a **única fonte de verdade**. O Detail.tsx deve exibir os valores do banco, não recalcular localmente.
+**Parte 1: Reverter os summary cards para usar cálculo local**
 
-### Etapa 1: Detail.tsx — usar valores do banco nos cards de resumo
-- Card "Variável": trocar `calculatedVariavel.total` → `payout.valor_variavel_total || 0`
-- Card "Total Conta": trocar `effectiveFixo + calculatedVariavel.total` → `payout.total_conta || 0`
-- Manter `useCalculatedVariavel` e `DynamicIndicatorsGrid` apenas para a seção de indicadores visuais (cards de performance individuais), que servem como preview/conferência
+No `src/pages/fechamento-sdr/Detail.tsx`:
+- Card "Variável": voltar a usar `calculatedVariavel.total` (valor calculado localmente)
+- Card "Total Conta": voltar a usar `effectiveFixo + calculatedVariavel.total`
+- Manter o badge "Recalcular" quando houver divergência com o DB, mas agora como **alerta informativo** de que o banco precisa ser atualizado
 
-### Etapa 2: Adicionar indicador de divergência
-- Se `calculatedVariavel.total` diferir de `payout.valor_variavel_total` por mais de R$ 1, mostrar um badge de alerta discreto sugerindo "Recalcular" — pois indica que os KPIs mudaram desde o último salvamento
+**Parte 2: Garantir consistência do useCalculatedVariavel com DynamicIndicatorCard**
 
-Alteração em 1 arquivo: `src/pages/fechamento-sdr/Detail.tsx`
+No `src/hooks/useCalculatedVariavel.ts`, para métricas com `payoutPctField` (como organizacao), quando a métrica ativa tem `peso_percentual` definido, priorizar o cálculo dinâmico (`variavelTotal × peso/100`) sobre o valor individual do compPlan — mesma lógica que o DynamicIndicatorCard na sua branch de fallback.
+
+Isso garante que o total no card "Variável" bata exatamente com a soma dos indicator cards abaixo.
+
+### Resultado esperado
+- Detail view mostra R$ 1.564,50 (calculado localmente, correto)
+- Badge "Recalcular" aparece indicando que o banco (R$ 2.992,50) está desatualizado
+- Ao clicar "Salvar e Recalcular", a Edge Function executa com dados atuais, usa a branch Closer correta, e atualiza o banco
+- Após recálculo, lista e detalhe ficam sincronizados
+
+### Arquivos alterados
+1. `src/pages/fechamento-sdr/Detail.tsx` — reverter summary cards para valores calculados
+2. `src/hooks/useCalculatedVariavel.ts` — alinhar lógica com DynamicIndicatorCard
 
