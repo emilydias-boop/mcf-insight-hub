@@ -1,32 +1,39 @@
 
 
-## Problema: "Agendadas" não aparece no gráfico
+## Plano: Traduzir status das reuniões para português legível
 
-### Causa raiz
-O gráfico classifica reuniões pelo **status atual** — mas quase todas já progrediram para `completed`, `no_show` ou `contract_paid`. Apenas 89 de ~1960 reuniões ainda estão em `invited`. Por isso a barra "Agendadas" fica quase vazia.
+### Problema
+Os status vêm do banco em inglês (`invited`, `completed`, `no_show`, `contract_paid`, `rescheduled`) e são exibidos assim na UI.
 
-Além disso, o status `scheduled` (4 registros) não estava sendo reconhecido.
+### Solução
+Criar uma função `formatMeetingStatus(status)` e aplicá-la em todos os pontos de exibição.
 
-### Correção em `src/components/sdr/SdrMeetingsChart.tsx`
+**Mapeamento:**
+- `invited` → `Agendado`
+- `completed` → `Realizada`
+- `no_show` → `No-show`
+- `contract_paid` → `Contrato Pago`
+- `rescheduled` → `Reagendado`
+- `scheduled` → `Agendado`
+- `cancelled` → `Cancelado`
+- Fallback: retorna o valor original
 
-Mudar a lógica: **todas as reuniões do dia contam como "Agendadas"**. "Realizadas" e "No-Show" são subconjuntos adicionais. Assim o gráfico mostra o volume total agendado vs. o que foi realizado vs. no-show.
+### Arquivos a alterar
 
-```typescript
-if (dayMap.has(key)) {
-  const entry = dayMap.get(key)!;
-  
-  // Toda reunião conta como agendada
-  entry.agendadas++;
-  
-  // Adicionalmente classificar o resultado
-  const status = meeting.status_atual?.toLowerCase() || '';
-  if (status.includes('realizada') || status === 'completed' || status === 'contract_paid' || status.includes('contrato')) {
-    entry.realizadas++;
-  } else if (status.includes('no-show') || status.includes('noshow') || status === 'no_show') {
-    entry.noShow++;
-  }
-}
-```
+**1. `src/components/sdr/SdrLeadsTable.tsx`**
+- Adicionar função `formatMeetingStatus`
+- Atualizar `getStatusBadgeClass` para reconhecer status em inglês
+- Substituir `{meeting.status_atual}` por `{formatMeetingStatus(meeting.status_atual)}`
+- Traduzir opções do filtro de status no dropdown
 
-Resultado: "Agendadas" = total de reuniões por dia, "Realizadas" e "No-Show" mostram os resultados.
+**2. `src/components/sdr/SdrMeetingActionsDrawer.tsx`**
+- Aplicar `formatMeetingStatus` na linha 120 onde exibe `{meeting.status_atual}`
+
+**3. `src/components/sdr/SelectedSdrLeadsPanel.tsx`**
+- Aplicar tradução nos filtros e na exportação CSV
+
+**4. `src/components/sdr/MeetingsTable.tsx`**
+- Aplicar tradução onde exibe o status
+
+A função pode ser criada em um arquivo utilitário compartilhado ou inline em cada componente (prefiro utilitário para consistência).
 
