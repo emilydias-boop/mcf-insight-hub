@@ -111,13 +111,10 @@ const menuItems: MenuItem[] = [
   },
   
   {
-    title: "Dashboard",
+    title: "Visão Diretor",
+    url: "/dashboard",
     icon: LayoutDashboard,
     resource: "dashboard",
-    items: [
-      { title: "Visão Geral", url: "/dashboard" },
-      { title: "Semanas", url: "/dashboard/semanas", requiredRoles: ["admin", "manager", "coordenador"] },
-    ],
   },
 
   // ===== BUSINESS UNITS =====

@@ -89,7 +89,7 @@ import SdrMeetingsDetailPage from "./pages/crm/SdrMeetingsDetailPage";
 import CloserMeetingsDetailPage from "./pages/crm/CloserMeetingsDetailPage";
 import Webhooks from "./pages/crm/Webhooks";
 import NotFound from "./pages/NotFound";
-import DashboardSemanas from "./pages/dashboard/Semanas";
+
 import ConsorcioIndex from "./pages/bu-consorcio/Index";
 import ConsorcioImportar from "./pages/bu-consorcio/Importar";
 import AdminPermissoes from "./pages/admin/Permissoes";
@@ -180,7 +180,7 @@ const App = () => (
               
               <Route index element={<Navigate to="/home" replace />} />
               <Route path="dashboard" element={<ResourceGuard resource="dashboard"><Dashboard /></ResourceGuard>} />
-              <Route path="dashboard/semanas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DashboardSemanas /></RoleGuard>} />
+              
               <Route path="receita" element={<ResourceGuard resource="receita"><Receita /></ResourceGuard>}>
                 <Route index element={<ReceitaOverview />} />
                 <Route path="a010" element={<A010 />} />
