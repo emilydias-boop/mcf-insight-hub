@@ -1,34 +1,28 @@
 
 
-## Plano: Edição direta do payout para fechamento manual
+## Diagnóstico: Duplicação de transações `newsale-`
 
 ### Problema
-Yanca já está marcada como "Manual", mas a tela de detalhe ainda mostra apenas o formulário de KPIs padrão + "Salvar e Recalcular". Como a Edge Function pula o cálculo, nada acontece ao salvar. Falta uma seção para editar diretamente os valores do payout.
+A função RPC `get_hubla_transactions_by_bu` filtra por `source IN ('hubla', 'manual')`, o que inclui transações `newsale-` (que têm `source = 'hubla'`). Essas transações são duplicatas "fantasma" criadas pelo webhook antes do processamento completo — sempre com `net_value = 0`. A transação real (com `hubla_id` UUID) chega depois e contém o valor correto.
+
+Exemplo do Yuri Pereira de Oliveira:
+- `hubla_id: 06e25043-...` → A000 Contrato, R$ 497, net R$ 460,76 (real)
+- `hubla_id: newsale-1772131004213` → A000 Contrato, R$ 497, net R$ 0 (duplicata)
+
+A deduplicação classifica a segunda como "Recorrente" e zera o bruto, mas ela ainda aparece na lista — causando confusão visual.
 
 ### Solução
-Adicionar um formulário "Valores do Payout" que aparece **apenas** quando `fechamento_manual === true`. Esse formulário permite editar diretamente `valor_variavel_total`, `valor_fixo`, `total_conta`, `ifood_mensal` e `ifood_ultrameta` com um botão "Salvar" que grava direto em `sdr_month_payout` (sem passar pela Edge Function).
+Excluir transações `newsale-%` na RPC `get_hubla_transactions_by_bu`, da mesma forma que já é feito em `get_all_hubla_transactions` (que tem `AND ht.hubla_id NOT ILIKE 'newsale-%'`).
 
-### Etapas
+### Etapa única
 
-**1. Criar componente `ManualPayoutForm`**
-- Novo arquivo: `src/components/sdr-fechamento/ManualPayoutForm.tsx`
-- Campos editáveis: Valor Fixo, Valor Variável, iFood Mensal, iFood Ultrameta
-- Total Conta calculado automaticamente (Fixo + Variável)
-- Total iFood calculado automaticamente (Mensal + Ultrameta)
-- Botão "Salvar Valores" que faz UPDATE direto em `sdr_month_payout`
+**Migração SQL** — adicionar filtro `AND ht.hubla_id NOT ILIKE 'newsale-%'` na função `get_hubla_transactions_by_bu`:
 
-**2. Criar hook `useUpdateManualPayout`**
-- Novo em `src/hooks/useSdrKpiMutations.ts`
-- Mutation que faz `supabase.from('sdr_month_payout').update(...)` com os campos editados
-- Invalida cache do payout após salvar
+```sql
+CREATE OR REPLACE FUNCTION public.get_hubla_transactions_by_bu(...)
+  -- Adicionar na cláusula WHERE:
+  AND ht.hubla_id NOT ILIKE 'newsale-%'
+```
 
-**3. Integrar no Detail.tsx**
-- Quando `employee?.fechamento_manual === true`:
-  - Esconder o `KpiEditForm` padrão (KPIs automáticos não se aplicam)
-  - Esconder a seção `DynamicIndicatorsSection` (indicadores automáticos não se aplicam)
-  - Mostrar o `ManualPayoutForm` no lugar
-- O card "Variável" no header passa a mostrar o `payout.valor_variavel_total` direto do banco (sem cálculo local)
-
-### Resultado
-Para Yanca (e qualquer futuro colaborador manual): abrir o detalhe → preencher os valores diretamente → salvar → valores persistem sem serem sobrescritos.
+Isso remove as linhas duplicadas fantasma sem afetar nenhuma transação real. Zero impacto em outras funcionalidades — a mesma exclusão já existe na RPC `get_all_hubla_transactions`.
 
