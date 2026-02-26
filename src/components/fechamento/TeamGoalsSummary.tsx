@@ -135,6 +135,9 @@ export function TeamGoalsSummary({ anoMes, bu = 'incorporador' }: TeamGoalsSumma
 
   const divinaBatida = currentRevenue >= teamGoal.meta_divina_valor;
   const ultrametaBatida = currentRevenue >= teamGoal.ultrameta_valor;
+  const hasDivinaPrizes = (teamGoal.meta_divina_premio_sdr || 0) > 0 || (teamGoal.meta_divina_premio_closer || 0) > 0;
+  const divinaMode = (teamGoal as any).meta_divina_modo || 'individual';
+  const divinaTopN = (teamGoal as any).meta_divina_top_n || 1;
 
   return (
     <Card className={cn(
@@ -218,85 +221,134 @@ export function TeamGoalsSummary({ anoMes, bu = 'incorporador' }: TeamGoalsSumma
         )}
 
         {/* Meta Divina Winners Section */}
-        {divinaBatida && (
+        {divinaBatida && hasDivinaPrizes && (
           <div className="p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-500/30 space-y-3">
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-amber-400" />
               <span className="font-bold text-amber-300 text-lg">🌟 Meta Divina Batida!</span>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* Best SDR */}
-              {bestSdr && (
-                <div className="p-3 rounded-lg bg-card/50 border border-amber-500/20">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs text-muted-foreground">Melhor SDR</span>
-                      <p className="font-semibold">{(bestSdr.sdr as any)?.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Performance: {getPerformancePct(bestSdr).toFixed(1)}%
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-amber-400">
-                        {formatCurrency(teamGoal.meta_divina_premio_sdr)}
-                      </p>
-                      {sdrWinner?.autorizado ? (
-                        <Badge variant="secondary" className="bg-green-500/30 text-green-300">
-                          Autorizado
-                        </Badge>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-amber-500/50 text-amber-300 hover:bg-amber-500/20"
-                          onClick={() => sdrWinner && authorizeWinner.mutate(sdrWinner.id)}
-                          disabled={authorizeWinner.isPending || !sdrWinner}
-                        >
-                          Autorizar
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
 
-              {/* Best Closer */}
-              {bestCloser && (
-                <div className="p-3 rounded-lg bg-card/50 border border-amber-500/20">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs text-muted-foreground">Melhor Closer</span>
-                      <p className="font-semibold">{(bestCloser.sdr as any)?.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Performance: {getPerformancePct(bestCloser).toFixed(1)}%
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-amber-400">
-                        {formatCurrency(teamGoal.meta_divina_premio_closer)}
-                      </p>
-                      {closerWinner?.autorizado ? (
-                        <Badge variant="secondary" className="bg-green-500/30 text-green-300">
-                          Autorizado
-                        </Badge>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-amber-500/50 text-amber-300 hover:bg-amber-500/20"
-                          onClick={() => closerWinner && authorizeWinner.mutate(closerWinner.id)}
-                          disabled={authorizeWinner.isPending || !closerWinner}
-                        >
-                          Autorizar
-                        </Button>
-                      )}
+            {/* Mode: individual */}
+            {divinaMode === 'individual' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {bestSdr && (teamGoal.meta_divina_premio_sdr || 0) > 0 && (
+                  <div className="p-3 rounded-lg bg-card/50 border border-amber-500/20">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs text-muted-foreground">Melhor SDR</span>
+                        <p className="font-semibold">{(bestSdr.sdr as any)?.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Performance: {getPerformancePct(bestSdr).toFixed(1)}%
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-amber-400">
+                          {formatCurrency(teamGoal.meta_divina_premio_sdr)}
+                        </p>
+                        {sdrWinner?.autorizado ? (
+                          <Badge variant="secondary" className="bg-green-500/30 text-green-300">
+                            Autorizado
+                          </Badge>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-amber-500/50 text-amber-300 hover:bg-amber-500/20"
+                            onClick={() => sdrWinner && authorizeWinner.mutate(sdrWinner.id)}
+                            disabled={authorizeWinner.isPending || !sdrWinner}
+                          >
+                            Autorizar
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
+                )}
+
+                {bestCloser && (teamGoal.meta_divina_premio_closer || 0) > 0 && (
+                  <div className="p-3 rounded-lg bg-card/50 border border-amber-500/20">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs text-muted-foreground">Melhor Closer</span>
+                        <p className="font-semibold">{(bestCloser.sdr as any)?.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Performance: {getPerformancePct(bestCloser).toFixed(1)}%
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-amber-400">
+                          {formatCurrency(teamGoal.meta_divina_premio_closer)}
+                        </p>
+                        {closerWinner?.autorizado ? (
+                          <Badge variant="secondary" className="bg-green-500/30 text-green-300">
+                            Autorizado
+                          </Badge>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-amber-500/50 text-amber-300 hover:bg-amber-500/20"
+                            onClick={() => closerWinner && authorizeWinner.mutate(closerWinner.id)}
+                            disabled={authorizeWinner.isPending || !closerWinner}
+                          >
+                            Autorizar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Mode: time_todo */}
+            {divinaMode === 'time_todo' && (
+              <div className="p-3 rounded-lg bg-card/50 border border-amber-500/20">
+                <p className="text-sm text-amber-300 font-medium">🎉 Prêmio dividido entre todos da equipe</p>
+                <div className="flex gap-4 mt-2">
+                  {(teamGoal.meta_divina_premio_sdr || 0) > 0 && (
+                    <span className="text-sm">SDRs: <strong className="text-amber-400">{formatCurrency(teamGoal.meta_divina_premio_sdr)}</strong> total</span>
+                  )}
+                  {(teamGoal.meta_divina_premio_closer || 0) > 0 && (
+                    <span className="text-sm">Closers: <strong className="text-amber-400">{formatCurrency(teamGoal.meta_divina_premio_closer)}</strong> total</span>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Mode: top_n */}
+            {(divinaMode === 'top_3' || divinaMode === 'top_5' || divinaMode === 'top_n') && (
+              <div className="p-3 rounded-lg bg-card/50 border border-amber-500/20">
+                <p className="text-sm text-amber-300 font-medium">
+                  🏆 Prêmio dividido entre os Top {divinaMode === 'top_3' ? 3 : divinaMode === 'top_5' ? 5 : divinaTopN} de cada área
+                </p>
+                <div className="flex gap-4 mt-2">
+                  {(teamGoal.meta_divina_premio_sdr || 0) > 0 && (
+                    <span className="text-sm">SDRs: <strong className="text-amber-400">{formatCurrency(teamGoal.meta_divina_premio_sdr / (divinaMode === 'top_3' ? 3 : divinaMode === 'top_5' ? 5 : divinaTopN))}</strong> cada</span>
+                  )}
+                  {(teamGoal.meta_divina_premio_closer || 0) > 0 && (
+                    <span className="text-sm">Closers: <strong className="text-amber-400">{formatCurrency(teamGoal.meta_divina_premio_closer / (divinaMode === 'top_3' ? 3 : divinaMode === 'top_5' ? 5 : divinaTopN))}</strong> cada</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
+        )}
+
+        {/* Divina batida sem prêmio configurado */}
+        {divinaBatida && !hasDivinaPrizes && (
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+            <Award className="h-5 w-5 text-amber-400" />
+            <span className="font-medium text-amber-300">🌟 Meta Divina Batida!</span>
+            <span className="text-sm text-muted-foreground">(sem premiação configurada)</span>
+          </div>
+        )}
+
+        {/* iFood payment note */}
+        {(ultrametaBatida || highestReached) && (
+          <p className="text-xs text-muted-foreground italic">
+            💡 iFood do mês será creditado até dia 20 do mês seguinte.
+          </p>
         )}
       </CardContent>
     </Card>

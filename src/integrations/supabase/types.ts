@@ -8373,8 +8373,10 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           id: string
+          meta_divina_modo: string
           meta_divina_premio_closer: number | null
           meta_divina_premio_sdr: number | null
+          meta_divina_top_n: number
           meta_divina_valor: number | null
           meta_premio_ifood: number | null
           meta_valor: number | null
@@ -8390,8 +8392,10 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           id?: string
+          meta_divina_modo?: string
           meta_divina_premio_closer?: number | null
           meta_divina_premio_sdr?: number | null
+          meta_divina_top_n?: number
           meta_divina_valor?: number | null
           meta_premio_ifood?: number | null
           meta_valor?: number | null
@@ -8407,8 +8411,10 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           id?: string
+          meta_divina_modo?: string
           meta_divina_premio_closer?: number | null
           meta_divina_premio_sdr?: number | null
+          meta_divina_top_n?: number
           meta_divina_valor?: number | null
           meta_premio_ifood?: number | null
           meta_valor?: number | null

@@ -56,6 +56,8 @@ interface GoalFormData {
   meta_divina_valor: string;
   meta_divina_premio_sdr: string;
   meta_divina_premio_closer: string;
+  meta_divina_modo: string;
+  meta_divina_top_n: string;
 }
 
 const formatNumberForInput = (value: number) => String(value);
@@ -78,6 +80,8 @@ export function TeamMonthlyGoalsTab({ defaultBU, lockBU }: TeamMonthlyGoalsTabPr
     meta_divina_valor: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_divina_valor),
     meta_divina_premio_sdr: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_divina_premio_sdr),
     meta_divina_premio_closer: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_divina_premio_closer),
+    meta_divina_modo: DEFAULT_GOAL_VALUES.meta_divina_modo,
+    meta_divina_top_n: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_divina_top_n),
   });
 
   // Sync with defaultBU prop
@@ -102,6 +106,8 @@ export function TeamMonthlyGoalsTab({ defaultBU, lockBU }: TeamMonthlyGoalsTabPr
         meta_divina_valor: formatNumberForInput(existingGoal.meta_divina_valor || 0),
         meta_divina_premio_sdr: formatNumberForInput(existingGoal.meta_divina_premio_sdr || 0),
         meta_divina_premio_closer: formatNumberForInput(existingGoal.meta_divina_premio_closer || 0),
+        meta_divina_modo: (existingGoal as any).meta_divina_modo || 'individual',
+        meta_divina_top_n: formatNumberForInput((existingGoal as any).meta_divina_top_n || 1),
       });
     } else {
       setFormData({
@@ -114,6 +120,8 @@ export function TeamMonthlyGoalsTab({ defaultBU, lockBU }: TeamMonthlyGoalsTabPr
         meta_divina_valor: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_divina_valor),
         meta_divina_premio_sdr: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_divina_premio_sdr),
         meta_divina_premio_closer: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_divina_premio_closer),
+        meta_divina_modo: DEFAULT_GOAL_VALUES.meta_divina_modo,
+        meta_divina_top_n: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_divina_top_n),
       });
     }
   }, [existingGoal]);
@@ -154,7 +162,9 @@ export function TeamMonthlyGoalsTab({ defaultBU, lockBU }: TeamMonthlyGoalsTabPr
       meta_divina_valor: Number(formData.meta_divina_valor),
       meta_divina_premio_sdr: Number(formData.meta_divina_premio_sdr),
       meta_divina_premio_closer: Number(formData.meta_divina_premio_closer),
-    });
+      meta_divina_modo: formData.meta_divina_modo,
+      meta_divina_top_n: Number(formData.meta_divina_top_n),
+    } as any);
   };
 
   const handleCopyFromPrevious = async () => {
@@ -335,6 +345,40 @@ export function TeamMonthlyGoalsTab({ defaultBU, lockBU }: TeamMonthlyGoalsTabPr
                     </div>
                   </TableCell>
                 </TableRow>
+                {/* Distribution mode row */}
+                <TableRow className="bg-purple-500/5">
+                  <TableCell>
+                    <span className="text-sm text-muted-foreground ml-6">Modo de distribuição</span>
+                  </TableCell>
+                  <TableCell colSpan={2}>
+                    <div className="flex items-center gap-3">
+                      <Select value={formData.meta_divina_modo} onValueChange={(v) => handleInputChange('meta_divina_modo', v)}>
+                        <SelectTrigger className="w-[200px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="individual">Individual (melhor)</SelectItem>
+                          <SelectItem value="time_todo">Time todo</SelectItem>
+                          <SelectItem value="top_3">Top 3</SelectItem>
+                          <SelectItem value="top_5">Top 5</SelectItem>
+                          <SelectItem value="top_n">Top N (personalizado)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {formData.meta_divina_modo === 'top_n' && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm text-muted-foreground">N:</span>
+                          <Input 
+                            type="number" 
+                            value={formData.meta_divina_top_n} 
+                            onChange={(e) => handleInputChange('meta_divina_top_n', e.target.value)} 
+                            className="w-16" 
+                            min={1}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </div>
@@ -342,7 +386,14 @@ export function TeamMonthlyGoalsTab({ defaultBU, lockBU }: TeamMonthlyGoalsTabPr
           {/* Info box */}
           <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg p-3 space-y-1">
             <p><strong>Ultrameta:</strong> Se batida, libera R$ {formatCurrency(Number(formData.ultrameta_premio_ifood))} de iFood para <strong>todos</strong> da equipe.</p>
-            <p><strong>Meta Divina:</strong> O melhor SDR recebe R$ {formatCurrency(Number(formData.meta_divina_premio_sdr))} e o melhor Closer recebe R$ {formatCurrency(Number(formData.meta_divina_premio_closer))}.</p>
+            <p><strong>Meta Divina:</strong> {
+              formData.meta_divina_modo === 'individual' 
+                ? `O melhor SDR recebe R$ ${formatCurrency(Number(formData.meta_divina_premio_sdr))} e o melhor Closer recebe R$ ${formatCurrency(Number(formData.meta_divina_premio_closer))}.`
+                : formData.meta_divina_modo === 'time_todo'
+                  ? `Valor de R$ ${formatCurrency(Number(formData.meta_divina_premio_sdr))} (SDRs) e R$ ${formatCurrency(Number(formData.meta_divina_premio_closer))} (Closers) dividido entre todos da área.`
+                  : `Valor dividido entre os Top ${formData.meta_divina_modo === 'top_3' ? '3' : formData.meta_divina_modo === 'top_5' ? '5' : formData.meta_divina_top_n} de cada área.`
+            }</p>
+            <p className="italic">💡 iFood do mês creditado até dia 20 do mês seguinte.</p>
           </div>
 
           {/* Actions */}
