@@ -428,7 +428,7 @@ const FechamentoSDRDetail = () => {
                   )}
                 </div>
                 <div className="text-xl font-bold mt-1 text-primary">
-                  {formatCurrency(payout.valor_variavel_total || 0)}
+                  {formatCurrency(calculatedVariavel.total)}
                 </div>
               </CardContent>
             </Card>
@@ -445,7 +445,7 @@ const FechamentoSDRDetail = () => {
                   )}
                 </div>
                 <div className="text-xl font-bold mt-1 text-primary">
-                  {formatCurrency(payout.total_conta || 0)}
+                  {formatCurrency(effectiveFixo + calculatedVariavel.total)}
                 </div>
               </CardContent>
             </Card>
