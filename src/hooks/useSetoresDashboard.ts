@@ -30,7 +30,7 @@ const SETOR_CONFIG: { id: SetorData['id']; nome: string; icone: LucideIcon }[] =
   { id: 'leilao', nome: 'MCF Leilão', icone: Gavel },
 ];
 
-// Week starts on Saturday (6) for most BUs
+// Week starts on Saturday (6) for most BUs 
 const WEEK_STARTS_ON = 6;
 // Consórcio BU uses Monday-Sunday
 const CONSORCIO_WEEK_STARTS_ON = 1;
