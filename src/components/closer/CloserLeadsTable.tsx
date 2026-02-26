@@ -16,9 +16,10 @@ import { CheckCircle, DollarSign } from "lucide-react";
 interface CloserLeadsTableProps {
   leads: CloserLead[];
   isLoading: boolean;
+  showR1Sdr?: boolean;
 }
 
-export function CloserLeadsTable({ leads, isLoading }: CloserLeadsTableProps) {
+export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: CloserLeadsTableProps) {
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -81,7 +82,8 @@ export function CloserLeadsTable({ leads, isLoading }: CloserLeadsTableProps) {
               <TableHead className="text-muted-foreground">Data</TableHead>
               <TableHead className="text-muted-foreground">Lead</TableHead>
               <TableHead className="text-muted-foreground">Telefone</TableHead>
-              <TableHead className="text-muted-foreground">SDR</TableHead>
+              <TableHead className="text-muted-foreground">{showR1Sdr ? 'SDR (R1)' : 'SDR'}</TableHead>
+              {showR1Sdr && <TableHead className="text-muted-foreground">Agendado por</TableHead>}
               <TableHead className="text-muted-foreground">Status</TableHead>
               <TableHead className="text-muted-foreground">Origem</TableHead>
             </TableRow>
@@ -104,8 +106,13 @@ export function CloserLeadsTable({ leads, isLoading }: CloserLeadsTableProps) {
                   {lead.contact_phone || '-'}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {lead.booked_by_name || '-'}
+                  {showR1Sdr ? (lead.r1_sdr_name || '-') : (lead.booked_by_name || '-')}
                 </TableCell>
+                {showR1Sdr && (
+                  <TableCell className="text-muted-foreground">
+                    {lead.booked_by_name || '-'}
+                  </TableCell>
+                )}
                 <TableCell>{getStatusBadge(lead.status, lead.contract_paid_at)}</TableCell>
                 <TableCell>
                   {lead.origin_name ? (
