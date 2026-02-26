@@ -310,7 +310,7 @@ const FechamentoSDRList = () => {
               Exportar CSV
             </Button>
 
-            <Button variant="outline" onClick={() => navigate("/fechamento-sdr/configuracoes")}>
+            <Button variant="outline" onClick={() => navigate(`/fechamento-sdr/configuracoes?bu=${effectiveBu}`)}>
               <Settings className="h-4 w-4 mr-2" />
               Configurações
             </Button>

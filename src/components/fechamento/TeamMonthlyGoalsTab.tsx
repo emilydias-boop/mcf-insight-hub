@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -30,13 +31,11 @@ import {
   Trophy,
   Star,
 } from 'lucide-react';
-import { toast } from 'sonner';
 import { 
   useTeamMonthlyGoals, 
   useUpsertTeamMonthlyGoals,
   useCopyGoalsFromPreviousMonth,
   DEFAULT_GOAL_VALUES,
-  TeamMonthlyGoal,
 } from '@/hooks/useTeamMonthlyGoals';
 import { formatCurrency } from '@/lib/formatters';
 
@@ -45,13 +44,6 @@ const BU_OPTIONS = [
   { value: 'consorcio', label: 'Consórcio' },
   { value: 'credito', label: 'Crédito' },
   { value: 'leilao', label: 'Leilão' },
-];
-
-const GOAL_LEVELS = [
-  { key: 'meta', label: 'Meta', color: 'text-yellow-500', icon: Target },
-  { key: 'supermeta', label: 'Supermeta', color: 'text-orange-500', icon: Target },
-  { key: 'ultrameta', label: 'Ultrameta', color: 'text-red-500', icon: Trophy },
-  { key: 'meta_divina', label: 'Meta Divina', color: 'text-purple-500', icon: Star },
 ];
 
 interface GoalFormData {
@@ -68,9 +60,14 @@ interface GoalFormData {
 
 const formatNumberForInput = (value: number) => String(value);
 
-export function TeamMonthlyGoalsTab() {
+interface TeamMonthlyGoalsTabProps {
+  defaultBU?: string;
+  lockBU?: boolean;
+}
+
+export function TeamMonthlyGoalsTab({ defaultBU, lockBU }: TeamMonthlyGoalsTabProps) {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
-  const [selectedBu, setSelectedBu] = useState('incorporador');
+  const [selectedBu, setSelectedBu] = useState(defaultBU || 'incorporador');
   const [formData, setFormData] = useState<GoalFormData>({
     meta_valor: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_valor),
     meta_premio_ifood: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_premio_ifood),
@@ -82,6 +79,11 @@ export function TeamMonthlyGoalsTab() {
     meta_divina_premio_sdr: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_divina_premio_sdr),
     meta_divina_premio_closer: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_divina_premio_closer),
   });
+
+  // Sync with defaultBU prop
+  useEffect(() => {
+    if (defaultBU) setSelectedBu(defaultBU);
+  }, [defaultBU]);
 
   const { data: existingGoal, isLoading } = useTeamMonthlyGoals(selectedMonth, selectedBu);
   const upsertGoals = useUpsertTeamMonthlyGoals();
@@ -102,7 +104,6 @@ export function TeamMonthlyGoalsTab() {
         meta_divina_premio_closer: formatNumberForInput(existingGoal.meta_divina_premio_closer || 0),
       });
     } else {
-      // Reset to defaults if no existing goal
       setFormData({
         meta_valor: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_valor),
         meta_premio_ifood: formatNumberForInput(DEFAULT_GOAL_VALUES.meta_premio_ifood),
@@ -126,20 +127,17 @@ export function TeamMonthlyGoalsTab() {
   };
 
   const handleInputChange = (field: keyof GoalFormData, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value,
-    }));
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleSave = async () => {
-    // Validate that values are increasing
     const meta = Number(formData.meta_valor);
     const supermeta = Number(formData.supermeta_valor);
     const ultrameta = Number(formData.ultrameta_valor);
     const divina = Number(formData.meta_divina_valor);
 
     if (meta >= supermeta || supermeta >= ultrameta || ultrameta >= divina) {
+      const { toast } = await import('sonner');
       toast.error('Os valores das metas devem ser crescentes: Meta < Supermeta < Ultrameta < Meta Divina');
       return;
     }
@@ -167,6 +165,7 @@ export function TeamMonthlyGoalsTab() {
   };
 
   const displayMonth = format(parse(selectedMonth, 'yyyy-MM', new Date()), 'MMMM yyyy', { locale: ptBR });
+  const buLabel = BU_OPTIONS.find(o => o.value === selectedBu)?.label || selectedBu;
 
   return (
     <div className="space-y-6">
@@ -181,40 +180,36 @@ export function TeamMonthlyGoalsTab() {
           {/* Month and BU selectors */}
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => handleMonthChange('prev')}
-              >
+              <Button variant="outline" size="icon" onClick={() => handleMonthChange('prev')}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="min-w-[140px] text-center font-medium capitalize">
                 {displayMonth}
               </span>
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => handleMonthChange('next')}
-              >
+              <Button variant="outline" size="icon" onClick={() => handleMonthChange('next')}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Label>BU:</Label>
-              <Select value={selectedBu} onValueChange={setSelectedBu}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {BU_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {lockBU ? (
+              <Badge variant="outline" className="text-sm px-3 py-1">{buLabel}</Badge>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Label>BU:</Label>
+                <Select value={selectedBu} onValueChange={setSelectedBu}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BU_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {existingGoal && (
               <span className="text-xs text-green-500 bg-green-500/10 px-2 py-1 rounded">
@@ -247,24 +242,14 @@ export function TeamMonthlyGoalsTab() {
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <span className="text-muted-foreground text-sm">R$</span>
-                      <Input
-                        type="number"
-                        value={formData.meta_valor}
-                        onChange={(e) => handleInputChange('meta_valor', e.target.value)}
-                        className="w-32"
-                      />
+                      <Input type="number" value={formData.meta_valor} onChange={(e) => handleInputChange('meta_valor', e.target.value)} className="w-32" />
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">iFood:</span>
                       <span className="text-muted-foreground text-sm">R$</span>
-                      <Input
-                        type="number"
-                        value={formData.meta_premio_ifood}
-                        onChange={(e) => handleInputChange('meta_premio_ifood', e.target.value)}
-                        className="w-24"
-                      />
+                      <Input type="number" value={formData.meta_premio_ifood} onChange={(e) => handleInputChange('meta_premio_ifood', e.target.value)} className="w-24" />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -280,24 +265,14 @@ export function TeamMonthlyGoalsTab() {
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <span className="text-muted-foreground text-sm">R$</span>
-                      <Input
-                        type="number"
-                        value={formData.supermeta_valor}
-                        onChange={(e) => handleInputChange('supermeta_valor', e.target.value)}
-                        className="w-32"
-                      />
+                      <Input type="number" value={formData.supermeta_valor} onChange={(e) => handleInputChange('supermeta_valor', e.target.value)} className="w-32" />
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">iFood:</span>
                       <span className="text-muted-foreground text-sm">R$</span>
-                      <Input
-                        type="number"
-                        value={formData.supermeta_premio_ifood}
-                        onChange={(e) => handleInputChange('supermeta_premio_ifood', e.target.value)}
-                        className="w-24"
-                      />
+                      <Input type="number" value={formData.supermeta_premio_ifood} onChange={(e) => handleInputChange('supermeta_premio_ifood', e.target.value)} className="w-24" />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -313,24 +288,14 @@ export function TeamMonthlyGoalsTab() {
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <span className="text-muted-foreground text-sm">R$</span>
-                      <Input
-                        type="number"
-                        value={formData.ultrameta_valor}
-                        onChange={(e) => handleInputChange('ultrameta_valor', e.target.value)}
-                        className="w-32"
-                      />
+                      <Input type="number" value={formData.ultrameta_valor} onChange={(e) => handleInputChange('ultrameta_valor', e.target.value)} className="w-32" />
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">iFood (todos):</span>
                       <span className="text-muted-foreground text-sm">R$</span>
-                      <Input
-                        type="number"
-                        value={formData.ultrameta_premio_ifood}
-                        onChange={(e) => handleInputChange('ultrameta_premio_ifood', e.target.value)}
-                        className="w-24"
-                      />
+                      <Input type="number" value={formData.ultrameta_premio_ifood} onChange={(e) => handleInputChange('ultrameta_premio_ifood', e.target.value)} className="w-24" />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -346,12 +311,7 @@ export function TeamMonthlyGoalsTab() {
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <span className="text-muted-foreground text-sm">R$</span>
-                      <Input
-                        type="number"
-                        value={formData.meta_divina_valor}
-                        onChange={(e) => handleInputChange('meta_divina_valor', e.target.value)}
-                        className="w-32"
-                      />
+                      <Input type="number" value={formData.meta_divina_valor} onChange={(e) => handleInputChange('meta_divina_valor', e.target.value)} className="w-32" />
                     </div>
                   </TableCell>
                   <TableCell>
@@ -359,22 +319,12 @@ export function TeamMonthlyGoalsTab() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">SDR:</span>
                         <span className="text-muted-foreground text-sm">R$</span>
-                        <Input
-                          type="number"
-                          value={formData.meta_divina_premio_sdr}
-                          onChange={(e) => handleInputChange('meta_divina_premio_sdr', e.target.value)}
-                          className="w-28"
-                        />
+                        <Input type="number" value={formData.meta_divina_premio_sdr} onChange={(e) => handleInputChange('meta_divina_premio_sdr', e.target.value)} className="w-28" />
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">Closer:</span>
                         <span className="text-muted-foreground text-sm">R$</span>
-                        <Input
-                          type="number"
-                          value={formData.meta_divina_premio_closer}
-                          onChange={(e) => handleInputChange('meta_divina_premio_closer', e.target.value)}
-                          className="w-28"
-                        />
+                        <Input type="number" value={formData.meta_divina_premio_closer} onChange={(e) => handleInputChange('meta_divina_premio_closer', e.target.value)} className="w-28" />
                       </div>
                     </div>
                   </TableCell>
