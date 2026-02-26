@@ -1,33 +1,34 @@
 
 
-## Plano: Fechamento Manual via campo no RH (genérico, não exclusivo)
+## Plano: Edição direta do payout para fechamento manual
 
-### Ideia
-Adicionar um campo `fechamento_manual` (boolean) na tabela `employees` do RH. Quando marcado, a Edge Function `recalculate-sdr-payout` **pula o cálculo automático** para esse colaborador, permitindo que os valores do payout sejam editados diretamente na tela de detalhe. Isso pode ser aplicado a qualquer pessoa (Yanca, ou futuros casos) e removido a qualquer momento pelo RH.
+### Problema
+Yanca já está marcada como "Manual", mas a tela de detalhe ainda mostra apenas o formulário de KPIs padrão + "Salvar e Recalcular". Como a Edge Function pula o cálculo, nada acontece ao salvar. Falta uma seção para editar diretamente os valores do payout.
+
+### Solução
+Adicionar um formulário "Valores do Payout" que aparece **apenas** quando `fechamento_manual === true`. Esse formulário permite editar diretamente `valor_variavel_total`, `valor_fixo`, `total_conta`, `ifood_mensal` e `ifood_ultrameta` com um botão "Salvar" que grava direto em `sdr_month_payout` (sem passar pela Edge Function).
 
 ### Etapas
 
-**1. Adicionar coluna `fechamento_manual` na tabela `employees`**
-- SQL: `ALTER TABLE employees ADD COLUMN fechamento_manual boolean DEFAULT false;`
-- Atualizar `src/integrations/supabase/types.ts` e `src/types/hr.ts` para incluir o campo.
+**1. Criar componente `ManualPayoutForm`**
+- Novo arquivo: `src/components/sdr-fechamento/ManualPayoutForm.tsx`
+- Campos editáveis: Valor Fixo, Valor Variável, iFood Mensal, iFood Ultrameta
+- Total Conta calculado automaticamente (Fixo + Variável)
+- Total iFood calculado automaticamente (Mensal + Ultrameta)
+- Botão "Salvar Valores" que faz UPDATE direto em `sdr_month_payout`
 
-**2. Adicionar toggle no RH (aba Remuneração do funcionário)**
-- Arquivo: `src/components/hr/tabs/EmployeeRemunerationTab.tsx`
-- Adicionar um `Switch` com label "Fechamento Manual" no formulário de edição, abaixo de "Modelo de Fechamento".
-- Quando ativo, exibir aviso: "O cálculo automático será desativado. Valores devem ser preenchidos manualmente no fechamento."
+**2. Criar hook `useUpdateManualPayout`**
+- Novo em `src/hooks/useSdrKpiMutations.ts`
+- Mutation que faz `supabase.from('sdr_month_payout').update(...)` com os campos editados
+- Invalida cache do payout após salvar
 
-**3. Edge Function: pular cálculo quando `fechamento_manual = true`**
-- Arquivo: `supabase/functions/recalculate-sdr-payout/index.ts`
-- Na query de SDRs (linha ~449), fazer JOIN com `employees` para trazer o campo `fechamento_manual`.
-- Antes do cálculo (~linha 476), verificar: se `fechamento_manual === true`, pular o recálculo automático (como faz para LOCKED/APPROVED), mantendo os valores manuais já salvos no payout.
+**3. Integrar no Detail.tsx**
+- Quando `employee?.fechamento_manual === true`:
+  - Esconder o `KpiEditForm` padrão (KPIs automáticos não se aplicam)
+  - Esconder a seção `DynamicIndicatorsSection` (indicadores automáticos não se aplicam)
+  - Mostrar o `ManualPayoutForm` no lugar
+- O card "Variável" no header passa a mostrar o `payout.valor_variavel_total` direto do banco (sem cálculo local)
 
-**4. Permitir edição direta dos valores no detalhe do fechamento**
-- Nos componentes de detalhe do payout (ex: `FechamentoDetail`, `KpiEditForm`), quando o payout pertence a um SDR com `fechamento_manual`, habilitar campos editáveis para `valor_reunioes_agendadas`, `valor_reunioes_realizadas`, `valor_variavel_total` etc.
-- Adicionar badge "Manual" ao lado do nome para indicar visualmente.
-
-### Resumo técnico
-- 1 coluna nova no banco (`employees.fechamento_manual`)
-- 3 arquivos editados (types, EmployeeRemunerationTab, Edge Function)
-- 1-2 arquivos de detalhe do fechamento ajustados para edição direta
-- Zero impacto em quem não tem a flag ativa
+### Resultado
+Para Yanca (e qualquer futuro colaborador manual): abrir o detalhe → preencher os valores diretamente → salvar → valores persistem sem serem sobrescritos.
 
