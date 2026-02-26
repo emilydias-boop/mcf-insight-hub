@@ -36,7 +36,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import { useAllHublaTransactions, TransactionFilters, HublaTransaction } from '@/hooks/useAllHublaTransactions';
+import { TransactionFilters, HublaTransaction } from '@/hooks/useAllHublaTransactions';
+import { useTransactionsByBU } from '@/hooks/useTransactionsByBU';
 import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
@@ -76,7 +77,7 @@ export default function TransacoesIncorp() {
     selectedProducts: selectedProducts.length > 0 ? selectedProducts : undefined,
   };
 
-  const { data: allTransactions = [], isLoading, refetch, isFetching } = useAllHublaTransactions(filters);
+  const { data: allTransactions = [], isLoading, refetch, isFetching } = useTransactionsByBU('incorporador', filters);
 
   // Buscar IDs de primeira compra GLOBAL via RPC (consistente com Dashboard)
   const { data: globalFirstIds = new Set<string>() } = useQuery({
