@@ -32,13 +32,12 @@ export function CloserLeadsTable({ leads, isLoading }: CloserLeadsTableProps) {
   if (leads.length === 0) {
     return (
       <div className="flex items-center justify-center py-8 text-muted-foreground">
-        <p>Nenhum lead realizado/contrato pago no período.</p>
+        <p>Nenhum lead encontrado no período.</p>
       </div>
     );
   }
 
   const getStatusBadge = (status: string, contractPaidAt?: string | null) => {
-    // contract_paid_at tem prioridade - fonte da verdade para contrato pago
     const displayStatus = contractPaidAt ? 'contract_paid' : status;
     
     switch (displayStatus) {
@@ -54,6 +53,18 @@ export function CloserLeadsTable({ leads, isLoading }: CloserLeadsTableProps) {
           <Badge className="bg-green-500/10 text-green-400 border-green-500/30 flex items-center gap-1">
             <CheckCircle className="h-3 w-3" />
             Realizada
+          </Badge>
+        );
+      case 'no_show':
+        return (
+          <Badge className="bg-red-500/10 text-red-400 border-red-500/30 flex items-center gap-1">
+            No-Show
+          </Badge>
+        );
+      case 'scheduled':
+        return (
+          <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/30 flex items-center gap-1">
+            Agendada
           </Badge>
         );
       default:

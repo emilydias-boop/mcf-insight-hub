@@ -49,6 +49,8 @@ export interface CloserDetailData {
   teamAverages: CloserTeamAverages;
   ranking: CloserRanking;
   leads: CloserLead[];
+  noShowLeads: CloserLead[];
+  r2Leads: CloserLead[];
   allClosers: R1CloserMetric[];
   isLoading: boolean;
   error: Error | null;
@@ -239,6 +241,200 @@ export function useCloserDetailData({
     enabled: !!closerId,
   });
 
+  // Fetch no-show leads for this closer
+  const {
+    data: noShowLeads = [],
+    isLoading: isLoadingNoShows,
+    refetch: refetchNoShows,
+  } = useQuery({
+    queryKey: ['closer-noshow-leads', closerId, start, end],
+    queryFn: async () => {
+      const { data: meetings, error: meetingsError } = await supabase
+        .from('meeting_slots')
+        .select(`
+          id,
+          scheduled_at,
+          meeting_slot_attendees (
+            id,
+            status,
+            deal_id,
+            attendee_name,
+            attendee_phone,
+            booked_by
+          )
+        `)
+        .eq('closer_id', closerId)
+        .eq('meeting_type', 'r1')
+        .gte('scheduled_at', start)
+        .lte('scheduled_at', end);
+
+      if (meetingsError) throw meetingsError;
+
+      const attendeesWithDeals: {
+        attendeeId: string;
+        status: string;
+        dealId: string;
+        attendeeName: string | null;
+        attendeePhone: string | null;
+        bookedBy: string | null;
+        scheduledAt: string;
+      }[] = [];
+
+      meetings?.forEach(meeting => {
+        meeting.meeting_slot_attendees?.forEach(att => {
+          if (att.deal_id && att.status === 'no_show') {
+            attendeesWithDeals.push({
+              attendeeId: att.id,
+              status: att.status,
+              dealId: att.deal_id,
+              attendeeName: att.attendee_name,
+              attendeePhone: att.attendee_phone,
+              bookedBy: att.booked_by,
+              scheduledAt: meeting.scheduled_at,
+            });
+          }
+        });
+      });
+
+      if (attendeesWithDeals.length === 0) return [];
+
+      const dealIds = [...new Set(attendeesWithDeals.map(a => a.dealId))];
+      const { data: deals } = await supabase
+        .from('crm_deals')
+        .select(`id, name, origin:crm_origins(name), contact:crm_contacts(id, name, email, phone)`)
+        .in('id', dealIds);
+
+      const dealsMap = new Map<string, { name: string; originName: string | null; contactName: string | null; contactEmail: string | null; contactPhone: string | null }>();
+      deals?.forEach(deal => {
+        const origin = Array.isArray(deal.origin) ? deal.origin[0] : deal.origin;
+        const contact = Array.isArray(deal.contact) ? deal.contact[0] : deal.contact;
+        dealsMap.set(deal.id, { name: deal.name, originName: origin?.name || null, contactName: contact?.name || null, contactEmail: contact?.email || null, contactPhone: contact?.phone || null });
+      });
+
+      const bookedByIds = [...new Set(attendeesWithDeals.map(a => a.bookedBy).filter(Boolean))] as string[];
+      let profilesMap: Record<string, string> = {};
+      if (bookedByIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', bookedByIds);
+        profiles?.forEach(p => { profilesMap[p.id] = p.full_name || 'Desconhecido'; });
+      }
+
+      return attendeesWithDeals.map(att => {
+        const dealInfo = dealsMap.get(att.dealId);
+        return {
+          attendee_id: att.attendeeId,
+          deal_id: att.dealId,
+          deal_name: dealInfo?.name || 'Sem nome',
+          contact_name: att.attendeeName || dealInfo?.contactName || 'Sem nome',
+          contact_email: dealInfo?.contactEmail,
+          contact_phone: att.attendeePhone || dealInfo?.contactPhone,
+          status: 'no_show',
+          contract_paid_at: null,
+          scheduled_at: att.scheduledAt,
+          booked_by_name: att.bookedBy ? profilesMap[att.bookedBy] || null : null,
+          origin_name: dealInfo?.originName,
+        } as CloserLead;
+      }).sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+    },
+    enabled: !!closerId,
+  });
+
+  // Fetch R2 leads for this closer
+  const {
+    data: r2Leads = [],
+    isLoading: isLoadingR2,
+    refetch: refetchR2,
+  } = useQuery({
+    queryKey: ['closer-r2-leads', closerId, start, end],
+    queryFn: async () => {
+      const { data: meetings, error: meetingsError } = await supabase
+        .from('meeting_slots')
+        .select(`
+          id,
+          scheduled_at,
+          meeting_slot_attendees (
+            id,
+            status,
+            deal_id,
+            attendee_name,
+            attendee_phone,
+            booked_by
+          )
+        `)
+        .eq('closer_id', closerId)
+        .eq('meeting_type', 'r2')
+        .gte('scheduled_at', start)
+        .lte('scheduled_at', end);
+
+      if (meetingsError) throw meetingsError;
+
+      const attendeesWithDeals: {
+        attendeeId: string;
+        status: string;
+        dealId: string;
+        attendeeName: string | null;
+        attendeePhone: string | null;
+        bookedBy: string | null;
+        scheduledAt: string;
+      }[] = [];
+
+      meetings?.forEach(meeting => {
+        meeting.meeting_slot_attendees?.forEach(att => {
+          if (att.deal_id) {
+            attendeesWithDeals.push({
+              attendeeId: att.id,
+              status: att.status,
+              dealId: att.deal_id,
+              attendeeName: att.attendee_name,
+              attendeePhone: att.attendee_phone,
+              bookedBy: att.booked_by,
+              scheduledAt: meeting.scheduled_at,
+            });
+          }
+        });
+      });
+
+      if (attendeesWithDeals.length === 0) return [];
+
+      const dealIds = [...new Set(attendeesWithDeals.map(a => a.dealId))];
+      const { data: deals } = await supabase
+        .from('crm_deals')
+        .select(`id, name, origin:crm_origins(name), contact:crm_contacts(id, name, email, phone)`)
+        .in('id', dealIds);
+
+      const dealsMap = new Map<string, { name: string; originName: string | null; contactName: string | null; contactEmail: string | null; contactPhone: string | null }>();
+      deals?.forEach(deal => {
+        const origin = Array.isArray(deal.origin) ? deal.origin[0] : deal.origin;
+        const contact = Array.isArray(deal.contact) ? deal.contact[0] : deal.contact;
+        dealsMap.set(deal.id, { name: deal.name, originName: origin?.name || null, contactName: contact?.name || null, contactEmail: contact?.email || null, contactPhone: contact?.phone || null });
+      });
+
+      const bookedByIds = [...new Set(attendeesWithDeals.map(a => a.bookedBy).filter(Boolean))] as string[];
+      let profilesMap: Record<string, string> = {};
+      if (bookedByIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', bookedByIds);
+        profiles?.forEach(p => { profilesMap[p.id] = p.full_name || 'Desconhecido'; });
+      }
+
+      return attendeesWithDeals.map(att => {
+        const dealInfo = dealsMap.get(att.dealId);
+        return {
+          attendee_id: att.attendeeId,
+          deal_id: att.dealId,
+          deal_name: dealInfo?.name || 'Sem nome',
+          contact_name: att.attendeeName || dealInfo?.contactName || 'Sem nome',
+          contact_email: dealInfo?.contactEmail,
+          contact_phone: att.attendeePhone || dealInfo?.contactPhone,
+          status: att.status,
+          contract_paid_at: null,
+          scheduled_at: att.scheduledAt,
+          booked_by_name: att.bookedBy ? profilesMap[att.bookedBy] || null : null,
+          origin_name: dealInfo?.originName,
+        } as CloserLead;
+      }).sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+    },
+    enabled: !!closerId,
+  });
+
   // Get metrics for the specific closer
   const closerMetrics = useMemo(() => {
     return allClosers.find(c => c.closer_id === closerId) || null;
@@ -296,11 +492,9 @@ export function useCloserDetailData({
       return { r1Realizada: 0, taxaConversao: 0, taxaNoShow: 0, contratoPago: 0, total: 0 };
     }
 
-    // Sort by each metric and find position
     const sortedByR1Realizada = [...allClosers].sort((a, b) => b.r1_realizada - a.r1_realizada);
     const sortedByContratoPago = [...allClosers].sort((a, b) => b.contrato_pago - a.contrato_pago);
     
-    // Calculate conversion rates for sorting
     const withRates = allClosers.map(c => ({
       ...c,
       taxaConversao: c.r1_realizada > 0 ? (c.contrato_pago / c.r1_realizada) * 100 : 0,
@@ -308,7 +502,7 @@ export function useCloserDetailData({
     }));
     
     const sortedByTaxaConversao = [...withRates].sort((a, b) => b.taxaConversao - a.taxaConversao);
-    const sortedByTaxaNoShow = [...withRates].sort((a, b) => a.taxaNoShow - b.taxaNoShow); // Lower is better
+    const sortedByTaxaNoShow = [...withRates].sort((a, b) => a.taxaNoShow - b.taxaNoShow);
 
     return {
       r1Realizada: sortedByR1Realizada.findIndex(c => c.closer_id === closerId) + 1,
@@ -322,6 +516,8 @@ export function useCloserDetailData({
   const refetch = () => {
     refetchMetrics();
     refetchLeads();
+    refetchNoShows();
+    refetchR2();
   };
 
   return {
@@ -330,8 +526,10 @@ export function useCloserDetailData({
     teamAverages,
     ranking,
     leads,
+    noShowLeads,
+    r2Leads,
     allClosers,
-    isLoading: isLoadingMetrics || isLoadingCloser || isLoadingLeads,
+    isLoading: isLoadingMetrics || isLoadingCloser || isLoadingLeads || isLoadingNoShows || isLoadingR2,
     error: metricsError,
     refetch,
   };

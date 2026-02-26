@@ -58,6 +58,8 @@ export default function CloserMeetingsDetailPage() {
     teamAverages,
     ranking,
     leads,
+    noShowLeads,
+    r2Leads,
     isLoading,
     refetch,
   } = useCloserDetailData({
@@ -108,6 +110,8 @@ export default function CloserMeetingsDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="leads">Leads Realizados ({leads.length})</TabsTrigger>
+          <TabsTrigger value="noshows">No-Shows ({noShowLeads.length})</TabsTrigger>
+          <TabsTrigger value="r2">R2 Agendadas ({r2Leads.length})</TabsTrigger>
           <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
         </TabsList>
 
@@ -169,6 +173,22 @@ export default function CloserMeetingsDetailPage() {
           <Card className="bg-card border-border">
             <CardContent className="p-4">
               <CloserLeadsTable leads={leads} isLoading={isLoading} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="noshows">
+          <Card className="bg-card border-border">
+            <CardContent className="p-4">
+              <CloserLeadsTable leads={noShowLeads} isLoading={isLoading} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="r2">
+          <Card className="bg-card border-border">
+            <CardContent className="p-4">
+              <CloserLeadsTable leads={r2Leads} isLoading={isLoading} />
             </CardContent>
           </Card>
         </TabsContent>
