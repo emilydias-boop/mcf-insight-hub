@@ -132,8 +132,9 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
       return [];
     }
     const meetings = meetingsQuery.data || [];
+    const sdrLower = sdrEmail.toLowerCase();
     const filtered = meetings.filter(
-      m => m.current_owner?.toLowerCase() === sdrEmail.toLowerCase()
+      m => (m.current_owner?.toLowerCase() === sdrLower) || (m.intermediador?.toLowerCase() === sdrLower)
     );
     return deduplicateMeetings(filtered);
   };

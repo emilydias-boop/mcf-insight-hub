@@ -371,44 +371,58 @@ export default function ReunioesEquipe() {
     updateUrlParams("custom", selectedMonth, customStartDate, date);
   };
 
-  // Export to Excel function
+  // Export to Excel function - contextual based on active tab
   const handleExportExcel = () => {
-    // Aba 1: Resumo por SDR
-    const resumoData = filteredBySDR.map(sdr => ({
-      "SDR": sdr.sdrName,
-      "Agendamento": sdr.agendamentos,
-      "R1 Agendada": sdr.r1Agendada,
-      "R1 Realizada": sdr.r1Realizada,
-      "No-Show": sdr.noShows,
-      "Contrato PAGO": sdr.contratos,
-    }));
+    const wb = XLSX.utils.book_new();
 
-    // Aba 2: Leads detalhados (filtrados pelos SDRs selecionados)
-    const leadsData = allMeetings
-      .filter(m => sdrFilter === "all" || m.intermediador === sdrFilter)
-      .map(m => ({
-        "SDR": m.intermediador || "",
-        "Data/Hora": m.data_agendamento ? format(new Date(m.data_agendamento), "dd/MM/yyyy HH:mm") : "",
-        "Lead": m.contact_name || "",
-        "Email": m.contact_email || "",
-        "Telefone": m.contact_phone || "",
-        "Tipo": m.tipo || "",
-        "Status": m.status_atual || "",
-        "Origem": m.origin_name || "",
-        "Closer": m.closer || "",
-        "Probabilidade": m.probability ? `${m.probability}%` : "",
+    if (activeTab === "closers" && closerMetrics) {
+      // Aba Closers: exportar resumo por Closer
+      const closerData = closerMetrics.map(c => ({
+        "Closer": c.closer_name,
+        "R1 Agendada": c.r1_agendada,
+        "R1 Realizada": c.r1_realizada,
+        "No-Show": c.noshow,
+        "Contrato Pago": c.contrato_pago,
+        "Outside": c.outside,
+        "R2 Agendada": c.r2_agendada,
+        "Taxa Conversão": c.r1_realizada > 0 ? `${((c.contrato_pago / c.r1_realizada) * 100).toFixed(1)}%` : "0%",
+        "Taxa No-Show": c.r1_agendada > 0 ? `${((c.noshow / c.r1_agendada) * 100).toFixed(1)}%` : "0%",
+      }));
+      const wsClosers = XLSX.utils.json_to_sheet(closerData);
+      XLSX.utils.book_append_sheet(wb, wsClosers, "Resumo Closers");
+      XLSX.writeFile(wb, `painel_closers_${format(start, "yyyyMMdd")}_${format(end, "yyyyMMdd")}.xlsx`);
+    } else {
+      // Aba SDRs: exportar resumo por SDR + leads detalhados
+      const resumoData = filteredBySDR.map(sdr => ({
+        "SDR": sdr.sdrName,
+        "Agendamento": sdr.agendamentos,
+        "R1 Agendada": sdr.r1Agendada,
+        "R1 Realizada": sdr.r1Realizada,
+        "No-Show": sdr.noShows,
+        "Contrato PAGO": sdr.contratos,
       }));
 
-    // Criar workbook com 2 abas
-    const wb = XLSX.utils.book_new();
-    const wsResumo = XLSX.utils.json_to_sheet(resumoData);
-    const wsLeads = XLSX.utils.json_to_sheet(leadsData);
-    
-    XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo SDR");
-    XLSX.utils.book_append_sheet(wb, wsLeads, "Leads Detalhados");
-    
-    // Download
-    XLSX.writeFile(wb, `painel_sdr_${format(start, "yyyyMMdd")}_${format(end, "yyyyMMdd")}.xlsx`);
+      const leadsData = allMeetings
+        .filter(m => sdrFilter === "all" || m.intermediador === sdrFilter)
+        .map(m => ({
+          "SDR": m.intermediador || "",
+          "Data/Hora": m.data_agendamento ? format(new Date(m.data_agendamento), "dd/MM/yyyy HH:mm") : "",
+          "Lead": m.contact_name || "",
+          "Email": m.contact_email || "",
+          "Telefone": m.contact_phone || "",
+          "Tipo": m.tipo || "",
+          "Status": m.status_atual || "",
+          "Origem": m.origin_name || "",
+          "Closer": m.closer || "",
+          "Probabilidade": m.probability ? `${m.probability}%` : "",
+        }));
+
+      const wsResumo = XLSX.utils.json_to_sheet(resumoData);
+      const wsLeads = XLSX.utils.json_to_sheet(leadsData);
+      XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo SDR");
+      XLSX.utils.book_append_sheet(wb, wsLeads, "Leads Detalhados");
+      XLSX.writeFile(wb, `painel_sdr_${format(start, "yyyyMMdd")}_${format(end, "yyyyMMdd")}.xlsx`);
+    }
   };
 
   return (

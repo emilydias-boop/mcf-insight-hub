@@ -84,7 +84,7 @@ export function SdrSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Contrato PAGO</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa Contrato</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">% Presença</TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
           </TableHeader>
