@@ -89,9 +89,9 @@ export const KpiEditForm = ({
     }
   }, [kpi]);
 
-  // Auto-preencher campos com dados da Agenda e Twilio quando não tem KPI salvo
+  // Auto-preencher campos com dados da Agenda e Twilio (sempre, mesmo com KPI salvo)
   useEffect(() => {
-    if (!kpi && agendaMetrics.data && !agendaMetrics.isLoading) {
+    if (agendaMetrics.data && !agendaMetrics.isLoading) {
       setFormData(prev => ({
         ...prev,
         reunioes_agendadas: agendaMetrics.data.agendamentos,
@@ -99,16 +99,16 @@ export const KpiEditForm = ({
         no_shows: agendaMetrics.data.no_shows,
       }));
     }
-  }, [kpi, agendaMetrics.data, agendaMetrics.isLoading]);
+  }, [agendaMetrics.data, agendaMetrics.isLoading]);
 
   useEffect(() => {
-    if (!kpi && !isCloser && callMetrics.data && !callMetrics.isLoading) {
+    if (!isCloser && callMetrics.data && !callMetrics.isLoading) {
       setFormData(prev => ({
         ...prev,
         tentativas_ligacoes: callMetrics.data.totalCalls,
       }));
     }
-  }, [kpi, callMetrics.data, callMetrics.isLoading, isCloser]);
+  }, [callMetrics.data, callMetrics.isLoading, isCloser]);
 
   const handleChange = (field: string, value: string) => {
     const numValue = parseInt(value) || 0;
