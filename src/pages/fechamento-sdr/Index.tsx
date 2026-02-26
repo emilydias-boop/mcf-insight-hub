@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { SdrStatusBadge } from "@/components/sdr-fechamento/SdrStatusBadge";
-import { useSdrPayouts, useRecalculateAllPayouts } from "@/hooks/useSdrFechamento";
+import { useSdrPayouts } from "@/hooks/useSdrFechamento";
 import { formatCurrency } from "@/lib/formatters";
 import { TeamGoalsSummary } from "@/components/fechamento/TeamGoalsSummary";
 import {
@@ -47,8 +47,6 @@ const FechamentoSDRList = () => {
     squad: squadFilter,
     search: searchTerm,
   });
-  const recalculateAll = useRecalculateAllPayouts();
-
   // Mutation to call edge function for recalculation with correct iFood from calendar
   const recalculateViaEdge = useMutation({
     mutationFn: async (anoMes: string) => {
@@ -372,10 +370,12 @@ const FechamentoSDRList = () => {
       </div>
 
       {/* Team Goals Summary */}
-      <TeamGoalsSummary 
-        anoMes={selectedMonth} 
-        bu={squadFilter !== 'all' ? squadFilter : 'incorporador'} 
-      />
+      {squadFilter !== 'all' && (
+        <TeamGoalsSummary 
+          anoMes={selectedMonth} 
+          bu={squadFilter} 
+        />
+      )}
 
       {/* Financial Summary Cards */}
       {payouts && payouts.length > 0 && financialSummary && (

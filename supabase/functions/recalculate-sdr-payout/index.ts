@@ -110,168 +110,8 @@ interface CargoInfo {
   variavel_valor: number;
 }
 
-// ===== NOVO: Função de cálculo específica para Closers com métricas dinâmicas =====
-const calculateCloserPayoutValues = (
-  kpi: Kpi,
-  metricasAtivas: MetricaAtiva[],
-  cargoInfo: CargoInfo,
-  compPlan: CompPlan,
-  calendarIfoodMensal?: number,
-  diasUteisMes?: number
-) => {
-  const diasUteisReal = diasUteisMes || compPlan.dias_uteis || 19;
-  
-  // Usar variável do cargo_catalogo
-  const variavelTotal = cargoInfo.variavel_valor || compPlan.valor_meta_rpg + compPlan.valor_docs_reuniao;
-  const fixoValor = cargoInfo.fixo_valor || compPlan.fixo_valor;
-  
-  console.log(`   💼 Closer: Variável Total do Cargo = R$ ${variavelTotal}, Fixo = R$ ${fixoValor}`);
-  
-  // Buscar métricas configuradas
-  const metricaRealizadas = metricasAtivas.find(m => m.nome_metrica === 'realizadas');
-  const metricaContratos = metricasAtivas.find(m => m.nome_metrica === 'contratos');
-  const metricaOrganizacao = metricasAtivas.find(m => m.nome_metrica === 'organizacao');
-  const metricaVendasParceria = metricasAtivas.find(m => m.nome_metrica === 'vendas_parceria');
-  
-  let valorVariavelTotal = 0;
-  let pctContratos = 0;
-  let multContratos = 0;
-  let valorContratos = 0;
-  let metaContratosCalculada = 0;
-  
-  // ===== CÁLCULO DE CONTRATOS (meta dinâmica) =====
-  if (metricaContratos && metricaContratos.peso_percentual > 0) {
-    const pesoContratos = metricaContratos.peso_percentual;
-    const valorBaseContratos = (variavelTotal * pesoContratos) / 100;
-    
-    // Se meta_percentual está preenchido, calcular meta como % das Realizadas
-    if (metricaContratos.meta_percentual && metricaContratos.meta_percentual > 0) {
-      const realizadas = kpi.reunioes_realizadas || 0;
-      metaContratosCalculada = Math.round((realizadas * metricaContratos.meta_percentual) / 100);
-      console.log(`   📊 Meta Contratos: ${metricaContratos.meta_percentual}% de ${realizadas} = ${metaContratosCalculada}`);
-    } else {
-      // Fallback: meta_valor × dias úteis
-      metaContratosCalculada = (metricaContratos.meta_valor || 1) * diasUteisReal;
-    }
-    
-    // Evitar divisão por zero
-    if (metaContratosCalculada > 0) {
-      // Aqui precisamos do valor real de contratos pagos (vem do KPI ou será passado externamente)
-      // Por enquanto, usamos um placeholder que será preenchido pela lógica externa
-      const contratosPagos = 0; // Será preenchido externamente
-      pctContratos = (contratosPagos / metaContratosCalculada) * 100;
-    }
-    
-    multContratos = getMultiplier(pctContratos);
-    valorContratos = valorBaseContratos * multContratos;
-    valorVariavelTotal += valorContratos;
-    
-    console.log(`   📊 Contratos: Meta=${metaContratosCalculada}, %=${pctContratos.toFixed(1)}%, Mult=${multContratos}, Valor=R$ ${valorContratos.toFixed(2)}`);
-  }
-  
-  // ===== CÁLCULO DE ORGANIZAÇÃO (meta fixa 100%) =====
-  let pctOrganizacao = 0;
-  let multOrganizacao = 0;
-  let valorOrganizacao = 0;
-  
-  if (metricaOrganizacao && metricaOrganizacao.peso_percentual > 0) {
-    const pesoOrganizacao = metricaOrganizacao.peso_percentual;
-    const valorBaseOrganizacao = (variavelTotal * pesoOrganizacao) / 100;
-    
-    pctOrganizacao = (kpi.score_organizacao / META_ORGANIZACAO) * 100;
-    multOrganizacao = getMultiplier(pctOrganizacao);
-    valorOrganizacao = valorBaseOrganizacao * multOrganizacao;
-    valorVariavelTotal += valorOrganizacao;
-    
-    console.log(`   📊 Organização: Score=${kpi.score_organizacao}%, Mult=${multOrganizacao}, Valor=R$ ${valorOrganizacao.toFixed(2)}`);
-  }
-  
-  // ===== CÁLCULO DE REALIZADAS (para Closers que usam essa métrica) =====
-  let pctRealizadas = 0;
-  let multRealizadas = 0;
-  let valorRealizadas = 0;
-  let metaRealizadasCalculada = 0;
-  
-  if (metricaRealizadas && metricaRealizadas.peso_percentual > 0) {
-    const pesoRealizadas = metricaRealizadas.peso_percentual;
-    const valorBaseRealizadas = (variavelTotal * pesoRealizadas) / 100;
-    
-    metaRealizadasCalculada = (metricaRealizadas.meta_valor || 10) * diasUteisReal;
-    pctRealizadas = metaRealizadasCalculada > 0 
-      ? (kpi.reunioes_realizadas / metaRealizadasCalculada) * 100 
-      : 0;
-    multRealizadas = getMultiplier(Math.min(pctRealizadas, 120));
-    valorRealizadas = valorBaseRealizadas * multRealizadas;
-    valorVariavelTotal += valorRealizadas;
-    
-    console.log(`   📊 Realizadas: Real=${kpi.reunioes_realizadas}, Meta=${metaRealizadasCalculada}, %=${pctRealizadas.toFixed(1)}%, Mult=${multRealizadas}, Valor=R$ ${valorRealizadas.toFixed(2)}`);
-  }
-  
-  // ===== CÁLCULO DE VENDAS PARCERIA (meta dinâmica se configurada) =====
-  let valorVendasParceria = 0;
-  
-  if (metricaVendasParceria && metricaVendasParceria.peso_percentual > 0) {
-    const pesoVendasParceria = metricaVendasParceria.peso_percentual;
-    const valorBaseVendasParceria = (variavelTotal * pesoVendasParceria) / 100;
-    
-    // Vendas Parceria geralmente não tem meta, apenas soma o valor
-    // ou usa meta_percentual similar a contratos
-    valorVendasParceria = valorBaseVendasParceria; // Será ajustado com multiplicador se houver meta
-    valorVariavelTotal += valorVendasParceria;
-    
-    console.log(`   📊 Vendas Parceria: Peso=${pesoVendasParceria}%, Valor=R$ ${valorVendasParceria.toFixed(2)}`);
-  }
-  
-  const totalConta = fixoValor + valorVariavelTotal;
-  
-  // iFood para Closers: usar média das métricas que têm peso
-  const metricsWithWeight = metricasAtivas.filter(m => m.peso_percentual > 0);
-  let pctMediaGlobal = 0;
-  if (metricsWithWeight.length > 0) {
-    // Calcular média ponderada ou simples das performances
-    const totalPct = pctContratos + pctOrganizacao + pctRealizadas;
-    const metricsCount = (pctContratos > 0 ? 1 : 0) + (pctOrganizacao > 0 ? 1 : 0) + (pctRealizadas > 0 ? 1 : 0);
-    pctMediaGlobal = metricsCount > 0 ? totalPct / metricsCount : 0;
-  }
-  
-  const ifoodMensal = calendarIfoodMensal ?? compPlan.ifood_mensal;
-  const ifoodUltrameta = pctMediaGlobal >= 100 ? compPlan.ifood_ultrameta : 0;
-  const totalIfood = ifoodMensal + ifoodUltrameta;
-  
-  console.log(`   💰 Closer Total: Variável=R$ ${valorVariavelTotal.toFixed(2)}, Fixo=R$ ${fixoValor}, Total=R$ ${totalConta.toFixed(2)}`);
-  
-  return {
-    pct_reunioes_agendadas: 0, // Closers não usam agendadas
-    pct_reunioes_realizadas: pctRealizadas,
-    pct_tentativas: 0,
-    pct_organizacao: pctOrganizacao,
-    pct_no_show: 0,
-    mult_reunioes_agendadas: 0,
-    mult_reunioes_realizadas: multRealizadas,
-    mult_tentativas: 0,
-    mult_organizacao: multOrganizacao,
-    mult_no_show: 0,
-    valor_reunioes_agendadas: 0,
-    valor_reunioes_realizadas: valorRealizadas,
-    valor_tentativas: 0,
-    valor_organizacao: valorOrganizacao,
-    valor_variavel_total: valorVariavelTotal,
-    valor_fixo: fixoValor,
-    total_conta: totalConta,
-    ifood_mensal: ifoodMensal,
-    ifood_ultrameta: ifoodUltrameta,
-    total_ifood: totalIfood,
-    meta_agendadas_ajustada: 0,
-    meta_realizadas_ajustada: metaRealizadasCalculada,
-    meta_tentativas_ajustada: 0,
-    dias_uteis_mes: diasUteisReal,
-    // Campos adicionais para Closer
-    meta_contratos_calculada: metaContratosCalculada,
-    pct_contratos: pctContratos,
-    mult_contratos: multContratos,
-    valor_contratos: valorContratos,
-  };
-};
+// NOTE: calculateCloserPayoutValues foi removido (dead code - nunca era chamado).
+// O cálculo real de Closers é feito inline no loop principal (linhas ~1063-1212).
 
 const calculatePayoutValues = (
   compPlan: CompPlan, 
@@ -1259,9 +1099,13 @@ serve(async (req) => {
           .eq('ano_mes', ano_mes)
           .single();
 
-        // Only update if not LOCKED
+        // Only update if not LOCKED or APPROVED
         if (existingPayout?.status === 'LOCKED') {
-          console.log(`   ⏭️ Payout travado para ${sdr.name}, pulando`);
+          console.log(`   ⏭️ Payout travado (LOCKED) para ${sdr.name}, pulando`);
+          continue;
+        }
+        if (existingPayout?.status === 'APPROVED') {
+          console.log(`   ⏭️ Payout aprovado (APPROVED) para ${sdr.name}, pulando`);
           continue;
         }
 
