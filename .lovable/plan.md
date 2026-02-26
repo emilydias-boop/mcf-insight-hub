@@ -1,15 +1,9 @@
 
 
-## Adicionar botão "Voltar" na página de Configurações
+## Corrigir rota do botão Voltar
 
-### Problema
-A página de Configurações de Fechamento (`/fechamento-sdr/configuracoes`) não tem um botão para voltar à tela de Fechamento Equipe.
+O botão "Voltar" navega para `/fechamento-sdr/equipe`, mas essa rota não existe. A rota correta é `/fechamento-sdr`. O texto "equipe" está sendo capturado pelo parâmetro `:payoutId`, resultando em "Fechamento não encontrado".
 
-### Implementação
-No header da página (`Configuracoes.tsx`), adicionar um botão com ícone de seta à esquerda do título que navega para `/fechamento-sdr/equipe`:
-
-- Importar `ArrowLeft` do lucide-react
-- Adicionar `<Button variant="ghost" onClick={() => navigate('/fechamento-sdr/equipe')}>` com ícone `ArrowLeft` antes do título "Configurações de Fechamento"
-
-Alteração em 1 arquivo: `src/pages/fechamento-sdr/Configuracoes.tsx`
+### Correção
+Em `src/pages/fechamento-sdr/Configuracoes.tsx`, alterar o `navigate('/fechamento-sdr/equipe')` para `navigate('/fechamento-sdr')`.
 
