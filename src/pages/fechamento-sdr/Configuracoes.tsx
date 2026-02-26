@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEmployeesWithCargo } from '@/hooks/useEmployees';
-import { Users, FileText, RefreshCw, Calendar, Target, ExternalLink } from 'lucide-react';
+import { Users, FileText, RefreshCw, Calendar, Target, ExternalLink, ArrowLeft } from 'lucide-react';
 import { WorkingDaysCalendar } from '@/components/sdr-fechamento/WorkingDaysCalendar';
 import { ActiveMetricsTab } from '@/components/fechamento/ActiveMetricsTab';
 import { PlansOteTab } from '@/components/fechamento/PlansOteTab';
@@ -72,11 +72,16 @@ const ConfiguracoesSdr = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Configurações de Fechamento</h1>
-          <p className="text-muted-foreground">
-            Gerencie equipe, planos de compensação e métricas
-          </p>
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/fechamento-sdr/equipe')}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">Configurações de Fechamento</h1>
+            <p className="text-muted-foreground">
+              Gerencie equipe, planos de compensação e métricas
+            </p>
+          </div>
         </div>
         <Badge variant="outline" className="text-sm px-3 py-1">
           {buLabel}
