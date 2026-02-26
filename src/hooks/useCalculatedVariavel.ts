@@ -103,19 +103,26 @@ export function useCalculatedVariavel({
         const pct = metaAjustada > 0 ? (kpiValue / metaAjustada) * 100 : 0;
         mult = getMultiplier(pct);
 
-        // Priority: specific compPlan value > dynamic calculation
-        if (config.compPlanValueField && compPlan) {
-          const valorEspecifico = (compPlan as any)[config.compPlanValueField] || 0;
-          if (valorEspecifico > 0) {
-            valorBase = valorEspecifico;
-          }
-        }
-
-        // Fallback: dynamic calculation if no specific value
-        if (valorBase === 0) {
+        // Priority: if metric has peso_percentual (Closer/dynamic metrics), always use dynamic calc
+        // Otherwise, try specific compPlan value first
+        if (metrica.peso_percentual && metrica.peso_percentual > 0) {
+          // Dynamic calculation based on peso_percentual (same as DynamicIndicatorCard)
           const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
-          const pesoPercent = metrica.peso_percentual || 25;
-          valorBase = baseVariavel * (pesoPercent / 100);
+          valorBase = baseVariavel * (metrica.peso_percentual / 100);
+        } else {
+          if (config.compPlanValueField && compPlan) {
+            const valorEspecifico = (compPlan as any)[config.compPlanValueField] || 0;
+            if (valorEspecifico > 0) {
+              valorBase = valorEspecifico;
+            }
+          }
+
+          // Fallback: dynamic calculation if no specific value
+          if (valorBase === 0) {
+            const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
+            const pesoPercent = metrica.peso_percentual || 25;
+            valorBase = baseVariavel * (pesoPercent / 100);
+          }
         }
 
         valorFinal = valorBase * mult;
