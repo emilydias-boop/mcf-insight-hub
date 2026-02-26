@@ -1,39 +1,18 @@
 
 
-## Diagnóstico da divergência R$ 2.992,50 vs R$ 1.564,50
+## Problema: Faturamento no Fechamento usa todas as BUs em vez de só Incorporador
 
 ### Causa raiz
-A Edge Function `recalculate-sdr-payout` processou a Cristiane Gomes pela **branch de SDR** em vez da branch de Closer. Isso aconteceu porque, no momento da última execução, provavelmente o vínculo `employee → cargo_catalogo` ainda não existia (condição na linha 903: `isCloser && metricasAtivas.length > 0 && cargoInfo`).
+O hook `useTeamRevenueByMonth` (linha 28-56 de `src/hooks/useTeamRevenueByMonth.ts`) para `bu === 'incorporador'` chama `get_all_hubla_transactions` — que retorna transações de **todas as BUs** (Incorporador + Consórcio + Leilão + Crédito etc.), totalizando R$ 1.810.940,92.
 
-A branch de SDR usa lógica completamente diferente (meta_diaria × dias_úteis, compPlan.valor_meta_rpg etc.), produzindo R$ 2.992,50 em vez do valor correto de ~R$ 1.564,50 (Contratos R$ 1.249,50 + Organização R$ 315,00).
+A página de Vendas (`TransacoesIncorp.tsx`) usa `get_hubla_transactions_by_bu('incorporador')`, que filtra apenas transações da BU Incorporador, totalizando R$ 1.444.641,00.
 
-### Evidência
-Dados no banco confirmam:
-- `pct_reunioes_agendadas = 306.25` → resultado típico da branch SDR (agendadas/meta_diaria), **não** da branch Closer (que armazenaria pctContratos ≈ 96.1%)
-- `valor_reunioes_realizadas = 2677.5` → inclui cálculos SDR incorretos para Closer
+### Correção
+Em `src/hooks/useTeamRevenueByMonth.ts`, trocar a chamada de `get_all_hubla_transactions` para `get_hubla_transactions_by_bu` passando `p_bu = 'incorporador'`, mantendo a mesma lógica de deduplicação com `get_first_transaction_ids` e `getDeduplicatedGross`.
 
-### Correção (2 partes)
+### Detalhe técnico
+- RPC atual: `supabase.rpc('get_all_hubla_transactions', { p_start_date, p_end_date, p_limit: 10000, p_search: null, p_products: null })`
+- RPC correta: `supabase.rpc('get_hubla_transactions_by_bu', { p_bu: 'incorporador', p_search: null, p_start_date, p_end_date, p_limit: 10000 })`
 
-**Parte 1: Reverter os summary cards para usar cálculo local**
-
-No `src/pages/fechamento-sdr/Detail.tsx`:
-- Card "Variável": voltar a usar `calculatedVariavel.total` (valor calculado localmente)
-- Card "Total Conta": voltar a usar `effectiveFixo + calculatedVariavel.total`
-- Manter o badge "Recalcular" quando houver divergência com o DB, mas agora como **alerta informativo** de que o banco precisa ser atualizado
-
-**Parte 2: Garantir consistência do useCalculatedVariavel com DynamicIndicatorCard**
-
-No `src/hooks/useCalculatedVariavel.ts`, para métricas com `payoutPctField` (como organizacao), quando a métrica ativa tem `peso_percentual` definido, priorizar o cálculo dinâmico (`variavelTotal × peso/100`) sobre o valor individual do compPlan — mesma lógica que o DynamicIndicatorCard na sua branch de fallback.
-
-Isso garante que o total no card "Variável" bata exatamente com a soma dos indicator cards abaixo.
-
-### Resultado esperado
-- Detail view mostra R$ 1.564,50 (calculado localmente, correto)
-- Badge "Recalcular" aparece indicando que o banco (R$ 2.992,50) está desatualizado
-- Ao clicar "Salvar e Recalcular", a Edge Function executa com dados atuais, usa a branch Closer correta, e atualiza o banco
-- Após recálculo, lista e detalhe ficam sincronizados
-
-### Arquivos alterados
-1. `src/pages/fechamento-sdr/Detail.tsx` — reverter summary cards para valores calculados
-2. `src/hooks/useCalculatedVariavel.ts` — alinhar lógica com DynamicIndicatorCard
+Alteração em 1 arquivo: `src/hooks/useTeamRevenueByMonth.ts`
 
