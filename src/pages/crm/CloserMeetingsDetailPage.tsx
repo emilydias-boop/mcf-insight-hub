@@ -188,7 +188,7 @@ export default function CloserMeetingsDetailPage() {
         <TabsContent value="r2">
           <Card className="bg-card border-border">
             <CardContent className="p-4">
-              <CloserLeadsTable leads={r2Leads} isLoading={isLoading} />
+              <CloserLeadsTable leads={r2Leads} isLoading={isLoading} showR1Sdr />
             </CardContent>
           </Card>
         </TabsContent>

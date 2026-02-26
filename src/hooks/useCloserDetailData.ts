@@ -35,6 +35,7 @@ export interface CloserLead {
   scheduled_at: string;
   booked_by_name: string | null;
   origin_name: string | null;
+  r1_sdr_name?: string | null;
 }
 
 export interface CloserDetailData {
@@ -364,7 +365,21 @@ export function useCloserDetailData({
 
       if (r1DealIds.size === 0) return [];
 
-      // Step 2: Find R2 meetings whose deal_id matches an R1 deal of this closer
+      // Step 2a: Fetch R1 booked_by (SDR) for each deal_id
+      const { data: r1SdrData } = await supabase
+        .from('meeting_slot_attendees')
+        .select('deal_id, booked_by, meeting_slot:meeting_slots!inner(meeting_type)')
+        .in('deal_id', Array.from(r1DealIds))
+        .eq('meeting_slot.meeting_type', 'r1');
+
+      const r1SdrMap = new Map<string, string>();
+      r1SdrData?.forEach((row: any) => {
+        if (row.deal_id && row.booked_by && !r1SdrMap.has(row.deal_id)) {
+          r1SdrMap.set(row.deal_id, row.booked_by);
+        }
+      });
+
+      // Step 2b: Find R2 meetings whose deal_id matches an R1 deal of this closer
       const { data: r2Attendees, error: r2Error } = await supabase
         .from('meeting_slot_attendees')
         .select(`
@@ -423,15 +438,20 @@ export function useCloserDetailData({
         dealsMap.set(deal.id, { name: deal.name, originName: origin?.name || null, contactName: contact?.name || null, contactEmail: contact?.email || null, contactPhone: contact?.phone || null });
       });
 
-      const bookedByIds = [...new Set(attendeesWithDeals.map(a => a.bookedBy).filter(Boolean))] as string[];
+      // Collect all profile IDs: R2 booked_by + R1 SDR booked_by
+      const allProfileIds = new Set<string>();
+      attendeesWithDeals.forEach(a => { if (a.bookedBy) allProfileIds.add(a.bookedBy); });
+      r1SdrMap.forEach(v => allProfileIds.add(v));
+
       let profilesMap: Record<string, string> = {};
-      if (bookedByIds.length > 0) {
-        const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', bookedByIds);
+      if (allProfileIds.size > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', Array.from(allProfileIds));
         profiles?.forEach(p => { profilesMap[p.id] = p.full_name || 'Desconhecido'; });
       }
 
       return attendeesWithDeals.map(att => {
         const dealInfo = dealsMap.get(att.dealId);
+        const r1SdrId = r1SdrMap.get(att.dealId);
         return {
           attendee_id: att.attendeeId,
           deal_id: att.dealId,
@@ -444,6 +464,7 @@ export function useCloserDetailData({
           scheduled_at: att.scheduledAt,
           booked_by_name: att.bookedBy ? profilesMap[att.bookedBy] || null : null,
           origin_name: dealInfo?.originName,
+          r1_sdr_name: r1SdrId ? profilesMap[r1SdrId] || null : null,
         } as CloserLead;
       }).sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
     },
