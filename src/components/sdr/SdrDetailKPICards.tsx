@@ -1,5 +1,6 @@
-import { Calendar, CheckCircle, XCircle, FileCheck, TrendingUp, TrendingDown } from "lucide-react";
+import { Calendar, CheckCircle, XCircle, FileCheck, TrendingUp, TrendingDown, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
 import { TeamAverages } from "@/hooks/useSdrDetailData";
 
@@ -14,11 +15,12 @@ interface KPICardProps {
   value: number | string;
   teamAverage: number;
   icon: React.ReactNode;
+  tooltip?: string;
   format?: "number" | "percent";
-  invertComparison?: boolean; // true for metrics where lower is better
+  invertComparison?: boolean;
 }
 
-function KPICard({ title, value, teamAverage, icon, format = "number", invertComparison = false }: KPICardProps) {
+function KPICard({ title, value, teamAverage, icon, tooltip, format = "number", invertComparison = false }: KPICardProps) {
   const numValue = typeof value === 'number' ? value : parseFloat(value.toString());
   const diff = numValue - teamAverage;
   const isPositive = invertComparison ? diff < 0 : diff > 0;
@@ -37,7 +39,19 @@ function KPICard({ title, value, teamAverage, icon, format = "number", invertCom
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">{title}</p>
+            <div className="flex items-center gap-1">
+              <p className="text-xs text-muted-foreground">{title}</p>
+              {tooltip && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[220px] text-xs">
+                    {tooltip}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
             <p className="text-2xl font-bold text-foreground">{formattedValue}</p>
           </div>
           <div className="p-2 rounded-lg bg-primary/10 text-primary">
@@ -75,38 +89,45 @@ export function SdrDetailKPICards({ metrics, teamAverages, isLoading }: SdrDetai
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-      <KPICard
-        title="Agendamentos"
-        value={metrics.agendamentos}
-        teamAverage={teamAverages.avgAgendamentos}
-        icon={<Calendar className="h-4 w-4" />}
-      />
-      <KPICard
-        title="R1 Agendada"
-        value={metrics.r1Agendada}
-        teamAverage={teamAverages.avgR1Agendada}
-        icon={<Calendar className="h-4 w-4" />}
-      />
-      <KPICard
-        title="R1 Realizada"
-        value={metrics.r1Realizada}
-        teamAverage={teamAverages.avgR1Realizada}
-        icon={<CheckCircle className="h-4 w-4" />}
-      />
-      <KPICard
-        title="No-Show"
-        value={metrics.noShows}
-        teamAverage={teamAverages.avgNoShows}
-        icon={<XCircle className="h-4 w-4" />}
-        invertComparison={true}
-      />
-      <KPICard
-        title="Contratos Pagos"
-        value={metrics.contratos}
-        teamAverage={teamAverages.avgContratos}
-        icon={<FileCheck className="h-4 w-4" />}
-      />
-    </div>
+    <TooltipProvider delayDuration={200}>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <KPICard
+          title="Agendamentos"
+          value={metrics.agendamentos}
+          teamAverage={teamAverages.avgAgendamentos}
+          icon={<Calendar className="h-4 w-4" />}
+          tooltip="Leads agendados pelo SDR neste período (pela data de criação do agendamento)"
+        />
+        <KPICard
+          title="R1 Agendada"
+          value={metrics.r1Agendada}
+          teamAverage={teamAverages.avgR1Agendada}
+          icon={<Calendar className="h-4 w-4" />}
+          tooltip="Reuniões marcadas PARA este período (pela data da reunião)"
+        />
+        <KPICard
+          title="R1 Realizada"
+          value={metrics.r1Realizada}
+          teamAverage={teamAverages.avgR1Realizada}
+          icon={<CheckCircle className="h-4 w-4" />}
+          tooltip="Reuniões que de fato aconteceram no período"
+        />
+        <KPICard
+          title="No-Show"
+          value={metrics.noShows}
+          teamAverage={teamAverages.avgNoShows}
+          icon={<XCircle className="h-4 w-4" />}
+          invertComparison={true}
+          tooltip="Reuniões agendadas para o período que não ocorreram (R1 Agendada − R1 Realizada)"
+        />
+        <KPICard
+          title="Contratos Pagos"
+          value={metrics.contratos}
+          teamAverage={teamAverages.avgContratos}
+          icon={<FileCheck className="h-4 w-4" />}
+          tooltip="Contratos pagos no período"
+        />
+      </div>
+    </TooltipProvider>
   );
 }
