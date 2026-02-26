@@ -16,6 +16,8 @@ export interface TeamMonthlyGoal {
   meta_divina_valor: number;
   meta_divina_premio_sdr: number;
   meta_divina_premio_closer: number;
+  meta_divina_modo: string;
+  meta_divina_top_n: number;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -44,6 +46,8 @@ export const DEFAULT_GOAL_VALUES = {
   meta_divina_valor: 2000000,
   meta_divina_premio_sdr: 0,
   meta_divina_premio_closer: 0,
+  meta_divina_modo: 'individual',
+  meta_divina_top_n: 1,
 };
 
 // Fetch goals for a specific month and BU
