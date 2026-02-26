@@ -595,10 +595,18 @@ serve(async (req) => {
         // ===== BUSCAR EMPLOYEE PRIMEIRO (necessário para fallback e elegibilidade ultrameta) =====
         const { data: employeeData } = await supabase
           .from('employees')
-          .select('cargo_catalogo_id, data_admissao')
+          .select('cargo_catalogo_id, data_admissao, fechamento_manual')
           .eq('sdr_id', sdr.id)
           .eq('status', 'ativo')
           .maybeSingle();
+
+        // ===== FECHAMENTO MANUAL: pular cálculo automático =====
+        if (employeeData?.fechamento_manual === true) {
+          console.log(`   ⏭️ Fechamento manual ativo para ${sdr.name}, pulando cálculo automático`);
+          results.push({ sdr_id: sdr.id, sdr_name: sdr.name, status: 'skipped_manual' });
+          processed++;
+          continue;
+        }
 
         // ===== VERIFICAR ELEGIBILIDADE PARA ULTRAMETA (precisa estar desde o início do mês) =====
         const dataAdmissao = employeeData?.data_admissao 

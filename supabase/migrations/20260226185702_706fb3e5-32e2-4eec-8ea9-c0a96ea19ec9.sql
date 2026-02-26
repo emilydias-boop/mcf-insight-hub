@@ -1,0 +1,1 @@
+ALTER TABLE public.employees ADD COLUMN fechamento_manual boolean DEFAULT false;

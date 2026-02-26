@@ -4768,6 +4768,7 @@ export type Database = {
           endereco: string | null
           estado: string | null
           estado_civil: string | null
+          fechamento_manual: boolean | null
           gestor_id: string | null
           id: string
           jornada_trabalho: string | null
@@ -4812,6 +4813,7 @@ export type Database = {
           endereco?: string | null
           estado?: string | null
           estado_civil?: string | null
+          fechamento_manual?: boolean | null
           gestor_id?: string | null
           id?: string
           jornada_trabalho?: string | null
@@ -4856,6 +4858,7 @@ export type Database = {
           endereco?: string | null
           estado?: string | null
           estado_civil?: string | null
+          fechamento_manual?: boolean | null
           gestor_id?: string | null
           id?: string
           jornada_trabalho?: string | null

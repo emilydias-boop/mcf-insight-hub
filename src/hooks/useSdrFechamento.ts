@@ -210,6 +210,7 @@ export const useSdrPayouts = (anoMes: string, filters?: {
           sdr_id, 
           status,
           cargo_catalogo_id,
+          fechamento_manual,
           cargo_catalogo:cargo_catalogo_id (
             id,
             nome_exibicao,
@@ -233,6 +234,7 @@ export const useSdrPayouts = (anoMes: string, filters?: {
         cargo: string | null;
         nome_completo: string;
         cargo_catalogo_id: string | null;
+        fechamento_manual: boolean | null;
         cargo_catalogo: {
           id: string;
           nome_exibicao: string;
@@ -253,6 +255,7 @@ export const useSdrPayouts = (anoMes: string, filters?: {
             cargo: emp.cargo,
             nome_completo: emp.nome_completo,
             cargo_catalogo_id: emp.cargo_catalogo_id,
+            fechamento_manual: (emp as any).fechamento_manual || false,
             cargo_catalogo: emp.cargo_catalogo as EmployeeWithCargo['cargo_catalogo'],
           });
         }
@@ -372,6 +375,7 @@ export const useSdrPayoutDetail = (payoutId: string | undefined) => {
           cargo_catalogo_id,
           departamento,
           cargo,
+          fechamento_manual,
           cargo_catalogo:cargo_catalogo_id (
             id, nome_exibicao, nivel, ote_total, fixo_valor, variavel_valor, area, cargo_base
           )

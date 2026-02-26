@@ -336,6 +336,11 @@ const FechamentoSDRDetail = () => {
                   Closer
                 </Badge>
               )}
+              {(payout as any)?.employee?.fechamento_manual && (
+                <Badge variant="outline" className="text-xs border-yellow-500 text-yellow-500">
+                  Manual
+                </Badge>
+              )}
             </h1>
             <p className="text-sm text-muted-foreground">Fechamento de {payout.ano_mes}</p>
           </div>
