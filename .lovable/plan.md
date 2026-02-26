@@ -1,42 +1,36 @@
 
 
-## Plano: Adicionar filtros nas abas do Closer Detail
+## Problema identificado: Evolução Diária vazia no SDR
 
-### Escopo
-Criar um componente `CloserLeadsFilters` que será exibido acima da tabela nas 4 abas (Leads Realizados, No-Shows, R2 Agendadas, Faturamento). A aba "Visão Geral" permanece sem filtros.
+### Causa raiz
+A RPC `get_sdr_meetings_from_agenda` retorna status em inglês: `completed`, `no_show`, `contract_paid`, `invited`, `rescheduled`.
 
-Os filtros serão **client-side** — filtrando os dados já carregados (`leads`, `noShowLeads`, `r2Leads`).
+O `useSdrMeetingsFromAgenda.ts` (linha 78) repassa esse valor sem tradução: `status_atual: row.status_atual`.
 
-### Filtros disponíveis
-1. **Busca por texto** — filtra por nome, email ou telefone do lead
-2. **Status** — Select com opções dinâmicas (Realizada, Contrato Pago, No-Show, Agendada, etc.)
-3. **SDR** — Select com SDRs únicos extraídos dos dados
-4. **Data** — Presets (Hoje, Semana, Mês, Custom com date pickers) que filtram dentro do período já carregado
+Mas o `SdrMeetingsChart.tsx` (linhas 48-55) verifica strings em português:
+- `status.includes('agendada')` — nunca match com `invited`/`rescheduled`
+- `status.includes('realizada')` — nunca match com `completed`
+- `status.includes('no-show')` — nunca match com `no_show`
 
-### Implementação
+### Correção
 
-**1. Novo componente: `src/components/closer/CloserLeadsFilters.tsx`**
-- Props: `leads: CloserLead[]`, `onFilter: (filtered: CloserLead[]) => void`, `showR1Sdr?: boolean`
-- Inputs: Input de busca, Select de status, Select de SDR, botões de período (Hoje/Semana/Mês/Custom) + date pickers
-- Extrai listas únicas de status e SDRs dos leads recebidos
-- Aplica filtros combinados e retorna leads filtrados via callback
+**Arquivo: `src/components/sdr/SdrMeetingsChart.tsx`** (linhas 47-55)
 
-**2. Atualizar `src/pages/crm/CloserMeetingsDetailPage.tsx`**
-- Importar `CloserLeadsFilters`
-- Para cada aba (leads, noshows, r2, faturamento), manter estado local de leads filtrados
-- Renderizar `<CloserLeadsFilters>` acima do `<CloserLeadsTable>` dentro de cada `TabsContent`
-- Passar leads filtrados ao `CloserLeadsTable` e contagem filtrada nos TabsTrigger
+Atualizar a classificação para reconhecer ambos os formatos (português e inglês):
 
-**3. Atualizar `src/components/closer/CloserRevenueTab.tsx`**
-- Aceitar prop opcional `searchFilter?: string` e aplicar busca nos dados exibidos, ou integrar o mesmo componente de filtros
+```typescript
+const status = meeting.status_atual?.toLowerCase() || '';
 
-### Layout dos filtros
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ [🔍 Buscar nome, email, telefone]  [Status ▼]  [SDR ▼]     │
-│ [Hoje] [Semana] [Mês] [📅 Início] — [📅 Fim]   [Limpar]   │
-└─────────────────────────────────────────────────────────────┘
+if (status.includes('agendada') || status === 'invited' || status === 'rescheduled') {
+  entry.agendadas++;
+} else if (status.includes('realizada') || status === 'completed') {
+  entry.realizadas++;
+} else if (status.includes('no-show') || status.includes('noshow') || status === 'no_show') {
+  entry.noShow++;
+} else if (status.includes('contrato') || status === 'contract_paid') {
+  entry.realizadas++; // contrato pago também conta como realizada no gráfico
+}
 ```
 
-Compacto em uma ou duas linhas, seguindo o estilo visual do dashboard (dark theme, borders, outline buttons).
+Isso é uma correção de 1 linha lógica — apenas expandir os if/else para aceitar os valores ingleses retornados pela RPC.
 
