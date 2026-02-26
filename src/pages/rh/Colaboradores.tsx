@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useEmployees, useEmployeeNfse } from '@/hooks/useEmployees';
 import { Employee, EMPLOYEE_STATUS_LABELS, CARGO_OPTIONS, SQUAD_OPTIONS, NFSE_STATUS_LABELS } from '@/types/hr';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,7 @@ import { useQuery } from '@tanstack/react-query';
 
 export default function Colaboradores() {
   const { data: employees, isLoading } = useEmployees();
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [cargoFilter, setCargoFilter] = useState<string>('all');
@@ -122,6 +124,18 @@ export default function Colaboradores() {
       <Badge className={`${statusInfo.color} text-xs`}>{statusInfo.label}</Badge>
     ) : null;
   };
+
+  // Auto-open drawer from URL query param
+  useEffect(() => {
+    const employeeId = searchParams.get('employee');
+    if (employeeId && employees && employees.length > 0) {
+      const found = employees.find(e => e.id === employeeId);
+      if (found) {
+        setSelectedEmployee(found);
+        setDrawerOpen(true);
+      }
+    }
+  }, [searchParams, employees]);
 
   const handleRowClick = (employee: Employee) => {
     setSelectedEmployee(employee);
