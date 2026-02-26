@@ -44,16 +44,15 @@ export function SdrMeetingsChart({ meetings, startDate, endDate, isLoading }: Sd
       if (dayMap.has(key)) {
         const entry = dayMap.get(key)!;
         
-        // Classify based on status_atual
+        // Toda reunião conta como agendada
+        entry.agendadas++;
+        
+        // Adicionalmente classificar o resultado
         const status = meeting.status_atual?.toLowerCase() || '';
-        if (status.includes('agendada') || status === 'invited' || status === 'rescheduled') {
-          entry.agendadas++;
-        } else if (status.includes('realizada') || status === 'completed') {
+        if (status.includes('realizada') || status === 'completed' || status === 'contract_paid' || status.includes('contrato')) {
           entry.realizadas++;
         } else if (status.includes('no-show') || status.includes('noshow') || status === 'no_show') {
           entry.noShow++;
-        } else if (status.includes('contrato') || status === 'contract_paid') {
-          entry.realizadas++;
         }
       }
     });
