@@ -14,6 +14,7 @@ import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { Meeting } from "@/hooks/useSdrMeetings";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { formatMeetingStatus } from "@/utils/formatMeetingStatus";
 
 // Suporta ambos os tipos de meeting
 type MeetingType = Meeting | MeetingV2;
@@ -30,18 +31,21 @@ function isMeetingV2(meeting: MeetingType): meeting is MeetingV2 {
 }
 
 const getStatusBadgeClass = (status: string) => {
-  const statusLower = status.toLowerCase();
-  if (statusLower.includes('contrato')) {
+  const statusLower = status?.toLowerCase() || '';
+  if (statusLower.includes('contrato') || statusLower === 'contract_paid') {
     return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
   }
-  if (statusLower.includes('realizada')) {
+  if (statusLower.includes('realizada') || statusLower === 'completed') {
     return 'bg-green-500/20 text-green-400 border-green-500/30';
   }
-  if (statusLower.includes('no-show') || statusLower.includes('noshow')) {
+  if (statusLower.includes('no-show') || statusLower.includes('noshow') || statusLower === 'no_show') {
     return 'bg-red-500/20 text-red-400 border-red-500/30';
   }
-  if (statusLower.includes('agendada')) {
+  if (statusLower.includes('agendad') || statusLower === 'invited' || statusLower === 'scheduled') {
     return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+  }
+  if (statusLower === 'rescheduled' || statusLower.includes('reagend')) {
+    return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
   }
   return 'bg-muted text-muted-foreground';
 };
@@ -200,7 +204,7 @@ export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: Meetings
                         variant="outline"
                         className={getStatusBadgeClass(status)}
                       >
-                        {status}
+                        {formatMeetingStatus(status)}
                       </Badge>
                     </TableCell>
                     

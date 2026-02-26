@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatMeetingStatus } from "@/utils/formatMeetingStatus";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { 
@@ -117,7 +118,7 @@ export function SdrMeetingActionsDrawer({ meeting, onClose, onRefresh }: SdrMeet
                   variant="outline"
                   className={getStageBadgeClass(meeting.status_atual)}
                 >
-                  {meeting.status_atual}
+                  {formatMeetingStatus(meeting.status_atual)}
                 </Badge>
               </div>
             </div>

@@ -14,6 +14,7 @@ import { SdrMeetingActionsDrawer } from "./SdrMeetingActionsDrawer";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatMeetingStatus } from "@/utils/formatMeetingStatus";
 
 interface SelectedSdrLeadsPanelProps {
   sdrName: string;
@@ -73,7 +74,7 @@ export function SelectedSdrLeadsPanel({
       m.contact_email || "",
       m.contact_phone || "",
       m.origin_name || "",
-      m.status_atual,
+      formatMeetingStatus(m.status_atual),
       m.closer || "",
       m.probability ? `${m.probability}%` : ""
     ]);
@@ -130,7 +131,7 @@ export function SelectedSdrLeadsPanel({
               <SelectContent>
                 <SelectItem value="all">Todos Status</SelectItem>
                 {uniqueStatuses.map(status => (
-                  <SelectItem key={status} value={status}>{status}</SelectItem>
+                  <SelectItem key={status} value={status}>{formatMeetingStatus(status)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
