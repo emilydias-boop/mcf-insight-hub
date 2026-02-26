@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Employee, RhNfse, TIPO_VARIAVEL_OPTIONS, NFSE_STATUS_LABELS, NFSE_PAGAMENTO_LABELS } from '@/types/hr';
+import { Switch } from '@/components/ui/switch';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useEmployeeSdrPayouts, useEmployeeMutations, useEmployeeNfse } from '@/hooks/useEmployees';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,6 +51,7 @@ export default function EmployeeRemunerationTab({ employee }: EmployeeRemunerati
     tipo_variavel: employee.tipo_variavel || '',
     descricao_comissao: employee.descricao_comissao || '',
     modelo_fechamento: employee.modelo_fechamento || '',
+    fechamento_manual: employee.fechamento_manual || false,
     banco: employee.banco || '',
     agencia: employee.agencia || '',
     conta: employee.conta || '',
@@ -65,6 +68,7 @@ export default function EmployeeRemunerationTab({ employee }: EmployeeRemunerati
       tipo_variavel: employee.tipo_variavel || '',
       descricao_comissao: employee.descricao_comissao || '',
       modelo_fechamento: employee.modelo_fechamento || '',
+      fechamento_manual: employee.fechamento_manual || false,
       banco: employee.banco || '',
       agencia: employee.agencia || '',
       conta: employee.conta || '',
@@ -314,6 +318,28 @@ export default function EmployeeRemunerationTab({ employee }: EmployeeRemunerati
                   placeholder="Ex: Fechamento Inside Sales Crédito"
                 />
               </div>
+              <div className="col-span-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Fechamento Manual</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Quando ativo, o cálculo automático é desativado para este colaborador
+                    </p>
+                  </div>
+                  <Switch
+                    checked={formData.fechamento_manual}
+                    onCheckedChange={(checked) => setFormData({ ...formData, fechamento_manual: checked })}
+                  />
+                </div>
+                {formData.fechamento_manual && (
+                  <Alert className="border-yellow-500/50 bg-yellow-500/10 py-2">
+                    <AlertCircle className="h-3.5 w-3.5 text-yellow-500" />
+                    <AlertDescription className="text-xs text-yellow-500">
+                      O cálculo automático será desativado. Valores devem ser preenchidos manualmente no fechamento.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
               <div className="col-span-2 border-t pt-4 mt-2">
                 <h4 className="font-medium mb-3">Dados Bancários</h4>
                 <div className="grid grid-cols-2 gap-4">
@@ -355,6 +381,12 @@ export default function EmployeeRemunerationTab({ employee }: EmployeeRemunerati
               <InfoRow label="Tipo de Variável" value={TIPO_VARIAVEL_OPTIONS.find(o => o.value === employee.tipo_variavel)?.label || employee.tipo_variavel} />
               <InfoRow label="Descrição Comissão" value={employee.descricao_comissao} />
               <InfoRow label="Modelo de Fechamento" value={employee.modelo_fechamento} />
+              <div className="flex justify-between py-2">
+                <span className="text-muted-foreground text-sm">Fechamento Manual</span>
+                <Badge variant={employee.fechamento_manual ? "default" : "secondary"} className="text-xs">
+                  {employee.fechamento_manual ? "Ativo" : "Desativado"}
+                </Badge>
+              </div>
               <div className="pt-3 mt-3 border-t">
                 <h4 className="font-medium text-sm mb-2">Dados Bancários</h4>
                 <div className="grid grid-cols-2 gap-2 text-sm">

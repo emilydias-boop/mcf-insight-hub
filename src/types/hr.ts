@@ -36,6 +36,7 @@ export interface Employee {
   tipo_variavel: string | null;
   descricao_comissao: string | null;
   modelo_fechamento: string | null;
+  fechamento_manual: boolean;
   
   // Dados bancários
   banco: string | null;
