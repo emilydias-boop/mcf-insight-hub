@@ -1,25 +1,16 @@
 
 
-## Plano: Alinhar Efeito Alavanca do Dashboard com dados do Controle Consórcio
+## Diagnóstico
 
-### Problema
-O Dashboard "Efeito Alavanca" busca dados de `get_hubla_transactions_by_bu('consorcio')` somando `product_price` (Hubla) = **R$ 465K**. O Painel Equipe do Consórcio busca de `consortium_cards.valor_credito` = **R$ 22.9MM**. O correto é o segundo.
+O erro `consorcioWeekly is not defined` não existe no código atual. O arquivo `useSetoresDashboard.ts` usa corretamente `consorcioCardsWeekly` (linhas 102, 170, 213). 
 
-### Causa
-- **Dashboard**: usa Hubla transactions (vendas online)
-- **Painel Consórcio**: usa `useConsorcioSummary` → `consortium_cards.valor_credito` + `consortium_installments.valor_comissao`
+Isso é um **cache de build desatualizado** — o preview está rodando uma versão anterior do código que ainda referenciava uma variável chamada `consorcioWeekly` (provavelmente de uma edição intermediária que não foi salva corretamente).
 
-### Correção
+## Correção
 
-**Arquivo: `src/hooks/useSetoresDashboard.ts`**
+Nenhuma mudança de código é necessária. O arquivo já está correto. Basta forçar um rebuild:
 
-1. Remover as 3 chamadas `get_hubla_transactions_by_bu(p_bu='consorcio')` (semana/mês/ano)
-2. Substituir por 3 queries diretas a `consortium_cards` (mesma lógica de `useConsorcioSummary`):
-   - Filtrar por `data_contratacao` nos períodos semana/mês/ano (usando semana Mon-Sun do Consórcio)
-   - Somar `valor_credito` para "Total em Cartas"
-   - Buscar `consortium_installments.valor_comissao` agrupado por período para "Comissão Total"
-3. Popular os campos `comissaoSemanal`, `comissaoMensal`, `comissaoAnual` no `SetorData` do `efeito_alavanca`
-4. Manter `apuradoSemanal/Mensal/Anual` = soma de `valor_credito` (Total em Cartas)
+1. **Forçar rebuild** — fazer qualquer micro-edição no arquivo (ex: adicionar/remover um espaço em branco em um comentário) para invalidar o cache do Vite e forçar recompilação.
 
-**Resultado**: Dashboard "Efeito Alavanca" mostrará os mesmos valores que o card "BU Consórcio" no Painel Equipe e o Controle Consórcio. Metas já compartilham o mesmo prefixo (`setor_efeito_alavanca`) em ambos os painéis, portanto editar em um atualiza o outro automaticamente.
+Se o erro persistir após rebuild, posso investigar se há outro arquivo importando uma versão antiga do hook.
 
