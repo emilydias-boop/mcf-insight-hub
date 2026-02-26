@@ -46,12 +46,14 @@ export function SdrMeetingsChart({ meetings, startDate, endDate, isLoading }: Sd
         
         // Classify based on status_atual
         const status = meeting.status_atual?.toLowerCase() || '';
-        if (status.includes('agendada')) {
+        if (status.includes('agendada') || status === 'invited' || status === 'rescheduled') {
           entry.agendadas++;
-        } else if (status.includes('realizada')) {
+        } else if (status.includes('realizada') || status === 'completed') {
           entry.realizadas++;
-        } else if (status.includes('no-show') || status.includes('noshow')) {
+        } else if (status.includes('no-show') || status.includes('noshow') || status === 'no_show') {
           entry.noShow++;
+        } else if (status.includes('contrato') || status === 'contract_paid') {
+          entry.realizadas++;
         }
       }
     });
