@@ -88,9 +88,10 @@ export function useCalculatedVariavel({
         let metaAjustada = 0;
 
         if (metrica.nome_metrica === 'agendamentos') {
-          metaAjustada = compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
+          // Priority: payout.meta_agendadas_ajustada → compPlan.meta_reunioes_agendadas → sdrMetaDiaria * diasUteisMes
+          metaAjustada = (payout as any)?.meta_agendadas_ajustada || compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
         } else if (metrica.nome_metrica === 'realizadas') {
-          // SINCRONIZADO COM KpiEditForm: Usar 70% das agendadas REAIS
+          // SINCRONIZADO COM Edge Function: Usar 70% das agendadas REAIS
           const agendadasReais = kpi?.reunioes_agendadas || 0;
           metaAjustada = Math.round(agendadasReais * 0.7);
         } else if (metrica.nome_metrica === 'tentativas') {
@@ -103,26 +104,19 @@ export function useCalculatedVariavel({
         const pct = metaAjustada > 0 ? (kpiValue / metaAjustada) * 100 : 0;
         mult = getMultiplier(pct);
 
-        // Priority: if metric has peso_percentual (Closer/dynamic metrics), always use dynamic calc
-        // Otherwise, try specific compPlan value first
-        if (metrica.peso_percentual && metrica.peso_percentual > 0) {
-          // Dynamic calculation based on peso_percentual (same as DynamicIndicatorCard)
-          const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
-          valorBase = baseVariavel * (metrica.peso_percentual / 100);
-        } else {
-          if (config.compPlanValueField && compPlan) {
-            const valorEspecifico = (compPlan as any)[config.compPlanValueField] || 0;
-            if (valorEspecifico > 0) {
-              valorBase = valorEspecifico;
-            }
+        // Priority: try specific compPlan value FIRST, then fall back to weight-based calc
+        if (config.compPlanValueField && compPlan) {
+          const valorEspecifico = (compPlan as any)[config.compPlanValueField] || 0;
+          if (valorEspecifico > 0) {
+            valorBase = valorEspecifico;
           }
+        }
 
-          // Fallback: dynamic calculation if no specific value
-          if (valorBase === 0) {
-            const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
-            const pesoPercent = metrica.peso_percentual || 25;
-            valorBase = baseVariavel * (pesoPercent / 100);
-          }
+        // Fallback: dynamic calculation if no specific value from compPlan
+        if (valorBase === 0) {
+          const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
+          const pesoPercent = metrica.peso_percentual || 25;
+          valorBase = baseVariavel * (pesoPercent / 100);
         }
 
         valorFinal = valorBase * mult;
