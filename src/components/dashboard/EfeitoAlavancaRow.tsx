@@ -1,28 +1,51 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { formatCurrency } from "@/lib/formatters";
+import { cn } from "@/lib/utils";
 import { TrendingUp, Settings2 } from "lucide-react";
+
+function getProgressColor(percent: number): string {
+  if (percent >= 80) return "bg-success";
+  if (percent >= 50) return "bg-warning";
+  return "bg-destructive";
+}
 
 interface PeriodMetricsProps {
   label: string;
   totalCartas: number;
+  meta: number;
   comissaoTotal: number;
 }
 
-function PeriodMetrics({ label, totalCartas, comissaoTotal }: PeriodMetricsProps) {
+function PeriodMetrics({ label, totalCartas, meta, comissaoTotal }: PeriodMetricsProps) {
+  const percent = meta > 0 ? Math.min((totalCartas / meta) * 100, 100) : 0;
+  const percentDisplay = meta > 0 ? (totalCartas / meta) * 100 : 0;
+
   return (
-    <div className="space-y-3">
-      <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-        {label}
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground uppercase tracking-wider font-medium">
+          {label}
+        </span>
+        <span className={cn(
+          "font-semibold",
+          percentDisplay >= 80 ? "text-success" : percentDisplay >= 50 ? "text-warning" : "text-destructive"
+        )}>
+          {percentDisplay.toFixed(0)}%
+        </span>
       </div>
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Total em Cartas:</span>
-          <span className="text-sm font-semibold text-foreground">{formatCurrency(totalCartas)}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Comissão Total:</span>
-          <span className="text-sm font-semibold text-success">{formatCurrency(comissaoTotal)}</span>
-        </div>
+      <Progress
+        value={percent}
+        className="h-2"
+        indicatorClassName={getProgressColor(percentDisplay)}
+      />
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>Apurado: <span className="text-foreground font-medium">{formatCurrency(totalCartas)}</span></span>
+        <span>Meta: {formatCurrency(meta)}</span>
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Comissão Total:</span>
+        <span className="font-semibold text-success">{formatCurrency(comissaoTotal)}</span>
       </div>
     </div>
   );
@@ -31,15 +54,15 @@ function PeriodMetrics({ label, totalCartas, comissaoTotal }: PeriodMetricsProps
 interface EfeitoAlavancaRowProps {
   semanaLabel: string;
   mesLabel: string;
-  // Semana
   totalCartasSemanal: number;
   comissaoSemanal: number;
-  // Mês
+  metaSemanal: number;
   totalCartasMensal: number;
   comissaoMensal: number;
-  // Ano
+  metaMensal: number;
   totalCartasAnual: number;
   comissaoAnual: number;
+  metaAnual: number;
   isLoading?: boolean;
   onEditGoals?: () => void;
   canEdit?: boolean;
@@ -50,10 +73,13 @@ export function EfeitoAlavancaRow({
   mesLabel,
   totalCartasSemanal,
   comissaoSemanal,
+  metaSemanal,
   totalCartasMensal,
   comissaoMensal,
+  metaMensal,
   totalCartasAnual,
   comissaoAnual,
+  metaAnual,
   isLoading = false,
   onEditGoals,
   canEdit = false,
@@ -65,11 +91,11 @@ export function EfeitoAlavancaRow({
           <div className="h-6 w-40 bg-muted animate-pulse rounded" />
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
             {[1, 2, 3].map((i) => (
               <div key={i} className="space-y-2">
                 <div className="h-4 w-24 bg-muted animate-pulse rounded" />
-                <div className="h-3 w-32 bg-muted animate-pulse rounded" />
+                <div className="h-2 w-full bg-muted animate-pulse rounded" />
                 <div className="h-3 w-32 bg-muted animate-pulse rounded" />
               </div>
             ))}
@@ -99,20 +125,23 @@ export function EfeitoAlavancaRow({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <PeriodMetrics 
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
+          <PeriodMetrics
             label={semanaLabel}
             totalCartas={totalCartasSemanal}
+            meta={metaSemanal}
             comissaoTotal={comissaoSemanal}
           />
-          <PeriodMetrics 
+          <PeriodMetrics
             label={mesLabel}
             totalCartas={totalCartasMensal}
+            meta={metaMensal}
             comissaoTotal={comissaoMensal}
           />
-          <PeriodMetrics 
+          <PeriodMetrics
             label="Ano 2026"
             totalCartas={totalCartasAnual}
+            meta={metaAnual}
             comissaoTotal={comissaoAnual}
           />
         </div>

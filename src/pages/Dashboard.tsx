@@ -152,10 +152,13 @@ export default function Dashboard() {
                   mesLabel={data.mesLabel}
                   totalCartasSemanal={setor.apuradoSemanal}
                   comissaoSemanal={setor.comissaoSemanal || 0}
+                  metaSemanal={setor.metaSemanal}
                   totalCartasMensal={setor.apuradoMensal}
                   comissaoMensal={setor.comissaoMensal || 0}
+                  metaMensal={setor.metaMensal}
                   totalCartasAnual={setor.apuradoAnual}
                   comissaoAnual={setor.comissaoAnual || 0}
+                  metaAnual={setor.metaAnual}
                   onEditGoals={canEdit ? () => setEditingSetor('efeito_alavanca') : undefined}
                   canEdit={canEdit}
                 />
