@@ -1,33 +1,30 @@
 
 
-## Plano: Alinhar dados do Dashboard com as páginas de Vendas das BUs
+## Causa raiz do conflito de valores
 
-### Problema atual
-O Dashboard busca dados de fontes diferentes das páginas de Vendas de cada BU, causando divergência nos valores:
-- **MCF Incorporador**: Dashboard usa `get_all_hubla_transactions` (todas as transações) + deduplicação. A página de Vendas BU filtra por produtos com `target_bu = 'incorporador'`.
-- **Efeito Alavanca**: Dashboard busca `consortium_cards` com `categoria = 'inside'`. Deveria buscar como a página de Vendas Consórcio: `get_hubla_transactions_by_bu('consorcio')` somando `product_price`.
-- **Crédito/Projetos/Leilão**: Dashboard busca dados de tabelas diversas, mas o usuário diz que esses setores ainda não estão configurados.
+O problema é claro:
 
-### Solução
+| Local | RPC usada | Filtro de BU |
+|---|---|---|
+| **Dashboard** (Painel do Diretor) | `get_hubla_transactions_by_bu('incorporador')` | Sim — só produtos com `target_bu = 'incorporador'` |
+| **Vendas MCF Incorporador** | `get_all_hubla_transactions` | **Não** — retorna TODAS as transações de TODAS as BUs |
 
-Refatorar `useSetoresDashboard.ts` para usar a mesma RPC `get_hubla_transactions_by_bu` que as páginas de Vendas usam.
+A página "Vendas MCF INCORPORADOR" mostra R$ 1.766.911,92 porque inclui transações de Consórcio, Leilão, Projetos, etc. O Dashboard mostra R$ 1.417.112,00 porque filtra corretamente só produtos do Incorporador.
 
-### Alterações
+A diferença de ~R$ 350.000 são transações de outras BUs que aparecem na página de Vendas mas não pertencem ao Incorporador.
 
-**Arquivo: `src/hooks/useSetoresDashboard.ts`**
+## Correção
 
-1. **MCF Incorporador**: Trocar `useIncorporadorGrossMetrics` por 3 chamadas `get_hubla_transactions_by_bu(p_bu='incorporador')` (semana/mês/ano) + aplicar `getDeduplicatedGross` com `get_first_transaction_ids` — mesmo cálculo de bruto da página de Vendas.
+**Arquivo: `src/pages/bu-incorporador/TransacoesIncorp.tsx`**
 
-2. **Efeito Alavanca**: Trocar queries de `consortium_cards`/`consortium_installments` por 3 chamadas `get_hubla_transactions_by_bu(p_bu='consorcio')` (semana/mês/ano) + somar `product_price` — mesmo cálculo de bruto da página Vendas Consórcio.
+1. Trocar `useAllHublaTransactions(filters)` por `useTransactionsByBU('incorporador', filters)` — mesma RPC que o Dashboard usa.
+2. Adaptar o formato de data para consistência com o hook (timezone BRT).
+3. Manter toda a lógica de deduplicação, agrupamento e filtro por closer igual.
 
-3. **MCF Crédito / Projetos / Leilão**: Remover queries atuais, retornar 0 por enquanto (não configurados).
+**Arquivo: `src/hooks/useTransactionsByBU.ts`**
 
-4. **Remover** imports/dependências não mais necessários (`useIncorporadorGrossMetrics`, queries de `consortium_cards`, `consortium_payments`, `consortium_installments`).
+4. Adicionar suporte ao parâmetro `selectedProducts` (filtro de produtos) que a página de Vendas usa — verificar se a RPC aceita, senão filtrar client-side.
+5. Ajustar formato de data para timezone BRT (atualmente usa `.toISOString()` que é UTC).
 
-5. **Simplificar** o `useMemo` de `modifiedData` (não precisa mais do "diff" do Incorporador).
-
-### Resultado esperado
-- O Bruto Total do MCF Incorporador no Dashboard vai bater com o Bruto Total da página Vendas MCF Incorporador.
-- O valor do Efeito Alavanca no Dashboard vai bater com o Bruto Total da página Vendas Consórcio.
-- Crédito, Projetos e Leilão mostram R$ 0,00 até serem configurados.
+Resultado: Dashboard e Vendas MCF Incorporador vão usar a mesma RPC com o mesmo filtro de BU, garantindo paridade total nos valores.
 
