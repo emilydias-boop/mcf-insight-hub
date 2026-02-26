@@ -87,12 +87,19 @@ export function useSetoresDashboard() {
       if (firstIdsError) throw firstIdsError;
       const firstIdSet = new Set((firstIdsData || []).map((r: { id: string }) => r.id));
 
-      // 2. Fetch all data in parallel using the same RPCs as the BU pages
+      // 2. Fetch all data in parallel
+      const consorcioWeekStartDate = formatDateForDB(consorcioWeekStart);
+      const consorcioWeekEndDate = formatDateForDB(consorcioWeekEnd);
+      const monthStartDate = formatDateForDB(monthStart);
+      const monthEndDate = formatDateForDB(monthEnd);
+      const yearStartDate = formatDateForDB(yearStart);
+      const yearEndDate = formatDateForDB(yearEnd);
+
       const [
-        // Incorporador (same as Vendas MCF Incorporador page)
+        // Incorporador
         incorpWeekly, incorpMonthly, incorpAnnual,
-        // Consórcio (same as Vendas Consórcio page)  
-        consorcioWeekly, consorcioMonthly, consorcioAnnual,
+        // Consórcio - consortium_cards por período
+        consorcioCardsWeekly, consorcioCardsMonthly, consorcioCardsAnnual,
         // Targets
         targets,
       ] = await Promise.all([
@@ -120,35 +127,49 @@ export function useSetoresDashboard() {
           p_end_date: formatDateForQuery(yearEnd, true),
           p_limit: 10000,
         }),
-        // Consórcio - Weekly (Mon-Sun)
-        supabase.rpc('get_hubla_transactions_by_bu', {
-          p_bu: 'consorcio',
-          p_search: null,
-          p_start_date: formatDateForQuery(consorcioWeekStart),
-          p_end_date: formatDateForQuery(consorcioWeekEnd, true),
-          p_limit: 5000,
-        }),
-        // Consórcio - Monthly
-        supabase.rpc('get_hubla_transactions_by_bu', {
-          p_bu: 'consorcio',
-          p_search: null,
-          p_start_date: formatDateForQuery(monthStart),
-          p_end_date: formatDateForQuery(monthEnd, true),
-          p_limit: 5000,
-        }),
-        // Consórcio - Annual
-        supabase.rpc('get_hubla_transactions_by_bu', {
-          p_bu: 'consorcio',
-          p_search: null,
-          p_start_date: formatDateForQuery(yearStart),
-          p_end_date: formatDateForQuery(yearEnd, true),
-          p_limit: 10000,
-        }),
+        // Consórcio Cards - Weekly (Mon-Sun)
+        supabase
+          .from('consortium_cards')
+          .select('id, valor_credito')
+          .gte('data_contratacao', consorcioWeekStartDate)
+          .lte('data_contratacao', consorcioWeekEndDate),
+        // Consórcio Cards - Monthly
+        supabase
+          .from('consortium_cards')
+          .select('id, valor_credito')
+          .gte('data_contratacao', monthStartDate)
+          .lte('data_contratacao', monthEndDate),
+        // Consórcio Cards - Annual
+        supabase
+          .from('consortium_cards')
+          .select('id, valor_credito')
+          .gte('data_contratacao', yearStartDate)
+          .lte('data_contratacao', yearEndDate),
         // All setor targets
         supabase
           .from('team_targets')
           .select('target_type, target_value')
           .like('target_type', 'setor_%'),
+      ]);
+
+      // 2b. Fetch commissions for each period's cards
+      const fetchComissao = async (cards: { id: string }[] | null): Promise<number> => {
+        if (!cards || cards.length === 0) return 0;
+        let total = 0;
+        for (const card of cards) {
+          const { data: installments } = await supabase
+            .from('consortium_installments')
+            .select('valor_comissao')
+            .eq('card_id', card.id);
+          installments?.forEach(inst => { total += Number(inst.valor_comissao); });
+        }
+        return total;
+      };
+
+      const [comissaoSemanal, comissaoMensal, comissaoAnual] = await Promise.all([
+        fetchComissao(consorcioCardsWeekly.data),
+        fetchComissao(consorcioCardsMonthly.data),
+        fetchComissao(consorcioCardsAnnual.data),
       ]);
 
       // 3. Calculate Incorporador gross with deduplication (same as Vendas page)
@@ -160,10 +181,10 @@ export function useSetoresDashboard() {
         }, 0);
       };
 
-      // 4. Calculate Consórcio (Efeito Alavanca) - sum product_price (same as Vendas Consórcio page)
-      const calculateConsorcioGross = (transactions: { product_price: number | null }[] | null): number => {
-        if (!transactions) return 0;
-        return transactions.reduce((sum, t) => sum + (t.product_price || 0), 0);
+      // 4. Calculate Consórcio (Efeito Alavanca) - sum valor_credito from consortium_cards
+      const calculateConsorcioCredito = (cards: { valor_credito: number | null }[] | null): number => {
+        if (!cards) return 0;
+        return cards.reduce((sum, c) => sum + (Number(c.valor_credito) || 0), 0);
       };
 
       // Helper to get target value
@@ -189,12 +210,15 @@ export function useSetoresDashboard() {
         if (config.id === 'efeito_alavanca') {
           return {
             ...config,
-            apuradoSemanal: calculateConsorcioGross(consorcioWeekly.data),
+            apuradoSemanal: calculateConsorcioCredito(consorcioCardsWeekly.data),
             metaSemanal: getTarget('setor_efeito_alavanca_semana'),
-            apuradoMensal: calculateConsorcioGross(consorcioMonthly.data),
+            apuradoMensal: calculateConsorcioCredito(consorcioCardsMonthly.data),
             metaMensal: getTarget('setor_efeito_alavanca_mes'),
-            apuradoAnual: calculateConsorcioGross(consorcioAnnual.data),
+            apuradoAnual: calculateConsorcioCredito(consorcioCardsAnnual.data),
             metaAnual: getTarget('setor_efeito_alavanca_ano'),
+            comissaoSemanal,
+            comissaoMensal,
+            comissaoAnual,
           };
         }
 
