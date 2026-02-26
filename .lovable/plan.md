@@ -1,26 +1,23 @@
 
 
-## Plano: Alinhar layout do Efeito Alavanca com os demais setores
+## Plano: Total Geral usar Comissão do Efeito Alavanca (não valor de crédito)
 
-### Problema atual
-O card "Efeito Alavanca" no Painel do Diretor usa um layout diferente (apenas "Total em Cartas" e "Comissão Total" sem barra de progresso), enquanto o card "BU Consórcio" no Painel Equipe mostra o formato padrão com barra de progresso, Apurado/Meta e percentual.
+### Problema
+O "Total Geral" soma `apuradoSemanal/Mensal/Anual` de todos os setores. Para Efeito Alavanca, esse valor é o `valor_credito` (R$ 22M+), mas o que de fato entra como receita é a **comissão** (R$ 1M). Isso infla o Total Geral.
 
 ### Correção
 
-**Arquivo: `src/components/dashboard/EfeitoAlavancaRow.tsx`**
+**Arquivo: `src/hooks/useSetoresDashboard.ts`** (linhas 237-245)
 
-Refatorar o componente para seguir o mesmo padrão visual do `SetorRow`:
-- Adicionar barra de progresso (`Progress`) com cores por nível (verde ≥80%, amarelo ≥50%, vermelho <50%)
-- Mostrar Apurado (valor em cartas) vs Meta com percentual
-- Manter a linha de "Comissão Total" abaixo de cada período como informação complementar
-- Receber props de `metaSemanal`, `metaMensal`, `metaAnual` (já vêm do hook via `setor.metaSemanal` etc.)
+Alterar o cálculo de `totais` para que, no caso do setor `efeito_alavanca`, use `comissaoSemanal/Mensal/Anual` em vez de `apuradoSemanal/Mensal/Anual`:
 
-**Arquivo: `src/pages/Dashboard.tsx`**
+```typescript
+const totais = {
+  apuradoSemanal: setores.reduce((sum, s) => 
+    sum + (s.id === 'efeito_alavanca' ? (s.comissaoSemanal || 0) : s.apuradoSemanal), 0),
+  // ... mesmo padrão para mensal e anual
+};
+```
 
-Passar as props de meta para o `EfeitoAlavancaRow`:
-- `metaSemanal={setor.metaSemanal}`
-- `metaMensal={setor.metaMensal}`
-- `metaAnual={setor.metaAnual}`
-
-As metas já compartilham o prefixo `setor_efeito_alavanca` em ambos os painéis, então editar em um atualiza o outro automaticamente.
+O card do Efeito Alavanca continua mostrando `valor_credito` como "Apurado" e a comissão abaixo, mas para o Total Geral só entra a comissão.
 
