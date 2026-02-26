@@ -1,23 +1,34 @@
 
 
-## Plano: Total Geral usar Comissão do Efeito Alavanca (não valor de crédito)
+## Plano: Remover "Semanas" e simplificar menu do Dashboard
 
-### Problema
-O "Total Geral" soma `apuradoSemanal/Mensal/Anual` de todos os setores. Para Efeito Alavanca, esse valor é o `valor_credito` (R$ 22M+), mas o que de fato entra como receita é a **comissão** (R$ 1M). Isso infla o Total Geral.
+### Alterações
 
-### Correção
+**1. `src/components/layout/AppSidebar.tsx` (linhas 113-121)**
 
-**Arquivo: `src/hooks/useSetoresDashboard.ts`** (linhas 237-245)
-
-Alterar o cálculo de `totais` para que, no caso do setor `efeito_alavanca`, use `comissaoSemanal/Mensal/Anual` em vez de `apuradoSemanal/Mensal/Anual`:
+Transformar o item "Dashboard" de menu expansível (com sub-itens) para link direto sem filhos:
 
 ```typescript
-const totais = {
-  apuradoSemanal: setores.reduce((sum, s) => 
-    sum + (s.id === 'efeito_alavanca' ? (s.comissaoSemanal || 0) : s.apuradoSemanal), 0),
-  // ... mesmo padrão para mensal e anual
-};
+{
+  title: "Visão Diretor",
+  url: "/dashboard",
+  icon: LayoutDashboard,
+  resource: "dashboard",
+},
 ```
 
-O card do Efeito Alavanca continua mostrando `valor_credito` como "Apurado" e a comissão abaixo, mas para o Total Geral só entra a comissão.
+Resultado no sidebar:
+- Visão Chairman
+- Visão Diretor ← clique único, sem expandir
+
+**2. `src/App.tsx` (linha 92 e 183)**
+
+- Remover o import `DashboardSemanas`
+- Remover a rota `dashboard/semanas`
+
+**3. Arquivo `src/pages/dashboard/Semanas.tsx`**
+
+- Deletar o arquivo (não será mais usado)
+
+> Os hooks `useWeeklyMetricsList` e `usePendingMetrics` permanecem pois podem ser usados por outros componentes. O componente `WeeklyMetricsDetailDrawer` também permanece caso seja referenciado em outro lugar.
 
