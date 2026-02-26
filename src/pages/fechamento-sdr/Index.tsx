@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -39,22 +39,19 @@ const FechamentoSDRList = () => {
   const [selectedMonth, setSelectedMonth] = useState(searchParams.get('month') || currentMonth);
   const activeBU = useActiveBU();
 
+  // BU is locked: URL param > activeBU > fallback 'incorporador'
+  const buParam = searchParams.get('bu');
+  const validBUs = ['incorporador', 'consorcio', 'credito', 'projetos', 'leilao', 'marketing'];
+  const effectiveBu = (buParam && validBUs.includes(buParam)) ? buParam
+    : (activeBU && validBUs.includes(activeBU)) ? activeBU
+    : 'incorporador';
+
   // Filter states
   const [roleFilter, setRoleFilter] = useState<"sdr" | "closer" | "all">("all");
-  const [squadFilter, setSquadFilter] = useState<string>(activeBU || "all");
   const [searchTerm, setSearchTerm] = useState("");
-
-  // Update squad filter when user's BU loads
-  useEffect(() => {
-    if (activeBU && squadFilter === "all") {
-      setSquadFilter(activeBU);
-    }
-  }, [activeBU]);
-
-
   const { data: payouts, isLoading } = useSdrPayouts(selectedMonth, {
     roleType: roleFilter,
-    squad: squadFilter,
+    squad: effectiveBu,
     search: searchTerm,
   });
   // Mutation to call edge function for recalculation with correct iFood from calendar
@@ -285,7 +282,7 @@ const FechamentoSDRList = () => {
           <div className="flex items-center gap-3">
             <Select value={selectedMonth} onValueChange={(month) => {
               setSelectedMonth(month);
-              setSearchParams({ month });
+              setSearchParams({ month, bu: effectiveBu });
             }}>
               <SelectTrigger className="w-[200px]">
                 <SelectValue />
@@ -344,27 +341,17 @@ const FechamentoSDRList = () => {
             </SelectContent>
           </Select>
 
-          <Select value={squadFilter} onValueChange={setSquadFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="BU" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas BUs</SelectItem>
-              <SelectItem value="incorporador">Incorporador</SelectItem>
-              <SelectItem value="consorcio">Consórcio</SelectItem>
-              <SelectItem value="credito">Crédito</SelectItem>
-              <SelectItem value="projetos">Projetos</SelectItem>
-            </SelectContent>
-          </Select>
+          <Badge variant="outline" className="px-3 py-1.5 text-sm font-medium">
+            BU: {getSquadLabel(effectiveBu)}
+          </Badge>
 
-          {(searchTerm || roleFilter !== "all" || squadFilter !== "all") && (
+          {(searchTerm || roleFilter !== "all") && (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => {
                 setSearchTerm("");
                 setRoleFilter("all");
-                setSquadFilter("all");
               }}
             >
               Limpar filtros
@@ -380,12 +367,10 @@ const FechamentoSDRList = () => {
       </div>
 
       {/* Team Goals Summary */}
-      {squadFilter !== 'all' && (
-        <TeamGoalsSummary 
-          anoMes={selectedMonth} 
-          bu={squadFilter} 
-        />
-      )}
+      <TeamGoalsSummary 
+        anoMes={selectedMonth} 
+        bu={effectiveBu} 
+      />
 
       {/* Financial Summary Cards */}
       {payouts && payouts.length > 0 && financialSummary && (
@@ -544,7 +529,7 @@ const FechamentoSDRList = () => {
                         <SdrStatusBadge status={payout.status} />
                       </TableCell>
                       <TableCell className="text-center">
-                        <Button variant="ghost" size="sm" onClick={() => navigate(`/fechamento-sdr/${payout.id}?from=${selectedMonth}`)}>
+                        <Button variant="ghost" size="sm" onClick={() => navigate(`/fechamento-sdr/${payout.id}?from=${selectedMonth}&bu=${effectiveBu}`)}>
                           <Eye className="h-4 w-4 mr-1" />
                           Ver
                         </Button>

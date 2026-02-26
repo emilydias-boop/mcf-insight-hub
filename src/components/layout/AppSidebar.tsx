@@ -127,7 +127,7 @@ const menuItems: MenuItem[] = [
     separator: true,
     items: [
       { title: "Painel Comercial", url: "/crm/reunioes-equipe" },
-      { title: "Fechamento Equipe", url: "/fechamento-sdr" },
+      { title: "Fechamento Equipe", url: "/fechamento-sdr?bu=incorporador" },
       { title: "Vendas", url: "/bu-incorporador/transacoes" },
       { title: "CRM", url: "/crm" },
       { title: "Relatórios", url: "/bu-incorporador/relatorios" },
