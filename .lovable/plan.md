@@ -1,45 +1,47 @@
 
 
-## Auditoria: Configurações de Fechamento
+## Diagnóstico: Configuração de Metas do Time
 
-### Problemas encontrados
+### O que aconteceu
 
-**1. ~400 linhas de dead code no arquivo principal**
-O `Configuracoes.tsx` (789 linhas) contém 4 componentes de dialog legados que **nunca são renderizados**: `EditSdrDialog`, `EditCompPlanDialog`, `SdrFormDialog`, `CompPlanFormDialog` (linhas 78-561). Todos os hooks associados (`useSdrsAll`, `useAllCompPlans`, `useCreateSdr`, `useApproveSdr`, `useCreateCompPlan`, `useApproveCompPlan`, `useDeleteCompPlan`, `useUsers`, `useUpdateSdr`, `useUpdateCompPlan`) e handlers (`handleApproveSdr`, `handleApproveCompPlan`, `handleToggleActive`, `handleDeleteCompPlan`) também são dead code — instanciados mas jamais referenciados no JSX.
+Verifiquei os dados no banco para fevereiro 2026 (BU Incorporador):
 
-**2. Aba "Equipe" não filtra por BU da rota**
-A tela é acessada dentro de uma BU específica (ex: Incorporador MCF), mas a aba Equipe permite "Todas as BUs", mostrando pessoas de Consórcio e Crédito misturadas. Deveria travar na BU da rota, igual fizemos no Fechamento Equipe.
+| Campo | Valor no Banco |
+|---|---|
+| meta_valor | 900.000 |
+| supermeta_valor | 1.000.000 |
+| ultrameta_valor | 1.200.000 |
+| ultrameta_premio_ifood | 1.000 |
+| meta_divina_valor | 1.600.000 |
+| meta_divina_premio_sdr | **50.000** |
+| meta_divina_premio_closer | **50.000** |
 
-**3. Aba "Equipe" é redundante com o RH**
-A aba apenas lista employees do RH com um botão "Gerenciar no RH". Não permite edição — é puramente uma visualização duplicada. O único valor agregado seria se filtrasse apenas quem participa do fechamento daquela BU.
+### Problemas identificados
 
-**4. Planos OTE e Métricas Ativas também não filtram por BU da rota**
-Ambos permitem "Todas" as BUs, quebrando o isolamento quando acessado dentro de uma BU.
+**1. Prêmio Meta Divina veio automático (R$ 50.000)**
+Quando você criou as metas de fevereiro, o sistema pré-preencheu o formulário com valores padrão hardcoded no código:
+```text
+meta_divina_premio_sdr: 50000
+meta_divina_premio_closer: 50000
+```
+Ou seja, mesmo sem você definir, ao clicar "Salvar" esses valores foram gravados. Isso é um bug — os defaults deveriam ser **zero**, não 50 mil.
 
-**5. Metas Equipe: BU padrão hardcoded**
-O `TeamMonthlyGoalsTab` sempre inicia com `selectedBu='incorporador'`, independente da BU de onde o usuário acessa.
+**2. Onde configurar tudo isso**
+A configuração fica em: **Configurações** (botão no topo da tela de Fechamento Equipe) **→ aba "Metas do Time"**. Lá tem campos para:
+- Meta / Supermeta / Ultrameta: valor alvo + prêmio iFood de cada nível
+- Meta Divina: valor alvo + prêmio SDR + prêmio Closer
 
-**6. `SdrConfigTab` (Consórcio) gerencia tabela `sdr` legada**
-Usado apenas em `FechamentoConfig.tsx` do Consórcio. Duplica cadastro que deveria vir do RH + employees.
+O iFood da Ultrameta **já está configurado** (R$ 1.000) e aparece no badge da tela.
 
-### Plano de ação
+### Correção proposta
 
-**Etapa 1: Remover dead code do Configuracoes.tsx**
-- Deletar os 4 componentes de dialog legados (linhas 67-561)
-- Remover imports e hooks não utilizados (`useSdrsAll`, `useAllCompPlans`, `useCreateSdr`, etc.)
-- Remover handlers mortos (`handleApproveSdr`, `handleApproveCompPlan`, `handleToggleActive`, `handleDeleteCompPlan`)
-- Resultado: arquivo reduzido de ~789 para ~200 linhas
+1. **Alterar DEFAULT_GOAL_VALUES**: Zerar os prêmios padrão para que novos meses não venham com valores fantasma:
+   - `meta_divina_premio_sdr: 0`
+   - `meta_divina_premio_closer: 0`
+   - `ultrameta_premio_ifood: 0`
+   - `supermeta_premio_ifood: 0`
 
-**Etapa 2: Travar BU pelo contexto da URL**
-- Ler `searchParams.get('bu')` ou usar `useActiveBU()` como fallback
-- Passar `effectiveBu` como prop para `PlansOteTab`, `ActiveMetricsTab`, `TeamMonthlyGoalsTab` (via `defaultBU` + `lockBU`)
-- Na aba Equipe, remover o dropdown "Todas as BUs" e filtrar direto pela BU travada
-- Badge estática mostrando a BU ativa
+2. **Destacar visualmente quando há valores padrão não salvos**: Quando o mês ainda não tem configuração salva, mostrar um aviso "Valores padrão — salve para confirmar" para evitar gravar acidentalmente.
 
-**Etapa 3: Ajustar TeamMonthlyGoalsTab**
-- Aceitar props `defaultBU` e `lockBU` (igual PlansOteTab e ActiveMetricsTab já fazem)
-- Quando `lockBU=true`, esconder seletor de BU e usar `defaultBU`
-
-**Etapa 4: Atualizar link do sidebar**
-- Garantir que o link para Configurações de Fechamento inclua `?bu=incorporador` (ou BU correspondente) no `AppSidebar.tsx`
+3. **Corrigir fevereiro no banco**: Zerar os prêmios da Meta Divina de fevereiro já que você não pretendia configurá-los (ou ajustar para o valor desejado via a aba Metas do Time).
 
