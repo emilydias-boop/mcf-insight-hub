@@ -119,7 +119,7 @@ const ConfiguracoesSdr = () => {
                 <Users className="h-5 w-5" />
                 Equipe {buLabel}
               </CardTitle>
-              <Button onClick={() => navigate('/rh')}>
+              <Button onClick={() => navigate('/rh/colaboradores')}>
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Gerenciar no RH
               </Button>
@@ -176,7 +176,7 @@ const ConfiguracoesSdr = () => {
                           <Button 
                             size="sm" 
                             variant="ghost"
-                            onClick={() => navigate(`/rh?employee=${emp.id}`)}
+                            onClick={() => navigate(`/rh/colaboradores?employee=${emp.id}`)}
                             title="Editar no RH"
                           >
                             <ExternalLink className="h-4 w-4" />
