@@ -1,16 +1,67 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/formatters';
-import { Users, CalendarCheck, FileCheck, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
-import { FunilDuplo } from '@/components/dashboard/FunilDuplo';
+import { Users, CalendarCheck, FileCheck, TrendingUp, TrendingDown, ArrowRight, Calendar } from 'lucide-react';
+import { useClintFunnel } from '@/hooks/useClintFunnel';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
-import { startOfDay, endOfDay, subDays } from 'date-fns';
+import { Progress } from '@/components/ui/progress';
+import {
+  getCustomWeekStart,
+  getCustomWeekEnd,
+  formatCustomWeekRange,
+} from '@/lib/dateHelpers';
+import { startOfDay, endOfDay, subDays, startOfMonth, endOfMonth, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const PIPELINE_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
+
+type PeriodType = 'today' | 'week' | 'month';
+
+function getPeriodRange(period: PeriodType) {
+  const now = new Date();
+  switch (period) {
+    case 'today':
+      return { start: startOfDay(now), end: endOfDay(now), label: format(now, "dd/MM/yyyy", { locale: ptBR }) };
+    case 'week': {
+      const ws = getCustomWeekStart(now);
+      const we = getCustomWeekEnd(now);
+      return { start: ws, end: we, label: formatCustomWeekRange(now) };
+    }
+    case 'month': {
+      const ms = startOfMonth(now);
+      const me = endOfMonth(now);
+      return {
+        start: ms,
+        end: me,
+        label: `${format(ms, "dd/MM", { locale: ptBR })} - ${format(me, "dd/MM/yyyy", { locale: ptBR })}`,
+      };
+    }
+  }
+}
+
+function getPrevPeriodRange(period: PeriodType) {
+  const now = new Date();
+  switch (period) {
+    case 'today': {
+      const prev = subDays(now, 1);
+      return { start: startOfDay(prev), end: endOfDay(prev) };
+    }
+    case 'week': {
+      const ws = getCustomWeekStart(now);
+      const we = getCustomWeekEnd(now);
+      return { start: subDays(ws, 7), end: subDays(we, 7) };
+    }
+    case 'month': {
+      const ms = startOfMonth(now);
+      const prevMs = startOfMonth(subDays(ms, 1));
+      const prevMe = endOfMonth(prevMs);
+      return { start: prevMs, end: prevMe };
+    }
+  }
+}
 
 const STAGE_COLORS = [
   'hsl(var(--primary))',
@@ -21,16 +72,31 @@ const STAGE_COLORS = [
   'hsl(var(--chart-5, 340 75% 55%))',
 ];
 
-export function FunilDashboard() {
-  const now = new Date();
-  const weekStart = getCustomWeekStart(now);
-  const weekEnd = getCustomWeekEnd(now);
-  const prevWeekStart = subDays(weekStart, 7);
-  const prevWeekEnd = subDays(weekEnd, 7);
+const PERIOD_OPTIONS: { value: PeriodType; label: string }[] = [
+  { value: 'today', label: 'Hoje' },
+  { value: 'week', label: 'Semana' },
+  { value: 'month', label: 'Mês' },
+];
 
-  // KPIs: current week
+export function FunilDashboard() {
+  const [period, setPeriod] = useState<PeriodType>('week');
+
+  const { start: periodStart, end: periodEnd, label: periodLabel } = useMemo(() => getPeriodRange(period), [period]);
+  const { start: prevStart, end: prevEnd } = useMemo(() => getPrevPeriodRange(period), [period]);
+
+  const prevLabel = period === 'today' ? 'vs ontem' : period === 'week' ? 'vs semana anterior' : 'vs mês anterior';
+
+  // Funnel data (unified, no Lead A/B split)
+  const { data: funnelData, isLoading: loadingFunnel } = useClintFunnel(
+    PIPELINE_ORIGIN_ID,
+    periodStart,
+    periodEnd,
+    false
+  );
+
+  // KPIs: current period
   const { data: kpis, isLoading: loadingKpis } = useQuery({
-    queryKey: ['funnel-kpis', weekStart.toISOString()],
+    queryKey: ['funnel-kpis', periodStart.toISOString(), periodEnd.toISOString()],
     queryFn: async () => {
       const [
         { count: novosLeads },
@@ -39,17 +105,20 @@ export function FunilDashboard() {
       ] = await Promise.all([
         supabase.from('crm_deals')
           .select('*', { count: 'exact', head: true })
-          .gte('created_at', weekStart.toISOString())
-          .lte('created_at', weekEnd.toISOString()),
+          .eq('origin_id', PIPELINE_ORIGIN_ID)
+          .gte('created_at', periodStart.toISOString())
+          .lte('created_at', periodEnd.toISOString()),
         supabase.from('crm_deals')
           .select('id, stage:crm_stages!inner(stage_name)')
-          .gte('created_at', weekStart.toISOString())
-          .lte('created_at', weekEnd.toISOString())
+          .eq('origin_id', PIPELINE_ORIGIN_ID)
+          .gte('created_at', periodStart.toISOString())
+          .lte('created_at', periodEnd.toISOString())
           .ilike('crm_stages.stage_name', '%Reunião 01 Agendada%'),
         supabase.from('crm_deals')
           .select('id, stage:crm_stages!inner(stage_name)')
-          .gte('created_at', weekStart.toISOString())
-          .lte('created_at', weekEnd.toISOString())
+          .eq('origin_id', PIPELINE_ORIGIN_ID)
+          .gte('created_at', periodStart.toISOString())
+          .lte('created_at', periodEnd.toISOString())
           .ilike('crm_stages.stage_name', '%Contrato Pago%'),
       ]);
 
@@ -63,9 +132,9 @@ export function FunilDashboard() {
     staleTime: 60000,
   });
 
-  // KPIs: previous week (for comparison)
+  // KPIs: previous period
   const { data: prevKpis } = useQuery({
-    queryKey: ['funnel-kpis-prev', prevWeekStart.toISOString()],
+    queryKey: ['funnel-kpis-prev', prevStart.toISOString(), prevEnd.toISOString()],
     queryFn: async () => {
       const [
         { count: novosLeads },
@@ -74,17 +143,20 @@ export function FunilDashboard() {
       ] = await Promise.all([
         supabase.from('crm_deals')
           .select('*', { count: 'exact', head: true })
-          .gte('created_at', prevWeekStart.toISOString())
-          .lte('created_at', prevWeekEnd.toISOString()),
+          .eq('origin_id', PIPELINE_ORIGIN_ID)
+          .gte('created_at', prevStart.toISOString())
+          .lte('created_at', prevEnd.toISOString()),
         supabase.from('crm_deals')
           .select('id, stage:crm_stages!inner(stage_name)')
-          .gte('created_at', prevWeekStart.toISOString())
-          .lte('created_at', prevWeekEnd.toISOString())
+          .eq('origin_id', PIPELINE_ORIGIN_ID)
+          .gte('created_at', prevStart.toISOString())
+          .lte('created_at', prevEnd.toISOString())
           .ilike('crm_stages.stage_name', '%Reunião 01 Agendada%'),
         supabase.from('crm_deals')
           .select('id, stage:crm_stages!inner(stage_name)')
-          .gte('created_at', prevWeekStart.toISOString())
-          .lte('created_at', prevWeekEnd.toISOString())
+          .eq('origin_id', PIPELINE_ORIGIN_ID)
+          .gte('created_at', prevStart.toISOString())
+          .lte('created_at', prevEnd.toISOString())
           .ilike('crm_stages.stage_name', '%Contrato Pago%'),
       ]);
 
@@ -97,13 +169,14 @@ export function FunilDashboard() {
     staleTime: 60000,
   });
 
-  // Stage distribution
+  // Stage distribution (current snapshot)
   const { data: stageDistribution, isLoading: loadingStages } = useQuery({
     queryKey: ['funnel-stage-distribution'],
     queryFn: async () => {
       const { data } = await supabase
         .from('crm_deals')
         .select('stage_id, stage:crm_stages!inner(stage_name, stage_order)')
+        .eq('origin_id', PIPELINE_ORIGIN_ID)
         .not('stage_id', 'is', null);
 
       if (!data) return [];
@@ -130,6 +203,7 @@ export function FunilDashboard() {
       const { data } = await supabase
         .from('crm_deals')
         .select('id, name, value, stage:crm_stages(stage_name)')
+        .eq('origin_id', PIPELINE_ORIGIN_ID)
         .not('value', 'is', null)
         .order('value', { ascending: false })
         .limit(5);
@@ -145,6 +219,7 @@ export function FunilDashboard() {
       const { data } = await supabase
         .from('crm_deals')
         .select('id, name, value, updated_at, stage:crm_stages(stage_name)')
+        .eq('origin_id', PIPELINE_ORIGIN_ID)
         .order('updated_at', { ascending: false })
         .limit(5);
       return data || [];
@@ -189,8 +264,34 @@ export function FunilDashboard() {
     },
   ];
 
+  const maxFunnelLeads = funnelData ? Math.max(...funnelData.map(s => s.leads), 1) : 1;
+
   return (
     <div className="space-y-6">
+      {/* Global Period Selector */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-foreground">Período:</span>
+          <span className="text-sm text-muted-foreground">{periodLabel}</span>
+        </div>
+        <div className="flex items-center bg-muted rounded-lg p-1 gap-0.5">
+          {PERIOD_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setPeriod(opt.value)}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                period === opt.value
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* KPIs */}
       <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         {kpiCards.map((kpi) => {
@@ -216,11 +317,8 @@ export function FunilDashboard() {
                     {kpi.variation !== null && (
                       <div className={`flex items-center gap-1 text-xs ${isPositive ? 'text-success' : 'text-destructive'}`}>
                         {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                        <span>{isPositive ? '+' : ''}{kpi.variation.toFixed(1)}% vs semana anterior</span>
+                        <span>{isPositive ? '+' : ''}{kpi.variation.toFixed(1)}% {prevLabel}</span>
                       </div>
-                    )}
-                    {kpi.variation === null && !kpi.isPercentage && (
-                      <p className="text-xs text-muted-foreground">Esta semana</p>
                     )}
                     {kpi.isPercentage && (
                       <p className="text-xs text-muted-foreground">Contratos / Novos Leads</p>
@@ -233,18 +331,66 @@ export function FunilDashboard() {
         })}
       </div>
 
-      {/* Funil Duplo */}
-      <FunilDuplo
-        originId={PIPELINE_ORIGIN_ID}
-        weekStart={weekStart}
-        weekEnd={weekEnd}
-        showCurrentState={false}
-      />
+      {/* Unified Funnel */}
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-foreground">Funil Comercial</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingFunnel ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : funnelData && funnelData.length > 0 ? (
+            <div className="space-y-3">
+              {funnelData.map((stage, index) => {
+                const progressPercent = (stage.leads / maxFunnelLeads) * 100;
+                const metaPercent = stage.meta > 0 ? Math.min((stage.leads / stage.meta) * 100, 100) : 0;
+                const metaHit = stage.meta > 0 && stage.leads >= stage.meta;
+                return (
+                  <div key={stage.stage_id} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium text-foreground truncate max-w-[200px]">{stage.etapa}</span>
+                      <div className="flex items-center gap-3 text-xs shrink-0">
+                        <span className="font-semibold text-foreground">{stage.leads}</span>
+                        {stage.meta > 0 && (
+                          <span className={`${metaHit ? 'text-success' : 'text-muted-foreground'}`}>
+                            Meta: {stage.meta}
+                          </span>
+                        )}
+                        {index > 0 && (
+                          <span className="text-muted-foreground">
+                            {stage.conversao.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <Progress
+                        value={progressPercent}
+                        className="h-3"
+                      />
+                      {stage.meta > 0 && (
+                        <div
+                          className="absolute top-0 h-3 border-r-2 border-dashed border-foreground/40"
+                          style={{ left: `${Math.min((stage.meta / maxFunnelLeads) * 100, 100)}%` }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-center py-8">Nenhum dado disponível para o período</p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Stage Distribution Chart */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-foreground">Distribuição por Etapa</CardTitle>
+          <CardTitle className="text-foreground">Distribuição por Etapa (Visão Atual)</CardTitle>
         </CardHeader>
         <CardContent>
           {loadingStages ? (
