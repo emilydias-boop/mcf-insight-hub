@@ -1,18 +1,21 @@
 
 
-## Problema: Faturamento no Fechamento usa todas as BUs em vez de só Incorporador
+## Problema: No-Show e Tentativas não auto-preenchem quando já existe KPI salvo
 
 ### Causa raiz
-O hook `useTeamRevenueByMonth` (linha 28-56 de `src/hooks/useTeamRevenueByMonth.ts`) para `bu === 'incorporador'` chama `get_all_hubla_transactions` — que retorna transações de **todas as BUs** (Incorporador + Consórcio + Leilão + Crédito etc.), totalizando R$ 1.810.940,92.
+No `KpiEditForm.tsx`, o auto-preenchimento da Agenda e Twilio (linhas 93-111) só acontece quando **não existe KPI salvo** (`!kpi`). Quando o KPI já foi salvo uma vez, o formulário carrega os valores antigos do banco (linhas 80-90) e nunca mais atualiza automaticamente.
 
-A página de Vendas (`TransacoesIncorp.tsx`) usa `get_hubla_transactions_by_bu('incorporador')`, que filtra apenas transações da BU Incorporador, totalizando R$ 1.444.641,00.
+Resultado: Agendamentos e Realizadas parecem corretos porque foram salvos com valores recentes, mas No-Shows (19 no banco vs 22 da Agenda) e Tentativas (0 no banco vs 750 do Twilio) ficam desatualizados.
 
 ### Correção
-Em `src/hooks/useTeamRevenueByMonth.ts`, trocar a chamada de `get_all_hubla_transactions` para `get_hubla_transactions_by_bu` passando `p_bu = 'incorporador'`, mantendo a mesma lógica de deduplicação com `get_first_transaction_ids` e `getDeduplicatedGross`.
+No `KpiEditForm.tsx`, **sempre** sobrescrever `no_shows` e `tentativas_ligacoes` com os valores automáticos (Agenda/Twilio) quando eles estiverem disponíveis — independente de já existir KPI salvo. Manter a possibilidade de edição manual pelo coordenador.
 
-### Detalhe técnico
-- RPC atual: `supabase.rpc('get_all_hubla_transactions', { p_start_date, p_end_date, p_limit: 10000, p_search: null, p_products: null })`
-- RPC correta: `supabase.rpc('get_hubla_transactions_by_bu', { p_bu: 'incorporador', p_search: null, p_start_date, p_end_date, p_limit: 10000 })`
+Concretamente:
+- Remover a condição `!kpi` dos useEffects de auto-preenchimento (linhas 93-111)
+- Os 3 campos automáticos (agendamentos, realizadas, no_shows) sempre atualizam da Agenda
+- Tentativas sempre atualiza do Twilio (para SDRs)
+- Score de organização continua manual (nunca auto-preenchido)
 
-Alteração em 1 arquivo: `src/hooks/useTeamRevenueByMonth.ts`
+### Arquivo alterado
+`src/components/sdr-fechamento/KpiEditForm.tsx` — remover `!kpi &&` das condições de auto-fill
 
