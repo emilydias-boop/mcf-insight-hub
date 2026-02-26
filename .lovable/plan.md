@@ -1,21 +1,36 @@
 
 
-## Problema: No-Show e Tentativas não auto-preenchem quando já existe KPI salvo
+## Problema: Edge Function calcula "Meta Realizadas" diferente do frontend
 
 ### Causa raiz
-No `KpiEditForm.tsx`, o auto-preenchimento da Agenda e Twilio (linhas 93-111) só acontece quando **não existe KPI salvo** (`!kpi`). Quando o KPI já foi salvo uma vez, o formulário carrega os valores antigos do banco (linhas 80-90) e nunca mais atualiza automaticamente.
+A Edge Function `recalculate-sdr-payout` calcula a meta de realizadas como **70% da META de agendadas** (linha 142):
+```
+metaRealizadasAjustada = Math.round(metaAgendadasAjustada * 0.7)
+→ 85 * 0.7 = 59
+→ 50/59 = 84.7% → multiplicador 0.5x
+```
 
-Resultado: Agendamentos e Realizadas parecem corretos porque foram salvos com valores recentes, mas No-Shows (19 no banco vs 22 da Agenda) e Tentativas (0 no banco vs 750 do Twilio) ficam desatualizados.
+Mas o frontend (`useCalculatedVariavel.ts`, linha 84) calcula como **70% das agendadas REAIS**:
+```
+metaAjustada = Math.round(agendadasReais * 0.7)
+→ 69 * 0.7 = 48
+→ 50/48 = 104.2% → multiplicador 1.0x
+```
+
+Isso explica: edge function dá R$ 400 (0.5x + 0.5x), frontend dá R$ 630 (0.5x + 1.0x).
 
 ### Correção
-No `KpiEditForm.tsx`, **sempre** sobrescrever `no_shows` e `tentativas_ligacoes` com os valores automáticos (Agenda/Twilio) quando eles estiverem disponíveis — independente de já existir KPI salvo. Manter a possibilidade de edição manual pelo coordenador.
+No arquivo `supabase/functions/recalculate-sdr-payout/index.ts`, **linha 142**, trocar:
+```typescript
+// ANTES:
+const metaRealizadasAjustada = Math.round(metaAgendadasAjustada * 0.7);
 
-Concretamente:
-- Remover a condição `!kpi` dos useEffects de auto-preenchimento (linhas 93-111)
-- Os 3 campos automáticos (agendamentos, realizadas, no_shows) sempre atualizam da Agenda
-- Tentativas sempre atualiza do Twilio (para SDRs)
-- Score de organização continua manual (nunca auto-preenchido)
+// DEPOIS:
+const metaRealizadasAjustada = Math.round((kpi.reunioes_agendadas || 0) * 0.7);
+```
+
+Isso sincroniza a Edge Function com o frontend, usando 70% das agendadas **reais** como meta de realizadas.
 
 ### Arquivo alterado
-`src/components/sdr-fechamento/KpiEditForm.tsx` — remover `!kpi &&` das condições de auto-fill
+`supabase/functions/recalculate-sdr-payout/index.ts` - 1 linha
 
