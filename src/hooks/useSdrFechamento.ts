@@ -150,7 +150,20 @@ const transformPayout = (data: any): SdrPayoutWithDetails => ({
   status: data.status as PayoutStatus,
 });
 
-// Mapeamento de squad para departamento RH
+// Normaliza qualquer variação de departamento para a chave canônica de BU
+const normalizeDeptToBU = (dept: string | null | undefined): string | null => {
+  if (!dept) return null;
+  const lower = dept.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (lower.includes('incorporador')) return 'incorporador';
+  if (lower.includes('consorcio')) return 'consorcio';
+  if (lower.includes('credito')) return 'credito';
+  if (lower.includes('projeto')) return 'projetos';
+  if (lower.includes('leilao')) return 'leilao';
+  if (lower.includes('marketing')) return 'marketing';
+  return null;
+};
+
+// Mapeamento de squad para departamento RH (mantido para compatibilidade)
 const SQUAD_TO_DEPT: Record<string, string> = {
   'incorporador': 'BU - Incorporador 50K',
   'consorcio': 'BU - Consórcio',
@@ -275,20 +288,22 @@ export const useSdrPayouts = (anoMes: string, filters?: {
           result = result.filter(p => (p.sdr as any)?.role_type === filters.roleType);
         }
         
-        // Filter by squad/BU - Use cascaded priority: departamento_vigente > employees.departamento > sdr.squad
+        // Filter by squad/BU - Use normalized canonical BU key
+        // Cascaded priority: departamento_vigente > employees.departamento > sdr.squad
         if (filters.squad && filters.squad !== 'all') {
-          const expectedDept = SQUAD_TO_DEPT[filters.squad];
           result = result.filter(p => {
             // 1. Priority: Frozen department from payout (departamento_vigente)
             const frozenDept = (p as any).departamento_vigente;
-            if (frozenDept) {
-              return frozenDept === expectedDept;
+            const canonicalFromFrozen = normalizeDeptToBU(frozenDept);
+            if (canonicalFromFrozen) {
+              return canonicalFromFrozen === filters.squad;
             }
             
             // 2. Fallback: Current HR department
             const employee = (p as any).employee;
-            if (employee?.departamento) {
-              return employee.departamento === expectedDept;
+            const canonicalFromHR = normalizeDeptToBU(employee?.departamento);
+            if (canonicalFromHR) {
+              return canonicalFromHR === filters.squad;
             }
             
             // 3. Final fallback: sdr.squad for orphans

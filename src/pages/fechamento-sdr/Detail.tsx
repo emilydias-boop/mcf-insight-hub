@@ -98,6 +98,7 @@ const FechamentoSDRDetail = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const fromMonth = searchParams.get('from');
+  const fromBu = searchParams.get('bu');
   const { user, role } = useAuth();
 
   const { data: payout, isLoading } = useSdrPayoutDetail(payoutId);
@@ -170,7 +171,7 @@ const FechamentoSDRDetail = () => {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">Fechamento não encontrado.</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate(fromMonth ? `/fechamento-sdr?month=${fromMonth}` : '/fechamento-sdr')}>
+        <Button variant="outline" className="mt-4" onClick={() => navigate(fromMonth ? `/fechamento-sdr?month=${fromMonth}${fromBu ? `&bu=${fromBu}` : ''}` : `/fechamento-sdr${fromBu ? `?bu=${fromBu}` : ''}`)}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Voltar
         </Button>
@@ -322,7 +323,7 @@ const FechamentoSDRDetail = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate(fromMonth ? `/fechamento-sdr?month=${fromMonth}` : '/fechamento-sdr')}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(fromMonth ? `/fechamento-sdr?month=${fromMonth}${fromBu ? `&bu=${fromBu}` : ''}` : `/fechamento-sdr${fromBu ? `?bu=${fromBu}` : ''}`)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
