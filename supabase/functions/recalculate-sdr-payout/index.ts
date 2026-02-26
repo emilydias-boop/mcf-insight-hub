@@ -138,8 +138,8 @@ const calculatePayoutValues = (
   // Meta de agendadas = meta_diaria do SDR × dias úteis do mês
   const metaAgendadasAjustada = Math.round((sdrMetaDiaria || 0) * diasUteisReal);
   
-  // Meta de Realizadas = 70% da META de agendadas do mês (não do valor real)
-  const metaRealizadasAjustada = Math.round(metaAgendadasAjustada * 0.7);
+  // Meta de Realizadas = 70% das agendadas REAIS (sincronizado com frontend)
+  const metaRealizadasAjustada = Math.round((kpi.reunioes_agendadas || 0) * 0.7);
   
   // Meta de Tentativas = 84/dia × dias úteis (meta fixa para todos) - APENAS SDR
   const metaTentativasAjustada = isCloser ? 0 : Math.round(META_TENTATIVAS_DIARIA * diasUteisReal);
