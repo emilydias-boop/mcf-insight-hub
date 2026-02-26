@@ -1,39 +1,42 @@
 
 
-## Plano: Opção C — Duas colunas na aba R2: "SDR (R1)" e "Agendado por"
+## Plano: Adicionar filtros nas abas do Closer Detail
 
-### Alterações
+### Escopo
+Criar um componente `CloserLeadsFilters` que será exibido acima da tabela nas 4 abas (Leads Realizados, No-Shows, R2 Agendadas, Faturamento). A aba "Visão Geral" permanece sem filtros.
 
-**1. `src/hooks/useCloserDetailData.ts`**
+Os filtros serão **client-side** — filtrando os dados já carregados (`leads`, `noShowLeads`, `r2Leads`).
 
-Na query `closer-r2-leads`, após obter os `r1DealIds`, também buscar o `booked_by` do R1 original para cada `deal_id`:
+### Filtros disponíveis
+1. **Busca por texto** — filtra por nome, email ou telefone do lead
+2. **Status** — Select com opções dinâmicas (Realizada, Contrato Pago, No-Show, Agendada, etc.)
+3. **SDR** — Select com SDRs únicos extraídos dos dados
+4. **Data** — Presets (Hoje, Semana, Mês, Custom com date pickers) que filtram dentro do período já carregado
 
-```typescript
-// Buscar booked_by do R1 para cada deal_id
-const { data: r1Sdr } = await supabase
-  .from('meeting_slot_attendees')
-  .select('deal_id, booked_by, meeting_slot:meeting_slots!inner(meeting_type)')
-  .in('deal_id', Array.from(r1DealIds))
-  .eq('meeting_slot.meeting_type', 'r1')
-  .order('created_at', { ascending: false });
+### Implementação
+
+**1. Novo componente: `src/components/closer/CloserLeadsFilters.tsx`**
+- Props: `leads: CloserLead[]`, `onFilter: (filtered: CloserLead[]) => void`, `showR1Sdr?: boolean`
+- Inputs: Input de busca, Select de status, Select de SDR, botões de período (Hoje/Semana/Mês/Custom) + date pickers
+- Extrai listas únicas de status e SDRs dos leads recebidos
+- Aplica filtros combinados e retorna leads filtrados via callback
+
+**2. Atualizar `src/pages/crm/CloserMeetingsDetailPage.tsx`**
+- Importar `CloserLeadsFilters`
+- Para cada aba (leads, noshows, r2, faturamento), manter estado local de leads filtrados
+- Renderizar `<CloserLeadsFilters>` acima do `<CloserLeadsTable>` dentro de cada `TabsContent`
+- Passar leads filtrados ao `CloserLeadsTable` e contagem filtrada nos TabsTrigger
+
+**3. Atualizar `src/components/closer/CloserRevenueTab.tsx`**
+- Aceitar prop opcional `searchFilter?: string` e aplicar busca nos dados exibidos, ou integrar o mesmo componente de filtros
+
+### Layout dos filtros
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ [🔍 Buscar nome, email, telefone]  [Status ▼]  [SDR ▼]     │
+│ [Hoje] [Semana] [Mês] [📅 Início] — [📅 Fim]   [Limpar]   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-Montar um mapa `deal_id → booked_by do R1` (primeiro match = mais recente). Buscar profiles desses IDs junto com os do R2. Adicionar campo `r1_sdr_name` ao retorno.
-
-**2. `src/hooks/useCloserDetailData.ts` — tipo `CloserLead`**
-
-Adicionar campo opcional:
-```typescript
-r1_sdr_name?: string | null;
-```
-
-**3. `src/components/closer/CloserLeadsTable.tsx`**
-
-- Aceitar prop `showR1Sdr?: boolean` (default `false`)
-- Quando `true`: renomear header "SDR" para "SDR (R1)" e adicionar coluna "Agendado por" após ela
-- "SDR (R1)" mostra `lead.r1_sdr_name`; "Agendado por" mostra `lead.booked_by_name`
-
-**4. `src/pages/crm/CloserMeetingsDetailPage.tsx`**
-
-Na aba R2, passar `showR1Sdr={true}` ao `CloserLeadsTable`.
+Compacto em uma ou duas linhas, seguindo o estilo visual do dashboard (dark theme, borders, outline buttons).
 
