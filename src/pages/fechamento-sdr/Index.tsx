@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -12,6 +12,7 @@ import { SdrStatusBadge } from "@/components/sdr-fechamento/SdrStatusBadge";
 import { useSdrPayouts } from "@/hooks/useSdrFechamento";
 import { formatCurrency } from "@/lib/formatters";
 import { TeamGoalsSummary } from "@/components/fechamento/TeamGoalsSummary";
+import { useActiveBU } from "@/hooks/useActiveBU";
 import {
   Calculator,
   Download,
@@ -36,11 +37,20 @@ const FechamentoSDRList = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentMonth = format(new Date(), "yyyy-MM");
   const [selectedMonth, setSelectedMonth] = useState(searchParams.get('month') || currentMonth);
+  const activeBU = useActiveBU();
 
   // Filter states
   const [roleFilter, setRoleFilter] = useState<"sdr" | "closer" | "all">("all");
-  const [squadFilter, setSquadFilter] = useState<string>("all");
+  const [squadFilter, setSquadFilter] = useState<string>(activeBU || "all");
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Update squad filter when user's BU loads
+  useEffect(() => {
+    if (activeBU && squadFilter === "all") {
+      setSquadFilter(activeBU);
+    }
+  }, [activeBU]);
+
 
   const { data: payouts, isLoading } = useSdrPayouts(selectedMonth, {
     roleType: roleFilter,
