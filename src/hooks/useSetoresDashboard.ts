@@ -236,11 +236,11 @@ export function useSetoresDashboard() {
 
       // Calculate totals
       const totais = {
-        apuradoSemanal: setores.reduce((sum, s) => sum + s.apuradoSemanal, 0),
+        apuradoSemanal: setores.reduce((sum, s) => sum + (s.id === 'efeito_alavanca' ? (s.comissaoSemanal || 0) : s.apuradoSemanal), 0),
         metaSemanal: setores.reduce((sum, s) => sum + s.metaSemanal, 0),
-        apuradoMensal: setores.reduce((sum, s) => sum + s.apuradoMensal, 0),
+        apuradoMensal: setores.reduce((sum, s) => sum + (s.id === 'efeito_alavanca' ? (s.comissaoMensal || 0) : s.apuradoMensal), 0),
         metaMensal: setores.reduce((sum, s) => sum + s.metaMensal, 0),
-        apuradoAnual: setores.reduce((sum, s) => sum + s.apuradoAnual, 0),
+        apuradoAnual: setores.reduce((sum, s) => sum + (s.id === 'efeito_alavanca' ? (s.comissaoAnual || 0) : s.apuradoAnual), 0),
         metaAnual: setores.reduce((sum, s) => sum + s.metaAnual, 0),
       };
 
