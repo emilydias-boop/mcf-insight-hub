@@ -1,16 +1,26 @@
 
 
-## Diagnóstico
+## Plano: Alinhar layout do Efeito Alavanca com os demais setores
 
-O erro `consorcioWeekly is not defined` não existe no código atual. O arquivo `useSetoresDashboard.ts` usa corretamente `consorcioCardsWeekly` (linhas 102, 170, 213). 
+### Problema atual
+O card "Efeito Alavanca" no Painel do Diretor usa um layout diferente (apenas "Total em Cartas" e "Comissão Total" sem barra de progresso), enquanto o card "BU Consórcio" no Painel Equipe mostra o formato padrão com barra de progresso, Apurado/Meta e percentual.
 
-Isso é um **cache de build desatualizado** — o preview está rodando uma versão anterior do código que ainda referenciava uma variável chamada `consorcioWeekly` (provavelmente de uma edição intermediária que não foi salva corretamente).
+### Correção
 
-## Correção
+**Arquivo: `src/components/dashboard/EfeitoAlavancaRow.tsx`**
 
-Nenhuma mudança de código é necessária. O arquivo já está correto. Basta forçar um rebuild:
+Refatorar o componente para seguir o mesmo padrão visual do `SetorRow`:
+- Adicionar barra de progresso (`Progress`) com cores por nível (verde ≥80%, amarelo ≥50%, vermelho <50%)
+- Mostrar Apurado (valor em cartas) vs Meta com percentual
+- Manter a linha de "Comissão Total" abaixo de cada período como informação complementar
+- Receber props de `metaSemanal`, `metaMensal`, `metaAnual` (já vêm do hook via `setor.metaSemanal` etc.)
 
-1. **Forçar rebuild** — fazer qualquer micro-edição no arquivo (ex: adicionar/remover um espaço em branco em um comentário) para invalidar o cache do Vite e forçar recompilação.
+**Arquivo: `src/pages/Dashboard.tsx`**
 
-Se o erro persistir após rebuild, posso investigar se há outro arquivo importando uma versão antiga do hook.
+Passar as props de meta para o `EfeitoAlavancaRow`:
+- `metaSemanal={setor.metaSemanal}`
+- `metaMensal={setor.metaMensal}`
+- `metaAnual={setor.metaAnual}`
+
+As metas já compartilham o prefixo `setor_efeito_alavanca` em ambos os painéis, então editar em um atualiza o outro automaticamente.
 
