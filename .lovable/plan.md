@@ -2,41 +2,47 @@
 
 ## Problema
 
-O KPI "Reuniões Agendadas" (e "Contratos Pagos") usa **snapshot do stage atual** dos deals:
+A query em `deal_activities` retorna apenas **15 registros** de "Reunião 01 Agendada" em fevereiro. A fonte correta é o sistema de agenda (`meeting_slot_attendees` + `meeting_slots`), que tem **~866** registros — a mesma fonte usada pelas Metas da Equipe.
 
-```
-crm_deals WHERE stage = 'Reunião 01 Agendada' AND created_at no período
-```
-
-Deals que já passaram por "R1 Agendada" mas avançaram para "R1 Realizada", "Contrato Pago", etc. **não são contados**. O número real é muito maior.
+A tabela `deal_activities` não é a fonte de verdade para reuniões agendadas — é apenas um log parcial de mudanças de stage no CRM.
 
 ## Solução
 
-Trocar a fonte de dados para `deal_activities` (movimentações históricas), contando deals que **passaram** por cada stage no período, não apenas os que estão lá agora.
+Trocar as queries de **Reuniões Agendadas** e **Contratos Pagos** no `FunilDashboard.tsx` para usar a mesma RPC do painel de Metas: `get_sdr_metrics_from_agenda`.
 
 ### Alteração em `src/components/crm/FunilDashboard.tsx`
 
-Substituir as queries de `agendadas` e `contratos` (linhas 111-122) por queries em `deal_activities`:
+**KPIs do período atual (linhas ~98-133):**
+1. Manter a query de `novosLeads` (crm_deals) como está
+2. Substituir as 2 queries de `deal_activities` por uma chamada à RPC `get_sdr_metrics_from_agenda`
+3. Extrair `r1_agendada` (sum) para Reuniões Agendadas e `contratos` (sum) para Contratos Pagos
+4. Recalcular Taxa de Conversão com os novos valores
+
+**KPIs do período anterior (linhas ~135-170):**
+- Mesma mudança: usar `get_sdr_metrics_from_agenda` com datas do período anterior
 
 ```typescript
-// Reuniões Agendadas: deals que PASSARAM por R1 Agendada no período
-supabase.from('deal_activities')
-  .select('deal_id')
-  .in('activity_type', ['stage_change', 'stage_changed'])
-  .ilike('to_stage', '%Reunião 01 Agendada%')
-  .gte('created_at', periodStart.toISOString())
-  .lte('created_at', periodEnd.toISOString())
+// Exemplo da nova lógica:
+const [
+  { count: novosLeads },
+  rpcResult,
+] = await Promise.all([
+  supabase.from('crm_deals')
+    .select('*', { count: 'exact', head: true })
+    .eq('origin_id', PIPELINE_ORIGIN_ID)
+    .gte('created_at', periodStart.toISOString())
+    .lte('created_at', periodEnd.toISOString()),
+  supabase.rpc('get_sdr_metrics_from_agenda', {
+    start_date: format(periodStart, 'yyyy-MM-dd'),
+    end_date: format(periodEnd, 'yyyy-MM-dd'),
+    sdr_email_filter: null,
+  }),
+]);
 
-// Contratos Pagos: deals que PASSARAM por Contrato Pago no período
-supabase.from('deal_activities')
-  .select('deal_id')
-  .in('activity_type', ['stage_change', 'stage_changed'])
-  .ilike('to_stage', '%Contrato Pago%')
-  .gte('created_at', periodStart.toISOString())
-  .lte('created_at', periodEnd.toISOString())
+const rpcData = (rpcResult.data as any)?.metrics || [];
+const agendadasCount = rpcData.reduce((sum, m) => sum + (m.r1_agendada || 0), 0);
+const contratosCount = rpcData.reduce((sum, m) => sum + (m.contratos || 0), 0);
 ```
 
-Deduplicar por `deal_id` no JS (usar `new Set(data.map(d => d.deal_id)).size`) para contar deals únicos.
-
-Aplicar a mesma correção para as queries do **período anterior** (linhas 149-160).
+Isso alinha o Painel de Controle do Funil com o Painel de Metas da Equipe (866 R1 Agendada, ~209 Contratos).
 
