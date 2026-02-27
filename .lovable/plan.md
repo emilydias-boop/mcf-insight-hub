@@ -1,31 +1,34 @@
 
 
-## Melhorias no Painel de Controle do Funil Comercial
+## Adicionar linha "Outside" na tabela de Closers
 
-### Problemas Identificados
+### O que muda
 
-1. **Lead B não existe mais** — o `FunilDuplo` divide em Lead A / Lead B desnecessariamente, ocupando espaço com uma coluna vazia
-2. **Período dos KPIs invisível** — os 4 cards usam a semana corrente internamente mas não mostram qual período, e o seletor de período do funil é independente dos KPIs
-3. **Dois seletores de período desconectados** — KPIs fixos na semana, funil com seu próprio dropdown
+Na `CloserSummaryTable`, adicionar uma linha dedicada **"Outside"** entre as linhas dos closers e a linha de Total. Essa linha mostra a soma de outsides (leads que compraram antes da R1).
 
-### Solução
-
-**Seletor de período global** no topo que controla KPIs + Funil + Distribuição, tudo sincronizado.
-
-**Substituir `FunilDuplo` por funil simples (sem divisão A/B)** — usar o hook `useClintFunnel` (que já existe e retorna dados unificados) em vez do `useClintFunnelByLeadType`.
+A linha de **Total** passa a somar `contrato_pago + outside` na coluna "Contrato Pago", igualando o valor do KPI.
 
 ### Implementação
 
-1. **`FunilDashboard.tsx`** — reescrever:
-   - Adicionar seletor de período global (Hoje / Semana / Mês) no header, com label visível do intervalo de datas
-   - Remover `FunilDuplo` e substituir por um funil simples usando `useClintFunnel` com `FunilLista` única
-   - Passar o mesmo período para KPIs, funil e distribuição
-   - Manter Novo Lead (Vendas A010), distribuição por etapa e listas de negócios
+**`src/components/sdr/CloserSummaryTable.tsx`**:
 
-2. **Manter `FunilDuplo.tsx` intacto** — pode ser usado em outras páginas, não deletar
+1. Após o `data.map(...)` dos closers, inserir uma `TableRow` estilizada (fundo laranja sutil) com:
+   - Coluna nome: "Outside" (com ícone ou badge laranja)
+   - Colunas R1 Agendada, R1 Realizada, No-show, Taxa No-Show, R2 Agendada: vazias ou "—"
+   - Coluna "Contrato Pago": `totals.outside` (a soma dos outsides de todos os closers)
 
-### Resultado
-- 1 seletor de período controla tudo
-- Funil unificado sem coluna Lead B vazia
-- Período visível em texto (ex: "21/02 - 27/02/2026")
+2. Na linha **Total**, coluna "Contrato Pago": mostrar `totals.contrato_pago + totals.outside` para bater com o KPI
+
+3. Manter a coluna "Outside" por closer como está (mostra quantos outsides cada closer teve na R1)
+
+### Resultado visual
+
+```text
+Closer       | R1 Agend | Outside | R1 Real | ... | Contrato Pago | ...
+─────────────┼──────────┼─────────┼─────────┼─────┼───────────────┼────
+Closer A     |    25    |    3    |   18    | ... |      12       | ...
+Closer B     |    30    |    5    |   22    | ... |      15       | ...
+─── Outside ─┼─────────-┼─────────┼─────────┼─────┼───── 22 ──────┼────
+═══ Total ═══|    55    |   22    |   40    | ... |    183+22=205 | ...
+```
 
