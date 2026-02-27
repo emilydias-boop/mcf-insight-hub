@@ -261,11 +261,16 @@ export default function ReunioesEquipe() {
   // Fetch Outside metrics for the selected period
   const { data: outsideData } = useSdrOutsideMetrics(start, end);
 
-  // Enrich teamKPIs with Outside data
+  // Calculate outsides from closerMetrics (source of truth)
+  const outsideFromClosers = useMemo(() => {
+    return closerMetrics?.reduce((sum, c) => sum + c.outside, 0) || 0;
+  }, [closerMetrics]);
+
+  // Enrich teamKPIs with Outside data - use closerMetrics as fallback
   const enrichedKPIs = useMemo(() => ({
     ...teamKPIs,
-    totalOutside: outsideData?.totalOutside || 0,
-  }), [teamKPIs, outsideData]);
+    totalOutside: outsideData?.totalOutside || outsideFromClosers,
+  }), [teamKPIs, outsideData, outsideFromClosers]);
 
   // Create base dataset with all SDRs (zeros) for "today" preset
   const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
@@ -341,11 +346,11 @@ export default function ReunioesEquipe() {
     r1Agendada: monthKPIs?.totalR1Agendada || 0,
     r1Realizada: monthKPIs?.totalRealizadas || 0,
     noShow: monthKPIs?.totalNoShows || 0,
-    contrato: monthKPIs?.totalContratos || 0,
+    contrato: (monthKPIs?.totalContratos || 0) + outsideFromClosers,
     r2Agendada: monthR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: monthR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: monthR2VendasKPIs?.vendasRealizadas || 0,
-  }), [monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs]);
+  }), [monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs, outsideFromClosers]);
 
   // Handlers that sync with URL
   const handlePresetChange = (preset: DatePreset) => {
