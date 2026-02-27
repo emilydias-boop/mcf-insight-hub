@@ -598,6 +598,7 @@ export default function ReunioesEquipe() {
             <CloserSummaryTable
               data={closerMetrics}
               isLoading={closerLoading}
+              totalContratosFromKPI={(enrichedKPIs.totalContratos || 0) + outsideFromClosers}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
                 const params = new URLSearchParams();
                 params.set("preset", datePreset);
