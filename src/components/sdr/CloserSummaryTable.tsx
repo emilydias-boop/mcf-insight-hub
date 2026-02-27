@@ -148,6 +148,25 @@ export function CloserSummaryTable({
               );
             })}
             
+            {/* Outside Row */}
+            <TableRow className="bg-orange-500/5 border-t border-dashed border-orange-500/30">
+              <TableCell className="font-medium">
+                <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/30">
+                  Outside
+                </Badge>
+              </TableCell>
+              <TableCell className="text-center text-muted-foreground">—</TableCell>
+              <TableCell className="text-center text-muted-foreground">—</TableCell>
+              <TableCell className="text-center text-muted-foreground">—</TableCell>
+              <TableCell className="text-center text-muted-foreground">—</TableCell>
+              <TableCell className="text-center text-muted-foreground">—</TableCell>
+              <TableCell className="text-center">
+                <span className="text-orange-400 font-semibold">{totals.outside}</span>
+              </TableCell>
+              <TableCell className="text-center text-muted-foreground">—</TableCell>
+              <TableCell className="text-center text-muted-foreground">—</TableCell>
+            </TableRow>
+
             {/* Totals Row */}
             <TableRow className="bg-muted/30 font-semibold border-t-2 border-border">
               <TableCell className="text-foreground">Total</TableCell>
@@ -177,7 +196,7 @@ export function CloserSummaryTable({
                 </span>
               </TableCell>
               <TableCell className="text-center">
-                <span className="text-amber-400">{totals.contrato_pago}</span>
+                <span className="text-amber-400">{totals.contrato_pago + totals.outside}</span>
               </TableCell>
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
