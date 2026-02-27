@@ -1,36 +1,42 @@
 
 
-## Análise da Diferença: 208 vs 206
+## Problema
 
-### Origem dos Números
+O KPI "Reuniões Agendadas" (e "Contratos Pagos") usa **snapshot do stage atual** dos deals:
 
-| Fonte | Valor | Como calcula |
-|-------|-------|-------------|
-| KPI "Contratos" | **208** | `totalContratos (SDR: 185) + outsideFromClosers (23)` |
-| Metas "Contrato Pago" | **208** | `monthKPIs.totalContratos (185) + outsideFromClosers (23)` |
-| Tabela Closers "Total" | **206** | `soma contrato_pago dos closers (183) + outside (23)` |
+```
+crm_deals WHERE stage = 'Reunião 01 Agendada' AND created_at no período
+```
 
-### Causa Raiz
+Deals que já passaram por "R1 Agendada" mas avançaram para "R1 Realizada", "Contrato Pago", etc. **não são contados**. O número real é muito maior.
 
-A diferença de **2** está entre o `totalContratos` dos SDRs (185) e a soma de `contrato_pago` dos Closers (183). São **hooks diferentes com lógicas distintas**:
+## Solução
 
-1. **SDR** (`get_sdr_metrics_from_agenda` RPC): conta contratos pelo **SDR que agendou** (`booked_by`)
-2. **Closer** (`useR1CloserMetrics`): conta contratos pelo **Closer que atendeu** (`closer_id`)
+Trocar a fonte de dados para `deal_activities` (movimentações históricas), contando deals que **passaram** por cada stage no período, não apenas os que estão lá agora.
 
-Os 2 contratos "extras" no SDR provavelmente são:
-- Reuniões onde o `closer_id` não é de um closer ativo, ou
-- Contratos atribuídos a um SDR válido mas cujo closer não está na lista de closers R1 ativos
+### Alteração em `src/components/crm/FunilDashboard.tsx`
 
-### Solução
+Substituir as queries de `agendadas` e `contratos` (linhas 111-122) por queries em `deal_activities`:
 
-Para que a tabela de Closers bata com o KPI, a linha **Total** deve usar o `totalContratos` do KPI (fonte SDR) em vez de somar `contrato_pago` dos closers.
+```typescript
+// Reuniões Agendadas: deals que PASSARAM por R1 Agendada no período
+supabase.from('deal_activities')
+  .select('deal_id')
+  .in('activity_type', ['stage_change', 'stage_changed'])
+  .ilike('to_stage', '%Reunião 01 Agendada%')
+  .gte('created_at', periodStart.toISOString())
+  .lte('created_at', periodEnd.toISOString())
 
-**`src/components/sdr/CloserSummaryTable.tsx`**:
-- Adicionar prop opcional `totalContratosFromKPI?: number`
-- Na linha Total, coluna "Contrato Pago": usar `totalContratosFromKPI` quando disponível, senão `totals.contrato_pago + totals.outside`
+// Contratos Pagos: deals que PASSARAM por Contrato Pago no período
+supabase.from('deal_activities')
+  .select('deal_id')
+  .in('activity_type', ['stage_change', 'stage_changed'])
+  .ilike('to_stage', '%Contrato Pago%')
+  .gte('created_at', periodStart.toISOString())
+  .lte('created_at', periodEnd.toISOString())
+```
 
-**`src/pages/crm/ReunioesEquipe.tsx`**:
-- Passar `totalContratosFromKPI={enrichedKPIs.totalContratos + outsideFromClosers}` para o `CloserSummaryTable`
+Deduplicar por `deal_id` no JS (usar `new Set(data.map(d => d.deal_id)).size`) para contar deals únicos.
 
-Assim o Total da tabela sempre espelha o KPI.
+Aplicar a mesma correção para as queries do **período anterior** (linhas 149-160).
 
