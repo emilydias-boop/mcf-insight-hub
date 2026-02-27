@@ -22,24 +22,24 @@ import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
 // Configuração de abas visíveis por BU
 const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
   incorporador: [
-    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'visao-geral', 'contatos', 'negocios', 
     'agenda', 'agenda-r2', 'r2-carrinho', 'deals-orfaos', 'leads-limbo',
     'contatos-duplicados', 'auditoria-agendamentos', 'configuracoes'
   ],
   consorcio: [
-    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'visao-geral', 'contatos', 'negocios', 
     'agenda', 'pos-reuniao', 'configuracoes'
   ],
   credito: [
-    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'visao-geral', 'contatos', 'negocios', 
     'agenda', 'configuracoes'
   ],
   projetos: [
-    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'visao-geral', 'contatos', 'negocios', 
     'agenda', 'configuracoes'
   ],
   leilao: [
-    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'visao-geral', 'contatos', 'negocios', 
     'agenda', 'configuracoes'
   ],
   marketing: [],
@@ -85,7 +85,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     { key: 'visao-geral', to: basePath, label: 'Visão Geral', icon: LayoutDashboard, end: true },
     { key: 'contatos', to: `${basePath}/contatos`, label: 'Contatos', icon: Users },
     { key: 'negocios', to: `${basePath}/negocios`, label: 'Negócios', icon: Briefcase },
-    { key: 'atendimentos', to: `${basePath}/atendimentos`, label: 'Atendimentos', icon: MessageCircle },
+    // { key: 'atendimentos', to: `${basePath}/atendimentos`, label: 'Atendimentos', icon: MessageCircle }, // Oculto até telefones disponíveis
     { key: 'agenda', to: `${basePath}/agenda`, label: 'Agenda R1', icon: CalendarDays },
     { key: 'agenda-r2', to: `${basePath}/agenda-r2`, label: 'Agenda R2', icon: CalendarDays },
     { key: 'r2-carrinho', to: `${basePath}/r2-carrinho`, label: 'Carrinho R2', icon: ShoppingCart },

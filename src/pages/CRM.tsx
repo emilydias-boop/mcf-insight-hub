@@ -30,7 +30,7 @@ const CRM = () => {
     { to: '/crm', label: 'Visão Geral', icon: LayoutDashboard, end: true },
     { to: '/crm/contatos', label: 'Contatos', icon: Users },
     { to: '/crm/negocios', label: 'Negócios', icon: Briefcase },
-    { to: '/crm/atendimentos', label: 'Atendimentos', icon: MessageCircle },
+    // { to: '/crm/atendimentos', label: 'Atendimentos', icon: MessageCircle }, // Oculto até telefones disponíveis
     { to: '/crm/agenda', label: 'Agenda R1', icon: CalendarDays },
     { to: '/crm/agenda-r2', label: 'Agenda R2', icon: CalendarDays },
     { to: '/crm/r2-carrinho', label: 'Carrinho R2', icon: Briefcase },
