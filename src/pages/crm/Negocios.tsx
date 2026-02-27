@@ -154,11 +154,24 @@ const Negocios = () => {
   }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdr]);
   
   // Definir pipeline padrão APENAS na primeira montagem
+  // Prioridade: defaultOrigin do banco > grupo único > SDR origin > BU_DEFAULT_ORIGIN_MAP > fallback
   useEffect(() => {
     if (pipelines && pipelines.length > 0 && !hasSetDefault.current && !isLoadingBU) {
       hasSetDefault.current = true;
       
-      // Se for SDR, pré-selecionar a origem da BU ativa
+      // 1. Se buMapping tem um defaultOrigin definido no banco, usar ele
+      if (buMapping?.defaultOrigin) {
+        setSelectedPipelineId(buMapping.defaultOrigin);
+        return;
+      }
+      
+      // 2. Se há apenas 1 grupo permitido, auto-selecionar
+      if (buAllowedGroups.length === 1) {
+        setSelectedPipelineId(buAllowedGroups[0]);
+        return;
+      }
+      
+      // 3. Se for SDR, pré-selecionar a origem da BU ativa
       if (isSdr) {
         if (activeBU && SDR_ORIGIN_BY_BU[activeBU]) {
           setSelectedPipelineId(SDR_ORIGIN_BY_BU[activeBU]);
@@ -168,13 +181,13 @@ const Negocios = () => {
         return;
       }
       
-      // Se tem BU ativa (da rota ou perfil), usar a origem padrão da BU
+      // 4. Se tem BU ativa, usar a origem padrão hardcoded da BU
       if (activeBU && BU_DEFAULT_ORIGIN_MAP[activeBU]) {
         setSelectedPipelineId(BU_DEFAULT_ORIGIN_MAP[activeBU]);
         return;
       }
       
-      // Fallback: Tentar encontrar PIPELINE INSIDE SALES ou usar o primeiro
+      // 5. Fallback: Tentar encontrar PIPELINE INSIDE SALES ou usar o primeiro
       const insideSales = pipelines.find(p => 
         p.name === 'PIPELINE INSIDE SALES' || 
         p.display_name?.includes('Inside Sales')
@@ -185,7 +198,7 @@ const Negocios = () => {
         setSelectedPipelineId(pipelines[0].id);
       }
     }
-  }, [pipelines, isSdr, activeBU, isLoadingBU]);
+  }, [pipelines, isSdr, activeBU, isLoadingBU, buMapping, buAllowedGroups]);
   
   // Buscar email do usuário logado
   const { data: userProfile } = useQuery({
@@ -543,13 +556,7 @@ const Negocios = () => {
   const hasSinglePipeline = buAllowedGroups.length === 1;
   const showSidebar = (!isSdr || sdrCanSeeSidebar) && !hasSinglePipeline;
   
-  // Auto-selecionar pipeline quando só tem 1 grupo
-  useEffect(() => {
-    if (hasSinglePipeline && buAllowedGroups[0] && !hasSetDefault.current) {
-      hasSetDefault.current = true;
-      setSelectedPipelineId(buAllowedGroups[0]);
-    }
-  }, [hasSinglePipeline, buAllowedGroups]);
+  // Auto-seleção de single pipeline agora está integrada no useEffect principal de default (linha 156+)
   
   // Estado do modal de configuração inline (para single pipeline)
   const [configModalOpen, setConfigModalOpen] = useState(false);
