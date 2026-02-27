@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Users, Zap, Database, Shield, Upload, FileText, History, ClipboardList, Loader2, RefreshCw, CalendarSync } from 'lucide-react';
+import { Settings, Users, Zap, Database, Shield, Upload, FileText, History, ClipboardList, Loader2, RefreshCw, CalendarSync, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import ImportarContatos from './ImportarContatos';
 import ImportarNegocios from './ImportarNegocios';
 import ImportarHistorico from './ImportarHistorico';
+import Tags from './Tags';
 
 const ConfiguracoesContent = () => {
   const { role } = useAuth();
@@ -390,6 +391,10 @@ const Configuracoes = () => {
             <span className="hidden sm:inline">Importar Histórico</span>
             <span className="sm:hidden">Histórico</span>
           </TabsTrigger>
+          <TabsTrigger value="tags" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm flex-1 md:flex-none">
+            <Tag className="h-3 w-3 sm:h-4 sm:w-4" />
+            Tags
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="configuracoes">
@@ -406,6 +411,10 @@ const Configuracoes = () => {
 
         <TabsContent value="importar-historico">
           <ImportarHistorico />
+        </TabsContent>
+
+        <TabsContent value="tags">
+          <Tags />
         </TabsContent>
       </Tabs>
     </div>
