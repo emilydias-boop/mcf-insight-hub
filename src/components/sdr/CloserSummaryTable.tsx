@@ -14,12 +14,14 @@ interface CloserSummaryTableProps {
   data?: R1CloserMetric[];
   isLoading?: boolean;
   onCloserClick?: (closerId: string) => void;
+  totalContratosFromKPI?: number;
 }
 
 export function CloserSummaryTable({ 
   data, 
   isLoading,
   onCloserClick,
+  totalContratosFromKPI,
 }: CloserSummaryTableProps) {
   if (isLoading) {
     return (
@@ -196,7 +198,7 @@ export function CloserSummaryTable({
                 </span>
               </TableCell>
               <TableCell className="text-center">
-                <span className="text-amber-400">{totals.contrato_pago + totals.outside}</span>
+                <span className="text-amber-400">{totalContratosFromKPI ?? (totals.contrato_pago + totals.outside)}</span>
               </TableCell>
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
