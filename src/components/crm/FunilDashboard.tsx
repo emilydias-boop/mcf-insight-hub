@@ -108,23 +108,23 @@ export function FunilDashboard() {
           .eq('origin_id', PIPELINE_ORIGIN_ID)
           .gte('created_at', periodStart.toISOString())
           .lte('created_at', periodEnd.toISOString()),
-        supabase.from('crm_deals')
-          .select('id, stage:crm_stages!inner(stage_name)')
-          .eq('origin_id', PIPELINE_ORIGIN_ID)
+        supabase.from('deal_activities')
+          .select('deal_id')
+          .in('activity_type', ['stage_change', 'stage_changed'])
+          .ilike('to_stage', '%Reunião 01 Agendada%')
           .gte('created_at', periodStart.toISOString())
-          .lte('created_at', periodEnd.toISOString())
-          .ilike('crm_stages.stage_name', '%Reunião 01 Agendada%'),
-        supabase.from('crm_deals')
-          .select('id, stage:crm_stages!inner(stage_name)')
-          .eq('origin_id', PIPELINE_ORIGIN_ID)
+          .lte('created_at', periodEnd.toISOString()),
+        supabase.from('deal_activities')
+          .select('deal_id')
+          .in('activity_type', ['stage_change', 'stage_changed'])
+          .ilike('to_stage', '%Contrato Pago%')
           .gte('created_at', periodStart.toISOString())
-          .lte('created_at', periodEnd.toISOString())
-          .ilike('crm_stages.stage_name', '%Contrato Pago%'),
+          .lte('created_at', periodEnd.toISOString()),
       ]);
 
       const leadsCount = novosLeads || 0;
-      const agendadasCount = agendadas?.length || 0;
-      const contratosCount = contratos?.length || 0;
+      const agendadasCount = agendadas ? new Set(agendadas.map((d: any) => d.deal_id)).size : 0;
+      const contratosCount = contratos ? new Set(contratos.map((d: any) => d.deal_id)).size : 0;
       const taxaConversao = leadsCount > 0 ? ((contratosCount / leadsCount) * 100) : 0;
 
       return { novosLeads: leadsCount, agendadas: agendadasCount, contratos: contratosCount, taxaConversao };
@@ -146,24 +146,24 @@ export function FunilDashboard() {
           .eq('origin_id', PIPELINE_ORIGIN_ID)
           .gte('created_at', prevStart.toISOString())
           .lte('created_at', prevEnd.toISOString()),
-        supabase.from('crm_deals')
-          .select('id, stage:crm_stages!inner(stage_name)')
-          .eq('origin_id', PIPELINE_ORIGIN_ID)
+        supabase.from('deal_activities')
+          .select('deal_id')
+          .in('activity_type', ['stage_change', 'stage_changed'])
+          .ilike('to_stage', '%Reunião 01 Agendada%')
           .gte('created_at', prevStart.toISOString())
-          .lte('created_at', prevEnd.toISOString())
-          .ilike('crm_stages.stage_name', '%Reunião 01 Agendada%'),
-        supabase.from('crm_deals')
-          .select('id, stage:crm_stages!inner(stage_name)')
-          .eq('origin_id', PIPELINE_ORIGIN_ID)
+          .lte('created_at', prevEnd.toISOString()),
+        supabase.from('deal_activities')
+          .select('deal_id')
+          .in('activity_type', ['stage_change', 'stage_changed'])
+          .ilike('to_stage', '%Contrato Pago%')
           .gte('created_at', prevStart.toISOString())
-          .lte('created_at', prevEnd.toISOString())
-          .ilike('crm_stages.stage_name', '%Contrato Pago%'),
+          .lte('created_at', prevEnd.toISOString()),
       ]);
 
       return {
         novosLeads: novosLeads || 0,
-        agendadas: agendadas?.length || 0,
-        contratos: contratos?.length || 0,
+        agendadas: agendadas ? new Set(agendadas.map((d: any) => d.deal_id)).size : 0,
+        contratos: contratos ? new Set(contratos.map((d: any) => d.deal_id)).size : 0,
       };
     },
     staleTime: 60000,
