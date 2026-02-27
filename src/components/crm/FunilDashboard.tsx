@@ -8,6 +8,7 @@ import { Users, CalendarCheck, FileCheck, TrendingUp, TrendingDown, ArrowRight, 
 import { useClintFunnel } from '@/hooks/useClintFunnel';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Progress } from '@/components/ui/progress';
+
 import {
   getCustomWeekStart,
   getCustomWeekEnd,
@@ -100,31 +101,24 @@ export function FunilDashboard() {
     queryFn: async () => {
       const [
         { count: novosLeads },
-        { data: agendadas },
-        { data: contratos },
+        rpcResult,
       ] = await Promise.all([
         supabase.from('crm_deals')
           .select('*', { count: 'exact', head: true })
           .eq('origin_id', PIPELINE_ORIGIN_ID)
           .gte('created_at', periodStart.toISOString())
           .lte('created_at', periodEnd.toISOString()),
-        supabase.from('deal_activities')
-          .select('deal_id')
-          .in('activity_type', ['stage_change', 'stage_changed'])
-          .ilike('to_stage', '%Reunião 01 Agendada%')
-          .gte('created_at', periodStart.toISOString())
-          .lte('created_at', periodEnd.toISOString()),
-        supabase.from('deal_activities')
-          .select('deal_id')
-          .in('activity_type', ['stage_change', 'stage_changed'])
-          .ilike('to_stage', '%Contrato Pago%')
-          .gte('created_at', periodStart.toISOString())
-          .lte('created_at', periodEnd.toISOString()),
+        supabase.rpc('get_sdr_metrics_from_agenda', {
+          start_date: format(periodStart, 'yyyy-MM-dd'),
+          end_date: format(periodEnd, 'yyyy-MM-dd'),
+          sdr_email_filter: null,
+        }),
       ]);
 
+      const rpcData = (rpcResult.data as any)?.metrics || [];
       const leadsCount = novosLeads || 0;
-      const agendadasCount = agendadas ? new Set(agendadas.map((d: any) => d.deal_id)).size : 0;
-      const contratosCount = contratos ? new Set(contratos.map((d: any) => d.deal_id)).size : 0;
+      const agendadasCount = rpcData.reduce((sum: number, m: any) => sum + (m.r1_agendada || 0), 0);
+      const contratosCount = rpcData.reduce((sum: number, m: any) => sum + (m.contratos || 0), 0);
       const taxaConversao = leadsCount > 0 ? ((contratosCount / leadsCount) * 100) : 0;
 
       return { novosLeads: leadsCount, agendadas: agendadasCount, contratos: contratosCount, taxaConversao };
@@ -138,32 +132,25 @@ export function FunilDashboard() {
     queryFn: async () => {
       const [
         { count: novosLeads },
-        { data: agendadas },
-        { data: contratos },
+        rpcResult,
       ] = await Promise.all([
         supabase.from('crm_deals')
           .select('*', { count: 'exact', head: true })
           .eq('origin_id', PIPELINE_ORIGIN_ID)
           .gte('created_at', prevStart.toISOString())
           .lte('created_at', prevEnd.toISOString()),
-        supabase.from('deal_activities')
-          .select('deal_id')
-          .in('activity_type', ['stage_change', 'stage_changed'])
-          .ilike('to_stage', '%Reunião 01 Agendada%')
-          .gte('created_at', prevStart.toISOString())
-          .lte('created_at', prevEnd.toISOString()),
-        supabase.from('deal_activities')
-          .select('deal_id')
-          .in('activity_type', ['stage_change', 'stage_changed'])
-          .ilike('to_stage', '%Contrato Pago%')
-          .gte('created_at', prevStart.toISOString())
-          .lte('created_at', prevEnd.toISOString()),
+        supabase.rpc('get_sdr_metrics_from_agenda', {
+          start_date: format(prevStart, 'yyyy-MM-dd'),
+          end_date: format(prevEnd, 'yyyy-MM-dd'),
+          sdr_email_filter: null,
+        }),
       ]);
 
+      const rpcData = (rpcResult.data as any)?.metrics || [];
       return {
         novosLeads: novosLeads || 0,
-        agendadas: agendadas ? new Set(agendadas.map((d: any) => d.deal_id)).size : 0,
-        contratos: contratos ? new Set(contratos.map((d: any) => d.deal_id)).size : 0,
+        agendadas: rpcData.reduce((sum: number, m: any) => sum + (m.r1_agendada || 0), 0),
+        contratos: rpcData.reduce((sum: number, m: any) => sum + (m.contratos || 0), 0),
       };
     },
     staleTime: 60000,
