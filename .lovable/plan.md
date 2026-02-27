@@ -1,37 +1,36 @@
 
 
-## Problema Identificado
+## Análise da Diferença: 208 vs 206
 
-Existem **duas fontes diferentes** de contagem de outsides:
+### Origem dos Números
 
-1. **`useR1CloserMetrics`** → retorna 23 outsides (correto, usado na tabela de Closers)
-2. **`useSdrOutsideMetrics`** → retorna 0 outsides (usado nos KPI cards e enrichedKPIs)
+| Fonte | Valor | Como calcula |
+|-------|-------|-------------|
+| KPI "Contratos" | **208** | `totalContratos (SDR: 185) + outsideFromClosers (23)` |
+| Metas "Contrato Pago" | **208** | `monthKPIs.totalContratos (185) + outsideFromClosers (23)` |
+| Tabela Closers "Total" | **206** | `soma contrato_pago dos closers (183) + outside (23)` |
 
-A divergência faz com que:
-- KPI "Contratos" mostre `185 + 0 = 185` com tooltip "Outside: 0"
-- A tabela de Closers mostre Outside: 23 e Total: 206
-- O painel "Metas da Equipe" use `totalContratos` sem outsides
+### Causa Raiz
 
-## Solução
+A diferença de **2** está entre o `totalContratos` dos SDRs (185) e a soma de `contrato_pago` dos Closers (183). São **hooks diferentes com lógicas distintas**:
 
-Derivar o total de outsides a partir dos `closerMetrics` (que já funciona corretamente) e usá-lo como fonte de verdade para KPIs e Goals Panel.
+1. **SDR** (`get_sdr_metrics_from_agenda` RPC): conta contratos pelo **SDR que agendou** (`booked_by`)
+2. **Closer** (`useR1CloserMetrics`): conta contratos pelo **Closer que atendeu** (`closer_id`)
 
-### Alterações
+Os 2 contratos "extras" no SDR provavelmente são:
+- Reuniões onde o `closer_id` não é de um closer ativo, ou
+- Contratos atribuídos a um SDR válido mas cujo closer não está na lista de closers R1 ativos
+
+### Solução
+
+Para que a tabela de Closers bata com o KPI, a linha **Total** deve usar o `totalContratos` do KPI (fonte SDR) em vez de somar `contrato_pago` dos closers.
+
+**`src/components/sdr/CloserSummaryTable.tsx`**:
+- Adicionar prop opcional `totalContratosFromKPI?: number`
+- Na linha Total, coluna "Contrato Pago": usar `totalContratosFromKPI` quando disponível, senão `totals.contrato_pago + totals.outside`
 
 **`src/pages/crm/ReunioesEquipe.tsx`**:
-- No `enrichedKPIs`, calcular `totalOutside` a partir de `closerMetrics` (soma de `outside` de cada closer) como fallback quando `outsideData` retorna 0
-- Nos `dayValues`, `weekValues` e `monthValues` do GoalsPanel, somar outsides ao campo `contrato`
+- Passar `totalContratosFromKPI={enrichedKPIs.totalContratos + outsideFromClosers}` para o `CloserSummaryTable`
 
-**Lógica**:
-```
-const outsideFromClosers = closerMetrics?.reduce((sum, c) => sum + c.outside, 0) || 0;
-
-enrichedKPIs.totalOutside = outsideData?.totalOutside || outsideFromClosers;
-```
-
-Para o GoalsPanel, o `monthValues.contrato` precisa incluir outsides para bater com o KPI. Como o GoalsPanel usa hooks separados (dia/semana/mês), a correção mais limpa é adicionar o outside dos closerMetrics ao `monthValues.contrato` (já que closerMetrics é filtrado pelo período selecionado).
-
-### Detalhes técnicos
-
-O `useSdrOutsideMetrics` provavelmente retorna 0 porque usa lógica de detecção diferente (busca por `product_category IN ('contrato','incorporador')` + `ilike '%contrato%'`), enquanto `useR1CloserMetrics` compara `contract_paid_at < scheduled_at`. As lógicas divergem. A correção unifica usando `closerMetrics` como fonte única.
+Assim o Total da tabela sempre espelha o KPI.
 
