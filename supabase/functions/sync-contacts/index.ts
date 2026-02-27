@@ -227,34 +227,27 @@ Deno.serve(async (req) => {
         break;
       }
 
-      // Processar em batches maiores com bulk upsert
+      // Processar em batches com deduplicação por email
       for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
         const batch = contacts.slice(i, i + BATCH_SIZE);
 
-        // Preparar todos os contatos do batch para bulk upsert
-        const contactsToUpsert = batch
+        // Preparar todos os contatos do batch
+        const contactsToProcess = batch
           .map((contact: any) => {
-            // Determinar nome: prioridade 1) name, 2) email, 3) fallback gerado
             let contactName = '';
             if (contact.name && contact.name.trim() !== '') {
               contactName = contact.name.trim();
             } else if (contact.email && contact.email.trim() !== '') {
               contactName = contact.email.trim();
             } else {
-              // Gerar nome padrão para não violar constraint NOT NULL
               contactName = `Contato sem nome (ID: ${contact.id})`;
               totalSkipped++;
-              console.log(`⚠️ Contato sem nome/email - gerando fallback: ${contactName}`);
             }
 
-            // Tentar vincular origin diretamente da API
             let originId = null;
             const contactOriginClintId = contact.origin_id || contact.origin?.id;
             if (contactOriginClintId) {
               originId = originsMap.get(contactOriginClintId) || null;
-              if (originId) {
-                console.log(`✅ Origem vinculada diretamente: ${contactOriginClintId} -> ${originId}`);
-              }
             }
 
             return {
@@ -263,32 +256,62 @@ Deno.serve(async (req) => {
               email: contact.email || null,
               phone: contact.phone || null,
               organization_name: contact.organization?.name || null,
-              origin_id: originId, // Pode ser null se não vier da API
+              origin_id: originId,
               tags: contact.tags || [],
               custom_fields: contact.custom_fields || {},
             };
           });
 
-        // Bulk upsert de todos os contatos do batch de uma vez
+        // DEDUPLICAÇÃO: Para contatos com email, verificar se já existe com outro clint_id
+        const emailsInBatch = contactsToProcess
+          .filter((c: any) => c.email)
+          .map((c: any) => c.email.toLowerCase());
+
+        if (emailsInBatch.length > 0) {
+          const { data: existingByEmail } = await supabase
+            .from('crm_contacts')
+            .select('id, email, clint_id')
+            .in('email', emailsInBatch);
+
+          if (existingByEmail && existingByEmail.length > 0) {
+            const emailToExisting = new Map<string, any>();
+            existingByEmail.forEach((c: any) => {
+              if (c.email) emailToExisting.set(c.email.toLowerCase(), c);
+            });
+
+            for (const contact of contactsToProcess) {
+              if (contact.email) {
+                const existing = emailToExisting.get(contact.email.toLowerCase());
+                if (existing && existing.clint_id !== contact.clint_id) {
+                  await supabase
+                    .from('crm_contacts')
+                    .update({ clint_id: contact.clint_id, updated_at: new Date().toISOString() })
+                    .eq('id', existing.id);
+                  console.log(`🔄 Reconciliado clint_id: ${existing.clint_id} → ${contact.clint_id} (email: ${contact.email})`);
+                }
+              }
+            }
+          }
+        }
+
+        // Bulk upsert
         const { error } = await supabase
           .from('crm_contacts')
-          .upsert(contactsToUpsert, { onConflict: 'clint_id' });
+          .upsert(contactsToProcess, { onConflict: 'clint_id' });
 
         if (error) {
           console.error(`❌ Erro no batch ${i}-${i + batch.length}:`, error);
           throw error;
         }
 
-        totalProcessed += contactsToUpsert.length;
+        totalProcessed += contactsToProcess.length;
         
-        // Calcular estatísticas de progresso
         const elapsedMs = Date.now() - startTime;
         const contactsPerMin = Math.round((totalProcessed / elapsedMs) * 60000);
         const percentage = response.meta?.total 
           ? ((totalProcessed / response.meta.total) * 100).toFixed(1)
           : 'N/A';
         
-        // Estimativa de tempo restante
         let estimatedTimeLeft = '';
         if (response.meta?.total && totalProcessed > 0) {
           const remainingContacts = response.meta.total - totalProcessed;

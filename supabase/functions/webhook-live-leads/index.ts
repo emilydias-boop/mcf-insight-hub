@@ -38,13 +38,39 @@ serve(async (req) => {
     const normalizedPhone = normalizePhone(payload.whatsapp);
     console.log('[LIVE-LEAD] Telefone normalizado:', normalizedPhone);
 
-    // 1. Verificar se contato já existe (por email)
+    // 1. Verificar se contato já existe (por email, fallback por telefone)
     let contactId: string;
-    const { data: existingContact } = await supabase
+    let existingContact = null;
+
+    // 1a. Buscar por email
+    const { data: contactByEmail } = await supabase
       .from('crm_contacts')
       .select('id')
       .ilike('email', payload.email.trim())
       .maybeSingle();
+
+    existingContact = contactByEmail;
+
+    // 1b. Fallback: buscar por telefone (últimos 9 dígitos)
+    if (!existingContact && normalizedPhone) {
+      const phoneSuffix = normalizedPhone.replace(/\D/g, '').slice(-9);
+      if (phoneSuffix.length === 9) {
+        const { data: contactByPhone } = await supabase
+          .from('crm_contacts')
+          .select('id, email')
+          .ilike('phone', `%${phoneSuffix}`)
+          .maybeSingle();
+        
+        if (contactByPhone) {
+          existingContact = contactByPhone;
+          console.log('[LIVE-LEAD] Contato encontrado por telefone:', contactByPhone.id);
+          // Atualizar email se faltante
+          if (!contactByPhone.email && payload.email) {
+            await supabase.from('crm_contacts').update({ email: payload.email.trim().toLowerCase(), updated_at: new Date().toISOString() }).eq('id', contactByPhone.id);
+          }
+        }
+      }
+    }
 
     if (existingContact) {
       contactId = existingContact.id;
