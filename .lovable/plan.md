@@ -1,11 +1,11 @@
 
 
-## Plano: Remover aba "Origens" do Painel de Controle do Funil
+## Plano: Remover aba "Grupos" do Painel de Controle do Funil
 
 ### Alteração em `src/pages/crm/Overview.tsx`
-1. Remover import de `Origens` (linha 6) e `MapPin` (linha 3)
-2. Remover o `TabsTrigger` de "origens" (linhas 28-31)
-3. Remover o `TabsContent` de "origens" (linhas 46-48)
+1. Remover import de `Grupos` e ícone `Layers`
+2. Remover o `TabsTrigger` de "grupos"
+3. Remover o `TabsContent` de "grupos"
 
-Grupos e Tags permanecem intactos.
+Tags permanece intacta.
 
