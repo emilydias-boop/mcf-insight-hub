@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, AlertCircle, RefreshCw, Settings } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCRMDeals, useSyncClintData } from '@/hooks/useCRMData';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
@@ -10,6 +10,8 @@ import { DealFormDialog } from '@/components/crm/DealFormDialog';
 import { BulkActionsBar } from '@/components/crm/BulkActionsBar';
 import { BulkTransferDialog } from '@/components/crm/BulkTransferDialog';
 import { useCRMPipelines } from '@/components/crm/PipelineSelector';
+import { PipelineConfigModal } from '@/components/crm/PipelineConfigModal';
+import { CreatePipelineWizard } from '@/components/crm/wizard/CreatePipelineWizard';
 import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { useAuth } from '@/contexts/AuthContext';
@@ -538,7 +540,26 @@ const Negocios = () => {
   // Determinar se deve mostrar a sidebar
   // SDRs de BUs com multi-pipeline podem ver a sidebar e navegar
   const sdrCanSeeSidebar = isSdr && activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU);
-  const showSidebar = !isSdr || sdrCanSeeSidebar;
+  const hasSinglePipeline = buAllowedGroups.length === 1;
+  const showSidebar = (!isSdr || sdrCanSeeSidebar) && !hasSinglePipeline;
+  
+  // Auto-selecionar pipeline quando só tem 1 grupo
+  useEffect(() => {
+    if (hasSinglePipeline && buAllowedGroups[0] && !hasSetDefault.current) {
+      hasSetDefault.current = true;
+      setSelectedPipelineId(buAllowedGroups[0]);
+    }
+  }, [hasSinglePipeline, buAllowedGroups]);
+  
+  // Estado do modal de configuração inline (para single pipeline)
+  const [configModalOpen, setConfigModalOpen] = useState(false);
+  
+  // Resolver nome da pipeline selecionada
+  const selectedPipelineName = useMemo(() => {
+    if (!selectedPipelineId || !pipelines) return '';
+    const p = pipelines.find(p => p.id === selectedPipelineId);
+    return p?.display_name || p?.name || '';
+  }, [selectedPipelineId, pipelines]);
   
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-56px)] overflow-hidden">
@@ -558,13 +579,26 @@ const Negocios = () => {
       
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 border-b gap-3">
-          <div>
-            <h2 className="text-lg sm:text-xl font-bold">
-              {isRestrictedRole ? 'Meus Negócios' : 'Pipeline de Vendas'}
-            </h2>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''}
-            </p>
+          <div className="flex items-center gap-2">
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2">
+                {isRestrictedRole ? 'Meus Negócios' : hasSinglePipeline && selectedPipelineName ? selectedPipelineName : 'Pipeline de Vendas'}
+                {hasSinglePipeline && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setConfigModalOpen(true)}
+                    title="Configurações da Pipeline"
+                  >
+                    <Settings className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                )}
+              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''}
+              </p>
+            </div>
           </div>
           
           <div className="flex gap-2 w-full sm:w-auto">
@@ -678,6 +712,16 @@ const Negocios = () => {
         selectedDealIds={Array.from(selectedDealIds)}
         onSuccess={handleClearSelection}
       />
+      
+      {/* Modal de configuração inline para single pipeline */}
+      {hasSinglePipeline && selectedPipelineId && (
+        <PipelineConfigModal
+          open={configModalOpen}
+          onOpenChange={setConfigModalOpen}
+          targetType="group"
+          targetId={selectedPipelineId}
+        />
+      )}
     </div>
   );
 };
