@@ -425,8 +425,25 @@ async function handleContactCreated(supabase: any, data: any) {
       .maybeSingle();
 
     if (existing) {
-      console.log('[CONTACT.CREATED] Contact already exists, updating instead');
+      console.log('[CONTACT.CREATED] Contact already exists by email, updating instead');
       return handleContactUpdated(supabase, data);
+    }
+  }
+
+  // Fallback: verificar por telefone normalizado (últimos 9 dígitos)
+  if (!email && normalizedPhone) {
+    const phoneSuffix = normalizedPhone.replace(/\D/g, '').slice(-9);
+    if (phoneSuffix.length === 9) {
+      const { data: existingByPhone } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('phone', `%${phoneSuffix}`)
+        .maybeSingle();
+
+      if (existingByPhone) {
+        console.log('[CONTACT.CREATED] Contact already exists by phone, updating instead');
+        return handleContactUpdated(supabase, data);
+      }
     }
   }
 
@@ -591,37 +608,65 @@ async function handleDealCreated(supabase: any, data: any) {
     }
   }
 
-  // 1. Buscar ou criar contato pelo email
+  // 1. Buscar ou criar contato — deduplicação por email + telefone
   let contactId = null;
+  const contactPhone = contactData.phone || data.contact_phone;
+  const normalizedContactPhone = normalizePhone(contactPhone);
+
+  // 1a. Buscar por email
   if (contactData.email) {
     const { data: contact } = await supabase
       .from('crm_contacts')
       .select('id')
-      .eq('email', contactData.email)
+      .ilike('email', contactData.email)
       .maybeSingle();
     
     if (contact) {
       contactId = contact.id;
-      console.log('[DEAL.CREATED] Contact found:', contactId);
-    } else {
-      // Criar contato se não existir
-      const { data: newContact, error: contactError } = await supabase
+      console.log('[DEAL.CREATED] Contact found by email:', contactId);
+    }
+  }
+
+  // 1b. Fallback: buscar por telefone normalizado (últimos 9 dígitos)
+  if (!contactId && normalizedContactPhone) {
+    const phoneSuffix = normalizedContactPhone.replace(/\D/g, '').slice(-9);
+    if (phoneSuffix.length === 9) {
+      const { data: contactByPhone } = await supabase
         .from('crm_contacts')
-        .insert({
-          clint_id: contactData.id || `contact-${Date.now()}`,
-          name: contactData.name || 'Contato via webhook',
-          email: contactData.email,
-          phone: contactData.phone,
-          tags: [],
-          custom_fields: {}
-        })
-        .select('id')
-        .single();
+        .select('id, email')
+        .ilike('phone', `%${phoneSuffix}`)
+        .maybeSingle();
       
-      if (!contactError && newContact) {
-        contactId = newContact.id;
-        console.log('[DEAL.CREATED] Contact created:', contactId);
+      if (contactByPhone) {
+        contactId = contactByPhone.id;
+        console.log('[DEAL.CREATED] Contact found by phone:', contactId);
+        // Atualizar email se faltante
+        if (contactData.email && !contactByPhone.email) {
+          await supabase.from('crm_contacts').update({ email: contactData.email, updated_at: new Date().toISOString() }).eq('id', contactId);
+          console.log('[DEAL.CREATED] Updated missing email on contact');
+        }
       }
+    }
+  }
+
+  // 1c. Criar contato se não encontrou
+  if (!contactId && (contactData.email || normalizedContactPhone)) {
+    const { data: newContact, error: contactError } = await supabase
+      .from('crm_contacts')
+      .insert({
+        clint_id: contactData.id || `contact-${Date.now()}`,
+        name: contactData.name || 'Contato via webhook',
+        email: contactData.email || null,
+        phone: normalizedContactPhone,
+        tags: [],
+        custom_fields: {}
+      })
+      .select('id')
+      .single();
+    
+    if (!contactError && newContact) {
+      contactId = newContact.id;
+      console.log('[DEAL.CREATED] Contact created:', contactId);
     }
   }
 
@@ -997,69 +1042,61 @@ async function handleDealStageChanged(supabase: any, data: any) {
     if (contact) {
       contactId = contact.id;
       console.log('[DEAL.STAGE_CHANGED] Found contact by email:', contactId);
-    } else {
-      // NOVO: Criar contato se não existir (igual ao handleDealCreated)
-      console.log('[DEAL.STAGE_CHANGED] Contact not found by email, creating...');
-      const normalizedPhone = contactData.phone ? normalizePhone(contactData.phone) : null;
-      
-      const { data: newContact, error: contactError } = await supabase
-        .from('crm_contacts')
-        .insert({
-          clint_id: contactData.id || `webhook-contact-${Date.now()}`,
-          name: contactData.name || data.contact_name || 'Contato via webhook',
-          email: contactData.email,
-          phone: normalizedPhone,
-          tags: contactData.tags || [],
-        })
-        .select('id')
-        .single();
-      
-      if (!contactError && newContact) {
-        contactId = newContact.id;
-        console.log('[DEAL.STAGE_CHANGED] Contact created:', contactId);
-      } else {
-        console.error('[DEAL.STAGE_CHANGED] Error creating contact:', contactError);
-      }
     }
   }
 
-  // 2.1b. NOVO: Se não tem email mas tem telefone, tentar buscar/criar por telefone
+  // 2.1a. Fallback: buscar por telefone normalizado se não encontrou por email
   if (!contactId && (contactData.phone || data.contact_phone)) {
     const phone = contactData.phone || data.contact_phone;
     const normalizedPhone = normalizePhone(phone);
     
     if (normalizedPhone) {
-      const { data: contactByPhone } = await supabase
-        .from('crm_contacts')
-        .select('id')
-        .eq('phone', normalizedPhone)
-        .maybeSingle();
-      
-      if (contactByPhone) {
-        contactId = contactByPhone.id;
-        console.log('[DEAL.STAGE_CHANGED] Found contact by phone:', contactId);
-      } else {
-        // Criar contato pelo telefone
-        console.log('[DEAL.STAGE_CHANGED] Creating contact by phone...');
-        const { data: newContact, error: contactError } = await supabase
+      const phoneSuffix = normalizedPhone.replace(/\D/g, '').slice(-9);
+      if (phoneSuffix.length === 9) {
+        const { data: contactByPhone } = await supabase
           .from('crm_contacts')
-          .insert({
-            clint_id: contactData.id || `webhook-phone-${Date.now()}`,
-            name: contactData.name || data.contact_name || 'Contato via webhook',
-            email: contactData.email || null,
-            phone: normalizedPhone,
-            tags: contactData.tags || [],
-          })
-          .select('id')
-          .single();
+          .select('id, email')
+          .ilike('phone', `%${phoneSuffix}`)
+          .maybeSingle();
         
-        if (!contactError && newContact) {
-          contactId = newContact.id;
-          console.log('[DEAL.STAGE_CHANGED] Contact created by phone:', contactId);
+        if (contactByPhone) {
+          contactId = contactByPhone.id;
+          console.log('[DEAL.STAGE_CHANGED] Found contact by phone:', contactId);
+          // Atualizar email se faltante
+          if (contactData.email && !contactByPhone.email) {
+            await supabase.from('crm_contacts').update({ email: contactData.email, updated_at: new Date().toISOString() }).eq('id', contactId);
+            console.log('[DEAL.STAGE_CHANGED] Updated missing email on contact');
+          }
         }
       }
     }
   }
+
+  // 2.1b. Criar contato se não encontrou por email nem telefone
+  if (!contactId && (contactData.email || contactData.phone || data.contact_phone)) {
+    console.log('[DEAL.STAGE_CHANGED] Contact not found, creating...');
+    const normalizedPhone = normalizePhone(contactData.phone || data.contact_phone);
+    
+    const { data: newContact, error: contactError } = await supabase
+      .from('crm_contacts')
+      .insert({
+        clint_id: contactData.id || `webhook-contact-${Date.now()}`,
+        name: contactData.name || data.contact_name || 'Contato via webhook',
+        email: contactData.email || null,
+        phone: normalizedPhone,
+        tags: contactData.tags || [],
+      })
+      .select('id')
+      .single();
+    
+    if (!contactError && newContact) {
+      contactId = newContact.id;
+      console.log('[DEAL.STAGE_CHANGED] Contact created:', contactId);
+    } else {
+      console.error('[DEAL.STAGE_CHANGED] Error creating contact:', contactError);
+    }
+  }
+
 
   // 2.2. Tentar buscar deal por contact_id (se encontrou contato)
   if (contactId) {

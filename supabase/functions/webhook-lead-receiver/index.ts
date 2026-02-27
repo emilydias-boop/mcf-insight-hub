@@ -152,13 +152,41 @@ serve(async (req) => {
     const normalizedPhone = normalizePhone(payload.whatsapp || payload.phone || payload.telefone);
     console.log('[WEBHOOK-RECEIVER] Telefone normalizado:', normalizedPhone);
 
-    // 7. Upsert contact
+    // 7. Upsert contact — deduplicação por email + telefone
     let contactId: string;
-    const { data: existingContact } = await supabase
-      .from('crm_contacts')
-      .select('id')
-      .ilike('email', (payload.email || '').trim())
-      .maybeSingle();
+    let existingContact = null;
+
+    // 7a. Buscar por email
+    const emailTrimmed = (payload.email || '').trim();
+    if (emailTrimmed) {
+      const { data: contactByEmail } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', emailTrimmed)
+        .maybeSingle();
+      existingContact = contactByEmail;
+    }
+
+    // 7b. Fallback: buscar por telefone (últimos 9 dígitos)
+    if (!existingContact && normalizedPhone) {
+      const phoneSuffix = normalizedPhone.replace(/\D/g, '').slice(-9);
+      if (phoneSuffix.length === 9) {
+        const { data: contactByPhone } = await supabase
+          .from('crm_contacts')
+          .select('id, email')
+          .ilike('phone', `%${phoneSuffix}`)
+          .maybeSingle();
+        
+        if (contactByPhone) {
+          existingContact = contactByPhone;
+          console.log('[WEBHOOK-RECEIVER] Contato encontrado por telefone:', contactByPhone.id);
+          // Atualizar email se faltante
+          if (!contactByPhone.email && emailTrimmed) {
+            await supabase.from('crm_contacts').update({ email: emailTrimmed.toLowerCase(), updated_at: new Date().toISOString() }).eq('id', contactByPhone.id);
+          }
+        }
+      }
+    }
 
     const autoTags = endpoint.auto_tags || [];
     const sourceTag = req.headers.get('x-source-tag');
@@ -187,7 +215,7 @@ serve(async (req) => {
         .insert({
           clint_id: `${slug}-${Date.now()}-${Math.random().toString(36).substring(7)}`,
           name: payload.name,
-          email: (payload.email || '').trim().toLowerCase(),
+          email: emailTrimmed ? emailTrimmed.toLowerCase() : null,
           phone: normalizedPhone,
           origin_id: endpoint.origin_id,
           tags: autoTags
