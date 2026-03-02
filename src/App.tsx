@@ -93,6 +93,7 @@ import NotFound from "./pages/NotFound";
 import ConsorcioIndex from "./pages/bu-consorcio/Index";
 import ConsorcioImportar from "./pages/bu-consorcio/Importar";
 import AdminPermissoes from "./pages/admin/Permissoes";
+import AdminRoles from "./pages/admin/Roles";
 import ConfiguracaoProdutos from "./pages/admin/ConfiguracaoProdutos";
 import LeadDistribution from "./pages/admin/LeadDistribution";
 import Automacoes from "./pages/admin/Automacoes";
@@ -313,6 +314,7 @@ const App = () => (
               <Route path="configuracoes" element={<ResourceGuard resource="configuracoes"><Configuracoes /></ResourceGuard>} />
               <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />
               <Route path="admin/permissoes" element={<RoleGuard allowedRoles={['admin']}><AdminPermissoes /></RoleGuard>} />
+              <Route path="admin/roles" element={<RoleGuard allowedRoles={['admin']}><AdminRoles /></RoleGuard>} />
               <Route path="admin/produtos" element={<RoleGuard allowedRoles={['admin']}><ConfiguracaoProdutos /></RoleGuard>} />
               <Route path="admin/distribuicao-leads" element={<RoleGuard allowedRoles={['admin', 'manager']}><LeadDistribution /></RoleGuard>} />
               <Route path="admin/automacoes" element={<RoleGuard allowedRoles={['admin']}><Automacoes /></RoleGuard>} />

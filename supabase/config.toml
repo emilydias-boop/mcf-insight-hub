@@ -281,3 +281,6 @@ verify_jwt = false
 
 [functions.ensure-crm-stage-mirror]
 verify_jwt = false
+
+[functions.manage-roles]
+verify_jwt = false
