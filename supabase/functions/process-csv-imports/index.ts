@@ -163,6 +163,21 @@ Deno.serve(async (req) => {
     const originId = job.metadata.origin_id // origin_id do job
     const ownerEmail = job.metadata.owner_email // owner do job (opcional)
     const ownerProfileId = job.metadata.owner_profile_id // owner profile id do job (opcional)
+
+    // Verificar se há distribuição ativa para esta origin (para rodízio automático)
+    let hasDistribution = false
+    if (originId && !ownerEmail) {
+      const { data: distConfig } = await supabase
+        .from('lead_distribution_config')
+        .select('id')
+        .eq('origin_id', originId)
+        .eq('is_active', true)
+        .limit(1)
+      hasDistribution = !!distConfig?.length
+      if (hasDistribution) {
+        console.log(`🔄 Distribuição automática ativa para origin ${originId}`)
+      }
+    }
     
     // Set para rastrear contatos já processados neste chunk (deduplicação por contact_id + origin_id)
     const processedContactOrigins = new Set<string>(job.metadata.processed_contact_origins || [])
@@ -218,6 +233,19 @@ Deno.serve(async (req) => {
             const resolvedProfileId = ownerProfileId || profilesCache.get(finalOwnerEmail.toLowerCase())
             if (resolvedProfileId) {
               dbDeal.owner_profile_id = resolvedProfileId
+            }
+          } else if (hasDistribution && originId) {
+            // Sem owner explícito: distribuir via rodízio
+            const { data: nextOwnerEmail } = await supabase.rpc('get_next_lead_owner', {
+              p_origin_id: originId
+            })
+            if (nextOwnerEmail) {
+              dbDeal.owner_id = nextOwnerEmail
+              const profileId = profilesCache.get(nextOwnerEmail.toLowerCase())
+              if (profileId) {
+                dbDeal.owner_profile_id = profileId
+              }
+              console.log(`🔄 Deal "${csvDeal.name}" distribuído para ${nextOwnerEmail} via rodízio`)
             }
           }
           
