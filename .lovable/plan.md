@@ -1,48 +1,71 @@
 
-## Problema
+## Diagnóstico
 
-O loop de polling para corretamente quando `status === 'completed'`, mas:
-1. `setIsImporting(false)` é chamado — OK
-2. `clearInterval` é chamado — OK
-3. **Porém `setProgress` não é atualizado para 100%** antes de parar
+Na linha 486-491 de `process-csv-imports/index.ts`:
 
-O resultado: a barra trava em 0% e a UI parece estar "Processando..." visualmente, mesmo que o job tenha terminado.
+```typescript
+const clintId = csvDeal.id?.trim()
+const name = csvDeal.name?.trim()
 
-Também há um segundo problema: o texto "Processando..." do botão continua sendo exibido baseado em `isImporting`, que é setado para `false` corretamente — mas a barra de progresso permanece em 0%, dando a impressão de carregamento infinito.
+if (!clintId || !name) {
+  return null  // ← deals da Hubla sem coluna 'id' caem aqui e são descartados
+}
+```
 
-## Correção
+CSVs exportados da Hubla não têm uma coluna `id` — por isso 324 deals foram silenciosamente ignorados. A solução correta é **gerar um `clint_id` sintético** quando a coluna `id` está ausente (igual ao que já é feito para contatos com prefixo `csv_import_`).
 
-**Em `src/pages/crm/ImportarNegocios.tsx`**, no bloco do polling (linhas 229-238):
+O `clint_id` sintético deve ser determinístico (baseado no nome + email + created_at do CSV) para evitar duplicatas se o usuário reimportar o mesmo arquivo.
+
+---
+
+## O que mudar
+
+### `supabase/functions/process-csv-imports/index.ts`
+
+**`convertToDBFormat`** → em vez de retornar `null` quando `!clintId`, gerar um ID sintético baseado em hash do conteúdo:
 
 ```typescript
 // ANTES
-if (job.status === 'completed' || job.status === 'failed') {
-  setIsImporting(false);
-  clearInterval(interval);
-  ...
-}
+const clintId = csvDeal.id?.trim()
+if (!clintId || !name) return null
 
-// DEPOIS  
-if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
-  setProgress(100);  // ← garantir que a barra chegue ao fim
-  setIsImporting(false);
-  clearInterval(interval);
-  ...
-}
+// DEPOIS
+const clintId = csvDeal.id?.trim() || generateSyntheticId(csvDeal)
+if (!name) return null  // só bloquear se não tiver nome
 ```
 
-Também corrigir o cálculo de progresso para usar `total_processed / total_deals` como fallback quando `current_chunk` não está disponível:
-
+**Função `generateSyntheticId`** (nova, no mesmo arquivo):
 ```typescript
-const currentChunk = metadata?.current_chunk || 0;
-const totalChunks = metadata?.total_chunks || 1;
-// Se current_chunk não disponível, usar total_processed/total_deals
-const processedDeals = job.total_processed || 0;
-const totalDeals = metadata?.total_deals || 1;
-const progressPercent = totalChunks > 1 
-  ? Math.round((currentChunk / totalChunks) * 100)
-  : Math.round((processedDeals / totalDeals) * 100);
+function generateSyntheticId(csvDeal: CSVDeal): string {
+  // Hash determinístico baseado em campos únicos do deal
+  const seed = [
+    csvDeal.name?.trim() || '',
+    csvDeal.email?.trim() || '',
+    csvDeal.phone?.trim() || csvDeal.telefone?.trim() || '',
+    csvDeal.created_at?.trim() || '',
+  ].join('|').toLowerCase()
+  
+  // Simples hash numérico para Deno (sem btoa de objetos)
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash) + seed.charCodeAt(i)
+    hash |= 0
+  }
+  return `csv_import_${Math.abs(hash)}`
+}
 ```
 
-## Arquivo a modificar
-- `src/pages/crm/ImportarNegocios.tsx` — bloco de polling (linhas ~229-238) e cálculo de progresso (~223-227)
+Isso garante que:
+- Deals sem coluna `id` (Hubla, etc.) **não serão mais descartados**
+- Reimportações do mesmo CSV **não criam duplicatas** (mesmo hash → mesmo `clint_id` → upsert)
+- Deals com `id` explícito continuam funcionando normalmente
+
+### `src/pages/crm/ImportarNegocios.tsx`
+
+Adicionar nota informativa no card de deals ignorados quando `total_skipped > 0` mas `errors.length === 0`, explicando que leads sem coluna `id` agora são processados com ID sintético. Se ainda houver ignorados, mostrar o botão de download.
+
+---
+
+## Arquivos a modificar
+- `supabase/functions/process-csv-imports/index.ts` — `convertToDBFormat` gera ID sintético + nova função `generateSyntheticId`
+- Re-deploy da edge function `process-csv-imports`
