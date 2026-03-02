@@ -9,9 +9,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { 
   Loader2, Shield, Settings, Link2, KeyRound, 
-  Mail, Calendar, Clock, AlertTriangle, LogOut, RefreshCw, Search 
+  Mail, Calendar, Clock, AlertTriangle, LogOut, RefreshCw, Search, Trash2 
 } from "lucide-react";
 import { useClintUsers } from "@/hooks/useClintAPI";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,7 +35,8 @@ import {
   useUpdateUserAccess, 
   useUpdateUserPermissions, 
   useUpdateUserIntegrations,
-  useSendPasswordReset 
+  useSendPasswordReset,
+  useDeleteUser 
 } from "@/hooks/useUserMutations";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
@@ -59,6 +71,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const updatePermissions = useUpdateUserPermissions();
   const updateIntegrations = useUpdateUserIntegrations();
   const sendPasswordReset = useSendPasswordReset();
+  const deleteUser = useDeleteUser();
   
   const [searchingClint, setSearchingClint] = useState(false);
   const [canBookR2, setCanBookR2] = useState(false);
@@ -269,6 +282,40 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                 </Badge>
               </div>
             </div>
+            {/* Delete user button */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir usuário</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tem certeza que deseja excluir <strong>{userDetails.full_name || userDetails.email}</strong>? 
+                    Esta ação é irreversível e removerá todos os dados do usuário.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => {
+                      if (userId) {
+                        deleteUser.mutate(userId, {
+                          onSuccess: () => onOpenChange(false),
+                        });
+                      }
+                    }}
+                    disabled={deleteUser.isPending}
+                  >
+                    {deleteUser.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    Excluir
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
           
           {/* Info dates */}

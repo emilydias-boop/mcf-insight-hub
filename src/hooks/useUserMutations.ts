@@ -4,6 +4,41 @@ import { toast } from "@/hooks/use-toast";
 import { AppRole, PermissionLevel, ResourceType, AccessStatus } from "@/types/user-management";
 
 // ===== MUTATION: Criar novo usuário via Edge Function =====
+// ===== MUTATION: Excluir usuário via Edge Function =====
+export const useDeleteUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const { data: result, error } = await supabase.functions.invoke("delete-user", {
+        body: { user_id: userId },
+      });
+
+      if (error) {
+        throw new Error(error.message || "Erro ao excluir usuário");
+      }
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      toast({ title: "Usuário excluído com sucesso" });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao excluir usuário",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+};
+
+// ===== MUTATION: Criar novo usuário via Edge Function =====
 export const useCreateUser = () => {
   const queryClient = useQueryClient();
 
