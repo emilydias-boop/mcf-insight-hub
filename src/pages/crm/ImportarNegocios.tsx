@@ -219,20 +219,27 @@ const ImportarNegocios = () => {
         const jobWithMetadata = { ...job, metadata } as JobStatus;
         setJobStatus(jobWithMetadata);
 
-        // Calcular progresso baseado nos chunks
+        // Calcular progresso com fallback para total_processed/total_deals
         const currentChunk = metadata?.current_chunk || 0;
         const totalChunks = metadata?.total_chunks || 1;
-        const progressPercent = Math.round((currentChunk / totalChunks) * 100);
+        const processedDeals = job.total_processed || 0;
+        const totalDeals = metadata?.total_deals || 1;
+        const progressPercent = totalChunks > 1
+          ? Math.round((currentChunk / totalChunks) * 100)
+          : Math.round((processedDeals / totalDeals) * 100);
         
         setProgress(progressPercent);
 
-        // Parar polling quando completar ou falhar
-        if (job.status === 'completed' || job.status === 'failed') {
+        // Parar polling quando completar, falhar ou cancelar
+        if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+          setProgress(100);
           setIsImporting(false);
           clearInterval(interval);
           
           if (job.status === 'completed') {
             toast.success(`Importação concluída! ${job.total_processed || 0} deals importados.`);
+          } else if (job.status === 'cancelled') {
+            toast.info('Importação cancelada.');
           } else {
             toast.error('Erro na importação. Verifique os logs.');
           }
