@@ -477,16 +477,32 @@ async function createContact(supabase: any, contactData: ContactData): Promise<s
   return data?.id || null
 }
 
+function generateSyntheticId(csvDeal: CSVDeal): string {
+  const seed = [
+    csvDeal.name?.trim() || '',
+    csvDeal.email?.trim() || '',
+    csvDeal.phone?.trim() || csvDeal.telefone?.trim() || csvDeal.celular?.trim() || csvDeal.whatsapp?.trim() || '',
+    csvDeal.created_at?.trim() || '',
+  ].join('|').toLowerCase()
+
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash) + seed.charCodeAt(i)
+    hash |= 0
+  }
+  return `csv_import_${Math.abs(hash)}`
+}
+
 function convertToDBFormat(
   csvDeal: CSVDeal,
   contactsCache: Map<string, string>,
   stagesCache: Map<string, string>,
   originId?: string
 ): CRMDeal | null {
-  const clintId = csvDeal.id?.trim()
+  const clintId = csvDeal.id?.trim() || generateSyntheticId(csvDeal)
   const name = csvDeal.name?.trim()
   
-  if (!clintId || !name) {
+  if (!name) {
     return null
   }
 
