@@ -1,25 +1,58 @@
 
-## Cancelar os 3 jobs de importação CSV travados
+## Diagnóstico
 
-Os 3 jobs de import de CSV do dia 13/02 estão:
-- `62190420` — pending — deals_1770990471569.csv
-- `4cb1c4b7` — pending — deals_1770989567343.csv  
-- `8aaaf71c` — processing — deals_1770988842673.csv
+### Erro principal: `null value in column "clint_id" of relation "crm_contacts"`
 
-### Correção
-Executar UPDATE no banco para setar `status = 'cancelled'` e adicionar uma mensagem de erro explicativa nesses 3 jobs específicos (pelos IDs de `import_deals_csv` de fevereiro/2026).
+A função `createContact` em `process-csv-imports/index.ts` tenta inserir contatos na tabela `crm_contacts`, mas essa tabela tem a coluna `clint_id` como **NOT NULL**. A função nunca passa o `clint_id`, então todos os contatos novos falham ao ser criados.
 
-```sql
-UPDATE sync_jobs
-SET 
-  status = 'cancelled',
-  error_message = 'Cancelado manualmente — job travado sem processamento',
-  updated_at = NOW()
-WHERE id IN (
-  '62190420-1df1-4ddd-9ac9-e0caa688fd1e',
-  '4cb1c4b7-9fa3-4cf8-a28e-7da7e82a93af',
-  '8aaaf71c-7074-46e8-9a23-584695712907'
-);
+**Consequência**: contatos não são criados → deals ficam sem `contact_id` mas ainda são processados → importação "funciona" mas sem vínculo de contato.
+
+### Problema secundário: Pipeline desatualizada no seletor
+
+O seletor de "Pipeline de Destino" em `ImportarNegocios.tsx` busca **todas** as `crm_origins` (mais de 100). Deve filtrar apenas as origens da BU Incorporador via `bu_origin_mapping`, e pré-selecionar automaticamente "PIPELINE INSIDE SALES" (`e3c04f21-ba2c-4c66-84f8-b4341c826b1c`) que é o único `is_default: true`.
+
+### Estado atual do mapeamento BU Incorporador
+- `entity_type: group` → grupo "Perpétuo - X1" (`a6f3cbfc`) com 11 origens
+- `entity_type: origin` → "PIPELINE INSIDE SALES" (`e3c04f21`) ← `is_default: true`
+
+---
+
+## Plano de correção
+
+### 1. `supabase/functions/process-csv-imports/index.ts` — Corrigir `createContact`
+
+A função `createContact` precisa gerar um `clint_id` sintético para contatos criados via importação CSV (já que eles não vêm da Clint). Usar um prefixo `csv_import_` + UUID aleatório:
+
+```typescript
+// ANTES (falha com NOT NULL constraint)
+.insert({
+  name: contactData.name,
+  email: contactData.email || null,
+  phone: normalizedPhone
+})
+
+// DEPOIS (gera clint_id sintético)
+.insert({
+  clint_id: `csv_import_${crypto.randomUUID()}`,
+  name: contactData.name,
+  email: contactData.email || null,
+  phone: normalizedPhone
+})
 ```
 
-Isso é uma operação de banco simples, sem alteração de código.
+### 2. `src/pages/crm/ImportarNegocios.tsx` — Filtrar origens pela BU Incorporador
+
+Substituir a query que busca **todas** as origens por uma query que:
+1. Busca o mapeamento `bu_origin_mapping` onde `bu = 'incorporador'`
+2. Expande grupos para incluir suas origens filhas
+3. Inclui origens diretas (`entity_type = 'origin'`)
+4. Pré-seleciona automaticamente a origin com `is_default = true` (`e3c04f21`)
+5. Mostra apenas as origens relevantes no dropdown (11 do grupo + 1 direta = máx 12 itens)
+
+Também adicionar seção expansível de **mapeamento de colunas** mostrando o que cada coluna CSV significa.
+
+---
+
+## Arquivos a modificar
+- `supabase/functions/process-csv-imports/index.ts` — linha 430-449 (função `createContact`)
+- `src/pages/crm/ImportarNegocios.tsx` — query de origens + auto-seleção + guia de colunas
