@@ -1,34 +1,32 @@
 
 
-## Problemas Identificados
+## Excluir Usuários Duplicados
 
-### 1. Erro ao atualizar Role
-A coluna `role` em `user_roles` usa o enum `app_role` do Postgres. O enum atual contém:
-`admin, manager, viewer, sdr, closer, coordenador, rh, financeiro, closer_sombra, gr`
+### Problema
+Não existe funcionalidade de exclusão de usuários. Gabriela Fernandes e Robert Roger aparecem duplicados e precisam ser removidos.
 
-Mas a tabela `roles_config` tem a role **"marketing"** que **não existe no enum**. Quando o dropdown mostra "Marketing" e o usuário tenta selecionar, o INSERT falha porque o valor não é válido no enum.
+### Solução
+Criar uma Edge Function `delete-user` (admin-only) que usa `supabase.auth.admin.deleteUser()` e um botão de exclusão no drawer de gerenciamento.
 
-### 2. BUs novas não aparecem
-A lista de BUs no drawer (linhas 379-385) está **hardcoded** com apenas 5 opções (Incorporador, Consórcio, Crédito, Projetos, Leilão). Falta "Marketing" e qualquer outra BU nova.
+### Mudanças
 
----
+**1. Nova Edge Function `supabase/functions/delete-user/index.ts`**
+- Valida que o caller é admin (mesmo padrão do `create-user`)
+- Recebe `{ user_id }` no body
+- Limpa dados relacionados: `user_roles`, `user_employment_data`, `user_integrations`, `user_permissions`, `user_targets`, `user_flags`, `user_observations`, `profiles`
+- Chama `supabaseAdmin.auth.admin.deleteUser(user_id)` para remover do auth
+- Retorna sucesso/erro
 
-## Solução
+**2. Novo hook `useDeleteUser` em `src/hooks/useUserMutations.ts`**
+- Mutation que invoca `supabase.functions.invoke("delete-user", { body: { user_id } })`
+- Invalida query `["users"]` no sucesso
+- Mostra toast de confirmação
 
-### Migração SQL
-Adicionar `marketing` ao enum `app_role`:
-```sql
-ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'marketing';
-```
+**3. Botão no `UserDetailsDrawer.tsx`**
+- Adicionar botão "Excluir Usuário" (vermelho, com ícone Trash) na aba de acesso ou no header do drawer
+- AlertDialog de confirmação: "Tem certeza? Esta ação é irreversível."
+- Ao confirmar, chama `deleteUser` e fecha o drawer
 
-### `UserDetailsDrawer.tsx`
-Trocar a lista hardcoded de BUs por dados dinâmicos. Duas opções:
-- Buscar de uma tabela/config de BUs
-- Ou ao menos adicionar "marketing" à lista estática
-
-A abordagem mais prática: adicionar `{ value: 'marketing', label: 'BU - Marketing' }` à lista existente, pois as BUs são uma lista fixa do negócio.
-
-### Arquivos a modificar
-- **Migration SQL** — `ALTER TYPE app_role ADD VALUE 'marketing'`
-- **`UserDetailsDrawer.tsx`** — adicionar "Marketing" na lista de BUs (linha 384)
+**4. Botão na tabela `GerenciamentoUsuarios.tsx`** (opcional)
+- Adicionar ícone de lixeira ao lado de "Gerenciar" para acesso rápido
 
