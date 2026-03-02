@@ -1,19 +1,25 @@
 
+## Cancelar os 3 jobs de importação CSV travados
 
-## Plano: Ocultar funcionalidade de Atendimentos
+Os 3 jobs de import de CSV do dia 13/02 estão:
+- `62190420` — pending — deals_1770990471569.csv
+- `4cb1c4b7` — pending — deals_1770989567343.csv  
+- `8aaaf71c` — processing — deals_1770988842673.csv
 
-Remover a aba "Atendimentos" da navegação e o widget/drawer flutuante de conversas, mantendo todo o código intacto para reativação futura.
+### Correção
+Executar UPDATE no banco para setar `status = 'cancelled'` e adicionar uma mensagem de erro explicativa nesses 3 jobs específicos (pelos IDs de `import_deals_csv` de fevereiro/2026).
 
-### 1. `src/pages/CRM.tsx` — Remover item de navegação
-- Remover/comentar o item `{ to: '/crm/atendimentos', label: 'Atendimentos', icon: MessageCircle }` do array `allNavItems`
+```sql
+UPDATE sync_jobs
+SET 
+  status = 'cancelled',
+  error_message = 'Cancelado manualmente — job travado sem processamento',
+  updated_at = NOW()
+WHERE id IN (
+  '62190420-1df1-4ddd-9ac9-e0caa688fd1e',
+  '4cb1c4b7-9fa3-4cf8-a28e-7da7e82a93af',
+  '8aaaf71c-7074-46e8-9a23-584695712907'
+);
+```
 
-### 2. `src/pages/crm/BUCRMLayout.tsx` — Remover de todas as BUs
-- Remover `'atendimentos'` de todos os arrays em `BU_VISIBLE_TABS` (incorporador, consorcio, credito, projetos, leilao)
-- Remover o item `{ key: 'atendimentos', ... }` do array de tabs
-
-### 3. `src/components/layout/MainLayout.tsx` — Desabilitar widget e drawer
-- Setar `ENABLE_CONVERSATIONS_WIDGET = false` ou remover/comentar as linhas do `ConversationsFloatingWidget` e `ConversationsDrawer`
-
-### 4. Rotas mantidas
-- As rotas em `App.tsx` serão mantidas (apenas não acessíveis pela UI), para não quebrar nada caso alguém acesse diretamente
-
+Isso é uma operação de banco simples, sem alteração de código.
