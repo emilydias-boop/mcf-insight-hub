@@ -1,58 +1,48 @@
 
-## Diagnóstico
+## Problema
 
-Atualmente no `process-csv-imports`, a lógica de owner é:
-1. `ownerEmail` (passado pelo job) → tem prioridade
-2. `csvOwnerEmail` (coluna owner/user_email do CSV) → fallback
-3. Se nenhum → `owner_id = null` → deal fica órfão
+O loop de polling para corretamente quando `status === 'completed'`, mas:
+1. `setIsImporting(false)` é chamado — OK
+2. `clearInterval` é chamado — OK
+3. **Porém `setProgress` não é atualizado para 100%** antes de parar
 
-A função `get_next_lead_owner(p_origin_id uuid)` já existe no banco e implementa o rodízio por percentual — é a mesma usada por webhooks (Clint, Hubla, LIVE). Basta chamá-la via RPC quando não houver owner.
+O resultado: a barra trava em 0% e a UI parece estar "Processando..." visualmente, mesmo que o job tenha terminado.
 
----
+Também há um segundo problema: o texto "Processando..." do botão continua sendo exibido baseado em `isImporting`, que é setado para `false` corretamente — mas a barra de progresso permanece em 0%, dando a impressão de carregamento infinito.
 
-## O que mudar
+## Correção
 
-### `supabase/functions/process-csv-imports/index.ts`
+**Em `src/pages/crm/ImportarNegocios.tsx`**, no bloco do polling (linhas 229-238):
 
-**Onde:** bloco de resolução de owner (linhas 210–222), dentro do loop `for (const csvDeal of chunkDeals)`
-
-**Lógica nova:**
-```
-1. csvOwnerEmail = csvDeal.owner || csvDeal.dono || csvDeal.user_email
-2. finalOwnerEmail = ownerEmail (job) || csvOwnerEmail (CSV)
-3. SE finalOwnerEmail → atribuir normalmente (comportamento atual)
-4. SE NÃO finalOwnerEmail E originId tem lead_distribution_config ativa:
-   → chamar get_next_lead_owner(originId) via RPC
-   → usar o retorno como owner_id
-   → resolver owner_profile_id no profilesCache
-```
-
-Para evitar chamar o RPC N vezes (uma por deal, o que incrementaria o contador corretamente), cada deal sem owner chama `get_next_lead_owner` individualmente — isso é o comportamento correto do rodízio.
-
-**Verificação prévia:** Antes do loop, checar se existe configuração ativa de distribuição para o `originId`:
 ```typescript
-const { data: distConfig } = await supabase
-  .from('lead_distribution_config')
-  .select('id')
-  .eq('origin_id', originId)
-  .eq('is_active', true)
-  .limit(1)
-const hasDistribution = !!distConfig?.length
+// ANTES
+if (job.status === 'completed' || job.status === 'failed') {
+  setIsImporting(false);
+  clearInterval(interval);
+  ...
+}
+
+// DEPOIS  
+if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+  setProgress(100);  // ← garantir que a barra chegue ao fim
+  setIsImporting(false);
+  clearInterval(interval);
+  ...
+}
 ```
 
-Só chamar o RPC se `hasDistribution = true`. Se não houver config, o deal fica sem owner (comportamento atual).
+Também corrigir o cálculo de progresso para usar `total_processed / total_deals` como fallback quando `current_chunk` não está disponível:
 
-### `src/pages/crm/ImportarNegocios.tsx`
-
-**Alterar o texto descritivo** do campo "Atribuir a (opcional)" para deixar claro que, se vazio e houver configuração de rodízio na pipeline selecionada, os leads serão distribuídos automaticamente.
-
+```typescript
+const currentChunk = metadata?.current_chunk || 0;
+const totalChunks = metadata?.total_chunks || 1;
+// Se current_chunk não disponível, usar total_processed/total_deals
+const processedDeals = job.total_processed || 0;
+const totalDeals = metadata?.total_deals || 1;
+const progressPercent = totalChunks > 1 
+  ? Math.round((currentChunk / totalChunks) * 100)
+  : Math.round((processedDeals / totalDeals) * 100);
 ```
-texto atual: "Todos os deals importados serão atribuídos a este responsável"
-texto novo:  "Se vazio, os leads serão distribuídos automaticamente via rodízio (se configurado na pipeline)"
-```
 
----
-
-## Arquivos a modificar
-- `supabase/functions/process-csv-imports/index.ts` — lógica de owner no loop + verificação prévia de distConfig
-- `src/pages/crm/ImportarNegocios.tsx` — texto descritivo do campo owner
+## Arquivo a modificar
+- `src/pages/crm/ImportarNegocios.tsx` — bloco de polling (linhas ~229-238) e cálculo de progresso (~223-227)
