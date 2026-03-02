@@ -372,7 +372,7 @@ const ImportarNegocios = () => {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Todos os deals importados serão atribuídos a este responsável
+              Se vazio, os leads serão distribuídos automaticamente via rodízio (se configurado na pipeline)
             </p>
           </div>
 
