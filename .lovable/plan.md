@@ -2,46 +2,30 @@
 
 ## Problema
 
-A aba "Marketing" na matriz de permissões está mostrando os mesmos recursos das outras BUs (CRM, Fechamento Equipe, Efeito Alavanca, etc.), mas o Marketing tem recursos próprios: **Dashboard Ads, Campanhas, Aquisição A010, Config Links A010, Documentos Estratégicos**.
+Os dropdowns de "Role de sistema" em **3 locais** estão com roles **hardcoded** em vez de buscar da tabela `roles_config`:
+
+1. **`UserDetailsDrawer.tsx`** (linha 347-354) — SelectItems fixos (Admin, Manager, Coordenador, SDR, Closer, Viewer)
+2. **`CargoFormDialog.tsx`** (linha 37-44) — constante `ROLE_SISTEMA_OPTIONS` hardcoded
+3. **`user-management.ts`** (linha 160+) — `ROLE_LABELS` hardcoded
 
 ## Solução
 
-### 1. Adicionar novos `resource_type` ao enum Postgres
+Substituir todas as listas hardcoded pelo hook `useRolesConfig(true)` que já busca roles ativos da tabela `roles_config`.
 
-Novos valores:
-- `marketing_dashboard_ads`
-- `marketing_campanhas`
-- `marketing_aquisicao_a010`
-- `marketing_config_links`
-- `marketing_documentos`
+### Mudanças
 
-Migration SQL com `ALTER TYPE resource_type ADD VALUE IF NOT EXISTS`.
+**`UserDetailsDrawer.tsx`**
+- Importar `useRolesConfig`
+- Substituir os 6 `<SelectItem>` fixos por um `.map()` sobre `roles` do hook
 
-### 2. Criar mapeamento de recursos por BU
+**`CargoFormDialog.tsx`**
+- Importar `useRolesConfig`
+- Remover constante `ROLE_SISTEMA_OPTIONS`
+- Usar `roles` do hook no `.map()` do Select
 
-Em vez de um único `BU_RESOURCES` para todas as BUs, criar um `BU_RESOURCE_MAP`:
+**`user-management.ts`**
+- O `ROLE_LABELS` estático pode continuar como fallback, mas os componentes acima passarão a usar dados dinâmicos da tabela
 
-```typescript
-const BU_RESOURCE_MAP: Record<string, ResourceType[]> = {
-  incorporador: ['crm', 'fechamento_sdr', 'efeito_alavanca'],
-  consorcio:    ['crm', 'fechamento_sdr', 'efeito_alavanca'],
-  credito:      ['crm', 'fechamento_sdr', 'efeito_alavanca', 'credito'],
-  projetos:     ['crm', 'fechamento_sdr', 'efeito_alavanca', 'projetos'],
-  leilao:       ['crm', 'fechamento_sdr', 'efeito_alavanca', 'leilao'],
-  marketing:    ['marketing_dashboard_ads', 'marketing_campanhas', 'marketing_aquisicao_a010', 'marketing_config_links', 'marketing_documentos'],
-};
-```
-
-### 3. Atualizar `RESOURCE_LABELS`
-
-Adicionar labels amigáveis para os novos recursos em `src/types/user-management.ts`.
-
-### 4. Atualizar `Permissoes.tsx`
-
-Trocar a lógica de `resources` para buscar do mapa por BU em vez do array fixo `BU_RESOURCES`.
-
-### Arquivos a modificar
-- **Migration SQL** — adicionar 5 novos valores ao enum `resource_type`
-- `src/types/user-management.ts` — adicionar labels dos novos recursos
-- `src/pages/admin/Permissoes.tsx` — substituir `BU_RESOURCES` por `BU_RESOURCE_MAP`
+**`CreateUserDialog.tsx`** (verificar se também usa lista hardcoded)
+- Se sim, aplicar a mesma correção
 
