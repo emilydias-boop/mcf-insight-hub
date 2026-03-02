@@ -1,58 +1,58 @@
 
 ## Diagnóstico
 
-### Erro principal: `null value in column "clint_id" of relation "crm_contacts"`
+Atualmente no `process-csv-imports`, a lógica de owner é:
+1. `ownerEmail` (passado pelo job) → tem prioridade
+2. `csvOwnerEmail` (coluna owner/user_email do CSV) → fallback
+3. Se nenhum → `owner_id = null` → deal fica órfão
 
-A função `createContact` em `process-csv-imports/index.ts` tenta inserir contatos na tabela `crm_contacts`, mas essa tabela tem a coluna `clint_id` como **NOT NULL**. A função nunca passa o `clint_id`, então todos os contatos novos falham ao ser criados.
-
-**Consequência**: contatos não são criados → deals ficam sem `contact_id` mas ainda são processados → importação "funciona" mas sem vínculo de contato.
-
-### Problema secundário: Pipeline desatualizada no seletor
-
-O seletor de "Pipeline de Destino" em `ImportarNegocios.tsx` busca **todas** as `crm_origins` (mais de 100). Deve filtrar apenas as origens da BU Incorporador via `bu_origin_mapping`, e pré-selecionar automaticamente "PIPELINE INSIDE SALES" (`e3c04f21-ba2c-4c66-84f8-b4341c826b1c`) que é o único `is_default: true`.
-
-### Estado atual do mapeamento BU Incorporador
-- `entity_type: group` → grupo "Perpétuo - X1" (`a6f3cbfc`) com 11 origens
-- `entity_type: origin` → "PIPELINE INSIDE SALES" (`e3c04f21`) ← `is_default: true`
+A função `get_next_lead_owner(p_origin_id uuid)` já existe no banco e implementa o rodízio por percentual — é a mesma usada por webhooks (Clint, Hubla, LIVE). Basta chamá-la via RPC quando não houver owner.
 
 ---
 
-## Plano de correção
+## O que mudar
 
-### 1. `supabase/functions/process-csv-imports/index.ts` — Corrigir `createContact`
+### `supabase/functions/process-csv-imports/index.ts`
 
-A função `createContact` precisa gerar um `clint_id` sintético para contatos criados via importação CSV (já que eles não vêm da Clint). Usar um prefixo `csv_import_` + UUID aleatório:
+**Onde:** bloco de resolução de owner (linhas 210–222), dentro do loop `for (const csvDeal of chunkDeals)`
 
-```typescript
-// ANTES (falha com NOT NULL constraint)
-.insert({
-  name: contactData.name,
-  email: contactData.email || null,
-  phone: normalizedPhone
-})
-
-// DEPOIS (gera clint_id sintético)
-.insert({
-  clint_id: `csv_import_${crypto.randomUUID()}`,
-  name: contactData.name,
-  email: contactData.email || null,
-  phone: normalizedPhone
-})
+**Lógica nova:**
+```
+1. csvOwnerEmail = csvDeal.owner || csvDeal.dono || csvDeal.user_email
+2. finalOwnerEmail = ownerEmail (job) || csvOwnerEmail (CSV)
+3. SE finalOwnerEmail → atribuir normalmente (comportamento atual)
+4. SE NÃO finalOwnerEmail E originId tem lead_distribution_config ativa:
+   → chamar get_next_lead_owner(originId) via RPC
+   → usar o retorno como owner_id
+   → resolver owner_profile_id no profilesCache
 ```
 
-### 2. `src/pages/crm/ImportarNegocios.tsx` — Filtrar origens pela BU Incorporador
+Para evitar chamar o RPC N vezes (uma por deal, o que incrementaria o contador corretamente), cada deal sem owner chama `get_next_lead_owner` individualmente — isso é o comportamento correto do rodízio.
 
-Substituir a query que busca **todas** as origens por uma query que:
-1. Busca o mapeamento `bu_origin_mapping` onde `bu = 'incorporador'`
-2. Expande grupos para incluir suas origens filhas
-3. Inclui origens diretas (`entity_type = 'origin'`)
-4. Pré-seleciona automaticamente a origin com `is_default = true` (`e3c04f21`)
-5. Mostra apenas as origens relevantes no dropdown (11 do grupo + 1 direta = máx 12 itens)
+**Verificação prévia:** Antes do loop, checar se existe configuração ativa de distribuição para o `originId`:
+```typescript
+const { data: distConfig } = await supabase
+  .from('lead_distribution_config')
+  .select('id')
+  .eq('origin_id', originId)
+  .eq('is_active', true)
+  .limit(1)
+const hasDistribution = !!distConfig?.length
+```
 
-Também adicionar seção expansível de **mapeamento de colunas** mostrando o que cada coluna CSV significa.
+Só chamar o RPC se `hasDistribution = true`. Se não houver config, o deal fica sem owner (comportamento atual).
+
+### `src/pages/crm/ImportarNegocios.tsx`
+
+**Alterar o texto descritivo** do campo "Atribuir a (opcional)" para deixar claro que, se vazio e houver configuração de rodízio na pipeline selecionada, os leads serão distribuídos automaticamente.
+
+```
+texto atual: "Todos os deals importados serão atribuídos a este responsável"
+texto novo:  "Se vazio, os leads serão distribuídos automaticamente via rodízio (se configurado na pipeline)"
+```
 
 ---
 
 ## Arquivos a modificar
-- `supabase/functions/process-csv-imports/index.ts` — linha 430-449 (função `createContact`)
-- `src/pages/crm/ImportarNegocios.tsx` — query de origens + auto-seleção + guia de colunas
+- `supabase/functions/process-csv-imports/index.ts` — lógica de owner no loop + verificação prévia de distConfig
+- `src/pages/crm/ImportarNegocios.tsx` — texto descritivo do campo owner
