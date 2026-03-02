@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Upload, FileText, CheckCircle, XCircle, AlertCircle, Download, Loader2 } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, AlertCircle, Download, Loader2, ChevronDown } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -44,19 +45,59 @@ const ImportarNegocios = () => {
   const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
   const [selectedOwnerEmail, setSelectedOwnerEmail] = useState<string | null>(null);
   const [selectedOwnerProfileId, setSelectedOwnerProfileId] = useState<string | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
-  // Buscar origens disponíveis
+  // Buscar origens filtradas pela BU Incorporador via bu_origin_mapping
   const { data: origins, isLoading: originsLoading } = useQuery({
-    queryKey: ['import-origins'],
+    queryKey: ['import-origins-incorporador'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1. Buscar mapeamentos da BU incorporador
+      const { data: mappings, error: mappingError } = await supabase
+        .from('bu_origin_mapping')
+        .select('entity_type, entity_id, is_default')
+        .eq('bu', 'incorporador');
+      if (mappingError) throw mappingError;
+
+      const directOriginIds = (mappings || [])
+        .filter(m => m.entity_type === 'origin')
+        .map(m => m.entity_id);
+      const groupIds = (mappings || [])
+        .filter(m => m.entity_type === 'group')
+        .map(m => m.entity_id);
+      const defaultOriginId = (mappings || [])
+        .find(m => m.entity_type === 'origin' && m.is_default)?.entity_id || null;
+
+      // 2. Buscar origens filhas dos grupos
+      let childOriginIds: string[] = [];
+      if (groupIds.length > 0) {
+        const { data: childOrigins } = await supabase
+          .from('crm_origins')
+          .select('id')
+          .in('group_id', groupIds);
+        childOriginIds = childOrigins?.map(o => o.id) || [];
+      }
+
+      // 3. Combinar IDs únicos
+      const allOriginIds = [...new Set([...directOriginIds, ...childOriginIds])];
+
+      // 4. Buscar dados das origens
+      const { data: originsData, error: originsError } = await supabase
         .from('crm_origins')
         .select('id, name, display_name')
+        .in('id', allOriginIds)
         .order('name');
-      if (error) throw error;
-      return data || [];
+      if (originsError) throw originsError;
+
+      return { origins: originsData || [], defaultOriginId };
     }
   });
+
+  // Auto-selecionar a origin padrão quando os dados carregarem
+  useEffect(() => {
+    if (origins?.defaultOriginId && !selectedOriginId) {
+      setSelectedOriginId(origins.defaultOriginId);
+    }
+  }, [origins?.defaultOriginId]);
 
   // Buscar usuários ativos para atribuição
   const { data: activeUsers, isLoading: usersLoading } = useQuery({
@@ -241,13 +282,43 @@ const ImportarNegocios = () => {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Formato esperado:</strong> CSV com colunas: id, name, value, stage, contact, owner, tags, etc.
-              <br />
               <strong>Processamento incremental:</strong> 1.000 deals por chunk a cada 2 minutos (cron job)
               <br />
               <strong>Segurança:</strong> Deals protegidos por webhook não são sobrescritos
             </AlertDescription>
           </Alert>
+
+          {/* Guia de colunas CSV */}
+          <Collapsible open={guideOpen} onOpenChange={setGuideOpen}>
+            <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full">
+              <ChevronDown className={`h-4 w-4 transition-transform ${guideOpen ? 'rotate-180' : ''}`} />
+              Guia de colunas do CSV
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="mt-3 rounded-lg border bg-muted/40 p-4">
+                <p className="text-xs text-muted-foreground mb-3">Colunas reconhecidas pelo importador:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {[
+                    { col: 'id', desc: 'ID único do deal (evita duplicatas)' },
+                    { col: 'name', desc: 'Nome do negócio (obrigatório)' },
+                    { col: 'value', desc: 'Valor do negócio (número)' },
+                    { col: 'stage', desc: 'Nome do estágio (ex: Novo Lead)' },
+                    { col: 'owner / user_email', desc: 'E-mail do responsável' },
+                    { col: 'contact', desc: 'Nome do contato' },
+                    { col: 'email', desc: 'E-mail do contato' },
+                    { col: 'phone', desc: 'Telefone do contato' },
+                    { col: 'tags', desc: 'Tags separadas por vírgula' },
+                    { col: 'created_at', desc: 'Data de criação original (ISO 8601)' },
+                  ].map(({ col, desc }) => (
+                    <div key={col} className="flex gap-2">
+                      <code className="bg-background border rounded px-1.5 py-0.5 font-mono shrink-0">{col}</code>
+                      <span className="text-muted-foreground">{desc}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
 
           {/* Seletor de Pipeline */}
           <div className="space-y-2">
@@ -263,7 +334,7 @@ const ImportarNegocios = () => {
                 <SelectValue placeholder={originsLoading ? "Carregando..." : "Selecione uma pipeline"} />
               </SelectTrigger>
               <SelectContent>
-                {origins?.map(origin => (
+                {origins?.origins?.map(origin => (
                   <SelectItem key={origin.id} value={origin.id}>
                     {origin.display_name || origin.name}
                   </SelectItem>
