@@ -45,6 +45,7 @@ const ImportarNegocios = () => {
   const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
   const [selectedOwnerEmail, setSelectedOwnerEmail] = useState<string | null>(null);
   const [selectedOwnerProfileId, setSelectedOwnerProfileId] = useState<string | null>(null);
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
 
   // Buscar origens filtradas pela BU Incorporador via bu_origin_mapping
@@ -99,6 +100,26 @@ const ImportarNegocios = () => {
     }
   }, [origins?.defaultOriginId]);
 
+  // Resetar estágio quando pipeline mudar
+  useEffect(() => {
+    setSelectedStageId(null);
+  }, [selectedOriginId]);
+
+  // Buscar estágios da pipeline selecionada
+  const { data: stagesForOrigin } = useQuery({
+    queryKey: ['stages-for-origin', selectedOriginId],
+    enabled: !!selectedOriginId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('local_pipeline_stages')
+        .select('id, name')
+        .eq('origin_id', selectedOriginId!)
+        .eq('is_active', true)
+        .order('stage_order');
+      return data || [];
+    }
+  });
+
   // Buscar usuários ativos para atribuição
   const { data: activeUsers, isLoading: usersLoading } = useQuery({
     queryKey: ['active-users-for-import'],
@@ -152,6 +173,9 @@ const ImportarNegocios = () => {
       }
       if (selectedOwnerProfileId) {
         formData.append('owner_profile_id', selectedOwnerProfileId);
+      }
+      if (selectedStageId) {
+        formData.append('default_stage_id', selectedStageId);
       }
 
       const { data, error } = await supabase.functions.invoke('import-deals-csv', {
@@ -350,6 +374,30 @@ const ImportarNegocios = () => {
             </Select>
             <p className="text-xs text-muted-foreground">
               Todos os deals importados serão associados a esta pipeline
+            </p>
+          </div>
+
+          {/* Seletor de Estágio Padrão */}
+          <div className="space-y-2">
+            <Label htmlFor="stage-select" className="text-sm font-medium">
+              Estágio padrão (opcional)
+            </Label>
+            <Select
+              value={selectedStageId || ''}
+              onValueChange={(value) => setSelectedStageId(value || null)}
+              disabled={isImporting || !selectedOriginId}
+            >
+              <SelectTrigger id="stage-select" className="w-full">
+                <SelectValue placeholder={!selectedOriginId ? "Selecione uma pipeline primeiro" : "Selecione um estágio padrão"} />
+              </SelectTrigger>
+              <SelectContent>
+                {stagesForOrigin?.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Usado quando o CSV não tem coluna "stage". Se vazio, deals entram sem estágio.
             </p>
           </div>
 
