@@ -1,31 +1,34 @@
 
 
-## Problema
+## Problemas Identificados
 
-Os dropdowns de "Role de sistema" em **3 locais** estão com roles **hardcoded** em vez de buscar da tabela `roles_config`:
+### 1. Erro ao atualizar Role
+A coluna `role` em `user_roles` usa o enum `app_role` do Postgres. O enum atual contém:
+`admin, manager, viewer, sdr, closer, coordenador, rh, financeiro, closer_sombra, gr`
 
-1. **`UserDetailsDrawer.tsx`** (linha 347-354) — SelectItems fixos (Admin, Manager, Coordenador, SDR, Closer, Viewer)
-2. **`CargoFormDialog.tsx`** (linha 37-44) — constante `ROLE_SISTEMA_OPTIONS` hardcoded
-3. **`user-management.ts`** (linha 160+) — `ROLE_LABELS` hardcoded
+Mas a tabela `roles_config` tem a role **"marketing"** que **não existe no enum**. Quando o dropdown mostra "Marketing" e o usuário tenta selecionar, o INSERT falha porque o valor não é válido no enum.
+
+### 2. BUs novas não aparecem
+A lista de BUs no drawer (linhas 379-385) está **hardcoded** com apenas 5 opções (Incorporador, Consórcio, Crédito, Projetos, Leilão). Falta "Marketing" e qualquer outra BU nova.
+
+---
 
 ## Solução
 
-Substituir todas as listas hardcoded pelo hook `useRolesConfig(true)` que já busca roles ativos da tabela `roles_config`.
+### Migração SQL
+Adicionar `marketing` ao enum `app_role`:
+```sql
+ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'marketing';
+```
 
-### Mudanças
+### `UserDetailsDrawer.tsx`
+Trocar a lista hardcoded de BUs por dados dinâmicos. Duas opções:
+- Buscar de uma tabela/config de BUs
+- Ou ao menos adicionar "marketing" à lista estática
 
-**`UserDetailsDrawer.tsx`**
-- Importar `useRolesConfig`
-- Substituir os 6 `<SelectItem>` fixos por um `.map()` sobre `roles` do hook
+A abordagem mais prática: adicionar `{ value: 'marketing', label: 'BU - Marketing' }` à lista existente, pois as BUs são uma lista fixa do negócio.
 
-**`CargoFormDialog.tsx`**
-- Importar `useRolesConfig`
-- Remover constante `ROLE_SISTEMA_OPTIONS`
-- Usar `roles` do hook no `.map()` do Select
-
-**`user-management.ts`**
-- O `ROLE_LABELS` estático pode continuar como fallback, mas os componentes acima passarão a usar dados dinâmicos da tabela
-
-**`CreateUserDialog.tsx`** (verificar se também usa lista hardcoded)
-- Se sim, aplicar a mesma correção
+### Arquivos a modificar
+- **Migration SQL** — `ALTER TYPE app_role ADD VALUE 'marketing'`
+- **`UserDetailsDrawer.tsx`** — adicionar "Marketing" na lista de BUs (linha 384)
 
