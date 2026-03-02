@@ -10070,6 +10070,7 @@ export type Database = {
         | "financeiro"
         | "closer_sombra"
         | "gr"
+        | "marketing"
       asset_event_type:
         | "comprado"
         | "liberado"
@@ -10327,6 +10328,7 @@ export const Constants = {
         "financeiro",
         "closer_sombra",
         "gr",
+        "marketing",
       ],
       asset_event_type: [
         "comprado",
