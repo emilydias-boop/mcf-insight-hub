@@ -433,6 +433,7 @@ async function createContact(supabase: any, contactData: ContactData): Promise<s
   const { data, error } = await supabase
     .from('crm_contacts')
     .insert({
+      clint_id: `csv_import_${crypto.randomUUID()}`,
       name: contactData.name,
       email: contactData.email || null,
       phone: normalizedPhone
