@@ -1,116 +1,76 @@
 
-## Diagnóstico
 
-Linha 525-528 de `process-csv-imports/index.ts`:
-```typescript
-if (csvDeal.stage) {
-  const stageId = stagesCache.get(csvDeal.stage.toLowerCase())
-  if (stageId) dbDeal.stage_id = stageId
-}
-// Se não tem coluna 'stage' no CSV → stage_id = undefined → entra sem estágio
-```
+## Plano: Página de Gerenciamento de Roles
 
-CSVs da Hubla não têm coluna `stage`, então **100% dos deals importados entram com `stage_id = null`** e caem na coluna "⚠️ Sem Estágio" do Kanban — visível mas sem estágio definido.
+### Problema Atual
+Roles são armazenadas como um **enum Postgres** (`app_role`). Para criar um novo cargo, é necessário rodar SQL manualmente (`ALTER TYPE app_role ADD VALUE`), atualizar labels no código, e configurar permissões. Não existe UI para isso.
 
-## Solução: Seletor de Estágio Padrão na tela de importação
+### Solução
 
-Quando o CSV não tiver coluna `stage` (ou o valor não bater com nenhum estágio), usar o **estágio padrão selecionado pelo usuário**.
+Criar uma tabela `roles_config` para armazenar metadados de cada role (label, cor, descrição, ativo/inativo), uma edge function que pode adicionar novos valores ao enum via service role, e uma página de administração completa.
 
 ---
 
-### 1. `src/pages/crm/ImportarNegocios.tsx`
+### 1. Nova tabela: `roles_config`
 
-**Novo estado e query:**
-```typescript
-const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
-
-// Query de estágios da pipeline selecionada
-const { data: stagesForOrigin } = useQuery({
-  queryKey: ['stages-for-origin', selectedOriginId],
-  enabled: !!selectedOriginId,
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('local_pipeline_stages')
-      .select('id, name')
-      .eq('origin_id', selectedOriginId)
-      .eq('is_active', true)
-      .order('stage_order');
-    return data || [];
-  }
-});
+```sql
+CREATE TABLE roles_config (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  role_key text UNIQUE NOT NULL, -- valor do enum (ex: 'sdr')
+  label text NOT NULL,           -- nome amigável (ex: 'SDR')
+  color text DEFAULT 'bg-muted text-muted-foreground border-border',
+  description text,
+  is_system boolean DEFAULT false, -- admin/manager não podem ser removidos
+  is_active boolean DEFAULT true,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
 ```
 
-**Resetar estágio quando pipeline mudar:**
-```typescript
-useEffect(() => {
-  setSelectedStageId(null);
-}, [selectedOriginId]);
-```
+Seed com os 10 roles atuais (admin, manager, coordenador, sdr, closer, closer_sombra, financeiro, rh, gr, viewer), marcando admin/manager/viewer como `is_system = true`.
 
-**Novo seletor na UI** (entre pipeline e responsável):
-```tsx
-<div className="space-y-2">
-  <Label>Estágio padrão (opcional)</Label>
-  <Select value={selectedStageId || ''} onValueChange={v => setSelectedStageId(v || null)}>
-    <SelectTrigger>
-      <SelectValue placeholder="Selecione um estágio padrão" />
-    </SelectTrigger>
-    <SelectContent>
-      {stagesForOrigin?.map(s => (
-        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-  <p className="text-xs text-muted-foreground">
-    Usado quando o CSV não tem coluna "stage". Se vazio, deals entram sem estágio.
-  </p>
-</div>
-```
+### 2. Edge function: `manage-roles`
 
-**Passar `default_stage_id` no FormData:**
-```typescript
-if (selectedStageId) {
-  formData.append('default_stage_id', selectedStageId);
-}
-```
+- **POST** `/manage-roles` com `{ action: 'create', role_key, label, color, description }`
+  - Valida que o caller é admin
+  - Executa `ALTER TYPE app_role ADD VALUE IF NOT EXISTS '{role_key}'` via service role SQL
+  - Insere na `roles_config`
+- **PATCH** para atualizar label/cor/descrição/ativo
+- **DELETE** (soft) para desativar (não é possível remover valores de enum Postgres)
+
+### 3. Nova página: `/admin/roles`
+
+Interface com:
+- Lista de todos os roles com label, cor, descrição, status (ativo/inativo), badge "Sistema" para roles fixos
+- Botão "Novo Cargo" abre dialog com campos: chave (slug), label, cor (seletor), descrição
+- Edição inline de label/cor/descrição para roles existentes
+- Toggle ativo/inativo (roles de sistema não podem ser desativados)
+- Link rápido para a Matriz de Permissões (`/admin/permissoes`) para configurar o que cada role pode ver
+
+### 4. Atualização do sidebar e rotas
+
+- Adicionar item "Cargos" em Administração no sidebar (requiredRoles: admin)
+- Adicionar rota `/admin/roles` no App.tsx
+
+### 5. Hook `useRolesConfig`
+
+Query na tabela `roles_config` para buscar roles dinâmicos. Substituir arrays hardcoded de ROLES/ROLE_LABELS na página de Permissões e em outros pontos do sistema por dados desta tabela.
 
 ---
 
-### 2. `supabase/functions/import-deals-csv/index.ts`
+### Detalhes técnicos
 
-Ler e salvar `default_stage_id` no metadata do job:
-```typescript
-const defaultStageId = formData.get('default_stage_id') as string | null;
-// ...
-metadata: { ..., default_stage_id: defaultStageId || null }
-```
+- O enum Postgres permite `ADD VALUE` mas **não permite remover** valores — por isso a desativação é via flag `is_active` na tabela
+- A edge function usa `supabaseAdmin` (service role) para executar o `ALTER TYPE` via `rpc` ou query direta
+- O `role_key` deve ser lowercase, sem espaços, sem acentos (slug) — validado no frontend e backend
+- Roles do sistema (admin, manager, viewer) têm `is_system = true` e não podem ser editados/desativados
 
----
+### Arquivos a criar/modificar
+- **Criar**: `supabase/functions/manage-roles/index.ts`
+- **Criar**: `src/pages/admin/Roles.tsx`
+- **Criar**: `src/hooks/useRolesConfig.ts`
+- **Modificar**: `src/App.tsx` — adicionar rota `/admin/roles`
+- **Modificar**: `src/components/layout/AppSidebar.tsx` — adicionar item "Cargos" no menu admin
+- **Modificar**: `src/pages/admin/Permissoes.tsx` — usar `useRolesConfig` em vez de array hardcoded
+- **Migration**: criar tabela `roles_config` + seed com roles atuais + RLS policies
 
-### 3. `supabase/functions/process-csv-imports/index.ts`
-
-Usar o `default_stage_id` do metadata quando o CSV não mapear estágio:
-```typescript
-// ANTES
-if (csvDeal.stage) {
-  const stageId = stagesCache.get(csvDeal.stage.toLowerCase())
-  if (stageId) dbDeal.stage_id = stageId
-}
-
-// DEPOIS
-const defaultStageId = job.metadata.default_stage_id || null
-if (csvDeal.stage) {
-  const stageId = stagesCache.get(csvDeal.stage.toLowerCase())
-  dbDeal.stage_id = stageId || defaultStageId || undefined
-} else if (defaultStageId) {
-  dbDeal.stage_id = defaultStageId
-}
-```
-
----
-
-## Arquivos a modificar
-- `src/pages/crm/ImportarNegocios.tsx` — novo seletor de estágio + query de estágios por pipeline + passar no FormData
-- `supabase/functions/import-deals-csv/index.ts` — ler e salvar `default_stage_id` no metadata
-- `supabase/functions/process-csv-imports/index.ts` — usar `default_stage_id` como fallback no `convertToDBFormat`
-- Re-deploy das duas edge functions
