@@ -1,62 +1,47 @@
 
 
-## Entendi a sua ideia
+## Problema
 
-Hoje a matriz de permissões é **global por cargo** — um SDR tem as mesmas permissões independente de estar no Consórcio ou no Incorporador. Mas faz mais sentido que as permissões sejam **por cargo + por BU**, porque um SDR de Consórcio pode precisar ver coisas diferentes de um SDR de Leilão.
+A aba "Marketing" na matriz de permissões está mostrando os mesmos recursos das outras BUs (CRM, Fechamento Equipe, Efeito Alavanca, etc.), mas o Marketing tem recursos próprios: **Dashboard Ads, Campanhas, Aquisição A010, Config Links A010, Documentos Estratégicos**.
 
-## Proposta: Permissões por Cargo separadas por BU
+## Solução
 
-### Como ficaria a interface
+### 1. Adicionar novos `resource_type` ao enum Postgres
 
-1. **Seletor de BU no topo** da página — abas ou dropdown (Incorporador, Consórcio, Crédito, Leilão, Global)
-2. **Aba "Global"** — permissões que valem para todos (Dashboard, Relatórios, Configurações, Gestão de Usuários)
-3. **Aba por BU** — permissões específicas daquela unidade (CRM, Fechamento Equipe, módulos específicos)
-4. A mesma matriz (Recurso x Cargo), mas filtrada pelo contexto da BU selecionada
+Novos valores:
+- `marketing_dashboard_ads`
+- `marketing_campanhas`
+- `marketing_aquisicao_a010`
+- `marketing_config_links`
+- `marketing_documentos`
 
-### Mudanças no banco de dados
+Migration SQL com `ALTER TYPE resource_type ADD VALUE IF NOT EXISTS`.
 
-Adicionar coluna `bu` (nullable) na tabela `role_permissions`:
+### 2. Criar mapeamento de recursos por BU
 
-```sql
-ALTER TABLE role_permissions ADD COLUMN bu TEXT DEFAULT NULL;
--- NULL = permissão global (vale para todas as BUs)
--- 'incorporador', 'consorcio', 'credito', 'leilao' = específica da BU
-
--- Atualizar constraint unique para incluir bu
-DROP INDEX IF EXISTS role_permissions_role_resource_key;
-CREATE UNIQUE INDEX role_permissions_role_resource_bu_key 
-  ON role_permissions (role, resource, COALESCE(bu, '__global__'));
-```
-
-### Mudanças na lógica de verificação (`useMyPermissions`)
+Em vez de um único `BU_RESOURCES` para todas as BUs, criar um `BU_RESOURCE_MAP`:
 
 ```typescript
-// Ao verificar acesso, considerar:
-// 1. Permissão global (bu = null) do cargo
-// 2. Permissão específica da BU ativa (bu = 'consorcio')
-// A mais específica (BU) sobrescreve a global
+const BU_RESOURCE_MAP: Record<string, ResourceType[]> = {
+  incorporador: ['crm', 'fechamento_sdr', 'efeito_alavanca'],
+  consorcio:    ['crm', 'fechamento_sdr', 'efeito_alavanca'],
+  credito:      ['crm', 'fechamento_sdr', 'efeito_alavanca', 'credito'],
+  projetos:     ['crm', 'fechamento_sdr', 'efeito_alavanca', 'projetos'],
+  leilao:       ['crm', 'fechamento_sdr', 'efeito_alavanca', 'leilao'],
+  marketing:    ['marketing_dashboard_ads', 'marketing_campanhas', 'marketing_aquisicao_a010', 'marketing_config_links', 'marketing_documentos'],
+};
 ```
 
-### Mudanças na UI (`Permissoes.tsx`)
+### 3. Atualizar `RESOURCE_LABELS`
 
-- Adicionar **Tabs** no topo: Global | Incorporador | Consórcio | Crédito | Leilão
-- Filtrar recursos relevantes por aba (ex: na aba Consórcio, mostrar CRM, Fechamento, etc.)
-- Ao salvar, incluir o campo `bu` nos upserts
-- Recursos globais (Dashboard, Configurações, Usuários) aparecem apenas na aba "Global"
+Adicionar labels amigáveis para os novos recursos em `src/types/user-management.ts`.
 
-### Classificação dos recursos
+### 4. Atualizar `Permissoes.tsx`
 
-| Recurso | Contexto |
-|---------|----------|
-| Dashboard, Relatórios, Configurações, Gestão de Usuários, Alertas | Global |
-| CRM, Fechamento Equipe, Efeito Alavanca | Por BU |
-| Financeiro (Receita/Custos), Módulo Financeiro | Global |
-| Projetos, Crédito, Leilão | Por BU (respectiva) |
+Trocar a lógica de `resources` para buscar do mapa por BU em vez do array fixo `BU_RESOURCES`.
 
 ### Arquivos a modificar
-
-- **Migration SQL** — adicionar coluna `bu` + novo unique index
-- `src/pages/admin/Permissoes.tsx` — adicionar tabs de BU, filtrar recursos, passar `bu` no save
-- `src/hooks/useRolePermissions.ts` — incluir `bu` nas queries e upserts
-- `src/hooks/useMyPermissions.ts` — verificar permissão global + BU ativa (usa `useActiveBU`)
+- **Migration SQL** — adicionar 5 novos valores ao enum `resource_type`
+- `src/types/user-management.ts` — adicionar labels dos novos recursos
+- `src/pages/admin/Permissoes.tsx` — substituir `BU_RESOURCES` por `BU_RESOURCE_MAP`
 
