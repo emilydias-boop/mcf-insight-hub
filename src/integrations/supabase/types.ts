@@ -7541,6 +7541,42 @@ export type Database = {
         }
         Relationships: []
       }
+      roles_config: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          is_system: boolean | null
+          label: string
+          role_key: string
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_system?: boolean | null
+          label: string
+          role_key: string
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_system?: boolean | null
+          label?: string
+          role_key?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       sdr: {
         Row: {
           active: boolean | null
