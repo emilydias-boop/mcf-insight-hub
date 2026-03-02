@@ -23,6 +23,8 @@ Deno.serve(async (req) => {
     const ownerEmail = formData.get('owner_email') as string | null
     const ownerProfileId = formData.get('owner_profile_id') as string | null
     
+    const defaultStageId = formData.get('default_stage_id') as string | null
+
     if (!file) {
       throw new Error('Nenhum arquivo fornecido')
     }
@@ -82,6 +84,7 @@ Deno.serve(async (req) => {
           origin_id: originId,
           owner_email: ownerEmail || null,
           owner_profile_id: ownerProfileId || null,
+          default_stage_id: defaultStageId || null,
           uploaded_at: new Date().toISOString()
         }
       })

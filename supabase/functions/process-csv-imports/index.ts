@@ -215,7 +215,7 @@ Deno.serve(async (req) => {
           processedContactOrigins.add(existingDealKey)
         }
         
-        const dbDeal = convertToDBFormat(csvDeal, contactsCache, stagesCache, originId)
+        const dbDeal = convertToDBFormat(csvDeal, contactsCache, stagesCache, originId, job.metadata.default_stage_id || null)
         if (dbDeal) {
           // Vincular contact_id se encontrado
           if (contactId) {
@@ -497,7 +497,8 @@ function convertToDBFormat(
   csvDeal: CSVDeal,
   contactsCache: Map<string, string>,
   stagesCache: Map<string, string>,
-  originId?: string
+  originId?: string,
+  defaultStageId?: string | null
 ): CRMDeal | null {
   const clintId = csvDeal.id?.trim() || generateSyntheticId(csvDeal)
   const name = csvDeal.name?.trim()
@@ -524,7 +525,9 @@ function convertToDBFormat(
 
   if (csvDeal.stage) {
     const stageId = stagesCache.get(csvDeal.stage.toLowerCase())
-    if (stageId) dbDeal.stage_id = stageId
+    dbDeal.stage_id = stageId || defaultStageId || undefined
+  } else if (defaultStageId) {
+    dbDeal.stage_id = defaultStageId
   }
 
   // contact_id será atribuído separadamente após busca/criação do contato
