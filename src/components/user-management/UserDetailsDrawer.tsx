@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUserDetails, useUserPermissions, useUserIntegrations } from "@/hooks/useUsers";
+import { useRolesConfig } from "@/hooks/useRolesConfig";
 import { 
   useUpdateUserRole, 
   useUpdateUserAccess, 
@@ -50,6 +51,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const { data: permissions = [] } = useUserPermissions(userId);
   const { data: integrations } = useUserIntegrations(userId);
   const { data: clintUsers } = useClintUsers();
+  const { roles: activeRoles } = useRolesConfig(true);
   const queryClient = useQueryClient();
 
   const updateRole = useUpdateUserRole();
@@ -345,12 +347,11 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="manager">Manager</SelectItem>
-                        <SelectItem value="coordenador">Coordenador</SelectItem>
-                        <SelectItem value="sdr">SDR</SelectItem>
-                        <SelectItem value="closer">Closer</SelectItem>
-                        <SelectItem value="viewer">Viewer</SelectItem>
+                        {activeRoles.map((r) => (
+                          <SelectItem key={r.role_key} value={r.role_key}>
+                            {r.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

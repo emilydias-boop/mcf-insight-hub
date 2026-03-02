@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Cargo, useCargoMutations, useAreas } from "@/hooks/useHRConfig";
+import { useRolesConfig } from "@/hooks/useRolesConfig";
 import {
   Dialog,
   DialogContent,
@@ -34,17 +35,6 @@ const MODELO_VARIAVEL_OPTIONS = [
   { value: 'bonus_metas', label: 'Bônus por Metas' },
 ];
 
-const ROLE_SISTEMA_OPTIONS = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'coordenador', label: 'Coordenador' },
-  { value: 'sdr', label: 'SDR' },
-  { value: 'closer', label: 'Closer' },
-  { value: 'closer_sombra', label: 'Closer Sombra' },
-  { value: 'financeiro', label: 'Financeiro' },
-  { value: 'rh', label: 'RH' },
-  { value: 'viewer', label: 'Viewer' },
-];
 
 const formSchema = z.object({
   nome_exibicao: z.string().min(2, "Nome é obrigatório"),
@@ -68,6 +58,7 @@ interface CargoFormDialogProps {
 export default function CargoFormDialog({ open, onOpenChange, cargo }: CargoFormDialogProps) {
   const { create, update } = useCargoMutations();
   const { data: areas } = useAreas();
+  const { roles: activeRoles } = useRolesConfig(true);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -259,9 +250,9 @@ export default function CargoFormDialog({ open, onOpenChange, cargo }: CargoForm
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {ROLE_SISTEMA_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
+                      {activeRoles.map((r) => (
+                        <SelectItem key={r.role_key} value={r.role_key}>
+                          {r.label}
                         </SelectItem>
                       ))}
                     </SelectContent>

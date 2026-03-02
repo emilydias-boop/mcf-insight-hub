@@ -22,8 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCreateUser } from "@/hooks/useUserMutations";
-import { ROLE_LABELS } from "@/types/user-management";
 import { useCargosAtivos } from "@/hooks/useHRConfig";
+import { useRolesConfig } from "@/hooks/useRolesConfig";
 
 const createUserSchema = z.object({
   full_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
@@ -47,6 +47,7 @@ export function CreateUserDialog() {
   const [open, setOpen] = useState(false);
   const createUser = useCreateUser();
   const { data: cargos, isLoading: cargosLoading } = useCargosAtivos();
+  const { roles: activeRoles } = useRolesConfig(true);
 
   const form = useForm<CreateUserForm>({
     resolver: zodResolver(createUserSchema),
@@ -206,9 +207,9 @@ export function CreateUserDialog() {
                 <SelectValue placeholder="Selecione o role" />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(ROLE_LABELS).map(([value, { label }]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
+                {activeRoles.map((r) => (
+                  <SelectItem key={r.role_key} value={r.role_key}>
+                    {r.label}
                   </SelectItem>
                 ))}
               </SelectContent>
