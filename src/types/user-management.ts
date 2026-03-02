@@ -187,4 +187,9 @@ export const RESOURCE_LABELS: Record<ResourceType, string> = {
   financeiro: "Módulo Financeiro",
   patrimonio: "Patrimônio (TI)",
   agenda_r2: "Agenda R2",
+  marketing_dashboard_ads: "Dashboard Ads",
+  marketing_campanhas: "Campanhas",
+  marketing_aquisicao_a010: "Aquisição A010",
+  marketing_config_links: "Config Links A010",
+  marketing_documentos: "Documentos Estratégicos",
 };

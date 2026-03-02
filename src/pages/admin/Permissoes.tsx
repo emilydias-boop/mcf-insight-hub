@@ -26,14 +26,14 @@ const GLOBAL_RESOURCES: ResourceType[] = [
   'agenda_r2',
 ];
 
-const BU_RESOURCES: ResourceType[] = [
-  'crm',
-  'fechamento_sdr',
-  'efeito_alavanca',
-  'projetos',
-  'credito',
-  'leilao',
-];
+const BU_RESOURCE_MAP: Record<string, ResourceType[]> = {
+  incorporador: ['crm', 'fechamento_sdr', 'efeito_alavanca'],
+  consorcio: ['crm', 'fechamento_sdr', 'efeito_alavanca'],
+  credito: ['crm', 'fechamento_sdr', 'efeito_alavanca', 'credito'],
+  projetos: ['crm', 'fechamento_sdr', 'efeito_alavanca', 'projetos'],
+  leilao: ['crm', 'fechamento_sdr', 'efeito_alavanca', 'leilao'],
+  marketing: ['marketing_dashboard_ads', 'marketing_campanhas', 'marketing_aquisicao_a010', 'marketing_config_links', 'marketing_documentos'],
+};
 
 const BU_TABS = [
   { value: '__global__', label: 'Global' },
@@ -72,7 +72,7 @@ export default function AdminPermissoes() {
   const [localChanges, setLocalChanges] = useState<Record<string, Record<string, PermissionLevel>>>({});
   const [isSaving, setIsSaving] = useState(false);
 
-  const resources = activeTab === '__global__' ? GLOBAL_RESOURCES : BU_RESOURCES;
+  const resources = activeTab === '__global__' ? GLOBAL_RESOURCES : (BU_RESOURCE_MAP[activeTab] || []);
 
   const getCurrentValue = (role: AppRole, resource: ResourceType): PermissionLevel => {
     if (localChanges[role]?.[resource]) {
