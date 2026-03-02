@@ -1,71 +1,116 @@
 
 ## Diagnóstico
 
-Na linha 486-491 de `process-csv-imports/index.ts`:
-
+Linha 525-528 de `process-csv-imports/index.ts`:
 ```typescript
-const clintId = csvDeal.id?.trim()
-const name = csvDeal.name?.trim()
-
-if (!clintId || !name) {
-  return null  // ← deals da Hubla sem coluna 'id' caem aqui e são descartados
+if (csvDeal.stage) {
+  const stageId = stagesCache.get(csvDeal.stage.toLowerCase())
+  if (stageId) dbDeal.stage_id = stageId
 }
+// Se não tem coluna 'stage' no CSV → stage_id = undefined → entra sem estágio
 ```
 
-CSVs exportados da Hubla não têm uma coluna `id` — por isso 324 deals foram silenciosamente ignorados. A solução correta é **gerar um `clint_id` sintético** quando a coluna `id` está ausente (igual ao que já é feito para contatos com prefixo `csv_import_`).
+CSVs da Hubla não têm coluna `stage`, então **100% dos deals importados entram com `stage_id = null`** e caem na coluna "⚠️ Sem Estágio" do Kanban — visível mas sem estágio definido.
 
-O `clint_id` sintético deve ser determinístico (baseado no nome + email + created_at do CSV) para evitar duplicatas se o usuário reimportar o mesmo arquivo.
+## Solução: Seletor de Estágio Padrão na tela de importação
+
+Quando o CSV não tiver coluna `stage` (ou o valor não bater com nenhum estágio), usar o **estágio padrão selecionado pelo usuário**.
 
 ---
 
-## O que mudar
+### 1. `src/pages/crm/ImportarNegocios.tsx`
 
-### `supabase/functions/process-csv-imports/index.ts`
-
-**`convertToDBFormat`** → em vez de retornar `null` quando `!clintId`, gerar um ID sintético baseado em hash do conteúdo:
-
+**Novo estado e query:**
 ```typescript
-// ANTES
-const clintId = csvDeal.id?.trim()
-if (!clintId || !name) return null
+const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
 
-// DEPOIS
-const clintId = csvDeal.id?.trim() || generateSyntheticId(csvDeal)
-if (!name) return null  // só bloquear se não tiver nome
+// Query de estágios da pipeline selecionada
+const { data: stagesForOrigin } = useQuery({
+  queryKey: ['stages-for-origin', selectedOriginId],
+  enabled: !!selectedOriginId,
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('local_pipeline_stages')
+      .select('id, name')
+      .eq('origin_id', selectedOriginId)
+      .eq('is_active', true)
+      .order('stage_order');
+    return data || [];
+  }
+});
 ```
 
-**Função `generateSyntheticId`** (nova, no mesmo arquivo):
+**Resetar estágio quando pipeline mudar:**
 ```typescript
-function generateSyntheticId(csvDeal: CSVDeal): string {
-  // Hash determinístico baseado em campos únicos do deal
-  const seed = [
-    csvDeal.name?.trim() || '',
-    csvDeal.email?.trim() || '',
-    csvDeal.phone?.trim() || csvDeal.telefone?.trim() || '',
-    csvDeal.created_at?.trim() || '',
-  ].join('|').toLowerCase()
-  
-  // Simples hash numérico para Deno (sem btoa de objetos)
-  let hash = 0
-  for (let i = 0; i < seed.length; i++) {
-    hash = ((hash << 5) - hash) + seed.charCodeAt(i)
-    hash |= 0
-  }
-  return `csv_import_${Math.abs(hash)}`
+useEffect(() => {
+  setSelectedStageId(null);
+}, [selectedOriginId]);
+```
+
+**Novo seletor na UI** (entre pipeline e responsável):
+```tsx
+<div className="space-y-2">
+  <Label>Estágio padrão (opcional)</Label>
+  <Select value={selectedStageId || ''} onValueChange={v => setSelectedStageId(v || null)}>
+    <SelectTrigger>
+      <SelectValue placeholder="Selecione um estágio padrão" />
+    </SelectTrigger>
+    <SelectContent>
+      {stagesForOrigin?.map(s => (
+        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+  <p className="text-xs text-muted-foreground">
+    Usado quando o CSV não tem coluna "stage". Se vazio, deals entram sem estágio.
+  </p>
+</div>
+```
+
+**Passar `default_stage_id` no FormData:**
+```typescript
+if (selectedStageId) {
+  formData.append('default_stage_id', selectedStageId);
 }
 ```
 
-Isso garante que:
-- Deals sem coluna `id` (Hubla, etc.) **não serão mais descartados**
-- Reimportações do mesmo CSV **não criam duplicatas** (mesmo hash → mesmo `clint_id` → upsert)
-- Deals com `id` explícito continuam funcionando normalmente
+---
 
-### `src/pages/crm/ImportarNegocios.tsx`
+### 2. `supabase/functions/import-deals-csv/index.ts`
 
-Adicionar nota informativa no card de deals ignorados quando `total_skipped > 0` mas `errors.length === 0`, explicando que leads sem coluna `id` agora são processados com ID sintético. Se ainda houver ignorados, mostrar o botão de download.
+Ler e salvar `default_stage_id` no metadata do job:
+```typescript
+const defaultStageId = formData.get('default_stage_id') as string | null;
+// ...
+metadata: { ..., default_stage_id: defaultStageId || null }
+```
+
+---
+
+### 3. `supabase/functions/process-csv-imports/index.ts`
+
+Usar o `default_stage_id` do metadata quando o CSV não mapear estágio:
+```typescript
+// ANTES
+if (csvDeal.stage) {
+  const stageId = stagesCache.get(csvDeal.stage.toLowerCase())
+  if (stageId) dbDeal.stage_id = stageId
+}
+
+// DEPOIS
+const defaultStageId = job.metadata.default_stage_id || null
+if (csvDeal.stage) {
+  const stageId = stagesCache.get(csvDeal.stage.toLowerCase())
+  dbDeal.stage_id = stageId || defaultStageId || undefined
+} else if (defaultStageId) {
+  dbDeal.stage_id = defaultStageId
+}
+```
 
 ---
 
 ## Arquivos a modificar
-- `supabase/functions/process-csv-imports/index.ts` — `convertToDBFormat` gera ID sintético + nova função `generateSyntheticId`
-- Re-deploy da edge function `process-csv-imports`
+- `src/pages/crm/ImportarNegocios.tsx` — novo seletor de estágio + query de estágios por pipeline + passar no FormData
+- `supabase/functions/import-deals-csv/index.ts` — ler e salvar `default_stage_id` no metadata
+- `supabase/functions/process-csv-imports/index.ts` — usar `default_stage_id` como fallback no `convertToDBFormat`
+- Re-deploy das duas edge functions
