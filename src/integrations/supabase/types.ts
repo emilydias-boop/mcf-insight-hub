@@ -10170,6 +10170,11 @@ export type Database = {
         | "financeiro"
         | "patrimonio"
         | "agenda_r2"
+        | "marketing_dashboard_ads"
+        | "marketing_campanhas"
+        | "marketing_aquisicao_a010"
+        | "marketing_config_links"
+        | "marketing_documentos"
       target_period: "mensal" | "trimestral" | "anual"
       target_type: "receita" | "vendas" | "leads" | "conversao" | "custom"
       transaction_status: "pago" | "pendente" | "cancelado"
@@ -10432,6 +10437,11 @@ export const Constants = {
         "financeiro",
         "patrimonio",
         "agenda_r2",
+        "marketing_dashboard_ads",
+        "marketing_campanhas",
+        "marketing_aquisicao_a010",
+        "marketing_config_links",
+        "marketing_documentos",
       ],
       target_period: ["mensal", "trimestral", "anual"],
       target_type: ["receita", "vendas", "leads", "conversao", "custom"],
