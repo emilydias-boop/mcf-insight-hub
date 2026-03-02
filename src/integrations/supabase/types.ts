@@ -7486,6 +7486,7 @@ export type Database = {
       }
       role_permissions: {
         Row: {
+          bu: string | null
           created_at: string | null
           id: string
           permission_level: string
@@ -7494,6 +7495,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          bu?: string | null
           created_at?: string | null
           id?: string
           permission_level?: string
@@ -7502,6 +7504,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          bu?: string | null
           created_at?: string | null
           id?: string
           permission_level?: string

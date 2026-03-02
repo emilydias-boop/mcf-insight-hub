@@ -7,27 +7,37 @@ interface RolePermission {
   role: string;
   resource: string;
   permission_level: string;
+  bu: string | null;
 }
 
+// Map: { role: { resource: permission_level } } — for a specific BU context
 type PermissionsMap = Record<string, Record<string, PermissionLevel>>;
 
-export const useRolePermissions = () => {
+export const useRolePermissions = (buFilter?: string | null) => {
   const queryClient = useQueryClient();
   
   const { data: permissions = [], isLoading } = useQuery({
-    queryKey: ['role-permissions-all'],
+    queryKey: ['role-permissions-all', buFilter],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('role_permissions')
         .select('*');
       
+      if (buFilter === undefined || buFilter === null) {
+        // Global: bu IS NULL
+        query = query.is('bu', null);
+      } else {
+        // Specific BU
+        query = query.eq('bu', buFilter);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return (data || []) as RolePermission[];
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Organize permissions as a map: { role: { resource: permission_level } }
   const permissionsMap: PermissionsMap = permissions.reduce((acc, perm) => {
     if (!acc[perm.role]) {
       acc[perm.role] = {};
@@ -36,25 +46,29 @@ export const useRolePermissions = () => {
     return acc;
   }, {} as PermissionsMap);
 
-  // Mutation to update a permission
   const updatePermission = useMutation({
     mutationFn: async ({ 
       role, 
       resource, 
-      permissionLevel 
+      permissionLevel,
+      bu,
     }: { 
       role: string; 
       resource: string; 
-      permissionLevel: PermissionLevel 
+      permissionLevel: PermissionLevel;
+      bu?: string | null;
     }) => {
+      const record: any = {
+        role,
+        resource,
+        permission_level: permissionLevel,
+        bu: bu ?? null,
+      };
+      
       const { error } = await supabase
         .from('role_permissions')
-        .upsert({
-          role,
-          resource,
-          permission_level: permissionLevel,
-        }, {
-          onConflict: 'role,resource'
+        .upsert(record, {
+          onConflict: 'role,resource,bu'
         });
       
       if (error) throw error;
@@ -65,21 +79,46 @@ export const useRolePermissions = () => {
     },
   });
 
-  // Batch update multiple permissions
   const updatePermissions = useMutation({
-    mutationFn: async (updates: { role: string; resource: string; permissionLevel: PermissionLevel }[]) => {
-      const { error } = await supabase
-        .from('role_permissions')
-        .upsert(
-          updates.map(u => ({
-            role: u.role,
-            resource: u.resource,
-            permission_level: u.permissionLevel,
-          })),
-          { onConflict: 'role,resource' }
-        );
-      
-      if (error) throw error;
+    mutationFn: async (updates: { role: string; resource: string; permissionLevel: PermissionLevel; bu?: string | null }[]) => {
+      const records = updates.map(u => ({
+        role: u.role,
+        resource: u.resource,
+        permission_level: u.permissionLevel,
+        bu: u.bu ?? null,
+      }));
+
+      // Upsert using the new unique index (role, resource, COALESCE(bu, '__global__'))
+      // We need to do individual upserts because the onConflict doesn't support COALESCE
+      for (const record of records) {
+        // Check if exists
+        let query = supabase
+          .from('role_permissions')
+          .select('id')
+          .eq('role', record.role)
+          .eq('resource', record.resource);
+        
+        if (record.bu === null) {
+          query = query.is('bu', null);
+        } else {
+          query = query.eq('bu', record.bu);
+        }
+        
+        const { data: existing } = await query.maybeSingle();
+        
+        if (existing) {
+          const { error } = await supabase
+            .from('role_permissions')
+            .update({ permission_level: record.permission_level })
+            .eq('id', existing.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('role_permissions')
+            .insert(record);
+          if (error) throw error;
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['role-permissions-all'] });
