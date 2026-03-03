@@ -263,7 +263,7 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col min-h-0 h-full space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-medium">Etapas do Kanban</h3>
