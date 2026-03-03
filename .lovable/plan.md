@@ -1,22 +1,39 @@
 
 
-## Problema encontrado
+## Objetivo
 
-Os logs da edge function mostram que **todos os deals estão falhando** com o erro:
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-> `Could not find the 'status' column of 'crm_deals' in the schema cache`
+## Mudanças
 
-A tabela `crm_deals` **não tem** uma coluna `status`. A edge function está tentando inserir `status: 'open'` no insert, mas essa coluna não existe.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Por isso os batches estão "processando" mas nenhum deal está sendo criado — todos caem no `catch` e são contados como `skipped`.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-## Correção
+### 2. Hook `useCloserDetailData.ts`
 
-### `supabase/functions/import-spreadsheet-leads/index.ts`
-- **Remover** `status: 'open'` do insert de `crm_deals`
-- O insert ficará apenas com: `name`, `contact_id`, `origin_id`, `stage_id`, `tags`, `clint_id`
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-### Melhoria de feedback
-- Após o fix, o progresso já funciona corretamente (batch X/44 + barra de progresso)
-- Adicionar log no console do resultado de cada batch para debug
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
