@@ -1,29 +1,39 @@
 
 
-## Diagnóstico
+## Objetivo
 
-**Jessé De Sousa Pires** (`jesse.piresjr@gmail.com`) tem:
-- **4 contatos duplicados** no sistema (mesmo email/telefone)
-- **2 deals na Pipeline Inside Sales**: um em "Venda Realizada" (correto, Jan 31) e outro em "Contrato Pago" (duplicado, Feb 21)
-- Ela comprou **A009** em 25/02 (é parceira), mas o deal duplicado foi criado em 21/02, antes de virar parceira — por isso o `checkIfPartner` não bloqueou
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-**Causa raiz**: Em 21/02, o Clint enviou webhooks com um `deal_id` diferente do original. Dois webhooks chegaram com 4 segundos de diferença, causando uma **race condition** na deduplicação de contatos — ambos criaram contatos novos em vez de encontrar o existente.
+## Mudanças
 
-## Plano de Correção
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### 1. Limpeza de dados da Jessé (imediata)
-- Mover os deals do contato duplicado (`0412cb88`) para o contato principal (`af97f5e6`)
-- Deletar o deal duplicado em "Contrato Pago" (`d7ad3ea4`) — a jornada real já está no deal original em "Venda Realizada"
-- Deletar os 3 contatos duplicados, mantendo apenas o original (`af97f5e6`)
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### 2. Proteção contra race condition no webhook (preventivo)
-No `clint-webhook-handler`, na busca de contato por email (seção 2.1), adicionar um **`SELECT ... FOR UPDATE`** ou usar **upsert com `ON CONFLICT`** ao criar contatos para evitar que dois webhooks simultâneos criem contatos duplicados para o mesmo email.
+### 2. Hook `useCloserDetailData.ts`
 
-Mudança no `clint-webhook-handler/index.ts` (linhas ~1076-1090):
-- Antes de criar um contato novo, fazer uma segunda verificação por email (double-check)
-- Usar `upsert` com `onConflict: 'email'` em vez de `insert` puro
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-### 3. Resultado
-- Jessé aparecerá apenas uma vez no Kanban, com o deal correto em "Venda Realizada"
-- Futuros webhooks simultâneos não criarão contatos duplicados
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
