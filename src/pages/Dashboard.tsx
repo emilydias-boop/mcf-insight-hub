@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ResourceGuard } from "@/components/auth/ResourceGuard";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { SetorRow } from "@/components/dashboard/SetorRow";
 import { EfeitoAlavancaRow } from "@/components/dashboard/EfeitoAlavancaRow";
 import { TotalGeralRow } from "@/components/dashboard/TotalGeralRow";
@@ -12,6 +12,9 @@ import { Separator } from "@/components/ui/separator";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { BURevenueGoalsEditModal, BURevenueSection } from "@/components/sdr/BURevenueGoalsEditModal";
+import { Button } from "@/components/ui/button";
+import { format, addMonths, subMonths, isSameMonth } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 const SETOR_MODAL_CONFIG: Record<string, { title: string; sections: BURevenueSection[] }> = {
   incorporador: {
@@ -42,9 +45,11 @@ export default function Dashboard() {
   const canEdit = !!role && ['admin', 'manager', 'coordenador'].includes(role);
 
   const [editingSetor, setEditingSetor] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const isCurrentMonth = isSameMonth(selectedDate, new Date());
 
   // Hook para dados dos setores (busca semana/mês/ano automaticamente)
-  const { data, isLoading, error } = useSetoresDashboard();
+  const { data, isLoading, error } = useSetoresDashboard(selectedDate);
 
   // Realtime listeners para atualização automática
   useEffect(() => {
@@ -91,6 +96,22 @@ export default function Dashboard() {
             <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
               Visão consolidada de metas e resultados por setor
             </p>
+          </div>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setSelectedDate(d => subMonths(d, 1))}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium min-w-[120px] text-center capitalize">
+              {format(selectedDate, 'MMMM yyyy', { locale: ptBR })}
+            </span>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setSelectedDate(d => addMonths(d, 1))}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            {!isCurrentMonth && (
+              <Button variant="secondary" size="sm" className="h-8 text-xs" onClick={() => setSelectedDate(new Date())}>
+                Hoje
+              </Button>
+            )}
           </div>
         </div>
 

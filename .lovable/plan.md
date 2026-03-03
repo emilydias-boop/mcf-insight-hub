@@ -1,41 +1,39 @@
 
 
-## Problema
+## Objetivo
 
-O "Painel do Diretor" mostra apenas os períodos atuais (semana atual, mês atual, ano atual). O usuário quer navegar para outros meses/semanas e ver todos os dados atualizados.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-## Solução
+## Mudanças
 
-Adicionar um seletor de mês/ano no header do dashboard, que controla os períodos de referência usados pelo hook `useSetoresDashboard`.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### 1. Modificar `useSetoresDashboard` para aceitar data de referência
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Atualmente o hook usa `new Date()` como referência fixa. A mudança:
-- Aceitar parâmetro `referenceDate: Date` 
-- Todos os cálculos de período (semana, mês, ano) serão baseados nessa data em vez de `today`
-- Labels se adaptam automaticamente (ex: "Mês Fevereiro", "Semana 21/02 - 27/02")
+### 2. Hook `useCloserDetailData.ts`
 
-### 2. Adicionar controle de navegação no `Dashboard.tsx`
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-No header, ao lado do título, adicionar:
-- Seletor de mês/ano com botões `<` e `>` para navegar entre meses
-- Botão "Hoje" para voltar ao período atual
-- O mês selecionado determina a `referenceDate` passada ao hook
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Layout:
-```text
-Painel do Diretor                    [<] Março 2026 [>] [Hoje]
-Visão consolidada de metas...
-```
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### 3. Arquivos a modificar
+### 4. Dados exportados no Excel
 
-- **`src/hooks/useSetoresDashboard.ts`**: Adicionar parâmetro `referenceDate?: Date`, usar como base em vez de `new Date()`
-- **`src/pages/Dashboard.tsx`**: Adicionar `useState` para mês/ano selecionado, renderizar controles de navegação, passar `referenceDate` ao hook
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-### Comportamento
-- Default: mês atual (igual a hoje)
-- Navegar para meses anteriores mostra a semana que contém o último dia daquele mês
-- "Ano" continua sendo o ano da data de referência
-- Metas (targets) continuam usando os mesmos valores fixos da `team_targets`
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

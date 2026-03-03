@@ -44,8 +44,8 @@ const formatDateForQuery = (date: Date, isEndOfDay = false): string => {
   return `${year}-${month}-${day}T${time}-03:00`;
 };
 
-export function useSetoresDashboard() {
-  const today = new Date();
+export function useSetoresDashboard(referenceDate?: Date) {
+  const today = referenceDate || new Date();
   
   // Period boundaries - Incorporador uses Sat-Fri
   const weekStart = startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
