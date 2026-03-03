@@ -68,6 +68,7 @@ const Negocios = () => {
   // Estado para seleção e transferência em massa
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [spreadsheetDialogOpen, setSpreadsheetDialogOpen] = useState(false);
   const bulkTransfer = useBulkTransfer();
   
   // Usar BU ativa (do contexto da rota ou do perfil do usuário)
