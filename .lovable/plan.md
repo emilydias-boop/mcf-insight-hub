@@ -1,22 +1,39 @@
 
 
-## Problemas Identificados
+## Objetivo
 
-### 1. Lista de etapas não rola (scroll)
-O `DialogContent` tem `h-[80vh]` e `overflow-hidden`, e a área de conteúdo tem `overflow-y-auto`. O problema é que o componente `PipelineStagesEditor` tem seu próprio wrapper `space-y-4` sem restrição de altura — o conteúdo cresce mas o scroll não funciona corretamente porque falta `min-h-0` no container flex intermediário.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-**Correção**: Adicionar `overflow-y-auto` e `max-h-full` no container do `PipelineStagesEditor`, e garantir que o right content panel tenha as constraints corretas de flex.
+## Mudanças
 
-### 2. Erro RLS ao criar stage em `crm_stages`
-O `PipelineStagesEditor` faz upsert direto no `crm_stages` via client-side Supabase (linha 100-110). A policy RLS exige `has_role(auth.uid(), 'admin')`. Apesar do usuário ser admin, o upsert pode falhar por questões de timing/cache do RLS.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**Correção**: Em vez de upsert direto, usar a Edge Function `ensure-crm-stage-mirror` que já existe e usa `service_role_key` (bypassa RLS). O fluxo:
-1. Criar em `local_pipeline_stages` (funciona normalmente)
-2. Chamar `ensure-crm-stage-mirror` com o `stage_id` retornado (usa service role, sem RLS)
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Mesma abordagem para update/delete: usar a Edge Function ou adicionar uma policy `WITH CHECK` explícita.
+### 2. Hook `useCloserDetailData.ts`
 
-### Arquivos a modificar
-- `src/components/crm/PipelineStagesEditor.tsx` — usar edge function para mirror + scroll fix
-- `src/components/crm/PipelineConfigModal.tsx` — ajustar CSS do container de conteúdo para scroll funcionar
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
