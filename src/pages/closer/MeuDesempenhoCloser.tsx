@@ -49,7 +49,7 @@ export default function MeuDesempenhoCloser() {
     closerMetrics,
     teamAverages,
     ranking,
-    leads,
+    allLeads,
     isLoading: isLoadingData,
     refetch,
   } = useCloserDetailData({
@@ -199,7 +199,7 @@ export default function MeuDesempenhoCloser() {
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="leads">
-            Leads Realizados ({leads.length})
+            Meus Leads ({allLeads.length})
           </TabsTrigger>
         </TabsList>
 
@@ -300,7 +300,7 @@ export default function MeuDesempenhoCloser() {
         </TabsContent>
 
         <TabsContent value="leads">
-          <CloserLeadsTable leads={leads} isLoading={isLoading} />
+          <CloserLeadsTable leads={allLeads} isLoading={isLoading} />
         </TabsContent>
       </Tabs>
     </div>
