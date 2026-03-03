@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { Upload, FileSpreadsheet, Search, Users, UserCheck, UserX, Download, Inbox, Eye } from 'lucide-react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { Upload, FileSpreadsheet, Search, Users, UserCheck, UserX, Download, Inbox, Eye, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import {
   useAssignLimboOwner,
   LimboRow,
 } from '@/hooks/useLimboLeads';
+import { useLatestLimboUpload, useSaveLimboUpload } from '@/hooks/useLimboUpload';
 import { CLOSER_LIST } from '@/constants/team';
 
 type Step = 'upload' | 'mapping' | 'results';
@@ -90,50 +91,7 @@ function StageTag({ stage }: { stage: string }) {
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
-// ─── Persistence helpers ────────────────────────────────
-const STORAGE_KEY = 'limbo-comparison-data';
-const STORAGE_EXPIRY_HOURS = 24;
-
-interface PersistenceData {
-  results: LimboRow[];
-  step: Step;
-  statusFilter: StatusFilter;
-  stageFilter: string;
-  ownerFilter: string;
-  page: number;
-  pageSize: number;
-  columnMapping: Record<ColumnKey, string>;
-  savedAt: string;
-}
-
-function saveToStorage(data: PersistenceData) {
-  try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (e) {
-    console.warn('Failed to save to sessionStorage', e);
-  }
-}
-
-function loadFromStorage(): PersistenceData | null {
-  try {
-    const stored = sessionStorage.getItem(STORAGE_KEY);
-    if (!stored) return null;
-    const data = JSON.parse(stored) as PersistenceData;
-    const hoursDiff = (Date.now() - new Date(data.savedAt).getTime()) / (1000 * 60 * 60);
-    if (hoursDiff > STORAGE_EXPIRY_HOURS) {
-      sessionStorage.removeItem(STORAGE_KEY);
-      return null;
-    }
-    return data;
-  } catch (e) {
-    console.warn('Failed to load from sessionStorage', e);
-    return null;
-  }
-}
-
-function clearStorage() {
-  sessionStorage.removeItem(STORAGE_KEY);
-}
+// (Persistence is now handled by Supabase via useLimboUpload hook)
 
 // ─── Excel Date Parser ──────────────────────────────────
 function parseExcelDate(value: string): Date | null {
@@ -160,68 +118,47 @@ function parseExcelDate(value: string): Date | null {
 
 // ─── Component ──────────────────────────────────────────
 export default function LeadsLimbo() {
-  const [step, setStep] = useState<Step>(() => {
-    const stored = loadFromStorage();
-    return stored?.step || 'upload';
-  });
+  const [step, setStep] = useState<Step>('upload');
   const [rawData, setRawData] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
-  const [columnMapping, setColumnMapping] = useState<Record<ColumnKey, string>>(() => {
-    const stored = loadFromStorage();
-    return stored?.columnMapping || { name: '', email: '', phone: '', stage: '', value: '', owner: '', created_at: '', lost_at: '' };
-  });
-  const [results, setResults] = useState<LimboRow[]>(() => {
-    const stored = loadFromStorage();
-    return stored?.results || [];
-  });
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
-    const stored = loadFromStorage();
-    return stored?.statusFilter || 'todos';
-  });
-  const [stageFilter, setStageFilter] = useState<string>(() => {
-    const stored = loadFromStorage();
-    return stored?.stageFilter || 'todos';
-  });
-  const [ownerFilter, setOwnerFilter] = useState<string>(() => {
-    const stored = loadFromStorage();
-    return stored?.ownerFilter || 'todos';
-  });
+  const [columnMapping, setColumnMapping] = useState<Record<ColumnKey, string>>({ name: '', email: '', phone: '', stage: '', value: '', owner: '', created_at: '', lost_at: '' });
+  const [results, setResults] = useState<LimboRow[]>([]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
+  const [stageFilter, setStageFilter] = useState<string>('todos');
+  const [ownerFilter, setOwnerFilter] = useState<string>('todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [selectCount, setSelectCount] = useState('');
   const [assignSdrEmail, setAssignSdrEmail] = useState('');
-  const [page, setPage] = useState<number>(() => {
-    const stored = loadFromStorage();
-    return stored?.page || 0;
-  });
-  const [pageSize, setPageSize] = useState<number>(() => {
-    const stored = loadFromStorage();
-    return stored?.pageSize || 50;
-  });
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
   const [isComparing, setIsComparing] = useState(false);
   const [selectedLead, setSelectedLead] = useState<LimboRow | null>(null);
+  const [currentFile, setCurrentFile] = useState<File | null>(null);
+  const loadedRef = useRef(false);
 
   const { data: localDeals, isLoading: loadingDeals } = useInsideSalesDeals();
   const { data: sdrs } = useActiveSdrs();
   const { data: profiles } = useProfilesByEmail();
   const assignMutation = useAssignLimboOwner();
+  const { data: latestUpload, isLoading: loadingUpload } = useLatestLimboUpload();
+  const saveLimboUpload = useSaveLimboUpload();
 
-  // Auto-save to sessionStorage
+  // Load persisted data from Supabase on mount
   useEffect(() => {
-    if (step === 'results' && results.length > 0) {
-      saveToStorage({
-        results,
-        step,
-        statusFilter,
-        stageFilter,
-        ownerFilter,
-        page,
-        pageSize,
-        columnMapping,
-        savedAt: new Date().toISOString(),
-      });
+    if (loadedRef.current) return;
+    if (loadingUpload) return;
+    if (latestUpload && latestUpload.comparison_results && latestUpload.comparison_results.length > 0) {
+      setResults(latestUpload.comparison_results);
+      if (latestUpload.column_mapping) {
+        setColumnMapping(latestUpload.column_mapping as any);
+      }
+      setStep('results');
+      loadedRef.current = true;
+    } else {
+      loadedRef.current = true;
     }
-  }, [results, step, statusFilter, stageFilter, ownerFilter, page, pageSize, columnMapping]);
+  }, [latestUpload, loadingUpload]);
 
   // Handle file upload
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
