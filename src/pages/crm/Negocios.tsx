@@ -40,6 +40,7 @@ import { useDealOwnerOptions } from '@/hooks/useDealOwnerOptions';
 import { useUniqueDealTags } from '@/hooks/useUniqueDealTags';
 import { useOutsideDetectionForDeals } from '@/hooks/useOutsideDetectionForDeals';
 import { OutsideDistributionButton } from '@/components/crm/OutsideDistributionButton';
+import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDialog';
 
 const Negocios = () => {
   // Ativar notificações em tempo real para novos leads
