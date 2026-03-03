@@ -649,24 +649,52 @@ async function handleDealCreated(supabase: any, data: any) {
     }
   }
 
-  // 1c. Criar contato se não encontrou
+  // 1c. Criar contato se não encontrou (com double-check para race condition)
   if (!contactId && (contactData.email || normalizedContactPhone)) {
-    const { data: newContact, error: contactError } = await supabase
-      .from('crm_contacts')
-      .insert({
-        clint_id: contactData.id || `contact-${Date.now()}`,
-        name: contactData.name || 'Contato via webhook',
-        email: contactData.email || null,
-        phone: normalizedContactPhone,
-        tags: [],
-        custom_fields: {}
-      })
-      .select('id')
-      .single();
-    
-    if (!contactError && newContact) {
-      contactId = newContact.id;
-      console.log('[DEAL.CREATED] Contact created:', contactId);
+    // Double-check: buscar novamente por email antes de criar (previne race condition)
+    if (contactData.email) {
+      const { data: raceCheck } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', contactData.email)
+        .limit(1)
+        .maybeSingle();
+      if (raceCheck) {
+        contactId = raceCheck.id;
+        console.log('[DEAL.CREATED] Contact found on race-condition double-check:', contactId);
+      }
+    }
+
+    if (!contactId) {
+      const { data: newContact, error: contactError } = await supabase
+        .from('crm_contacts')
+        .insert({
+          clint_id: contactData.id || `contact-${Date.now()}`,
+          name: contactData.name || 'Contato via webhook',
+          email: contactData.email || null,
+          phone: normalizedContactPhone,
+          tags: [],
+          custom_fields: {}
+        })
+        .select('id')
+        .single();
+      
+      if (!contactError && newContact) {
+        contactId = newContact.id;
+        console.log('[DEAL.CREATED] Contact created:', contactId);
+      } else if (contactError && contactData.email) {
+        // If insert failed (possibly unique constraint), try to find existing
+        const { data: fallback } = await supabase
+          .from('crm_contacts')
+          .select('id')
+          .ilike('email', contactData.email)
+          .limit(1)
+          .maybeSingle();
+        if (fallback) {
+          contactId = fallback.id;
+          console.log('[DEAL.CREATED] Contact found after insert conflict:', contactId);
+        }
+      }
     }
   }
 
@@ -1072,28 +1100,56 @@ async function handleDealStageChanged(supabase: any, data: any) {
     }
   }
 
-  // 2.1b. Criar contato se não encontrou por email nem telefone
+  // 2.1b. Criar contato se não encontrou por email nem telefone (com double-check para race condition)
   if (!contactId && (contactData.email || contactData.phone || data.contact_phone)) {
-    console.log('[DEAL.STAGE_CHANGED] Contact not found, creating...');
-    const normalizedPhone = normalizePhone(contactData.phone || data.contact_phone);
-    
-    const { data: newContact, error: contactError } = await supabase
-      .from('crm_contacts')
-      .insert({
-        clint_id: contactData.id || `webhook-contact-${Date.now()}`,
-        name: contactData.name || data.contact_name || 'Contato via webhook',
-        email: contactData.email || null,
-        phone: normalizedPhone,
-        tags: contactData.tags || [],
-      })
-      .select('id')
-      .single();
-    
-    if (!contactError && newContact) {
-      contactId = newContact.id;
-      console.log('[DEAL.STAGE_CHANGED] Contact created:', contactId);
-    } else {
-      console.error('[DEAL.STAGE_CHANGED] Error creating contact:', contactError);
+    // Double-check: buscar novamente por email antes de criar (previne race condition)
+    if (contactData.email) {
+      const { data: raceCheck } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', contactData.email)
+        .limit(1)
+        .maybeSingle();
+      if (raceCheck) {
+        contactId = raceCheck.id;
+        console.log('[DEAL.STAGE_CHANGED] Contact found on race-condition double-check:', contactId);
+      }
+    }
+
+    if (!contactId) {
+      console.log('[DEAL.STAGE_CHANGED] Contact not found, creating...');
+      const normalizedPhone = normalizePhone(contactData.phone || data.contact_phone);
+      
+      const { data: newContact, error: contactError } = await supabase
+        .from('crm_contacts')
+        .insert({
+          clint_id: contactData.id || `webhook-contact-${Date.now()}`,
+          name: contactData.name || data.contact_name || 'Contato via webhook',
+          email: contactData.email || null,
+          phone: normalizedPhone,
+          tags: contactData.tags || [],
+        })
+        .select('id')
+        .single();
+      
+      if (!contactError && newContact) {
+        contactId = newContact.id;
+        console.log('[DEAL.STAGE_CHANGED] Contact created:', contactId);
+      } else if (contactError && contactData.email) {
+        // If insert failed (possibly unique constraint), try to find existing
+        const { data: fallback } = await supabase
+          .from('crm_contacts')
+          .select('id')
+          .ilike('email', contactData.email)
+          .limit(1)
+          .maybeSingle();
+        if (fallback) {
+          contactId = fallback.id;
+          console.log('[DEAL.STAGE_CHANGED] Contact found after insert conflict:', contactId);
+        } else {
+          console.error('[DEAL.STAGE_CHANGED] Error creating contact:', contactError);
+        }
+      }
     }
   }
 
