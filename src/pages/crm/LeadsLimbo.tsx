@@ -494,7 +494,6 @@ export default function LeadsLimbo() {
             <Download className="h-4 w-4 mr-1" /> Exportar Não Encontrados ({counts.nao_encontrado})
           </Button>
           <Button variant="outline" size="sm" onClick={() => {
-            clearStorage();
             setStep('upload');
             setResults([]);
             setColumnMapping({ name: '', email: '', phone: '', stage: '', value: '', owner: '', created_at: '', lost_at: '' });
@@ -502,6 +501,8 @@ export default function LeadsLimbo() {
             setStageFilter('todos');
             setOwnerFilter('todos');
             setPage(0);
+            setCurrentFile(null);
+            loadedRef.current = true; // prevent re-load
           }}>
             Nova Comparação
           </Button>
