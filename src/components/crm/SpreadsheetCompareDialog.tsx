@@ -109,22 +109,20 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     toast.success(`Comparação concluída: ${found} encontrados, ${compared.length - found} não encontrados`);
   }, [rawData, columnMapping, deals]);
 
-  const handleCreateNotFound = useCallback(() => {
+  const handleCreateLeads = useCallback(() => {
     if (!originId) {
       toast.error('Pipeline não identificada');
       return;
     }
 
-    const notFoundLeads = results
-      .filter(r => r.matchStatus === 'not_found')
-      .map(r => ({ name: r.excelName, email: r.excelEmail, phone: r.excelPhone }));
+    const allLeads = results.map(r => ({ name: r.excelName, email: r.excelEmail, phone: r.excelPhone }));
 
-    if (!notFoundLeads.length) {
-      toast.info('Nenhum lead não encontrado para criar');
+    if (!allLeads.length) {
+      toast.info('Nenhum lead para processar');
       return;
     }
 
-    createNotFoundMutation.mutate({ leads: notFoundLeads, originId });
+    createNotFoundMutation.mutate({ leads: allLeads, originId });
   }, [results, originId, createNotFoundMutation]);
 
   const handleExport = useCallback(() => {
@@ -293,11 +291,11 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
               </Button>
               <Button
                 size="sm"
-                onClick={handleCreateNotFound}
-                disabled={createNotFoundMutation.isPending || counts.notFound === 0}
+                onClick={handleCreateLeads}
+                disabled={createNotFoundMutation.isPending || results.length === 0}
               >
                 <Tag className="h-4 w-4 mr-1" />
-                {createNotFoundMutation.isPending ? 'Criando...' : `Criar não encontrados com tag 'base clint' (${counts.notFound})`}
+                {createNotFoundMutation.isPending ? 'Processando...' : `Criar leads inexistentes com tag 'base clint' (${results.length})`}
               </Button>
             </div>
 
