@@ -614,7 +614,18 @@ const Negocios = () => {
           
           <div className="flex gap-2 w-full sm:w-auto">
             {(role === 'admin' || role === 'manager') && (
-              <OutsideDistributionButton />
+              <>
+                <OutsideDistributionButton />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSpreadsheetDialogOpen(true)}
+                  className="flex-1 sm:flex-none"
+                >
+                  <FileSpreadsheet className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Importar Planilha</span>
+                </Button>
+              </>
             )}
             <Button 
               variant="outline" 
