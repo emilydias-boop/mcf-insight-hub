@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
+import { FileSpreadsheet } from 'lucide-react';
 import { Plus, AlertCircle, RefreshCw, Settings } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCRMDeals, useSyncClintData } from '@/hooks/useCRMData';
