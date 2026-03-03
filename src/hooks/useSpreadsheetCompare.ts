@@ -96,49 +96,26 @@ export function compareSpreadsheetWithDeals(
 }
 
 /**
- * Mutation to add 'base clint' tag to matched deals
+ * Mutation to create deals for not-found leads via edge function
  */
-export function useAddBaseClintTag() {
+export function useCreateNotFoundDeals() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (dealIds: string[]) => {
-      const batchSize = 50;
-      let updated = 0;
+    mutationFn: async ({ leads, originId }: { leads: Array<{ name: string; email: string; phone: string }>; originId: string }) => {
+      const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
+        body: { leads, origin_id: originId },
+      });
 
-      for (let i = 0; i < dealIds.length; i += batchSize) {
-        const batch = dealIds.slice(i, i + batchSize);
-
-        // Fetch current tags for each deal
-        const { data: deals, error: fetchError } = await supabase
-          .from('crm_deals')
-          .select('id, tags')
-          .in('id', batch);
-
-        if (fetchError) throw fetchError;
-
-        for (const deal of deals || []) {
-          const currentTags: string[] = Array.isArray(deal.tags) ? deal.tags : [];
-          if (currentTags.includes('base clint')) continue;
-
-          const { error } = await supabase
-            .from('crm_deals')
-            .update({ tags: [...currentTags, 'base clint'] })
-            .eq('id', deal.id);
-
-          if (error) throw error;
-          updated++;
-        }
-      }
-
-      return { updated };
+      if (error) throw error;
+      return data as { created: number; skipped: number; total: number };
     },
     onSuccess: (data) => {
-      toast.success(`Tag 'base clint' aplicada em ${data.updated} deals!`);
+      toast.success(`${data.created} leads criados com tag 'base clint'${data.skipped > 0 ? ` (${data.skipped} já existiam)` : ''}`);
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
     },
     onError: (error: any) => {
-      toast.error(`Erro ao aplicar tag: ${error.message}`);
+      toast.error(`Erro ao criar leads: ${error.message}`);
     },
   });
 }
