@@ -69,11 +69,11 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje }: TeamKP
     },
     {
       title: "Contratos",
-      value: kpis.totalContratos + (kpis.totalOutside || 0),
+      value: kpis.totalContratos,
       icon: FileText,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
-      tooltip: `Contratos: ${kpis.totalContratos} | Outside: ${kpis.totalOutside || 0}`
+      tooltip: `Contratos: ${(kpis.totalContratos || 0) - (kpis.totalOutside || 0)} | Outside: ${kpis.totalOutside || 0}`
     },
     {
       title: "Taxa Conversão",
