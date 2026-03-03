@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
-import { compareSpreadsheetWithDeals, SpreadsheetRow, useAddBaseClintTag } from '@/hooks/useSpreadsheetCompare';
+import { compareSpreadsheetWithDeals, SpreadsheetRow, useCreateNotFoundDeals } from '@/hooks/useSpreadsheetCompare';
 import { DealStatus, getDealStatusLabel, getDealStatusColor } from '@/lib/dealStatusHelper';
 
 type Step = 'upload' | 'mapping' | 'results';
@@ -46,9 +46,10 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   deals: any[];
+  originId?: string;
 }
 
-export function SpreadsheetCompareDialog({ open, onOpenChange, deals }: Props) {
+export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }: Props) {
   const [step, setStep] = useState<Step>('upload');
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawData, setRawData] = useState<any[]>([]);
@@ -57,7 +58,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals }: Props) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchText, setSearchText] = useState('');
 
-  const addTagMutation = useAddBaseClintTag();
+  const createNotFoundMutation = useCreateNotFoundDeals();
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -108,18 +109,23 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals }: Props) {
     toast.success(`Comparação concluída: ${found} encontrados, ${compared.length - found} não encontrados`);
   }, [rawData, columnMapping, deals]);
 
-  const handleApplyTag = useCallback(() => {
-    const dealIds = results
-      .filter(r => r.matchStatus === 'found' && r.localDealId)
-      .map(r => r.localDealId!);
-
-    if (!dealIds.length) {
-      toast.info('Nenhum deal encontrado para aplicar tag');
+  const handleCreateNotFound = useCallback(() => {
+    if (!originId) {
+      toast.error('Pipeline não identificada');
       return;
     }
 
-    addTagMutation.mutate(dealIds);
-  }, [results, addTagMutation]);
+    const notFoundLeads = results
+      .filter(r => r.matchStatus === 'not_found')
+      .map(r => ({ name: r.excelName, email: r.excelEmail, phone: r.excelPhone }));
+
+    if (!notFoundLeads.length) {
+      toast.info('Nenhum lead não encontrado para criar');
+      return;
+    }
+
+    createNotFoundMutation.mutate({ leads: notFoundLeads, originId });
+  }, [results, originId, createNotFoundMutation]);
 
   const handleExport = useCallback(() => {
     const exportData = filteredResults.map(r => ({
@@ -287,11 +293,11 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals }: Props) {
               </Button>
               <Button
                 size="sm"
-                onClick={handleApplyTag}
-                disabled={addTagMutation.isPending || counts.found === 0}
+                onClick={handleCreateNotFound}
+                disabled={createNotFoundMutation.isPending || counts.notFound === 0}
               >
                 <Tag className="h-4 w-4 mr-1" />
-                {addTagMutation.isPending ? 'Aplicando...' : `Aplicar tag 'base clint' (${counts.found})`}
+                {createNotFoundMutation.isPending ? 'Criando...' : `Criar não encontrados com tag 'base clint' (${counts.notFound})`}
               </Button>
             </div>
 
