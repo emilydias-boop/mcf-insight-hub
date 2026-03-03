@@ -1,44 +1,53 @@
 
 
-## Problema: KPIs de Contratos no Painel estão inflados
+## Problema: Contratos não vinculados automaticamente à transação Hubla
 
 ### Diagnóstico
 
-Duas fontes de dados diferentes estão sendo usadas no Painel "Reuniões de Equipe":
+A função `autoMarkContractPaid` nos webhooks (`hubla-webhook-handler` e `webhook-make-contrato`) marca o attendee como `contract_paid` corretamente, **mas não cria o vínculo** com a transação Hubla (`hubla_transactions.linked_attendee_id`).
 
-| Componente | Fonte | Problema |
-|---|---|---|
-| **KPI Cards** (topo) | RPC `get_sdr_metrics_from_agenda` | Conta TODOS os `contract_paid_at` incluindo outsides. Depois o código soma outsides NOVAMENTE em cima |
-| **Tabela Closers** | `useR1CloserMetrics` | Correto: deduplica, exclui outsides do `contrato_pago` e conta outsides separadamente |
+**Dados de Fevereiro/2026:**
+- 196 contratos marcados como pagos na agenda
+- Apenas **12** têm vínculo com transação Hubla (via `LinkContractDialog` manual)
+- **184** estão sem vínculo — todos foram marcados pelo webhook automaticamente, mas sem o link
 
-**Resultado**: O card "Contratos" mostra um número inflado (ex: 193 + 9 = 202 para Fev) enquanto a tabela de Closers mostra o correto (67 + 9 = 76).
+Isso significa que o sistema está correto na **detecção** (encontra o attendee certo), mas falha na **rastreabilidade** — não conecta a transação à reunião.
 
-Problemas específicos:
-1. **Double-counting de Outside**: `TeamKPICards.tsx` linha 72 soma `totalContratos` (que já inclui outsides da RPC) + `totalOutside` (outsides contados novamente)
-2. **RPC não deduplica**: Se um lead tem múltiplos attendees (reagendamentos) com `contract_paid_at`, cada um é contado
+### Causa Raiz
+
+A interface `AutoMarkData` não inclui o `hubla_id` da transação. A função recebe apenas email/telefone/nome e data, mas não sabe **qual transação** disparou a marcação.
 
 ### Solução
 
-Usar `closerMetrics` (de `useR1CloserMetrics`) como fonte única de verdade para os KPIs de contrato, consistente com a tabela de Closers. Isso já é a recomendação do sistema (ver memória `unified-outside-metrics-source-of-truth`).
+**1. `supabase/functions/hubla-webhook-handler/index.ts`**
+- Adicionar `transactionHublaId` à interface `AutoMarkData`
+- Na função `autoMarkContractPaid`, após marcar o attendee como `contract_paid`, também atualizar `hubla_transactions.linked_attendee_id = matchingAttendee.id` usando o `transactionHublaId`
+- Nos dois pontos que chamam `autoMarkContractPaid` (linhas ~1631 e ~1773), passar o `hublaId` da transação
 
-### Mudanças
+**2. `supabase/functions/webhook-make-contrato/index.ts`**
+- Mesma alteração na interface `AutoMarkData` local e na função `autoMarkContractPaid`
+- No call site (linha ~494), passar o `insertedData.hubla_id`
 
-**1. `src/pages/crm/ReunioesEquipe.tsx`**
-- Calcular `totalContratos` e `totalOutside` a partir de `closerMetrics` (soma de `contrato_pago` e `outside` por closer)
-- Remover a dependência do `teamKPIs.totalContratos` para contratos
-- Ajustar `enrichedKPIs` para usar os valores corretos
-- Corrigir `dayValues`, `weekValues`, `monthValues` para não duplicar outsides
-- Corrigir `totalContratosFromKPI` na linha 601 (também duplicava)
+**3. `src/components/crm/MeetingSearchPanel.tsx`**
+- Remover o botão manual "Marcar Contrato Pago" (ícone `$`) que ainda existe no painel de busca
+- Manter apenas o badge "✅ Pago" para exibição e o botão de abrir detalhes
+- Remover imports não utilizados (`useMarkContractPaid`, `DollarSign`)
 
-**2. `src/components/sdr/TeamKPICards.tsx`**
-- Remover a soma dupla: `value: kpis.totalContratos` (sem somar `totalOutside` novamente, pois o valor já virá correto do parent)
-- Manter tooltip mostrando breakdown: `Contratos: X | Outside: Y`
+### Lógica do vínculo (adição ao autoMarkContractPaid)
 
-**3. `src/hooks/useTeamMeetingsData.ts`** (opcional)
-- Ajustar `taxaConversao` para usar o `totalContratos` correto (sem outsides na base de cálculo)
+```
+// Após marcar attendee como contract_paid:
+if (data.transactionHublaId) {
+  await supabase
+    .from('hubla_transactions')
+    .update({ linked_attendee_id: matchingAttendee.id })
+    .eq('hubla_id', data.transactionHublaId);
+}
+```
 
 ### Resultado esperado
-- Card "Contratos" mostrará o mesmo total que a soma da tabela de Closers
-- Tooltip continuará mostrando breakdown (contratos via reunião vs outside)
-- Taxa de conversão será calculada corretamente
+- Novos contratos serão automaticamente vinculados à transação Hubla que os gerou
+- O painel não terá mais botão manual de marcação
+- A rastreabilidade fica completa: transação Hubla ↔ attendee ↔ closer ↔ deal
+- Contratos históricos sem vínculo permanecem (dados passados), mas novos já terão o link correto
 
