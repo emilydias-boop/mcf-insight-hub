@@ -32,7 +32,7 @@ import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
-import { useSdrOutsideMetrics } from "@/hooks/useSdrOutsideMetrics";
+
 
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
@@ -259,18 +259,25 @@ export default function ReunioesEquipe() {
   const { data: pendentesHoje } = useMeetingsPendentesHoje();
 
   // Fetch Outside metrics for the selected period
-  const { data: outsideData } = useSdrOutsideMetrics(start, end);
+  
 
-  // Calculate outsides from closerMetrics (source of truth)
-  const outsideFromClosers = useMemo(() => {
-    return closerMetrics?.reduce((sum, c) => sum + c.outside, 0) || 0;
+  // Calculate contract totals from closerMetrics (source of truth - deduplicated, consistent with Closer table)
+  const contractsFromClosers = useMemo(() => {
+    const contratoPago = closerMetrics?.reduce((sum, c) => sum + c.contrato_pago, 0) || 0;
+    const outside = closerMetrics?.reduce((sum, c) => sum + c.outside, 0) || 0;
+    return { contratoPago, outside, total: contratoPago + outside };
   }, [closerMetrics]);
 
-  // Enrich teamKPIs with Outside data - use closerMetrics as fallback
+  // Enrich teamKPIs with contract data from closerMetrics (source of truth)
   const enrichedKPIs = useMemo(() => ({
     ...teamKPIs,
-    totalOutside: outsideData?.totalOutside || outsideFromClosers,
-  }), [teamKPIs, outsideData, outsideFromClosers]);
+    totalContratos: contractsFromClosers.total,
+    totalOutside: contractsFromClosers.outside,
+    // Recalculate taxaConversao with correct contract count (excluding outside)
+    taxaConversao: teamKPIs.totalRealizadas > 0
+      ? (contractsFromClosers.contratoPago / teamKPIs.totalRealizadas) * 100
+      : 0,
+  }), [teamKPIs, contractsFromClosers]);
 
   // Create base dataset with all SDRs (zeros) for "today" preset
   const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
@@ -346,11 +353,11 @@ export default function ReunioesEquipe() {
     r1Agendada: monthKPIs?.totalR1Agendada || 0,
     r1Realizada: monthKPIs?.totalRealizadas || 0,
     noShow: monthKPIs?.totalNoShows || 0,
-    contrato: (monthKPIs?.totalContratos || 0) + outsideFromClosers,
+    contrato: contractsFromClosers.total,
     r2Agendada: monthR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: monthR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: monthR2VendasKPIs?.vendasRealizadas || 0,
-  }), [monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs, outsideFromClosers]);
+  }), [monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs, contractsFromClosers]);
 
   // Handlers that sync with URL
   const handlePresetChange = (preset: DatePreset) => {
@@ -598,7 +605,7 @@ export default function ReunioesEquipe() {
             <CloserSummaryTable
               data={closerMetrics}
               isLoading={closerLoading}
-              totalContratosFromKPI={(enrichedKPIs.totalContratos || 0) + outsideFromClosers}
+              totalContratosFromKPI={contractsFromClosers.total}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
                 const params = new URLSearchParams();
                 params.set("preset", datePreset);
