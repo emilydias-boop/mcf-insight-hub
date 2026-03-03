@@ -287,3 +287,6 @@ verify_jwt = false
 
 [functions.manage-roles]
 verify_jwt = false
+
+[functions.fix-r2-ownership]
+verify_jwt = false
