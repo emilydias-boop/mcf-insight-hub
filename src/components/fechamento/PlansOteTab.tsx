@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, addMonths, subMonths } from 'date-fns';
+import { format, addMonths, subMonths, lastDayOfMonth, subDays, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -132,7 +132,8 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
         .from('sdr_comp_plan')
         .select('*')
         .lte('vigencia_inicio', monthStart)
-        .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`);
+        .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
+        .order('vigencia_inicio', { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -163,13 +164,15 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
     mutationFn: async ({ sdrId, values }: { sdrId: string; values: any }) => {
       const monthStart = `${anoMes}-01`;
       
-      // Verificar se já existe um plano vigente
+      // Verificar se já existe um plano vigente para este mês
       const { data: existing } = await supabase
         .from('sdr_comp_plan')
-        .select('id')
+        .select('id, vigencia_inicio')
         .eq('sdr_id', sdrId)
         .lte('vigencia_inicio', monthStart)
         .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
+        .order('vigencia_inicio', { ascending: false })
+        .limit(1)
         .maybeSingle();
       
       const planData = {
@@ -182,7 +185,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
         valor_docs_reuniao: values.valor_docs_reuniao,
         valor_tentativas: values.valor_tentativas,
         valor_organizacao: values.valor_organizacao,
-        meta_reunioes_agendadas: values.meta_diaria * 19, // Aproximação
+        meta_reunioes_agendadas: values.meta_diaria * 19,
         meta_reunioes_realizadas: Math.round(values.meta_diaria * 19 * 0.7),
         meta_tentativas: 84 * 19,
         meta_organizacao: 100,
@@ -195,12 +198,36 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
       };
       
       if (existing) {
-        const { error } = await supabase
-          .from('sdr_comp_plan')
-          .update(planData)
-          .eq('id', existing.id);
-        if (error) throw error;
+        const existingStart = existing.vigencia_inicio.substring(0, 7); // yyyy-MM
+        
+        if (existingStart === anoMes) {
+          // O plano existente é DO PRÓPRIO MÊS → atualizar normalmente
+          const { error } = await supabase
+            .from('sdr_comp_plan')
+            .update(planData)
+            .eq('id', existing.id);
+          if (error) throw error;
+        } else {
+          // O plano existente é de um mês ANTERIOR → fechar o antigo e criar novo
+          // Calcular último dia do mês anterior ao selecionado
+          const selectedMonthDate = parse(monthStart, 'yyyy-MM-dd', new Date());
+          const lastDayPrevMonth = format(subDays(selectedMonthDate, 1), 'yyyy-MM-dd');
+          
+          // Fechar o plano antigo
+          const { error: closeError } = await supabase
+            .from('sdr_comp_plan')
+            .update({ vigencia_fim: lastDayPrevMonth, updated_at: new Date().toISOString() })
+            .eq('id', existing.id);
+          if (closeError) throw closeError;
+          
+          // Criar novo plano para o mês selecionado
+          const { error: insertError } = await supabase
+            .from('sdr_comp_plan')
+            .insert(planData);
+          if (insertError) throw insertError;
+        }
       } else {
+        // Nenhum plano existente → inserir novo
         const { error } = await supabase
           .from('sdr_comp_plan')
           .insert(planData);
@@ -251,7 +278,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
         const cargo = emp.cargo_catalogo as EmployeeWithPlan['cargo_catalogo'];
         const sdrId = emp.sdr_id as string | null;
         
-        // Buscar comp_plan do sdr_id
+        // Buscar comp_plan do sdr_id (já ordenado por vigencia_inicio DESC, pegar o primeiro)
         const plan = sdrId && compPlans
           ? compPlans.find(p => p.sdr_id === sdrId)
           : null;
@@ -299,20 +326,72 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
   // Mutation para sincronizar planos com catálogo
   const syncWithCatalog = useMutation({
     mutationFn: async (empIds: string[]) => {
+      const monthStart = `${anoMes}-01`;
+      
       for (const emp of employeesWithPlans.filter(e => empIds.includes(e.id))) {
         if (!emp.sdr_id || !emp.cargo_catalogo || !emp.comp_plan) continue;
         
-        const { error } = await supabase
+        // Buscar o plano vigente com sua vigencia_inicio
+        const { data: existing } = await supabase
           .from('sdr_comp_plan')
-          .update({
-            ote_total: emp.cargo_catalogo.ote_total,
-            fixo_valor: emp.cargo_catalogo.fixo_valor,
-            variavel_total: emp.cargo_catalogo.variavel_valor,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', emp.comp_plan.id);
+          .select('id, vigencia_inicio')
+          .eq('sdr_id', emp.sdr_id)
+          .lte('vigencia_inicio', monthStart)
+          .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
+          .order('vigencia_inicio', { ascending: false })
+          .limit(1)
+          .maybeSingle();
         
-        if (error) throw error;
+        if (!existing) continue;
+        
+        const existingStart = existing.vigencia_inicio.substring(0, 7);
+        const updateValues = {
+          ote_total: emp.cargo_catalogo.ote_total,
+          fixo_valor: emp.cargo_catalogo.fixo_valor,
+          variavel_total: emp.cargo_catalogo.variavel_valor,
+          updated_at: new Date().toISOString(),
+        };
+        
+        if (existingStart === anoMes) {
+          // Plano é do próprio mês → atualizar normalmente
+          const { error } = await supabase
+            .from('sdr_comp_plan')
+            .update(updateValues)
+            .eq('id', existing.id);
+          if (error) throw error;
+        } else {
+          // Plano é de mês anterior → fechar e criar novo
+          const selectedMonthDate = parse(monthStart, 'yyyy-MM-dd', new Date());
+          const lastDayPrevMonth = format(subDays(selectedMonthDate, 1), 'yyyy-MM-dd');
+          
+          // Fechar plano antigo
+          const { error: closeError } = await supabase
+            .from('sdr_comp_plan')
+            .update({ vigencia_fim: lastDayPrevMonth, updated_at: new Date().toISOString() })
+            .eq('id', existing.id);
+          if (closeError) throw closeError;
+          
+          // Criar novo plano com valores do catálogo, copiando demais campos do antigo
+          const { data: oldPlan } = await supabase
+            .from('sdr_comp_plan')
+            .select('*')
+            .eq('id', existing.id)
+            .single();
+          
+          if (oldPlan) {
+            const { id, created_at, vigencia_inicio, vigencia_fim, ...rest } = oldPlan;
+            const { error: insertError } = await supabase
+              .from('sdr_comp_plan')
+              .insert({
+                ...rest,
+                ...updateValues,
+                vigencia_inicio: monthStart,
+                vigencia_fim: null,
+                status: 'PENDING',
+              });
+            if (insertError) throw insertError;
+          }
+        }
       }
     },
     onSuccess: () => {
