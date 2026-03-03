@@ -21,6 +21,7 @@ interface AutoMarkData {
   customerPhone: string | null;
   customerName: string | null;
   saleDate: string;
+  transactionHublaId?: string | null;
 }
 
 interface AutoMarkResult {
@@ -165,6 +166,20 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
     }
 
     console.log(`✅ [AUTO-PAGO] Attendee ${matchingAttendee.id} marcado como contract_paid`);
+
+    // 🔗 Vincular transação Hubla ao attendee para rastreabilidade completa
+    if (data.transactionHublaId) {
+      const { error: linkError } = await supabase
+        .from('hubla_transactions')
+        .update({ linked_attendee_id: matchingAttendee.id })
+        .eq('hubla_id', data.transactionHublaId);
+
+      if (linkError) {
+        console.error(`⚠️ [AUTO-PAGO] Erro ao vincular transação ${data.transactionHublaId} ao attendee:`, linkError.message);
+      } else {
+        console.log(`🔗 [AUTO-PAGO] Transação ${data.transactionHublaId} vinculada ao attendee ${matchingAttendee.id}`);
+      }
+    }
 
     // Atualizar reunião para completed se ainda não estiver
     if (meeting.status === 'scheduled' || meeting.status === 'rescheduled') {
@@ -496,6 +511,7 @@ Deno.serve(async (req) => {
       customerPhone: body.telefone || null,
       customerName: body.nome,
       saleDate: saleDate,
+      transactionHublaId: insertedData.hubla_id,
     });
 
     return new Response(

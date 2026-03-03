@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, DollarSign, ChevronRight, Loader2, Phone } from 'lucide-react';
+import { Search, ChevronRight, Loader2, Phone } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSearchPastMeetings, PastMeetingResult } from '@/hooks/useSearchPastMeetings';
-import { useMarkContractPaid } from '@/hooks/useAgendaData';
 import { MeetingSlot } from '@/hooks/useAgendaData';
 
 interface MeetingSearchPanelProps {
@@ -20,14 +19,6 @@ interface MeetingSearchPanelProps {
 export function MeetingSearchPanel({ closerId, onSelectMeeting, isConsorcio = false }: MeetingSearchPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const { data: results = [], isLoading } = useSearchPastMeetings(searchQuery, closerId);
-  const markContractPaid = useMarkContractPaid();
-
-  const handleMarkPaid = (result: PastMeetingResult) => {
-    markContractPaid.mutate({
-      meetingId: result.meeting.id,
-      attendeeId: result.attendeeId
-    });
-  };
 
   const handleOpenMeeting = (result: PastMeetingResult) => {
     // Convert to MeetingSlot format for the drawer
@@ -145,23 +136,10 @@ export function MeetingSearchPanel({ closerId, onSelectMeeting, isConsorcio = fa
                       </div>
                     </div>
                     <div className="flex items-center gap-1 ml-2">
-                      {!isConsorcio && (
-                        result.attendeeStatus === 'contract_paid' ? (
-                          <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30">
-                            ✅ Pago
-                          </Badge>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            className="h-8 w-8 p-0 bg-amber-500 hover:bg-amber-600"
-                            onClick={() => handleMarkPaid(result)}
-                            disabled={markContractPaid.isPending}
-                            title="Marcar Contrato Pago"
-                          >
-                            <DollarSign className="h-4 w-4" />
-                          </Button>
-                        )
+                      {!isConsorcio && result.attendeeStatus === 'contract_paid' && (
+                        <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30">
+                          ✅ Pago
+                        </Badge>
                       )}
                       <Button
                         size="sm"

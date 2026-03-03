@@ -710,6 +710,7 @@ interface AutoMarkData {
   customerPhone: string | null;
   customerName: string | null;
   saleDate: string;
+  transactionHublaId?: string | null;
 }
 
 // Normalizar nome para match fuzzy
@@ -1011,6 +1012,20 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
     }
 
     console.log(`✅ [AUTO-PAGO] Attendee ${matchingAttendee.id} marcado como contract_paid`);
+
+    // 🔗 Vincular transação Hubla ao attendee para rastreabilidade completa
+    if (data.transactionHublaId) {
+      const { error: linkError } = await supabase
+        .from('hubla_transactions')
+        .update({ linked_attendee_id: matchingAttendee.id })
+        .eq('hubla_id', data.transactionHublaId);
+
+      if (linkError) {
+        console.error(`⚠️ [AUTO-PAGO] Erro ao vincular transação ${data.transactionHublaId} ao attendee:`, linkError.message);
+      } else {
+        console.log(`🔗 [AUTO-PAGO] Transação ${data.transactionHublaId} vinculada ao attendee ${matchingAttendee.id}`);
+      }
+    }
 
     // 4. Atualizar reunião para completed se ainda não estiver
     if (meeting.status === 'scheduled' || meeting.status === 'rescheduled') {
@@ -1632,7 +1647,8 @@ serve(async (req) => {
               customerEmail: transactionData.customer_email,
               customerPhone: transactionData.customer_phone,
               customerName: transactionData.customer_name,
-              saleDate: saleDate
+              saleDate: saleDate,
+              transactionHublaId: transactionData.hubla_id
             });
           }
           
@@ -1774,7 +1790,8 @@ serve(async (req) => {
               customerEmail: transactionData.customer_email,
               customerPhone: transactionData.customer_phone,
               customerName: transactionData.customer_name,
-              saleDate: saleDate
+              saleDate: saleDate,
+              transactionHublaId: hublaId
             });
           }
           
