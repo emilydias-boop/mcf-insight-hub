@@ -744,6 +744,12 @@ const Negocios = () => {
           targetId={selectedPipelineId}
         />
       )}
+      {/* Dialog de importação de planilha */}
+      <SpreadsheetCompareDialog
+        open={spreadsheetDialogOpen}
+        onOpenChange={setSpreadsheetDialogOpen}
+        deals={dealsData || []}
+      />
     </div>
   );
 };
