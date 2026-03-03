@@ -97,6 +97,22 @@ export default function Dashboard() {
               Visão consolidada de metas e resultados por setor
             </p>
           </div>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setSelectedDate(d => subMonths(d, 1))}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium min-w-[120px] text-center capitalize">
+              {format(selectedDate, 'MMMM yyyy', { locale: ptBR })}
+            </span>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setSelectedDate(d => addMonths(d, 1))}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            {!isCurrentMonth && (
+              <Button variant="secondary" size="sm" className="h-8 text-xs" onClick={() => setSelectedDate(new Date())}>
+                Hoje
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Erros */}
