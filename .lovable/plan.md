@@ -1,39 +1,21 @@
 
 
-## Objetivo
+## Plano: Criar deals para TODOS os leads da planilha que não existem no CRM
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+Atualmente o botão "Criar não encontrados" só envia os leads com `matchStatus === 'not_found'` para a edge function. O usuário quer que **todos** os leads da planilha sejam enviados para criação — a edge function já faz deduplicação por email/telefone e pula os que já existem na pipeline. Assim, qualquer lead que não tenha um deal na pipeline atual será criado com tag `base clint`.
 
-## Mudanças
+### Mudanças
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+#### 1. `SpreadsheetCompareDialog.tsx`
+- Alterar `handleCreateNotFound` para enviar **todos** os leads da planilha (não só os `not_found`)
+- Renomear botão para "Criar leads inexistentes com tag 'base clint'" com contagem do total
+- A edge function já faz `check if deal exists for contact + origin` e pula duplicatas
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+#### 2. `import-spreadsheet-leads/index.ts` (edge function)
+- Já possui deduplicação por email → telefone e verifica se deal existe para o contact+origin antes de criar
+- Nenhuma mudança necessária — a lógica de skip já funciona corretamente
 
-### 2. Hook `useCloserDetailData.ts`
-
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
-
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Resultado
+O botão envia todos os 22.000 leads. A edge function cria apenas os que não existem na pipeline (contato+origin), pulando os que já têm deal. Toast mostra "X criados, Y já existiam".
 
