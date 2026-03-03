@@ -304,9 +304,21 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                 disabled={createNotFoundMutation.isPending || results.length === 0}
               >
                 <Tag className="h-4 w-4 mr-1" />
-                {createNotFoundMutation.isPending ? 'Processando...' : `Criar leads inexistentes com tag 'base clint' (${results.length})`}
+                {createNotFoundMutation.isPending && batchProgress
+                  ? `Processando batch ${batchProgress.current}/${batchProgress.total}...`
+                  : `Criar leads inexistentes com tag 'base clint' (${results.length})`}
               </Button>
             </div>
+
+            {/* Batch progress */}
+            {batchProgress && createNotFoundMutation.isPending && (
+              <div className="space-y-1">
+                <Progress value={(batchProgress.current / batchProgress.total) * 100} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">
+                  Processando batch {batchProgress.current} de {batchProgress.total}...
+                </p>
+              </div>
+            )}
 
             {/* Table */}
             <div className="border rounded-lg max-h-[50vh] overflow-auto">
