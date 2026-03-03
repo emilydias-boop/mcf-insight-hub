@@ -1,53 +1,48 @@
 
 
-## Problema: Contratos não vinculados automaticamente à transação Hubla
+## Problema Encontrado
 
-### Diagnóstico
+A taxa de conversão individual está **incorreta** porque Outside infla o denominador sem adicionar ao numerador:
 
-A função `autoMarkContractPaid` nos webhooks (`hubla-webhook-handler` e `webhook-make-contrato`) marca o attendee como `contract_paid` corretamente, **mas não cria o vínculo** com a transação Hubla (`hubla_transactions.linked_attendee_id`).
+- `r1_realizada` conta attendees com status `contract_paid` (inclui Outside)
+- `contrato_pago` **exclui** Outside (contrato pago antes da reunião)
 
-**Dados de Fevereiro/2026:**
-- 196 contratos marcados como pagos na agenda
-- Apenas **12** têm vínculo com transação Hubla (via `LinkContractDialog` manual)
-- **184** estão sem vínculo — todos foram marcados pelo webhook automaticamente, mas sem o link
+**Resultado**: Um closer com 10 realizadas, 3 contratos e 2 Outside mostra 30% (3/10), quando deveria mostrar 37.5% (3/8) — já que as 2 Outside não foram convertidas "depois da reunião".
 
-Isso significa que o sistema está correto na **detecção** (encontra o attendee certo), mas falha na **rastreabilidade** — não conecta a transação à reunião.
+## Solução
 
-### Causa Raiz
+Excluir Outside do `r1_realizada` no hook `useR1CloserMetrics.ts`.
 
-A interface `AutoMarkData` não inclui o `hubla_id` da transação. A função recebe apenas email/telefone/nome e data, mas não sabe **qual transação** disparou a marcação.
+### Alteração em `src/hooks/useR1CloserMetrics.ts`
 
-### Solução
+Na seção que conta `r1_realizada` (linhas 435-436), precisamos verificar se o attendee é Outside antes de contar como realizada:
 
-**1. `supabase/functions/hubla-webhook-handler/index.ts`**
-- Adicionar `transactionHublaId` à interface `AutoMarkData`
-- Na função `autoMarkContractPaid`, após marcar o attendee como `contract_paid`, também atualizar `hubla_transactions.linked_attendee_id = matchingAttendee.id` usando o `transactionHublaId`
-- Nos dois pontos que chamam `autoMarkContractPaid` (linhas ~1631 e ~1773), passar o `hublaId` da transação
+1. Construir um Set de attendee IDs que são Outside (usando `contractsByPaymentDate` onde `contract_paid_at < scheduled_at`)
+2. No loop de contagem (linha 435), só contar como `r1_realizada` se o attendee **não** for Outside
 
-**2. `supabase/functions/webhook-make-contrato/index.ts`**
-- Mesma alteração na interface `AutoMarkData` local e na função `autoMarkContractPaid`
-- No call site (linha ~494), passar o `insertedData.hubla_id`
+Ou alternativamente, mover a detecção para dentro do loop de meetings: se status é `contract_paid`, verificar o `contract_paid_at` contra `scheduled_at` do slot. Se Outside, não contar em `r1_realizada`.
 
-**3. `src/components/crm/MeetingSearchPanel.tsx`**
-- Remover o botão manual "Marcar Contrato Pago" (ícone `$`) que ainda existe no painel de busca
-- Manter apenas o badge "✅ Pago" para exibição e o botão de abrir detalhes
-- Remover imports não utilizados (`useMarkContractPaid`, `DollarSign`)
+**Problema**: No loop atual (linha 419), os attendees não têm `contract_paid_at` no select. Precisamos adicioná-lo ao select da query de meetings (linha 82-88).
 
-### Lógica do vínculo (adição ao autoMarkContractPaid)
+### Mudanças concretas:
 
-```
-// Após marcar attendee como contract_paid:
-if (data.transactionHublaId) {
-  await supabase
-    .from('hubla_transactions')
-    .update({ linked_attendee_id: matchingAttendee.id })
-    .eq('hubla_id', data.transactionHublaId);
-}
-```
+1. **Query de meetings** (linha 77-93): Adicionar `contract_paid_at` ao select dos `meeting_slot_attendees`
+2. **Loop de contagem** (linhas 435-436): Antes de incrementar `r1_realizada`, checar se é Outside:
+   ```
+   if (status === 'contract_paid') {
+     // Verificar se é Outside
+     const isOutside = att.contract_paid_at && new Date(att.contract_paid_at) < new Date(meeting.scheduled_at);
+     if (!isOutside) {
+       metric.r1_realizada++;
+     }
+   } else if (status === 'completed') {
+     metric.r1_realizada++;
+   }
+   ```
 
-### Resultado esperado
-- Novos contratos serão automaticamente vinculados à transação Hubla que os gerou
-- O painel não terá mais botão manual de marcação
-- A rastreabilidade fica completa: transação Hubla ↔ attendee ↔ closer ↔ deal
-- Contratos históricos sem vínculo permanecem (dados passados), mas novos já terão o link correto
+3. **CloserSummaryTable.tsx** e **CloserDetailKPICards.tsx**: Sem alteração — a fórmula `contrato_pago / r1_realizada` já está correta, o problema era nos dados.
+
+### Resultado
+
+A taxa de conversão refletirá: "das reuniões que o closer realmente fez (excluindo Outside), quantas converteram depois da reunião".
 
