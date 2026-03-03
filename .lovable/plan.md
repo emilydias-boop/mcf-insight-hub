@@ -2,37 +2,46 @@
 
 ## Problema
 
-Quando "Contratos Pagos" é ativado para um SDR, o `meta_percentual` calcula a meta como **% das Realizadas** (`reunioes_realizadas`). Mas para SDRs, a lógica correta é que a meta de contratos deve ser **% dos Agendamentos** (`reunioes_agendadas`), já que o SDR agenda reuniões e uma porcentagem dessas deve converter em contrato.
+O `sdr_comp_plan` usa um modelo de **vigência por faixa de data** (`vigencia_inicio` / `vigencia_fim`). Quando o usuário edita o plano para **março**, a mutation `saveCompPlan`:
 
-Atualmente o sistema usa `reunioes_realizadas` como referência em todos os casos (lógica de Closer).
+1. Busca um plano existente com `vigencia_inicio <= '2026-03-01'` e `vigencia_fim IS NULL`
+2. **Encontra o plano de fevereiro** (que tem `vigencia_inicio = '2026-02-01'` e `vigencia_fim = NULL`)
+3. **Sobrescreve esse mesmo registro**, mudando `vigencia_inicio` para `'2026-03-01'` e atualizando todos os valores
+
+Resultado: fevereiro perde seus dados originais e passa a ter os valores de março. SDRs que foram promovidos entre meses perdem o histórico do nível anterior.
+
+O mesmo problema ocorre na `syncWithCatalog` — atualiza o `comp_plan.id` encontrado sem considerar que ele pode cobrir outros meses.
 
 ## Correção
 
-### 1. Diferenciar referência por `cargo_base` no `DynamicIndicatorCard.tsx`
+### 1. Lógica de save com preservação de histórico (`saveCompPlan`)
 
-Adicionar uma prop `roleType` (ou `cargoBase`) ao componente. Quando `cargo_base === 'SDR'`:
-- Usar `kpi.reunioes_agendadas` como denominador em vez de `kpi.reunioes_realizadas`
-- Subtitle: `"30% de 150 agend. = 45"` em vez de `"30% de 100 realiz. = 30"`
+Quando já existe um plano vigente e ele foi criado **antes** do mês selecionado:
 
-### 2. Ajustar label na UI de configuração (`ActiveMetricsTab.tsx`)
+- **Fechar** o plano antigo: `UPDATE vigencia_fim = último dia do mês anterior`
+- **Criar** um novo registro com `vigencia_inicio = primeiro dia do mês selecionado` e `vigencia_fim = NULL`
 
-Detectar se o cargo selecionado tem `cargo_base === 'SDR'` e mudar o label de **"% das Realiz."** para **"% das Agend."** no campo de `meta_percentual` para a métrica de contratos.
+Quando o plano vigente tem `vigencia_inicio` **igual** ao mês selecionado:
+- **Atualizar** normalmente (é o plano do próprio mês)
 
-### 3. Ajustar a Edge Function (`recalculate-sdr-payout`)
+```text
+Antes (plano único):
+  vigencia_inicio: 2026-02-01, vigencia_fim: NULL, ote: 4000
 
-Na seção que calcula `metaContratosCalculada`, verificar o `role_type` do SDR:
-- Se `role_type === 'sdr'` ou `cargo_base === 'SDR'`: usar `reunioes_agendadas` 
-- Se `role_type === 'closer'`: manter `reunioes_realizadas` (comportamento atual)
+Após editar março com ote=4500:
+  Plano 1: vigencia_inicio: 2026-02-01, vigencia_fim: 2026-02-28, ote: 4000  ← preservado
+  Plano 2: vigencia_inicio: 2026-03-01, vigencia_fim: NULL, ote: 4500        ← novo
+```
 
-### 4. Ajustar `useCalculatedVariavel.ts`
+### 2. Ajustar a query de leitura (`compPlans` query)
 
-Mesmo ajuste: quando o cálculo dinâmico de contratos usar `meta_percentual`, verificar o tipo do colaborador para decidir se usa agendadas ou realizadas.
+A query atual já busca planos vigentes para o mês selecionado. Quando houver múltiplos planos para o mesmo SDR (por ex. um fechando em fev e outro abrindo em mar), deve pegar o **mais recente** cuja vigência cubra o mês. Adicionar `.order('vigencia_inicio', { ascending: false })` e no `useMemo` pegar o primeiro match por `sdr_id`.
+
+### 3. Ajustar `syncWithCatalog`
+
+A sincronização deve aplicar a mesma lógica: se o plano vigente cobre meses anteriores, fechar o antigo e criar novo para o mês atual. Não sobrescrever diretamente.
 
 ### Arquivos modificados
 
-- `src/components/fechamento/DynamicIndicatorCard.tsx` — nova prop + lógica condicional
-- `src/components/fechamento/ActiveMetricsTab.tsx` — label dinâmico
-- `src/hooks/useCalculatedVariavel.ts` — referência condicional
-- `supabase/functions/recalculate-sdr-payout/index.ts` — cálculo server-side
-- Componentes que chamam `DynamicIndicatorCard` — passar a nova prop
+- `src/components/fechamento/PlansOteTab.tsx` — mutations `saveCompPlan` e `syncWithCatalog`, query de leitura
 
