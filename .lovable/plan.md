@@ -1,39 +1,48 @@
 
 
-## Objetivo
+## Problema
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+O filtro Outside para de funcionar quando você clica em um lead e fecha o drawer. A causa:
 
-## Mudanças
+1. Ao interagir com o drawer (ligar, anotar, mover estágio), vários hooks chamam `invalidateQueries({ queryKey: ['crm-deals'] })`
+2. Isso refaz o fetch de `dealsData`, que muda a referência do array
+3. O hook `useOutsideDetectionForDeals` recalcula o `queryKey` baseado nos IDs dos deals — gerando uma nova query
+4. **Durante o refetch**, `outsideMap` fica `undefined` momentaneamente
+5. A condição do filtro (linha 502): `if (filters.outsideFilter !== 'all' && outsideMap)` — quando `outsideMap` é `undefined`, o bloco inteiro é **ignorado**, e todos os deals passam no filtro, mostrando "Todos"
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+O filtro em si permanece selecionado na UI, mas os dados filtrados mostram tudo porque a condição de guarda falha silenciosamente.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+## Correção
 
-### 2. Hook `useCloserDetailData.ts`
+### 1. Manter `outsideMap` estável durante refetch (`Negocios.tsx`)
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+Usar `placeholderData: keepPreviousData` ou manter um ref do último `outsideMap` válido para que, durante refetches, o mapa anterior continue sendo usado no filtro:
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+- Criar um `useRef` para armazenar o último `outsideMap` válido
+- No `useMemo` de `filteredDeals`, usar `outsideMap || outsideMapRef.current` em vez de apenas `outsideMap`
+- Atualizar o ref quando `outsideMap` muda
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+### 2. Ajustar o `useOutsideDetectionForDeals` para manter dados anteriores
 
-### 4. Dados exportados no Excel
+No hook `useOutsideDetectionForDeals.ts`, adicionar `placeholderData: (previousData) => previousData` na config do `useQuery`. Isso faz o React Query manter o resultado anterior enquanto refaz o fetch com o novo queryKey, evitando o flash de `undefined`.
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+### 3. Adicionar `outsideMap` como dependência estável no filtro (`Negocios.tsx`)
 
-Formato de data: `dd/MM/yyyy HH:mm`
+Mudar a condição do filtro de:
+```typescript
+if (filters.outsideFilter !== 'all' && outsideMap) {
+```
+Para:
+```typescript
+if (filters.outsideFilter !== 'all') {
+  if (!outsideMap) return false; // Esconder deals enquanto outsideMap carrega
+```
 
-## Resultado
+Isso inverte o comportamento: em vez de mostrar tudo quando o mapa não está pronto, **esconde** deals até o mapa estar disponível, evitando o flash de "todos os deals".
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Resultado
+
+- O filtro Outside permanece funcional mesmo após abrir/fechar o drawer
+- Sem flash de "todos os deals" durante refetches
+- A UI mantém o estado filtrado consistente
 
