@@ -313,9 +313,9 @@ export const PipelineConfigModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl h-[80vh] p-0 overflow-hidden">
+      <DialogContent className="max-w-4xl h-[80vh] p-0 overflow-hidden flex flex-col">
         {/* Inner wrapper to control layout (avoids grid/flex conflict with Radix) */}
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full min-h-0 flex-1">
           {/* Fixed header */}
           <DialogHeader className="px-6 py-4 border-b shrink-0">
             <DialogTitle className="flex items-center gap-2">
