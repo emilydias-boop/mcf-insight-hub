@@ -115,7 +115,19 @@ export default function Agenda() {
       result = result.filter(m => m.closer_id === closerFilter);
     }
     if (statusFilter) {
-      result = result.filter(m => m.status === statusFilter);
+      // Filter by attendee-level status instead of slot-level status
+      const attendeeStatusMap: Record<string, string[]> = {
+        'scheduled': ['invited', 'scheduled'],
+        'rescheduled': ['rescheduled'],
+        'completed': ['completed'],
+        'no_show': ['no_show'],
+        'canceled': ['cancelled', 'canceled'],
+        'contract_paid': ['contract_paid'],
+      };
+      const validStatuses = attendeeStatusMap[statusFilter] || [statusFilter];
+      result = result.filter(m => 
+        m.attendees?.some(att => validStatuses.includes(att.status))
+      );
     }
     if (searchTerm.length >= 2) {
       const search = searchTerm.toLowerCase();
