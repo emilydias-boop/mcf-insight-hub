@@ -1,44 +1,39 @@
 
 
-## Diagnóstico
+## Objetivo
 
-Encontrei **13 casos** idênticos ao da Jessé — leads com deals duplicados nos estágios "Contrato Pago" ou "Venda Realizada", criados pelo webhook do Clint quando o contrato foi pago. Em todos os casos, o padrão é:
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-- **Deal real**: mais atividades, reuniões vinculadas, criado antes
-- **Deal duplicado**: 0-3 atividades, 0 reuniões, criado pelo webhook posterior
+## Mudanças
 
-| Lead | Deal Real (atividades) | Deal Duplicado (atividades) |
-|------|----------------------|---------------------------|
-| Altacyr Guimarães | 13 atividades, 2 reuniões | 1 atividade, 0 reuniões |
-| André Menini | 7 atividades, 1 reunião | 3 atividades, 0 reuniões |
-| Deivison Carneiro | 12 atividades, 1 reunião | 1 atividade, 0 reuniões |
-| Desirrê Rodrigues | 7 atividades, 1 reunião | 2 atividades, 0 reuniões |
-| Fernando Magalhães | 9 atividades, 1 reunião | 0 atividades, 0 reuniões |
-| Jean Cantuário | 6 atividades, 4 reuniões | 1 atividade, 0 reuniões |
-| Julio Rodrigues | 20 atividades, 2 reuniões | 1 atividade, 0 reuniões |
-| Livie Marques | 7 atividades, 1 reunião | 6 atividades, 0 reuniões |
-| Lucas Chaves | 6 atividades, 2 reuniões | 3 atividades, 0 reuniões |
-| Lucia Jander | 13 atividades, 4 reuniões | 0 atividades, 0 reuniões |
-| Luiz Souza | 8 atividades, 4 reuniões | 1 atividade, 0 reuniões |
-| Agenor Macedo | 7 atividades, 2 reuniões | 2 atividades, 0 reuniões |
-| Nonato Rosal | 14 atividades, 2 reuniões | 1 atividade, 0 reuniões |
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-## Plano
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### 1. Migration SQL para limpar os 13 casos
+### 2. Hook `useCloserDetailData.ts`
 
-Uma migration que:
-1. **Deleta os 13 deals duplicados** (os com 0 reuniões e menos atividades)
-2. **Merge dos contatos duplicados** — para cada email com 2 contacts, move deals do contato duplicado para o principal e deleta o duplicado
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-Deals a deletar (duplicados sem reuniões):
-- `0fb0290f` (Altacyr), `0f2a0cb4` (André), `7d5b43dd` (Deivison), `4f5e82f0` (Desirrê), `46e5d644` (Fernando), `9c915ab6` (Jean), `66083a35` (Julio), `23fd376d` (Livie), `cc70084d` (Lucas), `cc490b47` (Lucia), `ba1f87ab` (Luiz), `2f28a4fb` (Agenor), `c86601fc` (Nonato)
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-### 2. Rodar merge de contatos duplicados restantes
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-Após deletar os deals duplicados, executar a página `/crm/contatos-duplicados` para unificar os contatos duplicados remanescentes (os 2.725 grupos por email).
+### 4. Dados exportados no Excel
 
-### Resultado
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-Os 13 leads deixarão de aparecer duplicados no Kanban. A proteção de race condition já implementada na mensagem anterior impede novos casos.
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
