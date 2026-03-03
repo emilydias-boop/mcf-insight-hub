@@ -1,39 +1,50 @@
 
 
-## Objetivo
+## Problema
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+O botão "Exportar Lista" sempre exporta `filteredMeetings` (todas as reuniões R2 do período), independente da aba ativa. Quando o usuário está na aba **Pendentes** (que usa dados do `R2PendingLeadsPanel` com sua própria query `useR2PendingLeads`), a exportação não reflete o que está na tela.
 
-## Mudanças
+O mesmo problema ocorre para a aba **No-Shows** (`R2NoShowsPanel`).
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+## Correção
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### 1. Tornar a exportação sensível à aba ativa (`AgendaR2.tsx`)
 
-### 2. Hook `useCloserDetailData.ts`
+Alterar `handleExportList` para verificar `activeTab` e exportar dados diferentes conforme a aba:
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+- **`list` / `calendar` / `closer`**: Exportar `filteredMeetings` (comportamento atual)
+- **`pending`**: Exportar os dados de `useR2PendingLeads` (leads com Contrato Pago aguardando R2)
+- **`noshows`**: Exportar os dados do painel de No-Shows
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+### 2. Expor dados de Pendentes para exportação
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+O hook `useR2PendingLeads` já é chamado internamente pelo `R2PendingLeadsPanel`. Para que o `AgendaR2.tsx` tenha acesso a esses dados sem duplicar a query, chamar o hook diretamente no `AgendaR2.tsx` (React Query deduplica automaticamente queries com a mesma key).
 
-### 4. Dados exportados no Excel
+### 3. Lógica do `handleExportList`
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+```typescript
+const handleExportList = () => {
+  if (activeTab === 'pending') {
+    // Exportar pendingLeads com colunas: Nome, Telefone, Closer R1, Data R1, Tempo
+    const headers = ['Nome', 'Telefone', 'Closer R1', 'Data R1', 'Status'];
+    const rows = pendingLeads.map(lead => [
+      lead.attendee_name || 'Sem nome',
+      lead.attendee_phone || '-',
+      lead.closer_name || '-',
+      lead.scheduled_at ? format(...) : '-',
+      'Contrato Pago'
+    ]);
+    // ... gerar CSV
+  } else if (activeTab === 'noshows') {
+    // Exportar no-shows
+  } else {
+    // Exportar filteredMeetings (atual)
+  }
+};
+```
 
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Resultado
+- "Exportar Lista" exportará exatamente o que o usuário está vendo na aba ativa
+- Pendentes exportará a lista de leads com Contrato Pago aguardando R2
+- No-Shows exportará os no-shows visíveis
 
