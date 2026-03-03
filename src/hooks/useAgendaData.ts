@@ -1572,18 +1572,23 @@ export async function syncDealStageFromAgenda(
         console.log(`Saved R2 Closer: ${closerEmail}`);
       }
       
-      // Buscar profile_id do closer para manter owner_profile_id sincronizado
-      const { data: closerProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', closerEmail)
-        .maybeSingle();
-      
-      updateData.owner_id = closerEmail;
-      if (closerProfile) {
-        updateData.owner_profile_id = closerProfile.id;
+      // Transferir owner_id APENAS para R1 (ou R2 no-show para gestão de reagendamento)
+      // R2 realizada/contrato_pago mantém o dono como closer R1
+      if (meetingType === 'r1' || isR2NoShow) {
+        const { data: closerProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', closerEmail)
+          .maybeSingle();
+        
+        updateData.owner_id = closerEmail;
+        if (closerProfile) {
+          updateData.owner_profile_id = closerProfile.id;
+        }
+        console.log(`Ownership transfer: Deal ${dealId} -> ${closerEmail} (profile: ${closerProfile?.id || 'not found'}, status: ${agendaStatus}, type: ${meetingType})`);
+      } else {
+        console.log(`R2 completed - ownership NOT transferred for Deal ${dealId}. r2_closer_email saved: ${closerEmail}. Owner remains as R1 closer.`);
       }
-      console.log(`Ownership transfer: Deal ${dealId} -> ${closerEmail} (profile: ${closerProfile?.id || 'not found'}, status: ${agendaStatus}, type: ${meetingType})`);
     }
 
     if (Object.keys(updateData).length === 0) return;
