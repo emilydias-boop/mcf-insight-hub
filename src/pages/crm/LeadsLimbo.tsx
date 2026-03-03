@@ -499,6 +499,15 @@ export default function LeadsLimbo() {
         <div>
           <h2 className="text-2xl font-bold text-foreground">Resultados da Comparação</h2>
           <p className="text-muted-foreground text-sm mt-1">Pipeline Inside Sales — {results.length} leads analisados</p>
+          {latestUpload && (
+            <div className="flex items-center gap-2 mt-1">
+              <Clock className="h-3 w-3 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">
+                Última atualização: {format(new Date(latestUpload.uploaded_at), 'dd/MM/yyyy HH:mm')} por {latestUpload.uploaded_by_name || 'Desconhecido'}
+                {latestUpload.file_name && ` — ${latestUpload.file_name}`}
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportNotFound} disabled={counts.nao_encontrado === 0}>
