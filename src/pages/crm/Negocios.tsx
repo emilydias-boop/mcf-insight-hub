@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, AlertCircle, RefreshCw, Settings } from 'lucide-react';
+import { Plus, AlertCircle, RefreshCw, Settings, FileSpreadsheet } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCRMDeals, useSyncClintData } from '@/hooks/useCRMData';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
@@ -39,6 +39,7 @@ import { useDealOwnerOptions } from '@/hooks/useDealOwnerOptions';
 import { useUniqueDealTags } from '@/hooks/useUniqueDealTags';
 import { useOutsideDetectionForDeals } from '@/hooks/useOutsideDetectionForDeals';
 import { OutsideDistributionButton } from '@/components/crm/OutsideDistributionButton';
+import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDialog';
 
 const Negocios = () => {
   // Ativar notificações em tempo real para novos leads
@@ -66,6 +67,7 @@ const Negocios = () => {
   // Estado para seleção e transferência em massa
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [spreadsheetDialogOpen, setSpreadsheetDialogOpen] = useState(false);
   const bulkTransfer = useBulkTransfer();
   
   // Usar BU ativa (do contexto da rota ou do perfil do usuário)
@@ -611,7 +613,18 @@ const Negocios = () => {
           
           <div className="flex gap-2 w-full sm:w-auto">
             {(role === 'admin' || role === 'manager') && (
-              <OutsideDistributionButton />
+              <>
+                <OutsideDistributionButton />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSpreadsheetDialogOpen(true)}
+                  className="flex-1 sm:flex-none"
+                >
+                  <FileSpreadsheet className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Importar Planilha</span>
+                </Button>
+              </>
             )}
             <Button 
               variant="outline" 
@@ -730,6 +743,12 @@ const Negocios = () => {
           targetId={selectedPipelineId}
         />
       )}
+      {/* Dialog de importação de planilha */}
+      <SpreadsheetCompareDialog
+        open={spreadsheetDialogOpen}
+        onOpenChange={setSpreadsheetDialogOpen}
+        deals={dealsData || []}
+      />
     </div>
   );
 };
