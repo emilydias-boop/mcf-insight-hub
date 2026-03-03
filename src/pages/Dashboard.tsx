@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ResourceGuard } from "@/components/auth/ResourceGuard";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { SetorRow } from "@/components/dashboard/SetorRow";
 import { EfeitoAlavancaRow } from "@/components/dashboard/EfeitoAlavancaRow";
 import { TotalGeralRow } from "@/components/dashboard/TotalGeralRow";
@@ -12,6 +12,9 @@ import { Separator } from "@/components/ui/separator";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { BURevenueGoalsEditModal, BURevenueSection } from "@/components/sdr/BURevenueGoalsEditModal";
+import { Button } from "@/components/ui/button";
+import { format, addMonths, subMonths, isSameMonth } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 const SETOR_MODAL_CONFIG: Record<string, { title: string; sections: BURevenueSection[] }> = {
   incorporador: {
@@ -42,9 +45,11 @@ export default function Dashboard() {
   const canEdit = !!role && ['admin', 'manager', 'coordenador'].includes(role);
 
   const [editingSetor, setEditingSetor] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const isCurrentMonth = isSameMonth(selectedDate, new Date());
 
   // Hook para dados dos setores (busca semana/mês/ano automaticamente)
-  const { data, isLoading, error } = useSetoresDashboard();
+  const { data, isLoading, error } = useSetoresDashboard(selectedDate);
 
   // Realtime listeners para atualização automática
   useEffect(() => {
