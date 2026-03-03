@@ -1,31 +1,39 @@
 
 
-## Diagnóstico
+## Objetivo
 
-Confirmei no banco de dados: **139 deals** estão com `owner_id` apontando para o closer de R2, quando deveriam estar no nome do closer de R1. Isso acontece porque o código antigo (antes da correção anterior) transferia a propriedade para o closer de R2 ao completar a reunião R2 ou registrar contrato pago/venda.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-**Exemplo real do banco**: Deal "Willians Moraes Silva de Oliveira" → `r1_closer_email: thaynar.tavares@...` → `owner_id: jessica.martins@...` (R2 closer) → deveria ser `thaynar.tavares@...`.
+## Mudanças
 
-A correção de código já foi feita (novos deals não terão esse problema), mas os **139 deals históricos** precisam ser corrigidos via SQL.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-## Plano
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### 1. Criar Edge Function para corrigir dados históricos
+### 2. Hook `useCloserDetailData.ts`
 
-Uma edge function `fix-r2-ownership` que:
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-1. Busca todos os deals onde `owner_id = r2_closer_email` e `r1_closer_email IS NOT NULL`
-2. Atualiza o `owner_id` para `r1_closer_email`
-3. Resolve e atualiza `owner_profile_id` correspondente
-4. Registra a mudança em `deal_activities` para auditoria
-5. Suporta `dryRun` para preview antes de executar
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**Exceção**: Deals em estágio "No-Show R2" continuam com o closer R2 (comportamento intencional para gestão de reagendamento).
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### 2. Resultado esperado
+### 4. Dados exportados no Excel
 
-Após executar a correção:
-- Deals em "R2 Agendada", "R2 Realizada", "Contrato Pago" e "Venda Realizada" voltam para o nome do closer R1
-- Filtrar por Thaynar no Kanban mostrará seus deals em todos os estágios do funil
-- O campo `r2_closer_email` continua preservado para rastreabilidade
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
