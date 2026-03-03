@@ -52,6 +52,7 @@ export interface CloserDetailData {
   leads: CloserLead[];
   noShowLeads: CloserLead[];
   r2Leads: CloserLead[];
+  allLeads: CloserLead[];
   allClosers: R1CloserMetric[];
   isLoading: boolean;
   error: Error | null;
@@ -339,6 +340,103 @@ export function useCloserDetailData({
     enabled: !!closerId,
   });
 
+  // Fetch scheduled leads for this closer (agendados/reagendados)
+  const {
+    data: scheduledLeads = [],
+    isLoading: isLoadingScheduled,
+    refetch: refetchScheduled,
+  } = useQuery({
+    queryKey: ['closer-scheduled-leads', closerId, start, end],
+    queryFn: async () => {
+      const { data: meetings, error: meetingsError } = await supabase
+        .from('meeting_slots')
+        .select(`
+          id,
+          scheduled_at,
+          meeting_slot_attendees (
+            id,
+            status,
+            deal_id,
+            attendee_name,
+            attendee_phone,
+            booked_by
+          )
+        `)
+        .eq('closer_id', closerId)
+        .eq('meeting_type', 'r1')
+        .gte('scheduled_at', start)
+        .lte('scheduled_at', end);
+
+      if (meetingsError) throw meetingsError;
+
+      const attendeesWithDeals: {
+        attendeeId: string;
+        status: string;
+        dealId: string;
+        attendeeName: string | null;
+        attendeePhone: string | null;
+        bookedBy: string | null;
+        scheduledAt: string;
+      }[] = [];
+
+      meetings?.forEach(meeting => {
+        meeting.meeting_slot_attendees?.forEach(att => {
+          if (att.deal_id && (att.status === 'scheduled' || att.status === 'rescheduled')) {
+            attendeesWithDeals.push({
+              attendeeId: att.id,
+              status: att.status,
+              dealId: att.deal_id,
+              attendeeName: att.attendee_name,
+              attendeePhone: att.attendee_phone,
+              bookedBy: att.booked_by,
+              scheduledAt: meeting.scheduled_at,
+            });
+          }
+        });
+      });
+
+      if (attendeesWithDeals.length === 0) return [];
+
+      const dealIds = [...new Set(attendeesWithDeals.map(a => a.dealId))];
+      const { data: deals } = await supabase
+        .from('crm_deals')
+        .select(`id, name, origin:crm_origins(name), contact:crm_contacts(id, name, email, phone)`)
+        .in('id', dealIds);
+
+      const dealsMap = new Map<string, { name: string; originName: string | null; contactName: string | null; contactEmail: string | null; contactPhone: string | null }>();
+      deals?.forEach(deal => {
+        const origin = Array.isArray(deal.origin) ? deal.origin[0] : deal.origin;
+        const contact = Array.isArray(deal.contact) ? deal.contact[0] : deal.contact;
+        dealsMap.set(deal.id, { name: deal.name, originName: origin?.name || null, contactName: contact?.name || null, contactEmail: contact?.email || null, contactPhone: contact?.phone || null });
+      });
+
+      const bookedByIds = [...new Set(attendeesWithDeals.map(a => a.bookedBy).filter(Boolean))] as string[];
+      let profilesMap: Record<string, string> = {};
+      if (bookedByIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', bookedByIds);
+        profiles?.forEach(p => { profilesMap[p.id] = p.full_name || 'Desconhecido'; });
+      }
+
+      return attendeesWithDeals.map(att => {
+        const dealInfo = dealsMap.get(att.dealId);
+        return {
+          attendee_id: att.attendeeId,
+          deal_id: att.dealId,
+          deal_name: dealInfo?.name || 'Sem nome',
+          contact_name: att.attendeeName || dealInfo?.contactName || 'Sem nome',
+          contact_email: dealInfo?.contactEmail,
+          contact_phone: att.attendeePhone || dealInfo?.contactPhone,
+          status: att.status,
+          contract_paid_at: null,
+          scheduled_at: att.scheduledAt,
+          booked_by_name: att.bookedBy ? profilesMap[att.bookedBy] || null : null,
+          origin_name: dealInfo?.originName,
+        } as CloserLead;
+      }).sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+    },
+    enabled: !!closerId,
+  });
+
   // Fetch R2 leads for this closer
   const {
     data: r2Leads = [],
@@ -549,10 +647,24 @@ export function useCloserDetailData({
     };
   }, [closerMetrics, allClosers, closerId]);
 
+  // Combine all leads into a single sorted array
+  const allLeads = useMemo(() => {
+    const combined = [...leads, ...noShowLeads, ...scheduledLeads];
+    // Deduplicate by attendee_id
+    const seen = new Set<string>();
+    const unique = combined.filter(l => {
+      if (seen.has(l.attendee_id)) return false;
+      seen.add(l.attendee_id);
+      return true;
+    });
+    return unique.sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+  }, [leads, noShowLeads, scheduledLeads]);
+
   const refetch = () => {
     refetchMetrics();
     refetchLeads();
     refetchNoShows();
+    refetchScheduled();
     refetchR2();
   };
 
@@ -564,8 +676,9 @@ export function useCloserDetailData({
     leads,
     noShowLeads,
     r2Leads,
+    allLeads,
     allClosers,
-    isLoading: isLoadingMetrics || isLoadingCloser || isLoadingLeads || isLoadingNoShows || isLoadingR2,
+    isLoading: isLoadingMetrics || isLoadingCloser || isLoadingLeads || isLoadingNoShows || isLoadingScheduled || isLoadingR2,
     error: metricsError,
     refetch,
   };
