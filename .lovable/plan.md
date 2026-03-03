@@ -1,53 +1,39 @@
 
 
-## Problema
+## Objetivo
 
-A aba "Lista" na Agenda R1 mostra o **status do slot** (`meeting_slots.status`) que normalmente é apenas `completed` ou `scheduled`. Os status granulares como **No-show**, **Reagendado**, **Contrato Pago** ficam no nível do **participante** (`meeting_slot_attendees.status`), por isso nunca aparecem na lista.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-O filtro de status também opera sobre `meeting_slots.status`, então filtrar por "No-show" ou "Reagendadas" retorna zero resultados.
+## Mudanças
 
-## Correção
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### 1. Reformular a listagem para nível de attendee (`MeetingsList.tsx`)
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Em vez de iterar sobre `meetings` (slots), a lista deve **expandir cada slot em linhas por attendee**. Cada linha mostra:
-- Data/Hora do slot
-- Nome do lead (attendee individual, não todos agrupados)
-- Closer do slot
-- **Status do attendee** (invited→Agendada, completed→Realizada, no_show→No-show, rescheduled→Reagendada, contract_paid→Contrato Pago)
-- Ações contextuais
+### 2. Hook `useCloserDetailData.ts`
 
-Isso alinha a lista com o que o calendário já mostra visualmente.
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-### 2. Ajustar o filtro de status (`Agenda.tsx`)
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Mudar o `filteredMeetings` para que, quando um `statusFilter` está ativo, filtre meetings que **tenham ao menos 1 attendee** com aquele status (em vez de filtrar por `m.status`):
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-```typescript
-if (statusFilter) {
-  // Map filter values to attendee-level statuses
-  const attendeeStatusMap: Record<string, string[]> = {
-    'scheduled': ['invited', 'scheduled'],
-    'rescheduled': ['rescheduled'],
-    'completed': ['completed'],
-    'no_show': ['no_show'],
-    'canceled': ['cancelled', 'canceled'],
-    'contract_paid': ['contract_paid'],
-  };
-  const validStatuses = attendeeStatusMap[statusFilter] || [statusFilter];
-  result = result.filter(m => 
-    m.attendees?.some(att => validStatuses.includes(att.status))
-  );
-}
-```
+### 4. Dados exportados no Excel
 
-### 3. Na `MeetingsList`, exibir status por attendee
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-Reformular o componente para que cada attendee (excluindo sócios/`is_partner`) gere uma linha com seu status individual. Isso elimina a confusão de ver "Realizada" quando na verdade um dos leads deu no-show.
+Formato de data: `dd/MM/yyyy HH:mm`
 
-### Resultado
+## Resultado
 
-- A lista mostrará No-show, Reagendado, Contrato Pago corretamente
-- O filtro de status funcionará com base nos status reais dos attendees
-- Consistência entre a visão de calendário e a visão de lista
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
