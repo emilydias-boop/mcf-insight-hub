@@ -29,7 +29,12 @@ export function useLatestLimboUpload() {
         .maybeSingle();
 
       if (error) throw error;
-      return data as LimboUploadRecord | null;
+      if (!data) return null;
+      return {
+        ...data,
+        column_mapping: data.column_mapping as any,
+        comparison_results: data.comparison_results as any,
+      } as LimboUploadRecord;
     },
     staleTime: 2 * 60 * 1000,
   });
