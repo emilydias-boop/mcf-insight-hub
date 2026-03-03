@@ -1,47 +1,31 @@
 
 
-## Problema
+## Diagnóstico
 
-A função `syncDealStageFromAgenda` transfere o `owner_id` do deal para o closer em **todos** os status de transferência (completed, contract_paid, R2 no-show), independente do `meetingType`. Isso faz com que ao completar R2, o dono passe do closer R1 (Thayna) para o closer R2 (Claudia).
+Confirmei no banco de dados: **139 deals** estão com `owner_id` apontando para o closer de R2, quando deveriam estar no nome do closer de R1. Isso acontece porque o código antigo (antes da correção anterior) transferia a propriedade para o closer de R2 ao completar a reunião R2 ou registrar contrato pago/venda.
 
-**Exemplo do usuário**: Wagner Ferreira → R1 com Thayna → R2 com Claudia → deal fica no nome da Claudia (errado). Deveria permanecer no nome da Thayna.
+**Exemplo real do banco**: Deal "Willians Moraes Silva de Oliveira" → `r1_closer_email: thaynar.tavares@...` → `owner_id: jessica.martins@...` (R2 closer) → deveria ser `thaynar.tavares@...`.
 
-## Solução
+A correção de código já foi feita (novos deals não terão esse problema), mas os **139 deals históricos** precisam ser corrigidos via SQL.
 
-**Arquivo: `src/hooks/useAgendaData.ts`** (linhas 1550-1586)
+## Plano
 
-Manter a transferência de ownership **apenas para R1**. Para R2, salvar o `r2_closer_email` mas **não** alterar `owner_id` nem `owner_profile_id`.
+### 1. Criar Edge Function para corrigir dados históricos
 
-Mudança na lógica (linha ~1550):
+Uma edge function `fix-r2-ownership` que:
 
-```typescript
-if (shouldTransferOwnership) {
-  // ... preservar original_sdr_email (sem mudança)
-  // ... salvar r1_closer_email (sem mudança)
-  // ... salvar r2_closer_email (sem mudança)
-  
-  // Transferir owner_id APENAS para R1
-  // R2 mantém o dono como R1 closer para rastreabilidade
-  if (meetingType === 'r1' || isR2NoShow) {
-    const { data: closerProfile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', closerEmail)
-      .maybeSingle();
-    
-    updateData.owner_id = closerEmail;
-    if (closerProfile) {
-      updateData.owner_profile_id = closerProfile.id;
-    }
-  }
-}
-```
+1. Busca todos os deals onde `owner_id = r2_closer_email` e `r1_closer_email IS NOT NULL`
+2. Atualiza o `owner_id` para `r1_closer_email`
+3. Resolve e atualiza `owner_profile_id` correspondente
+4. Registra a mudança em `deal_activities` para auditoria
+5. Suporta `dryRun` para preview antes de executar
 
-**R2 no-show** continua transferindo para o closer R2, pois a coordenadora precisa ver esses leads para reagendar (comportamento existente mantido).
+**Exceção**: Deals em estágio "No-Show R2" continuam com o closer R2 (comportamento intencional para gestão de reagendamento).
 
-### Resultado
-- R1 Realizada/Contrato Pago: deal passa para o closer R1 ✓
-- R2 Agendada/Realizada: deal **permanece** no closer R1 ✓
-- R2 No-show: deal passa para closer R2 (para gestão de reagendamento) ✓
-- `r2_closer_email` continua sendo salvo para rastreabilidade ✓
+### 2. Resultado esperado
+
+Após executar a correção:
+- Deals em "R2 Agendada", "R2 Realizada", "Contrato Pago" e "Venda Realizada" voltam para o nome do closer R1
+- Filtrar por Thaynar no Kanban mostrará seus deals em todos os estágios do funil
+- O campo `r2_closer_email` continua preservado para rastreabilidade
 
