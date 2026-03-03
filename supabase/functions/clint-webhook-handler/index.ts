@@ -1233,6 +1233,27 @@ async function handleDealStageChanged(supabase: any, data: any) {
 
   // 2.4. Se ainda não achou e temos contactId, criar o deal
   if (!dealId && contactId) {
+    // === DEDUPLICAÇÃO FINAL: buscar qualquer deal existente para este contato na mesma origin ===
+    if (originId) {
+      const { data: existingDeal } = await supabase
+        .from('crm_deals')
+        .select('id, stage_id, owner_id')
+        .eq('contact_id', contactId)
+        .eq('origin_id', originId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (existingDeal) {
+        dealId = existingDeal.id;
+        currentStageId = existingDeal.stage_id;
+        dealHasOwner = !!existingDeal.owner_id;
+        console.log('[DEAL.STAGE_CHANGED] DEDUP: Found existing deal for same contact+origin:', dealId, '- skipping creation');
+      }
+    }
+  }
+
+  if (!dealId && contactId) {
     // === VERIFICAÇÃO DE PARCEIRO antes de criar deal ===
     const contactEmail = contactData.email || data.contact_email;
     if (contactEmail) {
