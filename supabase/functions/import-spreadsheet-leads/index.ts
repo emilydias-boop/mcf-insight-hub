@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
       .from('crm_stages')
       .select('id, stage_name')
       .eq('origin_id', origin_id)
-      .order('order_index', { ascending: true })
+      .order('stage_order', { ascending: true })
       .limit(1);
 
     if (stagesError || !stages?.length) {

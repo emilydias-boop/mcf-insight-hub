@@ -98,17 +98,41 @@ export function compareSpreadsheetWithDeals(
 /**
  * Mutation to create deals for not-found leads via edge function
  */
+const BATCH_SIZE = 500;
+
 export function useCreateNotFoundDeals() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ leads, originId }: { leads: Array<{ name: string; email: string; phone: string }>; originId: string }) => {
-      const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
-        body: { leads, origin_id: originId },
-      });
+    mutationFn: async ({
+      leads,
+      originId,
+      onProgress,
+    }: {
+      leads: Array<{ name: string; email: string; phone: string }>;
+      originId: string;
+      onProgress?: (batch: number, totalBatches: number) => void;
+    }) => {
+      const totalBatches = Math.ceil(leads.length / BATCH_SIZE);
+      let totalCreated = 0;
+      let totalSkipped = 0;
 
-      if (error) throw error;
-      return data as { created: number; skipped: number; total: number };
+      for (let i = 0; i < leads.length; i += BATCH_SIZE) {
+        const batch = leads.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        onProgress?.(batchNum, totalBatches);
+
+        const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
+          body: { leads: batch, origin_id: originId },
+        });
+
+        if (error) throw error;
+        const result = data as { created: number; skipped: number; total: number };
+        totalCreated += result.created;
+        totalSkipped += result.skipped;
+      }
+
+      return { created: totalCreated, skipped: totalSkipped, total: leads.length };
     },
     onSuccess: (data) => {
       toast.success(`${data.created} leads criados com tag 'base clint'${data.skipped > 0 ? ` (${data.skipped} já existiam)` : ''}`);
