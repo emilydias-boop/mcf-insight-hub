@@ -79,11 +79,12 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           closer_id,
           meeting_type,
           scheduled_at,
-          meeting_slot_attendees (
+        meeting_slot_attendees (
             id,
             status,
             deal_id,
-            booked_by
+            booked_by,
+            contract_paid_at
           )
         `)
         .eq('meeting_type', 'r1')
@@ -430,9 +431,14 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
             metric!.r1_agendada++;
           }
           
-          // R1 Realizada: completed OR contract_paid OR has contract_paid_at
-          // Isso inclui attendees que foram movidos (status = rescheduled) mas tem contract_paid_at
-          if (status === 'completed' || status === 'contract_paid') {
+          // R1 Realizada: completed OR contract_paid (excluindo Outside)
+          // Outside = contrato pago ANTES da reunião, não conta como realizada
+          if (status === 'contract_paid') {
+            const isOutside = att.contract_paid_at && new Date(att.contract_paid_at) < new Date(meeting.scheduled_at);
+            if (!isOutside) {
+              metric!.r1_realizada++;
+            }
+          } else if (status === 'completed') {
             metric!.r1_realizada++;
           }
           
