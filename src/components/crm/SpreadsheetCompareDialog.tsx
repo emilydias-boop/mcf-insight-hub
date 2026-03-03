@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { compareSpreadsheetWithDeals, SpreadsheetRow, useCreateNotFoundDeals } from '@/hooks/useSpreadsheetCompare';
@@ -57,6 +58,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
   const [results, setResults] = useState<SpreadsheetRow[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchText, setSearchText] = useState('');
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
 
   const createNotFoundMutation = useCreateNotFoundDeals();
 
@@ -122,7 +124,14 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
       return;
     }
 
-    createNotFoundMutation.mutate({ leads: allLeads, originId });
+    setBatchProgress({ current: 0, total: 1 });
+    createNotFoundMutation.mutate({
+      leads: allLeads,
+      originId,
+      onProgress: (batch, totalBatches) => setBatchProgress({ current: batch, total: totalBatches }),
+    }, {
+      onSettled: () => setBatchProgress(null),
+    });
   }, [results, originId, createNotFoundMutation]);
 
   const handleExport = useCallback(() => {
