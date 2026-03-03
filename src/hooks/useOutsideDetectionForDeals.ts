@@ -220,5 +220,6 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
     enabled: deals.length > 0,
     staleTime: 60000,
     gcTime: 300000,
+    placeholderData: (previousData) => previousData,
   });
 };
