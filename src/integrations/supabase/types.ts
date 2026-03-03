@@ -6068,6 +6068,45 @@ export type Database = {
         }
         Relationships: []
       }
+      limbo_uploads: {
+        Row: {
+          column_mapping: Json | null
+          comparison_results: Json | null
+          file_name: string
+          id: string
+          row_count: number | null
+          status: string | null
+          storage_path: string
+          uploaded_at: string | null
+          uploaded_by: string
+          uploaded_by_name: string | null
+        }
+        Insert: {
+          column_mapping?: Json | null
+          comparison_results?: Json | null
+          file_name: string
+          id?: string
+          row_count?: number | null
+          status?: string | null
+          storage_path: string
+          uploaded_at?: string | null
+          uploaded_by: string
+          uploaded_by_name?: string | null
+        }
+        Update: {
+          column_mapping?: Json | null
+          comparison_results?: Json | null
+          file_name?: string
+          id?: string
+          row_count?: number | null
+          status?: string | null
+          storage_path?: string
+          uploaded_at?: string | null
+          uploaded_by?: string
+          uploaded_by_name?: string | null
+        }
+        Relationships: []
+      }
       local_pipeline_stages: {
         Row: {
           color: string | null
