@@ -2,49 +2,37 @@
 
 ## Problema
 
-O botão "Exportar Lista" sempre exporta `filteredMeetings` (todas as reuniões R2 do período), independente da aba ativa. Quando o usuário está na aba **Pendentes** (que usa dados do `R2PendingLeadsPanel` com sua própria query `useR2PendingLeads`), a exportação não reflete o que está na tela.
+Quando "Contratos Pagos" é ativado para um SDR, o `meta_percentual` calcula a meta como **% das Realizadas** (`reunioes_realizadas`). Mas para SDRs, a lógica correta é que a meta de contratos deve ser **% dos Agendamentos** (`reunioes_agendadas`), já que o SDR agenda reuniões e uma porcentagem dessas deve converter em contrato.
 
-O mesmo problema ocorre para a aba **No-Shows** (`R2NoShowsPanel`).
+Atualmente o sistema usa `reunioes_realizadas` como referência em todos os casos (lógica de Closer).
 
 ## Correção
 
-### 1. Tornar a exportação sensível à aba ativa (`AgendaR2.tsx`)
+### 1. Diferenciar referência por `cargo_base` no `DynamicIndicatorCard.tsx`
 
-Alterar `handleExportList` para verificar `activeTab` e exportar dados diferentes conforme a aba:
+Adicionar uma prop `roleType` (ou `cargoBase`) ao componente. Quando `cargo_base === 'SDR'`:
+- Usar `kpi.reunioes_agendadas` como denominador em vez de `kpi.reunioes_realizadas`
+- Subtitle: `"30% de 150 agend. = 45"` em vez de `"30% de 100 realiz. = 30"`
 
-- **`list` / `calendar` / `closer`**: Exportar `filteredMeetings` (comportamento atual)
-- **`pending`**: Exportar os dados de `useR2PendingLeads` (leads com Contrato Pago aguardando R2)
-- **`noshows`**: Exportar os dados do painel de No-Shows
+### 2. Ajustar label na UI de configuração (`ActiveMetricsTab.tsx`)
 
-### 2. Expor dados de Pendentes para exportação
+Detectar se o cargo selecionado tem `cargo_base === 'SDR'` e mudar o label de **"% das Realiz."** para **"% das Agend."** no campo de `meta_percentual` para a métrica de contratos.
 
-O hook `useR2PendingLeads` já é chamado internamente pelo `R2PendingLeadsPanel`. Para que o `AgendaR2.tsx` tenha acesso a esses dados sem duplicar a query, chamar o hook diretamente no `AgendaR2.tsx` (React Query deduplica automaticamente queries com a mesma key).
+### 3. Ajustar a Edge Function (`recalculate-sdr-payout`)
 
-### 3. Lógica do `handleExportList`
+Na seção que calcula `metaContratosCalculada`, verificar o `role_type` do SDR:
+- Se `role_type === 'sdr'` ou `cargo_base === 'SDR'`: usar `reunioes_agendadas` 
+- Se `role_type === 'closer'`: manter `reunioes_realizadas` (comportamento atual)
 
-```typescript
-const handleExportList = () => {
-  if (activeTab === 'pending') {
-    // Exportar pendingLeads com colunas: Nome, Telefone, Closer R1, Data R1, Tempo
-    const headers = ['Nome', 'Telefone', 'Closer R1', 'Data R1', 'Status'];
-    const rows = pendingLeads.map(lead => [
-      lead.attendee_name || 'Sem nome',
-      lead.attendee_phone || '-',
-      lead.closer_name || '-',
-      lead.scheduled_at ? format(...) : '-',
-      'Contrato Pago'
-    ]);
-    // ... gerar CSV
-  } else if (activeTab === 'noshows') {
-    // Exportar no-shows
-  } else {
-    // Exportar filteredMeetings (atual)
-  }
-};
-```
+### 4. Ajustar `useCalculatedVariavel.ts`
 
-### Resultado
-- "Exportar Lista" exportará exatamente o que o usuário está vendo na aba ativa
-- Pendentes exportará a lista de leads com Contrato Pago aguardando R2
-- No-Shows exportará os no-shows visíveis
+Mesmo ajuste: quando o cálculo dinâmico de contratos usar `meta_percentual`, verificar o tipo do colaborador para decidir se usa agendadas ou realizadas.
+
+### Arquivos modificados
+
+- `src/components/fechamento/DynamicIndicatorCard.tsx` — nova prop + lógica condicional
+- `src/components/fechamento/ActiveMetricsTab.tsx` — label dinâmico
+- `src/hooks/useCalculatedVariavel.ts` — referência condicional
+- `supabase/functions/recalculate-sdr-payout/index.ts` — cálculo server-side
+- Componentes que chamam `DynamicIndicatorCard` — passar a nova prop
 
