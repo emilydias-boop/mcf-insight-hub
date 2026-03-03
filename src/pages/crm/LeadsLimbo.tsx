@@ -377,6 +377,22 @@ export default function LeadsLimbo() {
 
   // ─── RENDER ────────────────────────────────────────────
 
+  // Loading persisted upload
+  if (loadingUpload && !loadedRef.current) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Leads em Limbo</h2>
+          <p className="text-muted-foreground mt-1">Carregando última comparação...</p>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Skeleton className="h-4 w-4 rounded-full" />
+          Verificando dados persistidos...
+        </div>
+      </div>
+    );
+  }
+
   // Step: Upload
   if (step === 'upload') {
     return (
