@@ -179,6 +179,7 @@ export default function LeadsLimbo() {
         setHeaders(hdrs);
         setRawData(json as any[]);
         setColumnMapping(autoMapColumns(hdrs));
+        setCurrentFile(file);
         setStep('mapping');
         toast.success(`${json.length} linhas carregadas`);
       } catch {
@@ -215,7 +216,17 @@ export default function LeadsLimbo() {
     setStageFilter('todos');
     setOwnerFilter('todos');
     setIsComparing(false);
-  }, [rawData, columnMapping, localDeals]);
+
+    // Save to Supabase for persistence
+    if (currentFile) {
+      saveLimboUpload.mutate({
+        file: currentFile,
+        columnMapping: columnMapping as any,
+        comparisonResults: compared,
+        rowCount: compared.length,
+      });
+    }
+  }, [rawData, columnMapping, localDeals, currentFile, saveLimboUpload]);
 
   // Unique stages and owners for filters
   const uniqueStages = useMemo(() => {
