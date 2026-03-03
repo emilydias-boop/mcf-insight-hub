@@ -1,27 +1,39 @@
 
 
-## Problema
+## Objetivo
 
-Dois bugs na edge function `import-spreadsheet-leads`:
-
-1. **Coluna errada**: A query usa `.order('order_index')` mas a coluna real em `crm_stages` é `stage_order`. Isso causa o erro `"Could not find stages for this pipeline"` porque o Supabase retorna erro na query.
-
-2. **Payload de 22K leads**: Enviar 22.000 leads de uma vez pode causar timeout na edge function (processamento sequencial). Precisamos enviar em batches pelo client.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
 ## Mudanças
 
-### 1. `supabase/functions/import-spreadsheet-leads/index.ts`
-- Corrigir `.order('order_index')` para `.order('stage_order')`
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### 2. `src/components/crm/SpreadsheetCompareDialog.tsx`
-- Implementar envio em batches (ex: 500 leads por vez) para evitar timeout
-- Mostrar progresso: "Processando batch 1/44..."
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### 3. `src/hooks/useSpreadsheetCompare.ts`
-- Adaptar mutation para aceitar batches e acumular resultados
+### 2. Hook `useCloserDetailData.ts`
 
-### Arquivos
-- **Modificar** `supabase/functions/import-spreadsheet-leads/index.ts` (fix coluna)
-- **Modificar** `src/components/crm/SpreadsheetCompareDialog.tsx` (batching)
-- **Modificar** `src/hooks/useSpreadsheetCompare.ts` (batching)
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { compareSpreadsheetWithDeals, SpreadsheetRow, useCreateNotFoundDeals } from '@/hooks/useSpreadsheetCompare';
@@ -57,6 +58,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
   const [results, setResults] = useState<SpreadsheetRow[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchText, setSearchText] = useState('');
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
 
   const createNotFoundMutation = useCreateNotFoundDeals();
 
@@ -122,7 +124,14 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
       return;
     }
 
-    createNotFoundMutation.mutate({ leads: allLeads, originId });
+    setBatchProgress({ current: 0, total: 1 });
+    createNotFoundMutation.mutate({
+      leads: allLeads,
+      originId,
+      onProgress: (batch, totalBatches) => setBatchProgress({ current: batch, total: totalBatches }),
+    }, {
+      onSettled: () => setBatchProgress(null),
+    });
   }, [results, originId, createNotFoundMutation]);
 
   const handleExport = useCallback(() => {
@@ -295,9 +304,21 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                 disabled={createNotFoundMutation.isPending || results.length === 0}
               >
                 <Tag className="h-4 w-4 mr-1" />
-                {createNotFoundMutation.isPending ? 'Processando...' : `Criar leads inexistentes com tag 'base clint' (${results.length})`}
+                {createNotFoundMutation.isPending && batchProgress
+                  ? `Processando batch ${batchProgress.current}/${batchProgress.total}...`
+                  : `Criar leads inexistentes com tag 'base clint' (${results.length})`}
               </Button>
             </div>
+
+            {/* Batch progress */}
+            {batchProgress && createNotFoundMutation.isPending && (
+              <div className="space-y-1">
+                <Progress value={(batchProgress.current / batchProgress.total) * 100} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">
+                  Processando batch {batchProgress.current} de {batchProgress.total}...
+                </p>
+              </div>
+            )}
 
             {/* Table */}
             <div className="border rounded-lg max-h-[50vh] overflow-auto">
