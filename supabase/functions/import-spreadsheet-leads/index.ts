@@ -125,7 +125,6 @@ Deno.serve(async (req) => {
             origin_id: origin_id,
             stage_id: firstStageId,
             tags: ['base clint'],
-            status: 'open',
             clint_id: `spreadsheet_import_${timestamp}_${i}`,
           });
 
