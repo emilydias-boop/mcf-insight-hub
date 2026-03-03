@@ -278,7 +278,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
         const cargo = emp.cargo_catalogo as EmployeeWithPlan['cargo_catalogo'];
         const sdrId = emp.sdr_id as string | null;
         
-        // Buscar comp_plan do sdr_id
+        // Buscar comp_plan do sdr_id (já ordenado por vigencia_inicio DESC, pegar o primeiro)
         const plan = sdrId && compPlans
           ? compPlans.find(p => p.sdr_id === sdrId)
           : null;
