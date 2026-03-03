@@ -1,43 +1,39 @@
 
 
-## Problema
+## Objetivo
 
-A lista de etapas no modal de configuração não permite scroll até o final. O usuário só consegue ver as etapas cortadas.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Causa raiz
+## Mudanças
 
-O `PipelineStagesEditor` tem `h-full` no seu wrapper root (linha 266), o que faz o componente **tentar se encaixar na altura do pai** em vez de crescer naturalmente com o conteúdo. O container pai (`div.flex-1.overflow-y-auto.p-6`) precisa que o conteúdo filho **ultrapasse** a altura disponível para ativar o scroll — mas `h-full` impede isso.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Além disso, o `DialogContent` base do shadcn usa `grid` + `gap-4` o que pode consumir espaço vertical inesperadamente.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-## Correção
+### 2. Hook `useCloserDetailData.ts`
 
-### 1. `PipelineStagesEditor.tsx` — Remover `h-full` do wrapper
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-```diff
-- <div className="flex flex-col min-h-0 h-full space-y-4">
-+ <div className="space-y-4">
-```
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-O componente não precisa de constraints de flex/altura — ele deve simplesmente renderizar seu conteúdo com altura natural. O scroll é responsabilidade do pai (`overflow-y-auto` no painel direito do modal).
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### 2. `PipelineConfigModal.tsx` — Garantir que o `DialogContent` não bloqueia overflow
+### 4. Dados exportados no Excel
 
-Na linha 316, remover `grid` implícito do `DialogContent` adicionando `flex flex-col` explicitamente e ajustando o gap:
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-```diff
-- <DialogContent className="max-w-4xl h-[80vh] p-0 overflow-hidden">
-+ <DialogContent className="max-w-4xl h-[80vh] p-0 overflow-hidden flex flex-col">
-```
+Formato de data: `dd/MM/yyyy HH:mm`
 
-E o inner wrapper (linha 318) já tem `flex flex-col h-full` — garantir que ele tenha `min-h-0`:
+## Resultado
 
-```diff
-- <div className="flex flex-col h-full">
-+ <div className="flex flex-col h-full min-h-0 flex-1">
-```
-
-### Arquivos modificados
-- `src/components/crm/PipelineStagesEditor.tsx` — linha 266: remover `h-full`, `flex flex-col`, `min-h-0`
-- `src/components/crm/PipelineConfigModal.tsx` — linhas 316-318: adicionar `flex flex-col` no DialogContent e `min-h-0 flex-1` no wrapper
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
