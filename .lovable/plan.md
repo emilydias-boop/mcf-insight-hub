@@ -1,32 +1,44 @@
 
 
-## Excluir Usuários Duplicados
+## Problema: KPIs de Contratos no Painel estão inflados
 
-### Problema
-Não existe funcionalidade de exclusão de usuários. Gabriela Fernandes e Robert Roger aparecem duplicados e precisam ser removidos.
+### Diagnóstico
+
+Duas fontes de dados diferentes estão sendo usadas no Painel "Reuniões de Equipe":
+
+| Componente | Fonte | Problema |
+|---|---|---|
+| **KPI Cards** (topo) | RPC `get_sdr_metrics_from_agenda` | Conta TODOS os `contract_paid_at` incluindo outsides. Depois o código soma outsides NOVAMENTE em cima |
+| **Tabela Closers** | `useR1CloserMetrics` | Correto: deduplica, exclui outsides do `contrato_pago` e conta outsides separadamente |
+
+**Resultado**: O card "Contratos" mostra um número inflado (ex: 193 + 9 = 202 para Fev) enquanto a tabela de Closers mostra o correto (67 + 9 = 76).
+
+Problemas específicos:
+1. **Double-counting de Outside**: `TeamKPICards.tsx` linha 72 soma `totalContratos` (que já inclui outsides da RPC) + `totalOutside` (outsides contados novamente)
+2. **RPC não deduplica**: Se um lead tem múltiplos attendees (reagendamentos) com `contract_paid_at`, cada um é contado
 
 ### Solução
-Criar uma Edge Function `delete-user` (admin-only) que usa `supabase.auth.admin.deleteUser()` e um botão de exclusão no drawer de gerenciamento.
+
+Usar `closerMetrics` (de `useR1CloserMetrics`) como fonte única de verdade para os KPIs de contrato, consistente com a tabela de Closers. Isso já é a recomendação do sistema (ver memória `unified-outside-metrics-source-of-truth`).
 
 ### Mudanças
 
-**1. Nova Edge Function `supabase/functions/delete-user/index.ts`**
-- Valida que o caller é admin (mesmo padrão do `create-user`)
-- Recebe `{ user_id }` no body
-- Limpa dados relacionados: `user_roles`, `user_employment_data`, `user_integrations`, `user_permissions`, `user_targets`, `user_flags`, `user_observations`, `profiles`
-- Chama `supabaseAdmin.auth.admin.deleteUser(user_id)` para remover do auth
-- Retorna sucesso/erro
+**1. `src/pages/crm/ReunioesEquipe.tsx`**
+- Calcular `totalContratos` e `totalOutside` a partir de `closerMetrics` (soma de `contrato_pago` e `outside` por closer)
+- Remover a dependência do `teamKPIs.totalContratos` para contratos
+- Ajustar `enrichedKPIs` para usar os valores corretos
+- Corrigir `dayValues`, `weekValues`, `monthValues` para não duplicar outsides
+- Corrigir `totalContratosFromKPI` na linha 601 (também duplicava)
 
-**2. Novo hook `useDeleteUser` em `src/hooks/useUserMutations.ts`**
-- Mutation que invoca `supabase.functions.invoke("delete-user", { body: { user_id } })`
-- Invalida query `["users"]` no sucesso
-- Mostra toast de confirmação
+**2. `src/components/sdr/TeamKPICards.tsx`**
+- Remover a soma dupla: `value: kpis.totalContratos` (sem somar `totalOutside` novamente, pois o valor já virá correto do parent)
+- Manter tooltip mostrando breakdown: `Contratos: X | Outside: Y`
 
-**3. Botão no `UserDetailsDrawer.tsx`**
-- Adicionar botão "Excluir Usuário" (vermelho, com ícone Trash) na aba de acesso ou no header do drawer
-- AlertDialog de confirmação: "Tem certeza? Esta ação é irreversível."
-- Ao confirmar, chama `deleteUser` e fecha o drawer
+**3. `src/hooks/useTeamMeetingsData.ts`** (opcional)
+- Ajustar `taxaConversao` para usar o `totalContratos` correto (sem outsides na base de cálculo)
 
-**4. Botão na tabela `GerenciamentoUsuarios.tsx`** (opcional)
-- Adicionar ícone de lixeira ao lado de "Gerenciar" para acesso rápido
+### Resultado esperado
+- Card "Contratos" mostrará o mesmo total que a soma da tabela de Closers
+- Tooltip continuará mostrando breakdown (contratos via reunião vs outside)
+- Taxa de conversão será calculada corretamente
 
