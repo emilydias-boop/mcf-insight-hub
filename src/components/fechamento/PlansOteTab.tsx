@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, addMonths, subMonths } from 'date-fns';
+import { format, addMonths, subMonths, lastDayOfMonth, subDays, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
