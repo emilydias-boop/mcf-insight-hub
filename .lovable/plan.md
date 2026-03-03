@@ -1,75 +1,39 @@
 
 
-## Problema
+## Objetivo
 
-Atualmente, o arquivo `.xlsx` enviado na página "Leads em Limbo" é processado apenas no navegador do usuário e salvo em `sessionStorage`. Isso significa que:
-- Se o usuário recarrega a página ou fecha o navegador, perde tudo
-- Outros usuários não conseguem ver o arquivo nem os resultados da comparação
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-## Solução
+## Mudanças
 
-Persistir o arquivo no Supabase Storage e salvar os metadados + resultados da comparação no banco de dados, permitindo que todos os usuários com acesso vejam a última planilha carregada e seus resultados.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### 1. Criar tabela `limbo_uploads` no Supabase
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Armazena metadados de cada upload e os resultados da comparação serializada.
+### 2. Hook `useCloserDetailData.ts`
 
-```sql
-CREATE TABLE public.limbo_uploads (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  file_name text NOT NULL,
-  storage_path text NOT NULL,
-  uploaded_by uuid REFERENCES auth.users(id) NOT NULL,
-  uploaded_at timestamptz DEFAULT now(),
-  row_count integer DEFAULT 0,
-  column_mapping jsonb,
-  comparison_results jsonb,  -- resultados da comparação serializados
-  status text DEFAULT 'pending' -- pending, compared, expired
-);
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-ALTER TABLE public.limbo_uploads ENABLE ROW LEVEL SECURITY;
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-CREATE POLICY "Authenticated users can read limbo_uploads"
-  ON public.limbo_uploads FOR SELECT TO authenticated USING (true);
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-CREATE POLICY "Authenticated users can insert limbo_uploads"
-  ON public.limbo_uploads FOR INSERT TO authenticated WITH CHECK (auth.uid() = uploaded_by);
+### 4. Dados exportados no Excel
 
-CREATE POLICY "Authenticated users can update limbo_uploads"
-  ON public.limbo_uploads FOR UPDATE TO authenticated USING (true);
-```
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-### 2. Upload do arquivo para Supabase Storage
+Formato de data: `dd/MM/yyyy HH:mm`
 
-Usar o bucket `csv-imports` (já existe) ou criar `limbo-files`. Ao selecionar o arquivo:
-1. Fazer upload para Storage
-2. Inserir registro em `limbo_uploads`
-3. Processar o XLSX normalmente no client
-4. Salvar os resultados da comparação no campo `comparison_results`
+## Resultado
 
-### 3. Carregar último upload ao abrir a página
-
-Ao montar o componente:
-1. Buscar o último `limbo_uploads` com `status = 'compared'`
-2. Se existir, carregar os resultados do `comparison_results` e mostrar direto no step `results`
-3. Mostrar info de quem subiu e quando
-4. Permitir "Nova Comparação" para substituir
-
-### 4. Modificar `LeadsLimbo.tsx`
-
-- Substituir `sessionStorage` por queries ao Supabase
-- Adicionar hook `useLimboUpload` para buscar/salvar uploads
-- Mostrar badge com "Última atualização: {data} por {nome}" no topo
-- Manter botão "Nova Comparação" para re-upload
-
-### Arquivos a modificar/criar
-- **Nova migração SQL**: criar tabela `limbo_uploads` + RLS
-- **Novo hook** `src/hooks/useLimboUpload.ts`: fetch último upload, salvar upload + resultados
-- **Modificar** `src/pages/crm/LeadsLimbo.tsx`: usar o novo hook em vez de sessionStorage, mostrar info do último upload
-
-### Fluxo do usuário
-1. Abre a página → vê os resultados da última comparação (se existir), com info de quem subiu
-2. Clica "Nova Comparação" → volta ao step upload
-3. Sobe arquivo → arquivo vai pro Storage + banco → processa e salva resultados
-4. Outros usuários abrem a mesma página → veem os mesmos resultados
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
