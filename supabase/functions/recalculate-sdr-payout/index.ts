@@ -446,7 +446,7 @@ serve(async (req) => {
     }> = [];
 
     // Get SDRs to process (with email and role_type for RPC call)
-    let sdrsQuery = supabase.from('sdr').select('id, name, email, meta_diaria, role_type, squad').eq('active', true);
+    let sdrsQuery = supabase.from('sdr').select('id, name, email, meta_diaria, role_type, squad, nivel').eq('active', true);
     if (sdr_id) {
       sdrsQuery = sdrsQuery.eq('id', sdr_id);
     }
@@ -623,17 +623,17 @@ serve(async (req) => {
         }
 
         // ===== BUSCAR CARGO_CATALOGO PARA CLOSERS =====
-        let cargoInfo: CargoInfo | null = null;
+        let cargoInfo: (CargoInfo & { nivel?: number; nome_exibicao?: string }) | null = null;
         if (employeeData?.cargo_catalogo_id) {
           const { data: cargoData } = await supabase
             .from('cargos_catalogo')
-            .select('ote_total, fixo_valor, variavel_valor')
+            .select('ote_total, fixo_valor, variavel_valor, nivel, nome_exibicao')
             .eq('id', employeeData.cargo_catalogo_id)
             .single();
           
           if (cargoData) {
-            cargoInfo = cargoData as CargoInfo;
-            console.log(`   💼 Cargo: OTE=${cargoInfo.ote_total}, Fixo=${cargoInfo.fixo_valor}, Variável=${cargoInfo.variavel_valor}`);
+            cargoInfo = cargoData as CargoInfo & { nivel?: number; nome_exibicao?: string };
+            console.log(`   💼 Cargo: OTE=${cargoInfo.ote_total}, Fixo=${cargoInfo.fixo_valor}, Variável=${cargoInfo.variavel_valor}, Nível=${cargoInfo.nivel}`);
           }
         }
 
@@ -1127,6 +1127,8 @@ serve(async (req) => {
             sdr_id: sdr.id,
             ano_mes: ano_mes,
             ...payoutFields,
+            nivel_vigente: cargoInfo?.nivel || sdr.nivel || null,
+            cargo_vigente: cargoInfo?.nome_exibicao || null,
             status: existingPayout?.status || 'DRAFT',
             ifood_ultrameta_autorizado: existingPayout?.ifood_ultrameta_autorizado || false,
             ifood_ultrameta_autorizado_por: existingPayout?.ifood_ultrameta_autorizado_por || null,

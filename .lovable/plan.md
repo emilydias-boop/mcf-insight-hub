@@ -1,40 +1,39 @@
 
 
-## Problema
+## Objetivo
 
-Ao visualizar o fechamento de **fevereiro 2026**, a coluna "Nível" mostra o nível **atual** do colaborador (março), não o nível que estava vigente em fevereiro. Isso acontece porque:
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-1. A tabela `sdr_month_payout` não armazena o nível vigente na época
-2. O código em `Index.tsx` linha 479 lê `employee?.cargo_catalogo?.nivel` — que é o nível **atual** do RH
-3. O `sdr_comp_plan` tem versionamento por vigência mas também não armazena o campo `nivel`
+## Mudanças
 
-## Solução
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Congelar o nível e o cargo no momento do cálculo do payout, similar ao que já é feito com `departamento_vigente`.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### 1. Adicionar colunas na tabela `sdr_month_payout`
-```sql
-ALTER TABLE sdr_month_payout 
-  ADD COLUMN IF NOT EXISTS nivel_vigente integer,
-  ADD COLUMN IF NOT EXISTS cargo_vigente text;
-```
+### 2. Hook `useCloserDetailData.ts`
 
-### 2. Edge Function `recalculate-sdr-payout`
-Ao criar/atualizar o payout, gravar `nivel_vigente` e `cargo_vigente` com os valores do momento do cálculo (vindos do `cargo_catalogo` ou `sdr.nivel`).
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-### 3. Frontend `Index.tsx`
-Alterar a lógica de exibição do Nível (linha 479) para priorizar o valor congelado:
-```
-nivel = payout.nivel_vigente || employee?.cargo_catalogo?.nivel || sdr.nivel || 1
-```
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Mesma lógica no export CSV (linha 235).
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### 4. Regenerar tipos Supabase
-Atualizar `types.ts` para incluir os novos campos.
+### 4. Dados exportados no Excel
 
-## Impacto
-- Fechamentos **futuros** serão congelados automaticamente ao recalcular
-- Fechamentos **passados** (como fev/2026) precisarão de um "Recalcular Todos" para preencher os campos retroativamente
-- A exibição passará a mostrar o nível correto da época em vez do atual
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
