@@ -102,6 +102,11 @@ export const DynamicIndicatorCard = ({
       const realizadas = kpi?.reunioes_realizadas || 0;
       metaAjustada = Math.round((realizadas * metrica.meta_percentual) / 100);
       metaDiaria = metrica.meta_percentual; // Exibir como %
+    } else if (metrica.nome_metrica === 'contratos') {
+      // Fallback SDR: 30% das realizadas
+      const realizadas = kpi?.reunioes_realizadas || 0;
+      metaAjustada = Math.round(realizadas * 0.3);
+      metaDiaria = 30; // 30%
     } else {
       // Meta fixa: valor diário × dias úteis (comportamento anterior)
       metaDiaria = metrica.meta_valor || 1;
@@ -115,8 +120,11 @@ export const DynamicIndicatorCard = ({
 
     // Custom subtitle based on meta type
     const isPercentualMeta = metrica.meta_percentual && metrica.meta_percentual > 0;
+    const isContratosFallback = !isPercentualMeta && metrica.nome_metrica === 'contratos';
     const metaSubtitle = isPercentualMeta 
       ? `${metrica.meta_percentual}% de ${kpi?.reunioes_realizadas || 0} realiz. = ${metaAjustada}`
+      : isContratosFallback
+      ? `30% de ${kpi?.reunioes_realizadas || 0} realiz. = ${metaAjustada}`
       : undefined;
 
     return (
