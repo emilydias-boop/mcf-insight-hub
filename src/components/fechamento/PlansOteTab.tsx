@@ -727,6 +727,27 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
               Os seguintes colaboradores possuem valores diferentes entre o plano individual e o catálogo de cargos do RH.
             </DialogDescription>
           </DialogHeader>
+
+          {/* Alerta para meses passados */}
+          {(() => {
+            const now = new Date();
+            const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const isPastMonth = anoMes < currentMonth;
+            if (!isPastMonth) return null;
+            return (
+              <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-sm text-destructive">
+                <div className="flex items-center gap-2 font-semibold mb-1">
+                  <AlertTriangle className="h-4 w-4" />
+                  Atenção: mês passado ({format(selectedDate, 'MMMM yyyy', { locale: ptBR })})
+                </div>
+                <p>
+                  A sincronização usará os valores <strong>atuais</strong> do catálogo de cargos. 
+                  Se houve promoções desde então, os valores gravados serão do nível atual e não do nível da época. 
+                  Use apenas se tiver certeza de que os níveis não mudaram.
+                </p>
+              </div>
+            );
+          })()}
           
           <div className="max-h-[400px] overflow-y-auto">
             <Table>
