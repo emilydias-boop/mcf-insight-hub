@@ -72,6 +72,10 @@ export function useCalculatedVariavel({
           // Dynamic meta: X% of Realizadas
           const realizadas = kpi?.reunioes_realizadas || 0;
           metaAjustada = Math.round((realizadas * metrica.meta_percentual) / 100);
+        } else if (metrica.nome_metrica === 'contratos') {
+          // Fallback SDR: 30% das realizadas
+          const realizadas = kpi?.reunioes_realizadas || 0;
+          metaAjustada = Math.round(realizadas * 0.3);
         } else {
           // Fixed meta: daily value × working days
           const metaDiaria = metrica.meta_valor || 1;

@@ -182,8 +182,8 @@ export const DynamicKpiFieldsGrid = ({
       case 'tentativas':
         return `Meta: ${84 * diasUteisMes} (84/dia × ${diasUteisMes} dias)`;
       case 'contratos':
-        const agendadas_contratos = formData.reunioes_agendadas || 0;
-        return `Meta: ${Math.round(agendadas_contratos * 0.3)} (30% de ${agendadas_contratos} agendadas)`;
+        const realizadas_contratos = formData.reunioes_realizadas || 0;
+        return `Meta: ${Math.round(realizadas_contratos * 0.3)} (30% de ${realizadas_contratos} realizadas)`;
       case 'organizacao':
         return `Meta: 100% (fixa)`;
       default:
