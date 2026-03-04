@@ -1,31 +1,39 @@
 
 
-## Problema
+## Objetivo
 
-O campo "Intermediações de Contrato" no formulário de KPIs não exibe a meta, enquanto os outros campos mostram (ex: "Meta: 74 (70% de 105 agendadas)"). O usuário quer que apareça algo como **"Meta: 28 (30% de 93 realizadas)"**.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-## Correção
+## Mudanças
 
-### Arquivo: `src/components/fechamento/DynamicKpiField.tsx`
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**1. Adicionar caso 'contratos' em `getMetaDescription`** (linha 170-183):
-```typescript
-case 'contratos':
-  const realizadas = formData.reunioes_realizadas || 0;
-  return `Meta: ${Math.round(realizadas * 0.3)} (30% de ${realizadas} realizadas)`;
-```
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**2. Mostrar `metaDescription` no render do campo 'contratos'** (linhas 86-101):
-Atualizar o bloco de renderização read-only para incluir a linha de meta acima do valor, igual aos outros campos. Adicionar `metaDescription` como texto descritivo entre o label e o valor.
+### 2. Hook `useCloserDetailData.ts`
 
-### Resultado
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-O campo "Intermediações de Contrato" exibirá:
-```
-Intermediações de Contrato  ⚡ Auto
-Meta: 28 (30% de 93 realizadas)
-26 (calculado da Hubla)
-```
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Consistente com os demais campos do formulário de KPIs.
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
