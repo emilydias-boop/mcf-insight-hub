@@ -312,7 +312,7 @@ const FechamentoSDRDetail = () => {
   // Closer-specific intermediações count (use agenda data for Closers)
   const effectiveIntermediacao = isCloser && closerMetrics.data 
     ? closerMetrics.data.contratos_pagos 
-    : intermediacaoCount;
+    : (effectiveKpi?.intermediacoes_contrato || intermediacaoCount);
 
   // Vendas parceria for Closers
   const vendasParceria = isCloser && closerMetrics.data 
