@@ -1,39 +1,59 @@
 
 
-## Objetivo
+## Diagnóstico
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+Encontrei a causa raiz. O problema **não é** na Edge Function ou no frontend — esses estão funcionando corretamente lendo os dados do `sdr_comp_plan`. O problema é que **os próprios comp_plans de fevereiro foram criados com valores errados**.
 
-## Mudanças
+### O que aconteceu
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+Quando alguém usou "Sincronizar com Catálogo" na aba Planos OTE (possivelmente com fevereiro selecionado), o sistema:
+1. Encontrou o plano antigo (N1) vigente
+2. Fechou o plano antigo
+3. Criou um **novo plano para fevereiro usando os valores ATUAIS do catálogo** (N2)
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Exemplo concreto — **Juliana Rodrigues**:
+- Plano Feb 2026: N2, OTE R$ 4.500, fixo R$ 3.150 — **criado em 03/03/2026** (após a promoção)
+- Plano Mar 2026: N1, OTE R$ 4.000, fixo R$ 2.800 — plano original
 
-### 2. Hook `useCloserDetailData.ts`
+Ou seja, o plano de fevereiro foi criado **depois** da promoção, usando valores de N2 retroativamente. O mesmo aconteceu com Leticia Nunes, Julia Caroline, Carol Souza e Antony Elias.
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+### Por isso o nível e as metas estão errados
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+Como o comp_plan de fevereiro já tem `cargo_catalogo_id` de N2 e valores de N2, a Edge Function lê esses dados e grava `nivel_vigente = 2` corretamente — mas o dado de entrada é que está errado.
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+## Plano de Correção
 
-### 4. Dados exportados no Excel
+### 1. Corrigir os comp_plans de fevereiro via SQL
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+Atualizar os comp_plans de fevereiro que foram criados após o mês (em março) com os valores corretos de N1:
 
-Formato de data: `dd/MM/yyyy HH:mm`
+```sql
+-- Corrigir planos de fevereiro que foram criados em março com valores N2
+-- para pessoas que deveriam ser N1
+UPDATE sdr_comp_plan 
+SET cargo_catalogo_id = 'd035345f-...N1...',
+    ote_total = 4000, fixo_valor = 2800, variavel_total = 1200
+WHERE vigencia_inicio = '2026-02-01' 
+  AND vigencia_fim = '2026-02-28'
+  AND created_at > '2026-02-28'  -- criado após fevereiro
+  AND cargo_catalogo_id = '9e3d43e9-...N2...'
+  AND sdr_id IN (...)  -- SDRs que eram N1 em fevereiro
+```
 
-## Resultado
+### 2. Prevenir recontaminação na sincronização
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+Alterar `PlansOteTab.tsx` para:
+- Exibir um **alerta** quando o mês selecionado for anterior ao mês atual
+- Indicar que a sincronização usará valores **atuais** do catálogo, que podem não corresponder ao nível histórico
+- Opcionalmente bloquear a sincronização para meses passados
+
+### 3. Recalcular fevereiro
+
+Após corrigir os comp_plans, o "Recalcular Todos" para fevereiro vai derivar corretamente N1 dos comp_plans corrigidos, e as metas/valores financeiros também serão corretos.
+
+## Resultado Esperado
+
+- Fevereiro mostrará N1 para quem era N1 na época
+- OTE, Fixo e Variável de fevereiro refletirão os valores de N1
+- O sync futuro terá proteção contra modificação retroativa
 
