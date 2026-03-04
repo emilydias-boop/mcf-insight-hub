@@ -17,13 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Package, DollarSign, Calendar } from 'lucide-react';
+import { Plus, Package, DollarSign, Calendar, Database, FileText } from 'lucide-react';
 import { SdrIntermediacao } from '@/types/sdr-fechamento';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSdrContractsFromAgenda } from '@/hooks/useSdrContractsFromAgenda';
 
 interface IntermediacoesListProps {
   sdrId: string;
@@ -44,8 +45,14 @@ export const IntermediacoesList = ({
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Fetch intermediações
-  const { data: intermediacoes, isLoading } = useQuery({
+  // Para SDRs: buscar contratos da Agenda (mesma fonte do indicador)
+  const { data: agendaContracts, isLoading: isLoadingAgenda } = useSdrContractsFromAgenda(
+    !isCloser ? sdrId : undefined,
+    !isCloser ? anoMes : undefined
+  );
+
+  // Fetch intermediações manuais (legadas / fallback)
+  const { data: intermediacoes, isLoading: isLoadingManual } = useQuery({
     queryKey: ['sdr-intermediacoes', sdrId, anoMes],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -59,6 +66,10 @@ export const IntermediacoesList = ({
       return data as SdrIntermediacao[];
     },
   });
+
+  // Determinar fonte: Agenda tem prioridade para SDRs
+  const useAgendaSource = !isCloser && (agendaContracts?.length || 0) > 0;
+  const isLoading = isCloser ? isLoadingManual : (isLoadingAgenda || isLoadingManual);
 
   // Fetch Hubla transactions for the month (contracts only)
   const { data: transactions } = useQuery({
@@ -79,6 +90,7 @@ export const IntermediacoesList = ({
       if (error) throw error;
       return data;
     },
+    enabled: !useAgendaSource, // Só buscar Hubla se não usar Agenda
   });
 
   // Add intermediação mutation
@@ -124,13 +136,24 @@ export const IntermediacoesList = ({
 
   const selectedTransactionData = transactions?.find(t => t.id === selectedTransaction);
 
+  // Mostrar botão Adicionar apenas no modo manual (Closer ou fallback)
+  const showAddButton = !disabled && (isCloser || !useAgendaSource);
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-lg">
-          {isCloser ? 'Vendas Parceria' : 'Intermediações de Contrato'}
-        </CardTitle>
-        {!disabled && (
+        <div>
+          <CardTitle className="text-lg">
+            {isCloser ? 'Vendas Parceria' : 'Intermediações de Contrato'}
+          </CardTitle>
+          {useAgendaSource && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+              <Database className="h-3 w-3" />
+              Fonte: Agenda (mesma base do indicador)
+            </p>
+          )}
+        </div>
+        {showAddButton && (
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
               <Button size="sm" variant="outline">
@@ -206,11 +229,48 @@ export const IntermediacoesList = ({
       <CardContent>
         {isLoading ? (
           <div className="text-center py-4 text-muted-foreground">Carregando...</div>
+        ) : useAgendaSource ? (
+          // === MODO AGENDA: lista de contratos da Agenda ===
+          <div className="space-y-3">
+            {agendaContracts!.map((contract) => (
+              <div
+                key={contract.id}
+                className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+              >
+                <div className="space-y-1">
+                  <div className="font-medium">{contract.leadName}</div>
+                  {contract.closerName && (
+                    <div className="text-sm text-muted-foreground">
+                      Closer: {contract.closerName}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    Pago em {formatDate(contract.contractPaidAt)}
+                  </div>
+                </div>
+                <div className="text-right space-y-1">
+                  {contract.contactEmail && (
+                    <div className="text-xs text-muted-foreground">{contract.contactEmail}</div>
+                  )}
+                  {contract.contactPhone && (
+                    <div className="text-xs text-muted-foreground">{contract.contactPhone}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+            <div className="pt-3 border-t flex items-center justify-between">
+              <span className="font-medium">Total de Contratos</span>
+              <span className="font-bold text-lg">{agendaContracts!.length}</span>
+            </div>
+          </div>
         ) : !intermediacoes || intermediacoes.length === 0 ? (
+          // === SEM DADOS ===
           <div className="text-center py-4 text-muted-foreground">
             Nenhuma intermediação registrada para este mês.
           </div>
         ) : (
+          // === MODO MANUAL/LEGADO ===
           <div className="space-y-3">
             {intermediacoes.map((inter) => (
               <div
