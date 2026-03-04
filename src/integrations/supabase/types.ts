@@ -7953,6 +7953,7 @@ export type Database = {
           ano_mes: string
           aprovado_em: string | null
           aprovado_por: string | null
+          cargo_vigente: string | null
           created_at: string | null
           departamento_vigente: string | null
           dias_uteis_mes: number | null
@@ -7970,6 +7971,7 @@ export type Database = {
           mult_reunioes_realizadas: number | null
           mult_tentativas: number | null
           nfse_id: string | null
+          nivel_vigente: number | null
           pct_organizacao: number | null
           pct_reunioes_agendadas: number | null
           pct_reunioes_realizadas: number | null
@@ -7991,6 +7993,7 @@ export type Database = {
           ano_mes: string
           aprovado_em?: string | null
           aprovado_por?: string | null
+          cargo_vigente?: string | null
           created_at?: string | null
           departamento_vigente?: string | null
           dias_uteis_mes?: number | null
@@ -8008,6 +8011,7 @@ export type Database = {
           mult_reunioes_realizadas?: number | null
           mult_tentativas?: number | null
           nfse_id?: string | null
+          nivel_vigente?: number | null
           pct_organizacao?: number | null
           pct_reunioes_agendadas?: number | null
           pct_reunioes_realizadas?: number | null
@@ -8029,6 +8033,7 @@ export type Database = {
           ano_mes?: string
           aprovado_em?: string | null
           aprovado_por?: string | null
+          cargo_vigente?: string | null
           created_at?: string | null
           departamento_vigente?: string | null
           dias_uteis_mes?: number | null
@@ -8046,6 +8051,7 @@ export type Database = {
           mult_reunioes_realizadas?: number | null
           mult_tentativas?: number | null
           nfse_id?: string | null
+          nivel_vigente?: number | null
           pct_organizacao?: number | null
           pct_reunioes_agendadas?: number | null
           pct_reunioes_realizadas?: number | null

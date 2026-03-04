@@ -231,8 +231,8 @@ const FechamentoSDRList = () => {
       const sdrData = p.sdr as any;
       const employee = (p as any).employee;
 
-      // Use HR data as source of truth for export too
-      const nivel = employee?.cargo_catalogo?.nivel || p.sdr?.nivel || 1;
+      // Priority: 1) frozen nivel_vigente, 2) RH cargo_catalogo.nivel, 3) legacy sdr.nivel, 4) fallback 1
+      const nivel = (p as any).nivel_vigente || employee?.cargo_catalogo?.nivel || p.sdr?.nivel || 1;
       const ote = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
 
       return [
@@ -475,8 +475,8 @@ const FechamentoSDRList = () => {
                   const compPlan = getCompPlanForSdr(payout.sdr_id);
                   const employee = (payout as any).employee;
 
-                  // Priority: 1) RH cargo_catalogo.nivel, 2) legacy sdr.nivel, 3) fallback 1
-                  const nivel = employee?.cargo_catalogo?.nivel || payout.sdr?.nivel || 1;
+                   // Priority: 1) frozen nivel_vigente, 2) RH cargo_catalogo.nivel, 3) legacy sdr.nivel, 4) fallback 1
+                   const nivel = (payout as any).nivel_vigente || employee?.cargo_catalogo?.nivel || payout.sdr?.nivel || 1;
 
                   // Priority: 1) compPlan vigente, 2) RH cargo_catalogo.ote_total, 3) fallback 4000
                   const ote = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
