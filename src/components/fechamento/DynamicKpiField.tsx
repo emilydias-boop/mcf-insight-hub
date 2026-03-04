@@ -93,6 +93,11 @@ export const DynamicKpiField = ({
             {badgeConfig.label}
           </Badge>
         </Label>
+        {metaDescription && (
+          <span className="text-[10px] text-muted-foreground/70 block">
+            {metaDescription}
+          </span>
+        )}
         <div className="h-8 px-3 py-1.5 rounded-md border bg-muted/50 flex items-center text-sm">
           <span className="font-medium">{value}</span>
           <span className="text-muted-foreground/70 text-[10px] ml-1.5">(calculado da Hubla)</span>
@@ -176,6 +181,9 @@ export const DynamicKpiFieldsGrid = ({
         return `Meta: ${Math.round(agendadas * 0.7)} (70% de ${agendadas} agendadas)`;
       case 'tentativas':
         return `Meta: ${84 * diasUteisMes} (84/dia × ${diasUteisMes} dias)`;
+      case 'contratos':
+        const agendadas_contratos = formData.reunioes_agendadas || 0;
+        return `Meta: ${Math.round(agendadas_contratos * 0.3)} (30% de ${agendadas_contratos} agendadas)`;
       case 'organizacao':
         return `Meta: 100% (fixa)`;
       default:
