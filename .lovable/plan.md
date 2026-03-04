@@ -1,31 +1,39 @@
 
-Objetivo: corrigir o bloco “Intermediações de Contrato” no formulário **Editar KPIs** (SDR), para exibir a meta com a mesma lógica já usada nos indicadores: **% das Reuniões Realizadas**.  
-No exemplo da tela: **30% de 93 realiz. = 28**.
 
-1) Diagnóstico confirmado
-- O indicador já está correto (meta dinâmica de contratos).
-- O problema está no formulário `KpiEditForm`: no bloco de SDR, “Intermediações de Contrato” renderiza apenas o valor (`intermediacoes`) e não mostra o cálculo da meta.
-- Arquivo afetado: `src/components/sdr-fechamento/KpiEditForm.tsx` (bloco SDR, campo “Intermediações de Contrato”).
+## Objetivo
 
-2) Implementação proposta (1 arquivo)
-- Em `KpiEditForm.tsx`, criar valores derivados para meta de contratos no contexto SDR:
-  - base = `formData.reunioes_realizadas`
-  - percentual = `metaContratosPercentual` quando vier configurado; senão fallback SDR = `30`
-  - meta calculada = `Math.round(base * (percentual / 100))`
-- No bloco visual de “Intermediações de Contrato” (SDR), inserir linha de descrição de meta acima do valor:
-  - formato esperado: `Meta: 28 (30% de 93 realiz.)`
-  - ou equivalente com mesmo conteúdo numérico.
-- Manter o campo como read-only e manter `intermediacoes` como realizado (valor vindo da integração já corrigida).
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-3) Detalhes técnicos (consistência)
-- Usar `formData.reunioes_realizadas` (não `kpi` direto) para a meta atualizar imediatamente quando o usuário sincronizar/editar.
-- Preservar arredondamento com `Math.round` (já adotado no restante da lógica).
-- Não alterar cálculo de payout/indicadores (já corretos); apenas alinhar apresentação no formulário.
+## Mudanças
 
-4) Validação após implementar
-- Abrir o mesmo registro do print e confirmar:
-  - Reuniões Realizadas = 93
-  - Intermediações de Contrato mostra meta `28` com texto `30% de 93 realiz.`
-- Teste rápido de reatividade:
-  - alterar “Reuniões Realizadas” no formulário e verificar que a meta de intermediações atualiza em tempo real.
-- Confirmar que os indicadores continuam com os mesmos números (sem regressão visual nem de cálculo).
+### 1. Página `MeuDesempenhoCloser.tsx`
+
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+
+### 2. Hook `useCloserDetailData.ts`
+
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+
