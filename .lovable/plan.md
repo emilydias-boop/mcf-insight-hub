@@ -1,55 +1,39 @@
 
 
-## Problema
+## Objetivo
 
-Ao recalcular fevereiro, a Edge Function busca `nivel` e `cargo` da tabela `cargos_catalogo` usando o `cargo_catalogo_id` **atual** do employee. Se o colaborador foi promovido de N1→N2 em março, o recálculo de fevereiro grava N2 incorretamente.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Os **valores financeiros** (OTE, fixo, variável) estão corretos porque vêm do `sdr_comp_plan` que é versionado por vigência. Mas o `nivel_vigente` e `cargo_vigente` vêm do cargo atual.
+## Mudanças
 
-## Solução
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Derivar o nível histórico a partir do `sdr_comp_plan` vigente no mês, que já contém os valores corretos da época.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### 1. Edge Function `recalculate-sdr-payout`
+### 2. Hook `useCloserDetailData.ts`
 
-Após encontrar o `compPlan` vigente para o mês (linha ~641-649), usar os valores do comp_plan para fazer match com o `cargos_catalogo` e descobrir o nível da época:
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-```typescript
-// Buscar nível histórico baseado no OTE do comp_plan vigente
-let nivelVigente = cargoInfo?.nivel || sdr.nivel || null;
-let cargoVigente = cargoInfo?.nome_exibicao || null;
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-if (compPlan) {
-  // Tentar encontrar o cargo que corresponde ao OTE do comp_plan
-  const { data: cargoHistorico } = await supabase
-    .from('cargos_catalogo')
-    .select('nivel, nome_exibicao')
-    .eq('ote_total', compPlan.ote_total)
-    .eq('fixo_valor', compPlan.fixo_valor)
-    .eq('ativo', true)
-    .limit(1)
-    .single();
-  
-  if (cargoHistorico) {
-    nivelVigente = cargoHistorico.nivel;
-    cargoVigente = cargoHistorico.nome_exibicao;
-  }
-}
-```
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-Depois usar `nivelVigente` e `cargoVigente` no upsert (linha 1130-1131) em vez de `cargoInfo?.nivel`.
+### 4. Dados exportados no Excel
 
-### 2. Alternativa mais robusta (recomendada)
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-Adicionar `cargo_catalogo_id` ao `sdr_comp_plan` para que ao versionar o plano (close-and-create), o cargo da época fique gravado:
+Formato de data: `dd/MM/yyyy HH:mm`
 
-- **Migration**: `ALTER TABLE sdr_comp_plan ADD COLUMN IF NOT EXISTS cargo_catalogo_id uuid REFERENCES cargos_catalogo(id);`
-- **Sync/Edit plan logic**: Gravar o `cargo_catalogo_id` do employee ao criar novo comp_plan
-- **Edge Function**: Buscar nível do `cargo_catalogo_id` do comp_plan (histórico) em vez do employee (atual)
+## Resultado
 
-### Resultado
-
-- Ao clicar "Recalcular Todos" para fevereiro, o nível exibido será o que estava vigente em fevereiro (N1), não o atual (N2)
-- Os valores financeiros já estão corretos (vêm do comp_plan versionado)
-- Fechamentos futuros também gravarão o nível correto automaticamente
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

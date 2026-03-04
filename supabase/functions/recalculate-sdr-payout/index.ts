@@ -646,9 +646,45 @@ serve(async (req) => {
           .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
           .order('vigencia_inicio', { ascending: false })
           .limit(1)
-          .single();
+           .single();
 
         let compPlan = compPlanResult;
+
+        // ===== DERIVAR NÍVEL HISTÓRICO DO COMP_PLAN =====
+        let cargoHistoricoNivel: number | null = null;
+        let cargoHistoricoNome: string | null = null;
+        
+        if (compPlan) {
+          if (compPlan.cargo_catalogo_id) {
+            // Buscar diretamente pelo cargo_catalogo_id salvo no comp_plan
+            const { data: cargoHist } = await supabase
+              .from('cargos_catalogo')
+              .select('nivel, nome_exibicao')
+              .eq('id', compPlan.cargo_catalogo_id)
+              .single();
+            if (cargoHist) {
+              cargoHistoricoNivel = cargoHist.nivel;
+              cargoHistoricoNome = cargoHist.nome_exibicao;
+            }
+          } else {
+            // Fallback: match por OTE+fixo para comp_plans antigos sem cargo_catalogo_id
+            const { data: cargoHist } = await supabase
+              .from('cargos_catalogo')
+              .select('nivel, nome_exibicao')
+              .eq('ote_total', compPlan.ote_total)
+              .eq('fixo_valor', compPlan.fixo_valor)
+              .order('nivel', { ascending: true })
+              .limit(1)
+              .maybeSingle();
+            if (cargoHist) {
+              cargoHistoricoNivel = cargoHist.nivel;
+              cargoHistoricoNome = cargoHist.nome_exibicao;
+            }
+          }
+          if (cargoHistoricoNivel) {
+            console.log(`   📋 Nível histórico do comp_plan: ${cargoHistoricoNivel} (${cargoHistoricoNome})`);
+          }
+        }
 
         // ===== FALLBACK: Criar comp_plan automático se não existir =====
         if (compError || !compPlan) {
@@ -1127,8 +1163,8 @@ serve(async (req) => {
             sdr_id: sdr.id,
             ano_mes: ano_mes,
             ...payoutFields,
-            nivel_vigente: cargoInfo?.nivel || sdr.nivel || null,
-            cargo_vigente: cargoInfo?.nome_exibicao || null,
+            nivel_vigente: cargoHistoricoNivel ?? cargoInfo?.nivel ?? sdr.nivel ?? null,
+            cargo_vigente: cargoHistoricoNome ?? cargoInfo?.nome_exibicao ?? null,
             status: existingPayout?.status || 'DRAFT',
             ifood_ultrameta_autorizado: existingPayout?.ifood_ultrameta_autorizado || false,
             ifood_ultrameta_autorizado_por: existingPayout?.ifood_ultrameta_autorizado_por || null,

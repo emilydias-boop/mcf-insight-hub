@@ -7680,6 +7680,7 @@ export type Database = {
         Row: {
           aprovado_em: string | null
           aprovado_por: string | null
+          cargo_catalogo_id: string | null
           created_at: string | null
           criado_por: string | null
           dias_uteis: number | null
@@ -7707,6 +7708,7 @@ export type Database = {
         Insert: {
           aprovado_em?: string | null
           aprovado_por?: string | null
+          cargo_catalogo_id?: string | null
           created_at?: string | null
           criado_por?: string | null
           dias_uteis?: number | null
@@ -7734,6 +7736,7 @@ export type Database = {
         Update: {
           aprovado_em?: string | null
           aprovado_por?: string | null
+          cargo_catalogo_id?: string | null
           created_at?: string | null
           criado_por?: string | null
           dias_uteis?: number | null
@@ -7759,6 +7762,13 @@ export type Database = {
           vigencia_inicio?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "sdr_comp_plan_cargo_catalogo_id_fkey"
+            columns: ["cargo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sdr_comp_plan_sdr_id_fkey"
             columns: ["sdr_id"]
