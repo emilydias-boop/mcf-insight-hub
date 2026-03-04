@@ -1163,14 +1163,7 @@ serve(async (req) => {
             sdr_id: sdr.id,
             ano_mes: ano_mes,
             ...payoutFields,
-            nivel_vigente: (() => {
-              // Derivar nível histórico do comp_plan vigente (não do cargo atual)
-              if (compPlan?.cargo_catalogo_id) {
-                // Se comp_plan tem cargo_catalogo_id, já foi resolvido abaixo
-                return cargoHistoricoNivel ?? cargoInfo?.nivel ?? sdr.nivel ?? null;
-              }
-              return cargoHistoricoNivel ?? cargoInfo?.nivel ?? sdr.nivel ?? null;
-            })(),
+            nivel_vigente: cargoHistoricoNivel ?? cargoInfo?.nivel ?? sdr.nivel ?? null,
             cargo_vigente: cargoHistoricoNome ?? cargoInfo?.nome_exibicao ?? null,
             status: existingPayout?.status || 'DRAFT',
             ifood_ultrameta_autorizado: existingPayout?.ifood_ultrameta_autorizado || false,
