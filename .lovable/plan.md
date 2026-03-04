@@ -1,34 +1,39 @@
 
 
-## Problema
+## Objetivo
 
-O componente `DynamicIndicatorsSection` (que renderiza "Indicadores de Meta") aparece **duas vezes** na página de detalhe do fechamento (`Detail.tsx`):
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-1. **Linha 529** — dentro do bloco `!fechamento_manual` (correto)
-2. **Linha 544** — fora do bloco, renderizado sempre (duplicata)
+## Mudanças
 
-## Correção
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Remover as linhas 543-554 (o segundo `DynamicIndicatorsSection` duplicado) do `Detail.tsx`. O primeiro dentro do bloco condicional (linha 529-539) é o correto e será mantido.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-```text
-Antes:
-  <>
-    {canEdit && <KpiEditForm ... />}
-    <DynamicIndicatorsSection ... />   ← correto (dentro do bloco)
-  </>
-)}
+### 2. Hook `useCloserDetailData.ts`
 
-{/* Dynamic Indicators Grid */}
-<DynamicIndicatorsSection ... />       ← DUPLICATA (fora do bloco)
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-Depois:
-  <>
-    {canEdit && <KpiEditForm ... />}
-    <DynamicIndicatorsSection ... />   ← correto (dentro do bloco)
-  </>
-)}
-```
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Apenas 1 arquivo modificado: `src/pages/fechamento-sdr/Detail.tsx` (remover linhas 543-554).
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

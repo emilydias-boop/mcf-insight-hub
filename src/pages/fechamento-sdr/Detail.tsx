@@ -540,18 +540,7 @@ const FechamentoSDRDetail = () => {
         </>
       )}
 
-      {/* Dynamic Indicators Grid */}
-      <DynamicIndicatorsSection
-        sdrId={payout.sdr_id}
-        anoMes={payout.ano_mes}
-        kpi={effectiveKpi}
-        payout={payout}
-        compPlan={compPlan || null}
-        diasUteisMes={diasUteisMes}
-        sdrMetaDiaria={sdrMetaDiaria}
-        isCloser={isCloser}
-        variavelTotal={effectiveVariavel}
-      />
+
 
       {/* Intermediações / Vendas Parceria */}
       <IntermediacoesList sdrId={payout.sdr_id} anoMes={payout.ano_mes} disabled={!canEdit} isCloser={isCloser} />
