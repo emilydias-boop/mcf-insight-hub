@@ -582,6 +582,8 @@ serve(async (req) => {
               // NOVA LÓGICA: No-Show = Agendamentos - Realizadas (garantir conta sempre feche)
               noShows = Math.max(0, reunioesAgendadas - reunioesRealizadas);
               taxaNoShow = reunioesAgendadas > 0 ? (noShows / reunioesAgendadas) * 100 : 0;
+              // Usar contratos da RPC também para SDRs
+              contratosPagos = metrics.contratos || 0;
               
               console.log(`   📊 Métricas da Agenda para ${sdr.name}: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}`);
             } else {
@@ -869,6 +871,11 @@ serve(async (req) => {
               ? existingKpi.taxa_no_show
               : (reunioesAgendadas > 0 ? taxaNoShow : existingKpi.taxa_no_show),
             
+            // Atualizar contratos pagos da agenda
+            intermediacoes_contrato: wasManuallyEdited
+              ? existingKpi.intermediacoes_contrato
+              : (contratosPagos > 0 ? contratosPagos : existingKpi.intermediacoes_contrato),
+            
             updated_at: new Date().toISOString(),
           };
           
@@ -900,7 +907,7 @@ serve(async (req) => {
             taxa_no_show: taxaNoShow,
             tentativas_ligacoes: 0,
             score_organizacao: 0,
-            intermediacoes_contrato: isCloser ? contratosPagos : 0,
+            intermediacoes_contrato: contratosPagos,
             updated_at: new Date().toISOString(),
           };
 
