@@ -1208,11 +1208,11 @@ export const useUpdateSdr = () => {
           let employeeId: string | null = null;
 
           if (sdrEmail) {
-            const { data: emp } = await supabase
+            const { data: emp } = await (supabase
               .from('employees')
               .select('id')
-              .eq('email', sdrEmail)
-              .maybeSingle() as { data: { id: string } | null };
+              .eq('email', sdrEmail) as any)
+              .maybeSingle();
             employeeId = emp?.id || null;
           }
 
