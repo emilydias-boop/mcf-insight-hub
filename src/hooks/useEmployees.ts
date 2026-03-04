@@ -157,11 +157,19 @@ export function useEmployeeMutations() {
   });
 
   const updateEmployee = useMutation({
-    mutationFn: async ({ id, data, previousData }: { 
+    mutationFn: async ({ id, data }: { 
       id: string; 
       data: Partial<Employee>;
       previousData?: { departamento?: string };
     }) => {
+      // 1. Buscar dados anteriores do banco antes do update
+      const { data: previous } = await supabase
+        .from('employees')
+        .select('cargo, nivel, squad, gestor_id, departamento, salario_base, status')
+        .eq('id', id)
+        .single();
+
+      // 2. Executar update
       const { data: result, error } = await supabase
         .from('employees')
         .update(data)
@@ -171,17 +179,140 @@ export function useEmployeeMutations() {
       
       if (error) throw error;
 
-      // If department changed, register a transfer event
-      if (previousData?.departamento && 
-          data.departamento && 
-          previousData.departamento !== data.departamento) {
-        await supabase.from('employee_events').insert({
-          employee_id: id,
-          tipo_evento: 'transferencia',
-          titulo: 'Transferência de Departamento',
-          descricao: `Transferido de ${previousData.departamento} para ${data.departamento}`,
-          data_evento: new Date().toISOString().split('T')[0],
-        });
+      // 3. Detectar mudanças e criar eventos automaticamente
+      if (previous) {
+        const eventsToCreate: Array<{
+          employee_id: string;
+          tipo_evento: string;
+          titulo: string;
+          descricao: string;
+          data_evento: string;
+          valor_anterior: string | null;
+          valor_novo: string | null;
+        }> = [];
+
+        const today = new Date().toISOString().split('T')[0];
+
+        // Cargo
+        if (data.cargo !== undefined && data.cargo !== previous.cargo) {
+          eventsToCreate.push({
+            employee_id: id,
+            tipo_evento: 'mudanca_cargo',
+            titulo: 'Mudança de Cargo',
+            descricao: `Cargo alterado de "${previous.cargo || 'Não definido'}" para "${data.cargo || 'Não definido'}"`,
+            data_evento: today,
+            valor_anterior: previous.cargo || null,
+            valor_novo: data.cargo || null,
+          });
+        }
+
+        // Nível
+        if (data.nivel !== undefined && data.nivel !== previous.nivel) {
+          eventsToCreate.push({
+            employee_id: id,
+            tipo_evento: 'promocao',
+            titulo: 'Mudança de Nível',
+            descricao: `Nível alterado de ${previous.nivel} para ${data.nivel}`,
+            data_evento: today,
+            valor_anterior: String(previous.nivel),
+            valor_novo: String(data.nivel),
+          });
+        }
+
+        // Squad
+        if (data.squad !== undefined && data.squad !== previous.squad) {
+          eventsToCreate.push({
+            employee_id: id,
+            tipo_evento: 'troca_squad',
+            titulo: 'Troca de Squad',
+            descricao: `Squad alterado de "${previous.squad || 'Não definido'}" para "${data.squad || 'Não definido'}"`,
+            data_evento: today,
+            valor_anterior: previous.squad || null,
+            valor_novo: data.squad || null,
+          });
+        }
+
+        // Departamento
+        if (data.departamento !== undefined && data.departamento !== previous.departamento) {
+          eventsToCreate.push({
+            employee_id: id,
+            tipo_evento: 'transferencia',
+            titulo: 'Transferência de Departamento',
+            descricao: `Transferido de "${previous.departamento || 'Não definido'}" para "${data.departamento || 'Não definido'}"`,
+            data_evento: today,
+            valor_anterior: previous.departamento || null,
+            valor_novo: data.departamento || null,
+          });
+        }
+
+        // Salário base
+        if (data.salario_base !== undefined && data.salario_base !== previous.salario_base) {
+          const fmtPrev = previous.salario_base != null ? `R$ ${Number(previous.salario_base).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não definido';
+          const fmtNew = data.salario_base != null ? `R$ ${Number(data.salario_base).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não definido';
+          eventsToCreate.push({
+            employee_id: id,
+            tipo_evento: 'reajuste',
+            titulo: 'Reajuste Salarial',
+            descricao: `Salário alterado de ${fmtPrev} para ${fmtNew}`,
+            data_evento: today,
+            valor_anterior: previous.salario_base != null ? String(previous.salario_base) : null,
+            valor_novo: data.salario_base != null ? String(data.salario_base) : null,
+          });
+        }
+
+        // Status
+        if (data.status !== undefined && data.status !== previous.status) {
+          let tipoEvento = 'mudanca_status';
+          let titulo = 'Mudança de Status';
+          if (data.status === 'desligado') { tipoEvento = 'desligamento'; titulo = 'Desligamento'; }
+          else if (data.status === 'afastado') { tipoEvento = 'afastamento'; titulo = 'Afastamento'; }
+          else if (data.status === 'ativo' && (previous.status === 'afastado' || previous.status === 'desligado')) { tipoEvento = 'retorno'; titulo = 'Retorno'; }
+          else if (data.status === 'ferias') { tipoEvento = 'ferias'; titulo = 'Início de Férias'; }
+
+          eventsToCreate.push({
+            employee_id: id,
+            tipo_evento: tipoEvento,
+            titulo,
+            descricao: `Status alterado de "${previous.status}" para "${data.status}"`,
+            data_evento: today,
+            valor_anterior: previous.status,
+            valor_novo: data.status,
+          });
+        }
+
+        // Gestor
+        if (data.gestor_id !== undefined && data.gestor_id !== previous.gestor_id) {
+          let nomeAnterior = 'Nenhum';
+          let nomeNovo = 'Nenhum';
+
+          const gestorIds = [previous.gestor_id, data.gestor_id].filter(Boolean) as string[];
+          if (gestorIds.length > 0) {
+            const { data: gestores } = await supabase
+              .from('employees')
+              .select('id, nome_completo')
+              .in('id', gestorIds);
+            if (gestores) {
+              const gestorMap = Object.fromEntries(gestores.map(g => [g.id, g.nome_completo]));
+              if (previous.gestor_id) nomeAnterior = gestorMap[previous.gestor_id] || 'Desconhecido';
+              if (data.gestor_id) nomeNovo = gestorMap[data.gestor_id] || 'Desconhecido';
+            }
+          }
+
+          eventsToCreate.push({
+            employee_id: id,
+            tipo_evento: 'mudanca_gestor',
+            titulo: 'Mudança de Gestor',
+            descricao: `Gestor alterado de "${nomeAnterior}" para "${nomeNovo}"`,
+            data_evento: today,
+            valor_anterior: nomeAnterior,
+            valor_novo: nomeNovo,
+          });
+        }
+
+        // Inserir todos os eventos em batch
+        if (eventsToCreate.length > 0) {
+          await supabase.from('employee_events').insert(eventsToCreate);
+        }
       }
 
       return result;
@@ -189,6 +320,7 @@ export function useEmployeeMutations() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       queryClient.invalidateQueries({ queryKey: ['employee', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['employee-events', variables.id] });
       toast.success('Colaborador atualizado com sucesso');
     },
     onError: (error) => {
