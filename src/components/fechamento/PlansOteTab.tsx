@@ -175,9 +175,13 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
         .limit(1)
         .maybeSingle();
       
+      // Find the employee to get cargo_catalogo_id
+      const emp = employeesWithPlans.find(e => e.sdr_id === sdrId);
+      
       const planData = {
         sdr_id: sdrId,
         vigencia_inicio: monthStart,
+        cargo_catalogo_id: emp?.cargo_catalogo_id || null,
         ote_total: values.ote_total,
         fixo_valor: values.fixo_valor,
         variavel_total: values.variavel_total,
@@ -385,6 +389,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
               .insert({
                 ...rest,
                 ...updateValues,
+                cargo_catalogo_id: emp.cargo_catalogo_id || rest.cargo_catalogo_id || null,
                 vigencia_inicio: monthStart,
                 vigencia_fim: null,
                 status: 'PENDING',
