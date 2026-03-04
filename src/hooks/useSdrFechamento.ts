@@ -1212,7 +1212,7 @@ export const useUpdateSdr = () => {
               .from('employees')
               .select('id')
               .eq('email', sdrEmail)
-              .maybeSingle();
+              .maybeSingle() as { data: { id: string } | null };
             employeeId = emp?.id || null;
           }
 
