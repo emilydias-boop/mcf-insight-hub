@@ -506,6 +506,9 @@ export const KpiEditForm = ({
                       Auto
                     </Badge>
                   </Label>
+                  <span className="text-[10px] text-muted-foreground/70 block">
+                    Meta: {Math.round((formData.reunioes_realizadas || 0) * 0.3)} (30% de {formData.reunioes_realizadas || 0} realiz.)
+                  </span>
                   <div className="h-8 px-3 py-1.5 rounded-md border bg-muted/50 flex items-center text-sm">
                     <span className="font-medium">{intermediacoes}</span>
                     <span className="text-muted-foreground/70 text-[10px] ml-1.5">(calculado da Hubla)</span>
