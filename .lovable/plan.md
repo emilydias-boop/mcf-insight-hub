@@ -1,39 +1,34 @@
 
 
-## Objetivo
+## Plano: Propagar mudança de nível SDR para o histórico do colaborador
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+Quando o nível do SDR é alterado via Fechamento (SdrConfigTab → `useUpdateSdr`), essa mudança **não gera evento** na aba Histórico do colaborador. O auto-logging que acabamos de construir só funciona para edições via `useUpdateEmployee` (tela RH). São fluxos separados.
 
-## Mudanças
+Resultado: você mudou de N1 para N2 em março, mas o histórico do colaborador não registrou essa promoção.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Solução
+Adicionar a mesma lógica de detecção de mudanças no `useUpdateSdr` (arquivo `src/hooks/useSdrFechamento.ts`), buscando o `employee` vinculado ao SDR e inserindo o evento em `employee_events`.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Arquivo: `src/hooks/useSdrFechamento.ts` (hook `useUpdateSdr`, linhas ~1116-1140)
 
-### 2. Hook `useCloserDetailData.ts`
+Antes do update:
+1. Buscar dados anteriores do SDR (`nivel`, `meta_diaria`, `squad`, `role_type`)
+2. Buscar o `employee` vinculado via `sdr_id`
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+Após o update, para cada mudança detectada:
+- `nivel` → evento `promocao`, "Mudança de Nível (SDR)", "Nível X → Nível Y"
+- `meta_diaria` → evento `reajuste_meta`, "Ajuste de Meta Diária", "X → Y"
+- `role_type` → evento `mudanca_cargo`, "Mudança de Função (SDR)", "sdr → closer" ou vice-versa
+- `squad` → evento `troca_squad`, "Troca de Squad (SDR)"
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+Inserir em `employee_events` usando o `employee.id` encontrado.
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+### Arquivo: `src/components/fechamento/SdrConfigTab.tsx`
+- Sem mudança necessária — já chama `updateSdr.mutateAsync` que será interceptado.
 
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Resultado esperado
+- Editar nível de N1→N2 no Fechamento → evento aparece automaticamente no Histórico do colaborador
+- Fechamentos de fevereiro mantêm N1 (congelado no payout), março em diante usa N2
+- Eventos manuais e os do `useUpdateEmployee` continuam funcionando normalmente
 
