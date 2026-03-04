@@ -932,19 +932,21 @@ serve(async (req) => {
           no_shows: kpi.no_shows,
         });
 
-        // Count intermediações
+        // Count intermediações - usar como fallback apenas se contratos da agenda = 0
         const { count: interCount } = await supabase
           .from('sdr_intermediacoes')
           .select('*', { count: 'exact', head: true })
           .eq('sdr_id', sdr.id)
           .eq('ano_mes', ano_mes);
 
-        if (interCount !== null && interCount !== kpi.intermediacoes_contrato) {
+        // Se contratosPagos da agenda > 0, já foi salvo acima; senão usar sdr_intermediacoes como fallback
+        const finalContratos = contratosPagos > 0 ? contratosPagos : (interCount || 0);
+        if (finalContratos !== kpi.intermediacoes_contrato) {
           await supabase
             .from('sdr_month_kpi')
-            .update({ intermediacoes_contrato: interCount })
+            .update({ intermediacoes_contrato: finalContratos })
             .eq('id', kpi.id);
-          kpi.intermediacoes_contrato = interCount;
+          kpi.intermediacoes_contrato = finalContratos;
         }
 
         // Calculate values - lógica diferente para Closers com métricas ativas
