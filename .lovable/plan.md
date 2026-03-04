@@ -1,51 +1,39 @@
 
 
-## Resultado da Análise: Fluxo de Fechamento Individual (Fev e Mar 2026)
+## Objetivo
 
-### Fevereiro 2026 - Cálculos CORRETOS
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Validei manualmente os números de 5 SDRs promovidos + Juliana Rodrigues. **Todos os cálculos batem:**
+## Mudanças
 
-| SDR | Agend. | Meta | %Agend | Mult | Real. | MetaR | %Real | Mult | Variável | Total |
-|---|---|---|---|---|---|---|---|---|---|---|
-| Antony (N1) | 89 | 119 | 58.2% | 0 | 64 | 62 | 103.2% | 1 | R$743 | R$3.543 |
-| Carol C (N2) | 121 | 153 | 71.2% | 0.5 | 94 | 85 | 110.6% | 1 | R$1.088 | R$4.238 |
-| Carol S (N1) | 106 | 119 | 69.3% | 0 | 83 | 74 | 112.2% | 1 | R$743 | R$3.543 |
-| Julia (N1) | 101 | 153 | 66.0% | 0 | 71 | 71 | 100% | 1 | R$743 | R$3.543 |
-| Leticia (N1) | 105 | 119 | 68.6% | 0 | 93 | 74 | 125.7% | 1.5 | R$1.415 | R$4.215 |
-| Juliana R (N1) | 70 | 119 | 58.8% | 0 | 52 | 49 | 106.1% | 1 | R$743 | R$3.543 |
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Fórmulas conferidas: meta_realiz = 70% × agendadas_reais; multiplicadores conforme faixas (0-70%=0, 71-85%=0.5, etc). Tudo OK.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### Março 2026 - 3 Problemas Detectados
+### 2. Hook `useCloserDetailData.ts`
 
-**Problema 1: Payouts com valor_fixo desatualizado (CRÍTICO)**
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-Os payouts de março foram gerados ANTES das promoções de nível. O `valor_fixo` está errado:
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-| SDR | Cargo Março | fixo correto | fixo no payout | Diferença |
-|---|---|---|---|---|
-| Antony Elias | N2 | R$3.150 | R$2.800 | -R$350 |
-| Carol Souza | N2 | R$3.150 | R$2.800 | -R$350 |
-| Julia Caroline | N2 | R$3.150 | R$2.800 | -R$350 |
-| Leticia Nunes | N2 | R$3.150 | R$2.800 | -R$350 |
-| Carol Correa | N3 | R$3.500 | R$3.150 | -R$350 |
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-**Correção**: Recalcular os payouts de março (via botão "Recalcular" ou via Edge Function) atualizará automaticamente o `valor_fixo` a partir do comp_plan vigente.
+### 4. Dados exportados no Excel
 
-**Problema 2: Março sem métricas configuradas**
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-A tabela `fechamento_metricas_mes` para `2026-03` está **vazia**. O sistema usará métricas fallback (padrão hardcoded), que podem não corresponder aos pesos que vocês definiram para fevereiro. Solução: copiar as métricas de fev para março na aba Configurações > Métricas Ativas.
+Formato de data: `dd/MM/yyyy HH:mm`
 
-**Problema 3: Métricas duplicadas em Fevereiro (menor impacto)**
+## Resultado
 
-SDR Inside N1 e N2 em fevereiro têm métricas duplicadas porque existem registros com `squad='incorporador'` E `squad=NULL` para o mesmo cargo. O hook `useActiveMetricsForCargo` prioriza squad-specific, então o frontend exibe corretamente. A Edge Function faz o mesmo. Não é bug funcional, mas poluição de dados.
-
-### Plano de Correção
-
-1. **Copiar métricas para março**: Na tela Configurações > Métricas Ativas, copiar configuração de fevereiro para março (ou configurar manualmente)
-2. **Recalcular payouts de março**: Após copiar métricas, executar recálculo para os 5 SDRs promovidos para atualizar o `valor_fixo` e demais campos
-3. **Limpar duplicatas de fevereiro** (opcional): Remover registros com `squad=NULL` que conflitam com os de `squad='incorporador'`
-
-Posso executar os itens 1, 2 e 3 automaticamente via SQL + invocação da Edge Function.
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
