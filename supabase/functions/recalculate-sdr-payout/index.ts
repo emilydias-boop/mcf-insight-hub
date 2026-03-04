@@ -446,7 +446,7 @@ serve(async (req) => {
     }> = [];
 
     // Get SDRs to process (with email and role_type for RPC call)
-    let sdrsQuery = supabase.from('sdr').select('id, name, email, meta_diaria, role_type, squad').eq('active', true);
+    let sdrsQuery = supabase.from('sdr').select('id, name, email, meta_diaria, role_type, squad, nivel').eq('active', true);
     if (sdr_id) {
       sdrsQuery = sdrsQuery.eq('id', sdr_id);
     }
