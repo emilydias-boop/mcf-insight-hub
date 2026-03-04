@@ -1119,6 +1119,15 @@ export const useUpdateSdr = () => {
   return useMutation({
     mutationFn: async (sdr: Partial<Sdr> & { id: string }) => {
       const { id, ...updateData } = sdr;
+
+      // 1) Buscar dados anteriores do SDR para detectar mudanças
+      const { data: previous } = await supabase
+        .from('sdr')
+        .select('nivel, meta_diaria, squad, role_type, email')
+        .eq('id', id)
+        .single();
+
+      // 2) Executar o update
       const { data, error } = await supabase
         .from('sdr')
         .update(updateData)
@@ -1127,6 +1136,106 @@ export const useUpdateSdr = () => {
         .single();
 
       if (error) throw error;
+
+      // 3) Detectar mudanças e registrar no histórico do colaborador vinculado
+      if (previous) {
+        const eventsToCreate: Array<{
+          employee_id: string;
+          tipo_evento: string;
+          titulo: string;
+          descricao: string;
+          valor_anterior: string | null;
+          valor_novo: string | null;
+          data_evento: string;
+        }> = [];
+
+        const changedFields: Array<{
+          field: string;
+          old: any;
+          new: any;
+          tipo: string;
+          titulo: string;
+          formatFn?: (v: any) => string;
+        }> = [];
+
+        if (updateData.nivel !== undefined && updateData.nivel !== previous.nivel) {
+          changedFields.push({
+            field: 'nivel',
+            old: previous.nivel,
+            new: updateData.nivel,
+            tipo: 'promocao',
+            titulo: 'Mudança de Nível (SDR)',
+            formatFn: (v) => `Nível ${v}`,
+          });
+        }
+
+        if (updateData.meta_diaria !== undefined && updateData.meta_diaria !== previous.meta_diaria) {
+          changedFields.push({
+            field: 'meta_diaria',
+            old: previous.meta_diaria,
+            new: updateData.meta_diaria,
+            tipo: 'reajuste',
+            titulo: 'Ajuste de Meta Diária (SDR)',
+            formatFn: (v) => String(v),
+          });
+        }
+
+        if (updateData.role_type !== undefined && updateData.role_type !== previous.role_type) {
+          changedFields.push({
+            field: 'role_type',
+            old: previous.role_type,
+            new: updateData.role_type,
+            tipo: 'mudanca_cargo',
+            titulo: 'Mudança de Função (SDR)',
+            formatFn: (v) => v || '-',
+          });
+        }
+
+        if (updateData.squad !== undefined && updateData.squad !== previous.squad) {
+          changedFields.push({
+            field: 'squad',
+            old: previous.squad,
+            new: updateData.squad,
+            tipo: 'troca_squad',
+            titulo: 'Troca de Squad (SDR)',
+            formatFn: (v) => v || '-',
+          });
+        }
+
+        if (changedFields.length > 0) {
+          // Buscar employee vinculado pelo email do SDR
+          const sdrEmail = previous.email;
+          let employeeId: string | null = null;
+
+          if (sdrEmail) {
+            const { data: emp } = await supabase
+              .from('employees')
+              .select('id')
+              .eq('email', sdrEmail)
+              .maybeSingle();
+            employeeId = emp?.id || null;
+          }
+
+          if (employeeId) {
+            const now = new Date().toISOString();
+            for (const cf of changedFields) {
+              const fmt = cf.formatFn || ((v: any) => String(v ?? '-'));
+              eventsToCreate.push({
+                employee_id: employeeId,
+                tipo_evento: cf.tipo,
+                titulo: cf.titulo,
+                descricao: `${cf.titulo}: ${fmt(cf.old)} → ${fmt(cf.new)}`,
+                valor_anterior: cf.old != null ? String(cf.old) : null,
+                valor_novo: cf.new != null ? String(cf.new) : null,
+                data_evento: now,
+              });
+            }
+
+            await supabase.from('employee_events').insert(eventsToCreate);
+          }
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
