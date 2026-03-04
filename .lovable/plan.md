@@ -1,39 +1,58 @@
 
 
-## Objetivo
+## Problema
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+O indicador "Contratos Pagos" para SDRs mostra **Meta: 17 (1/dia)** porque `meta_percentual` não está configurado no banco, e o código usa fallback de `meta_valor=1 × dias_uteis`. O correto é **30% das Reuniões Realizadas** (ex: 52 realizadas → meta 16, com 13 contratos = 81.3%).
 
-## Mudanças
+Além disso, a meta description no formulário "Editar KPIs" usa `reunioes_agendadas` em vez de `reunioes_realizadas`.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+## Correção (3 arquivos)
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### 1. `src/components/fechamento/DynamicKpiField.tsx` (linha 184-186)
+Corrigir `getMetaDescription` para usar `reunioes_realizadas`:
+```typescript
+case 'contratos':
+  const realizadas_contratos = formData.reunioes_realizadas || 0;
+  return `Meta: ${Math.round(realizadas_contratos * 0.3)} (30% de ${realizadas_contratos} realizadas)`;
+```
 
-### 2. Hook `useCloserDetailData.ts`
+### 2. `src/components/fechamento/DynamicIndicatorCard.tsx` (linhas 96-109)
+No bloco `isDynamicCalc`, adicionar fallback para contratos quando `meta_percentual` não está configurado — usar 30% das realizadas:
+```typescript
+if (metrica.meta_percentual && metrica.meta_percentual > 0) {
+  // Configurado no DB
+  const realizadas = kpi?.reunioes_realizadas || 0;
+  metaAjustada = Math.round((realizadas * metrica.meta_percentual) / 100);
+  metaDiaria = metrica.meta_percentual;
+} else if (metrica.nome_metrica === 'contratos') {
+  // Fallback SDR: 30% das realizadas
+  const realizadas = kpi?.reunioes_realizadas || 0;
+  metaAjustada = Math.round(realizadas * 0.3);
+  metaDiaria = 30; // 30%
+} else {
+  metaDiaria = metrica.meta_valor || 1;
+  metaAjustada = metaDiaria * diasUteisMes;
+}
+```
+E atualizar o `metaSubtitle` para incluir este caso.
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+### 3. `src/hooks/useCalculatedVariavel.ts` (linhas 69-79)
+Mesma lógica de fallback para manter consistência no cálculo do variável total:
+```typescript
+if (metrica.meta_percentual && metrica.meta_percentual > 0) {
+  const realizadas = kpi?.reunioes_realizadas || 0;
+  metaAjustada = Math.round((realizadas * metrica.meta_percentual) / 100);
+} else if (metrica.nome_metrica === 'contratos') {
+  const realizadas = kpi?.reunioes_realizadas || 0;
+  metaAjustada = Math.round(realizadas * 0.3);
+} else {
+  const metaDiaria = metrica.meta_valor || 1;
+  metaAjustada = metaDiaria * diasUteisMes;
+}
+```
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Resultado
+- Formulário KPIs: "Meta: 16 (30% de 52 realizadas)"
+- Indicador: Meta: 16, Realizado: 13, **81.3%**, Faixa 71-85%, Multiplicador 0.5x
+- Variável total recalculado consistentemente
 
