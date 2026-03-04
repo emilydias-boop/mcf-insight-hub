@@ -74,6 +74,8 @@ interface EmployeeWithPlan {
     fixo_valor: number;
     variavel_total: number;
     meta_diaria?: number;
+    meta_reunioes_agendadas?: number;
+    dias_uteis?: number;
     valor_meta_rpg: number;
     valor_docs_reuniao: number;
     valor_tentativas: number;
@@ -440,7 +442,9 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
       ote: hasPlan ? emp.comp_plan!.ote_total : (cargo?.ote_total || 0),
       fixo: hasPlan ? emp.comp_plan!.fixo_valor : (cargo?.fixo_valor || 0),
       variavel: hasPlan ? emp.comp_plan!.variavel_total : (cargo?.variavel_valor || 0),
-      metaDiaria: emp.sdr_meta_diaria || 10,
+      metaDiaria: hasPlan && emp.comp_plan!.meta_reunioes_agendadas && emp.comp_plan!.dias_uteis
+        ? Math.round(emp.comp_plan!.meta_reunioes_agendadas / emp.comp_plan!.dias_uteis)
+        : emp.sdr_meta_diaria || 10,
       isPersonalized: hasPlan,
     };
   };
