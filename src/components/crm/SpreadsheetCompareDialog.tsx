@@ -245,9 +245,59 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     });
   }, [results, originId, createNotFoundMutation]);
 
-  const handleExportFn = () => {
-    // Will be defined after filteredResults
-  };
+  // Counts
+  const counts = useMemo(() => {
+    const found = results.filter(r => r.matchStatus === 'found');
+    return {
+      total: results.length,
+      found: found.length,
+      notFound: results.length - found.length,
+      open: found.filter(r => r.dealStatus === 'open').length,
+      won: found.filter(r => r.dealStatus === 'won').length,
+      lost: found.filter(r => r.dealStatus === 'lost').length,
+    };
+  }, [results]);
+
+  const filteredResults = useMemo(() => {
+    let filtered = results;
+
+    if (statusFilter === 'found') filtered = filtered.filter(r => r.matchStatus === 'found');
+    else if (statusFilter === 'not_found') filtered = filtered.filter(r => r.matchStatus === 'not_found');
+    else if (statusFilter === 'open') filtered = filtered.filter(r => r.matchStatus === 'found' && r.dealStatus === 'open');
+    else if (statusFilter === 'won') filtered = filtered.filter(r => r.matchStatus === 'found' && r.dealStatus === 'won');
+    else if (statusFilter === 'lost') filtered = filtered.filter(r => r.matchStatus === 'found' && r.dealStatus === 'lost');
+
+    if (searchText) {
+      const s = searchText.toLowerCase();
+      filtered = filtered.filter(r =>
+        r.excelName.toLowerCase().includes(s) ||
+        r.excelEmail.toLowerCase().includes(s) ||
+        r.excelPhone.includes(searchText) ||
+        (r.localContactName || '').toLowerCase().includes(s)
+      );
+    }
+
+    return filtered;
+  }, [results, statusFilter, searchText]);
+
+  const handleExport = useCallback(() => {
+    const exportData = filteredResults.map(r => ({
+      'Nome (Planilha)': r.excelName,
+      'Email (Planilha)': r.excelEmail,
+      'Telefone (Planilha)': r.excelPhone,
+      'Status': r.matchStatus === 'found' ? 'Encontrado' : 'Não encontrado',
+      'Status Deal': r.dealStatus ? getDealStatusLabel(r.dealStatus) : '',
+      'Nome (Sistema)': r.localContactName || '',
+      'Email (Sistema)': r.localContactEmail || '',
+      'Telefone (Sistema)': r.localContactPhone || '',
+      'Estágio': r.localStageName || '',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Comparação');
+    XLSX.writeFile(wb, 'comparacao_base_clint.xlsx');
+  }, [filteredResults]);
 
   // Transfer selected deals
   const handleTransferSelected = useCallback(async () => {
@@ -287,41 +337,6 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
       setSelectedDealIds(new Set(foundWithDealId.map(r => r.localDealId!)));
     }
   };
-
-  // Counts
-  const counts = useMemo(() => {
-    const found = results.filter(r => r.matchStatus === 'found');
-    return {
-      total: results.length,
-      found: found.length,
-      notFound: results.length - found.length,
-      open: found.filter(r => r.dealStatus === 'open').length,
-      won: found.filter(r => r.dealStatus === 'won').length,
-      lost: found.filter(r => r.dealStatus === 'lost').length,
-    };
-  }, [results]);
-
-  const filteredResults = useMemo(() => {
-    let filtered = results;
-
-    if (statusFilter === 'found') filtered = filtered.filter(r => r.matchStatus === 'found');
-    else if (statusFilter === 'not_found') filtered = filtered.filter(r => r.matchStatus === 'not_found');
-    else if (statusFilter === 'open') filtered = filtered.filter(r => r.matchStatus === 'found' && r.dealStatus === 'open');
-    else if (statusFilter === 'won') filtered = filtered.filter(r => r.matchStatus === 'found' && r.dealStatus === 'won');
-    else if (statusFilter === 'lost') filtered = filtered.filter(r => r.matchStatus === 'found' && r.dealStatus === 'lost');
-
-    if (searchText) {
-      const s = searchText.toLowerCase();
-      filtered = filtered.filter(r =>
-        r.excelName.toLowerCase().includes(s) ||
-        r.excelEmail.toLowerCase().includes(s) ||
-        r.excelPhone.includes(searchText) ||
-        (r.localContactName || '').toLowerCase().includes(s)
-      );
-    }
-
-    return filtered;
-  }, [results, statusFilter, searchText]);
 
   const handleReset = () => {
     setStep('upload');
