@@ -1,39 +1,31 @@
 
 
-## Objetivo
+## Plano: Corrigir colunas Parceria, SDR e Closer na tabela de Contatos
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problemas identificados
 
-## Mudanças
+1. **Parceria não aparece** — A coluna usa `hidden 2xl:table-cell` (só visível em telas ≥1536px). Na maioria dos monitores fica escondida.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+2. **SDR mostrando "—"** — O hook só busca `original_sdr_email` do deal, mas muitos deals não têm esse campo preenchido. Deveria fazer fallback para `owner_id` (email do dono do deal, que geralmente é o SDR).
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+3. **Closer mostrando "—"** — O hook só busca `r1_closer_email`, que só é preenchido após agendamento de R1. Muitos deals novos não têm closer ainda, o que é esperado. Porém o fallback poderia buscar via `meeting_slot_attendees` se existir reunião agendada.
 
-### 2. Hook `useCloserDetailData.ts`
+4. **Organização "—"** — O campo `organization_name` é genuinamente nulo para a maioria dos contatos no banco. Isso é dado real, não bug.
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+### Alterações
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**`src/hooks/useContactsEnriched.ts`**
+- Adicionar `owner_id` ao select dos `crm_deals`
+- No SDR: usar `original_sdr_email || owner_id` como fallback (owner geralmente é o SDR)
+- Resolver nome do owner_id no mesmo profileMap
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+**`src/pages/crm/Contatos.tsx`**
+- Remover `hidden 2xl:table-cell` da coluna Parceria — torná-la visível em `lg:` ou sempre visível
+- Manter a coluna mesmo quando `partnerMap` é undefined (mostrar "—" enquanto carrega)
+- Reorganizar colunas para priorizar as mais úteis: Nome, Email, Telefone, Status, Etapa, SDR, Closer, Parceria (Organização pode ficar em `2xl:`)
 
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Resultado
+- Parceria sempre visível na tabela
+- SDR preenchido para a maioria dos deals (via fallback owner_id)
+- Closer continua "—" quando não há reunião, o que é correto
 
