@@ -25,6 +25,8 @@ const Contatos = () => {
   const [filters, setFilters] = useState<ContactFilterValues>(emptyFilters);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pipelineModalOpen, setPipelineModalOpen] = useState(false);
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
+  const [wantsSelectAll, setWantsSelectAll] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm), 400);
@@ -43,6 +45,28 @@ const Contatos = () => {
     [contactsData]
   );
   const { data: partnerMap } = usePartnerProductDetectionBatch(attendeesForCheck);
+
+  // Auto-load all pages when partnership filter is active
+  const needsFullLoad = !!(filters.partnerProduct && hasNextPage);
+  useEffect(() => {
+    if (needsFullLoad && !isFetchingNextPage) {
+      setIsLoadingAll(true);
+      fetchNextPage();
+    }
+    if (!hasNextPage && isLoadingAll) {
+      setIsLoadingAll(false);
+    }
+  }, [needsFullLoad, isFetchingNextPage, hasNextPage, fetchNextPage, isLoadingAll]);
+
+  // After full load completes, if user wanted select all, do it
+  useEffect(() => {
+    if (wantsSelectAll && !hasNextPage && !isFetchingNextPage) {
+      setWantsSelectAll(false);
+      setIsLoadingAll(false);
+    }
+  }, [wantsSelectAll, hasNextPage, isFetchingNextPage]);
+
+
 
   // Derive partner product options from partnerMap
   const partnerProductOptions = useMemo(() => {
@@ -91,6 +115,13 @@ const Contatos = () => {
     return result;
   }, [contactsData, filters, partnerMap]);
 
+  // Keep updating selection as more filtered contacts load in
+  useEffect(() => {
+    if (wantsSelectAll && filteredContacts.length > 0) {
+      setSelectedIds(new Set(filteredContacts.map(c => c.id)));
+    }
+  }, [wantsSelectAll, filteredContacts]);
+
   // Selection handlers
   const handleSelect = useCallback((id: string, checked: boolean) => {
     setSelectedIds(prev => {
@@ -102,13 +133,19 @@ const Contatos = () => {
 
   const handleSelectAll = useCallback(() => {
     const allIds = filteredContacts.map(c => c.id);
-    const allSelected = allIds.every(id => selectedIds.has(id));
+    const allSelected = allIds.length > 0 && allIds.every(id => selectedIds.has(id));
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
+      // If there are more pages to load, trigger full load first
+      if (hasNextPage) {
+        setIsLoadingAll(true);
+        setWantsSelectAll(true);
+        fetchNextPage();
+      }
       setSelectedIds(new Set(allIds));
     }
-  }, [filteredContacts, selectedIds]);
+  }, [filteredContacts, selectedIds, hasNextPage, fetchNextPage]);
 
   const handleContactClick = (contactId: string) => {
     setSelectedContactId(contactId);
@@ -167,15 +204,33 @@ const Contatos = () => {
         partnerProductOptions={partnerProductOptions}
       />
 
+      {/* Loading all pages indicator */}
+      {isLoadingAll && (
+        <div className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-foreground">
+              Carregando todos os contatos para filtrar parcerias...
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {contactsData.length} contatos carregados
+              {filteredContacts.length > 0 && ` • ${filteredContacts.length} parceiros encontrados`}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Select all toggle */}
       {filteredContacts.length > 0 && (
         <div className="flex items-center gap-2">
           <Checkbox
             checked={allFilteredSelected}
             onCheckedChange={handleSelectAll}
+            disabled={isLoadingAll}
           />
           <span className="text-xs text-muted-foreground">
             Selecionar todos ({filteredContacts.length})
+            {hasNextPage && filters.partnerProduct && ' — carregando mais...'}
           </span>
         </div>
       )}
