@@ -342,6 +342,8 @@ function PropostasTab() {
           onClick={() => {
             const data = propostas.map(p => ({
               "Contato": p.contact_name || p.deal_name || '',
+              "Telefone": p.contact_phone || '',
+              "Email": p.contact_email || '',
               "Valor Crédito": p.valor_credito,
               "Prazo (meses)": p.prazo_meses,
               "Produto": p.tipo_produto || '',
@@ -466,6 +468,7 @@ function SemSucessoTab() {
             const data = deals.map(d => ({
               "Contato": d.contact_name || d.deal_name || '',
               "Telefone": d.contact_phone || '',
+              "Email": d.contact_email || '',
               "Pipeline": d.origin_name || '',
               "Motivo": d.motivo_recusa || '',
               "Data": d.updated_at ? format(new Date(d.updated_at), 'dd/MM/yyyy', { locale: ptBR }) : '',
