@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useContactsEnriched, useContactFilterOptions, type EnrichedContact } from '@/hooks/useContactsEnriched';
 import { useSyncClintData } from '@/hooks/useCRMData';
-import { usePartnerProductDetectionBatch, useAllPartnerProducts } from '@/hooks/usePartnerProductDetection';
+import { usePartnerProductDetectionBatch, useAllPartnerProducts, PRODUCT_GROUPS } from '@/hooks/usePartnerProductDetection';
 import { Search, Plus, User, RefreshCw, Loader2 } from 'lucide-react';
 import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
 import { ContactFormDialog } from '@/components/crm/ContactFormDialog';
@@ -92,6 +92,10 @@ const Contatos = () => {
     if (filters.partnerProduct && partnerMap) {
       if (filters.partnerProduct === '__any__') {
         result = result.filter(c => partnerMap[c.id]?.isPartner);
+      } else if (filters.partnerProduct === '__incorporador__') {
+        result = result.filter(c => PRODUCT_GROUPS.incorporador.products.includes(partnerMap[c.id]?.productLabel || ''));
+      } else if (filters.partnerProduct === '__anticrise__') {
+        result = result.filter(c => PRODUCT_GROUPS.anticrise.products.includes(partnerMap[c.id]?.productLabel || ''));
       } else {
         result = result.filter(c => partnerMap[c.id]?.productLabel === filters.partnerProduct);
       }
