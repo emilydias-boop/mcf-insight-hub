@@ -333,8 +333,29 @@ function PropostasTab() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">Propostas Enviadas</CardTitle>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={propostas.length === 0}
+          onClick={() => {
+            const data = propostas.map(p => ({
+              "Contato": p.contact_name || p.deal_name || '',
+              "Valor Crédito": p.valor_credito,
+              "Prazo (meses)": p.prazo_meses,
+              "Produto": p.tipo_produto || '',
+              "Status": p.status || '',
+            }));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Propostas");
+            XLSX.writeFile(wb, `propostas-consorcio-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+          }}
+        >
+          <Download className="h-4 w-4 mr-1" />
+          Exportar Excel
+        </Button>
       </CardHeader>
       <CardContent>
         {propostas.length === 0 ? (
@@ -435,8 +456,29 @@ function SemSucessoTab() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">Deals Sem Sucesso</CardTitle>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={deals.length === 0}
+          onClick={() => {
+            const data = deals.map(d => ({
+              "Contato": d.contact_name || d.deal_name || '',
+              "Telefone": d.contact_phone || '',
+              "Pipeline": d.origin_name || '',
+              "Motivo": d.motivo_recusa || '',
+              "Data": d.updated_at ? format(new Date(d.updated_at), 'dd/MM/yyyy', { locale: ptBR }) : '',
+            }));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Sem Sucesso");
+            XLSX.writeFile(wb, `sem-sucesso-consorcio-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+          }}
+        >
+          <Download className="h-4 w-4 mr-1" />
+          Exportar Excel
+        </Button>
       </CardHeader>
       <CardContent>
         {deals.length === 0 ? (
