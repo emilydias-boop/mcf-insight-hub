@@ -115,6 +115,13 @@ const Contatos = () => {
     return result;
   }, [contactsData, filters, partnerMap]);
 
+  // Keep updating selection as more filtered contacts load in
+  useEffect(() => {
+    if (wantsSelectAll && filteredContacts.length > 0) {
+      setSelectedIds(new Set(filteredContacts.map(c => c.id)));
+    }
+  }, [wantsSelectAll, filteredContacts]);
+
   // Selection handlers
   const handleSelect = useCallback((id: string, checked: boolean) => {
     setSelectedIds(prev => {
