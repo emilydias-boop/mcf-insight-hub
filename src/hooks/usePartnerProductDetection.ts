@@ -74,8 +74,8 @@ export const usePartnerProductDetectionBatch = (attendees: AttendeeForCheck[]) =
         return {};
       }
 
-      // Build email -> best product map
-      const emailToProduct = new Map<string, string>();
+      // Build email -> best product map (label + full name)
+      const emailToProduct = new Map<string, { label: string; fullName: string }>();
       for (const tx of transactions || []) {
         const email = tx.customer_email?.toLowerCase().trim();
         if (!email || !tx.product_name) continue;
@@ -83,7 +83,7 @@ export const usePartnerProductDetectionBatch = (attendees: AttendeeForCheck[]) =
         
         const label = classifyProduct(tx.product_name);
         if (label) {
-          emailToProduct.set(email, label);
+          emailToProduct.set(email, { label, fullName: tx.product_name });
         }
       }
 
@@ -93,12 +93,12 @@ export const usePartnerProductDetectionBatch = (attendees: AttendeeForCheck[]) =
         const email = att.email?.toLowerCase().trim();
         if (!email) continue;
         
-        const productLabel = emailToProduct.get(email);
-        if (productLabel) {
+        const product = emailToProduct.get(email);
+        if (product) {
           result[att.id] = {
             isPartner: true,
-            productLabel,
-            productName: productLabel,
+            productLabel: product.label,
+            productName: product.fullName,
           };
         }
       }
