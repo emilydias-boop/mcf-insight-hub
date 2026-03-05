@@ -246,14 +246,12 @@ const Contatos = () => {
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Nome</th>
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden md:table-cell">Email</th>
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Telefone</th>
-                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden xl:table-cell">Organização</th>
-                  <th className="text-center px-3 py-2.5 font-medium text-muted-foreground w-16">Status</th>
-                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Etapa</th>
-                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden xl:table-cell">SDR</th>
-                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden xl:table-cell">Closer</th>
-                  {partnerMap && (
-                    <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden 2xl:table-cell">Parceria</th>
-                  )}
+                   <th className="text-center px-3 py-2.5 font-medium text-muted-foreground w-16">Status</th>
+                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Etapa</th>
+                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">SDR</th>
+                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden xl:table-cell">Closer</th>
+                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Parceria</th>
+                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden 2xl:table-cell">Organização</th>
                 </tr>
               </thead>
               <tbody>
@@ -280,9 +278,6 @@ const Contatos = () => {
                       <td className="px-3 py-2.5 text-muted-foreground hidden lg:table-cell">
                         {contact.phone || '—'}
                       </td>
-                      <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[150px] hidden xl:table-cell">
-                        {contact.organization_name || '—'}
-                      </td>
                       <td className="px-3 py-2.5 text-center">
                         <span title={contact.thermalStatus}>
                           {THERMAL_ICONS[contact.thermalStatus] || '⚪'}
@@ -303,23 +298,24 @@ const Contatos = () => {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[120px] hidden xl:table-cell">
+                      <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[120px] hidden lg:table-cell">
                         {contact.sdrName || '—'}
                       </td>
                       <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[120px] hidden xl:table-cell">
                         {contact.closerName || '—'}
                       </td>
-                      {partnerMap && (
-                        <td className="px-3 py-2.5 hidden 2xl:table-cell">
-                          {partner?.isPartner ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                              {partner.productLabel}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
-                      )}
+                      <td className="px-3 py-2.5 hidden lg:table-cell">
+                        {partner?.isPartner ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                            {partner.productLabel}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[150px] hidden 2xl:table-cell">
+                        {contact.organization_name || '—'}
+                      </td>
                     </tr>
                   );
                 })}

@@ -64,7 +64,7 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
       id, name, email, phone, organization_name, tags, created_at,
       crm_deals(
         id, name, stage_id, origin_id, created_at,
-        original_sdr_email, r1_closer_email,
+        original_sdr_email, r1_closer_email, owner_id,
         stage_moved_at, last_worked_at,
         crm_stages(stage_name, color),
         crm_origins(name)
@@ -88,6 +88,7 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
     c.crm_deals?.forEach((d: any) => {
       if (d.original_sdr_email) emailsToResolve.add(d.original_sdr_email.toLowerCase());
       if (d.r1_closer_email) emailsToResolve.add(d.r1_closer_email.toLowerCase());
+      if (d.owner_id) emailsToResolve.add(d.owner_id.toLowerCase());
     });
   });
 
@@ -152,7 +153,7 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
       }
     }
 
-    const sdrEmail = latestDeal?.original_sdr_email?.toLowerCase();
+    const sdrEmail = (latestDeal?.original_sdr_email || latestDeal?.owner_id)?.toLowerCase();
     const closerEmail = latestDeal?.r1_closer_email?.toLowerCase();
     const lastAct = latestDeal ? activityMap[latestDeal.id] || null : null;
 
