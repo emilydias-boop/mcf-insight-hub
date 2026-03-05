@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { differenceInDays } from 'date-fns';
 
@@ -40,8 +40,6 @@ interface ProfileMap {
   [email: string]: string;
 }
 
-const PAGE_SIZE = 500;
-
 const getThermalStatus = (daysSince: number | null): ThermalStatus => {
   if (daysSince === null) return 'sem_deal';
   if (daysSince <= 3) return 'quente';
@@ -50,78 +48,16 @@ const getThermalStatus = (daysSince: number | null): ThermalStatus => {
   return 'perdido';
 };
 
-const normalizePhone = (phone: string | null): string | null => {
-  if (!phone) return null;
-  const digits = phone.replace(/\D/g, '');
-  return digits.length >= 9 ? digits.slice(-9) : null;
-};
+interface PaginatedResult {
+  contacts: EnrichedContact[];
+  totalCount: number;
+}
 
-const deduplicateContacts = (contacts: EnrichedContact[]): EnrichedContact[] => {
-  const groups = new Map<string, EnrichedContact[]>();
+const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: string): Promise<PaginatedResult> => {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
-  for (const contact of contacts) {
-    const emailKey = contact.email?.toLowerCase().trim();
-    const phoneKey = normalizePhone(contact.phone);
-    const key = emailKey || (phoneKey ? `phone:${phoneKey}` : `id:${contact.id}`);
-
-    const group = groups.get(key);
-    if (group) {
-      group.push(contact);
-    } else {
-      groups.set(key, [contact]);
-    }
-  }
-
-  const result: EnrichedContact[] = [];
-  for (const group of groups.values()) {
-    if (group.length === 1) {
-      result.push(group[0]);
-      continue;
-    }
-
-    group.sort((a, b) => {
-      const aHasDeal = a.latestDeal ? 1 : 0;
-      const bHasDeal = b.latestDeal ? 1 : 0;
-      if (bHasDeal !== aHasDeal) return bHasDeal - aHasDeal;
-      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    });
-
-    const primary = { ...group[0], isDuplicate: true };
-
-    for (let i = 1; i < group.length; i++) {
-      const other = group[i];
-      if (other.latestDeal && primary.latestDeal) {
-        const otherDate = other.latestDeal.created_at || '';
-        const primaryDate = primary.latestDeal.created_at || '';
-        if (otherDate > primaryDate) {
-          primary.latestDeal = other.latestDeal;
-          primary.daysSinceActivity = other.daysSinceActivity;
-          primary.thermalStatus = other.thermalStatus;
-          primary.sdrName = other.sdrName;
-          primary.closerName = other.closerName;
-          primary.lastActivity = other.lastActivity;
-        }
-      } else if (other.latestDeal && !primary.latestDeal) {
-        primary.latestDeal = other.latestDeal;
-        primary.daysSinceActivity = other.daysSinceActivity;
-        primary.thermalStatus = other.thermalStatus;
-        primary.sdrName = other.sdrName;
-        primary.closerName = other.closerName;
-        primary.lastActivity = other.lastActivity;
-      }
-    }
-
-    result.push(primary);
-  }
-
-  return result;
-};
-
-const fetchContactsPage = async (pageParam: number, searchTerm?: string) => {
-  const from = pageParam * PAGE_SIZE;
-  const to = from + PAGE_SIZE - 1;
-
-  // 1. Fetch contacts with deals
+  // 1. Fetch contacts with deals + count
   let query = supabase
     .from('crm_contacts')
     .select(`
@@ -133,7 +69,7 @@ const fetchContactsPage = async (pageParam: number, searchTerm?: string) => {
         crm_stages(stage_name, color),
         crm_origins(name)
       )
-    `)
+    `, { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -141,10 +77,10 @@ const fetchContactsPage = async (pageParam: number, searchTerm?: string) => {
     query = query.or(`name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
   }
 
-  const { data: contacts, error: contactsError } = await query;
+  const { data: contacts, error: contactsError, count } = await query;
 
   if (contactsError) throw contactsError;
-  if (!contacts) return [];
+  if (!contacts) return { contacts: [], totalCount: 0 };
 
   // 2. Collect unique emails for SDR/Closer name resolution
   const emailsToResolve = new Set<string>();
@@ -198,16 +134,7 @@ const fetchContactsPage = async (pageParam: number, searchTerm?: string) => {
     }
   }
 
-  // 6. Detect duplicates by email within this page
-  const emailCount: Record<string, number> = {};
-  contacts.forEach((c: any) => {
-    if (c.email) {
-      const key = c.email.toLowerCase();
-      emailCount[key] = (emailCount[key] || 0) + 1;
-    }
-  });
-
-  // 7. Build enriched contacts
+  // 6. Build enriched contacts
   const now = new Date();
   const enriched: EnrichedContact[] = contacts.map((contact: any) => {
     const deals = contact.crm_deals || [];
@@ -252,34 +179,21 @@ const fetchContactsPage = async (pageParam: number, searchTerm?: string) => {
       } : null,
       thermalStatus: getThermalStatus(daysSinceActivity),
       daysSinceActivity,
-      isDuplicate: contact.email ? (emailCount[contact.email.toLowerCase()] || 0) > 1 : false,
+      isDuplicate: false,
       sdrName: sdrEmail ? (profileMap[sdrEmail] || sdrEmail) : null,
       closerName: closerEmail ? (profileMap[closerEmail] || closerEmail) : null,
       lastActivity: lastAct,
     };
   });
 
-  return enriched;
+  return { contacts: enriched, totalCount: count || 0 };
 };
 
-export const useContactsEnriched = (searchTerm?: string) => {
-  return useInfiniteQuery({
-    queryKey: ['contacts-enriched', searchTerm || ''],
-    queryFn: ({ pageParam }) => fetchContactsPage(pageParam, searchTerm),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, _allPages, lastPageParam) => {
-      // If we got a full page, there are likely more
-      if (lastPage.length === PAGE_SIZE) {
-        return lastPageParam + 1;
-      }
-      return undefined;
-    },
+export const useContactsEnriched = (searchTerm?: string, page: number = 1, pageSize: number = 50) => {
+  return useQuery({
+    queryKey: ['contacts-enriched', searchTerm || '', page, pageSize],
+    queryFn: () => fetchContactsPage(page, pageSize, searchTerm),
     staleTime: 30000,
-    select: (data) => {
-      // Flatten all pages and deduplicate across the entire set
-      const allContacts = data.pages.flat();
-      return deduplicateContacts(allContacts);
-    },
   });
 };
 

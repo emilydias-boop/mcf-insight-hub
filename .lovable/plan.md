@@ -1,47 +1,39 @@
 
 
-## Plano: Trocar grid de cards por lista/tabela com paginação
+## Objetivo
 
-### Problema
-O grid de cards com infinite scroll é lento para 110k+ contatos, especialmente quando precisa carregar tudo para filtros de parceria. Uma visualização em lista com paginação server-side resolve a performance.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Alterações
+## Mudanças
 
-**`src/hooks/useContactsEnriched.ts`**
-- Substituir `useInfiniteQuery` por `useQuery` com paginação offset
-- Aceitar `page` e `pageSize` como parâmetros
-- Usar `count: 'exact'` no Supabase para obter total de registros
-- Retornar `{ contacts: EnrichedContact[], totalCount: number }`
-- Manter deduplicação e enriquecimento por página
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**`src/pages/crm/Contatos.tsx`**
-- Adicionar states: `currentPage` (1), `pageSize` (50)
-- Remover toda lógica de auto-fetch/infinite scroll (`isLoadingAll`, `wantsSelectAll`, useEffects de loop)
-- Trocar grid de `ContactCard` por tabela compacta em lista (linhas com: checkbox, nome, email, telefone, org, status térmico, deal/etapa, SDR, closer, parceria)
-- Adicionar componente `Pagination` (já existe em `ui/pagination.tsx`) no rodapé
-- Adicionar `Select` de pageSize: 25, 50, 100, 200
-- Mostrar "Mostrando 51-100 de 2000 contatos"
-- Reset page=1 ao mudar filtros/busca
-- "Selecionar todos" opera sobre a página atual
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**`src/components/crm/ContactCard.tsx`**
-- Mantido para uso futuro, mas não usado na lista
+### 2. Hook `useCloserDetailData.ts`
 
-### Layout da lista
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-```text
-☐ | Nome          | Email              | Telefone    | Org    | Status | Etapa     | SDR   | Closer | Parceria
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────
-☐ | João Silva    | joao@email.com     | 11999...    | XPTO   | 🟢     | Agendado  | Maria | Pedro  | A001
-☐ | Ana Costa     | ana@email.com      | 21988...    | ABC    | 🔴     | No-show   | Lucas | —      | —
-```
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Paginação: `< 1 2 3 ... 40 >  |  Mostrando 50 por página  |  Total: 2000`
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### Fluxo
-1. Página carrega 50 contatos rapidamente (1 query)
-2. Usuário navega entre páginas ou muda pageSize
-3. Filtros resetam para page=1
-4. "Selecionar todos" seleciona os da página atual
-5. Clique na linha abre o drawer 360°
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
