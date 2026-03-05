@@ -1,39 +1,65 @@
 
 
-## Objetivo
+## Plano: Drawer de Contato 360° — Visão completa do ecossistema
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+O `ContactDetailsDrawer` atual é básico: mostra apenas nome, tags, deals simples e observações. O usuário quer uma visão 360° do contato com tudo: compras, jornada, timeline, ligações, como chegou, como foi tratado.
 
-## Mudanças
+### Solução
+Reescrever o `ContactDetailsDrawer` reutilizando componentes já existentes no `DealDetailsDrawer`, mas centrado no **contato** (agregando dados de todos os deals).
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Alterações
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+**`src/components/crm/ContactDetailsDrawer.tsx`** — Reescrita completa
 
-### 2. Hook `useCloserDetailData.ts`
+**Header compacto:**
+- Avatar com iniciais, nome, email, telefone
+- Botões de ação rápida: WhatsApp, ligar, copiar telefone
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**Seção 1 — Informações Gerais + Tags**
+- Data de cadastro, organização, campos customizados
+- Tags com cores
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**Seção 2 — Negócios Relacionados (expandido)**
+- Reutilizar `CrossPipelineHistory` adaptado ou listar todos os deals com:
+  - Pipeline/Origin, Stage (com cor), Owner/SDR, datas
+  - Botão para abrir `DealDetailsDrawer` de cada deal
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+**Seção 3 — Compras / Transações Hubla**
+- Usar `useCustomerTransactions` (já existe) com o email do contato
+- Listar todas as transações: produto, valor, data, status, source
+- Totalizar investimento (reutilizar `useCustomerJourney`)
+- Badge de parceiro se aplicável
 
-### 4. Dados exportados no Excel
+**Seção 4 — Jornada do Lead**
+- Usar `useLeadJourney` do deal mais recente para mostrar SDR → R1 → R2
+- Usar `useA010Journey` para jornada A010
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+**Seção 5 — Abas (como no DealDetailsDrawer)**
+- **Timeline**: `LeadFullTimeline` usando deal principal + contactId (já agrega cross-pipeline)
+- **Ligações**: `CallHistorySection` com contactId
+- **Notas**: `DealNotesTab` ou `ContactNotesSection` + notas de todos os deals
+- **Observações**: `ContactNotesSection` existente (campo livre do contato)
 
-Formato de data: `dd/MM/yyyy HH:mm`
+**Componentes reutilizados (sem alteração):**
+- `CrossPipelineHistory`
+- `LeadFullTimeline`
+- `CallHistorySection`
+- `useCustomerTransactions` / `useCustomerJourney`
+- `useLeadJourney`
+- `useA010Journey`
+- `ContactNotesSection`
 
-## Resultado
+**Novo componente auxiliar:**
+- `ContactTransactionsSection` — lista de transações Hubla do contato com totais
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Fluxo
+1. Drawer abre com `contactId`
+2. Busca contato + todos os deals do contato
+3. Identifica deal principal (mais recente com atividade)
+4. Renderiza visão 360° com todas as seções
+5. Cada deal relacionado pode abrir o `DealDetailsDrawer` específico
+
+### Resultado
+O drawer de contato se torna o hub central de informação: mostra tudo que o contato fez, pagou, como chegou, em que pipelines está, e todo o histórico de interações.
 
