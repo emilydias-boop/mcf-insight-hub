@@ -1,15 +1,18 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useContactsEnriched, useContactFilterOptions, type EnrichedContact } from '@/hooks/useContactsEnriched';
 import { useSyncClintData } from '@/hooks/useCRMData';
 import { usePartnerProductDetectionBatch } from '@/hooks/usePartnerProductDetection';
-import { Search, Plus, User, RefreshCw, Loader2 } from 'lucide-react';
+import { Search, Plus, User, RefreshCw, Loader2, Send } from 'lucide-react';
 import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
 import { ContactFormDialog } from '@/components/crm/ContactFormDialog';
 import { ContactCard } from '@/components/crm/ContactCard';
 import { ContactFilters, emptyFilters, type ContactFilterValues } from '@/components/crm/ContactFilters';
+import { BulkActionsBar } from '@/components/crm/BulkActionsBar';
+import { SendToPipelineModal } from '@/components/crm/SendToPipelineModal';
 import { toast } from 'sonner';
 import { subDays } from 'date-fns';
 
@@ -20,6 +23,8 @@ const Contatos = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [filters, setFilters] = useState<ContactFilterValues>(emptyFilters);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pipelineModalOpen, setPipelineModalOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm), 400);
@@ -31,6 +36,23 @@ const Contatos = () => {
 
   const contactsData = contacts || [];
   const filterOptions = useContactFilterOptions(contactsData);
+
+  // Batch partner detection for ALL loaded contacts
+  const attendeesForCheck = useMemo(() => 
+    contactsData.map(c => ({ id: c.id, email: c.email })),
+    [contactsData]
+  );
+  const { data: partnerMap } = usePartnerProductDetectionBatch(attendeesForCheck);
+
+  // Derive partner product options from partnerMap
+  const partnerProductOptions = useMemo(() => {
+    if (!partnerMap) return [];
+    const labels = new Set<string>();
+    Object.values(partnerMap).forEach(p => {
+      if (p.isPartner && p.productLabel) labels.add(p.productLabel);
+    });
+    return Array.from(labels).sort();
+  }, [partnerMap]);
 
   // Filter stages by selected pipeline
   const filteredStageOptions = useMemo(() => {
@@ -45,47 +67,48 @@ const Contatos = () => {
   const filteredContacts = useMemo(() => {
     let result = contactsData;
 
-    // Pipeline
-    if (filters.pipeline) {
-      result = result.filter(c => c.latestDeal?.origin_id === filters.pipeline);
-    }
+    if (filters.pipeline) result = result.filter(c => c.latestDeal?.origin_id === filters.pipeline);
+    if (filters.stage) result = result.filter(c => c.latestDeal?.stage_name === filters.stage);
+    if (filters.sdr) result = result.filter(c => c.sdrName === filters.sdr);
+    if (filters.closer) result = result.filter(c => c.closerName === filters.closer);
+    if (filters.status) result = result.filter(c => c.thermalStatus === filters.status);
 
-    // Stage
-    if (filters.stage) {
-      result = result.filter(c => c.latestDeal?.stage_name === filters.stage);
-    }
-
-    // SDR
-    if (filters.sdr) {
-      result = result.filter(c => c.sdrName === filters.sdr);
-    }
-
-    // Closer
-    if (filters.closer) {
-      result = result.filter(c => c.closerName === filters.closer);
-    }
-
-    // Status
-    if (filters.status) {
-      result = result.filter(c => c.thermalStatus === filters.status);
-    }
-
-    // Date range
     if (filters.dateRange) {
       const days = parseInt(filters.dateRange);
       const cutoff = subDays(new Date(), days);
       result = result.filter(c => new Date(c.created_at) >= cutoff);
     }
 
-    return result;
-  }, [contactsData, searchTerm, filters]);
+    // Partnership filter
+    if (filters.partnerProduct && partnerMap) {
+      if (filters.partnerProduct === '__any__') {
+        result = result.filter(c => partnerMap[c.id]?.isPartner);
+      } else {
+        result = result.filter(c => partnerMap[c.id]?.productLabel === filters.partnerProduct);
+      }
+    }
 
-  // Batch partner detection for visible contacts
-  const attendeesForCheck = useMemo(() => 
-    filteredContacts.map(c => ({ id: c.id, email: c.email })),
-    [filteredContacts]
-  );
-  const { data: partnerMap } = usePartnerProductDetectionBatch(attendeesForCheck);
+    return result;
+  }, [contactsData, filters, partnerMap]);
+
+  // Selection handlers
+  const handleSelect = useCallback((id: string, checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    const allIds = filteredContacts.map(c => c.id);
+    const allSelected = allIds.every(id => selectedIds.has(id));
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(allIds));
+    }
+  }, [filteredContacts, selectedIds]);
 
   const handleContactClick = (contactId: string) => {
     setSelectedContactId(contactId);
@@ -99,6 +122,8 @@ const Contatos = () => {
       onError: () => toast.error('Erro ao sincronizar dados'),
     });
   };
+
+  const allFilteredSelected = filteredContacts.length > 0 && filteredContacts.every(c => selectedIds.has(c.id));
 
   return (
     <div className="flex flex-col gap-3 sm:gap-4">
@@ -139,7 +164,21 @@ const Contatos = () => {
         options={{ ...filterOptions, stages: filteredStageOptions as string[] }}
         resultCount={filteredContacts.length}
         totalCount={contactsData.length}
+        partnerProductOptions={partnerProductOptions}
       />
+
+      {/* Select all toggle */}
+      {filteredContacts.length > 0 && (
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={allFilteredSelected}
+            onCheckedChange={handleSelectAll}
+          />
+          <span className="text-xs text-muted-foreground">
+            Selecionar todos ({filteredContacts.length})
+          </span>
+        </div>
+      )}
 
       {/* Content */}
       {isLoading ? (
@@ -151,7 +190,14 @@ const Contatos = () => {
         <>
           <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredContacts.map((contact) => (
-              <ContactCard key={contact.id} contact={contact} onClick={handleContactClick} partnerProduct={partnerMap?.[contact.id]} />
+              <ContactCard
+                key={contact.id}
+                contact={contact}
+                onClick={handleContactClick}
+                partnerProduct={partnerMap?.[contact.id]}
+                selected={selectedIds.has(contact.id)}
+                onSelect={handleSelect}
+              />
             ))}
           </div>
 
@@ -205,6 +251,21 @@ const Contatos = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Bulk actions */}
+      <BulkActionsBar
+        selectedCount={selectedIds.size}
+        onTransfer={() => setPipelineModalOpen(true)}
+        onClearSelection={() => setSelectedIds(new Set())}
+        isTransferring={false}
+      />
+
+      <SendToPipelineModal
+        open={pipelineModalOpen}
+        onOpenChange={setPipelineModalOpen}
+        selectedContactIds={Array.from(selectedIds)}
+        onSuccess={() => setSelectedIds(new Set())}
+      />
 
       <ContactDetailsDrawer contactId={selectedContactId} open={drawerOpen} onOpenChange={setDrawerOpen} />
       <ContactFormDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />

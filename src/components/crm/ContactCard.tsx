@@ -1,5 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Mail, Phone, User, AlertTriangle, Clock, Copy, Handshake } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -10,6 +11,8 @@ interface ContactCardProps {
   contact: EnrichedContact;
   onClick: (id: string) => void;
   partnerProduct?: PartnerProductInfo;
+  selected?: boolean;
+  onSelect?: (id: string, checked: boolean) => void;
 }
 
 const thermalConfig: Record<ThermalStatus, { label: string; borderClass: string; badgeClass: string }> = {
@@ -51,19 +54,30 @@ const activityTypeLabels: Record<string, string> = {
   task: 'Tarefa',
 };
 
-export const ContactCard = ({ contact, onClick, partnerProduct }: ContactCardProps) => {
+export const ContactCard = ({ contact, onClick, partnerProduct, selected, onSelect }: ContactCardProps) => {
   const thermal = thermalConfig[contact.thermalStatus];
   const isStale = contact.daysSinceActivity !== null && contact.daysSinceActivity > 7;
+  const showCheckbox = !!onSelect;
 
   return (
     <Card
-      className={`bg-card border-border hover:border-primary/50 transition-all cursor-pointer ${thermal.borderClass} ${isStale ? 'opacity-75' : ''}`}
+      className={`bg-card border-border hover:border-primary/50 transition-all cursor-pointer ${thermal.borderClass} ${isStale ? 'opacity-75' : ''} ${selected ? 'ring-2 ring-primary' : ''}`}
       onClick={() => onClick(contact.id)}
     >
       <CardContent className="p-4">
-        {/* Row 1: Name + Thermal badge */}
+        {/* Row 1: Checkbox + Name + Thermal badge */}
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex items-center gap-2 min-w-0">
+            {showCheckbox && (
+              <Checkbox
+                checked={selected}
+                onCheckedChange={(checked) => {
+                  onSelect(contact.id, !!checked);
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="shrink-0"
+              />
+            )}
             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
               <User className="h-4 w-4 text-primary" />
             </div>

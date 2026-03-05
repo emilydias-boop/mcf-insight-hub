@@ -10,6 +10,7 @@ export interface ContactFilterValues {
   closer: string;
   status: string;
   dateRange: string;
+  partnerProduct: string;
 }
 
 interface FilterOptions {
@@ -25,6 +26,7 @@ interface ContactFiltersProps {
   options: FilterOptions;
   resultCount: number;
   totalCount: number;
+  partnerProductOptions?: string[];
 }
 
 const statusOptions: { value: ThermalStatus | ''; label: string }[] = [
@@ -48,12 +50,13 @@ const emptyFilters: ContactFilterValues = {
   closer: '',
   status: '',
   dateRange: '',
+  partnerProduct: '',
 };
 
 const hasActiveFilters = (f: ContactFilterValues) =>
   Object.values(f).some(v => v !== '');
 
-export const ContactFilters = ({ filters, onChange, options, resultCount, totalCount }: ContactFiltersProps) => {
+export const ContactFilters = ({ filters, onChange, options, resultCount, totalCount, partnerProductOptions = [] }: ContactFiltersProps) => {
   const update = (key: keyof ContactFilterValues, value: string) => {
     const next = { ...filters, [key]: value === '__all__' ? '' : value };
     // Reset stage when pipeline changes
@@ -146,6 +149,20 @@ export const ContactFilters = ({ filters, onChange, options, resultCount, totalC
             <SelectItem value="__all__">Qualquer data</SelectItem>
             {dateRangeOptions.map(d => (
               <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Partnership */}
+        <Select value={filters.partnerProduct || '__all__'} onValueChange={v => update('partnerProduct', v)}>
+          <SelectTrigger className="h-8 w-[160px] text-xs bg-card">
+            <SelectValue placeholder="Parceria" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Sem filtro</SelectItem>
+            <SelectItem value="__any__">🤝 Qualquer parceria</SelectItem>
+            {partnerProductOptions.map(p => (
+              <SelectItem key={p} value={p}>{p}</SelectItem>
             ))}
           </SelectContent>
         </Select>
