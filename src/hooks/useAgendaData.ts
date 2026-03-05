@@ -1529,7 +1529,7 @@ export async function syncDealStageFromAgenda(
 
     // 4. Determine if we should transfer ownership
     // Transfer ownership to closer when: completed, contract_paid, or R2 no_show
-    // R2 no-shows stay with closer so Yanca (coordinator) can reschedule them
+    // R2 no-shows stay with closer so Leticia (coordinator) can reschedule them
     const ownershipTransferStatuses = ['completed', 'contract_paid'];
     const isR2NoShow = meetingType === 'r2' && agendaStatus === 'no_show';
     const shouldTransferOwnership = (ownershipTransferStatuses.includes(agendaStatus) || isR2NoShow) && closerEmail;

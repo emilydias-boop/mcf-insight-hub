@@ -45,7 +45,7 @@ export const CONFETTI_EXCLUDE_PRODUCTS = [
 
 // Lista de responsáveis por preencher R2
 export const R2_BOOKERS_LIST = [
-  { id: '04bb4045-701d-443c-b2c9-aee74e7f58d9', nome: 'Yanca Oliveira' },
+  { id: '6cb06155-26dd-4be9-87ce-53e60a59a4e7', nome: 'Leticia Rodrigues' },
   { id: 'dd76c153-a4a5-432e-ab4c-0b48f6141659', nome: 'Julio Caetano' },
   { id: 'c8fd2b83-2aee-41a4-9154-e812f492bc5f', nome: 'Cristiane Gomes' },
   { id: '6bb81a27-fd8f-4af8-bce0-377f3576124f', nome: 'Thaynar Tavares' },
