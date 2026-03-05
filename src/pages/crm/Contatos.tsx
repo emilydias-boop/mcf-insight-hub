@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useContactsEnriched, useContactFilterOptions, type EnrichedContact } from '@/hooks/useContactsEnriched';
 import { useSyncClintData } from '@/hooks/useCRMData';
-import { Search, Plus, User, RefreshCw } from 'lucide-react';
+import { Search, Plus, User, RefreshCw, Loader2 } from 'lucide-react';
 import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
 import { ContactFormDialog } from '@/components/crm/ContactFormDialog';
 import { ContactCard } from '@/components/crm/ContactCard';
@@ -18,7 +18,7 @@ const Contatos = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [filters, setFilters] = useState<ContactFilterValues>(emptyFilters);
-  const { data: contacts, isLoading } = useContactsEnriched();
+  const { data: contacts, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useContactsEnriched();
   const syncMutation = useSyncClintData();
 
   const contactsData = contacts || [];
@@ -143,11 +143,42 @@ const Contatos = () => {
           <p className="text-lg font-semibold text-foreground">Carregando contatos...</p>
         </div>
       ) : filteredContacts.length > 0 ? (
-        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredContacts.map((contact) => (
-            <ContactCard key={contact.id} contact={contact} onClick={handleContactClick} />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filteredContacts.map((contact) => (
+              <ContactCard key={contact.id} contact={contact} onClick={handleContactClick} />
+            ))}
+          </div>
+
+          {/* Load more */}
+          {hasNextPage && (
+            <div className="flex flex-col items-center gap-2 py-4">
+              <p className="text-sm text-muted-foreground">
+                Mostrando {contactsData.length} contatos carregados
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+              >
+                {isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Carregando mais...
+                  </>
+                ) : (
+                  'Carregar mais contatos'
+                )}
+              </Button>
+            </div>
+          )}
+
+          {!hasNextPage && contactsData.length > 0 && (
+            <p className="text-sm text-muted-foreground text-center py-2">
+              Todos os {contactsData.length} contatos carregados
+            </p>
+          )}
+        </>
       ) : (
         <Card className="bg-card border-border">
           <CardContent className="p-8 text-center">
