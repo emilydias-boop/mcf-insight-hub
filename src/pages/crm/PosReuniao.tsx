@@ -161,6 +161,32 @@ function RealizadasTab() {
               Limpar filtros
             </Button>
           )}
+          <div className="ml-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={filtered.length === 0}
+              onClick={() => {
+                const data = filtered.map(r => ({
+                  "Nome": r.contact_name || r.deal_name || '',
+                  "Telefone": r.contact_phone || '',
+                  "Email": r.contact_email || '',
+                  "Pipeline": r.origin_name || '',
+                  "Data Reunião": r.meeting_date ? format(new Date(r.meeting_date), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '',
+                  "Região": r.region || '',
+                  "Renda": r.renda || '',
+                  "Closer": r.closer_name || '',
+                }));
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Leads Realizadas");
+                XLSX.writeFile(wb, `leads-realizadas-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+              }}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              Exportar Excel
+            </Button>
+          </div>
         </div>
 
         {filtered.length === 0 ? (
