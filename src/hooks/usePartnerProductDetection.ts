@@ -83,8 +83,8 @@ export const useAllPartnerProducts = () => {
       const labels = new Set<string>();
       for (const tx of data || []) {
         if (!tx.product_name) continue;
-        const label = classifyProduct(tx.product_name);
-        if (label) labels.add(label);
+        const classified = classifyProduct(tx.product_name);
+        if (classified) labels.add(classified.label);
       }
 
       return Array.from(labels).sort();
@@ -127,9 +127,9 @@ export const usePartnerProductDetectionBatch = (attendees: AttendeeForCheck[]) =
         if (!email || !tx.product_name) continue;
         if (emailToProduct.has(email)) continue; // keep first (most recent)
         
-        const label = classifyProduct(tx.product_name);
-        if (label) {
-          emailToProduct.set(email, { label, fullName: tx.product_name });
+        const classified = classifyProduct(tx.product_name);
+        if (classified) {
+          emailToProduct.set(email, { label: classified.label, fullName: tx.product_name });
         }
       }
 
