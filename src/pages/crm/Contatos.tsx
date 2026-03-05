@@ -195,15 +195,33 @@ const Contatos = () => {
         partnerProductOptions={partnerProductOptions}
       />
 
+      {/* Loading all pages indicator */}
+      {isLoadingAll && (
+        <div className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-foreground">
+              Carregando todos os contatos para filtrar parcerias...
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {contactsData.length} contatos carregados
+              {filteredContacts.length > 0 && ` • ${filteredContacts.length} parceiros encontrados`}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Select all toggle */}
       {filteredContacts.length > 0 && (
         <div className="flex items-center gap-2">
           <Checkbox
             checked={allFilteredSelected}
             onCheckedChange={handleSelectAll}
+            disabled={isLoadingAll}
           />
           <span className="text-xs text-muted-foreground">
             Selecionar todos ({filteredContacts.length})
+            {hasNextPage && filters.partnerProduct && ' — carregando mais...'}
           </span>
         </div>
       )}
