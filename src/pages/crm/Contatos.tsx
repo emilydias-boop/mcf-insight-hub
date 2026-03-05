@@ -25,6 +25,8 @@ const Contatos = () => {
   const [filters, setFilters] = useState<ContactFilterValues>(emptyFilters);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pipelineModalOpen, setPipelineModalOpen] = useState(false);
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
+  const [wantsSelectAll, setWantsSelectAll] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm), 400);
@@ -43,6 +45,26 @@ const Contatos = () => {
     [contactsData]
   );
   const { data: partnerMap } = usePartnerProductDetectionBatch(attendeesForCheck);
+
+  // Auto-load all pages when partnership filter is active
+  const needsFullLoad = !!(filters.partnerProduct && hasNextPage);
+  useEffect(() => {
+    if (needsFullLoad && !isFetchingNextPage) {
+      setIsLoadingAll(true);
+      fetchNextPage();
+    }
+    if (!hasNextPage && isLoadingAll) {
+      setIsLoadingAll(false);
+    }
+  }, [needsFullLoad, isFetchingNextPage, hasNextPage, fetchNextPage, isLoadingAll]);
+
+  // After full load completes, if user wanted select all, do it
+  useEffect(() => {
+    if (wantsSelectAll && !hasNextPage && !isFetchingNextPage) {
+      setWantsSelectAll(false);
+      setIsLoadingAll(false);
+    }
+  }, [wantsSelectAll, hasNextPage, isFetchingNextPage]);
 
   // Derive partner product options from partnerMap
   const partnerProductOptions = useMemo(() => {
