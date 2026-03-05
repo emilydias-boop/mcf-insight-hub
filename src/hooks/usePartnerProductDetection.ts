@@ -47,6 +47,39 @@ function classifyProduct(productName: string): string | null {
  * Batch hook to detect partner products for leads in the Consórcio BU.
  * Returns which main product each lead purchased (A001, A009, Anticrise, etc).
  */
+/**
+ * Hook to fetch ALL distinct partner products from the database.
+ * Returns classified labels for use in filter dropdowns.
+ */
+export const useAllPartnerProducts = () => {
+  return useQuery({
+    queryKey: ['all-partner-products'],
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await supabase
+        .from('hubla_transactions')
+        .select('product_name')
+        .eq('sale_status', 'completed')
+        .not('product_name', 'is', null);
+
+      if (error) {
+        console.error('Error fetching all partner products:', error);
+        return [];
+      }
+
+      // Classify and deduplicate
+      const labels = new Set<string>();
+      for (const tx of data || []) {
+        if (!tx.product_name) continue;
+        const label = classifyProduct(tx.product_name);
+        if (label) labels.add(label);
+      }
+
+      return Array.from(labels).sort();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
 export const usePartnerProductDetectionBatch = (attendees: AttendeeForCheck[]) => {
   return useQuery({
     queryKey: ['partner-product-detection', attendees.map(a => `${a.id}:${a.email}`).join(',')],

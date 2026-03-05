@@ -1,6 +1,10 @@
+import { useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { X, Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { ThermalStatus } from '@/hooks/useContactsEnriched';
 
 export interface ContactFilterValues {
@@ -57,6 +61,8 @@ const hasActiveFilters = (f: ContactFilterValues) =>
   Object.values(f).some(v => v !== '');
 
 export const ContactFilters = ({ filters, onChange, options, resultCount, totalCount, partnerProductOptions = [] }: ContactFiltersProps) => {
+  const [partnerOpen, setPartnerOpen] = useState(false);
+
   const update = (key: keyof ContactFilterValues, value: string) => {
     const next = { ...filters, [key]: value === '__all__' ? '' : value };
     // Reset stage when pipeline changes
@@ -153,19 +159,63 @@ export const ContactFilters = ({ filters, onChange, options, resultCount, totalC
           </SelectContent>
         </Select>
 
-        {/* Partnership */}
-        <Select value={filters.partnerProduct || '__all__'} onValueChange={v => update('partnerProduct', v)}>
-          <SelectTrigger className="h-8 w-[160px] text-xs bg-card">
-            <SelectValue placeholder="Parceria" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Sem filtro</SelectItem>
-            <SelectItem value="__any__">🤝 Qualquer parceria</SelectItem>
-            {partnerProductOptions.map(p => (
-              <SelectItem key={p} value={p}>{p}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Partnership — searchable */}
+        <Popover open={partnerOpen} onOpenChange={setPartnerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={partnerOpen}
+              className="h-8 w-[180px] justify-between text-xs bg-card font-normal"
+            >
+              <span className="truncate">
+                {!filters.partnerProduct
+                  ? 'Parceria'
+                  : filters.partnerProduct === '__any__'
+                    ? '🤝 Qualquer parceria'
+                    : filters.partnerProduct}
+              </span>
+              <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[220px] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Buscar produto..." className="h-8 text-xs" />
+              <CommandList>
+                <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem
+                    value="__all__"
+                    onSelect={() => { update('partnerProduct', '__all__'); setPartnerOpen(false); }}
+                    className="text-xs"
+                  >
+                    <Check className={cn("mr-2 h-3 w-3", !filters.partnerProduct ? "opacity-100" : "opacity-0")} />
+                    Sem filtro
+                  </CommandItem>
+                  <CommandItem
+                    value="__any__"
+                    onSelect={() => { update('partnerProduct', '__any__'); setPartnerOpen(false); }}
+                    className="text-xs"
+                  >
+                    <Check className={cn("mr-2 h-3 w-3", filters.partnerProduct === '__any__' ? "opacity-100" : "opacity-0")} />
+                    🤝 Qualquer parceria
+                  </CommandItem>
+                  {partnerProductOptions.map(p => (
+                    <CommandItem
+                      key={p}
+                      value={p}
+                      onSelect={() => { update('partnerProduct', p); setPartnerOpen(false); }}
+                      className="text-xs"
+                    >
+                      <Check className={cn("mr-2 h-3 w-3", filters.partnerProduct === p ? "opacity-100" : "opacity-0")} />
+                      {p}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
         {hasActiveFilters(filters) && (
           <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => onChange(emptyFilters)}>

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useContactsEnriched, useContactFilterOptions, type EnrichedContact } from '@/hooks/useContactsEnriched';
 import { useSyncClintData } from '@/hooks/useCRMData';
-import { usePartnerProductDetectionBatch } from '@/hooks/usePartnerProductDetection';
+import { usePartnerProductDetectionBatch, useAllPartnerProducts } from '@/hooks/usePartnerProductDetection';
 import { Search, Plus, User, RefreshCw, Loader2 } from 'lucide-react';
 import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
 import { ContactFormDialog } from '@/components/crm/ContactFormDialog';
@@ -64,16 +64,7 @@ const Contatos = () => {
     [contactsData]
   );
   const { data: partnerMap } = usePartnerProductDetectionBatch(attendeesForCheck);
-
-  // Derive partner product options from partnerMap
-  const partnerProductOptions = useMemo(() => {
-    if (!partnerMap) return [];
-    const labels = new Set<string>();
-    Object.values(partnerMap).forEach(p => {
-      if (p.isPartner && p.productLabel) labels.add(p.productLabel);
-    });
-    return Array.from(labels).sort();
-  }, [partnerMap]);
+  const { data: allPartnerProducts = [] } = useAllPartnerProducts();
 
   // Filter stages by selected pipeline
   const filteredStageOptions = useMemo(() => {
@@ -206,7 +197,7 @@ const Contatos = () => {
         options={{ ...filterOptions, stages: filteredStageOptions as string[] }}
         resultCount={filteredContacts.length}
         totalCount={totalCount}
-        partnerProductOptions={partnerProductOptions}
+        partnerProductOptions={allPartnerProducts}
       />
 
       {/* Select all toggle + info */}
