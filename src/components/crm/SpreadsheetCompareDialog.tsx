@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Upload, FileSpreadsheet, Search, CheckCircle2, XCircle, Download, Tag, ClipboardPaste, UserPlus, Loader2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, Search, CheckCircle2, XCircle, Download, Tag, ClipboardPaste, UserPlus, Loader2, ArrowRightLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -12,14 +12,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
-import { compareSpreadsheetWithDeals, SpreadsheetRow, useCreateNotFoundDeals } from '@/hooks/useSpreadsheetCompare';
+import { compareSpreadsheetGlobal, SpreadsheetRow, useCreateNotFoundDeals } from '@/hooks/useSpreadsheetCompare';
 import { DealStatus, getDealStatusLabel, getDealStatusColor } from '@/lib/dealStatusHelper';
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 type Step = 'upload' | 'mapping' | 'results';
-type StatusFilter = 'all' | 'found' | 'not_found' | 'open' | 'won' | 'lost';
+type StatusFilter = 'all' | 'found_in_current' | 'found_elsewhere' | 'not_found';
 
 const COLUMN_KEYS = ['name', 'email', 'phone'] as const;
 type ColumnKey = typeof COLUMN_KEYS[number];
@@ -88,7 +88,6 @@ function parseTextToRows(text: string): { headers: string[]; rawData: any[] } {
     headers = firstLine.split(sep).map(h => h.trim());
     dataLines = lines.slice(1);
   } else {
-    // Auto-generate headers based on column count
     const colCount = firstLine.split(sep).length;
     if (colCount >= 3) {
       headers = ['Nome', 'Telefone', 'Email'];
@@ -129,13 +128,14 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
   const [searchText, setSearchText] = useState('');
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [pastedText, setPastedText] = useState('');
-  const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
   const [selectedOwner, setSelectedOwner] = useState<string | null>(null);
+  const [isComparing, setIsComparing] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const createNotFoundMutation = useCreateNotFoundDeals();
   const bulkTransfer = useBulkTransfer();
 
-  // Query available SDRs/Closers for transfer
+  // Query available SDRs/Closers
   const { data: availableUsers, isLoading: loadingUsers } = useQuery({
     queryKey: ['transfer-users-sdr-closer'],
     queryFn: async () => {
@@ -200,9 +200,14 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     processFileData(hdrs, data);
   }, [pastedText, processFileData]);
 
-  const handleCompare = useCallback(() => {
+  const handleCompare = useCallback(async () => {
     if (!columnMapping.name && !columnMapping.email && !columnMapping.phone) {
       toast.error('Mapeie pelo menos uma coluna (nome, email ou telefone)');
+      return;
+    }
+
+    if (!originId) {
+      toast.error('Pipeline não identificada');
       return;
     }
 
@@ -212,60 +217,134 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
       phone: String(row[columnMapping.phone] || ''),
     }));
 
-    const compared = compareSpreadsheetWithDeals(rows, deals);
-    setResults(compared);
-    setSelectedDealIds(new Set());
-    setSelectedOwner(null);
-    setStep('results');
-    
-    const found = compared.filter(r => r.matchStatus === 'found').length;
-    toast.success(`Comparação concluída: ${found} encontrados, ${compared.length - found} não encontrados`);
-  }, [rawData, columnMapping, deals]);
+    setIsComparing(true);
+    try {
+      const compared = await compareSpreadsheetGlobal(
+        rows,
+        originId,
+        (current, total) => setBatchProgress({ current, total })
+      );
+      setResults(compared);
+      setSelectedOwner(null);
+      setStep('results');
 
-  const handleCreateLeads = useCallback(() => {
-    if (!originId) {
-      toast.error('Pipeline não identificada');
+      const inCurrent = compared.filter(r => r.matchStatus === 'found_in_current').length;
+      const elsewhere = compared.filter(r => r.matchStatus === 'found_elsewhere').length;
+      const notFound = compared.filter(r => r.matchStatus === 'not_found').length;
+      toast.success(`Busca global: ${inCurrent} nesta pipeline, ${elsewhere} em outras, ${notFound} novos`);
+    } catch (err: any) {
+      toast.error(`Erro na busca: ${err.message}`);
+    } finally {
+      setIsComparing(false);
+      setBatchProgress(null);
+    }
+  }, [rawData, columnMapping, originId]);
+
+  // Smart import: handle all 3 categories
+  const handleSmartImport = useCallback(async () => {
+    if (!originId || !selectedOwner) {
+      toast.error('Selecione um SDR/Closer');
       return;
     }
 
-    const allLeads = results.map(r => ({ name: r.excelName, email: r.excelEmail, phone: r.excelPhone }));
+    const user = availableUsers?.find((u: any) => u.email === selectedOwner);
+    if (!user) return;
 
-    if (!allLeads.length) {
-      toast.info('Nenhum lead para processar');
-      return;
+    setIsImporting(true);
+    setBatchProgress({ current: 0, total: 3 });
+
+    try {
+      let updatedCount = 0;
+      let createdCount = 0;
+      let skippedCount = 0;
+
+      // 1. found_in_current → update owner
+      const inCurrent = results.filter(r => r.matchStatus === 'found_in_current' && r.localDealId);
+      if (inCurrent.length > 0) {
+        setBatchProgress({ current: 1, total: 3 });
+        const transferResult = await bulkTransfer.mutateAsync({
+          dealIds: inCurrent.map(r => r.localDealId!),
+          newOwnerEmail: user.email,
+          newOwnerName: user.full_name || user.email,
+          newOwnerProfileId: user.id,
+        });
+        updatedCount = transferResult.success;
+      }
+
+      // 2. found_elsewhere → create deal with existing contact_id
+      const elsewhere = results.filter(r => r.matchStatus === 'found_elsewhere' && r.contactId);
+      if (elsewhere.length > 0) {
+        setBatchProgress({ current: 2, total: 3 });
+        const elseLeads = elsewhere.map(r => ({
+          name: r.localContactName || r.excelName,
+          email: r.localContactEmail || r.excelEmail,
+          phone: r.localContactPhone || r.excelPhone,
+          contact_id: r.contactId!,
+        }));
+
+        const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
+          body: {
+            leads: elseLeads,
+            origin_id: originId,
+            owner_email: user.email,
+            owner_profile_id: user.id,
+          },
+        });
+        if (error) throw error;
+        createdCount += (data as any).created || 0;
+        skippedCount += (data as any).skipped || 0;
+      }
+
+      // 3. not_found → create contact + deal
+      const notFound = results.filter(r => r.matchStatus === 'not_found');
+      if (notFound.length > 0) {
+        setBatchProgress({ current: 3, total: 3 });
+        const newLeads = notFound.map(r => ({
+          name: r.excelName,
+          email: r.excelEmail,
+          phone: r.excelPhone,
+        }));
+
+        const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
+          body: {
+            leads: newLeads,
+            origin_id: originId,
+            owner_email: user.email,
+            owner_profile_id: user.id,
+          },
+        });
+        if (error) throw error;
+        createdCount += (data as any).created || 0;
+        skippedCount += (data as any).skipped || 0;
+      }
+
+      toast.success(
+        `✅ ${updatedCount} transferidos, ${createdCount} criados${skippedCount > 0 ? `, ${skippedCount} já existiam` : ''}`
+      );
+    } catch (err: any) {
+      toast.error(`Erro na importação: ${err.message}`);
+    } finally {
+      setIsImporting(false);
+      setBatchProgress(null);
     }
-
-    setBatchProgress({ current: 0, total: 1 });
-    createNotFoundMutation.mutate({
-      leads: allLeads,
-      originId,
-      onProgress: (batch, totalBatches) => setBatchProgress({ current: batch, total: totalBatches }),
-    }, {
-      onSettled: () => setBatchProgress(null),
-    });
-  }, [results, originId, createNotFoundMutation]);
+  }, [originId, selectedOwner, availableUsers, results, bulkTransfer]);
 
   // Counts
   const counts = useMemo(() => {
-    const found = results.filter(r => r.matchStatus === 'found');
     return {
       total: results.length,
-      found: found.length,
-      notFound: results.length - found.length,
-      open: found.filter(r => r.dealStatus === 'open').length,
-      won: found.filter(r => r.dealStatus === 'won').length,
-      lost: found.filter(r => r.dealStatus === 'lost').length,
+      inCurrent: results.filter(r => r.matchStatus === 'found_in_current').length,
+      elsewhere: results.filter(r => r.matchStatus === 'found_elsewhere').length,
+      notFound: results.filter(r => r.matchStatus === 'not_found').length,
     };
   }, [results]);
 
   const filteredResults = useMemo(() => {
     let filtered = results;
 
-    if (statusFilter === 'found') filtered = filtered.filter(r => r.matchStatus === 'found');
-    else if (statusFilter === 'not_found') filtered = filtered.filter(r => r.matchStatus === 'not_found');
-    else if (statusFilter === 'open') filtered = filtered.filter(r => r.matchStatus === 'found' && r.dealStatus === 'open');
-    else if (statusFilter === 'won') filtered = filtered.filter(r => r.matchStatus === 'found' && r.dealStatus === 'won');
-    else if (statusFilter === 'lost') filtered = filtered.filter(r => r.matchStatus === 'found' && r.dealStatus === 'lost');
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(r => r.matchStatus === statusFilter);
+    }
 
     if (searchText) {
       const s = searchText.toLowerCase();
@@ -285,8 +364,10 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
       'Nome (Planilha)': r.excelName,
       'Email (Planilha)': r.excelEmail,
       'Telefone (Planilha)': r.excelPhone,
-      'Status': r.matchStatus === 'found' ? 'Encontrado' : 'Não encontrado',
-      'Status Deal': r.dealStatus ? getDealStatusLabel(r.dealStatus) : '',
+      'Status': r.matchStatus === 'found_in_current' ? 'Já nesta pipeline'
+        : r.matchStatus === 'found_elsewhere' ? 'Em outra pipeline'
+        : 'Não encontrado',
+      'Pipeline Origem': r.originName || '',
       'Nome (Sistema)': r.localContactName || '',
       'Email (Sistema)': r.localContactEmail || '',
       'Telefone (Sistema)': r.localContactPhone || '',
@@ -296,47 +377,8 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Comparação');
-    XLSX.writeFile(wb, 'comparacao_base_clint.xlsx');
+    XLSX.writeFile(wb, 'comparacao_global.xlsx');
   }, [filteredResults]);
-
-  // Transfer selected deals
-  const handleTransferSelected = useCallback(async () => {
-    if (!selectedOwner || selectedDealIds.size === 0) return;
-    const user = availableUsers?.find((u: any) => u.email === selectedOwner);
-    if (!user) return;
-
-    await bulkTransfer.mutateAsync({
-      dealIds: Array.from(selectedDealIds),
-      newOwnerEmail: user.email,
-      newOwnerName: user.full_name || user.email,
-      newOwnerProfileId: user.id,
-    });
-
-    setSelectedDealIds(new Set());
-    setSelectedOwner(null);
-  }, [selectedOwner, selectedDealIds, availableUsers, bulkTransfer]);
-
-  // Toggle selection
-  const toggleDealSelection = (dealId: string) => {
-    setSelectedDealIds(prev => {
-      const next = new Set(prev);
-      if (next.has(dealId)) next.delete(dealId);
-      else next.add(dealId);
-      return next;
-    });
-  };
-
-  const foundWithDealId = useMemo(() => 
-    filteredResults.filter(r => r.matchStatus === 'found' && r.localDealId),
-  [filteredResults]);
-
-  const toggleSelectAllFound = () => {
-    if (selectedDealIds.size === foundWithDealId.length && foundWithDealId.length > 0) {
-      setSelectedDealIds(new Set());
-    } else {
-      setSelectedDealIds(new Set(foundWithDealId.map(r => r.localDealId!)));
-    }
-  };
 
   const handleReset = () => {
     setStep('upload');
@@ -347,8 +389,28 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     setSearchText('');
     setColumnMapping({ name: '', email: '', phone: '' });
     setPastedText('');
-    setSelectedDealIds(new Set());
     setSelectedOwner(null);
+    setIsComparing(false);
+    setIsImporting(false);
+  };
+
+  const getStatusIcon = (status: SpreadsheetRow['matchStatus']) => {
+    switch (status) {
+      case 'found_in_current':
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      case 'found_elsewhere':
+        return <ArrowRightLeft className="h-4 w-4 text-amber-500" />;
+      case 'not_found':
+        return <XCircle className="h-4 w-4 text-red-400" />;
+    }
+  };
+
+  const getStatusLabel = (status: SpreadsheetRow['matchStatus']) => {
+    switch (status) {
+      case 'found_in_current': return 'Nesta pipeline';
+      case 'found_elsewhere': return 'Outra pipeline';
+      case 'not_found': return 'Novo';
+    }
   };
 
   return (
@@ -357,10 +419,10 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
-            Importar Planilha Base Clint
+            Importar Planilha — Busca Global
           </DialogTitle>
           <DialogDescription>
-            Compare leads da planilha ou lista com os deals da pipeline atual
+            Busca contatos em TODA a base (todas as pipelines) e importa para a pipeline atual
           </DialogDescription>
         </DialogHeader>
 
@@ -441,8 +503,27 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
             </div>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={handleReset}>Voltar</Button>
-              <Button size="sm" onClick={handleCompare}>Comparar</Button>
+              <Button size="sm" onClick={handleCompare} disabled={isComparing}>
+                {isComparing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    Buscando na base...
+                    {batchProgress && ` (${batchProgress.current}/${batchProgress.total})`}
+                  </>
+                ) : (
+                  'Comparar (busca global)'
+                )}
+              </Button>
             </div>
+
+            {isComparing && batchProgress && (
+              <div className="space-y-1">
+                <Progress value={(batchProgress.current / batchProgress.total) * 100} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">
+                  Buscando {batchProgress.current} de {batchProgress.total} contatos...
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -454,24 +535,87 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
               <Badge variant="outline" className="cursor-pointer" onClick={() => setStatusFilter('all')}>
                 Total: {counts.total}
               </Badge>
-              <Badge className="bg-green-500/20 text-green-700 cursor-pointer hover:bg-green-500/30" onClick={() => setStatusFilter('found')}>
-                <CheckCircle2 className="h-3 w-3 mr-1" /> Encontrados: {counts.found}
+              <Badge className="bg-green-500/20 text-green-700 cursor-pointer hover:bg-green-500/30" onClick={() => setStatusFilter('found_in_current')}>
+                <CheckCircle2 className="h-3 w-3 mr-1" /> Nesta pipeline: {counts.inCurrent}
+              </Badge>
+              <Badge className="bg-amber-500/20 text-amber-700 cursor-pointer hover:bg-amber-500/30" onClick={() => setStatusFilter('found_elsewhere')}>
+                <ArrowRightLeft className="h-3 w-3 mr-1" /> Outra pipeline: {counts.elsewhere}
               </Badge>
               <Badge className="bg-red-500/20 text-red-700 cursor-pointer hover:bg-red-500/30" onClick={() => setStatusFilter('not_found')}>
-                <XCircle className="h-3 w-3 mr-1" /> Não encontrados: {counts.notFound}
-              </Badge>
-              <Badge className="bg-blue-500/20 text-blue-700 cursor-pointer hover:bg-blue-500/30" onClick={() => setStatusFilter('open')}>
-                Abertos: {counts.open}
-              </Badge>
-              <Badge className="bg-emerald-500/20 text-emerald-700 cursor-pointer hover:bg-emerald-500/30" onClick={() => setStatusFilter('won')}>
-                Ganhos: {counts.won}
-              </Badge>
-              <Badge className="bg-orange-500/20 text-orange-700 cursor-pointer hover:bg-orange-500/30" onClick={() => setStatusFilter('lost')}>
-                Perdidos: {counts.lost}
+                <XCircle className="h-3 w-3 mr-1" /> Novos: {counts.notFound}
               </Badge>
             </div>
 
-            {/* Search + Actions */}
+            {/* SDR Selector + Import */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 p-3 border rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2 flex-1">
+                <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-xs font-medium">
+                  Importar todos para esta pipeline com SDR:
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Select value={selectedOwner || ''} onValueChange={setSelectedOwner}>
+                  <SelectTrigger className="h-8 text-xs w-[200px]">
+                    <SelectValue placeholder="Selecionar SDR/Closer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {loadingUsers ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      </div>
+                    ) : (
+                      availableUsers?.map((user: any) => (
+                        <SelectItem key={user.id} value={user.email}>
+                          <span className="flex items-center gap-2">
+                            {user.full_name || user.email}
+                            <span className="text-muted-foreground text-xs">
+                              ({user.user_roles?.[0]?.role?.toUpperCase()})
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  className="text-xs h-8"
+                  onClick={handleSmartImport}
+                  disabled={!selectedOwner || isImporting || results.length === 0}
+                >
+                  {isImporting ? (
+                    <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Importando...</>
+                  ) : (
+                    <>
+                      Importar {results.length} leads
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* What will happen */}
+            {selectedOwner && (
+              <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded border space-y-1">
+                <p className="font-medium">Ao importar:</p>
+                {counts.inCurrent > 0 && <p>• {counts.inCurrent} leads já nesta pipeline → <strong>transferir owner</strong></p>}
+                {counts.elsewhere > 0 && <p>• {counts.elsewhere} contatos de outras pipelines → <strong>criar deal aqui</strong> (sem duplicar contato)</p>}
+                {counts.notFound > 0 && <p>• {counts.notFound} novos → <strong>criar contato + deal</strong></p>}
+              </div>
+            )}
+
+            {/* Progress */}
+            {isImporting && batchProgress && (
+              <div className="space-y-1">
+                <Progress value={(batchProgress.current / batchProgress.total) * 100} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">
+                  Etapa {batchProgress.current} de {batchProgress.total}...
+                </p>
+              </div>
+            )}
+
+            {/* Search + Export */}
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
@@ -485,145 +629,53 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
               <Button size="sm" variant="outline" onClick={handleExport}>
                 <Download className="h-4 w-4 mr-1" /> Exportar
               </Button>
-              <Button
-                size="sm"
-                onClick={handleCreateLeads}
-                disabled={createNotFoundMutation.isPending || results.length === 0}
-              >
-                <Tag className="h-4 w-4 mr-1" />
-                {createNotFoundMutation.isPending && batchProgress
-                  ? `Processando batch ${batchProgress.current}/${batchProgress.total}...`
-                  : `Criar leads inexistentes com tag 'base clint' (${results.length})`}
-              </Button>
             </div>
-
-            {/* Transfer section */}
-            {counts.found > 0 && (
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 p-3 border rounded-lg bg-muted/50">
-                <div className="flex items-center gap-2 flex-1">
-                  <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-xs font-medium">
-                    {selectedDealIds.size > 0
-                      ? `${selectedDealIds.size} lead(s) selecionado(s)`
-                      : 'Selecione leads encontrados para transferir'}
-                  </span>
-                  <Button size="sm" variant="ghost" className="text-xs h-6 px-2" onClick={toggleSelectAllFound}>
-                    {selectedDealIds.size === foundWithDealId.length && foundWithDealId.length > 0
-                      ? 'Limpar seleção'
-                      : `Selecionar todos (${foundWithDealId.length})`}
-                  </Button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Select value={selectedOwner || ''} onValueChange={setSelectedOwner}>
-                    <SelectTrigger className="h-8 text-xs w-[200px]">
-                      <SelectValue placeholder="Selecionar SDR/Closer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {loadingUsers ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        </div>
-                      ) : (
-                        availableUsers?.map((user: any) => (
-                          <SelectItem key={user.id} value={user.email}>
-                            <span className="flex items-center gap-2">
-                              {user.full_name || user.email}
-                              <span className="text-muted-foreground text-xs">
-                                ({user.user_roles?.[0]?.role?.toUpperCase()})
-                              </span>
-                            </span>
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    size="sm"
-                    className="text-xs h-8"
-                    onClick={handleTransferSelected}
-                    disabled={selectedDealIds.size === 0 || !selectedOwner || bulkTransfer.isPending}
-                  >
-                    {bulkTransfer.isPending ? (
-                      <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Transferindo...</>
-                    ) : (
-                      `Transferir ${selectedDealIds.size}`
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Batch progress */}
-            {batchProgress && createNotFoundMutation.isPending && (
-              <div className="space-y-1">
-                <Progress value={(batchProgress.current / batchProgress.total) * 100} className="h-2" />
-                <p className="text-xs text-muted-foreground text-center">
-                  Processando batch {batchProgress.current} de {batchProgress.total}...
-                </p>
-              </div>
-            )}
 
             {/* Table */}
             <div className="border rounded-lg max-h-[50vh] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs w-8"></TableHead>
                     <TableHead className="text-xs">Status</TableHead>
                     <TableHead className="text-xs">Nome (Planilha)</TableHead>
-                    <TableHead className="text-xs">Email (Planilha)</TableHead>
                     <TableHead className="text-xs">Tel (Planilha)</TableHead>
                     <TableHead className="text-xs">Nome (Sistema)</TableHead>
-                    <TableHead className="text-xs">Estágio</TableHead>
-                    <TableHead className="text-xs">Status Deal</TableHead>
+                    <TableHead className="text-xs">Tel (Sistema)</TableHead>
+                    <TableHead className="text-xs">Pipeline / Estágio</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredResults.slice(0, 200).map((row, i) => (
                     <TableRow key={i} className={row.matchStatus === 'not_found' ? 'opacity-60' : ''}>
                       <TableCell className="py-1">
-                        {row.matchStatus === 'found' && row.localDealId ? (
-                          <Checkbox
-                            checked={selectedDealIds.has(row.localDealId)}
-                            onCheckedChange={() => toggleDealSelection(row.localDealId!)}
-                          />
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="py-1">
-                        {row.matchStatus === 'found' ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-400" />
-                        )}
+                        <div className="flex items-center gap-1">
+                          {getStatusIcon(row.matchStatus)}
+                          <span className="text-xs">{getStatusLabel(row.matchStatus)}</span>
+                        </div>
                       </TableCell>
                       <TableCell className="text-xs py-1">{row.excelName}</TableCell>
-                      <TableCell className="text-xs py-1">{row.excelEmail}</TableCell>
                       <TableCell className="text-xs py-1">{row.excelPhone}</TableCell>
                       <TableCell className="text-xs py-1">{row.localContactName || '—'}</TableCell>
+                      <TableCell className="text-xs py-1">{row.localContactPhone || '—'}</TableCell>
                       <TableCell className="text-xs py-1">
-                        {row.localStageName ? (
+                        {row.matchStatus === 'found_in_current' && row.localStageName ? (
                           <Badge variant="outline" className="text-xs">{row.localStageName}</Badge>
-                        ) : '—'}
-                      </TableCell>
-                      <TableCell className="text-xs py-1">
-                        {row.dealStatus ? (
-                          <span className={`font-medium ${getDealStatusColor(row.dealStatus)}`}>
-                            {getDealStatusLabel(row.dealStatus)}
-                          </span>
+                        ) : row.matchStatus === 'found_elsewhere' && row.originName ? (
+                          <Badge className="bg-amber-500/20 text-amber-700 text-xs">{row.originName}</Badge>
                         ) : '—'}
                       </TableCell>
                     </TableRow>
                   ))}
                   {filteredResults.length > 200 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-2">
-                        Mostrando 200 de {filteredResults.length} resultados. Use o filtro ou exporte para ver todos.
+                      <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-2">
+                        Mostrando 200 de {filteredResults.length} resultados.
                       </TableCell>
                     </TableRow>
                   )}
                   {filteredResults.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-4">
+                      <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-4">
                         Nenhum resultado encontrado
                       </TableCell>
                     </TableRow>
