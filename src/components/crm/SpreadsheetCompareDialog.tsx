@@ -245,24 +245,9 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     });
   }, [results, originId, createNotFoundMutation]);
 
-  const handleExport = useCallback(() => {
-    const exportData = filteredResults.map(r => ({
-      'Nome (Planilha)': r.excelName,
-      'Email (Planilha)': r.excelEmail,
-      'Telefone (Planilha)': r.excelPhone,
-      'Status': r.matchStatus === 'found' ? 'Encontrado' : 'Não encontrado',
-      'Status Deal': r.dealStatus ? getDealStatusLabel(r.dealStatus) : '',
-      'Nome (Sistema)': r.localContactName || '',
-      'Email (Sistema)': r.localContactEmail || '',
-      'Telefone (Sistema)': r.localContactPhone || '',
-      'Estágio': r.localStageName || '',
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Comparação');
-    XLSX.writeFile(wb, 'comparacao_base_clint.xlsx');
-  }, [results, statusFilter, searchText]);
+  const handleExportFn = () => {
+    // Will be defined after filteredResults
+  };
 
   // Transfer selected deals
   const handleTransferSelected = useCallback(async () => {
