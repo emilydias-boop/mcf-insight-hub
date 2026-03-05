@@ -1,39 +1,31 @@
 
 
-## Objetivo
+## Plano: Corrigir filtro de Parceria com busca e lista completa de produtos
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problemas
+1. **Opções limitadas à página atual** — `partnerProductOptions` é derivado do `partnerMap` que só contém dados dos 50 contatos da página. Não mostra todos os produtos existentes.
+2. **"Qualquer parceria" não filtra corretamente** — Está filtrando client-side sobre `partnerMap` da página, que só detecta parcerias dos emails carregados.
+3. **Não é possível digitar/buscar** — O Select não tem campo de busca.
 
-## Mudanças
+### Solução
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**1. Novo hook `useAllPartnerProducts` em `src/hooks/usePartnerProductDetection.ts`**
+- Query no Supabase: buscar `DISTINCT product_name` de `hubla_transactions` onde `sale_status = 'completed'`
+- Aplicar a mesma lógica de `classifyProduct` (ignorar Contrato/P2/Suplemento, mapear A001→A001 etc.)
+- Retornar lista única de labels ordenadas (ex: A001, A009, A010, Anticrise, ACESSO VITALÍCIO, Sócio MCF, etc.)
+- Cache longo (5 min staleTime)
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+**2. Trocar Select por Popover+Command (searchable) em `ContactFilters.tsx`**
+- Substituir o `<Select>` de Parceria por um `Popover` com `Command` (cmdk, já instalado) que permite digitar para buscar
+- Listar: "Sem filtro", "🤝 Qualquer parceria", e todos os produtos do novo hook
+- Ao digitar, filtra a lista de produtos em tempo real
 
-### 2. Hook `useCloserDetailData.ts`
+**3. Atualizar `Contatos.tsx`**
+- Passar `allPartnerProducts` (do novo hook) como `partnerProductOptions` em vez do `partnerProductOptions` derivado da página
+- O filtro `__any__` e filtro por produto específico continuam funcionando client-side com `partnerMap`, que é adequado para a página atual
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
-
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Arquivos
+- `src/hooks/usePartnerProductDetection.ts` — adicionar `useAllPartnerProducts`
+- `src/components/crm/ContactFilters.tsx` — trocar Select de parceria por Command searchable
+- `src/pages/crm/Contatos.tsx` — usar novo hook para opções
 
