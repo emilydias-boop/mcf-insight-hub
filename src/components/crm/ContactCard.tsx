@@ -1,13 +1,15 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Mail, Phone, User, AlertTriangle, Clock, Copy } from 'lucide-react';
+import { Mail, Phone, User, AlertTriangle, Clock, Copy, Handshake } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { EnrichedContact, ThermalStatus } from '@/hooks/useContactsEnriched';
+import type { PartnerProductInfo } from '@/hooks/usePartnerProductDetection';
 
 interface ContactCardProps {
   contact: EnrichedContact;
   onClick: (id: string) => void;
+  partnerProduct?: PartnerProductInfo;
 }
 
 const thermalConfig: Record<ThermalStatus, { label: string; borderClass: string; badgeClass: string }> = {
@@ -49,7 +51,7 @@ const activityTypeLabels: Record<string, string> = {
   task: 'Tarefa',
 };
 
-export const ContactCard = ({ contact, onClick }: ContactCardProps) => {
+export const ContactCard = ({ contact, onClick, partnerProduct }: ContactCardProps) => {
   const thermal = thermalConfig[contact.thermalStatus];
   const isStale = contact.daysSinceActivity !== null && contact.daysSinceActivity > 7;
 
@@ -72,7 +74,13 @@ export const ContactCard = ({ contact, onClick }: ContactCardProps) => {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+            {partnerProduct?.isPartner && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 max-w-[140px]">
+                <Handshake className="h-3 w-3 mr-0.5 shrink-0" />
+                <span className="truncate">{partnerProduct.productName}</span>
+              </Badge>
+            )}
             {contact.isDuplicate && (
               <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-5">
                 <Copy className="h-3 w-3 mr-0.5" />

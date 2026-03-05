@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useContactsEnriched, useContactFilterOptions, type EnrichedContact } from '@/hooks/useContactsEnriched';
 import { useSyncClintData } from '@/hooks/useCRMData';
+import { usePartnerProductDetectionBatch } from '@/hooks/usePartnerProductDetection';
 import { Search, Plus, User, RefreshCw, Loader2 } from 'lucide-react';
 import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
 import { ContactFormDialog } from '@/components/crm/ContactFormDialog';
@@ -79,6 +80,13 @@ const Contatos = () => {
     return result;
   }, [contactsData, searchTerm, filters]);
 
+  // Batch partner detection for visible contacts
+  const attendeesForCheck = useMemo(() => 
+    filteredContacts.map(c => ({ id: c.id, email: c.email })),
+    [filteredContacts]
+  );
+  const { data: partnerMap } = usePartnerProductDetectionBatch(attendeesForCheck);
+
   const handleContactClick = (contactId: string) => {
     setSelectedContactId(contactId);
     setDrawerOpen(true);
@@ -143,7 +151,7 @@ const Contatos = () => {
         <>
           <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredContacts.map((contact) => (
-              <ContactCard key={contact.id} contact={contact} onClick={handleContactClick} />
+              <ContactCard key={contact.id} contact={contact} onClick={handleContactClick} partnerProduct={partnerMap?.[contact.id]} />
             ))}
           </div>
 
