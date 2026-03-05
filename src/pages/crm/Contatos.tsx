@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,11 +14,18 @@ import { subDays } from 'date-fns';
 
 const Contatos = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [filters, setFilters] = useState<ContactFilterValues>(emptyFilters);
-  const { data: contacts, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useContactsEnriched();
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const { data: contacts, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useContactsEnriched(debouncedSearch);
   const syncMutation = useSyncClintData();
 
   const contactsData = contacts || [];
@@ -36,16 +43,6 @@ const Contatos = () => {
 
   const filteredContacts = useMemo(() => {
     let result = contactsData;
-
-    // Text search
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(c =>
-        c.name?.toLowerCase().includes(term) ||
-        c.email?.toLowerCase().includes(term) ||
-        c.phone?.includes(term)
-      );
-    }
 
     // Pipeline
     if (filters.pipeline) {

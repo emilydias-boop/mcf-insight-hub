@@ -117,12 +117,12 @@ const deduplicateContacts = (contacts: EnrichedContact[]): EnrichedContact[] => 
   return result;
 };
 
-const fetchContactsPage = async (pageParam: number) => {
+const fetchContactsPage = async (pageParam: number, searchTerm?: string) => {
   const from = pageParam * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
   // 1. Fetch contacts with deals
-  const { data: contacts, error: contactsError } = await supabase
+  let query = supabase
     .from('crm_contacts')
     .select(`
       id, name, email, phone, organization_name, tags, created_at,
@@ -136,6 +136,12 @@ const fetchContactsPage = async (pageParam: number) => {
     `)
     .order('created_at', { ascending: false })
     .range(from, to);
+
+  if (searchTerm && searchTerm.length >= 3) {
+    query = query.or(`name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+  }
+
+  const { data: contacts, error: contactsError } = await query;
 
   if (contactsError) throw contactsError;
   if (!contacts) return [];
@@ -256,10 +262,10 @@ const fetchContactsPage = async (pageParam: number) => {
   return enriched;
 };
 
-export const useContactsEnriched = () => {
+export const useContactsEnriched = (searchTerm?: string) => {
   return useInfiniteQuery({
-    queryKey: ['contacts-enriched'],
-    queryFn: ({ pageParam }) => fetchContactsPage(pageParam),
+    queryKey: ['contacts-enriched', searchTerm || ''],
+    queryFn: ({ pageParam }) => fetchContactsPage(pageParam, searchTerm),
     initialPageParam: 0,
     getNextPageParam: (lastPage, _allPages, lastPageParam) => {
       // If we got a full page, there are likely more
