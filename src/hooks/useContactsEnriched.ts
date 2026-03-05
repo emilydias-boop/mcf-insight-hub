@@ -188,7 +188,9 @@ export const useContactsEnriched = () => {
         };
       });
 
-      return enriched;
+      // 8. Deduplicate by email or phone suffix
+      const deduped = deduplicateContacts(enriched);
+      return deduped;
     },
     staleTime: 30000,
   });
