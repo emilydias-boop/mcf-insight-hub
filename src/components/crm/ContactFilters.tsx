@@ -173,7 +173,11 @@ export const ContactFilters = ({ filters, onChange, options, resultCount, totalC
                   ? 'Parceria'
                   : filters.partnerProduct === '__any__'
                     ? '🤝 Qualquer parceria'
-                    : filters.partnerProduct}
+                    : filters.partnerProduct === '__incorporador__'
+                      ? '🏗️ Incorporador'
+                      : filters.partnerProduct === '__anticrise__'
+                        ? '📉 Anticrise'
+                        : filters.partnerProduct}
               </span>
               <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
             </Button>
@@ -192,13 +196,29 @@ export const ContactFilters = ({ filters, onChange, options, resultCount, totalC
                     <Check className={cn("mr-2 h-3 w-3", !filters.partnerProduct ? "opacity-100" : "opacity-0")} />
                     Sem filtro
                   </CommandItem>
-                  <CommandItem
+                   <CommandItem
                     value="__any__"
                     onSelect={() => { update('partnerProduct', '__any__'); setPartnerOpen(false); }}
                     className="text-xs"
                   >
                     <Check className={cn("mr-2 h-3 w-3", filters.partnerProduct === '__any__' ? "opacity-100" : "opacity-0")} />
                     🤝 Qualquer parceria
+                  </CommandItem>
+                  <CommandItem
+                    value="__incorporador__"
+                    onSelect={() => { update('partnerProduct', '__incorporador__'); setPartnerOpen(false); }}
+                    className="text-xs"
+                  >
+                    <Check className={cn("mr-2 h-3 w-3", filters.partnerProduct === '__incorporador__' ? "opacity-100" : "opacity-0")} />
+                    🏗️ Incorporador
+                  </CommandItem>
+                  <CommandItem
+                    value="__anticrise__"
+                    onSelect={() => { update('partnerProduct', '__anticrise__'); setPartnerOpen(false); }}
+                    className="text-xs"
+                  >
+                    <Check className={cn("mr-2 h-3 w-3", filters.partnerProduct === '__anticrise__' ? "opacity-100" : "opacity-0")} />
+                    📉 Anticrise
                   </CommandItem>
                   {partnerProductOptions.map(p => (
                     <CommandItem

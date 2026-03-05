@@ -12,15 +12,23 @@ interface AttendeeForCheck {
   email: string | null;
 }
 
-// Map product_name patterns to display labels
-const PRODUCT_MAPPINGS: { pattern: RegExp; label: string }[] = [
-  { pattern: /A001/i, label: 'A001' },
-  { pattern: /A009/i, label: 'A009' },
-  { pattern: /A010/i, label: 'A010' },
-  { pattern: /A002/i, label: 'A002' },
-  { pattern: /Anticrise Completo|A003/i, label: 'Anticrise' },
-  { pattern: /Anticrise B[aá]sico|A004/i, label: 'Anticrise Básico' },
+export type ProductGroup = 'incorporador' | 'anticrise' | 'outros';
+
+// Map product_name patterns to display labels and groups
+const PRODUCT_MAPPINGS: { pattern: RegExp; label: string; group: ProductGroup }[] = [
+  { pattern: /A001/i, label: 'A001', group: 'incorporador' },
+  { pattern: /A009/i, label: 'A009', group: 'incorporador' },
+  { pattern: /A002/i, label: 'A002', group: 'incorporador' },
+  { pattern: /A010/i, label: 'A010', group: 'outros' },
+  { pattern: /Anticrise Completo|A003/i, label: 'Anticrise', group: 'anticrise' },
+  { pattern: /Anticrise B[aá]sico|A004/i, label: 'Anticrise Básico', group: 'anticrise' },
 ];
+
+export const PRODUCT_GROUPS: Record<ProductGroup, { label: string; icon: string; products: string[] }> = {
+  incorporador: { label: 'Incorporador', icon: '🏗️', products: ['A001', 'A009', 'A002'] },
+  anticrise: { label: 'Anticrise', icon: '📉', products: ['Anticrise', 'Anticrise Básico'] },
+  outros: { label: 'Outros', icon: '📦', products: ['A010'] },
+};
 
 // Products to ignore (treated as new lead, not partner)
 const IGNORED_PRODUCTS = [
@@ -30,17 +38,22 @@ const IGNORED_PRODUCTS = [
   /Suplemento/i,
 ];
 
-function classifyProduct(productName: string): string | null {
+interface ClassifiedProduct {
+  label: string;
+  group: ProductGroup;
+}
+
+function classifyProduct(productName: string): ClassifiedProduct | null {
   // Check if it should be ignored
   if (IGNORED_PRODUCTS.some(p => p.test(productName))) return null;
   
   // Find matching product label
   for (const mapping of PRODUCT_MAPPINGS) {
-    if (mapping.pattern.test(productName)) return mapping.label;
+    if (mapping.pattern.test(productName)) return { label: mapping.label, group: mapping.group };
   }
   
   // Unknown product but not ignored - still a partner
-  return productName;
+  return { label: productName, group: 'outros' };
 }
 
 /**
@@ -70,8 +83,8 @@ export const useAllPartnerProducts = () => {
       const labels = new Set<string>();
       for (const tx of data || []) {
         if (!tx.product_name) continue;
-        const label = classifyProduct(tx.product_name);
-        if (label) labels.add(label);
+        const classified = classifyProduct(tx.product_name);
+        if (classified) labels.add(classified.label);
       }
 
       return Array.from(labels).sort();
@@ -114,9 +127,9 @@ export const usePartnerProductDetectionBatch = (attendees: AttendeeForCheck[]) =
         if (!email || !tx.product_name) continue;
         if (emailToProduct.has(email)) continue; // keep first (most recent)
         
-        const label = classifyProduct(tx.product_name);
-        if (label) {
-          emailToProduct.set(email, { label, fullName: tx.product_name });
+        const classified = classifyProduct(tx.product_name);
+        if (classified) {
+          emailToProduct.set(email, { label: classified.label, fullName: tx.product_name });
         }
       }
 
