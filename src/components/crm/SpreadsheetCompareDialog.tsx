@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Upload, FileSpreadsheet, Search, CheckCircle2, XCircle, Download, Tag } from 'lucide-react';
+import { Upload, FileSpreadsheet, Search, CheckCircle2, XCircle, Download, Tag, ClipboardPaste, UserPlus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -7,10 +7,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { compareSpreadsheetWithDeals, SpreadsheetRow, useCreateNotFoundDeals } from '@/hooks/useSpreadsheetCompare';
 import { DealStatus, getDealStatusLabel, getDealStatusColor } from '@/lib/dealStatusHelper';
+import { useBulkTransfer } from '@/hooks/useBulkTransfer';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 type Step = 'upload' | 'mapping' | 'results';
 type StatusFilter = 'all' | 'found' | 'not_found' | 'open' | 'won' | 'lost';
@@ -43,6 +49,69 @@ function autoMapColumns(headers: string[]): Record<ColumnKey, string> {
   return mapping;
 }
 
+/** Detect separator from text lines */
+function detectSeparator(lines: string[]): string {
+  const candidates = [';', ',', '\t', ' - '];
+  const sample = lines.slice(0, 10);
+  let best = ';';
+  let bestCount = 0;
+  for (const sep of candidates) {
+    const total = sample.reduce((sum, line) => sum + (line.split(sep).length - 1), 0);
+    if (total > bestCount) {
+      bestCount = total;
+      best = sep;
+    }
+  }
+  return best;
+}
+
+/** Check if line looks like a header */
+function looksLikeHeader(line: string): boolean {
+  const lower = line.toLowerCase();
+  const headerWords = ['nome', 'name', 'telefone', 'phone', 'email', 'contato', 'celular'];
+  return headerWords.some(w => lower.includes(w));
+}
+
+/** Parse plain text into headers + rawData */
+function parseTextToRows(text: string): { headers: string[]; rawData: any[] } {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length === 0) return { headers: [], rawData: [] };
+
+  const sep = detectSeparator(lines);
+  const firstLine = lines[0];
+  const hasHeader = looksLikeHeader(firstLine);
+
+  let headers: string[];
+  let dataLines: string[];
+
+  if (hasHeader) {
+    headers = firstLine.split(sep).map(h => h.trim());
+    dataLines = lines.slice(1);
+  } else {
+    // Auto-generate headers based on column count
+    const colCount = firstLine.split(sep).length;
+    if (colCount >= 3) {
+      headers = ['Nome', 'Telefone', 'Email'];
+    } else if (colCount === 2) {
+      headers = ['Nome', 'Telefone'];
+    } else {
+      headers = ['Nome'];
+    }
+    dataLines = lines;
+  }
+
+  const rawData = dataLines.map(line => {
+    const parts = line.split(sep).map(p => p.trim());
+    const row: any = {};
+    headers.forEach((h, i) => {
+      row[h] = parts[i] || '';
+    });
+    return row;
+  });
+
+  return { headers, rawData };
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -59,37 +128,77 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchText, setSearchText] = useState('');
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
+  const [pastedText, setPastedText] = useState('');
+  const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
+  const [selectedOwner, setSelectedOwner] = useState<string | null>(null);
 
   const createNotFoundMutation = useCreateNotFoundDeals();
+  const bulkTransfer = useBulkTransfer();
+
+  // Query available SDRs/Closers for transfer
+  const { data: availableUsers, isLoading: loadingUsers } = useQuery({
+    queryKey: ['transfer-users-sdr-closer'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select(`id, full_name, email, user_roles!inner(role)`)
+        .in('user_roles.role', ['sdr', 'closer', 'admin', 'manager', 'coordenador'])
+        .order('full_name');
+      return data || [];
+    },
+    enabled: open && step === 'results',
+  });
+
+  const processFileData = useCallback((hdrs: string[], data: any[]) => {
+    setHeaders(hdrs);
+    setRawData(data);
+    setColumnMapping(autoMapColumns(hdrs));
+    setStep('mapping');
+  }, []);
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const ext = file.name.split('.').pop()?.toLowerCase();
 
-        if (!json.length) {
-          toast.error('Planilha vazia');
-          return;
-        }
+    if (ext === 'csv' || ext === 'txt') {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const text = evt.target?.result as string;
+          const { headers: hdrs, rawData: data } = parseTextToRows(text);
+          if (!data.length) { toast.error('Arquivo vazio'); return; }
+          processFileData(hdrs, data);
+        } catch { toast.error('Erro ao ler arquivo'); }
+      };
+      reader.readAsText(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+          if (!json.length) { toast.error('Planilha vazia'); return; }
+          const hdrs = Object.keys(json[0] as any);
+          processFileData(hdrs, json as any[]);
+        } catch { toast.error('Erro ao ler planilha'); }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  }, [processFileData]);
 
-        const hdrs = Object.keys(json[0] as any);
-        setHeaders(hdrs);
-        setRawData(json as any[]);
-        setColumnMapping(autoMapColumns(hdrs));
-        setStep('mapping');
-      } catch {
-        toast.error('Erro ao ler planilha');
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  }, []);
+  const handlePasteSubmit = useCallback(() => {
+    if (!pastedText.trim()) {
+      toast.error('Cole uma lista de leads');
+      return;
+    }
+    const { headers: hdrs, rawData: data } = parseTextToRows(pastedText);
+    if (!data.length) { toast.error('Nenhum dado detectado na lista'); return; }
+    processFileData(hdrs, data);
+  }, [pastedText, processFileData]);
 
   const handleCompare = useCallback(() => {
     if (!columnMapping.name && !columnMapping.email && !columnMapping.phone) {
@@ -105,6 +214,8 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
 
     const compared = compareSpreadsheetWithDeals(rows, deals);
     setResults(compared);
+    setSelectedDealIds(new Set());
+    setSelectedOwner(null);
     setStep('results');
     
     const found = compared.filter(r => r.matchStatus === 'found').length;
@@ -133,25 +244,6 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
       onSettled: () => setBatchProgress(null),
     });
   }, [results, originId, createNotFoundMutation]);
-
-  const handleExport = useCallback(() => {
-    const exportData = filteredResults.map(r => ({
-      'Nome (Planilha)': r.excelName,
-      'Email (Planilha)': r.excelEmail,
-      'Telefone (Planilha)': r.excelPhone,
-      'Status': r.matchStatus === 'found' ? 'Encontrado' : 'Não encontrado',
-      'Status Deal': r.dealStatus ? getDealStatusLabel(r.dealStatus) : '',
-      'Nome (Sistema)': r.localContactName || '',
-      'Email (Sistema)': r.localContactEmail || '',
-      'Telefone (Sistema)': r.localContactPhone || '',
-      'Estágio': r.localStageName || '',
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Comparação');
-    XLSX.writeFile(wb, 'comparacao_base_clint.xlsx');
-  }, [results, statusFilter, searchText]);
 
   // Counts
   const counts = useMemo(() => {
@@ -188,6 +280,64 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     return filtered;
   }, [results, statusFilter, searchText]);
 
+  const handleExport = useCallback(() => {
+    const exportData = filteredResults.map(r => ({
+      'Nome (Planilha)': r.excelName,
+      'Email (Planilha)': r.excelEmail,
+      'Telefone (Planilha)': r.excelPhone,
+      'Status': r.matchStatus === 'found' ? 'Encontrado' : 'Não encontrado',
+      'Status Deal': r.dealStatus ? getDealStatusLabel(r.dealStatus) : '',
+      'Nome (Sistema)': r.localContactName || '',
+      'Email (Sistema)': r.localContactEmail || '',
+      'Telefone (Sistema)': r.localContactPhone || '',
+      'Estágio': r.localStageName || '',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Comparação');
+    XLSX.writeFile(wb, 'comparacao_base_clint.xlsx');
+  }, [filteredResults]);
+
+  // Transfer selected deals
+  const handleTransferSelected = useCallback(async () => {
+    if (!selectedOwner || selectedDealIds.size === 0) return;
+    const user = availableUsers?.find((u: any) => u.email === selectedOwner);
+    if (!user) return;
+
+    await bulkTransfer.mutateAsync({
+      dealIds: Array.from(selectedDealIds),
+      newOwnerEmail: user.email,
+      newOwnerName: user.full_name || user.email,
+      newOwnerProfileId: user.id,
+    });
+
+    setSelectedDealIds(new Set());
+    setSelectedOwner(null);
+  }, [selectedOwner, selectedDealIds, availableUsers, bulkTransfer]);
+
+  // Toggle selection
+  const toggleDealSelection = (dealId: string) => {
+    setSelectedDealIds(prev => {
+      const next = new Set(prev);
+      if (next.has(dealId)) next.delete(dealId);
+      else next.add(dealId);
+      return next;
+    });
+  };
+
+  const foundWithDealId = useMemo(() => 
+    filteredResults.filter(r => r.matchStatus === 'found' && r.localDealId),
+  [filteredResults]);
+
+  const toggleSelectAllFound = () => {
+    if (selectedDealIds.size === foundWithDealId.length && foundWithDealId.length > 0) {
+      setSelectedDealIds(new Set());
+    } else {
+      setSelectedDealIds(new Set(foundWithDealId.map(r => r.localDealId!)));
+    }
+  };
+
   const handleReset = () => {
     setStep('upload');
     setHeaders([]);
@@ -196,6 +346,9 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     setStatusFilter('all');
     setSearchText('');
     setColumnMapping({ name: '', email: '', phone: '' });
+    setPastedText('');
+    setSelectedDealIds(new Set());
+    setSelectedOwner(null);
   };
 
   return (
@@ -207,22 +360,56 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
             Importar Planilha Base Clint
           </DialogTitle>
           <DialogDescription>
-            Compare leads da planilha com os deals da pipeline atual
+            Compare leads da planilha ou lista com os deals da pipeline atual
           </DialogDescription>
         </DialogHeader>
 
         {/* Step 1: Upload */}
         {step === 'upload' && (
-          <div className="flex flex-col items-center gap-4 py-8">
-            <Upload className="h-12 w-12 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Selecione um arquivo .xlsx do Clint</p>
-            <Input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileUpload}
-              className="max-w-sm"
-            />
-          </div>
+          <Tabs defaultValue="file" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="file" className="flex items-center gap-1">
+                <Upload className="h-4 w-4" /> Arquivo
+              </TabsTrigger>
+              <TabsTrigger value="paste" className="flex items-center gap-1">
+                <ClipboardPaste className="h-4 w-4" /> Colar Lista
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="file">
+              <div className="flex flex-col items-center gap-4 py-8">
+                <Upload className="h-12 w-12 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Selecione um arquivo .xlsx, .csv ou .txt</p>
+                <Input
+                  type="file"
+                  accept=".xlsx,.xls,.csv,.txt"
+                  onChange={handleFileUpload}
+                  className="max-w-sm"
+                />
+              </div>
+            </TabsContent>
+            <TabsContent value="paste">
+              <div className="flex flex-col gap-4 py-4">
+                <p className="text-sm text-muted-foreground">
+                  Cole sua lista abaixo. Formatos aceitos: <br />
+                  <code className="text-xs bg-muted px-1 rounded">Nome - 11999998888</code> ou{' '}
+                  <code className="text-xs bg-muted px-1 rounded">Nome;Telefone;Email</code> ou{' '}
+                  <code className="text-xs bg-muted px-1 rounded">Nome,Telefone</code>
+                </p>
+                <Textarea
+                  placeholder={"João Silva - 11999998888\nMaria Santos - 21988887777\nCarlos Souza - 31977776666"}
+                  value={pastedText}
+                  onChange={(e) => setPastedText(e.target.value)}
+                  rows={10}
+                  className="font-mono text-xs"
+                />
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={handlePasteSubmit} disabled={!pastedText.trim()}>
+                    Processar Lista
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
         )}
 
         {/* Step 2: Mapping */}
@@ -310,6 +497,62 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
               </Button>
             </div>
 
+            {/* Transfer section */}
+            {counts.found > 0 && (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 p-3 border rounded-lg bg-muted/50">
+                <div className="flex items-center gap-2 flex-1">
+                  <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-xs font-medium">
+                    {selectedDealIds.size > 0
+                      ? `${selectedDealIds.size} lead(s) selecionado(s)`
+                      : 'Selecione leads encontrados para transferir'}
+                  </span>
+                  <Button size="sm" variant="ghost" className="text-xs h-6 px-2" onClick={toggleSelectAllFound}>
+                    {selectedDealIds.size === foundWithDealId.length && foundWithDealId.length > 0
+                      ? 'Limpar seleção'
+                      : `Selecionar todos (${foundWithDealId.length})`}
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select value={selectedOwner || ''} onValueChange={setSelectedOwner}>
+                    <SelectTrigger className="h-8 text-xs w-[200px]">
+                      <SelectValue placeholder="Selecionar SDR/Closer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {loadingUsers ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        </div>
+                      ) : (
+                        availableUsers?.map((user: any) => (
+                          <SelectItem key={user.id} value={user.email}>
+                            <span className="flex items-center gap-2">
+                              {user.full_name || user.email}
+                              <span className="text-muted-foreground text-xs">
+                                ({user.user_roles?.[0]?.role?.toUpperCase()})
+                              </span>
+                            </span>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={handleTransferSelected}
+                    disabled={selectedDealIds.size === 0 || !selectedOwner || bulkTransfer.isPending}
+                  >
+                    {bulkTransfer.isPending ? (
+                      <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Transferindo...</>
+                    ) : (
+                      `Transferir ${selectedDealIds.size}`
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Batch progress */}
             {batchProgress && createNotFoundMutation.isPending && (
               <div className="space-y-1">
@@ -325,6 +568,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="text-xs w-8"></TableHead>
                     <TableHead className="text-xs">Status</TableHead>
                     <TableHead className="text-xs">Nome (Planilha)</TableHead>
                     <TableHead className="text-xs">Email (Planilha)</TableHead>
@@ -337,6 +581,14 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                 <TableBody>
                   {filteredResults.slice(0, 200).map((row, i) => (
                     <TableRow key={i} className={row.matchStatus === 'not_found' ? 'opacity-60' : ''}>
+                      <TableCell className="py-1">
+                        {row.matchStatus === 'found' && row.localDealId ? (
+                          <Checkbox
+                            checked={selectedDealIds.has(row.localDealId)}
+                            onCheckedChange={() => toggleDealSelection(row.localDealId!)}
+                          />
+                        ) : null}
+                      </TableCell>
                       <TableCell className="py-1">
                         {row.matchStatus === 'found' ? (
                           <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -364,14 +616,14 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                   ))}
                   {filteredResults.length > 200 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-2">
+                      <TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-2">
                         Mostrando 200 de {filteredResults.length} resultados. Use o filtro ou exporte para ver todos.
                       </TableCell>
                     </TableRow>
                   )}
                   {filteredResults.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-4">
+                      <TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-4">
                         Nenhum resultado encontrado
                       </TableCell>
                     </TableRow>

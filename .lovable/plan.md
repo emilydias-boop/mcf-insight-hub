@@ -1,37 +1,39 @@
 
 
-## Plano: Aceitar lista de texto além de .xlsx no SpreadsheetCompareDialog
+## Objetivo
 
-### Problema
-Atualmente o dialog só aceita arquivos `.xlsx/.xls`. O usuário frequentemente tem listas simples (texto colado ou `.txt/.csv`) com nome e telefone, e precisa cruzar com a base e transferir para um SDR.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Alterações
+## Mudanças
 
-**Arquivo: `src/components/crm/SpreadsheetCompareDialog.tsx`**
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**Step 1 (Upload) — duas opções de entrada:**
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-1. **Aba "Arquivo"**: Mantém o input de `.xlsx/.xls` atual, adicionando também `.csv,.txt`
-2. **Aba "Colar Lista"**: Um `<textarea>` onde o usuário cola linhas no formato livre (ex: `Nome - 11999998888` ou `Nome;telefone;email`). O sistema detecta automaticamente o separador (`;`, `,`, `-`, tab) e extrai as colunas.
+### 2. Hook `useCloserDetailData.ts`
 
-Usar `Tabs` do shadcn para alternar entre as duas opções na step de upload.
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**Lógica de parsing da lista colada:**
-- Detectar separador mais comum (`;` > `,` > tab > `-`)
-- Primeira linha pode ser header ou dado (auto-detectar se contém palavras como "nome", "telefone")
-- Gerar o mesmo `headers[]` + `rawData[]` que o upload de arquivo produz, alimentando o mesmo fluxo de mapping → compare → results
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**Parsing de CSV/TXT via file input:**
-- Para `.csv` e `.txt`: ler como texto (`readAsText`), aplicar a mesma lógica de split por separador
-- Para `.xlsx/.xls`: manter o parsing atual via XLSX
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-**Step 2 (Mapping) e Step 3 (Results):** Sem alterações — o fluxo downstream permanece idêntico.
+### 4. Dados exportados no Excel
 
-**Adição do seletor de SDR + transferência (conforme plano anterior aprovado):**
-- Adicionar checkboxes nos leads `found` na tabela de resultados
-- Adicionar seletor de SDR (query profiles com roles sdr/closer/admin/manager)
-- Botão "Transferir X leads" usando `useBulkTransfer`
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-### Resumo de mudanças
-- `SpreadsheetCompareDialog.tsx`: Adicionar tabs Upload/Colar no step 1, parsing de texto, aceitar `.csv/.txt`, checkboxes + seletor SDR + botão transferir no step 3
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
