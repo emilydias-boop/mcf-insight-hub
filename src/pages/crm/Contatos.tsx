@@ -66,6 +66,13 @@ const Contatos = () => {
     }
   }, [wantsSelectAll, hasNextPage, isFetchingNextPage]);
 
+  // Keep updating selection as more filtered contacts load in
+  useEffect(() => {
+    if (wantsSelectAll && filteredContacts.length > 0) {
+      setSelectedIds(new Set(filteredContacts.map(c => c.id)));
+    }
+  }, [wantsSelectAll, filteredContacts]);
+
   // Derive partner product options from partnerMap
   const partnerProductOptions = useMemo(() => {
     if (!partnerMap) return [];
