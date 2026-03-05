@@ -1,39 +1,30 @@
 
 
-## Objetivo
+## Plano: Agrupar filtro de Parceria em categorias (Anticrise / Incorporador)
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+"Qualquer parceria" mostra todos os contatos com qualquer produto, sem distinção. O usuário precisa filtrar por **categoria**: produtos Anticrise (A003, A004) vs produtos Incorporador (A001, A002, A009) vs outros (A010, etc).
 
-## Mudanças
+### Alterações
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**`src/hooks/usePartnerProductDetection.ts`**
+- Adicionar mapeamento de **grupo/categoria** para cada produto:
+  - **Incorporador**: A001, A002, A009
+  - **Anticrise**: A003 (Anticrise), A004 (Anticrise Básico)
+  - **Outros**: A010, e quaisquer produtos não classificados
+- Exportar constante `PRODUCT_GROUPS` com essas categorias
+- No `classifyProduct`, retornar também o grupo
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+**`src/components/crm/ContactFilters.tsx`**
+- Substituir "🤝 Qualquer parceria" por duas opções de grupo:
+  - "🏗️ Incorporador" (filtra A001, A002, A009)
+  - "📉 Anticrise" (filtra A003, A004)
+- Manter a lista individual de produtos abaixo, separada por grupo
+- Manter campo de busca (Command/cmdk)
 
-### 2. Hook `useCloserDetailData.ts`
+**`src/pages/crm/Contatos.tsx`**
+- Ajustar lógica de filtro: quando `partnerProduct` é `__incorporador__` ou `__anticrise__`, filtrar pelo grupo de produtos correspondente no `partnerMap`
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
-
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Resultado
+O filtro de parceria terá: Sem filtro → Incorporador → Anticrise → (produtos individuais searchable)
 
