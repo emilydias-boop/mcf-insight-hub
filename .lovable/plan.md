@@ -1,39 +1,28 @@
 
 
-## Objetivo
+## Plano: Busca server-side para contatos
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+A busca atual (`searchTerm`) filtra client-side apenas os contatos já carregados em memória. Com 118k contatos e carregamento de 500 por vez, o usuário não consegue encontrar contatos que ainda não foram carregados.
 
-## Mudanças
+### Solução
+Quando o usuário digitar no campo de busca, fazer uma query direta ao Supabase com `ilike` no nome/email/telefone, independente da paginação.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Alterações
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+**`src/hooks/useContactsEnriched.ts`**
+- Adicionar parâmetro `searchTerm` opcional ao `fetchContactsPage` e ao `useContactsEnriched`
+- Quando `searchTerm` estiver preenchido (3+ caracteres), adicionar filtros `.or()` na query do Supabase: `name.ilike.%term%,email.ilike.%term%,phone.ilike.%term%`
+- O `queryKey` incluirá o `searchTerm` para invalidar/re-fetch automaticamente
 
-### 2. Hook `useCloserDetailData.ts`
+**`src/pages/crm/Contatos.tsx`**
+- Aplicar debounce de 400ms no `searchTerm` antes de passá-lo ao hook (evitar queries a cada tecla)
+- Passar o `debouncedSearchTerm` para `useContactsEnriched(debouncedSearchTerm)`
+- Remover o filtro client-side de texto (o Supabase já faz)
+- Manter os outros filtros (pipeline, stage, SDR, etc.) client-side sobre os resultados retornados
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
-
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Resultado
+- Buscar "Daltron" vai consultar o banco e trazer o contato mesmo que não esteja nos primeiros 500
+- Sem busca ativa, o comportamento de paginação "Carregar mais" continua igual
+- Debounce evita excesso de queries
 
