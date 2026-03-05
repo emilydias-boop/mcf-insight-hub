@@ -6,15 +6,24 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useContactsEnriched, useContactFilterOptions, type EnrichedContact } from '@/hooks/useContactsEnriched';
 import { useSyncClintData } from '@/hooks/useCRMData';
 import { usePartnerProductDetectionBatch } from '@/hooks/usePartnerProductDetection';
-import { Search, Plus, User, RefreshCw, Loader2, Send } from 'lucide-react';
+import { Search, Plus, User, RefreshCw, Loader2 } from 'lucide-react';
 import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
 import { ContactFormDialog } from '@/components/crm/ContactFormDialog';
-import { ContactCard } from '@/components/crm/ContactCard';
 import { ContactFilters, emptyFilters, type ContactFilterValues } from '@/components/crm/ContactFilters';
 import { BulkActionsBar } from '@/components/crm/BulkActionsBar';
 import { SendToPipelineModal } from '@/components/crm/SendToPipelineModal';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from '@/components/ui/pagination';
 import { toast } from 'sonner';
 import { subDays } from 'date-fns';
+
+const THERMAL_ICONS: Record<string, string> = {
+  quente: '🟢',
+  morno: '🟡',
+  frio: '🔵',
+  perdido: '🔴',
+  sem_deal: '⚪',
+};
 
 const Contatos = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,48 +34,36 @@ const Contatos = () => {
   const [filters, setFilters] = useState<ContactFilterValues>(emptyFilters);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pipelineModalOpen, setPipelineModalOpen] = useState(false);
-  const [isLoadingAll, setIsLoadingAll] = useState(false);
-  const [wantsSelectAll, setWantsSelectAll] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 400);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1);
+    }, 400);
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  const { data: contacts, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useContactsEnriched(debouncedSearch);
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters]);
+
+  const { data, isLoading } = useContactsEnriched(debouncedSearch, currentPage, pageSize);
   const syncMutation = useSyncClintData();
 
-  const contactsData = contacts || [];
+  const contactsData = data?.contacts || [];
+  const totalCount = data?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
   const filterOptions = useContactFilterOptions(contactsData);
 
-  // Batch partner detection for ALL loaded contacts
-  const attendeesForCheck = useMemo(() => 
+  // Batch partner detection for current page contacts
+  const attendeesForCheck = useMemo(() =>
     contactsData.map(c => ({ id: c.id, email: c.email })),
     [contactsData]
   );
   const { data: partnerMap } = usePartnerProductDetectionBatch(attendeesForCheck);
-
-  // Auto-load all pages when partnership filter is active
-  const needsFullLoad = !!(filters.partnerProduct && hasNextPage);
-  useEffect(() => {
-    if (needsFullLoad && !isFetchingNextPage) {
-      setIsLoadingAll(true);
-      fetchNextPage();
-    }
-    if (!hasNextPage && isLoadingAll) {
-      setIsLoadingAll(false);
-    }
-  }, [needsFullLoad, isFetchingNextPage, hasNextPage, fetchNextPage, isLoadingAll]);
-
-  // After full load completes, if user wanted select all, do it
-  useEffect(() => {
-    if (wantsSelectAll && !hasNextPage && !isFetchingNextPage) {
-      setWantsSelectAll(false);
-      setIsLoadingAll(false);
-    }
-  }, [wantsSelectAll, hasNextPage, isFetchingNextPage]);
-
-
 
   // Derive partner product options from partnerMap
   const partnerProductOptions = useMemo(() => {
@@ -88,22 +85,19 @@ const Contatos = () => {
     ));
   }, [filters.pipeline, contactsData, filterOptions.stages]);
 
+  // Client-side filtering (for filters not handled server-side)
   const filteredContacts = useMemo(() => {
     let result = contactsData;
-
     if (filters.pipeline) result = result.filter(c => c.latestDeal?.origin_id === filters.pipeline);
     if (filters.stage) result = result.filter(c => c.latestDeal?.stage_name === filters.stage);
     if (filters.sdr) result = result.filter(c => c.sdrName === filters.sdr);
     if (filters.closer) result = result.filter(c => c.closerName === filters.closer);
     if (filters.status) result = result.filter(c => c.thermalStatus === filters.status);
-
     if (filters.dateRange) {
       const days = parseInt(filters.dateRange);
       const cutoff = subDays(new Date(), days);
       result = result.filter(c => new Date(c.created_at) >= cutoff);
     }
-
-    // Partnership filter
     if (filters.partnerProduct && partnerMap) {
       if (filters.partnerProduct === '__any__') {
         result = result.filter(c => partnerMap[c.id]?.isPartner);
@@ -111,16 +105,8 @@ const Contatos = () => {
         result = result.filter(c => partnerMap[c.id]?.productLabel === filters.partnerProduct);
       }
     }
-
     return result;
   }, [contactsData, filters, partnerMap]);
-
-  // Keep updating selection as more filtered contacts load in
-  useEffect(() => {
-    if (wantsSelectAll && filteredContacts.length > 0) {
-      setSelectedIds(new Set(filteredContacts.map(c => c.id)));
-    }
-  }, [wantsSelectAll, filteredContacts]);
 
   // Selection handlers
   const handleSelect = useCallback((id: string, checked: boolean) => {
@@ -137,15 +123,9 @@ const Contatos = () => {
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
-      // If there are more pages to load, trigger full load first
-      if (hasNextPage) {
-        setIsLoadingAll(true);
-        setWantsSelectAll(true);
-        fetchNextPage();
-      }
       setSelectedIds(new Set(allIds));
     }
-  }, [filteredContacts, selectedIds, hasNextPage, fetchNextPage]);
+  }, [filteredContacts, selectedIds]);
 
   const handleContactClick = (contactId: string) => {
     setSelectedContactId(contactId);
@@ -160,7 +140,32 @@ const Contatos = () => {
     });
   };
 
+  const handlePageSizeChange = (value: string) => {
+    setPageSize(Number(value));
+    setCurrentPage(1);
+  };
+
   const allFilteredSelected = filteredContacts.length > 0 && filteredContacts.every(c => selectedIds.has(c.id));
+
+  // Pagination range
+  const getPaginationRange = () => {
+    const range: (number | 'ellipsis')[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) range.push(i);
+    } else {
+      range.push(1);
+      if (currentPage > 3) range.push('ellipsis');
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) range.push(i);
+      if (currentPage < totalPages - 2) range.push('ellipsis');
+      range.push(totalPages);
+    }
+    return range;
+  };
+
+  const showFrom = totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+  const showTo = Math.min(currentPage * pageSize, totalCount);
 
   return (
     <div className="flex flex-col gap-3 sm:gap-4">
@@ -200,38 +205,27 @@ const Contatos = () => {
         onChange={setFilters}
         options={{ ...filterOptions, stages: filteredStageOptions as string[] }}
         resultCount={filteredContacts.length}
-        totalCount={contactsData.length}
+        totalCount={totalCount}
         partnerProductOptions={partnerProductOptions}
       />
 
-      {/* Loading all pages indicator */}
-      {isLoadingAll && (
-        <div className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20">
-          <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-foreground">
-              Carregando todos os contatos para filtrar parcerias...
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {contactsData.length} contatos carregados
-              {filteredContacts.length > 0 && ` • ${filteredContacts.length} parceiros encontrados`}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Select all toggle */}
+      {/* Select all toggle + info */}
       {filteredContacts.length > 0 && (
-        <div className="flex items-center gap-2">
-          <Checkbox
-            checked={allFilteredSelected}
-            onCheckedChange={handleSelectAll}
-            disabled={isLoadingAll}
-          />
-          <span className="text-xs text-muted-foreground">
-            Selecionar todos ({filteredContacts.length})
-            {hasNextPage && filters.partnerProduct && ' — carregando mais...'}
-          </span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={allFilteredSelected}
+              onCheckedChange={handleSelectAll}
+            />
+            <span className="text-xs text-muted-foreground">
+              Selecionar todos da página ({filteredContacts.length})
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              Mostrando {showFrom}-{showTo} de {totalCount.toLocaleString('pt-BR')} contatos
+            </span>
+          </div>
         </div>
       )}
 
@@ -243,47 +237,153 @@ const Contatos = () => {
         </div>
       ) : filteredContacts.length > 0 ? (
         <>
-          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredContacts.map((contact) => (
-              <ContactCard
-                key={contact.id}
-                contact={contact}
-                onClick={handleContactClick}
-                partnerProduct={partnerMap?.[contact.id]}
-                selected={selectedIds.has(contact.id)}
-                onSelect={handleSelect}
-              />
-            ))}
+          {/* Table */}
+          <div className="rounded-lg border border-border overflow-x-auto bg-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="w-10 px-3 py-2.5"></th>
+                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Nome</th>
+                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden md:table-cell">Email</th>
+                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Telefone</th>
+                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden xl:table-cell">Organização</th>
+                  <th className="text-center px-3 py-2.5 font-medium text-muted-foreground w-16">Status</th>
+                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Etapa</th>
+                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden xl:table-cell">SDR</th>
+                  <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden xl:table-cell">Closer</th>
+                  {partnerMap && (
+                    <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden 2xl:table-cell">Parceria</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredContacts.map((contact) => {
+                  const partner = partnerMap?.[contact.id];
+                  return (
+                    <tr
+                      key={contact.id}
+                      className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
+                      onClick={() => handleContactClick(contact.id)}
+                    >
+                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(contact.id)}
+                          onCheckedChange={(checked) => handleSelect(contact.id, !!checked)}
+                        />
+                      </td>
+                      <td className="px-3 py-2.5 font-medium text-foreground truncate max-w-[200px]">
+                        {contact.name}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[200px] hidden md:table-cell">
+                        {contact.email || '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground hidden lg:table-cell">
+                        {contact.phone || '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[150px] hidden xl:table-cell">
+                        {contact.organization_name || '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <span title={contact.thermalStatus}>
+                          {THERMAL_ICONS[contact.thermalStatus] || '⚪'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 hidden lg:table-cell">
+                        {contact.latestDeal?.stage_name ? (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                            style={{
+                              backgroundColor: contact.latestDeal.stage_color ? `${contact.latestDeal.stage_color}20` : undefined,
+                              color: contact.latestDeal.stage_color || undefined,
+                            }}
+                          >
+                            {contact.latestDeal.stage_name}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[120px] hidden xl:table-cell">
+                        {contact.sdrName || '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[120px] hidden xl:table-cell">
+                        {contact.closerName || '—'}
+                      </td>
+                      {partnerMap && (
+                        <td className="px-3 py-2.5 hidden 2xl:table-cell">
+                          {partner?.isPartner ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                              {partner.productLabel}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
-          {/* Load more */}
-          {hasNextPage && (
-            <div className="flex flex-col items-center gap-2 py-4">
-              <p className="text-sm text-muted-foreground">
-                Mostrando {contactsData.length} contatos carregados
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => fetchNextPage()}
-                disabled={isFetchingNextPage}
-              >
-                {isFetchingNextPage ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Carregando mais...
-                  </>
-                ) : (
-                  'Carregar mais contatos'
-                )}
-              </Button>
+          {/* Pagination */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Por página:</span>
+              <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+                <SelectTrigger className="w-20 h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="200">200</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          )}
 
-          {!hasNextPage && contactsData.length > 0 && (
-            <p className="text-sm text-muted-foreground text-center py-2">
-              Todos os {contactsData.length} contatos carregados
-            </p>
-          )}
+            {totalPages > 1 && (
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                  {getPaginationRange().map((item, idx) =>
+                    item === 'ellipsis' ? (
+                      <PaginationItem key={`ellipsis-${idx}`}>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    ) : (
+                      <PaginationItem key={item}>
+                        <PaginationLink
+                          isActive={currentPage === item}
+                          onClick={() => setCurrentPage(item as number)}
+                          className="cursor-pointer"
+                        >
+                          {item}
+                        </PaginationLink>
+                      </PaginationItem>
+                    )
+                  )}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
+
+            <span className="text-sm text-muted-foreground">
+              {totalCount.toLocaleString('pt-BR')} contatos
+            </span>
+          </div>
         </>
       ) : (
         <Card className="bg-card border-border">
