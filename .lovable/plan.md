@@ -1,39 +1,26 @@
 
 
-## Objetivo
+## Plano: Fluxo BU → Funil → Pipeline → Etapa no modal
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+O modal "Enviar para Pipeline" pula o nível de Funil (grupo). Ao selecionar uma BU como Consórcio, mostra diretamente todas as origens (pipelines) misturadas. O fluxo correto deve ser hierárquico: **BU → Funil (grupo) → Pipeline (origem) → Etapa**.
 
-## Mudanças
+### Alteração
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**`src/components/crm/SendToPipelineModal.tsx`** — Adicionar passo intermediário de Funil
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+1. Adicionar state `selectedGroupId`
+2. Após selecionar BU, buscar os **grupos** (funis) mapeados para essa BU via `useBUPipelineMap` + query em `crm_groups`
+3. Novo Select "Funil" que lista os grupos da BU (ex: "BU - Consorcio", "Perpétuo - X1", "Hubla - Construir Para Alugar")
+4. Após selecionar funil, buscar as **origens** filhas desse grupo via `crm_origins.group_id`
+5. Select "Pipeline" agora mostra apenas origens do grupo selecionado
+6. Resetar cascata: mudar BU limpa funil/pipeline/etapa; mudar funil limpa pipeline/etapa
 
-### 2. Hook `useCloserDetailData.ts`
+### Fluxo final
+```text
+BU (Consórcio) → Funil (BU - Consorcio) → Pipeline (origem) → Etapa (stage)
+```
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
-
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Arquivos
+- `src/components/crm/SendToPipelineModal.tsx` — única alteração
 
