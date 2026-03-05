@@ -19,48 +19,42 @@ interface SendToPipelineModalProps {
 
 export const SendToPipelineModal = ({ open, onOpenChange, selectedContactIds, onSuccess }: SendToPipelineModalProps) => {
   const [selectedBU, setSelectedBU] = useState<BusinessUnit | ''>('');
+  const [selectedGroupId, setSelectedGroupId] = useState('');
   const [selectedOriginId, setSelectedOriginId] = useState('');
   const [selectedStageId, setSelectedStageId] = useState('');
 
   const bulkMutation = useBulkCreateDeals();
 
-  // Fetch pipeline map for selected BU
   const { data: buMapping } = useBUPipelineMap(selectedBU || null);
 
-  // Fetch origins for selected BU
-  const { data: origins } = useQuery({
-    queryKey: ['origins-for-bu', selectedBU, buMapping?.origins, buMapping?.groups],
+  // Fetch groups (funis) for selected BU
+  const { data: groups } = useQuery({
+    queryKey: ['groups-for-bu', selectedBU, buMapping?.groups],
     queryFn: async () => {
-      if (!buMapping) return [];
-      const allOriginIds = buMapping.origins || [];
-
-      // Also resolve group children
-      if (buMapping.groups?.length) {
-        const { data: children } = await supabase
-          .from('crm_origins')
-          .select('id, name')
-          .in('group_id', buMapping.groups);
-        const childIds = children?.map(c => c.id) || [];
-        const combinedIds = [...new Set([...allOriginIds, ...childIds])];
-        
-        if (combinedIds.length === 0) return [];
-        const { data } = await supabase
-          .from('crm_origins')
-          .select('id, name, display_name')
-          .in('id', combinedIds)
-          .order('name');
-        return data || [];
-      }
-
-      if (allOriginIds.length === 0) return [];
+      if (!buMapping?.groups?.length) return [];
       const { data } = await supabase
-        .from('crm_origins')
-        .select('id, name, display_name')
-        .in('id', allOriginIds)
+        .from('crm_groups')
+        .select('id, name')
+        .in('id', buMapping.groups)
         .order('name');
       return data || [];
     },
-    enabled: !!selectedBU && !!buMapping,
+    enabled: !!selectedBU && !!buMapping && (buMapping.groups?.length ?? 0) > 0,
+  });
+
+  // Fetch origins (pipelines) for selected group
+  const { data: origins } = useQuery({
+    queryKey: ['origins-for-group', selectedGroupId],
+    queryFn: async () => {
+      if (!selectedGroupId) return [];
+      const { data } = await supabase
+        .from('crm_origins')
+        .select('id, name, display_name')
+        .eq('group_id', selectedGroupId)
+        .order('name');
+      return data || [];
+    },
+    enabled: !!selectedGroupId,
   });
 
   // Fetch stages for selected origin
@@ -70,6 +64,13 @@ export const SendToPipelineModal = ({ open, onOpenChange, selectedContactIds, on
 
   const handleBUChange = (v: string) => {
     setSelectedBU(v as BusinessUnit);
+    setSelectedGroupId('');
+    setSelectedOriginId('');
+    setSelectedStageId('');
+  };
+
+  const handleGroupChange = (v: string) => {
+    setSelectedGroupId(v);
     setSelectedOriginId('');
     setSelectedStageId('');
   };
@@ -88,6 +89,7 @@ export const SendToPipelineModal = ({ open, onOpenChange, selectedContactIds, on
           onSuccess();
           onOpenChange(false);
           setSelectedBU('');
+          setSelectedGroupId('');
           setSelectedOriginId('');
           setSelectedStageId('');
         },
@@ -122,8 +124,25 @@ export const SendToPipelineModal = ({ open, onOpenChange, selectedContactIds, on
             </Select>
           </div>
 
-          {/* Pipeline/Origin */}
-          {selectedBU && origins && origins.length > 0 && (
+          {/* Funil (Group) */}
+          {selectedBU && groups && groups.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Funil</label>
+              <Select value={selectedGroupId} onValueChange={handleGroupChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o funil" />
+                </SelectTrigger>
+                <SelectContent>
+                  {groups.map((g: any) => (
+                    <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Pipeline (Origin) */}
+          {selectedGroupId && origins && origins.length > 0 && (
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Pipeline</label>
               <Select value={selectedOriginId} onValueChange={handleOriginChange}>
@@ -139,7 +158,7 @@ export const SendToPipelineModal = ({ open, onOpenChange, selectedContactIds, on
             </div>
           )}
 
-          {/* Stage */}
+          {/* Etapa (Stage) */}
           {selectedOriginId && stages && stages.length > 0 && (
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Etapa</label>
