@@ -9,6 +9,7 @@ interface LeadInput {
   name: string;
   email: string;
   phone: string;
+  contact_id?: string; // When provided, skip contact creation
 }
 
 Deno.serve(async (req) => {
@@ -21,7 +22,12 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const { leads, origin_id } = await req.json() as { leads: LeadInput[]; origin_id: string };
+    const { leads, origin_id, owner_email, owner_profile_id } = await req.json() as {
+      leads: LeadInput[];
+      origin_id: string;
+      owner_email?: string;
+      owner_profile_id?: string;
+    };
 
     if (!leads?.length || !origin_id) {
       return new Response(JSON.stringify({ error: 'leads and origin_id are required' }), {
@@ -57,50 +63,55 @@ Deno.serve(async (req) => {
       const phoneSuffix = phoneClean.length >= 9 ? phoneClean.slice(-9) : phoneClean;
 
       try {
-        // Deduplicate contact: email → phone
-        let existingContact: any = null;
-
-        if (emailNorm) {
-          const { data } = await supabase
-            .from('crm_contacts')
-            .select('id')
-            .ilike('email', emailNorm)
-            .limit(1);
-          if (data?.length) existingContact = data[0];
-        }
-
-        if (!existingContact && phoneSuffix) {
-          const { data } = await supabase
-            .from('crm_contacts')
-            .select('id')
-            .ilike('phone', `%${phoneSuffix}`)
-            .limit(1);
-          if (data?.length) existingContact = data[0];
-        }
-
         let contactId: string;
 
-        if (existingContact) {
-          contactId = existingContact.id;
+        // If contact_id is provided, use it directly (contact already exists)
+        if (lead.contact_id) {
+          contactId = lead.contact_id;
         } else {
-          // Create contact
-          const { data: newContact, error: contactError } = await supabase
-            .from('crm_contacts')
-            .insert({
-              name: lead.name || 'Sem nome',
-              email: emailNorm || null,
-              phone: lead.phone || null,
-              clint_id: `spreadsheet_import_${timestamp}_${i}`,
-            })
-            .select('id')
-            .single();
+          // Deduplicate contact: email → phone
+          let existingContact: any = null;
 
-          if (contactError) {
-            console.error(`Error creating contact for ${lead.name}:`, contactError);
-            skipped++;
-            continue;
+          if (emailNorm) {
+            const { data } = await supabase
+              .from('crm_contacts')
+              .select('id')
+              .ilike('email', emailNorm)
+              .limit(1);
+            if (data?.length) existingContact = data[0];
           }
-          contactId = newContact.id;
+
+          if (!existingContact && phoneSuffix) {
+            const { data } = await supabase
+              .from('crm_contacts')
+              .select('id')
+              .ilike('phone', `%${phoneSuffix}`)
+              .limit(1);
+            if (data?.length) existingContact = data[0];
+          }
+
+          if (existingContact) {
+            contactId = existingContact.id;
+          } else {
+            // Create contact
+            const { data: newContact, error: contactError } = await supabase
+              .from('crm_contacts')
+              .insert({
+                name: lead.name || 'Sem nome',
+                email: emailNorm || null,
+                phone: lead.phone || null,
+                clint_id: `spreadsheet_import_${timestamp}_${i}`,
+              })
+              .select('id')
+              .single();
+
+            if (contactError) {
+              console.error(`Error creating contact for ${lead.name}:`, contactError);
+              skipped++;
+              continue;
+            }
+            contactId = newContact.id;
+          }
         }
 
         // Check if deal already exists for this contact in this origin
@@ -116,17 +127,26 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Create deal
+        // Create deal with optional owner
+        const dealData: any = {
+          name: lead.name || 'Lead importado',
+          contact_id: contactId,
+          origin_id: origin_id,
+          stage_id: firstStageId,
+          tags: ['base clint'],
+          clint_id: `spreadsheet_import_${timestamp}_${i}`,
+        };
+
+        if (owner_email) {
+          dealData.owner_id = owner_email;
+        }
+        if (owner_profile_id) {
+          dealData.owner_profile_id = owner_profile_id;
+        }
+
         const { error: dealError } = await supabase
           .from('crm_deals')
-          .insert({
-            name: lead.name || 'Lead importado',
-            contact_id: contactId,
-            origin_id: origin_id,
-            stage_id: firstStageId,
-            tags: ['base clint'],
-            clint_id: `spreadsheet_import_${timestamp}_${i}`,
-          });
+          .insert(dealData);
 
         if (dealError) {
           console.error(`Error creating deal for ${lead.name}:`, dealError);
