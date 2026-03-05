@@ -124,13 +124,19 @@ const Contatos = () => {
 
   const handleSelectAll = useCallback(() => {
     const allIds = filteredContacts.map(c => c.id);
-    const allSelected = allIds.every(id => selectedIds.has(id));
+    const allSelected = allIds.length > 0 && allIds.every(id => selectedIds.has(id));
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
+      // If there are more pages to load, trigger full load first
+      if (hasNextPage) {
+        setIsLoadingAll(true);
+        setWantsSelectAll(true);
+        fetchNextPage();
+      }
       setSelectedIds(new Set(allIds));
     }
-  }, [filteredContacts, selectedIds]);
+  }, [filteredContacts, selectedIds, hasNextPage, fetchNextPage]);
 
   const handleContactClick = (contactId: string) => {
     setSelectedContactId(contactId);
