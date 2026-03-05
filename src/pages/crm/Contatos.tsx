@@ -131,7 +131,7 @@ const Contatos = () => {
       <ContactFilters
         filters={filters}
         onChange={setFilters}
-        options={{ ...filterOptions, stages: filteredStageOptions }}
+        options={{ ...filterOptions, stages: filteredStageOptions as string[] }}
         resultCount={filteredContacts.length}
         totalCount={contactsData.length}
       />

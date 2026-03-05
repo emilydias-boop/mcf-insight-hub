@@ -50,6 +50,75 @@ const getThermalStatus = (daysSince: number | null): ThermalStatus => {
   return 'perdido';
 };
 
+const normalizePhone = (phone: string | null): string | null => {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  return digits.length >= 9 ? digits.slice(-9) : null;
+};
+
+const deduplicateContacts = (contacts: EnrichedContact[]): EnrichedContact[] => {
+  const groups = new Map<string, EnrichedContact[]>();
+
+  for (const contact of contacts) {
+    const emailKey = contact.email?.toLowerCase().trim();
+    const phoneKey = normalizePhone(contact.phone);
+    const key = emailKey || (phoneKey ? `phone:${phoneKey}` : `id:${contact.id}`);
+
+    const group = groups.get(key);
+    if (group) {
+      group.push(contact);
+    } else {
+      groups.set(key, [contact]);
+    }
+  }
+
+  const result: EnrichedContact[] = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      result.push(group[0]);
+      continue;
+    }
+
+    // Pick primary: prefer the one with a deal, then oldest
+    group.sort((a, b) => {
+      const aHasDeal = a.latestDeal ? 1 : 0;
+      const bHasDeal = b.latestDeal ? 1 : 0;
+      if (bHasDeal !== aHasDeal) return bHasDeal - aHasDeal;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+
+    const primary = { ...group[0], isDuplicate: true };
+
+    // Consolidate: pick the most recent deal across all duplicates
+    for (let i = 1; i < group.length; i++) {
+      const other = group[i];
+      if (other.latestDeal && primary.latestDeal) {
+        const otherDate = other.latestDeal.created_at || '';
+        const primaryDate = primary.latestDeal.created_at || '';
+        if (otherDate > primaryDate) {
+          primary.latestDeal = other.latestDeal;
+          primary.daysSinceActivity = other.daysSinceActivity;
+          primary.thermalStatus = other.thermalStatus;
+          primary.sdrName = other.sdrName;
+          primary.closerName = other.closerName;
+          primary.lastActivity = other.lastActivity;
+        }
+      } else if (other.latestDeal && !primary.latestDeal) {
+        primary.latestDeal = other.latestDeal;
+        primary.daysSinceActivity = other.daysSinceActivity;
+        primary.thermalStatus = other.thermalStatus;
+        primary.sdrName = other.sdrName;
+        primary.closerName = other.closerName;
+        primary.lastActivity = other.lastActivity;
+      }
+    }
+
+    result.push(primary);
+  }
+
+  return result;
+};
+
 export const useContactsEnriched = () => {
   return useQuery({
     queryKey: ['contacts-enriched'],
@@ -188,7 +257,9 @@ export const useContactsEnriched = () => {
         };
       });
 
-      return enriched;
+      // 8. Deduplicate by email or phone suffix
+      const deduped = deduplicateContacts(enriched);
+      return deduped;
     },
     staleTime: 30000,
   });

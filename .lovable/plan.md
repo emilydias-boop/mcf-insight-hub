@@ -1,30 +1,39 @@
 
 
-## Plano: Deduplicar contatos na listagem por email/telefone
+## Objetivo
 
-### Problema
-A página de Contatos mostra registros duplicados de `crm_contacts` (ex: "Carlos Henrique" aparece 2x com mesmo email e telefone). Esses são registros distintos na tabela mas representam a mesma pessoa.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Solução
-No hook `useContactsEnriched.ts`, após buscar e enriquecer os contatos, aplicar deduplicação client-side agrupando por email (ou telefone como fallback). Para cada grupo de duplicados, manter apenas o contato "primário" (o que tem mais deals, ou o mais antigo), consolidando os deals de todos os duplicados nele.
+## Mudanças
 
-### Alterações
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**Arquivo: `src/hooks/useContactsEnriched.ts`**
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Após construir o array `enriched` (linha ~170), adicionar uma etapa de deduplicação:
+### 2. Hook `useCloserDetailData.ts`
 
-1. Agrupar contatos por `email.toLowerCase()` (quando email existe) e por sufixo de telefone (últimos 9 dígitos, quando não há email)
-2. Para cada grupo com 2+ contatos:
-   - Escolher o primário: mais deals → mais antigo
-   - Consolidar: manter o `latestDeal` do que tiver o deal mais recente, somar informações
-   - Marcar `isDuplicate: true` no card consolidado
-3. Retornar apenas contatos únicos
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-Isso garante que a listagem mostra cada pessoa uma única vez, independentemente de quantos registros duplicados existam em `crm_contacts`. Os deals de todas as cópias são considerados ao determinar o status térmico e deal mais recente.
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-### Resultado
-- "Carlos Henrique Guimarães do Vale" aparece 1x no lugar de 2x
-- O card consolidado mostra o deal mais relevante entre todos os registros
-- Badge "Dup" permanece para indicar que existem registros duplicados no banco
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
