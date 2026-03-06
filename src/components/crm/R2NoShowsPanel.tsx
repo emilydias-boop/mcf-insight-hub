@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -189,13 +189,33 @@ function NoShowCard({
   );
 }
 
-export function R2NoShowsPanel({ closers }: R2NoShowsPanelProps) {
-  const [dateFilter, setDateFilter] = useState<DateFilterType>('week');
-  const [selectedDate, setSelectedDate] = useState(new Date());
+export function R2NoShowsPanel({ closers, parentViewMode, parentSelectedDate, parentRangeStart, parentRangeEnd }: R2NoShowsPanelProps) {
+  // Map parent viewMode to panel dateFilter
+  const mapViewMode = (vm?: 'day' | 'week' | 'month'): DateFilterType => {
+    if (vm === 'day') return 'day';
+    if (vm === 'month') return 'month';
+    return 'week';
+  };
+
+  const [dateFilter, setDateFilter] = useState<DateFilterType>(mapViewMode(parentViewMode));
+  const [selectedDate, setSelectedDate] = useState(parentSelectedDate || new Date());
   const [customRange, setCustomRange] = useState<{ start: Date; end: Date }>({
     start: subDays(new Date(), 7),
     end: new Date(),
   });
+
+  // Sync with parent filters when they change
+  useEffect(() => {
+    if (parentViewMode) {
+      setDateFilter(mapViewMode(parentViewMode));
+    }
+  }, [parentViewMode]);
+
+  useEffect(() => {
+    if (parentSelectedDate) {
+      setSelectedDate(parentSelectedDate);
+    }
+  }, [parentSelectedDate]);
   const [closerFilter, setCloserFilter] = useState<string>('all');
   const [r1CloserFilter, setR1CloserFilter] = useState<string>('all');
   
