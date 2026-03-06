@@ -122,33 +122,6 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
     );
   }
 
-  const handleCopyReport2 = useCallback(() => {
-    const today = format(new Date(), 'dd/MM/yyyy');
-    const lines = [`📋 RELATÓRIO PENDENTES R2 - ${today}`, `Total: ${filteredLeads.length} leads`, ''];
-
-    filteredLeads.forEach((lead, i) => {
-      const name = lead.attendee_name || lead.deal?.contact?.name || lead.deal?.name || 'Lead';
-      const phone = lead.attendee_phone || lead.deal?.contact?.phone || 'N/A';
-      const r1Date = lead.meeting_slot?.scheduled_at
-        ? format(parseISO(lead.meeting_slot.scheduled_at), "dd/MM 'às' HH:mm")
-        : 'N/A';
-      const closer = lead.meeting_slot?.closer?.name || 'N/A';
-      const paidAt = format(parseISO(lead.contract_paid_at), "dd/MM 'às' HH:mm");
-
-      lines.push(
-        `${i + 1}. Nome: ${name}`,
-        `   📞 Telefone: ${phone}`,
-        `   📅 R1: ${r1Date}`,
-        `   👤 Closer R1: ${closer}`,
-        `   💰 Contrato Pago: ${paidAt}`,
-        ''
-      );
-    });
-
-    navigator.clipboard.writeText(lines.join('\n'));
-    toast.success('Relatório copiado!');
-  }, [filteredLeads]);
-
   return (
     <>
       <div className="mb-4 flex items-center justify-between">
