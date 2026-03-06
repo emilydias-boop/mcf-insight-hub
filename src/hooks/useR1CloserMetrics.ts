@@ -65,12 +65,19 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         .from('sdr')
         .select('email, name')
         .eq('active', true)
-        .eq('squad', bu)
-        .eq('role_type', 'sdr');
+        .eq('squad', bu);
+        // REMOVIDO: .eq('role_type', 'sdr') — closers também podem agendar reuniões diretamente
 
       if (sdrsError) throw sdrsError;
 
-      const validSdrEmails = new Set((sdrs || []).map(s => s.email.toLowerCase()));
+      // Também incluir closers ativos da BU como agendadores válidos
+      // Caso: Thaynar Tavares (closer) agenda reuniões diretamente → contrato deve ser contado
+      const closerEmails = new Set((closers || []).map(c => c.email.toLowerCase()));
+
+      const validSdrEmails = new Set([
+        ...(sdrs || []).map(s => s.email.toLowerCase()),
+        ...closerEmails,
+      ]);
 
       // Statuses that count as "Agendada" - explicitly defined to avoid counting canceled/rescheduled
       const allowedAgendadaStatuses = ['scheduled', 'invited', 'completed', 'no_show', 'contract_paid'];
