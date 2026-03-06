@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -14,7 +14,9 @@ import {
   Loader2,
   Users,
   AlertCircle,
+  Copy,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -218,7 +220,33 @@ export function R2NoShowsPanel({ closers }: R2NoShowsPanelProps) {
     return leads.filter(l => l.r1_closer_id === r1CloserFilter);
   }, [leads, r1CloserFilter]);
 
-  // Convert R2NoShowLead to R2MeetingRow for the detail drawer
+  const handleCopyReport = useCallback(() => {
+    const today = format(new Date(), 'dd/MM/yyyy');
+    const lines = [`📋 RELATÓRIO NO-SHOWS R2 - ${today}`, `Total: ${filteredLeads.length} no-shows`, ''];
+
+    filteredLeads.forEach((lead, i) => {
+      const r2Date = format(new Date(lead.scheduled_at), "dd/MM 'às' HH:mm");
+      const r1Info = lead.r1_closer_name
+        ? `${lead.r1_closer_name}${lead.r1_date ? ` (${format(new Date(lead.r1_date), 'dd/MM')})` : ''}`
+        : 'N/A';
+
+      lines.push(
+        `${i + 1}. Nome: ${lead.name}`,
+        `   📞 Telefone: ${lead.phone || 'N/A'}`,
+        `   📧 Email: ${lead.email || 'N/A'}`,
+        `   📅 R2 era: ${r2Date}`,
+        `   👤 Sócio R2: ${lead.closer_name}`,
+        `   📞 SDR: ${lead.sdr_name || 'N/A'}`,
+        `   🎯 Closer R1: ${r1Info}`,
+        ''
+      );
+    });
+
+    navigator.clipboard.writeText(lines.join('\n'));
+    toast.success('Relatório copiado!');
+  }, [filteredLeads]);
+
+
   const convertToMeetingRow = (lead: R2NoShowLead): R2MeetingRow => ({
     id: lead.meeting_id,
     scheduled_at: lead.scheduled_at,
@@ -438,10 +466,16 @@ export function R2NoShowsPanel({ closers }: R2NoShowsPanelProps) {
           </Select>
         </div>
 
-        {/* Results Count */}
-        <div className="ml-auto text-sm text-muted-foreground">
-          Mostrando <span className="font-medium text-foreground">{filteredLeads.length}</span> no-shows
-          {' '}de {getDateRangeLabel()}
+        {/* Copy Report + Results Count */}
+        <div className="ml-auto flex items-center gap-3">
+          <Button size="sm" variant="outline" onClick={handleCopyReport}>
+            <Copy className="h-4 w-4 mr-1" />
+            Copiar Relatório
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Mostrando <span className="font-medium text-foreground">{filteredLeads.length}</span> no-shows
+            {' '}de {getDateRangeLabel()}
+          </span>
         </div>
       </div>
 
