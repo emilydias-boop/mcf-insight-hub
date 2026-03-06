@@ -45,7 +45,7 @@ import {
 import { useR2PendingLeads, R2PendingLead } from '@/hooks/useR2PendingLeads';
 import { R2QuickScheduleModal } from './R2QuickScheduleModal';
 import { RefundModal } from './RefundModal';
-import { R2CloserWithAvailability } from '@/hooks/useR2AgendaData';
+import { useRecognizePartner } from '@/hooks/useRecognizePartner';
 import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { cn } from '@/lib/utils';
