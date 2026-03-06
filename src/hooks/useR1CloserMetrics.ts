@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { startOfDay, endOfDay, format } from "date-fns";
+import { startOfDay, endOfDay, format, subHours, addHours } from "date-fns";
 
 /**
  * Executes a Supabase .in() query in batches to avoid URL length limits.
