@@ -1,39 +1,25 @@
 
 
-## Objetivo
+## Diagnóstico
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+Existem **7 registros de no-show R2** em março no banco de dados. Após exclusões (reagendados, reembolsados, R2 completados), o número final pode variar.
 
-## Mudanças
+O problema principal é que o **badge no-show** e a **lista no-show** usam fontes de data **diferentes**:
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+- **Badge**: usa `rangeStart`/`rangeEnd` do `viewMode` da página principal (Dia/Semana/Mês)
+- **Lista do painel**: usa seu próprio estado `dateFilter` interno, que inicia como `'week'` por padrão
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Quando você seleciona "Mês" no filtro principal, o badge atualiza para o mês inteiro, mas o painel de No-Shows continua filtrando pela semana atual internamente. Isso explica a divergência.
 
-### 2. Hook `useCloserDetailData.ts`
+## Plano de correção
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**Arquivo: `src/pages/crm/AgendaR2.tsx`**
+- Passar `viewMode`, `selectedDate` e `rangeStart`/`rangeEnd` como props para o `R2NoShowsPanel`
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**Arquivo: `src/components/crm/R2NoShowsPanel.tsx`**
+- Receber e usar o `viewMode` e `selectedDate` da página pai como estado inicial do filtro de data do painel
+- Sincronizar o filtro de data do painel com o filtro principal: quando `viewMode` mudar na página pai, atualizar o `dateFilter` e `selectedDate` do painel via `useEffect`
+- Isso garante que badge e lista sempre mostrem o mesmo período
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+**Resultado**: Badge e lista de no-shows sempre sincronizados com o mesmo período selecionado.
 
