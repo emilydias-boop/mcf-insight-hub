@@ -11,7 +11,8 @@ import {
   MoreVertical,
   RotateCcw,
   Copy,
-  UserCheck
+  UserCheck,
+  Repeat
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ import { useR2PendingLeads, R2PendingLead } from '@/hooks/useR2PendingLeads';
 import { R2QuickScheduleModal } from './R2QuickScheduleModal';
 import { RefundModal } from './RefundModal';
 import { useRecognizePartner } from '@/hooks/useRecognizePartner';
+import { useRecognizeRecurrence } from '@/hooks/useRecognizeRecurrence';
 import { R2CloserWithAvailability } from '@/hooks/useR2AgendaData';
 import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
@@ -68,6 +70,9 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
   const [partnerDialogOpen, setPartnerDialogOpen] = useState(false);
   const [partnerLead, setPartnerLead] = useState<R2PendingLead | null>(null);
   const recognizePartner = useRecognizePartner();
+  const [recurrenceDialogOpen, setRecurrenceDialogOpen] = useState(false);
+  const [recurrenceLead, setRecurrenceLead] = useState<R2PendingLead | null>(null);
+  const recognizeRecurrence = useRecognizeRecurrence();
 
   const filteredLeads = useMemo(() => {
     if (r1CloserFilter === 'all') return pendingLeads;
@@ -257,6 +262,13 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
                             <UserCheck className="h-4 w-4 mr-2 text-blue-600" />
                             Reconhecer Parceiro
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setRecurrenceLead(lead);
+                            setRecurrenceDialogOpen(true);
+                          }}>
+                            <Repeat className="h-4 w-4 mr-2 text-green-600" />
+                            Reconhecer Recorrência
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -336,6 +348,41 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
                 }
                 setPartnerDialogOpen(false);
                 setPartnerLead(null);
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Recurrence Recognition Confirmation */}
+      <AlertDialog open={recurrenceDialogOpen} onOpenChange={setRecurrenceDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reconhecer como Recorrência?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O lead <strong>{recurrenceLead?.attendee_name || recurrenceLead?.deal?.contact?.name || 'Lead'}</strong> será 
+              marcado como recorrência, removido da lista de pendentes e o deal será movido para Perdido.
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (recurrenceLead) {
+                  recognizeRecurrence.mutate({
+                    attendeeId: recurrenceLead.id,
+                    dealId: recurrenceLead.deal?.id,
+                    contactId: recurrenceLead.deal?.contact?.id,
+                    contactName: recurrenceLead.attendee_name || recurrenceLead.deal?.contact?.name || undefined,
+                    contactEmail: recurrenceLead.deal?.contact?.email || undefined,
+                    contactPhone: recurrenceLead.attendee_phone || recurrenceLead.deal?.contact?.phone || undefined,
+                  });
+                }
+                setRecurrenceDialogOpen(false);
+                setRecurrenceLead(null);
               }}
             >
               Confirmar
