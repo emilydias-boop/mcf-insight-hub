@@ -40,10 +40,10 @@ export const useContractReport = (
   return useQuery({
     queryKey: ['contract-report', filters, allowedCloserIds],
     queryFn: async (): Promise<ContractReportRow[]> => {
-      // Corrigir fuso horário BRT (UTC-3): expandir range em 3h para cada lado
-      // Ex: filtrar "05/03 BRT" = buscar de 04/03 21:00 UTC até 06/03 02:59 UTC
+      // Corrigir fuso horário BRT (UTC-3): somar 3h em ambos os extremos
+      // Ex: filtrar "05/03 BRT" = buscar de 05/03 03:00 UTC até 06/03 02:59 UTC (janela 24h exata)
       const BRT_OFFSET_HOURS = 3;
-      const startISO = subHours(new Date(format(filters.startDate, 'yyyy-MM-dd') + 'T00:00:00'), BRT_OFFSET_HOURS).toISOString();
+      const startISO = addHours(new Date(format(filters.startDate, 'yyyy-MM-dd') + 'T00:00:00'), BRT_OFFSET_HOURS).toISOString();
       const endISO = addHours(new Date(format(filters.endDate, 'yyyy-MM-dd') + 'T23:59:59'), BRT_OFFSET_HOURS).toISOString();
       
       // Query meeting_slot_attendees with status = 'contract_paid'
