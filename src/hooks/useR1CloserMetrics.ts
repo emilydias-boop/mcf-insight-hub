@@ -41,11 +41,10 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
   return useQuery({
     queryKey: ['r1-closer-metrics', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), bu],
     queryFn: async (): Promise<R1CloserMetric[]> => {
-      // Corrigir fuso horário: usuário pensa em BRT (UTC-3)
-      // Para capturar todos os contratos do dia em BRT, expandimos o range em 3h para cada lado
-      // Ex: dia 05/03 BRT = 04/03 21:00 UTC → 06/03 02:59 UTC
+      // Corrigir fuso horário BRT (UTC-3): somar 3h em ambos os extremos
+      // Ex: dia 05/03 BRT = 05/03 03:00 UTC → 06/03 02:59 UTC (janela 24h exata)
       const BRT_OFFSET_HOURS = 3;
-      const start = subHours(startOfDay(startDate), BRT_OFFSET_HOURS).toISOString();
+      const start = addHours(startOfDay(startDate), BRT_OFFSET_HOURS).toISOString();
       const end = addHours(endOfDay(endDate), BRT_OFFSET_HOURS).toISOString();
 
       // Fetch active closers that handle R1 meetings - FILTERED by BU
