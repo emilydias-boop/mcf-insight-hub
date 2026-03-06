@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -14,7 +14,9 @@ import {
   Loader2,
   Users,
   AlertCircle,
+  Copy,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -438,10 +440,16 @@ export function R2NoShowsPanel({ closers }: R2NoShowsPanelProps) {
           </Select>
         </div>
 
-        {/* Results Count */}
-        <div className="ml-auto text-sm text-muted-foreground">
-          Mostrando <span className="font-medium text-foreground">{filteredLeads.length}</span> no-shows
-          {' '}de {getDateRangeLabel()}
+        {/* Copy Report + Results Count */}
+        <div className="ml-auto flex items-center gap-3">
+          <Button size="sm" variant="outline" onClick={handleCopyReport}>
+            <Copy className="h-4 w-4 mr-1" />
+            Copiar Relatório
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Mostrando <span className="font-medium text-foreground">{filteredLeads.length}</span> no-shows
+            {' '}de {getDateRangeLabel()}
+          </span>
         </div>
       </div>
 
