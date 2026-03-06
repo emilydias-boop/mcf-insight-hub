@@ -65,6 +65,9 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
   const [refundModalOpen, setRefundModalOpen] = useState(false);
   const [refundLead, setRefundLead] = useState<R2PendingLead | null>(null);
   const [r1CloserFilter, setR1CloserFilter] = useState<string>('all');
+  const [partnerDialogOpen, setPartnerDialogOpen] = useState(false);
+  const [partnerLead, setPartnerLead] = useState<R2PendingLead | null>(null);
+  const recognizePartner = useRecognizePartner();
 
   const filteredLeads = useMemo(() => {
     if (r1CloserFilter === 'all') return pendingLeads;
@@ -305,6 +308,41 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
         dealName={refundLead?.attendee_name || refundLead?.deal?.name}
         meetingType="r1"
       />
+
+      {/* Partner Recognition Confirmation */}
+      <AlertDialog open={partnerDialogOpen} onOpenChange={setPartnerDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reconhecer como Parceiro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O lead <strong>{partnerLead?.attendee_name || partnerLead?.deal?.contact?.name || 'Lead'}</strong> será 
+              marcado como parceiro, removido da lista de pendentes e o deal será movido para Perdido.
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (partnerLead) {
+                  recognizePartner.mutate({
+                    attendeeId: partnerLead.id,
+                    dealId: partnerLead.deal?.id,
+                    contactId: partnerLead.deal?.contact?.id,
+                    contactName: partnerLead.attendee_name || partnerLead.deal?.contact?.name || undefined,
+                    contactEmail: partnerLead.deal?.contact?.email || undefined,
+                    contactPhone: partnerLead.attendee_phone || partnerLead.deal?.contact?.phone || undefined,
+                  });
+                }
+                setPartnerDialogOpen(false);
+                setPartnerLead(null);
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
