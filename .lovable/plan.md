@@ -1,39 +1,27 @@
 
 
-## Objetivo
+## Plano: Adicionar "Reconhecer Recorrência" no Pendentes R2 + Filtro
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Alterações
 
-## Mudanças
+**1. Novo hook `src/hooks/useRecognizeRecurrence.ts`**
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+Idêntico ao `useRecognizePartner`, mas com:
+- `return_source: 'manual_recurrence'`
+- `partner_product: 'Reconhecido como recorrência - Pendentes R2'`
+- Status do attendee: `'recurrence_recognized'`
+- Activity type: `'recurrence_recognized'`
+- Toast: "Lead reconhecido como recorrência com sucesso"
+- Invalida: `r2-pending-leads`, `partner-returns`, `r2-agenda`
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+**2. `src/components/crm/R2PendingLeadsPanel.tsx`**
 
-### 2. Hook `useCloserDetailData.ts`
+- Importar `useRecognizeRecurrence` e ícone `Repeat` do lucide-react
+- Adicionar estados `recurrenceDialogOpen` e `recurrenceLead`
+- Adicionar 4ª opção no DropdownMenu: "Reconhecer Recorrência" (ícone Repeat, cor verde)
+- Adicionar AlertDialog de confirmação para recorrência (similar ao de parceiro)
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**3. `src/hooks/useR2PendingLeads.ts`**
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+- No filtro de resultados, excluir attendees com `status` igual a `'recurrence_recognized'` ou `'partner_recognized'` (fallback para caso dados antigos ainda apareçam)
 
