@@ -1,24 +1,39 @@
 
 
-## Diagnóstico: Badge No-Shows (17) vs Lista (5 leads)
+## Objetivo
 
-O badge "17" na aba No-Shows usa o hook `useR2NoShowsCount()` que conta **todos os no-shows dos últimos 30 dias** (sem filtro de data/closer).
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Já a lista exibida usa `useR2NoShowLeads()` que filtra pelo **período selecionado** nos filtros (Dia/Semana/Mês/Personalizado). No screenshot, o período está configurado para "Semana" ou "Mês" de março, mostrando apenas 5 no-shows desse intervalo.
+## Mudanças
 
-### Plano de correção
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**Arquivo: `src/hooks/useR2NoShowLeads.ts` (função `useR2NoShowsCount`)**
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Alterar a contagem do badge para usar o mesmo período que a lista mostra por padrão (mês atual), ao invés de "últimos 30 dias". OU, alternativamente:
+### 2. Hook `useCloserDetailData.ts`
 
-**Arquivo: `src/pages/crm/AgendaR2.tsx`**
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-Passar os parâmetros de data ativos para `useR2NoShowsCount` de modo que o badge reflita o mesmo filtro de período que a lista. Isso requer:
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-1. Modificar `useR2NoShowsCount` para aceitar parâmetros de data opcionais (`startDate`, `endDate`)
-2. Passar `rangeStart`/`rangeEnd` da AgendaR2 para o hook
-3. Quando sem parâmetros (fallback), usar mês atual ao invés de 30 dias
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-Isso garante que o badge e a lista mostrem o mesmo número.
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

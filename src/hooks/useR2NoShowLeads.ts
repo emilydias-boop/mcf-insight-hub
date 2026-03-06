@@ -325,13 +325,13 @@ export function useR2NoShowLeads({
 /**
  * Hook to count no-shows (for badge), excluding those that have been rescheduled
  */
-export function useR2NoShowsCount() {
+export function useR2NoShowsCount(startDate?: Date, endDate?: Date) {
   return useQuery({
-    queryKey: ['r2-noshow-count'],
+    queryKey: ['r2-noshow-count', startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async (): Promise<number> => {
-      // Count no-shows from last 30 days
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // Use provided range or fallback to current month
+      const rangeStart = startDate || startOfMonth(new Date());
+      const rangeEnd = endDate || endOfMonth(new Date());
       
       // Step 1: Get IDs of all no_show attendees in the last 30 days
       const { data: noShowAttendees, error } = await supabase
@@ -339,7 +339,8 @@ export function useR2NoShowsCount() {
         .select('id, meeting_slot:meeting_slots!inner(meeting_type, scheduled_at)')
         .eq('status', 'no_show')
         .eq('meeting_slot.meeting_type', 'r2')
-        .gte('meeting_slot.scheduled_at', thirtyDaysAgo.toISOString());
+        .gte('meeting_slot.scheduled_at', rangeStart.toISOString())
+        .lte('meeting_slot.scheduled_at', rangeEnd.toISOString());
 
       if (error) throw error;
       if (!noShowAttendees || noShowAttendees.length === 0) return 0;
