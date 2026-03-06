@@ -43,6 +43,10 @@ import { LEAD_PROFILE_OPTIONS, R2MeetingRow } from '@/types/r2Agenda';
 
 interface R2NoShowsPanelProps {
   closers: R2CloserWithAvailability[];
+  parentViewMode?: 'day' | 'week' | 'month';
+  parentSelectedDate?: Date;
+  parentRangeStart?: Date;
+  parentRangeEnd?: Date;
 }
 
 function NoShowCard({ 

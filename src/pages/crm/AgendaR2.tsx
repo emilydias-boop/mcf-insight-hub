@@ -628,7 +628,13 @@ export default function AgendaR2() {
 
             {/* No-Shows Tab */}
             <TabsContent value="noshows" className="mt-0">
-              <R2NoShowsPanel closers={closersAsR2CloserWithAvailability} />
+              <R2NoShowsPanel 
+                closers={closersAsR2CloserWithAvailability} 
+                parentViewMode={viewMode}
+                parentSelectedDate={selectedDate}
+                parentRangeStart={rangeStart}
+                parentRangeEnd={rangeEnd}
+              />
             </TabsContent>
 
             {/* Report Tab */}
