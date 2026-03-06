@@ -51,7 +51,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       // Fetch active closers that handle R1 meetings - FILTERED by BU
       const { data: closers, error: closersError } = await supabase
         .from('closers')
-        .select('id, name, color, meeting_type, bu')
+        .select('id, name, color, email, meeting_type, bu')
         .eq('is_active', true)
         .eq('bu', bu);
 
