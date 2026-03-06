@@ -1,26 +1,39 @@
 
 
-## Plano: Filtrar parceiros (is_partner) das métricas de Closers
+## Objetivo
 
-### Problema
-O hook `useR1CloserMetrics.ts` (aba "Closers" no painel de equipe) **não filtra** attendees com `is_partner = true`. Isso faz com que sócios adicionados a reuniões sejam contados nas métricas de R1 Agendada, R1 Realizada, No-Show e Outside dos Closers.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-A RPC `get_sdr_metrics_from_agenda` (aba SDRs) já filtra corretamente com `AND msa.is_partner = false`.
+## Mudanças
 
-### Alterações
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**`src/hooks/useR1CloserMetrics.ts`**
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-3 pontos de correção:
+### 2. Hook `useCloserDetailData.ts`
 
-1. **Query principal de meetings (linha 82-88)**: Adicionar `is_partner` no select dos attendees para poder filtrar client-side.
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-2. **Processamento de attendees (linha 420)**: Adicionar check `if (att.is_partner) return;` antes de contar nas métricas (r1_agendada, r1_realizada, noshow).
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-3. **Query de contratos por data de pagamento (linhas 204-220 e 226-243)**: Adicionar `.eq('is_partner', false)` nas queries de `contractsByPaymentDate` e `contractsWithoutTimestamp`.
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-4. **Outside detection (linha 356)**: Adicionar check `is_partner` ao contar outsides — precisa buscar `is_partner` nas queries de attendees usadas nessa seção, ou reutilizar o filtro do passo 2 (que já pula outsides de parceiros indiretamente via o map de deals).
+### 4. Dados exportados no Excel
 
-### Resultado
-Sócios não serão mais contados em nenhuma métrica da aba Closers, mantendo consistência com a aba SDRs.
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
