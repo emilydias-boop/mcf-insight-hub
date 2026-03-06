@@ -1,39 +1,28 @@
 
 
-## Objetivo
+## Plano: Botão "Copiar Relatório" na aba No-Shows do R2
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Alteração em `src/components/crm/R2NoShowsPanel.tsx`
 
-## Mudanças
+Adicionar botão "Copiar Relatório" ao lado do contador de resultados (linha ~441), com a mesma lógica do painel de Pendentes, adaptado aos dados de no-show.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**Formato do relatório:**
+```text
+📋 RELATÓRIO NO-SHOWS R2 - DD/MM/YYYY
+Total: X no-shows
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+1. Nome: Fábio Raposo Monaco
+   📞 Telefone: 11 99472-8877
+   📧 Email: frmonaco@hotmail.com
+   📅 R2 era: 06/03 às 16:00
+   👤 Sócio R2: Claudia Carielo
+   📞 SDR: Yanca Tavares
+   🎯 Closer R1: Julio (02/03)
+```
 
-### 2. Hook `useCloserDetailData.ts`
-
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
-
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+**Implementação:**
+- Importar `Copy` do lucide-react e `toast` do sonner
+- Adicionar `useCallback` ao import do React
+- Criar `handleCopyReport` iterando sobre `filteredLeads` com os campos: `name`, `phone`, `email`, `scheduled_at`, `closer_name`, `sdr_name`, `r1_closer_name`, `r1_date`
+- Botão outline com ícone `Copy` posicionado antes do contador "Mostrando X no-shows"
 
