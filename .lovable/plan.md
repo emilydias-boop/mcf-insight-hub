@@ -1,44 +1,39 @@
 
-## Problema: Janela de 30h ao invés de 24h para filtro de contratos BRT
 
-### Causa raiz
+## Objetivo
 
-A correção de fuso anterior aplicou `subHours` no `start` e `addHours` no `end`, criando uma janela de **30 horas** em vez de 24. O correto é **somar** 3h em AMBOS os extremos (converter meia-noite BRT para UTC).
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-```text
-ERRADO (atual):
-  start = 04/03 00:00 - 3h = 03/03 21:00 UTC  ← captura contratos do dia anterior!
-  end   = 04/03 23:59 + 3h = 05/03 02:59 UTC
-  Janela = 30h
+## Mudanças
 
-CORRETO:
-  start = 04/03 00:00 + 3h = 04/03 03:00 UTC  ← meia-noite BRT exata
-  end   = 04/03 23:59 + 3h = 05/03 02:59 UTC
-  Janela = 24h
-```
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Os contratos do dia 03/03 BRT (pagos entre 03/03 21:00–23:59 UTC) estão sendo incluídos incorretamente na contagem do dia 04/03.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### Arquivos a alterar
+### 2. Hook `useCloserDetailData.ts`
 
-**1. `src/hooks/useContractReport.ts` — linha 46**
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-```ts
-// DE (errado):
-const startISO = subHours(new Date(...'T00:00:00'), BRT_OFFSET_HOURS).toISOString();
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-// PARA (correto):
-const startISO = addHours(new Date(...'T00:00:00'), BRT_OFFSET_HOURS).toISOString();
-```
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-**2. `src/hooks/useR1CloserMetrics.ts` — linha 48**
+### 4. Dados exportados no Excel
 
-```ts
-// DE (errado):
-const start = subHours(startOfDay(startDate), BRT_OFFSET_HOURS).toISOString();
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-// PARA (correto):
-const start = addHours(startOfDay(startDate), BRT_OFFSET_HOURS).toISOString();
-```
+Formato de data: `dd/MM/yyyy HH:mm`
 
-Ambas as correções removem o `subHours` do `start` e usam `addHours` (mesmo padrão do `end`), garantindo que o filtro captura exatamente as 24h do dia em BRT convertidas para UTC.
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+
