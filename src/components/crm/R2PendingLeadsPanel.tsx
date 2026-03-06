@@ -8,9 +8,10 @@ import {
   Clock, 
   CheckCircle, 
   AlertCircle,
-  ArrowRight,
+  MoreVertical,
   RotateCcw,
-  Copy
+  Copy,
+  UserCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
