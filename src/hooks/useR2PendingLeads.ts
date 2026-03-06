@@ -66,7 +66,7 @@ export function useR2PendingLeads() {
             contact:crm_contacts(id, name, phone, email)
           )
         `)
-        .eq('status', 'contract_paid')
+        .in('status', ['contract_paid'])
         .eq('meeting_slots.meeting_type', 'r1')
         .order('contract_paid_at', { ascending: false, nullsFirst: false });
 
@@ -193,6 +193,11 @@ export function useR2PendingLeads() {
       // Also filter out Outside leads whose R1 is not yet completed
       const pendingLeads = attendeesWithContact
         .filter(a => {
+          // 0. Fallback: exclude already recognized statuses
+          const status = a.status;
+          if (status === 'partner_recognized' || status === 'recurrence_recognized') {
+            return false;
+          }
           // 1. Check by contact_id
           if (a.contact_id && contactsWithR2.has(a.contact_id)) {
             return false;
