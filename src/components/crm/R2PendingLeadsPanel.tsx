@@ -8,9 +8,10 @@ import {
   Clock, 
   CheckCircle, 
   AlertCircle,
-  ArrowRight,
+  MoreVertical,
   RotateCcw,
-  Copy
+  Copy,
+  UserCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -25,9 +26,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useR2PendingLeads, R2PendingLead } from '@/hooks/useR2PendingLeads';
 import { R2QuickScheduleModal } from './R2QuickScheduleModal';
 import { RefundModal } from './RefundModal';
+import { useRecognizePartner } from '@/hooks/useRecognizePartner';
 import { R2CloserWithAvailability } from '@/hooks/useR2AgendaData';
 import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
@@ -47,6 +65,9 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
   const [refundModalOpen, setRefundModalOpen] = useState(false);
   const [refundLead, setRefundLead] = useState<R2PendingLead | null>(null);
   const [r1CloserFilter, setR1CloserFilter] = useState<string>('all');
+  const [partnerDialogOpen, setPartnerDialogOpen] = useState(false);
+  const [partnerLead, setPartnerLead] = useState<R2PendingLead | null>(null);
+  const recognizePartner = useRecognizePartner();
 
   const filteredLeads = useMemo(() => {
     if (r1CloserFilter === 'all') return pendingLeads;
@@ -212,32 +233,32 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        className="text-orange-600 border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRefund(lead);
-                        }}
-                      >
-                        <RotateCcw className="h-4 w-4 mr-1" />
-                        Reembolso
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        className="bg-purple-600 hover:bg-purple-700"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleScheduleR2(lead);
-                        }}
-                      >
-                        <Calendar className="h-4 w-4 mr-1" />
-                        Agendar R2
-                        <ArrowRight className="h-4 w-4 ml-1" />
-                      </Button>
+                    {/* Actions Menu */}
+                    <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleScheduleR2(lead)}>
+                            <Calendar className="h-4 w-4 mr-2 text-purple-600" />
+                            Agendar R2
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleRefund(lead)}>
+                            <RotateCcw className="h-4 w-4 mr-2 text-orange-600" />
+                            Reembolso
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setPartnerLead(lead);
+                            setPartnerDialogOpen(true);
+                          }}>
+                            <UserCheck className="h-4 w-4 mr-2 text-blue-600" />
+                            Reconhecer Parceiro
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </CardContent>
@@ -287,6 +308,41 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
         dealName={refundLead?.attendee_name || refundLead?.deal?.name}
         meetingType="r1"
       />
+
+      {/* Partner Recognition Confirmation */}
+      <AlertDialog open={partnerDialogOpen} onOpenChange={setPartnerDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reconhecer como Parceiro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O lead <strong>{partnerLead?.attendee_name || partnerLead?.deal?.contact?.name || 'Lead'}</strong> será 
+              marcado como parceiro, removido da lista de pendentes e o deal será movido para Perdido.
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (partnerLead) {
+                  recognizePartner.mutate({
+                    attendeeId: partnerLead.id,
+                    dealId: partnerLead.deal?.id,
+                    contactId: partnerLead.deal?.contact?.id,
+                    contactName: partnerLead.attendee_name || partnerLead.deal?.contact?.name || undefined,
+                    contactEmail: partnerLead.deal?.contact?.email || undefined,
+                    contactPhone: partnerLead.attendee_phone || partnerLead.deal?.contact?.phone || undefined,
+                  });
+                }
+                setPartnerDialogOpen(false);
+                setPartnerLead(null);
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
