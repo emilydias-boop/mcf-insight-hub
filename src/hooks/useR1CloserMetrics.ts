@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { startOfDay, endOfDay, format } from "date-fns";
+import { startOfDay, endOfDay, format, subHours, addHours } from "date-fns";
 
 /**
  * Executes a Supabase .in() query in batches to avoid URL length limits.
@@ -41,13 +41,17 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
   return useQuery({
     queryKey: ['r1-closer-metrics', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), bu],
     queryFn: async (): Promise<R1CloserMetric[]> => {
-      const start = startOfDay(startDate).toISOString();
-      const end = endOfDay(endDate).toISOString();
+      // Corrigir fuso horário: usuário pensa em BRT (UTC-3)
+      // Para capturar todos os contratos do dia em BRT, expandimos o range em 3h para cada lado
+      // Ex: dia 05/03 BRT = 04/03 21:00 UTC → 06/03 02:59 UTC
+      const BRT_OFFSET_HOURS = 3;
+      const start = subHours(startOfDay(startDate), BRT_OFFSET_HOURS).toISOString();
+      const end = addHours(endOfDay(endDate), BRT_OFFSET_HOURS).toISOString();
 
       // Fetch active closers that handle R1 meetings - FILTERED by BU
       const { data: closers, error: closersError } = await supabase
         .from('closers')
-        .select('id, name, color, meeting_type, bu')
+        .select('id, name, color, email, meeting_type, bu')
         .eq('is_active', true)
         .eq('bu', bu);
 
@@ -61,12 +65,19 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         .from('sdr')
         .select('email, name')
         .eq('active', true)
-        .eq('squad', bu)
-        .eq('role_type', 'sdr');
+        .eq('squad', bu);
+        // REMOVIDO: .eq('role_type', 'sdr') — closers também podem agendar reuniões diretamente
 
       if (sdrsError) throw sdrsError;
 
-      const validSdrEmails = new Set((sdrs || []).map(s => s.email.toLowerCase()));
+      // Também incluir closers ativos da BU como agendadores válidos
+      // Caso: Thaynar Tavares (closer) agenda reuniões diretamente → contrato deve ser contado
+      const closerEmails = new Set((closers || []).map(c => c.email.toLowerCase()));
+
+      const validSdrEmails = new Set([
+        ...(sdrs || []).map(s => s.email.toLowerCase()),
+        ...closerEmails,
+      ]);
 
       // Statuses that count as "Agendada" - explicitly defined to avoid counting canceled/rescheduled
       const allowedAgendadaStatuses = ['scheduled', 'invited', 'completed', 'no_show', 'contract_paid'];
