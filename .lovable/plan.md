@@ -1,44 +1,39 @@
 
 
-## Plano: Enriquecer busca "Por Lead" com visão 360° completa
+## Objetivo
 
-### Problema
-Atualmente a busca por lead mostra apenas dados básicos da reunião (horário, nome, telefone, email, status, closer, SDR, tipo, obs). Faltam informações cruciais: dados do deal/pipeline, origem, estágio atual, histórico de compras (Hubla), e dados completos do contato.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Alterações
+## Mudanças
 
-**1. `src/hooks/useInvestigationReport.ts` — Enriquecer dados do lead**
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Expandir a interface `InvestigationAttendee` com campos adicionais:
-- `deal_name`, `deal_stage`, `deal_stage_color`, `deal_created_at` (do `crm_deals` + `crm_stages`)
-- `origin_name` (do `crm_origins`)
-- `contact_city`, `contact_state` (do `crm_contacts`)
-- `purchase_count`, `total_invested` (agregado de `hubla_transactions` por email/telefone do contato)
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Na `useInvestigationByLead`, expandir a query de `crm_deals` para buscar:
-- `crm_deals.name, stage:crm_stages(name, color), origin:crm_origins(name), created_at`
-- Buscar `crm_contacts` com `city, state`
-- Buscar `hubla_transactions` por email do contato para calcular total investido e quantidade de compras
+### 2. Hook `useCloserDetailData.ts`
 
-**2. `src/components/relatorios/InvestigationReportPanel.tsx` — Card resumo do lead + tabela enriquecida**
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-Quando a busca por lead retorna resultados, exibir acima da tabela:
-- **Card "Perfil do Lead"**: Nome, telefone, email, cidade/estado, data de entrada no CRM, origem
-- **Card "Deal Atual"**: Nome do deal, estágio atual (com cor), pipeline
-- **Card "Histórico Financeiro"**: Quantidade de compras, valor total investido (formatado R$)
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Na tabela de reuniões, adicionar colunas:
-- `Estágio` (do deal associado a cada reunião, com badge colorido)
-- `Origem` (nome da origem)
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-No export Excel, incluir os novos campos.
+### 4. Dados exportados no Excel
 
-**3. Resumo das queries adicionais no hook**
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-- `crm_deals`: expandir select para incluir `name, created_at, stage:crm_stages(name, color), origin:crm_origins(name)`
-- `crm_contacts`: buscar `name, email, phone, city, state` pelos `contact_id` dos attendees
-- `hubla_transactions`: buscar por email do contato, agregar `count` e `sum(product_price)`
+Formato de data: `dd/MM/yyyy HH:mm`
 
-### Resultado
-A busca por lead mostrará uma visão 360° completa: perfil do contato, deal atual com estágio, origem, histórico de compras Hubla, e todas as reuniões com informações enriquecidas.
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

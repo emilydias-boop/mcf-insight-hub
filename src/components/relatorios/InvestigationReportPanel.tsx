@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
-import { Search, Download, Users, CheckCircle, XCircle, FileCheck, Calendar } from 'lucide-react';
+import { Search, Download, Users, CheckCircle, XCircle, FileCheck, Calendar, User, ShoppingCart, Tag } from 'lucide-react';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
-import { useInvestigationByCloser, useInvestigationByLead, InvestigationAttendee } from '@/hooks/useInvestigationReport';
+import { useInvestigationByCloser, useInvestigationByLead, InvestigationAttendee, LeadProfile, LeadFinancials } from '@/hooks/useInvestigationReport';
 import { formatMeetingStatus } from '@/utils/formatMeetingStatus';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { format } from 'date-fns';
@@ -29,6 +29,15 @@ function StatusBadge({ status }: { status: string | null }) {
   return <Badge variant={variant}>{label}</Badge>;
 }
 
+function StageBadge({ name, color }: { name: string | null; color: string | null }) {
+  if (!name) return <span className="text-muted-foreground text-xs">-</span>;
+  return (
+    <Badge variant="outline" style={{ borderColor: color || undefined, color: color || undefined }}>
+      {name}
+    </Badge>
+  );
+}
+
 function MetricCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: number; color: string }) {
   return (
     <Card>
@@ -45,7 +54,59 @@ function MetricCard({ icon: Icon, label, value, color }: { icon: React.ElementTy
   );
 }
 
-function AttendeeTable({ attendees, showCloser }: { attendees: InvestigationAttendee[]; showCloser?: boolean }) {
+function LeadProfileCard({ profile }: { profile: LeadProfile }) {
+  return (
+    <Card>
+      <CardContent className="pt-4 pb-4 space-y-2">
+        <div className="flex items-center gap-2 mb-2">
+          <User className="h-4 w-4 text-primary" />
+          <span className="font-semibold text-sm">Perfil do Lead</span>
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+          <div><span className="text-muted-foreground">Nome:</span> {profile.name || '-'}</div>
+          <div><span className="text-muted-foreground">Email:</span> {profile.email || '-'}</div>
+          <div><span className="text-muted-foreground">Telefone:</span> {profile.phone || '-'}</div>
+          <div><span className="text-muted-foreground">Organização:</span> {profile.organization || '-'}</div>
+          <div><span className="text-muted-foreground">Origem:</span> {profile.origin_name || '-'}</div>
+          <div><span className="text-muted-foreground">Entrada no CRM:</span> {profile.created_at ? format(new Date(profile.created_at), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</div>
+        </div>
+        {profile.tags && profile.tags.length > 0 && (
+          <div className="flex items-center gap-1 flex-wrap mt-1">
+            <Tag className="h-3 w-3 text-muted-foreground" />
+            {profile.tags.map(t => (
+              <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function FinancialsCard({ financials }: { financials: LeadFinancials }) {
+  const formattedTotal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(financials.total_invested / 100);
+  return (
+    <Card>
+      <CardContent className="pt-4 pb-4 space-y-2">
+        <div className="flex items-center gap-2 mb-2">
+          <ShoppingCart className="h-4 w-4 text-primary" />
+          <span className="font-semibold text-sm">Histórico Financeiro (Hubla)</span>
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+          <div><span className="text-muted-foreground">Compras:</span> <span className="font-bold">{financials.purchase_count}</span></div>
+          <div><span className="text-muted-foreground">Total investido:</span> <span className="font-bold">{formattedTotal}</span></div>
+        </div>
+        {financials.products.length > 0 && (
+          <div className="text-xs text-muted-foreground mt-1">
+            Produtos: {financials.products.join(', ')}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AttendeeTable({ attendees, showCloser, showEnriched }: { attendees: InvestigationAttendee[]; showCloser?: boolean; showEnriched?: boolean }) {
   const nonPartner = attendees.filter(a => !a.is_partner);
 
   if (nonPartner.length === 0) {
@@ -72,6 +133,8 @@ function AttendeeTable({ attendees, showCloser }: { attendees: InvestigationAtte
               <TableHead>Status</TableHead>
               {showCloser && <TableHead>Closer</TableHead>}
               <TableHead>SDR</TableHead>
+              {showEnriched && <TableHead>Estágio</TableHead>}
+              {showEnriched && <TableHead>Origem</TableHead>}
               <TableHead>Tipo</TableHead>
               <TableHead>Obs</TableHead>
             </TableRow>
@@ -88,6 +151,8 @@ function AttendeeTable({ attendees, showCloser }: { attendees: InvestigationAtte
                 <TableCell><StatusBadge status={att.status} /></TableCell>
                 {showCloser && <TableCell className="text-xs">{att.closer_name}</TableCell>}
                 <TableCell className="text-xs">{att.sdr_name || '-'}</TableCell>
+                {showEnriched && <TableCell><StageBadge name={att.deal_stage} color={att.deal_stage_color} /></TableCell>}
+                {showEnriched && <TableCell className="text-xs">{att.origin_name || '-'}</TableCell>}
                 <TableCell className="text-xs">{att.lead_type || '-'}</TableCell>
                 <TableCell className="text-xs max-w-[150px] truncate" title={att.notes || att.closer_notes || ''}>
                   {att.closer_notes || att.notes || '-'}
@@ -101,19 +166,27 @@ function AttendeeTable({ attendees, showCloser }: { attendees: InvestigationAtte
   );
 }
 
-function exportToExcel(attendees: InvestigationAttendee[], filename: string) {
+function exportToExcel(attendees: InvestigationAttendee[], filename: string, enriched?: boolean) {
   const nonPartner = attendees.filter(a => !a.is_partner);
-  const rows = nonPartner.map(a => ({
-    'Data/Hora': a.scheduled_at ? format(new Date(a.scheduled_at), 'dd/MM/yyyy HH:mm') : '',
-    'Nome': a.attendee_name || '',
-    'Telefone': a.attendee_phone || '',
-    'Email': a.contact_email || '',
-    'Status': formatMeetingStatus(a.status),
-    'Closer': a.closer_name,
-    'SDR': a.sdr_name || '',
-    'Tipo': a.lead_type || '',
-    'Observações': a.closer_notes || a.notes || '',
-  }));
+  const rows = nonPartner.map(a => {
+    const base: Record<string, string> = {
+      'Data/Hora': a.scheduled_at ? format(new Date(a.scheduled_at), 'dd/MM/yyyy HH:mm') : '',
+      'Nome': a.attendee_name || '',
+      'Telefone': a.attendee_phone || '',
+      'Email': a.contact_email || '',
+      'Status': formatMeetingStatus(a.status),
+      'Closer': a.closer_name,
+      'SDR': a.sdr_name || '',
+    };
+    if (enriched) {
+      base['Estágio'] = a.deal_stage || '';
+      base['Origem'] = a.origin_name || '';
+      base['Deal'] = a.deal_name || '';
+    }
+    base['Tipo'] = a.lead_type || '';
+    base['Observações'] = a.closer_notes || a.notes || '';
+    return base;
+  });
 
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
@@ -136,6 +209,9 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
   const isLoading = tab === 'closer' ? closerQuery.isLoading : leadQuery.isLoading;
   const metrics = activeData?.metrics;
   const attendees = activeData?.attendees || [];
+  const leadProfile = activeData?.leadProfile || null;
+  const financials = activeData?.financials || null;
+  const isLeadTab = tab === 'lead';
 
   const handleLeadSearch = () => {
     setSearchTerm(searchInput.trim());
@@ -212,6 +288,14 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
           </TabsContent>
         </Tabs>
 
+        {/* Lead Profile & Financials Cards */}
+        {isLeadTab && (leadProfile || financials) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {leadProfile && <LeadProfileCard profile={leadProfile} />}
+            {financials && <FinancialsCard financials={financials} />}
+          </div>
+        )}
+
         {/* Metrics */}
         {metrics && metrics.total > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -232,16 +316,16 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
         {!isLoading && attendees.length > 0 && (
           <>
             <div className="flex justify-end">
-              <Button variant="outline" size="sm" onClick={() => exportToExcel(attendees, exportFilename)}>
+              <Button variant="outline" size="sm" onClick={() => exportToExcel(attendees, exportFilename, isLeadTab)}>
                 <Download className="h-4 w-4 mr-2" />
                 Exportar Excel
               </Button>
             </div>
-            <AttendeeTable attendees={attendees} showCloser={tab === 'lead'} />
+            <AttendeeTable attendees={attendees} showCloser={isLeadTab} showEnriched={isLeadTab} />
           </>
         )}
 
-        {/* Empty state when query ran but no results */}
+        {/* Empty state */}
         {!isLoading && attendees.length === 0 && ((tab === 'closer' && closerId && date) || (tab === 'lead' && searchTerm.length >= 3)) && (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">
