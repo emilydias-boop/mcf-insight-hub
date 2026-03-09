@@ -111,7 +111,7 @@ export function useSdrActivityMetrics(
       });
       
       // 5. Agregar ligações
-      calls?.forEach(call => {
+      allCalls.forEach(call => {
         if (!call.user_id) return;
         
         const profile = profileMap.get(call.user_id);
