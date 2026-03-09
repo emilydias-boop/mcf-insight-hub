@@ -457,7 +457,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
             if (!isOutside) {
               metric!.r1_realizada++;
             }
-          } else if (status === 'completed') {
+          } else if (status === 'completed' || status === 'refunded') {
             metric!.r1_realizada++;
           }
           
