@@ -139,7 +139,7 @@ export function useSdrActivityMetrics(
       });
       
       // 6. Agregar atividades
-      activities?.forEach(activity => {
+      allActivities.forEach(activity => {
         if (!activity.user_id) return;
         
         const profile = profileMap.get(activity.user_id);
