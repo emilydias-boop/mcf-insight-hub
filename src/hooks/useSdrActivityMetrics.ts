@@ -2,6 +2,24 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useSdrsFromSquad } from './useSdrsFromSquad';
 
+// Helper to fetch all rows bypassing the 1000-row default limit
+async function fetchAllRows<T>(
+  buildQuery: () => ReturnType<ReturnType<typeof supabase.from>['select']>
+): Promise<T[]> {
+  const PAGE = 1000;
+  const all: T[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await buildQuery().range(from, from + PAGE - 1);
+    if (error) { console.error('fetchAllRows error:', error); break; }
+    if (!data || data.length === 0) break;
+    all.push(...(data as T[]));
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
 export interface SdrActivityMetrics {
   sdrEmail: string;
   sdrName: string;
