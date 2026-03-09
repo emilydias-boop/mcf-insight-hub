@@ -21,8 +21,9 @@ serve(async (req) => {
     const formData = await req.formData();
     
     const callSid = formData.get('CallSid')?.toString();
-    const callStatus = formData.get('CallStatus')?.toString();
-    const callDuration = formData.get('CallDuration')?.toString();
+    // Twilio sends DialCallStatus/DialCallDuration when using <Dial> action callback
+    const callStatus = formData.get('DialCallStatus')?.toString() || formData.get('CallStatus')?.toString();
+    const callDuration = formData.get('DialCallDuration')?.toString() || formData.get('CallDuration')?.toString();
     const from = formData.get('From')?.toString();
     const to = formData.get('To')?.toString();
     const direction = formData.get('Direction')?.toString();
