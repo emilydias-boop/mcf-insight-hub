@@ -346,8 +346,14 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       setCurrentCall(null);
       setCallStatus('completed');
       setDeviceStatus('ready');
+      // Persist to DB with duration from local timer
+      updateCallInDb(currentCallId, {
+        status: 'completed',
+        ended_at: new Date().toISOString(),
+        duration_seconds: callDuration,
+      });
     }
-  }, [currentCall]);
+  }, [currentCall, currentCallId, callDuration, updateCallInDb]);
 
   const toggleMute = useCallback(() => {
     if (currentCall) {
