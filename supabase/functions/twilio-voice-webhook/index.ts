@@ -122,9 +122,10 @@ serve(async (req) => {
       updated_at: new Date().toISOString()
     };
 
-    // Set started_at when call is answered
+    // Do NOT overwrite started_at - it was set by the frontend when the SDR clicked to call
+    // The 'in-progress' webhook means the callee answered, not when the call started
     if (callStatus === 'in-progress') {
-      updates.started_at = new Date().toISOString();
+      updates.answered_at = new Date().toISOString();
     }
 
     // Set ended_at and duration when call completes
