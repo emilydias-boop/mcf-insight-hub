@@ -485,7 +485,7 @@ const Negocios = () => {
       
       // Filtro por prioridade de atividade
       if (filters.activityPriority !== 'all' && activitySummaries) {
-        const summary = activitySummaries.get(deal.id);
+        const summary = activitySummaries.get(deal.id.toLowerCase().trim());
         const totalActivities = summary?.totalActivities ?? 0;
         
         switch (filters.activityPriority) {
