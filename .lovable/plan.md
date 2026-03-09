@@ -1,28 +1,39 @@
 
 
-## Problema: Filtro de "Tentativas" não funciona para não-SDRs
+## Objetivo
 
-### Diagnóstico
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-O filtro de tentativas depende do hook `useBatchDealActivitySummary` que busca ligações (`calls`) e atividades (`deal_activities`) usando `.in('deal_id', dealIds)`.
+## Mudanças
 
-**2 problemas encontrados:**
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-1. **Limite de 1000 linhas do Supabase (mesmo bug corrigido antes)**: Para admins/managers, `dealIds` contém milhares de IDs. A query de `calls` retorna no máximo 1000 registros, truncando os dados. Muitos deals ficam com `totalCalls = 0` erroneamente, e o filtro os exclui.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-2. **Case mismatch na lookup**: O `summaryMap` armazena chaves como `id.toLowerCase().trim()` (linha 131-135), mas o filtro em `Negocios.tsx` busca com `activitySummaries.get(deal.id)` (linha 449) — sem normalizar. Se houver qualquer diferença de casing, o lookup retorna `undefined` e `totalCalls` cai para 0.
+### 2. Hook `useCloserDetailData.ts`
 
-### Correção
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**`src/hooks/useDealActivitySummary.ts`** (hook `useBatchDealActivitySummary`):
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-1. **Paginar as queries de `calls`, `deal_activities` (whatsapp), e `deal_activities` (notes)** usando o mesmo padrão `fetchAll` com `.range()` em batches de 1000, para garantir que todos os registros sejam retornados.
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-2. **Também fazer batch do `.in()` em grupos de 200 IDs** para evitar URLs muito longas que falham silenciosamente no PostgREST.
+### 4. Dados exportados no Excel
 
-**`src/pages/crm/Negocios.tsx`** (linha 449):
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-3. **Normalizar o deal.id na lookup**: Trocar `activitySummaries.get(deal.id)` por `activitySummaries.get(deal.id.toLowerCase().trim())` — consistente com como o mapa é construído.
+Formato de data: `dd/MM/yyyy HH:mm`
 
-4. Aplicar a mesma normalização nas demais linhas (414-416, 487-489) que também usam `activitySummaries.get(deal.id)`.
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
