@@ -1,57 +1,39 @@
 
 
-## Problema: Métricas de Ligações mostrando números errados
+## Objetivo
 
-### Diagnóstico
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Existem **2 problemas** no hook `useSdrActivityMetrics`:
+## Mudanças
 
-**1. Limite de 1000 linhas do Supabase (CRÍTICO)**
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-O Supabase JS client retorna no máximo 1000 linhas por padrão. Em Março 2026 existem **3.470 ligações**, mas o hook só recebe as primeiras 1000. Isso corta ~71% dos dados. O mesmo acontece com `deal_activities`.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-A query atual:
-```js
-const { data: calls } = await supabase
-  .from('calls')
-  .select('user_id, status, outcome, deal_id')
-  .gte('created_at', startIso)
-  .lte('created_at', endIso);
-// Retorna apenas 1000 de 3470!
-```
+### 2. Hook `useCloserDetailData.ts`
 
-**2. Sem filtro de `direction = 'outbound'`**
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-O hook conta todas as ligações (inbound + outbound), enquanto o padrão correto do sistema (usado em `useSdrCallMetrics` e `sync-sdr-kpis`) é contar apenas `outbound`.
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-### Correção
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-**`src/hooks/useSdrActivityMetrics.ts`**:
+### 4. Dados exportados no Excel
 
-1. Adicionar filtro `.eq('direction', 'outbound')` na query de calls
-2. Usar paginação para buscar todas as linhas (loop com `.range()` em batches de 1000) tanto para `calls` quanto para `deal_activities`
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-A função de paginação será algo como:
-```ts
-async function fetchAll(query) {
-  const PAGE = 1000;
-  let all = [];
-  let from = 0;
-  while (true) {
-    const { data } = await query.range(from, from + PAGE - 1);
-    if (!data || data.length === 0) break;
-    all.push(...data);
-    if (data.length < PAGE) break;
-    from += PAGE;
-  }
-  return all;
-}
-```
+Formato de data: `dd/MM/yyyy HH:mm`
 
-Isso garante que todas as 3.470+ ligações sejam contadas, e apenas as outbound (realizadas pelo SDR).
+## Resultado
 
-### Resultado esperado
-
-- Antes: ~1000 ligações truncadas, sem filtro de direção
-- Depois: Todas as 3.470 ligações outbound contadas corretamente por SDR
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

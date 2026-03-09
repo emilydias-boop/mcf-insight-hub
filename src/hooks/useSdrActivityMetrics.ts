@@ -38,19 +38,43 @@ export function useSdrActivityMetrics(
       const startIso = startDate.toISOString();
       const endIso = endDate.toISOString();
       
-      // 1. Buscar ligações por user_id no período
-      const { data: calls } = await supabase
-        .from('calls')
-        .select('user_id, status, outcome, deal_id')
-        .gte('created_at', startIso)
-        .lte('created_at', endIso);
+      // Helper: fetch all rows with pagination (bypasses 1000-row limit)
+      const PAGE = 1000;
       
-      // 2. Buscar deal_activities por user_id no período
-      const { data: activities } = await supabase
-        .from('deal_activities')
-        .select('user_id, activity_type, deal_id')
-        .gte('created_at', startIso)
-        .lte('created_at', endIso);
+      // 1. Buscar TODAS as ligações outbound no período
+      const allCalls: any[] = [];
+      let callsFrom = 0;
+      while (true) {
+        const { data } = await supabase
+          .from('calls')
+          .select('user_id, status, outcome, deal_id')
+          .eq('direction', 'outbound')
+          .gte('created_at', startIso)
+          .lte('created_at', endIso)
+          .range(callsFrom, callsFrom + PAGE - 1);
+        if (!data || data.length === 0) break;
+        allCalls.push(...data);
+        if (data.length < PAGE) break;
+        callsFrom += PAGE;
+      }
+      
+      // 2. Buscar TODAS as deal_activities no período
+      const allActivities: any[] = [];
+      let actFrom = 0;
+      while (true) {
+        const { data } = await supabase
+          .from('deal_activities')
+          .select('user_id, activity_type, deal_id')
+          .gte('created_at', startIso)
+          .lte('created_at', endIso)
+          .range(actFrom, actFrom + PAGE - 1);
+        if (!data || data.length === 0) break;
+        allActivities.push(...data);
+        if (data.length < PAGE) break;
+        actFrom += PAGE;
+      }
+      
+      console.log(`[SdrActivityMetrics] Fetched ${allCalls.length} outbound calls, ${allActivities.length} activities`);
       
       // 3. Buscar profiles para mapear user_id -> email
       const { data: profiles } = await supabase
@@ -87,7 +111,7 @@ export function useSdrActivityMetrics(
       });
       
       // 5. Agregar ligações
-      calls?.forEach(call => {
+      allCalls.forEach(call => {
         if (!call.user_id) return;
         
         const profile = profileMap.get(call.user_id);
@@ -115,7 +139,7 @@ export function useSdrActivityMetrics(
       });
       
       // 6. Agregar atividades
-      activities?.forEach(activity => {
+      allActivities.forEach(activity => {
         if (!activity.user_id) return;
         
         const profile = profileMap.get(activity.user_id);
