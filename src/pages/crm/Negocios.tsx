@@ -446,7 +446,7 @@ const Negocios = () => {
       // Filtro por quantidade de tentativas (range)
       // Só aplica se activitySummaries já carregou (evita filtrar erroneamente com 0)
       if (filters.attemptsRange && activitySummaries) {
-        const summary = activitySummaries.get(deal.id);
+        const summary = activitySummaries.get(deal.id.toLowerCase().trim());
         const totalCalls = summary?.totalCalls ?? 0;
         
         if (totalCalls < filters.attemptsRange.min || 
