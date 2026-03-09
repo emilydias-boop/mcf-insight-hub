@@ -2,23 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useSdrsFromSquad } from './useSdrsFromSquad';
 
-// Helper to fetch all rows bypassing the 1000-row default limit
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchAllPaginated(queryBuilder: any): Promise<any[]> {
-  const PAGE = 1000;
-  const all: any[] = [];
-  let from = 0;
-  while (true) {
-    const { data, error } = await queryBuilder.range(from, from + PAGE - 1);
-    if (error) { console.error('fetchAllPaginated error:', error); break; }
-    if (!data || data.length === 0) break;
-    all.push(...data);
-    if (data.length < PAGE) break;
-    from += PAGE;
-  }
-  return all;
-}
-
 export interface SdrActivityMetrics {
   sdrEmail: string;
   sdrName: string;
@@ -55,24 +38,43 @@ export function useSdrActivityMetrics(
       const startIso = startDate.toISOString();
       const endIso = endDate.toISOString();
       
-      // 1. Buscar ligações outbound por user_id no período (com paginação para >1000 rows)
-      const calls = await fetchAllPaginated(
-        supabase
+      // Helper: fetch all rows with pagination (bypasses 1000-row limit)
+      const PAGE = 1000;
+      
+      // 1. Buscar TODAS as ligações outbound no período
+      const allCalls: any[] = [];
+      let callsFrom = 0;
+      while (true) {
+        const { data } = await supabase
           .from('calls')
           .select('user_id, status, outcome, deal_id')
           .eq('direction', 'outbound')
           .gte('created_at', startIso)
           .lte('created_at', endIso)
-      );
+          .range(callsFrom, callsFrom + PAGE - 1);
+        if (!data || data.length === 0) break;
+        allCalls.push(...data);
+        if (data.length < PAGE) break;
+        callsFrom += PAGE;
+      }
       
-      // 2. Buscar deal_activities por user_id no período (com paginação)
-      const activities = await fetchAllPaginated(
-        supabase
+      // 2. Buscar TODAS as deal_activities no período
+      const allActivities: any[] = [];
+      let actFrom = 0;
+      while (true) {
+        const { data } = await supabase
           .from('deal_activities')
           .select('user_id, activity_type, deal_id')
           .gte('created_at', startIso)
           .lte('created_at', endIso)
-      );
+          .range(actFrom, actFrom + PAGE - 1);
+        if (!data || data.length === 0) break;
+        allActivities.push(...data);
+        if (data.length < PAGE) break;
+        actFrom += PAGE;
+      }
+      
+      console.log(`[SdrActivityMetrics] Fetched ${allCalls.length} outbound calls, ${allActivities.length} activities`);
       
       // 3. Buscar profiles para mapear user_id -> email
       const { data: profiles } = await supabase
