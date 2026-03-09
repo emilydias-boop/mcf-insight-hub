@@ -9,8 +9,8 @@ export interface ActivitySummary {
   lastContactAttempt: string | null;
   attemptsExhausted: boolean;
   maxAttempts: number;
-  totalActivities: number; // Total de todas as atividades (calls + whatsapp + notes)
-  notesCount: number; // Quantidade de notas
+  totalActivities: number;
+  notesCount: number;
 }
 
 const DEFAULT_MAX_ATTEMPTS = 5;
@@ -33,7 +33,6 @@ export function useDealActivitySummary(dealId: string | undefined, stageId?: str
     queryFn: async (): Promise<ActivitySummary> => {
       if (!dealId) return defaultSummary;
 
-      // Buscar limite de tentativas do estágio
       let maxAttempts = DEFAULT_MAX_ATTEMPTS;
       if (stageId) {
         const { data: limitData } = await supabase
@@ -47,7 +46,6 @@ export function useDealActivitySummary(dealId: string | undefined, stageId?: str
         }
       }
 
-      // Buscar ligações do deal
       const { data: calls, error } = await supabase
         .from('calls')
         .select('status, outcome, created_at')
@@ -60,14 +58,11 @@ export function useDealActivitySummary(dealId: string | undefined, stageId?: str
       }
 
       const totalCalls = calls?.length || 0;
-      
-      // Ligações atendidas são as que tem status completed/in-progress ou outcome positivo
       const answeredCalls = calls?.filter(c =>
         ['completed', 'in-progress'].includes(c.status || '') ||
         ['interessado', 'agendou_r1', 'agendou_r2', 'agendou', 'atendeu'].includes(c.outcome || '')
       ).length || 0;
 
-      // Buscar atividades de WhatsApp do deal
       const { data: whatsappActivities } = await supabase
         .from('deal_activities')
         .select('id')
@@ -75,10 +70,8 @@ export function useDealActivitySummary(dealId: string | undefined, stageId?: str
         .eq('activity_type', 'whatsapp_sent');
 
       const whatsappSent = whatsappActivities?.length || 0;
-
       const attemptsExhausted = totalCalls >= maxAttempts && answeredCalls === 0;
 
-      // Buscar notas do deal
       const { data: noteActivities } = await supabase
         .from('deal_activities')
         .select('id')
@@ -101,8 +94,36 @@ export function useDealActivitySummary(dealId: string | undefined, stageId?: str
       };
     },
     enabled: !!dealId,
-    staleTime: 30 * 1000, // Cache por 30 segundos
+    staleTime: 30 * 1000,
   });
+}
+
+// Helper: fetch all rows with pagination to bypass the 1000-row limit
+async function fetchAllPaginated<T>(
+  queryBuilder: () => ReturnType<ReturnType<typeof supabase.from>['select']>,
+  dealIds: string[],
+  idField: string,
+  PAGE_SIZE = 1000,
+  BATCH_SIZE = 200
+): Promise<T[]> {
+  const allResults: T[] = [];
+  
+  // Split dealIds into batches to avoid URL length limits
+  for (let b = 0; b < dealIds.length; b += BATCH_SIZE) {
+    const batchIds = dealIds.slice(b, b + BATCH_SIZE);
+    let from = 0;
+    while (true) {
+      const { data } = await (queryBuilder() as any)
+        .in(idField, batchIds)
+        .range(from, from + PAGE_SIZE - 1);
+      if (!data || data.length === 0) break;
+      allResults.push(...data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+  }
+  
+  return allResults;
 }
 
 // Hook para buscar atividades de múltiplos deals de uma vez (otimização)
@@ -114,8 +135,7 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
       
       if (dealIds.length === 0) return summaryMap;
 
-      // Normalizar dealIds para garantir correspondência
-       const normalizedDealIds = dealIds.map(id => String(id || '').toLowerCase().trim());
+      const normalizedDealIds = dealIds.map(id => String(id || '').toLowerCase().trim());
 
       // Buscar limites de tentativas por estágio
       const { data: stageLimits } = await supabase
@@ -127,7 +147,7 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
         if (l.stage_id) limitsMap.set(l.stage_id, l.max_attempts);
       });
 
-      // Inicializar com valores padrão usando IDs normalizados
+      // Inicializar com valores padrão
       normalizedDealIds.forEach((normalizedId, index) => {
         const originalId = dealIds[index];
         const stageId = stageIds?.get(originalId);
@@ -135,32 +155,70 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
         summaryMap.set(normalizedId, { ...defaultSummary, maxAttempts });
       });
 
-      // Buscar todas as ligações de uma vez
-      const { data: calls } = await supabase
-        .from('calls')
-        .select('deal_id, status, outcome, created_at')
-        .in('deal_id', dealIds)
-        .order('created_at', { ascending: false });
+      const BATCH = 200;
+      const PAGE = 1000;
 
-      // Buscar atividades de WhatsApp
-      const { data: whatsappActivities } = await supabase
-        .from('deal_activities')
-        .select('deal_id')
-        .in('deal_id', dealIds)
-        .eq('activity_type', 'whatsapp_sent');
+      // Fetch all calls with pagination + batching
+      const allCalls: any[] = [];
+      for (let b = 0; b < dealIds.length; b += BATCH) {
+        const batchIds = dealIds.slice(b, b + BATCH);
+        let from = 0;
+        while (true) {
+          const { data } = await supabase
+            .from('calls')
+            .select('deal_id, status, outcome, created_at')
+            .in('deal_id', batchIds)
+            .order('created_at', { ascending: false })
+            .range(from, from + PAGE - 1);
+          if (!data || data.length === 0) break;
+          allCalls.push(...data);
+          if (data.length < PAGE) break;
+          from += PAGE;
+        }
+      }
 
-      // Buscar notas
-      const { data: noteActivities } = await supabase
-        .from('deal_activities')
-        .select('deal_id')
-        .in('deal_id', dealIds)
-        .eq('activity_type', 'note');
+      // Fetch all whatsapp activities with pagination + batching
+      const allWhatsapp: any[] = [];
+      for (let b = 0; b < dealIds.length; b += BATCH) {
+        const batchIds = dealIds.slice(b, b + BATCH);
+        let from = 0;
+        while (true) {
+          const { data } = await supabase
+            .from('deal_activities')
+            .select('deal_id')
+            .in('deal_id', batchIds)
+            .eq('activity_type', 'whatsapp_sent')
+            .range(from, from + PAGE - 1);
+          if (!data || data.length === 0) break;
+          allWhatsapp.push(...data);
+          if (data.length < PAGE) break;
+          from += PAGE;
+        }
+      }
+
+      // Fetch all notes with pagination + batching
+      const allNotes: any[] = [];
+      for (let b = 0; b < dealIds.length; b += BATCH) {
+        const batchIds = dealIds.slice(b, b + BATCH);
+        let from = 0;
+        while (true) {
+          const { data } = await supabase
+            .from('deal_activities')
+            .select('deal_id')
+            .in('deal_id', batchIds)
+            .eq('activity_type', 'note')
+            .range(from, from + PAGE - 1);
+          if (!data || data.length === 0) break;
+          allNotes.push(...data);
+          if (data.length < PAGE) break;
+          from += PAGE;
+        }
+      }
 
       // Agregar por deal_id
-      calls?.forEach(call => {
-         // Converter para string e normalizar - FORÇAR conversão de tipo
-         const normalizedCallId = String(call.deal_id || '').toLowerCase().trim();
-         const summary = summaryMap.get(normalizedCallId);
+      allCalls.forEach(call => {
+        const normalizedCallId = String(call.deal_id || '').toLowerCase().trim();
+        const summary = summaryMap.get(normalizedCallId);
         if (summary) {
           summary.totalCalls++;
           
@@ -180,19 +238,17 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
         }
       });
 
-      // Agregar WhatsApp
-      whatsappActivities?.forEach(activity => {
-         const normalizedId = String(activity.deal_id || '').toLowerCase().trim();
-         const summary = summaryMap.get(normalizedId);
+      allWhatsapp.forEach(activity => {
+        const normalizedId = String(activity.deal_id || '').toLowerCase().trim();
+        const summary = summaryMap.get(normalizedId);
         if (summary) {
           summary.whatsappSent++;
         }
       });
 
-      // Agregar Notas
-      noteActivities?.forEach(activity => {
-         const normalizedId = String(activity.deal_id || '').toLowerCase().trim();
-         const summary = summaryMap.get(normalizedId);
+      allNotes.forEach(activity => {
+        const normalizedId = String(activity.deal_id || '').toLowerCase().trim();
+        const summary = summaryMap.get(normalizedId);
         if (summary) {
           summary.notesCount++;
         }
