@@ -79,7 +79,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       ]);
 
       // Statuses that count as "Agendada" - explicitly defined to avoid counting canceled/rescheduled
-      const allowedAgendadaStatuses = ['scheduled', 'invited', 'completed', 'no_show', 'contract_paid'];
+      const allowedAgendadaStatuses = ['scheduled', 'invited', 'completed', 'no_show', 'contract_paid', 'refunded'];
 
       // Fetch R1 meeting slots with attendees in the period
       const { data: meetings, error: meetingsError } = await supabase
