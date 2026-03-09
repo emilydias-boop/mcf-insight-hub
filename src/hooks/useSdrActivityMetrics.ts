@@ -3,17 +3,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSdrsFromSquad } from './useSdrsFromSquad';
 
 // Helper to fetch all rows bypassing the 1000-row default limit
-async function fetchAllRows<T>(
-  buildQuery: () => ReturnType<ReturnType<typeof supabase.from>['select']>
-): Promise<T[]> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchAllPaginated(queryBuilder: any): Promise<any[]> {
   const PAGE = 1000;
-  const all: T[] = [];
+  const all: any[] = [];
   let from = 0;
   while (true) {
-    const { data, error } = await buildQuery().range(from, from + PAGE - 1);
-    if (error) { console.error('fetchAllRows error:', error); break; }
+    const { data, error } = await queryBuilder.range(from, from + PAGE - 1);
+    if (error) { console.error('fetchAllPaginated error:', error); break; }
     if (!data || data.length === 0) break;
-    all.push(...(data as T[]));
+    all.push(...data);
     if (data.length < PAGE) break;
     from += PAGE;
   }
@@ -56,9 +55,9 @@ export function useSdrActivityMetrics(
       const startIso = startDate.toISOString();
       const endIso = endDate.toISOString();
       
-      // 1. Buscar ligações outbound por user_id no período (com paginação)
-      const calls = await fetchAllRows<{ user_id: string | null; status: string | null; outcome: string | null; deal_id: string | null }>(
-        () => supabase
+      // 1. Buscar ligações outbound por user_id no período (com paginação para >1000 rows)
+      const calls = await fetchAllPaginated(
+        supabase
           .from('calls')
           .select('user_id, status, outcome, deal_id')
           .eq('direction', 'outbound')
@@ -67,8 +66,8 @@ export function useSdrActivityMetrics(
       );
       
       // 2. Buscar deal_activities por user_id no período (com paginação)
-      const activities = await fetchAllRows<{ user_id: string | null; activity_type: string | null; deal_id: string | null }>(
-        () => supabase
+      const activities = await fetchAllPaginated(
+        supabase
           .from('deal_activities')
           .select('user_id, activity_type, deal_id')
           .gte('created_at', startIso)
