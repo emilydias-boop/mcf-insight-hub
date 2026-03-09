@@ -1,39 +1,57 @@
 
 
-## Objetivo
+## Problema: KPI Cards e Tabela de Closers mostram números diferentes
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Números reais do banco (Março 2026, BRT, incorporador)
 
-## Mudanças
+| Status | Contagem Real |
+|--------|--------------|
+| completed | 148 |
+| no_show | 113 |
+| invited (pendentes) | 43 |
+| contract_paid | 42 |
+| rescheduled | 7 |
+| refunded | 2 |
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+Total attendees válidos (incorporador): **264** (84 foram agendados por SDRs do consórcio — Cleiton, Ithaline, Ygor — e devem ser excluídos)
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Causas das discrepâncias
 
-### 2. Hook `useCloserDetailData.ts`
+**1. KPI Cards usam a RPC `get_sdr_metrics_from_agenda`** que:
+- Agrupa por SDR (booked_by), não por Closer
+- Inclui `rescheduled` na contagem de R1 Agendada (deveria excluir)
+- Calcula No-Shows como fórmula `r1_agendada - r1_realizada` (inclui `invited`/pendentes como no-shows)
+- Não filtra por SDRs do incorporador vs consórcio
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**2. Tabela de Closers usa `useR1CloserMetrics`** que:
+- Agrupa por Closer
+- Exclui `rescheduled` corretamente
+- Conta No-Shows pelo status real (`no_show`)
+- Filtra por bookers válidos do incorporador
+- Mas **não inclui `refunded` como realizada** (deveria)
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+### Solução: Closers Table como fonte da verdade
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+A tabela de Closers tem a lógica mais correta. A solução é:
+1. Corrigir o pequeno bug de `refunded` no hook de Closers
+2. Fazer os KPI Cards derivarem R1 Agendada, Realizadas e No-Shows dos totais da tabela de Closers (já funciona assim para Contratos)
 
-### 4. Dados exportados no Excel
+### Mudanças
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+**1. `src/hooks/useR1CloserMetrics.ts`** — Adicionar `refunded` como status válido
 
-Formato de data: `dd/MM/yyyy HH:mm`
+- Linha 82: Adicionar `'refunded'` ao array `allowedAgendadaStatuses`
+- Linhas 455-462: Adicionar `refunded` ao bloco de `r1_realizada` (junto com `completed`)
 
-## Resultado
+**2. `src/pages/crm/ReunioesEquipe.tsx`** — Derivar KPIs de R1 da tabela de Closers
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+- Linhas 271-280: Expandir `enrichedKPIs` para também sobrescrever `totalR1Agendada`, `totalRealizadas`, `totalNoShows` e `taxaNoShow` com os totais calculados de `closerMetrics`, em vez de usar os valores da RPC
+
+### Resultado esperado
+
+Ambos mostrarão os mesmos números porque usam a mesma fonte:
+- **R1 Agendada**: soma de `r1_agendada` de todos os closers ≈ 264
+- **Realizadas**: soma de `r1_realizada` (incluindo `refunded`) ≈ 192
+- **No-Shows**: soma de `noshow` (status real) ≈ 113
+- **Contratos**: já alinhado via `contractsFromClosers`
 
