@@ -56,19 +56,24 @@ export function useSdrActivityMetrics(
       const startIso = startDate.toISOString();
       const endIso = endDate.toISOString();
       
-      // 1. Buscar ligações por user_id no período
-      const { data: calls } = await supabase
-        .from('calls')
-        .select('user_id, status, outcome, deal_id')
-        .gte('created_at', startIso)
-        .lte('created_at', endIso);
+      // 1. Buscar ligações outbound por user_id no período (com paginação)
+      const calls = await fetchAllRows<{ user_id: string | null; status: string | null; outcome: string | null; deal_id: string | null }>(
+        () => supabase
+          .from('calls')
+          .select('user_id, status, outcome, deal_id')
+          .eq('direction', 'outbound')
+          .gte('created_at', startIso)
+          .lte('created_at', endIso)
+      );
       
-      // 2. Buscar deal_activities por user_id no período
-      const { data: activities } = await supabase
-        .from('deal_activities')
-        .select('user_id, activity_type, deal_id')
-        .gte('created_at', startIso)
-        .lte('created_at', endIso);
+      // 2. Buscar deal_activities por user_id no período (com paginação)
+      const activities = await fetchAllRows<{ user_id: string | null; activity_type: string | null; deal_id: string | null }>(
+        () => supabase
+          .from('deal_activities')
+          .select('user_id, activity_type, deal_id')
+          .gte('created_at', startIso)
+          .lte('created_at', endIso)
+      );
       
       // 3. Buscar profiles para mapear user_id -> email
       const { data: profiles } = await supabase
