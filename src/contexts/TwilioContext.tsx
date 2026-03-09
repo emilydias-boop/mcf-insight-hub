@@ -201,6 +201,23 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     }
   }, [user, deviceStatus, device]);
 
+  // Helper to update call record in DB
+  const updateCallInDb = useCallback(async (
+    callId: string | null,
+    updates: Record<string, any>
+  ) => {
+    if (!callId) return;
+    try {
+      const { error } = await supabase
+        .from('calls')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', callId);
+      if (error) console.error('Error updating call in DB:', error);
+    } catch (e) {
+      console.error('Failed to update call in DB:', e);
+    }
+  }, []);
+
   const makeCall = useCallback(async (
     phoneNumber: string, 
     dealId?: string, 
@@ -251,7 +268,6 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       });
 
       // Capture CallSid once available and update the database
-      // The CallSid is in call.parameters after connection
       const checkAndUpdateCallSid = async () => {
         const callSid = (call as any).parameters?.CallSid;
         if (callSid) {
@@ -266,7 +282,6 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       call.on('ringing', () => {
         console.log('Call ringing');
         setCallStatus('ringing');
-        // Try to capture CallSid when ringing starts
         checkAndUpdateCallSid();
       });
 
@@ -274,7 +289,6 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         console.log('Call accepted');
         setCallStatus('in-progress');
         setDeviceStatus('busy');
-        // Also try when call is accepted (backup)
         checkAndUpdateCallSid();
       });
 
@@ -283,6 +297,11 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         setCallStatus('completed');
         setDeviceStatus('ready');
         setCurrentCall(null);
+        // Persist to DB as safety net (webhook may also update)
+        updateCallInDb(callId, {
+          status: 'completed',
+          ended_at: new Date().toISOString(),
+        });
       });
 
       call.on('cancel', () => {
@@ -290,6 +309,12 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         setCallStatus('idle');
         setDeviceStatus('ready');
         setCurrentCall(null);
+        // Persist canceled status to DB
+        updateCallInDb(callId, {
+          status: 'canceled',
+          ended_at: new Date().toISOString(),
+          duration_seconds: 0,
+        });
       });
 
       call.on('error', (err: Error) => {
@@ -297,6 +322,12 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         setCallStatus('failed');
         setDeviceStatus('ready');
         setCurrentCall(null);
+        // Persist failed status to DB
+        updateCallInDb(callId, {
+          status: 'failed',
+          ended_at: new Date().toISOString(),
+          duration_seconds: 0,
+        });
       });
 
       setCurrentCall(call as unknown as TwilioCall);
@@ -307,7 +338,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       setCallStatus('failed');
       return null;
     }
-  }, [device, user, deviceStatus, testPipelineId]);
+  }, [device, user, deviceStatus, testPipelineId, updateCallInDb]);
 
   const hangUp = useCallback(() => {
     if (currentCall) {
