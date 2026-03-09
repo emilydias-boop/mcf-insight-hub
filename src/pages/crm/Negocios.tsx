@@ -412,7 +412,7 @@ const Negocios = () => {
       
       // Filtro por inatividade
       if (filters.inactivityDays !== null) {
-        const summary = activitySummaries?.get(deal.id);
+        const summary = activitySummaries?.get(deal.id.toLowerCase().trim());
         const lastActivity = summary?.lastContactAttempt;
         
         if (!lastActivity) {
