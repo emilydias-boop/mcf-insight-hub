@@ -202,48 +202,63 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
       }
 
       // 8. Buscar R2 agendadas atribuídas a este closer (R2 cujo deal teve R1 com contrato pago)
-      // Pegar deal_ids APENAS dos attendees com contract_paid/refunded (excluindo parceiros)
-      const r1DealIds: string[] = [];
+      // Mapa deal_id → contract_paid_at (só contract_paid/refunded, excluindo parceiros)
+      const r1DealMap = new Map<string, string>();
       for (const slot of (slots || [])) {
         for (const att of (slot.meeting_slot_attendees || [])) {
           const attStatus = (att as any).status?.toLowerCase();
-          if ((att as any).deal_id && !(att as any).is_partner && 
-              ['contract_paid', 'refunded'].includes(attStatus) &&
-              !r1DealIds.includes((att as any).deal_id)) {
-            r1DealIds.push((att as any).deal_id);
+          const dealId = (att as any).deal_id;
+          if (dealId && !(att as any).is_partner && 
+              ['contract_paid', 'refunded'].includes(attStatus)) {
+            // Usar contract_paid_at se disponível, senão fallback para scheduled_at do slot
+            const paidAt = (att as any).contract_paid_at || slot.scheduled_at;
+            if (!r1DealMap.has(dealId)) {
+              r1DealMap.set(dealId, paidAt);
+            }
           }
         }
       }
 
       let r2_agendadas = 0;
+      const r1DealIds = [...r1DealMap.keys()];
 
       // Query R2 meeting slots for deals that had R1 with this closer
       if (r1DealIds.length > 0) {
         const { data: r2Slots, error: r2Error } = await supabase
           .from('meeting_slots')
-          .select('id')
+          .select('id, deal_id, created_at')
           .eq('meeting_type', 'r2')
           .in('deal_id', r1DealIds)
           .gte('scheduled_at', `${startDate}T00:00:00`)
           .lte('scheduled_at', `${endDate}T23:59:59`);
 
         if (!r2Error && r2Slots) {
-          r2_agendadas = r2Slots.length;
+          // Filtrar: só contar R2 criada APÓS o pagamento do contrato
+          r2_agendadas = r2Slots.filter((r2: any) => {
+            const paidAt = r1DealMap.get(r2.deal_id);
+            return paidAt && new Date(r2.created_at) >= new Date(paidAt);
+          }).length;
         }
       }
 
-      // Fallback: also count R2 slots directly assigned to this closer (if they do R2 themselves)
+      // Fallback: R2 slots directly assigned to this closer
       if (r2_agendadas === 0) {
         const { data: r2Direct, error: r2DirectError } = await supabase
           .from('meeting_slots')
-          .select('id')
+          .select('id, deal_id, created_at')
           .eq('closer_id', closerId)
           .eq('meeting_type', 'r2')
           .gte('scheduled_at', `${startDate}T00:00:00`)
           .lte('scheduled_at', `${endDate}T23:59:59`);
 
         if (!r2DirectError && r2Direct) {
-          r2_agendadas = r2Direct.length;
+          // Mesmo filtro: R2 criada após pagamento do contrato (se deal estiver no mapa)
+          r2_agendadas = r2Direct.filter((r2: any) => {
+            const paidAt = r1DealMap.get(r2.deal_id);
+            // Se deal não está no mapa, contar (fallback direto do closer)
+            if (!paidAt) return true;
+            return new Date(r2.created_at) >= new Date(paidAt);
+          }).length;
         }
       }
 
