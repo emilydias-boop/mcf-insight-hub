@@ -25,7 +25,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
     queryKey: ['closer-agenda-metrics', sdrId, anoMes],
     queryFn: async (): Promise<CloserAgendaMetrics> => {
       if (!sdrId || !anoMes) {
-        return { closerId: null, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0 };
+        return { closerId: null, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0, r2_agendadas: 0 };
       }
 
       // 1. Buscar email do SDR
