@@ -1,39 +1,39 @@
 
 
-## Problema: KPI Form mostra meta fixa em vez de 30% dinâmica para Contratos Pagos
+## Objetivo
 
-### Causa raiz
-O card de indicadores (`DynamicIndicatorCard`) tem um fallback no código (linhas 111-115): quando `meta_percentual` é `null` e a métrica é `contratos`, ele assume 30% das Realizadas. Porém o formulário de KPIs (`KpiEditForm`) **não tem esse fallback** -- quando `metaContratosPercentual` é `undefined`, ele cai na fórmula fixa `metaContratosDiaria × diasUteisMes = 22`.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Na base de dados, a row de `fechamento_metricas_mes` para este closer (cargo `fd8d5a86`, squad `incorporador`, mês `2026-03`) tem `meta_percentual: null` e não existe row genérica (squad=null) como fallback.
+## Mudanças
 
-### Correção
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-| # | Arquivo | Mudança |
-|---|---------|---------|
-| 1 | `KpiEditForm.tsx` (linhas 75-79) | Adicionar fallback: se `metaContratosPercentual` é undefined/null e `roleType === 'closer'`, usar 30% como default |
-| 2 | `KpiEditForm.tsx` (linhas 287-291) | Atualizar o texto do subtítulo para refletir o fallback de 30% |
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### Código proposto
+### 2. Hook `useCloserDetailData.ts`
 
-```typescript
-// Linha 75-79 - Antes:
-const metaContratosCalculada = metaContratosPercentual && metaContratosPercentual > 0
-  ? Math.round((realizadasAtual * metaContratosPercentual) / 100)
-  : metaContratosDiaria * diasUteisMes;
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-// Depois:
-const effectiveMetaContratosPercentual = metaContratosPercentual 
-  || (isCloser ? 30 : undefined); // Closers: fallback 30%
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-const metaContratosCalculada = effectiveMetaContratosPercentual && effectiveMetaContratosPercentual > 0
-  ? Math.round((realizadasAtual * effectiveMetaContratosPercentual) / 100)
-  : metaContratosDiaria * diasUteisMes;
-```
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-E atualizar o subtítulo (linha 288) para usar `effectiveMetaContratosPercentual` em vez de `metaContratosPercentual`.
+### 4. Dados exportados no Excel
 
-### Resultado esperado
-- Contratos Pagos no form mostrará: **"Meta: 30% de 44 Realizadas = 13"** em vez de "Meta: 22 (1/dia × 22 dias)"
-- Consistência entre o form (topo) e os indicadores (embaixo)
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
