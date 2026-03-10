@@ -286,8 +286,8 @@ export const KpiEditForm = ({
                     </Badge>
                   </Label>
                   <span className="text-[10px] text-muted-foreground/70 block">
-                    {metaContratosPercentual && metaContratosPercentual > 0 ? (
-                      <>Meta: {metaContratosPercentual}% de {realizadasAtual} Realizadas = {metaContratosCalculada}</>
+                    {effectiveMetaContratosPercentual && effectiveMetaContratosPercentual > 0 ? (
+                      <>Meta: {effectiveMetaContratosPercentual}% de {realizadasAtual} Realizadas = {metaContratosCalculada}</>
                     ) : (
                       <>Meta: {metaContratosCalculada} ({metaContratosDiaria}/dia × {diasUteisMes} dias)</>
                     )}
