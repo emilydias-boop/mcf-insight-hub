@@ -1,39 +1,45 @@
 
 
-## Objetivo
+## Análise dos Problemas
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### 1. Meta de Contratos Pagos mostrando "22 (1/dia × 22 dias)" em vez de "30% de 50 = 15"
 
-## Mudanças
+O subtítulo do campo "Contratos Pagos" no formulário KPI mostra a fórmula fixa (`metaContratosDiaria × diasUteis = 22`) em vez da dinâmica (30% das Realizadas = 15).
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**Causa raiz (linha 76 de KpiEditForm.tsx):**
+```typescript
+const realizadasAtual = kpi?.reunioes_realizadas || agendaMetrics.data?.r1_realizada || 0;
+```
+Este cálculo **não considera** `closerAgendaMetrics?.r1_realizadas`. Como `agendaMetrics` (RPC de SDR) retorna vazio para closers, e `kpi?.reunioes_realizadas` pode estar desatualizado ou zero, o valor pode não refletir o real.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Adicionalmente, é possível que `metaContratosPercentual` esteja vindo como `null`/`0` da tabela `fechamento_metricas_mes` para este closer, fazendo o código cair no fallback fixo (linha 291).
 
-### 2. Hook `useCloserDetailData.ts`
+### 2. No-Shows = 24
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+Os 24 no-shows são uma contagem direta da base de dados: 24 participantes (attendees) com `status = 'no_show'` nos meeting_slots deste closer em março/2026. Não há erro de lógica -- é o dado real registrado na agenda.
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+Com 50 realizadas e 24 no-shows, a taxa é 24/(50+24) ≈ 32.4% (se considerar agendadas = realizadas + no-shows + pendentes). O número parece plausível.
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+---
 
-### 4. Dados exportados no Excel
+## Correção Proposta
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+| # | Arquivo | Mudança |
+|---|---------|---------|
+| 1 | `KpiEditForm.tsx` (linha 76) | Incluir `closerAgendaMetrics?.r1_realizadas` no cálculo de `realizadasAtual` para closers |
 
-Formato de data: `dd/MM/yyyy HH:mm`
+```typescript
+// Antes
+const realizadasAtual = kpi?.reunioes_realizadas || agendaMetrics.data?.r1_realizada || 0;
 
-## Resultado
+// Depois
+const realizadasAtual = kpi?.reunioes_realizadas 
+  || closerAgendaMetrics?.r1_realizadas 
+  || agendaMetrics.data?.r1_realizada 
+  || 0;
+```
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+Isso garante que o subtítulo do campo Contratos Pagos use o valor correto de realizadas (50) para calcular a meta dinâmica (30% de 50 = 15), **desde que** `metaContratosPercentual` esteja configurado na tabela `fechamento_metricas_mes`.
+
+Se o problema persistir (subtítulo ainda mostrando fórmula fixa), significa que a configuração de `meta_percentual` para a métrica 'contratos' deste closer/squad/mês não está cadastrada -- seria necessário verificar/cadastrar na aba "Métricas Ativas".
 
