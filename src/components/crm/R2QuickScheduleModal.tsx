@@ -196,6 +196,7 @@ export function R2QuickScheduleModal({
       attendeePhone: selectedDeal.contact?.phone || undefined,
       r2Observations: r2Observations || undefined,
       bookedBy: bookedBy || undefined,
+      isPreSchedule,
     }, {
       onSuccess: () => {
         onOpenChange(false);
