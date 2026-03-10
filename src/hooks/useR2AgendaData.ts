@@ -281,6 +281,7 @@ export function useCreateR2Meeting() {
       attendeeName,
       attendeePhone,
       // R2-specific fields
+      isPreSchedule,
       leadProfile,
       attendanceStatus,
       videoStatus,
