@@ -97,7 +97,13 @@ export const DynamicIndicatorCard = ({
     let metaAjustada: number;
     let metaDiaria: number;
     
-    if (metrica.meta_percentual && metrica.meta_percentual > 0) {
+    if (metrica.nome_metrica === 'r2_agendadas') {
+      // R2 Agendadas: meta = X% dos Contratos Pagos (default 100%)
+      const contratosPagos = kpi?.intermediacoes_contrato || 0;
+      const pctContratos = metrica.meta_percentual && metrica.meta_percentual > 0 ? metrica.meta_percentual : 100;
+      metaAjustada = Math.round((contratosPagos * pctContratos) / 100);
+      metaDiaria = pctContratos;
+    } else if (metrica.meta_percentual && metrica.meta_percentual > 0) {
       // Meta dinâmica: X% das Realizadas
       const realizadas = kpi?.reunioes_realizadas || 0;
       metaAjustada = Math.round((realizadas * metrica.meta_percentual) / 100);
