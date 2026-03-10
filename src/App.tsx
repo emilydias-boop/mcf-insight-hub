@@ -337,7 +337,7 @@ const App = () => (
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="tarefas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Tarefas /></RoleGuard>} />
               
-              {/* Gerentes de Conta Routes */}
+              {/* Gerentes de Relacionamento Routes */}
               <Route path="gerentes-conta" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'gr']}><GerenciamentoGRIndex /></RoleGuard>}>
                 <Route index element={<MinhaCarteira />} />
                 <Route path="minha-carteira" element={<MinhaCarteira />} />

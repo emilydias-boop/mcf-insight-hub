@@ -60,7 +60,7 @@ export const CreateGRWalletDialog = ({ open, onClose }: CreateGRWalletDialogProp
         
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Gerente de Conta</Label>
+            <Label>Gerente de Relacionamento</Label>
             <Select value={selectedUser} onValueChange={setSelectedUser}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione um usuário" />
