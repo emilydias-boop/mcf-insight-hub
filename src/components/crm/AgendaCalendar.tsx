@@ -703,6 +703,9 @@ export function AgendaCalendar({
 
   // Month view rendering
   if (viewMode === 'month') {
+    if (!selectedDate) {
+      return <div className="p-4 text-center text-muted-foreground">Carregando...</div>;
+    }
     const monthStart = startOfMonth(selectedDate);
     const monthEnd = endOfMonth(selectedDate);
     const startDay = startOfWeek(monthStart, { weekStartsOn: weekStartsOn });
@@ -720,12 +723,16 @@ export function AgendaCalendar({
       day = addDays(day, 1);
     }
 
+    // Generate weekday headers based on weekStartsOn
+    const weekdayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    const orderedWeekdays = Array.from({ length: 7 }, (_, i) => weekdayNames[(weekStartsOn + i) % 7]);
+
     return (
       <div className="border rounded-lg overflow-hidden bg-card">
         {/* Header */}
         <div className="grid grid-cols-7 border-b bg-muted/50">
-          {['Sáb', 'Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex'].map(d => (
-            <div key={d} className="p-2.5 text-center text-xs font-medium text-muted-foreground">
+          {orderedWeekdays.map((d, i) => (
+            <div key={`${d}-${i}`} className="p-2.5 text-center text-xs font-medium text-muted-foreground">
               {d}
             </div>
           ))}
