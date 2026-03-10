@@ -30,6 +30,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 const ATTENDEE_STATUS_CONFIG: Record<string, { label: string; shortLabel: string; bgClass: string }> = {
   invited: { label: "Agendado", shortLabel: "Agend.", bgClass: "bg-purple-600/80" },
+  pre_scheduled: { label: "Pré-agendado", shortLabel: "Pré", bgClass: "bg-orange-500/80" },
   completed: { label: "Compareceu", shortLabel: "OK", bgClass: "bg-green-600/80" },
   no_show: { label: "No-show", shortLabel: "NS", bgClass: "bg-red-600/80" },
   contract_paid: { label: "Contrato Pago", shortLabel: "Contrato", bgClass: "bg-emerald-600/80" },

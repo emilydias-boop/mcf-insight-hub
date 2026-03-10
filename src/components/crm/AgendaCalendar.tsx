@@ -52,6 +52,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 const STATUS_BADGE_STYLES: Record<string, { label: string; className: string }> = {
   scheduled: { label: 'Agendada', className: 'bg-primary text-primary-foreground' },
+  pre_scheduled: { label: 'Pré', className: 'bg-orange-500 text-white' },
   rescheduled: { label: 'Reagendada', className: 'bg-yellow-500 text-white' },
   completed: { label: 'Realizada', className: 'bg-green-500 text-white' },
   no_show: { label: 'No-show', className: 'bg-red-500 text-white' },
