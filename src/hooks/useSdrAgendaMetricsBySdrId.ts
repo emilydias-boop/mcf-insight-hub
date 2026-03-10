@@ -9,6 +9,7 @@ export interface SdrAgendaMetricsById {
   no_shows: number;
   contratos: number;
   vendas_parceria: number;
+  r2_agendadas: number;
 }
 
 export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: string | undefined) => {
