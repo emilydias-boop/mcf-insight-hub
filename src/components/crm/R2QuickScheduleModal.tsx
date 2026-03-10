@@ -23,6 +23,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { R2CloserWithAvailability, useCreateR2Meeting } from '@/hooks/useR2AgendaData';
 import { useSearchDealsForSchedule, useSearchDealsByPhone, useSearchDealsByEmail } from '@/hooks/useAgendaData';
@@ -100,7 +101,7 @@ export function R2QuickScheduleModal({
 
   // R2-specific fields
   const [r2Observations, setR2Observations] = useState<string>('');
-
+  const [isPreSchedule, setIsPreSchedule] = useState(false);
   // BU filtering
   const activeBU = useActiveBU();
   const { data: originIds } = useBUOriginIds(activeBU);
@@ -196,6 +197,7 @@ export function R2QuickScheduleModal({
       attendeePhone: selectedDeal.contact?.phone || undefined,
       r2Observations: r2Observations || undefined,
       bookedBy: bookedBy || undefined,
+      isPreSchedule,
     }, {
       onSuccess: () => {
         onOpenChange(false);
@@ -222,6 +224,7 @@ export function R2QuickScheduleModal({
     setShowEmailResults(false);
     // Reset R2-specific fields
     setR2Observations('');
+    setIsPreSchedule(false);
   };
 
   const isSelected = !!selectedDeal;
@@ -537,13 +540,22 @@ export function R2QuickScheduleModal({
               />
             </div>
 
+            {/* Pre-schedule toggle */}
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-medium">Pré-agendamento</Label>
+                <p className="text-xs text-muted-foreground">Aguarda confirmação antes de ficar oficial</p>
+              </div>
+              <Switch checked={isPreSchedule} onCheckedChange={setIsPreSchedule} />
+            </div>
+
             {/* Submit */}
             <Button 
               className="w-full bg-purple-600 hover:bg-purple-700 mt-4" 
               onClick={handleSubmit}
               disabled={!selectedDeal || !selectedCloser || !selectedDate || !selectedTime || createMeeting.isPending}
             >
-              {createMeeting.isPending ? 'Agendando...' : 'Agendar R2'}
+              {createMeeting.isPending ? 'Agendando...' : isPreSchedule ? 'Pré-agendar R2' : 'Agendar R2'}
             </Button>
           </div>
         </ScrollArea>

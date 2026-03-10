@@ -56,6 +56,8 @@ import { R2StatusConfigModal } from "@/components/crm/R2StatusConfigModal";
 import { R2QualificationReportPanel } from "@/components/crm/R2QualificationReportPanel";
 import { useR2PendingLeadsCount } from "@/hooks/useR2PendingLeads";
 import { useR2NoShowsCount } from "@/hooks/useR2NoShowLeads";
+import { useR2PreScheduledCount } from "@/hooks/useR2PreScheduledLeads";
+import { R2PreScheduledTab } from "@/components/crm/R2PreScheduledTab";
 import { R2RescheduleModal } from "@/components/crm/R2RescheduleModal";
 import { R2MeetingRow } from "@/types/r2Agenda";
 import { R2Meeting } from "@/hooks/useR2AgendaMeetings";
@@ -142,6 +144,7 @@ export default function AgendaR2() {
   const { data: r1Closers = [] } = useGestorClosers('r1');
   const pendingCount = useR2PendingLeadsCount();
   const { data: noShowCount = 0 } = useR2NoShowsCount(rangeStart, rangeEnd);
+  const preScheduledCount = useR2PreScheduledCount();
 
   // Fetch R2 configured slots for the "Por Closer" view
   const closerIds = useMemo(() => closers.map((c) => c.id), [closers]);
@@ -602,6 +605,15 @@ export default function AgendaR2() {
                     </Badge>
                   )}
                 </TabsTrigger>
+                <TabsTrigger value="prescheduled" className="gap-2">
+                  <Clock className="h-4 w-4" />
+                  Pré-Agendados
+                  {preScheduledCount > 0 && (
+                    <Badge variant="outline" className="h-5 min-w-[20px] px-1.5 text-xs bg-orange-500/10 text-orange-600 border-orange-500/20">
+                      {preScheduledCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="report" className="gap-2">
                   <FileText className="h-4 w-4" />
                   Relatório
@@ -640,6 +652,11 @@ export default function AgendaR2() {
             {/* Report Tab */}
             <TabsContent value="report" className="mt-0">
               <R2QualificationReportPanel />
+            </TabsContent>
+
+            {/* Pre-Scheduled Tab */}
+            <TabsContent value="prescheduled" className="mt-0">
+              <R2PreScheduledTab />
             </TabsContent>
             <TabsContent value="calendar" className="mt-0">
               {isLoadingMeetings || isLoadingClosers ? (

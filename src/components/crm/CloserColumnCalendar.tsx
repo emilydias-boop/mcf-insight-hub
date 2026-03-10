@@ -46,6 +46,12 @@ const ATTENDEE_STATUS_CONFIG: Record<
     bgClass: "bg-blue-600/80",
     variant: "outline",
   },
+  pre_scheduled: {
+    label: "Pré-agendado",
+    shortLabel: "Pré",
+    bgClass: "bg-orange-500/80",
+    variant: "secondary",
+  },
   completed: {
     label: "Compareceu",
     shortLabel: "OK",

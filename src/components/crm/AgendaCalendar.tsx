@@ -42,6 +42,7 @@ const DEFAULT_COLORS: Record<string, string> = {
 
 const STATUS_STYLES: Record<string, string> = {
   scheduled: 'border-l-4 border-l-primary bg-primary/5',
+  pre_scheduled: 'border-l-4 border-l-orange-500 bg-orange-50/50 dark:bg-orange-900/10 border-dashed',
   rescheduled: 'border-l-4 border-l-yellow-500 bg-yellow-50/50 dark:bg-yellow-900/10',
   completed: 'border-l-4 border-l-green-500 bg-green-50/50 dark:bg-green-900/10',
   no_show: 'border-l-4 border-l-red-500 bg-red-50/50 dark:bg-red-900/10',
@@ -51,6 +52,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 const STATUS_BADGE_STYLES: Record<string, { label: string; className: string }> = {
   scheduled: { label: 'Agendada', className: 'bg-primary text-primary-foreground' },
+  pre_scheduled: { label: 'Pré', className: 'bg-orange-500 text-white' },
   rescheduled: { label: 'Reagendada', className: 'bg-yellow-500 text-white' },
   completed: { label: 'Realizada', className: 'bg-green-500 text-white' },
   no_show: { label: 'No-show', className: 'bg-red-500 text-white' },

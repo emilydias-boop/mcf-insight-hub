@@ -281,6 +281,7 @@ export function useCreateR2Meeting() {
       attendeeName,
       attendeePhone,
       // R2-specific fields
+      isPreSchedule,
       leadProfile,
       attendanceStatus,
       videoStatus,
@@ -299,6 +300,7 @@ export function useCreateR2Meeting() {
       attendeeName?: string;
       attendeePhone?: string;
       // R2-specific fields
+      isPreSchedule?: boolean;
       leadProfile?: string;
       attendanceStatus?: string;
       videoStatus?: 'ok' | 'pendente';
@@ -335,7 +337,7 @@ export function useCreateR2Meeting() {
           contact_id: contactId || null,
           attendee_name: attendeeName || null,
           attendee_phone: attendeePhone || null,
-          status: attendanceStatus || 'invited',
+          status: isPreSchedule ? 'pre_scheduled' : (attendanceStatus || 'invited'),
           lead_profile: leadProfile || null,
           video_status: videoStatus || 'pendente',
           r2_status_id: r2StatusId || null,
