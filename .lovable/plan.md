@@ -1,39 +1,78 @@
 
 
-## Objetivo
+## Pré-Agendamento R2: Fluxo de Confirmação
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Contexto
 
-## Mudanças
+Hoje o fluxo é: Closer R1 → R1 realizada → Contrato pago → Lead aparece na lista "Pendentes" da Agenda R2 → Alguém agenda o R2 diretamente.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+O novo fluxo adiciona uma etapa intermediária: o **Closer de R1** faz um **pré-agendamento** (escolhe closer R2, data e horário), e depois a **Leticia** (confirmadora) entra em contato com o lead para confirmar. Só após confirmação o agendamento fica "oficial".
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Mudanças necessárias
 
-### 2. Hook `useCloserDetailData.ts`
+**1. Novo status de attendee: `pre_scheduled`**
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+Adicionar um novo status ao fluxo do `meeting_slot_attendees`. Atualmente os status são: `invited`, `scheduled`, `completed`, `no_show`, `contract_paid`, `rescheduled`, `refunded`. O novo `pre_scheduled` indica que o Closer R1 marcou o horário mas ainda falta confirmação.
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**2. Banco de dados**
+- Nenhuma migração de schema necessária (o campo `status` em `meeting_slot_attendees` é `text`, aceita qualquer valor)
+- Adicionar coluna opcional `confirmed_by` (uuid, nullable) em `meeting_slot_attendees` para rastrear quem confirmou
+- Adicionar coluna opcional `confirmed_at` (timestamptz, nullable) para quando foi confirmado
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+**3. Modificar `useCreateR2Meeting` (src/hooks/useR2AgendaData.ts)**
+- Aceitar novo parâmetro `isPreSchedule: boolean`
+- Quando `isPreSchedule = true`, criar o attendee com `status: 'pre_scheduled'` em vez de `'invited'`
+- O slot em `meeting_slots` fica com `status: 'scheduled'` normalmente (reserva o horário)
 
-### 4. Dados exportados no Excel
+**4. Modificar `R2QuickScheduleModal` (src/components/crm/R2QuickScheduleModal.tsx)**
+- Adicionar checkbox/toggle "Pré-agendamento (aguarda confirmação)"
+- Quando ativado, passa `isPreSchedule: true` para o `useCreateR2Meeting`
+- Disponibilizar esse toggle quando o agendamento vier da lista de Pendentes ou do Closer R1
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+**5. Nova aba/seção: "Pré-Agendados" na Agenda R2**
+- Criar hook `useR2PreScheduledLeads` que busca attendees com `status = 'pre_scheduled'`
+- Listar com: nome do lead, telefone, closer R2, data/hora agendada, quem pré-agendou
+- Botões de ação: **Confirmar** (muda para `invited`) ou **Cancelar**
+- A confirmação registra `confirmed_by` e `confirmed_at`
 
-Formato de data: `dd/MM/yyyy HH:mm`
+**6. Atualizar visualizações existentes**
+- `ATTENDEE_STATUS_CONFIG` em `AgendaCalendar.tsx` e `CloserColumnCalendar.tsx`: adicionar `pre_scheduled` com label "Pré" e cor amarela/laranja para diferenciar visualmente
+- `formatMeetingStatus.ts`: adicionar mapeamento `pre_scheduled → "Pré-agendado"`
+- Calendário R2: mostrar leads pré-agendados com estilo visual diferenciado (borda tracejada ou opacidade reduzida)
+- Contagem de capacidade (`useR2CloserAvailableSlots`): pré-agendados **devem** ocupar slot (reservar horário)
 
-## Resultado
+**7. Fluxo de Pendentes**
+- Na lista `R2PendingLeadsPanel`, ao clicar "Agendar", abrir o modal com o toggle de pré-agendamento visível
+- Leads pré-agendados devem **sair** da lista de pendentes (já têm horário reservado)
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Resumo do fluxo
+
+```text
+Closer R1 marca R2 (pre_scheduled)
+         │
+         ▼
+Leticia vê na aba "Pré-Agendados"
+         │
+    ┌────┴────┐
+    ▼         ▼
+Confirma    Cancela
+(→ invited)  (→ cancelled)
+    │
+    ▼
+Aparece normal no calendário R2
+```
+
+### Arquivos impactados
+
+| Arquivo | Mudança |
+|---------|---------|
+| SQL migration | Adicionar `confirmed_by` e `confirmed_at` em `meeting_slot_attendees` |
+| `src/hooks/useR2AgendaData.ts` | Parâmetro `isPreSchedule` no `useCreateR2Meeting` |
+| `src/hooks/useR2PreScheduledLeads.ts` | **Novo** - hook para buscar pré-agendados |
+| `src/components/crm/R2PreScheduledTab.tsx` | **Novo** - aba com lista de pré-agendados e ações |
+| `src/components/crm/R2QuickScheduleModal.tsx` | Toggle de pré-agendamento |
+| `src/pages/crm/AgendaR2.tsx` | Adicionar aba "Pré-Agendados" |
+| `src/components/crm/AgendaCalendar.tsx` | Status visual para `pre_scheduled` |
+| `src/components/crm/CloserColumnCalendar.tsx` | Status visual para `pre_scheduled` |
+| `src/utils/formatMeetingStatus.ts` | Mapeamento do novo status |
 
