@@ -364,7 +364,7 @@ export const KpiEditForm = ({
                     )}
                   </span>
                   <div className="h-8 px-3 py-1.5 rounded-md border bg-muted/50 flex items-center text-sm">
-                    <span className="font-medium">{agendaMetrics.data?.r2_agendadas ?? 0}</span>
+                    <span className="font-medium">{isCloser && closerAgendaMetrics ? closerAgendaMetrics.r2_agendadas : (agendaMetrics.data?.r2_agendadas ?? 0)}</span>
                     <span className="text-muted-foreground/70 text-[10px] ml-1.5">(da Agenda)</span>
                   </div>
                 </div>
