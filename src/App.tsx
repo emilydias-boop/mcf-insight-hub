@@ -130,7 +130,7 @@ import CampanhasDashboard from "./pages/bu-marketing/CampanhasDashboard";
 import A010AcquisitionDashboard from "./pages/bu-marketing/A010AcquisitionDashboard";
 import A010LinkMappingsConfig from "./pages/bu-marketing/A010LinkMappingsConfig";
 
-// Gerentes de Conta
+// Gerentes de Relacionamento
 import GerenciamentoGRIndex from "./pages/gerentes-conta/Index";
 import MinhaCarteira from "./pages/gerentes-conta/MinhaCarteira";
 import GestaoCarteiras from "./pages/gerentes-conta/GestaoCarteiras";
@@ -337,7 +337,7 @@ const App = () => (
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="tarefas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Tarefas /></RoleGuard>} />
               
-              {/* Gerentes de Conta Routes */}
+              {/* Gerentes de Relacionamento Routes */}
               <Route path="gerentes-conta" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'gr']}><GerenciamentoGRIndex /></RoleGuard>}>
                 <Route index element={<MinhaCarteira />} />
                 <Route path="minha-carteira" element={<MinhaCarteira />} />

@@ -34,7 +34,7 @@ const GestaoCarteiras = () => {
         <div>
           <h1 className="text-2xl font-bold">Gestão de Carteiras</h1>
           <p className="text-muted-foreground">
-            Gerencie as carteiras dos Gerentes de Conta
+            Gerencie as carteiras dos Gerentes de Relacionamento
           </p>
         </div>
         <div className="flex items-center gap-2">

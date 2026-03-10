@@ -50,7 +50,7 @@ export const GRDetailHeader = ({ wallet, metrics }: GRDetailHeaderProps) => {
               </Avatar>
               
               <div>
-                <h1 className="text-2xl font-bold">{wallet.gr_name || 'Gerente de Conta'}</h1>
+                <h1 className="text-2xl font-bold">{wallet.gr_name || 'Gerente de Relacionamento'}</h1>
                 <p className="text-muted-foreground">{wallet.gr_email}</p>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge variant="outline">{wallet.bu.toUpperCase()}</Badge>

@@ -272,9 +272,9 @@ const menuItems: MenuItem[] = [
     ],
   },
 
-  // GERENTES DE CONTA
+  // GERENTES DE RELACIONAMENTO
   {
-    title: "Gerentes de Conta",
+    title: "Gerentes de Relacionamento",
     icon: Briefcase,
     requiredRoles: ["admin", "manager", "coordenador", "gr"],
     items: [

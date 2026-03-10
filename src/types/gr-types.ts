@@ -1,4 +1,4 @@
-// Tipos para o módulo de Gerentes de Conta (GR)
+// Tipos para o módulo de Gerentes de Relacionamento (GR)
 
 // Enums
 export type GREntryStatus = 
