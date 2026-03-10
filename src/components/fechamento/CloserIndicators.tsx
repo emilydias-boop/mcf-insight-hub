@@ -11,6 +11,7 @@ interface CloserIndicatorsProps {
   compPlan: SdrCompPlan | null;
   diasUteisMes: number;
   sdrMetaDiaria: number;
+  r2Agendadas?: number;
 }
 
 export const CloserIndicators = ({
