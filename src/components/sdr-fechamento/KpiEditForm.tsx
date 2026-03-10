@@ -27,6 +27,7 @@ interface KpiEditFormProps {
   metaContratosDiaria?: number;
   vendasParceria?: number;
   metaContratosPercentual?: number; // Novo: % das Realizadas para meta de contratos
+  closerAgendaMetrics?: { r1_alocadas: number; r1_realizadas: number; contratos_pagos: number; no_shows: number; vendas_parceria: number; r2_agendadas: number };
 }
 
 export const KpiEditForm = ({
