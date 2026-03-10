@@ -237,7 +237,7 @@ export const ContactDetailsDrawer = ({ contactId, open, onOpenChange }: ContactD
 
               {/* ===== ABAS: Timeline / Ligações / Notas / Observações ===== */}
               <Tabs defaultValue="timeline" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 h-8">
+                <TabsList className="w-full h-8">
                   <TabsTrigger value="timeline" className="text-xs gap-1">
                     <History className="h-3 w-3" /> Timeline
                   </TabsTrigger>
