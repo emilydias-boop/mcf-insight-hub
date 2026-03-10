@@ -67,10 +67,12 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         .select(`
           id,
           scheduled_at,
+          deal_id,
           meeting_slot_attendees (
             id,
             status,
-            is_partner
+            is_partner,
+            deal_id
           )
         `)
         .eq('closer_id', closerId)
