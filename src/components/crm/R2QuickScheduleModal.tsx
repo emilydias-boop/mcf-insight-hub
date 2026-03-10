@@ -538,13 +538,22 @@ export function R2QuickScheduleModal({
               />
             </div>
 
+            {/* Pre-schedule toggle */}
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-medium">Pré-agendamento</Label>
+                <p className="text-xs text-muted-foreground">Aguarda confirmação antes de ficar oficial</p>
+              </div>
+              <Switch checked={isPreSchedule} onCheckedChange={setIsPreSchedule} />
+            </div>
+
             {/* Submit */}
             <Button 
               className="w-full bg-purple-600 hover:bg-purple-700 mt-4" 
               onClick={handleSubmit}
               disabled={!selectedDeal || !selectedCloser || !selectedDate || !selectedTime || createMeeting.isPending}
             >
-              {createMeeting.isPending ? 'Agendando...' : 'Agendar R2'}
+              {createMeeting.isPending ? 'Agendando...' : isPreSchedule ? 'Pré-agendar R2' : 'Agendar R2'}
             </Button>
           </div>
         </ScrollArea>
