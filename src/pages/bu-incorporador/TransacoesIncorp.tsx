@@ -326,10 +326,6 @@ export default function TransacoesIncorp() {
               <Download className="h-4 w-4 mr-2" />
               Exportar
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExportParcerias} className="border-amber-500 text-amber-700 hover:bg-amber-50">
-              <Download className="h-4 w-4 mr-2" />
-              Exportar Parcerias
-            </Button>
           </div>
         </div>
 

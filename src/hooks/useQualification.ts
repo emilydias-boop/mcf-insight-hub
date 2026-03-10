@@ -24,7 +24,7 @@ export function useQualification({
 }: UseQualificationOptions) {
   const queryClient = useQueryClient();
   const [isUpdating, setIsUpdating] = useState(false);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Mutation para atualizar custom_fields
   const updateFieldMutation = useMutation({

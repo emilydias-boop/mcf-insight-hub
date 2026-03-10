@@ -8,7 +8,7 @@ const STORAGE_KEY = 'notified-meeting-reminders';
 
 export function useMeetingReminders() {
   const { data: meetings } = useUpcomingMeetings(new Date());
-  const timersRef = useRef<NodeJS.Timeout[]>([]);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
     // Clear previous timers
