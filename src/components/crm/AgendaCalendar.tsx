@@ -684,7 +684,7 @@ export function AgendaCalendar({
   // Calculate how many slots a meeting occupies
   // Each visual slot is 15 minutes
   const getSlotsNeeded = (durationMinutes: number) => {
-    return Math.ceil(durationMinutes / 30);
+    return Math.max(1, Math.ceil(durationMinutes / 15));
   };
 
   // Handle drag and drop
@@ -703,6 +703,9 @@ export function AgendaCalendar({
 
   // Month view rendering
   if (viewMode === 'month') {
+    if (!selectedDate) {
+      return <div className="p-4 text-center text-muted-foreground">Carregando...</div>;
+    }
     const monthStart = startOfMonth(selectedDate);
     const monthEnd = endOfMonth(selectedDate);
     const startDay = startOfWeek(monthStart, { weekStartsOn: weekStartsOn });
@@ -720,12 +723,16 @@ export function AgendaCalendar({
       day = addDays(day, 1);
     }
 
+    // Generate weekday headers based on weekStartsOn
+    const weekdayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    const orderedWeekdays = Array.from({ length: 7 }, (_, i) => weekdayNames[(weekStartsOn + i) % 7]);
+
     return (
       <div className="border rounded-lg overflow-hidden bg-card">
         {/* Header */}
         <div className="grid grid-cols-7 border-b bg-muted/50">
-          {['Sáb', 'Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex'].map(d => (
-            <div key={d} className="p-2.5 text-center text-xs font-medium text-muted-foreground">
+          {orderedWeekdays.map((d, i) => (
+            <div key={`${d}-${i}`} className="p-2.5 text-center text-xs font-medium text-muted-foreground">
               {d}
             </div>
           ))}
@@ -757,6 +764,7 @@ export function AgendaCalendar({
                     </div>
                     <div className="space-y-1">
                       {dayMeetings.slice(0, 3).map(meeting => {
+                        if (!meeting?.id || !meeting?.scheduled_at) return null;
                         const closerColor = getCloserColor(meeting.closer_id, meeting.closer?.name);
                         return (
                           <HoverCard key={meeting.id} openDelay={200} closeDelay={100}>
@@ -1038,7 +1046,7 @@ export function AgendaCalendar({
               >
                   <div 
                     className={cn(
-                      'min-w-[60px] w-[60px] flex-shrink-0 h-[40px] flex items-center justify-center text-xs border-r bg-muted/30',
+                      'min-w-[60px] w-[60px] flex-shrink-0 h-[48px] flex items-center justify-center text-xs border-r bg-muted/30',
                       (minute === 15 || minute === 45) && 'text-muted-foreground/60',
                       anyDayFull ? 'line-through text-muted-foreground/40' : 'text-muted-foreground',
                       onEditHours && 'cursor-pointer hover:bg-muted/50 hover:text-foreground transition-colors'
@@ -1085,7 +1093,7 @@ export function AgendaCalendar({
                               }
                             }}
                             className={cn(
-                              'h-[40px] border-l relative overflow-visible',
+                              'h-[48px] border-l relative overflow-visible',
                               isCurrent && 'bg-primary/15 ring-1 ring-primary/30',
                               snapshot.isDraggingOver && !isSlotFull && 'bg-primary/20',
                               isOccupied && 'cursor-pointer',
