@@ -127,7 +127,15 @@ export const KpiEditForm = ({
   const handleSyncFromAgenda = () => {
     let updated = false;
     
-    if (agendaMetrics.data) {
+    if (isCloser && closerAgendaMetrics) {
+      setFormData(prev => ({
+        ...prev,
+        reunioes_agendadas: closerAgendaMetrics.r1_alocadas,
+        reunioes_realizadas: closerAgendaMetrics.r1_realizadas,
+        no_shows: closerAgendaMetrics.no_shows,
+      }));
+      updated = true;
+    } else if (agendaMetrics.data) {
       setFormData(prev => ({
         ...prev,
         reunioes_agendadas: agendaMetrics.data!.agendamentos,
