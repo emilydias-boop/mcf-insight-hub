@@ -33,9 +33,6 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
 
   const isPJ = employee.tipo_contrato === 'PJ';
 
-  // Calculate number of tabs for grid (added Avaliações tab)
-  const tabCount = isPJ ? 8 : 7;
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
