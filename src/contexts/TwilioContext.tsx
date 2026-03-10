@@ -145,16 +145,22 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     }
   }, [callStatus]);
 
-  const initializeDevice = useCallback(async (): Promise<boolean> => {
+  const initializeDevice = useCallback(async (forceRefresh = false): Promise<boolean> => {
     if (!user) return false;
     
-    // If already ready, return immediately
-    if (deviceStatus === 'ready' && device) {
+    // If already ready and not forcing refresh, return immediately
+    if (deviceStatus === 'ready' && device && !forceRefresh) {
       return true;
     }
     
     try {
       setDeviceStatus('connecting');
+      
+      // Destroy existing device before creating new one
+      if (device) {
+        try { device.destroy(); } catch (e) { /* ignore */ }
+        setDevice(null);
+      }
       
       // Load Twilio Voice SDK dynamically
       const { Device } = await import('@twilio/voice-sdk');
@@ -169,6 +175,9 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         setDeviceStatus('error');
         return false;
       }
+
+      // Record token creation time
+      tokenCreatedAt.current = Date.now();
 
       // Create and register device
       const twilioDevice = new Device(data.token, {
@@ -204,6 +213,20 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       return false;
     }
   }, [user, deviceStatus, device]);
+
+  // Check if token needs refresh
+  const ensureValidToken = useCallback(async (): Promise<boolean> => {
+    const tokenAge = tokenCreatedAt.current ? Date.now() - tokenCreatedAt.current : Infinity;
+    if (tokenAge > TOKEN_MAX_AGE_MS) {
+      console.log(`Twilio token expired (${Math.round(tokenAge / 60000)}min old), refreshing...`);
+      toast({
+        title: 'Reconectando telefone...',
+        description: 'Sessão expirada, renovando conexão.',
+      });
+      return await initializeDevice(true);
+    }
+    return deviceStatus === 'ready' && !!device;
+  }, [initializeDevice, deviceStatus, device]);
 
   // Helper to update call record in DB
   const updateCallInDb = useCallback(async (
