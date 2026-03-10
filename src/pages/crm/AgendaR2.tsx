@@ -605,6 +605,15 @@ export default function AgendaR2() {
                     </Badge>
                   )}
                 </TabsTrigger>
+                <TabsTrigger value="prescheduled" className="gap-2">
+                  <Clock className="h-4 w-4" />
+                  Pré-Agendados
+                  {preScheduledCount > 0 && (
+                    <Badge variant="outline" className="h-5 min-w-[20px] px-1.5 text-xs bg-orange-500/10 text-orange-600 border-orange-500/20">
+                      {preScheduledCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="report" className="gap-2">
                   <FileText className="h-4 w-4" />
                   Relatório
