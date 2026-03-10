@@ -360,7 +360,7 @@ export const KpiEditForm = ({
                   <span className="text-[10px] text-muted-foreground/70 block">
                     R2 atribuídas ao Closer (via R1 original)
                     {agendaMetrics.data && (
-                      <span className="ml-1 text-purple-500">• Agenda: {agendaMetrics.data.r2_agendadas}</span>
+                      <span className="ml-1 text-purple-500">• Agenda: {isCloser && closerAgendaMetrics ? closerAgendaMetrics.r2_agendadas : agendaMetrics.data.r2_agendadas}</span>
                     )}
                   </span>
                   <div className="h-8 px-3 py-1.5 rounded-md border bg-muted/50 flex items-center text-sm">
