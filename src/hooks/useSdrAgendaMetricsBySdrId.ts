@@ -58,6 +58,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
         no_shows: number;
         contratos: number;
         vendas_parceria?: number;
+        r2_agendadas?: number;
       }> };
 
       const metrics = response?.metrics?.[0];
