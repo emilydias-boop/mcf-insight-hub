@@ -144,6 +144,7 @@ export default function AgendaR2() {
   const { data: r1Closers = [] } = useGestorClosers('r1');
   const pendingCount = useR2PendingLeadsCount();
   const { data: noShowCount = 0 } = useR2NoShowsCount(rangeStart, rangeEnd);
+  const preScheduledCount = useR2PreScheduledCount();
 
   // Fetch R2 configured slots for the "Por Closer" view
   const closerIds = useMemo(() => closers.map((c) => c.id), [closers]);
