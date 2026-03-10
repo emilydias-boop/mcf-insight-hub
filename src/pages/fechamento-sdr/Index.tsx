@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -12,6 +12,7 @@ import { SdrStatusBadge } from "@/components/sdr-fechamento/SdrStatusBadge";
 import { useSdrPayouts } from "@/hooks/useSdrFechamento";
 import { formatCurrency } from "@/lib/formatters";
 import { TeamGoalsSummary } from "@/components/fechamento/TeamGoalsSummary";
+import { PayoutTableRow } from "@/components/fechamento/PayoutTableRow";
 import { useActiveBU } from "@/hooks/useActiveBU";
 import {
   Calculator,
@@ -117,14 +118,29 @@ const FechamentoSDRList = () => {
     return compPlans?.find((cp) => cp.sdr_id === sdrId);
   };
 
-  // Calculate financial summary
+  // State for locally calculated values from PayoutTableRow
+  const calculatedValuesRef = useRef<Record<string, { variavel: number; totalConta: number }>>({});
+  const [calculatedValues, setCalculatedValues] = useState<Record<string, { variavel: number; totalConta: number }>>({});
+
+  const handleRowCalculated = useCallback((payoutId: string, variavel: number, totalConta: number) => {
+    const prev = calculatedValuesRef.current[payoutId];
+    if (!prev || prev.variavel !== variavel || prev.totalConta !== totalConta) {
+      calculatedValuesRef.current = { ...calculatedValuesRef.current, [payoutId]: { variavel, totalConta } };
+      setCalculatedValues(calculatedValuesRef.current);
+    }
+  }, []);
+
+  // Calculate financial summary using locally calculated values when available
   const financialSummary = payouts?.reduce(
-    (acc, p) => ({
-      totalFixo: acc.totalFixo + (p.valor_fixo || 0),
-      totalVariavel: acc.totalVariavel + (p.valor_variavel_total || 0),
-      totalConta: acc.totalConta + (p.total_conta || 0),
-      totalIfood: acc.totalIfood + (p.total_ifood || 0),
-    }),
+    (acc, p) => {
+      const calc = calculatedValues[p.id];
+      return {
+        totalFixo: acc.totalFixo + (p.valor_fixo || 0),
+        totalVariavel: acc.totalVariavel + (calc ? calc.variavel : (p.valor_variavel_total || 0)),
+        totalConta: acc.totalConta + (calc ? calc.totalConta : (p.total_conta || 0)),
+        totalIfood: acc.totalIfood + (p.total_ifood || 0),
+      };
+    },
     { totalFixo: 0, totalVariavel: 0, totalConta: 0, totalIfood: 0 },
   );
 
@@ -475,76 +491,25 @@ const FechamentoSDRList = () => {
                 {payouts.map((payout) => {
                   const compPlan = getCompPlanForSdr(payout.sdr_id);
                   const employee = (payout as any).employee;
-
-                   // Priority: 1) frozen nivel_vigente, 2) RH cargo_catalogo.nivel, 3) legacy sdr.nivel, 4) fallback 1
-                   const nivel = (payout as any).nivel_vigente || employee?.cargo_catalogo?.nivel || payout.sdr?.nivel || 1;
-
-                  // Priority: 1) compPlan vigente, 2) RH cargo_catalogo.ote_total, 3) fallback 4000
+                  const nivel = (payout as any).nivel_vigente || employee?.cargo_catalogo?.nivel || payout.sdr?.nivel || 1;
                   const ote = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
-
                   const sdrData = payout.sdr as any;
 
                   return (
-                    <TableRow key={payout.id}>
-                      <TableCell className="font-medium">
-                        {payout.sdr?.name || "SDR"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant={sdrData?.role_type === "closer" ? "secondary" : "outline"}
-                          className="font-normal"
-                        >
-                          {getRoleLabel(sdrData?.role_type)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {(() => {
-                          const buInfo = getBuFromPayout(payout);
-                          return (
-                            <div
-                              className="flex items-center justify-center gap-1"
-                              title={buInfo.hasWarning ? "SDR sem vínculo RH" : undefined}
-                            >
-                              <span
-                                className={`text-sm ${buInfo.isFromHR ? "text-foreground" : "text-muted-foreground"}`}
-                              >
-                                {buInfo.label}
-                              </span>
-                              {buInfo.hasWarning && <AlertTriangle className="h-3 w-3 text-yellow-500" />}
-                            </div>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className="font-mono">
-                          N{nivel}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">{formatCurrency(ote)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {formatCurrency(payout.valor_variavel_total || 0)}
-                          {payout.status === 'DRAFT' && (
-                            <span title="Valor pode estar desatualizado. Clique em 'Recalcular Todos' ou acesse o detalhe para ver o valor atual.">
-                              <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 shrink-0" />
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        {formatCurrency(payout.total_conta || 0)}
-                      </TableCell>
-                      <TableCell className="text-right">{formatCurrency(payout.total_ifood || 0)}</TableCell>
-                      <TableCell className="text-center">
-                        <SdrStatusBadge status={payout.status} />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Button variant="ghost" size="sm" onClick={() => navigate(`/fechamento-sdr/${payout.id}?from=${selectedMonth}&bu=${effectiveBu}`)}>
-                          <Eye className="h-4 w-4 mr-1" />
-                          Ver
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                    <PayoutTableRow
+                      key={payout.id}
+                      payout={payout}
+                      compPlan={compPlan}
+                      anoMes={selectedMonth}
+                      effectiveBu={effectiveBu}
+                      selectedMonth={selectedMonth}
+                      nivel={nivel}
+                      ote={ote}
+                      buInfo={getBuFromPayout(payout)}
+                      roleLabel={getRoleLabel(sdrData?.role_type)}
+                      roleType={sdrData?.role_type || 'sdr'}
+                      onCalculated={handleRowCalculated}
+                    />
                   );
                 })}
               </TableBody>
