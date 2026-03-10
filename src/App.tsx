@@ -130,7 +130,7 @@ import CampanhasDashboard from "./pages/bu-marketing/CampanhasDashboard";
 import A010AcquisitionDashboard from "./pages/bu-marketing/A010AcquisitionDashboard";
 import A010LinkMappingsConfig from "./pages/bu-marketing/A010LinkMappingsConfig";
 
-// Gerentes de Conta
+// Gerentes de Relacionamento
 import GerenciamentoGRIndex from "./pages/gerentes-conta/Index";
 import MinhaCarteira from "./pages/gerentes-conta/MinhaCarteira";
 import GestaoCarteiras from "./pages/gerentes-conta/GestaoCarteiras";
