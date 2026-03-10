@@ -102,16 +102,7 @@ export function PayoutTableRow({
         </Badge>
       </TableCell>
       <TableCell className="text-right">{formatCurrency(ote)}</TableCell>
-      <TableCell className="text-right">
-        <div className="flex items-center justify-end gap-1">
-          {formatCurrency(displayVariavel)}
-          {hasDivergence && payout.status === 'DRAFT' && (
-            <span title={`Banco: ${formatCurrency(dbVariavel)} — Valor recalculado localmente`}>
-              <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 shrink-0" />
-            </span>
-          )}
-        </div>
-      </TableCell>
+      <TableCell className="text-right">{formatCurrency(displayVariavel)}</TableCell>
       <TableCell className="text-right font-semibold">{formatCurrency(displayTotalConta)}</TableCell>
       <TableCell className="text-right">{formatCurrency(payout.total_ifood || 0)}</TableCell>
       <TableCell className="text-center">
