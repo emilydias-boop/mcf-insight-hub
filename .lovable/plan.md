@@ -1,39 +1,42 @@
 
 
-## Objetivo
+## Corrigir discrepância de valores: Calcular variável localmente na tabela
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+A tabela do Index mostra `payout.valor_variavel_total` do banco (último cálculo salvo), enquanto a página de Detalhe recalcula em tempo real com `useCalculatedVariavel`. Resultado: valores diferentes (ex: Juliana R$743 na tabela vs R$953 no detalhe).
 
-## Mudanças
+O warning icon adicionado anteriormente não resolve o problema - o usuário precisa ver o valor correto direto na tabela.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Solução
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Criar um componente `PayoutTableRow` que encapsula cada linha da tabela e internamente usa os mesmos hooks do Detail para calcular o variável real. Também recalcular os totalizadores com os valores locais.
 
-### 2. Hook `useCloserDetailData.ts`
+### Mudanças
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+| # | Arquivo | Mudança |
+|---|---------|---------|
+| 1 | Criar `src/components/fechamento/PayoutTableRow.tsx` | Componente que renderiza uma `<TableRow>` e internamente chama `useActiveMetricsForSdr`, `useSdrMonthKpi`, `useSdrCompPlan`, e `useCalculatedVariavel` para exibir o valor calculado real |
+| 2 | `src/pages/fechamento-sdr/Index.tsx` | Substituir o render inline de cada payout por `<PayoutTableRow>`, passar callback `onCalculated` para reportar o valor ao pai para os totalizadores |
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+### Detalhes técnicos
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+**PayoutTableRow** receberá:
+- `payout` (dados do banco)
+- `compPlan` (já carregado pelo pai)
+- `anoMes` (mês selecionado)
+- `onCalculated(payoutId, variavel, totalConta)` - callback para atualizar totalizadores no pai
 
-### 4. Dados exportados no Excel
+Internamente:
+1. `useActiveMetricsForSdr(payout.sdr_id, anoMes)` → métricas
+2. `useSdrMonthKpi(payout.sdr_id, anoMes)` → KPI atualizado
+3. `useCalculatedVariavel(...)` → valor real
+4. `useEffect` → reporta valor calculado ao pai via callback
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+**Index.tsx**:
+- Estado `calculatedValues: Record<string, { variavel: number; totalConta: number }>` 
+- Cards de total somam valores calculados quando disponíveis, fallback para banco
+- Exibe badge sutil quando valor calculado diverge do banco
 
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Performance
+~48 queries extras para 16 SDRs, mas React Query faz cache/dedup (métricas por squad são compartilhadas, `staleTime: 30s`). Na prática serão ~3-4 queries únicas de métricas + 16 de KPI.
 
