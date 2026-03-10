@@ -297,9 +297,10 @@ const FechamentoSDRList = () => {
             </Select>
 
             <Button
-              variant="outline"
+              variant="default"
               onClick={() => recalculateViaEdge.mutate(selectedMonth)}
               disabled={recalculateViaEdge.isPending}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${recalculateViaEdge.isPending ? "animate-spin" : ""}`} />
               Recalcular Todos
