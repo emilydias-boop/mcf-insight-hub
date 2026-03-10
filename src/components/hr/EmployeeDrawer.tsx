@@ -33,9 +33,6 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
 
   const isPJ = employee.tipo_contrato === 'PJ';
 
-  // Calculate number of tabs for grid (added Avaliações tab)
-  const tabCount = isPJ ? 8 : 7;
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
@@ -90,7 +87,7 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
         </SheetHeader>
 
         <Tabs defaultValue="geral" className="mt-6">
-          <TabsList className={`grid w-full grid-cols-${tabCount}`}>
+          <TabsList className="flex w-full overflow-x-auto">
             <TabsTrigger value="geral" className="flex items-center gap-1">
               <User className="h-3 w-3" />
               <span className="hidden sm:inline">Geral</span>
