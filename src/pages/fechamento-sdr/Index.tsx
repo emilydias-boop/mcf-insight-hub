@@ -491,76 +491,25 @@ const FechamentoSDRList = () => {
                 {payouts.map((payout) => {
                   const compPlan = getCompPlanForSdr(payout.sdr_id);
                   const employee = (payout as any).employee;
-
-                   // Priority: 1) frozen nivel_vigente, 2) RH cargo_catalogo.nivel, 3) legacy sdr.nivel, 4) fallback 1
-                   const nivel = (payout as any).nivel_vigente || employee?.cargo_catalogo?.nivel || payout.sdr?.nivel || 1;
-
-                  // Priority: 1) compPlan vigente, 2) RH cargo_catalogo.ote_total, 3) fallback 4000
+                  const nivel = (payout as any).nivel_vigente || employee?.cargo_catalogo?.nivel || payout.sdr?.nivel || 1;
                   const ote = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
-
                   const sdrData = payout.sdr as any;
 
                   return (
-                    <TableRow key={payout.id}>
-                      <TableCell className="font-medium">
-                        {payout.sdr?.name || "SDR"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant={sdrData?.role_type === "closer" ? "secondary" : "outline"}
-                          className="font-normal"
-                        >
-                          {getRoleLabel(sdrData?.role_type)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {(() => {
-                          const buInfo = getBuFromPayout(payout);
-                          return (
-                            <div
-                              className="flex items-center justify-center gap-1"
-                              title={buInfo.hasWarning ? "SDR sem vínculo RH" : undefined}
-                            >
-                              <span
-                                className={`text-sm ${buInfo.isFromHR ? "text-foreground" : "text-muted-foreground"}`}
-                              >
-                                {buInfo.label}
-                              </span>
-                              {buInfo.hasWarning && <AlertTriangle className="h-3 w-3 text-yellow-500" />}
-                            </div>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className="font-mono">
-                          N{nivel}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">{formatCurrency(ote)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {formatCurrency(payout.valor_variavel_total || 0)}
-                          {payout.status === 'DRAFT' && (
-                            <span title="Valor pode estar desatualizado. Clique em 'Recalcular Todos' ou acesse o detalhe para ver o valor atual.">
-                              <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 shrink-0" />
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        {formatCurrency(payout.total_conta || 0)}
-                      </TableCell>
-                      <TableCell className="text-right">{formatCurrency(payout.total_ifood || 0)}</TableCell>
-                      <TableCell className="text-center">
-                        <SdrStatusBadge status={payout.status} />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Button variant="ghost" size="sm" onClick={() => navigate(`/fechamento-sdr/${payout.id}?from=${selectedMonth}&bu=${effectiveBu}`)}>
-                          <Eye className="h-4 w-4 mr-1" />
-                          Ver
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                    <PayoutTableRow
+                      key={payout.id}
+                      payout={payout}
+                      compPlan={compPlan}
+                      anoMes={selectedMonth}
+                      effectiveBu={effectiveBu}
+                      selectedMonth={selectedMonth}
+                      nivel={nivel}
+                      ote={ote}
+                      buInfo={getBuFromPayout(payout)}
+                      roleLabel={getRoleLabel(sdrData?.role_type)}
+                      roleType={sdrData?.role_type || 'sdr'}
+                      onCalculated={handleRowCalculated}
+                    />
                   );
                 })}
               </TableBody>
