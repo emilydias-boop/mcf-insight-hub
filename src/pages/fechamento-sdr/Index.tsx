@@ -525,10 +525,9 @@ const FechamentoSDRList = () => {
                         <div className="flex items-center justify-end gap-1">
                           {formatCurrency(payout.valor_variavel_total || 0)}
                           {payout.status === 'DRAFT' && (
-                            <AlertTriangle 
-                              className="h-3.5 w-3.5 text-yellow-500 shrink-0" 
-                              title="Valor pode estar desatualizado. Clique em 'Recalcular Todos' ou acesse o detalhe para ver o valor atual."
-                            />
+                            <span title="Valor pode estar desatualizado. Clique em 'Recalcular Todos' ou acesse o detalhe para ver o valor atual.">
+                              <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 shrink-0" />
+                            </span>
                           )}
                         </div>
                       </TableCell>
