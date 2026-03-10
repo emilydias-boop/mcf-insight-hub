@@ -91,7 +91,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
   const [currentCallId, setCurrentCallId] = useState<string | null>(null);
   const [currentCallDealId, setCurrentCallDealId] = useState<string | null>(null);
   const [testPipelineId, setTestPipelineId] = useState<string | null>(null);
-  const [durationInterval, setDurationInterval] = useState<NodeJS.Timeout | null>(null);
+  const [durationInterval, setDurationInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   const tokenCreatedAt = useRef<number | null>(null);
 
   const TOKEN_MAX_AGE_MS = 50 * 60 * 1000; // 50 minutes

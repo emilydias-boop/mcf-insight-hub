@@ -155,14 +155,13 @@ export function useSetoresDashboard(referenceDate?: Date) {
       // 2b. Fetch commissions for each period's cards
       const fetchComissao = async (cards: { id: string }[] | null): Promise<number> => {
         if (!cards || cards.length === 0) return 0;
+        const cardIds = cards.map(c => c.id);
+        const { data: installments } = await supabase
+          .from('consortium_installments')
+          .select('valor_comissao')
+          .in('card_id', cardIds);
         let total = 0;
-        for (const card of cards) {
-          const { data: installments } = await supabase
-            .from('consortium_installments')
-            .select('valor_comissao')
-            .eq('card_id', card.id);
-          installments?.forEach(inst => { total += Number(inst.valor_comissao); });
-        }
+        installments?.forEach(inst => { total += Number(inst.valor_comissao); });
         return total;
       };
 

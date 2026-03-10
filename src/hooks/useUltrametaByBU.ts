@@ -98,6 +98,7 @@ export function useUltrametaByBU() {
           product_price: t.product_price,
           installment_number: t.installment_number,
           gross_override: t.gross_override,
+          reference_price: t.reference_price,
         };
         return sum + getDeduplicatedGross(transaction, isFirst);
       }, 0);
