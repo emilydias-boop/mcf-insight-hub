@@ -297,9 +297,10 @@ const FechamentoSDRList = () => {
             </Select>
 
             <Button
-              variant="outline"
+              variant="default"
               onClick={() => recalculateViaEdge.mutate(selectedMonth)}
               disabled={recalculateViaEdge.isPending}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${recalculateViaEdge.isPending ? "animate-spin" : ""}`} />
               Recalcular Todos
@@ -520,7 +521,16 @@ const FechamentoSDRList = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">{formatCurrency(ote)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(payout.valor_variavel_total || 0)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {formatCurrency(payout.valor_variavel_total || 0)}
+                          {payout.status === 'DRAFT' && (
+                            <span title="Valor pode estar desatualizado. Clique em 'Recalcular Todos' ou acesse o detalhe para ver o valor atual.">
+                              <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 shrink-0" />
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-right font-semibold">
                         {formatCurrency(payout.total_conta || 0)}
                       </TableCell>
