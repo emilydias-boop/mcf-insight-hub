@@ -653,6 +653,11 @@ export default function AgendaR2() {
             <TabsContent value="report" className="mt-0">
               <R2QualificationReportPanel />
             </TabsContent>
+
+            {/* Pre-Scheduled Tab */}
+            <TabsContent value="prescheduled" className="mt-0">
+              <R2PreScheduledTab />
+            </TabsContent>
             <TabsContent value="calendar" className="mt-0">
               {isLoadingMeetings || isLoadingClosers ? (
                 <div className="space-y-2">
