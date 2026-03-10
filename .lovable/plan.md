@@ -1,39 +1,36 @@
 
 
-## Objetivo
+## Problema: Conteúdo transbordando em vários locais do sistema
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Diagnóstico
 
-## Mudanças
+O problema principal está no uso de `grid-cols-N` fixo em espaços limitados, combinado com o `font-size: 50%` (base 8px). O caso mais visível é o `EmployeeDrawer.tsx` que usa `grid-cols-8` para as abas (Geral, Rem., NFSe, Docs, Hist., Notas, Perm., Aval.) dentro de um drawer de `max-w-2xl`. Com 8 colunas fixas, cada aba tem apenas ~80px, insuficiente para ícone + texto.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+Este padrão (muitas colunas em grid fixo ou conteúdo sem overflow handling) se repete em outros locais do sistema.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Correção proposta
 
-### 2. Hook `useCloserDetailData.ts`
+| # | Arquivo | Mudança |
+|---|---------|---------|
+| 1 | `src/components/hr/EmployeeDrawer.tsx` | Substituir `grid grid-cols-${tabCount}` por layout flexível com scroll horizontal (`flex overflow-x-auto`), removendo o grid fixo |
+| 2 | `src/components/ui/tabs.tsx` | Adicionar variante para `TabsList` que suporte scroll horizontal quando há muitas abas |
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+### Detalhes técnicos
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**EmployeeDrawer.tsx (linha 93):**
+```typescript
+// Antes:
+<TabsList className={`grid w-full grid-cols-${tabCount}`}>
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+// Depois:
+<TabsList className="flex w-full overflow-x-auto">
+```
 
-### 4. Dados exportados no Excel
+Cada `TabsTrigger` mantém `flex items-center gap-1` mas remove `whitespace-nowrap` implícito do grid, permitindo que as abas ocupem o espaço necessário e façam scroll se não couberem.
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+**tabs.tsx - TabsList:**
+Ajustar o `inline-flex` para aceitar `overflow-x-auto` sem quebrar o layout padrão, adicionando `scrollbar-hide` para estética.
 
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Resultado esperado
+As abas se ajustam ao espaço disponível, com scroll horizontal quando necessário, sem transbordar ou sobrepor outros elementos. Isso resolve o problema no drawer do colaborador e pode ser aplicado em outros locais similares.
 
