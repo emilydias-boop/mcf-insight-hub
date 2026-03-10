@@ -93,7 +93,14 @@ export const KpiEditForm = ({
 
   // Auto-preencher campos com dados da Agenda e Twilio (sempre, mesmo com KPI salvo)
   useEffect(() => {
-    if (agendaMetrics.data && !agendaMetrics.isLoading) {
+    if (isCloser && closerAgendaMetrics) {
+      setFormData(prev => ({
+        ...prev,
+        reunioes_agendadas: closerAgendaMetrics.r1_alocadas,
+        reunioes_realizadas: closerAgendaMetrics.r1_realizadas,
+        no_shows: closerAgendaMetrics.no_shows,
+      }));
+    } else if (agendaMetrics.data && !agendaMetrics.isLoading) {
       setFormData(prev => ({
         ...prev,
         reunioes_agendadas: agendaMetrics.data.agendamentos,
@@ -101,7 +108,7 @@ export const KpiEditForm = ({
         no_shows: agendaMetrics.data.no_shows,
       }));
     }
-  }, [agendaMetrics.data, agendaMetrics.isLoading]);
+  }, [agendaMetrics.data, agendaMetrics.isLoading, isCloser, closerAgendaMetrics]);
 
   useEffect(() => {
     if (!isCloser && callMetrics.data && !callMetrics.isLoading) {
