@@ -131,8 +131,8 @@ export const CloserIndicators = ({
               Agenda
             </Badge>
           </div>
-          <div className="text-2xl font-bold text-muted-foreground">
-            -
+          <div className="text-2xl font-bold text-purple-500">
+            {r2Agendadas}
           </div>
           <div className="text-xs text-muted-foreground mt-1">
             Reuniões de follow-up agendadas

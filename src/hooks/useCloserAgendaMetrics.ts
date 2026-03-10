@@ -199,6 +199,53 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         }
       }
 
+      // 8. Buscar R2 agendadas atribuídas a este closer (R2 cujo deal teve R1 com este closer)
+      // Pegar deal_ids dos attendees R1 deste closer
+      const r1DealIds: string[] = [];
+      for (const slot of (slots || [])) {
+        if ((slot as any).deal_id) {
+          r1DealIds.push((slot as any).deal_id);
+        }
+        // Also get deal_ids from attendees
+        for (const att of (slot.meeting_slot_attendees || [])) {
+          if ((att as any).deal_id && !r1DealIds.includes((att as any).deal_id)) {
+            r1DealIds.push((att as any).deal_id);
+          }
+        }
+      }
+
+      let r2_agendadas = 0;
+
+      // Query R2 meeting slots for deals that had R1 with this closer
+      if (r1DealIds.length > 0) {
+        const { data: r2Slots, error: r2Error } = await supabase
+          .from('meeting_slots')
+          .select('id')
+          .eq('meeting_type', 'r2')
+          .in('deal_id', r1DealIds)
+          .gte('scheduled_at', `${startDate}T00:00:00`)
+          .lte('scheduled_at', `${endDate}T23:59:59`);
+
+        if (!r2Error && r2Slots) {
+          r2_agendadas = r2Slots.length;
+        }
+      }
+
+      // Fallback: also count R2 slots directly assigned to this closer (if they do R2 themselves)
+      if (r2_agendadas === 0) {
+        const { data: r2Direct, error: r2DirectError } = await supabase
+          .from('meeting_slots')
+          .select('id')
+          .eq('closer_id', closerId)
+          .eq('meeting_type', 'r2')
+          .gte('scheduled_at', `${startDate}T00:00:00`)
+          .lte('scheduled_at', `${endDate}T23:59:59`);
+
+        if (!r2DirectError && r2Direct) {
+          r2_agendadas = r2Direct.length;
+        }
+      }
+
       return {
         closerId,
         r1_alocadas,
@@ -206,6 +253,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         contratos_pagos,
         no_shows,
         vendas_parceria,
+        r2_agendadas,
       };
     },
     enabled: !!sdrId && !!anoMes,
