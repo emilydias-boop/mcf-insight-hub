@@ -17,7 +17,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
     queryKey: ['sdr-agenda-metrics-by-id', sdrId, anoMes],
     queryFn: async (): Promise<SdrAgendaMetricsById> => {
       if (!sdrId || !anoMes) {
-        return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
+        return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0, r2_agendadas: 0 };
       }
 
       // 1. Buscar email do SDR
