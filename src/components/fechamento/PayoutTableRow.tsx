@@ -13,7 +13,7 @@ import { SdrCompPlan } from '@/types/sdr-fechamento';
 
 interface PayoutTableRowProps {
   payout: any;
-  compPlan: SdrCompPlan | undefined;
+  compPlan: any;
   anoMes: string;
   effectiveBu: string;
   selectedMonth: string;
