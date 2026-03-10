@@ -76,8 +76,6 @@ export function PayoutTableRow({
   const displayVariavel = metricas.length > 0 ? calculatedVariavel : (payout.valor_variavel_total || 0);
   const displayTotalConta = metricas.length > 0 ? calculatedTotalConta : (payout.total_conta || 0);
 
-  const dbVariavel = payout.valor_variavel_total || 0;
-  const hasDivergence = metricas.length > 0 && Math.abs(displayVariavel - dbVariavel) > 1;
 
   return (
     <TableRow>
