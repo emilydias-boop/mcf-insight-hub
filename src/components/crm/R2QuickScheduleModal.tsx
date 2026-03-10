@@ -157,6 +157,13 @@ export function R2QuickScheduleModal({
     setSelectedTime('');
   }, [selectedCloser, selectedDate]);
 
+  // Auto-detect R1 Closer for pre-scheduling
+  useEffect(() => {
+    if (!bookedBy) return;
+    const booker = r2Bookers.find(b => b.id === bookedBy);
+    setIsPreSchedule(booker?.isR1Closer ?? false);
+  }, [bookedBy, r2Bookers]);
+
   const handleSelectDeal = useCallback((deal: DealOption) => {
     setSelectedDeal(deal);
     setNameQuery(deal.contact?.name || deal.name);
