@@ -1,39 +1,113 @@
 
 
-## Objetivo
+## Auditoria Completa: BU Incorporador
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### ERROS DE BUILD (Urgente)
 
-## Mudanças
+3 arquivos com `NodeJS.Timeout` que não compila no browser:
+- `src/contexts/TwilioContext.tsx` (linha 94)
+- `src/hooks/useMeetingReminders.ts` (linha 11)
+- `src/hooks/useQualification.ts` (linha 27)
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**Correção**: Trocar `NodeJS.Timeout` por `ReturnType<typeof setTimeout>`.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+---
 
-### 2. Hook `useCloserDetailData.ts`
+### HOOKS MORTOS (Código em excesso)
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+3 hooks que **nunca são importados** por nenhum componente — código morto que polui o projeto:
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+| Hook | Motivo |
+|------|--------|
+| `useIncorporadorGrossMetrics.ts` | Duplica exatamente o que `useSetoresDashboard` já calcula (bruto semanal/mensal/anual). Ninguém importa. |
+| `useIncorporador50k.ts` | Lógica legada de filtrar produtos Incorporador. Substituída pela RPC `get_hubla_transactions_by_bu`. Ninguém importa. |
+| `useIncorporadorTransactions.ts` | Usa RPC `get_incorporador_transactions` (legada). A página de Vendas usa `useTransactionsByBU`. Ninguém importa. |
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+**Correção**: Deletar os 3 arquivos.
 
-### 4. Dados exportados no Excel
+---
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+### BUG DE CÁLCULO: `reference_price` ausente no Ultrameta
 
-Formato de data: `dd/MM/yyyy HH:mm`
+**`src/hooks/useUltrametaByBU.ts`** (linhas 96-101): Ao montar o objeto `transaction` para calcular o bruto do Incorporador, **não inclui `reference_price`**:
 
-## Resultado
+```js
+const transaction = {
+  product_name: t.product_name,
+  product_price: t.product_price,
+  installment_number: t.installment_number,
+  gross_override: t.gross_override,
+  // ← FALTA: reference_price: t.reference_price,
+};
+```
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+A RPC `get_all_hubla_transactions` **retorna** `reference_price`, mas ele é ignorado. Consequência: o cálculo do bruto na Home (Visão Chairman/4 Moons) cai na Regra 6 (fallback hardcoded) em vez de usar o preço autoritativo do banco (Regra 5). Pode causar divergência entre o valor na Home vs. no Dashboard do Diretor (que usa `useSetoresDashboard`, que passa `t` diretamente e inclui `reference_price`).
+
+**Correção**: Adicionar `reference_price: t.reference_price` ao objeto.
+
+---
+
+### BUG DE CÁLCULO: `reference_price` ausente no `useTeamRevenueByMonth`
+
+Mesmo problema no hook de faturamento por mês do fechamento (linha 46-50):
+
+```js
+const transaction = {
+  product_name: t.product_name,
+  product_price: t.product_price,
+  installment_number: t.installment_number,
+  gross_override: t.gross_override,
+  reference_price: t.reference_price, // ← este existe, OK
+};
+```
+
+Este hook **já inclui** `reference_price` — está correto. Apenas confirmo que não há problema aqui.
+
+---
+
+### PERFORMANCE: N+1 queries no `fetchComissao` do Dashboard
+
+**`src/hooks/useSetoresDashboard.ts`** (linhas 156-167): Para calcular comissões do Efeito Alavanca, faz **1 query por card** de consórcio:
+
+```js
+for (const card of cards) {
+  const { data: installments } = await supabase
+    .from('consortium_installments')
+    .select('valor_comissao')
+    .eq('card_id', card.id);
+}
+```
+
+Se houver 50 cards no mês, são 50 queries sequenciais. Isso trava o carregamento do Dashboard.
+
+**Correção**: Fazer uma única query com `.in('card_id', cardIds)` em vez do loop.
+
+---
+
+### CÓDIGO HARDCODED: Export de Parcerias com datas fixas
+
+**`src/pages/bu-incorporador/TransacoesIncorp.tsx`** (linhas 257-258):
+
+```js
+.gte('sale_date', '2026-02-01')
+.lt('sale_date', '2026-02-20')
+```
+
+O botão "Exportar Parcerias" tem datas hardcoded de Fevereiro 2026 e o filename é `parcerias-fevereiro-2026.csv`. Isso foi claramente um uso pontual que ficou no código.
+
+**Correção**: Remover o botão ou fazer usar os filtros de data ativos da página.
+
+---
+
+### RESUMO DAS CORREÇÕES
+
+| # | Arquivo | Ação |
+|---|---------|------|
+| 1 | `TwilioContext.tsx`, `useMeetingReminders.ts`, `useQualification.ts` | `NodeJS.Timeout` → `ReturnType<typeof setTimeout>` |
+| 2 | `useIncorporadorGrossMetrics.ts` | Deletar (código morto) |
+| 3 | `useIncorporador50k.ts` | Deletar (código morto) |
+| 4 | `useIncorporadorTransactions.ts` | Deletar (código morto) |
+| 5 | `useUltrametaByBU.ts` | Adicionar `reference_price: t.reference_price` |
+| 6 | `useSetoresDashboard.ts` | Refatorar `fetchComissao` para query única |
+| 7 | `TransacoesIncorp.tsx` | Remover botão/função `handleExportParcerias` hardcoded |
 
