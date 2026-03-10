@@ -299,6 +299,7 @@ export function useCreateR2Meeting() {
       attendeeName?: string;
       attendeePhone?: string;
       // R2-specific fields
+      isPreSchedule?: boolean;
       leadProfile?: string;
       attendanceStatus?: string;
       videoStatus?: 'ok' | 'pendente';
