@@ -764,6 +764,7 @@ export function AgendaCalendar({
                     </div>
                     <div className="space-y-1">
                       {dayMeetings.slice(0, 3).map(meeting => {
+                        if (!meeting?.id || !meeting?.scheduled_at) return null;
                         const closerColor = getCloserColor(meeting.closer_id, meeting.closer?.name);
                         return (
                           <HoverCard key={meeting.id} openDelay={200} closeDelay={100}>
