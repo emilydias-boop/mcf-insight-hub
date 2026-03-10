@@ -337,7 +337,7 @@ export function useCreateR2Meeting() {
           contact_id: contactId || null,
           attendee_name: attendeeName || null,
           attendee_phone: attendeePhone || null,
-          status: attendanceStatus || 'invited',
+          status: isPreSchedule ? 'pre_scheduled' : (attendanceStatus || 'invited'),
           lead_profile: leadProfile || null,
           video_status: videoStatus || 'pendente',
           r2_status_id: r2StatusId || null,

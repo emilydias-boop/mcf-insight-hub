@@ -1,6 +1,7 @@
 const statusMap: Record<string, string> = {
   invited: "Agendado",
   scheduled: "Agendado",
+  pre_scheduled: "Pré-agendado",
   completed: "Realizada",
   no_show: "No-show",
   contract_paid: "Contrato Pago",
