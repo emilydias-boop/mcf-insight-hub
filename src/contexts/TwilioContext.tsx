@@ -92,6 +92,9 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
   const [currentCallDealId, setCurrentCallDealId] = useState<string | null>(null);
   const [testPipelineId, setTestPipelineId] = useState<string | null>(null);
   const [durationInterval, setDurationInterval] = useState<NodeJS.Timeout | null>(null);
+  const tokenCreatedAt = useRef<number | null>(null);
+
+  const TOKEN_MAX_AGE_MS = 50 * 60 * 1000; // 50 minutes
   
   // Qualification modal state (global)
   const [qualificationModalOpen, setQualificationModalOpen] = useState(false);
