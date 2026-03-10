@@ -74,8 +74,9 @@ export const KpiEditForm = ({
 
   // Meta de contratos para Closer - dinâmica se metaContratosPercentual está configurado
   const realizadasAtual = kpi?.reunioes_realizadas || closerAgendaMetrics?.r1_realizadas || agendaMetrics.data?.r1_realizada || 0;
-  const metaContratosCalculada = metaContratosPercentual && metaContratosPercentual > 0
-    ? Math.round((realizadasAtual * metaContratosPercentual) / 100)
+  const effectiveMetaContratosPercentual = metaContratosPercentual || (isCloser ? 30 : undefined);
+  const metaContratosCalculada = effectiveMetaContratosPercentual && effectiveMetaContratosPercentual > 0
+    ? Math.round((realizadasAtual * effectiveMetaContratosPercentual) / 100)
     : metaContratosDiaria * diasUteisMes;
 
   // Preencher formulário com dados existentes do KPI
