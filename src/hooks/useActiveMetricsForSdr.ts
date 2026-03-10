@@ -311,6 +311,7 @@ export const METRIC_CONFIG: Record<string, {
     icon: 'CalendarPlus',
     color: 'purple',
     kpiField: 'r2_agendadas',
+    isDynamicCalc: true,
     isAuto: true,
     autoSource: 'Agenda',
   },
