@@ -1,39 +1,35 @@
 
 
-## Objetivo
+## Renomear "Gerentes de Conta" → "Gerentes de Relacionamento" + Verificação do plano
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Status do Módulo GR
 
-## Mudanças
+O módulo está **funcionalmente completo** com todas as features implementadas:
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+| Feature | Status |
+|---------|--------|
+| Minha Carteira (visão do GR) | Implementado |
+| Gestão de Carteiras (admin) | Implementado |
+| Detalhe do GR (6 abas: Performance, Parceiros, Agenda, Histórico, Financeiro, Auditoria) | Implementado |
+| Drawer de entrada (timeline, ações, status) | Implementado |
+| Distribuição automática/manual | Implementado |
+| Transferência entre carteiras | Implementado |
+| Capacidade e redistribuição | Implementado |
+| Sincronização bidirecional com CRM | Implementado (triggers/RPC) |
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### O que falta: Renomear para "Gerentes de Relacionamento"
 
-### 2. Hook `useCloserDetailData.ts`
+Todas as referências textuais "Gerentes de Conta" / "Gerente de Conta" precisam ser atualizadas em **7 arquivos**:
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+| # | Arquivo | Mudança |
+|---|---------|---------|
+| 1 | `src/components/layout/AppSidebar.tsx` | Título da seção: "Gerentes de Conta" → "Gerentes de Relacionamento" |
+| 2 | `src/pages/gerentes-conta/GestaoCarteiras.tsx` | Título e subtítulo da página |
+| 3 | `src/pages/gerentes-conta/GRDetail.tsx` | Textos "Voltar para Gestão" |
+| 4 | `src/components/gr/GRDetailHeader.tsx` | Fallback name "Gerente de Conta" → "Gerente de Relacionamento" |
+| 5 | `src/components/gr/CreateGRWalletDialog.tsx` | Label "Gerente de Conta" → "Gerente de Relacionamento" |
+| 6 | `src/types/gr-types.ts` | Comentário do módulo |
+| 7 | `src/App.tsx` | Comentário de seção |
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+As rotas (`/gerentes-conta/...`) e nomes de arquivos/pastas permanecem iguais para evitar quebras - apenas os textos visíveis ao usuário mudam.
 
