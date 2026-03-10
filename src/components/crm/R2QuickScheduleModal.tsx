@@ -100,7 +100,7 @@ export function R2QuickScheduleModal({
 
   // R2-specific fields
   const [r2Observations, setR2Observations] = useState<string>('');
-
+  const [isPreSchedule, setIsPreSchedule] = useState(false);
   // BU filtering
   const activeBU = useActiveBU();
   const { data: originIds } = useBUOriginIds(activeBU);
