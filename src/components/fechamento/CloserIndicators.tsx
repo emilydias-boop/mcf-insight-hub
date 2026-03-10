@@ -20,6 +20,7 @@ export const CloserIndicators = ({
   compPlan,
   diasUteisMes,
   sdrMetaDiaria,
+  r2Agendadas = 0,
 }: CloserIndicatorsProps) => {
   // Cálculos específicos para Closer
   const metaAlocadasCalculada = sdrMetaDiaria * diasUteisMes;
