@@ -251,10 +251,24 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     contactId?: string,
     originId?: string
   ): Promise<string | null> => {
-    if (!device || !user || deviceStatus !== 'ready') {
-      console.error('Device not ready');
+    if (!user) {
+      console.error('User not authenticated');
       return null;
     }
+
+    // Ensure token is valid before proceeding
+    const tokenValid = await ensureValidToken();
+    if (!tokenValid) {
+      console.error('Device not ready after token refresh');
+      toast({
+        title: 'Erro de conexão',
+        description: 'Não foi possível conectar ao telefone. Recarregue a página.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    let callId: string | null = null;
 
     try {
       setCallStatus('connecting');
@@ -282,17 +296,40 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         return null;
       }
       
-      const callId = insertResult.data.id;
+      callId = insertResult.data.id;
       setCurrentCallId(callId);
       setCurrentCallDealId(dealId || null);
 
-      // Make the call via Twilio
-      const call = await device.connect({
-        params: {
-          To: phoneNumber,
-          callRecordId: callId
+      // Attempt to connect via Twilio
+      let call: any;
+      try {
+        call = await device!.connect({
+          params: {
+            To: phoneNumber,
+            callRecordId: callId
+          }
+        });
+      } catch (connectError) {
+        console.error('device.connect() failed, retrying with fresh token:', connectError);
+        
+        // Retry once with fresh token
+        const refreshed = await initializeDevice(true);
+        if (!refreshed) {
+          throw new Error('Failed to reconnect after token refresh');
         }
-      });
+
+        toast({
+          title: 'Reconectado',
+          description: 'Sessão renovada, tentando ligar novamente...',
+        });
+
+        call = await device!.connect({
+          params: {
+            To: phoneNumber,
+            callRecordId: callId
+          }
+        });
+      }
 
       // Capture CallSid once available and update the database
       const checkAndUpdateCallSid = async () => {
@@ -363,9 +400,25 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Error making call:', error);
       setCallStatus('failed');
+      
+      // Update DB record to 'failed' so it doesn't stay as 'initiated' forever
+      if (callId) {
+        updateCallInDb(callId, {
+          status: 'failed',
+          ended_at: new Date().toISOString(),
+          duration_seconds: 0,
+        });
+      }
+
+      toast({
+        title: 'Erro ao ligar',
+        description: 'Não foi possível realizar a chamada. Tente novamente.',
+        variant: 'destructive',
+      });
+      
       return null;
     }
-  }, [device, user, deviceStatus, testPipelineId, updateCallInDb]);
+  }, [device, user, deviceStatus, testPipelineId, updateCallInDb, ensureValidToken, initializeDevice]);
 
   const hangUp = useCallback(() => {
     if (currentCall) {
