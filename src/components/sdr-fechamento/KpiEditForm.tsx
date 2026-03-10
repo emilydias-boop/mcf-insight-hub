@@ -45,6 +45,7 @@ export const KpiEditForm = ({
   metaContratosDiaria = 1,
   vendasParceria = 0,
   metaContratosPercentual,
+  closerAgendaMetrics,
 }: KpiEditFormProps) => {
   const isCloser = roleType === 'closer';
   // Calcular metas baseadas na meta diária do SDR
