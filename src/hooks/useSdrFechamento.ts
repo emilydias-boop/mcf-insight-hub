@@ -500,11 +500,11 @@ const calculateMetricPerformance = (
     
     case 'r2_agendadas':
       const metaR2 = metaPersonalizada || 10;
-      // Usamos intermediacoes_contrato como proxy para R2 agendadas por enquanto
+      const realizadoR2 = (kpi as any).r2_agendadas || 0;
       return {
         meta: metaR2,
-        realizado: 0, // TODO: adicionar campo específico quando disponível
-        pct: 0,
+        realizado: realizadoR2,
+        pct: metaR2 > 0 ? (realizadoR2 / metaR2) * 100 : 0,
       };
     
     case 'outside_sales':

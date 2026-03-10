@@ -139,7 +139,8 @@ const FechamentoSDRDetail = () => {
           reunioes_realizadas: closerMetrics.data.r1_realizadas,
           no_shows: closerMetrics.data.no_shows,
           intermediacoes_contrato: closerMetrics.data.contratos_pagos,
-        }
+          r2_agendadas: closerMetrics.data.r2_agendadas,
+        } as SdrMonthKpi & { r2_agendadas: number }
       : kpi
     : null;
 

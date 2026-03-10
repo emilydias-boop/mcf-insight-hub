@@ -9,6 +9,7 @@ export interface SdrAgendaMetricsById {
   no_shows: number;
   contratos: number;
   vendas_parceria: number;
+  r2_agendadas: number;
 }
 
 export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: string | undefined) => {
@@ -16,7 +17,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
     queryKey: ['sdr-agenda-metrics-by-id', sdrId, anoMes],
     queryFn: async (): Promise<SdrAgendaMetricsById> => {
       if (!sdrId || !anoMes) {
-        return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
+        return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0, r2_agendadas: 0 };
       }
 
       // 1. Buscar email do SDR
@@ -28,7 +29,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
 
       if (sdrError || !sdr?.email) {
         console.error('[useSdrAgendaMetricsBySdrId] Error fetching SDR:', sdrError);
-        return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
+        return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0, r2_agendadas: 0 };
       }
 
       // 2. Calcular período do mês
@@ -46,7 +47,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
 
       if (error) {
         console.error('[useSdrAgendaMetricsBySdrId] RPC error:', error);
-        return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
+        return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0, r2_agendadas: 0 };
       }
 
       // Handle response - extract first metric from array
@@ -57,6 +58,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
         no_shows: number;
         contratos: number;
         vendas_parceria?: number;
+        r2_agendadas?: number;
       }> };
 
       const metrics = response?.metrics?.[0];
@@ -68,6 +70,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
         no_shows: metrics?.no_shows || 0,
         contratos: metrics?.contratos || 0,
         vendas_parceria: metrics?.vendas_parceria || 0,
+        r2_agendadas: metrics?.r2_agendadas || 0,
       };
     },
     enabled: !!sdrId && !!anoMes,

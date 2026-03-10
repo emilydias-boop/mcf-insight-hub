@@ -17,6 +17,7 @@ export interface CloserAgendaMetrics {
   contratos_pagos: number;    // contract_paid + refunded (pela data do pagamento)
   no_shows: number;           // status = no_show
   vendas_parceria: number;    // hubla_transactions com product_category='parceria'
+  r2_agendadas: number;       // R2 meetings attributed to this closer (via R1 deal_id)
 }
 
 export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string | undefined) => {
@@ -24,7 +25,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
     queryKey: ['closer-agenda-metrics', sdrId, anoMes],
     queryFn: async (): Promise<CloserAgendaMetrics> => {
       if (!sdrId || !anoMes) {
-        return { closerId: null, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0 };
+        return { closerId: null, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0, r2_agendadas: 0 };
       }
 
       // 1. Buscar email do SDR
@@ -36,7 +37,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
 
       if (sdrError || !sdr?.email) {
         console.error('[useCloserAgendaMetrics] Error fetching SDR:', sdrError);
-        return { closerId: null, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0 };
+        return { closerId: null, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0, r2_agendadas: 0 };
       }
 
       // 2. Buscar closer_id pelo email
@@ -49,7 +50,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
 
       if (closerError || !closer?.id) {
         console.warn('[useCloserAgendaMetrics] Closer not found for email:', sdr.email);
-        return { closerId: null, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0 };
+        return { closerId: null, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0, r2_agendadas: 0 };
       }
 
       const closerId = closer.id;
@@ -66,10 +67,12 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         .select(`
           id,
           scheduled_at,
+          deal_id,
           meeting_slot_attendees (
             id,
             status,
-            is_partner
+            is_partner,
+            deal_id
           )
         `)
         .eq('closer_id', closerId)
@@ -78,7 +81,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
 
       if (slotsError) {
         console.error('[useCloserAgendaMetrics] Error fetching slots:', slotsError);
-        return { closerId, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0 };
+        return { closerId, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0, r2_agendadas: 0 };
       }
 
       // 5. Contar métricas baseadas nos attendees (EXCETO contratos_pagos)
@@ -198,6 +201,53 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         }
       }
 
+      // 8. Buscar R2 agendadas atribuídas a este closer (R2 cujo deal teve R1 com este closer)
+      // Pegar deal_ids dos attendees R1 deste closer
+      const r1DealIds: string[] = [];
+      for (const slot of (slots || [])) {
+        if ((slot as any).deal_id) {
+          r1DealIds.push((slot as any).deal_id);
+        }
+        // Also get deal_ids from attendees
+        for (const att of (slot.meeting_slot_attendees || [])) {
+          if ((att as any).deal_id && !r1DealIds.includes((att as any).deal_id)) {
+            r1DealIds.push((att as any).deal_id);
+          }
+        }
+      }
+
+      let r2_agendadas = 0;
+
+      // Query R2 meeting slots for deals that had R1 with this closer
+      if (r1DealIds.length > 0) {
+        const { data: r2Slots, error: r2Error } = await supabase
+          .from('meeting_slots')
+          .select('id')
+          .eq('meeting_type', 'r2')
+          .in('deal_id', r1DealIds)
+          .gte('scheduled_at', `${startDate}T00:00:00`)
+          .lte('scheduled_at', `${endDate}T23:59:59`);
+
+        if (!r2Error && r2Slots) {
+          r2_agendadas = r2Slots.length;
+        }
+      }
+
+      // Fallback: also count R2 slots directly assigned to this closer (if they do R2 themselves)
+      if (r2_agendadas === 0) {
+        const { data: r2Direct, error: r2DirectError } = await supabase
+          .from('meeting_slots')
+          .select('id')
+          .eq('closer_id', closerId)
+          .eq('meeting_type', 'r2')
+          .gte('scheduled_at', `${startDate}T00:00:00`)
+          .lte('scheduled_at', `${endDate}T23:59:59`);
+
+        if (!r2DirectError && r2Direct) {
+          r2_agendadas = r2Direct.length;
+        }
+      }
+
       return {
         closerId,
         r1_alocadas,
@@ -205,6 +255,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         contratos_pagos,
         no_shows,
         vendas_parceria,
+        r2_agendadas,
       };
     },
     enabled: !!sdrId && !!anoMes,

@@ -1,64 +1,39 @@
 
 
-## Diagnóstico: R2 Agendadas no Fechamento do Closer
+## Objetivo
 
-### O que está acontecendo
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-O card "R2 Agendadas" no fechamento mostra **0** porque existem **3 problemas encadeados**:
+## Mudanças
 
-### Problema 1: `useCloserAgendaMetrics` não retorna `r2_agendadas`
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-O hook `useCloserAgendaMetrics` (usado no Detail.tsx para closers) retorna apenas:
-- `r1_alocadas`, `r1_realizadas`, `contratos_pagos`, `no_shows`, `vendas_parceria`
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**Não tem campo `r2_agendadas`**. Nunca busca reuniões R2 do closer.
+### 2. Hook `useCloserDetailData.ts`
 
-### Problema 2: `useSdrAgendaMetricsBySdrId` também não retorna `r2_agendadas`
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-O hook usado no `KpiEditForm` chama a RPC `get_sdr_metrics_from_agenda` e retorna:
-- `agendamentos`, `r1_agendada`, `r1_realizada`, `no_shows`, `contratos`, `vendas_parceria`
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Também **sem `r2_agendadas`**. A interface `SdrAgendaMetricsById` nem tem esse campo.
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### Problema 3: `DynamicIndicatorCard` busca `kpi.r2_agendadas` que nunca é populado
+### 4. Dados exportados no Excel
 
-O `METRIC_CONFIG` para `r2_agendadas` aponta para `kpiField: 'r2_agendadas'`, mas a tabela `sdr_month_kpi` não tem esse campo. E o `useSdrFechamento` retorna `realizado: 0` com um `// TODO`.
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-### Fluxo do dado que falta
+Formato de data: `dd/MM/yyyy HH:mm`
 
-O que o card "R2 Agendadas" precisa: contar quantas reuniões R2 foram agendadas para leads atendidos por este closer no R1. Essa informação existe na tabela `meeting_slots` com `meeting_type = 'r2'`.
+## Resultado
 
-### Correção
-
-**`src/hooks/useCloserAgendaMetrics.ts`**:
-- Adicionar campo `r2_agendadas` à interface `CloserAgendaMetrics`
-- Buscar `meeting_slots` com `meeting_type = 'r2'` onde o lead teve R1 com este closer (via `meeting_slot_attendees` → `deal_id` → R1 slot do closer), OU mais simples: contar R2 slots deste closer diretamente se o closer faz R2 também
-
-**`src/hooks/useSdrAgendaMetricsBySdrId.ts`**:
-- Adicionar `r2_agendadas` à interface `SdrAgendaMetricsById`
-- Buscar contagem de R2 agendadas para o closer (reuniões R2 onde os leads vieram do R1 deste closer)
-
-**`src/components/sdr-fechamento/KpiEditForm.tsx`**:
-- Exibir o campo R2 Agendadas no formulário do Closer (atualmente não existe)
-- Mostrar o valor automático da agenda
-
-**`src/hooks/useSdrFechamento.ts`** (linha 501-508):
-- Substituir o `TODO` por lógica real que usa o valor do hook
-
-**`src/components/fechamento/CloserIndicators.tsx`** (linha 120-139):
-- Substituir o placeholder ("-") pelo valor real de `r2_agendadas`
-
-A questão principal é **de onde vem o R2 do closer**: se o closer faz R1 E R2, basta contar `meeting_slots` com `meeting_type = 'r2'` e `closer_id = X`. Se o R2 é atribuído ao closer que fez o R1 (outro closer faz o R2), precisa rastrear pelo `deal_id`.
-
-Baseado no código existente (`useR1CloserMetrics` linha 127-128: "R2 is attributed to the closer who did the R1 for the same deal"), a lógica correta é: contar reuniões R2 cujos leads tiveram R1 com este closer.
-
-### Mudanças
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/hooks/useCloserAgendaMetrics.ts` | Adicionar busca de R2 agendadas (por deal_id dos attendees do closer) |
-| `src/hooks/useSdrAgendaMetricsBySdrId.ts` | Adicionar `r2_agendadas` ao retorno |
-| `src/components/sdr-fechamento/KpiEditForm.tsx` | Exibir campo R2 Agendadas para Closers |
-| `src/components/fechamento/CloserIndicators.tsx` | Usar valor real em vez de placeholder |
-| `src/hooks/useSdrFechamento.ts` | Remover TODO e usar valor real |
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
