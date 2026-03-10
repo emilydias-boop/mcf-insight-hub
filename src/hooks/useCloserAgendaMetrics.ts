@@ -17,6 +17,7 @@ export interface CloserAgendaMetrics {
   contratos_pagos: number;    // contract_paid + refunded (pela data do pagamento)
   no_shows: number;           // status = no_show
   vendas_parceria: number;    // hubla_transactions com product_category='parceria'
+  r2_agendadas: number;       // R2 meetings attributed to this closer (via R1 deal_id)
 }
 
 export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string | undefined) => {
