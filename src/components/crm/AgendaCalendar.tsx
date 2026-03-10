@@ -1093,7 +1093,7 @@ export function AgendaCalendar({
                               }
                             }}
                             className={cn(
-                              'h-[40px] border-l relative overflow-visible',
+                              'h-[48px] border-l relative overflow-visible',
                               isCurrent && 'bg-primary/15 ring-1 ring-primary/30',
                               snapshot.isDraggingOver && !isSlotFull && 'bg-primary/20',
                               isOccupied && 'cursor-pointer',
