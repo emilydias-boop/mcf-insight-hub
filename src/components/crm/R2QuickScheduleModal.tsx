@@ -224,6 +224,7 @@ export function R2QuickScheduleModal({
     setShowEmailResults(false);
     // Reset R2-specific fields
     setR2Observations('');
+    setIsPreSchedule(false);
   };
 
   const isSelected = !!selectedDeal;
