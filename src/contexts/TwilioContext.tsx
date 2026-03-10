@@ -1,6 +1,7 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
+import { toast } from '@/hooks/use-toast';
 
 // Call record interface (matches the calls table)
 interface CallRecord {
@@ -91,6 +92,9 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
   const [currentCallDealId, setCurrentCallDealId] = useState<string | null>(null);
   const [testPipelineId, setTestPipelineId] = useState<string | null>(null);
   const [durationInterval, setDurationInterval] = useState<NodeJS.Timeout | null>(null);
+  const tokenCreatedAt = useRef<number | null>(null);
+
+  const TOKEN_MAX_AGE_MS = 50 * 60 * 1000; // 50 minutes
   
   // Qualification modal state (global)
   const [qualificationModalOpen, setQualificationModalOpen] = useState(false);
@@ -141,16 +145,22 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     }
   }, [callStatus]);
 
-  const initializeDevice = useCallback(async (): Promise<boolean> => {
+  const initializeDevice = useCallback(async (forceRefresh = false): Promise<boolean> => {
     if (!user) return false;
     
-    // If already ready, return immediately
-    if (deviceStatus === 'ready' && device) {
+    // If already ready and not forcing refresh, return immediately
+    if (deviceStatus === 'ready' && device && !forceRefresh) {
       return true;
     }
     
     try {
       setDeviceStatus('connecting');
+      
+      // Destroy existing device before creating new one
+      if (device) {
+        try { device.destroy(); } catch (e) { /* ignore */ }
+        setDevice(null);
+      }
       
       // Load Twilio Voice SDK dynamically
       const { Device } = await import('@twilio/voice-sdk');
@@ -165,6 +175,9 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         setDeviceStatus('error');
         return false;
       }
+
+      // Record token creation time
+      tokenCreatedAt.current = Date.now();
 
       // Create and register device
       const twilioDevice = new Device(data.token, {
@@ -201,6 +214,20 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     }
   }, [user, deviceStatus, device]);
 
+  // Check if token needs refresh
+  const ensureValidToken = useCallback(async (): Promise<boolean> => {
+    const tokenAge = tokenCreatedAt.current ? Date.now() - tokenCreatedAt.current : Infinity;
+    if (tokenAge > TOKEN_MAX_AGE_MS) {
+      console.log(`Twilio token expired (${Math.round(tokenAge / 60000)}min old), refreshing...`);
+      toast({
+        title: 'Reconectando telefone...',
+        description: 'Sessão expirada, renovando conexão.',
+      });
+      return await initializeDevice(true);
+    }
+    return deviceStatus === 'ready' && !!device;
+  }, [initializeDevice, deviceStatus, device]);
+
   // Helper to update call record in DB
   const updateCallInDb = useCallback(async (
     callId: string | null,
@@ -224,10 +251,24 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     contactId?: string,
     originId?: string
   ): Promise<string | null> => {
-    if (!device || !user || deviceStatus !== 'ready') {
-      console.error('Device not ready');
+    if (!user) {
+      console.error('User not authenticated');
       return null;
     }
+
+    // Ensure token is valid before proceeding
+    const tokenValid = await ensureValidToken();
+    if (!tokenValid) {
+      console.error('Device not ready after token refresh');
+      toast({
+        title: 'Erro de conexão',
+        description: 'Não foi possível conectar ao telefone. Recarregue a página.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    let callId: string | null = null;
 
     try {
       setCallStatus('connecting');
@@ -255,17 +296,40 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         return null;
       }
       
-      const callId = insertResult.data.id;
+      callId = insertResult.data.id;
       setCurrentCallId(callId);
       setCurrentCallDealId(dealId || null);
 
-      // Make the call via Twilio
-      const call = await device.connect({
-        params: {
-          To: phoneNumber,
-          callRecordId: callId
+      // Attempt to connect via Twilio
+      let call: any;
+      try {
+        call = await device!.connect({
+          params: {
+            To: phoneNumber,
+            callRecordId: callId
+          }
+        });
+      } catch (connectError) {
+        console.error('device.connect() failed, retrying with fresh token:', connectError);
+        
+        // Retry once with fresh token
+        const refreshed = await initializeDevice(true);
+        if (!refreshed) {
+          throw new Error('Failed to reconnect after token refresh');
         }
-      });
+
+        toast({
+          title: 'Reconectado',
+          description: 'Sessão renovada, tentando ligar novamente...',
+        });
+
+        call = await device!.connect({
+          params: {
+            To: phoneNumber,
+            callRecordId: callId
+          }
+        });
+      }
 
       // Capture CallSid once available and update the database
       const checkAndUpdateCallSid = async () => {
@@ -336,9 +400,25 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Error making call:', error);
       setCallStatus('failed');
+      
+      // Update DB record to 'failed' so it doesn't stay as 'initiated' forever
+      if (callId) {
+        updateCallInDb(callId, {
+          status: 'failed',
+          ended_at: new Date().toISOString(),
+          duration_seconds: 0,
+        });
+      }
+
+      toast({
+        title: 'Erro ao ligar',
+        description: 'Não foi possível realizar a chamada. Tente novamente.',
+        variant: 'destructive',
+      });
+      
       return null;
     }
-  }, [device, user, deviceStatus, testPipelineId, updateCallInDb]);
+  }, [device, user, deviceStatus, testPipelineId, updateCallInDb, ensureValidToken, initializeDevice]);
 
   const hangUp = useCallback(() => {
     if (currentCall) {
