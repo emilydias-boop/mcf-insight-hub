@@ -1,24 +1,39 @@
-## Problema: R2 Agendadas e Vendas Parceria zeradas no KPI Form do Closer
-
-### Causa raiz
-
-O `KpiEditForm` usa internamente `useSdrAgendaMetricsBySdrId` (linha 65) que chama o RPC `get_sdr_metrics_from_agenda`. Este RPC retorna **vazio** para Closers (confirmado no network request: `{"metrics": []}`), porque closers não são SDRs no sistema de agenda.
-
-O Detail.tsx já busca os dados corretos via `useCloserAgendaMetrics` e usa esses valores para montar o `effectiveKpi`, mas **não passa esses dados para o formulário**. O formulário exibe `agendaMetrics.data?.r2_agendadas` (sempre 0) e `vendasParceria` (passado como prop, mas vem de outra fonte que também pode estar zerada).
-
-### Solução
-
-Passar os dados do `closerMetrics` para o `KpiEditForm` como prop opcional, e quando presente, usar esses valores em vez do hook interno de SDR.
 
 
-| #   | Arquivo           | Mudança                                                                                                                                                                                                                     |
-| --- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `KpiEditForm.tsx` | Adicionar prop `closerAgendaMetrics?: { r1_realizadas, contratos_pagos, no_shows, vendas_parceria, r2_agendadas }`. Quando presente (closer), usar estes valores nos campos auto-preenchidos em vez de `agendaMetrics.data` |
-| 2   | `Detail.tsx`      | Passar `closerAgendaMetrics={closerMetrics.data}` para o `KpiEditForm` quando `isCloser`                                                                                                                                    |
+## Objetivo
 
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Resultado esperado
+## Mudanças
 
-- R2 Agendadas: mostra o valor real da agenda do closer (ex: 50)
-- Vendas Parceria: mostra o valor real das transações de parceria
-- Os campos auto-preenchidos (Realizadas, No-Shows, Contratos) também passam a usar a fonte correta
+### 1. Página `MeuDesempenhoCloser.tsx`
+
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+
+### 2. Hook `useCloserDetailData.ts`
+
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+

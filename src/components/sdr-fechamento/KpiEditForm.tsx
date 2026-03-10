@@ -27,6 +27,7 @@ interface KpiEditFormProps {
   metaContratosDiaria?: number;
   vendasParceria?: number;
   metaContratosPercentual?: number; // Novo: % das Realizadas para meta de contratos
+  closerAgendaMetrics?: { r1_alocadas: number; r1_realizadas: number; contratos_pagos: number; no_shows: number; vendas_parceria: number; r2_agendadas: number };
 }
 
 export const KpiEditForm = ({
@@ -44,6 +45,7 @@ export const KpiEditForm = ({
   metaContratosDiaria = 1,
   vendasParceria = 0,
   metaContratosPercentual,
+  closerAgendaMetrics,
 }: KpiEditFormProps) => {
   const isCloser = roleType === 'closer';
   // Calcular metas baseadas na meta diária do SDR
@@ -91,7 +93,14 @@ export const KpiEditForm = ({
 
   // Auto-preencher campos com dados da Agenda e Twilio (sempre, mesmo com KPI salvo)
   useEffect(() => {
-    if (agendaMetrics.data && !agendaMetrics.isLoading) {
+    if (isCloser && closerAgendaMetrics) {
+      setFormData(prev => ({
+        ...prev,
+        reunioes_agendadas: closerAgendaMetrics.r1_alocadas,
+        reunioes_realizadas: closerAgendaMetrics.r1_realizadas,
+        no_shows: closerAgendaMetrics.no_shows,
+      }));
+    } else if (agendaMetrics.data && !agendaMetrics.isLoading) {
       setFormData(prev => ({
         ...prev,
         reunioes_agendadas: agendaMetrics.data.agendamentos,
@@ -99,7 +108,7 @@ export const KpiEditForm = ({
         no_shows: agendaMetrics.data.no_shows,
       }));
     }
-  }, [agendaMetrics.data, agendaMetrics.isLoading]);
+  }, [agendaMetrics.data, agendaMetrics.isLoading, isCloser, closerAgendaMetrics]);
 
   useEffect(() => {
     if (!isCloser && callMetrics.data && !callMetrics.isLoading) {
@@ -118,7 +127,15 @@ export const KpiEditForm = ({
   const handleSyncFromAgenda = () => {
     let updated = false;
     
-    if (agendaMetrics.data) {
+    if (isCloser && closerAgendaMetrics) {
+      setFormData(prev => ({
+        ...prev,
+        reunioes_agendadas: closerAgendaMetrics.r1_alocadas,
+        reunioes_realizadas: closerAgendaMetrics.r1_realizadas,
+        no_shows: closerAgendaMetrics.no_shows,
+      }));
+      updated = true;
+    } else if (agendaMetrics.data) {
       setFormData(prev => ({
         ...prev,
         reunioes_agendadas: agendaMetrics.data!.agendamentos,
@@ -351,11 +368,11 @@ export const KpiEditForm = ({
                   <span className="text-[10px] text-muted-foreground/70 block">
                     R2 atribuídas ao Closer (via R1 original)
                     {agendaMetrics.data && (
-                      <span className="ml-1 text-purple-500">• Agenda: {agendaMetrics.data.r2_agendadas}</span>
+                      <span className="ml-1 text-purple-500">• Agenda: {isCloser && closerAgendaMetrics ? closerAgendaMetrics.r2_agendadas : agendaMetrics.data.r2_agendadas}</span>
                     )}
                   </span>
                   <div className="h-8 px-3 py-1.5 rounded-md border bg-muted/50 flex items-center text-sm">
-                    <span className="font-medium">{agendaMetrics.data?.r2_agendadas ?? 0}</span>
+                    <span className="font-medium">{isCloser && closerAgendaMetrics ? closerAgendaMetrics.r2_agendadas : (agendaMetrics.data?.r2_agendadas ?? 0)}</span>
                     <span className="text-muted-foreground/70 text-[10px] ml-1.5">(da Agenda)</span>
                   </div>
                 </div>
@@ -376,7 +393,7 @@ export const KpiEditForm = ({
                     )}
                   </span>
                   <div className="h-8 px-3 py-1.5 rounded-md border bg-muted/50 flex items-center text-sm">
-                    <span className="font-medium">{vendasParceria}</span>
+                    <span className="font-medium">{isCloser && closerAgendaMetrics ? closerAgendaMetrics.vendas_parceria : vendasParceria}</span>
                     <span className="text-muted-foreground/70 text-[10px] ml-1.5">(da Agenda)</span>
                   </div>
                 </div>
