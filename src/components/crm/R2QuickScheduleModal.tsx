@@ -157,6 +157,13 @@ export function R2QuickScheduleModal({
     setSelectedTime('');
   }, [selectedCloser, selectedDate]);
 
+  // Auto-detect R1 Closer for pre-scheduling
+  useEffect(() => {
+    if (!bookedBy) return;
+    const booker = r2Bookers.find(b => b.id === bookedBy);
+    setIsPreSchedule(booker?.isR1Closer ?? false);
+  }, [bookedBy, r2Bookers]);
+
   const handleSelectDeal = useCallback((deal: DealOption) => {
     setSelectedDeal(deal);
     setNameQuery(deal.contact?.name || deal.name);
@@ -541,13 +548,29 @@ export function R2QuickScheduleModal({
             </div>
 
             {/* Pre-schedule toggle */}
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div className="space-y-0.5">
-                <Label className="text-xs font-medium">Pré-agendamento</Label>
-                <p className="text-xs text-muted-foreground">Aguarda confirmação antes de ficar oficial</p>
-              </div>
-              <Switch checked={isPreSchedule} onCheckedChange={setIsPreSchedule} />
-            </div>
+            {(() => {
+              const selectedBooker = r2Bookers.find(b => b.id === bookedBy);
+              const isAutoDetected = selectedBooker?.isR1Closer ?? false;
+              return (
+                <div className={cn(
+                  "flex items-center justify-between rounded-lg border p-3",
+                  isAutoDetected && "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
+                )}>
+                  <div className="space-y-0.5">
+                    <Label className="text-xs font-medium flex items-center gap-1.5">
+                      Pré-agendamento
+                      {isAutoDetected && (
+                        <span className="text-[10px] font-normal text-amber-600 bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 rounded">
+                          Closer R1
+                        </span>
+                      )}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">Aguarda confirmação antes de ficar oficial</p>
+                  </div>
+                  <Switch checked={isPreSchedule} onCheckedChange={setIsPreSchedule} />
+                </div>
+              );
+            })()}
 
             {/* Submit */}
             <Button 

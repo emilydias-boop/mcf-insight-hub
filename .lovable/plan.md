@@ -1,29 +1,39 @@
 
 
-## Auto-detecção de Pré-Agendamento por Closer R1
+## Objetivo
 
-### Contexto
-Hoje o toggle "Pré-agendamento" no modal é 100% manual. O usuário quer que, ao selecionar o "Responsável pelo agendamento" (bookedBy), o sistema detecte automaticamente se é um Closer R1 e ative o pré-agendamento. O toggle continua visível como override.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Lógica
-1. Quando o booker é selecionado no modal, buscar seu email na tabela `profiles`
-2. Verificar se esse email existe na tabela `closers` com `meeting_type = 'r1'` (ou `meeting_type IS NULL`, que também indica R1)
-3. Se sim → ativar `isPreSchedule` automaticamente
-4. O toggle continua disponível para override manual (forçar pré-agendamento ou desativar)
+## Mudanças
 
-### Mudanças
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-| Arquivo | O que muda |
-|---------|-----------|
-| `src/hooks/useR2Bookers.ts` | Adicionar campo `is_r1_closer` ao retorno, fazendo join com `closers` via email |
-| `src/components/crm/R2QuickScheduleModal.tsx` | Quando `bookedBy` muda, verificar se o booker é R1 closer e auto-setar `isPreSchedule`. Mostrar indicador visual "Closer R1 detectado" junto ao toggle |
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### Detalhes técnicos
+### 2. Hook `useCloserDetailData.ts`
 
-**useR2Bookers.ts**: Buscar `profiles` com `can_book_r2 = true`, depois fazer segunda query em `closers` para verificar quais emails são R1 closers. Retornar `{ id, nome, isR1Closer }`.
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**R2QuickScheduleModal.tsx**: `useEffect` no `bookedBy` que, ao mudar, busca o booker na lista e se `isR1Closer === true`, seta `setIsPreSchedule(true)`. Se não for R1, seta `false`. Label do toggle mostra "(auto: Closer R1)" quando auto-detectado.
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-### Slots e capacidade
-Os pré-agendados já ocupam capacidade (o `useR2CloserAvailableSlots` conta `meeting_slots` com status `scheduled`/`rescheduled`, e o slot é criado com status `scheduled` independente de ser pré-agendamento). Isso já está funcionando corretamente — o horário fica indisponível para outros.
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
