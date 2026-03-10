@@ -429,7 +429,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
         {/* Step 1: Upload */}
         {step === 'upload' && (
           <Tabs defaultValue="file" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="w-full">
               <TabsTrigger value="file" className="flex items-center gap-1">
                 <Upload className="h-4 w-4" /> Arquivo
               </TabsTrigger>

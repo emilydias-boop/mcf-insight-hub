@@ -424,7 +424,7 @@ export function R2CloserAvailabilityConfig({ open, onOpenChange, closers, isLoad
 
             {/* Config Type Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="w-full">
                 <TabsTrigger value="fixed">Horários Fixos</TabsTrigger>
                 <TabsTrigger value="daily">Por Data</TabsTrigger>
                 <TabsTrigger value="blocked">Bloqueados</TabsTrigger>

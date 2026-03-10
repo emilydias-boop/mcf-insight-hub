@@ -129,7 +129,7 @@ export function PlaybookDocEditor({ open, onOpenChange, doc }: PlaybookDocEditor
         </SheetHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="mx-6 mt-4 grid w-auto grid-cols-3">
+          <TabsList className="mx-6 mt-4">
             <TabsTrigger value="conteudo">Conteúdo</TabsTrigger>
             <TabsTrigger value="config">Configurações</TabsTrigger>
             <TabsTrigger value="stats">Estatísticas</TabsTrigger>

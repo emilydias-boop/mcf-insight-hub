@@ -135,7 +135,7 @@ export default function Alertas() {
         </div>
 
         <Tabs defaultValue="todos" className="w-full">
-          <TabsList className="grid w-full md:w-[400px] grid-cols-4">
+          <TabsList className="w-full md:w-[400px]">
             <TabsTrigger value="todos">Todos</TabsTrigger>
             <TabsTrigger value="critico">Crítico</TabsTrigger>
             <TabsTrigger value="warning">Aviso</TabsTrigger>

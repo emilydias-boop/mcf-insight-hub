@@ -125,7 +125,7 @@ export function ConsorcioConfigModal({ open, onOpenChange }: ConsorcioConfigModa
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="w-full">
             <TabsTrigger value="tipos">Tipos</TabsTrigger>
             <TabsTrigger value="categorias">Categorias</TabsTrigger>
             <TabsTrigger value="origens">Origens</TabsTrigger>

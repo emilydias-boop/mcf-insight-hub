@@ -87,7 +87,7 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
         </SheetHeader>
 
         <Tabs defaultValue="geral" className="mt-6">
-          <TabsList className="flex w-full overflow-x-auto">
+          <TabsList className="w-full">
             <TabsTrigger value="geral" className="flex items-center gap-1">
               <User className="h-3 w-3" />
               <span className="hidden sm:inline">Geral</span>
