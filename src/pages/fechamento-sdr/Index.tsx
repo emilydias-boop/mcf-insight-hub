@@ -118,14 +118,29 @@ const FechamentoSDRList = () => {
     return compPlans?.find((cp) => cp.sdr_id === sdrId);
   };
 
-  // Calculate financial summary
+  // State for locally calculated values from PayoutTableRow
+  const calculatedValuesRef = useRef<Record<string, { variavel: number; totalConta: number }>>({});
+  const [calculatedValues, setCalculatedValues] = useState<Record<string, { variavel: number; totalConta: number }>>({});
+
+  const handleRowCalculated = useCallback((payoutId: string, variavel: number, totalConta: number) => {
+    const prev = calculatedValuesRef.current[payoutId];
+    if (!prev || prev.variavel !== variavel || prev.totalConta !== totalConta) {
+      calculatedValuesRef.current = { ...calculatedValuesRef.current, [payoutId]: { variavel, totalConta } };
+      setCalculatedValues(calculatedValuesRef.current);
+    }
+  }, []);
+
+  // Calculate financial summary using locally calculated values when available
   const financialSummary = payouts?.reduce(
-    (acc, p) => ({
-      totalFixo: acc.totalFixo + (p.valor_fixo || 0),
-      totalVariavel: acc.totalVariavel + (p.valor_variavel_total || 0),
-      totalConta: acc.totalConta + (p.total_conta || 0),
-      totalIfood: acc.totalIfood + (p.total_ifood || 0),
-    }),
+    (acc, p) => {
+      const calc = calculatedValues[p.id];
+      return {
+        totalFixo: acc.totalFixo + (p.valor_fixo || 0),
+        totalVariavel: acc.totalVariavel + (calc ? calc.variavel : (p.valor_variavel_total || 0)),
+        totalConta: acc.totalConta + (calc ? calc.totalConta : (p.total_conta || 0)),
+        totalIfood: acc.totalIfood + (p.total_ifood || 0),
+      };
+    },
     { totalFixo: 0, totalVariavel: 0, totalConta: 0, totalIfood: 0 },
   );
 
