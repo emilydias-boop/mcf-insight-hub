@@ -20,6 +20,7 @@ interface R2CloserColumnCalendarProps {
 
 const STATUS_STYLES: Record<string, string> = {
   scheduled: "bg-purple-500/70 hover:bg-purple-500/80",
+  pre_scheduled: "bg-orange-400/70 hover:bg-orange-400/80 border border-dashed border-orange-500",
   rescheduled: "bg-yellow-500/90 hover:bg-yellow-500",
   completed: "bg-green-500/80 hover:bg-green-500",
   no_show: "bg-red-500/80 hover:bg-red-500",
