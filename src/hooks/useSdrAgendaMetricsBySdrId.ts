@@ -29,7 +29,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
 
       if (sdrError || !sdr?.email) {
         console.error('[useSdrAgendaMetricsBySdrId] Error fetching SDR:', sdrError);
-        return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
+        return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0, r2_agendadas: 0 };
       }
 
       // 2. Calcular período do mês
