@@ -1,45 +1,39 @@
 
 
-## Análise: R2 Agendadas (50) vs Contratos Pagos (47)
+## Objetivo
 
-### Causa da discrepância
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-O cálculo de R2 Agendadas (linhas 206-233 de `useCloserAgendaMetrics.ts`) coleta **todos os deal_ids** dos attendees R1 do closer, **independente do status**. Isso inclui deals com status `completed`, `no_show`, `invited` -- não apenas `contract_paid`/`refunded`.
+## Mudanças
 
-Ou seja, se um deal teve R1 com status `completed` (sem contrato pago) mas mesmo assim alguém agendou um R2 para esse deal, ele é contado nas R2 Agendadas. Isso explica os 3 a mais (50 - 47 = 3).
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### Correção proposta
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Filtrar os `r1DealIds` para incluir **apenas deals cujo attendee tem status `contract_paid` ou `refunded`** (excluindo parceiros). Isso garante que R2 Agendadas reflete apenas leads que efetivamente pagaram contrato.
+### 2. Hook `useCloserDetailData.ts`
 
-| # | Arquivo | Mudança |
-|---|---------|---------|
-| 1 | `useCloserAgendaMetrics.ts` (linhas 204-217) | Filtrar `r1DealIds` para incluir apenas attendees com status `contract_paid` ou `refunded` e `!is_partner` |
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-### Código atual vs proposto
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**Atual** (coleta TODOS os deal_ids):
-```
-for (const slot of (slots || [])) {
-  if (slot.deal_id) r1DealIds.push(slot.deal_id);
-  for (const att of slot.meeting_slot_attendees) {
-    if (att.deal_id) r1DealIds.push(att.deal_id);
-  }
-}
-```
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-**Proposto** (filtra por contract_paid/refunded):
-```
-for (const slot of (slots || [])) {
-  for (const att of slot.meeting_slot_attendees) {
-    if (att.deal_id && !att.is_partner && 
-        ['contract_paid', 'refunded'].includes(att.status)) {
-      r1DealIds.push(att.deal_id);
-    }
-  }
-}
-```
+### 4. Dados exportados no Excel
 
-### Resultado esperado
-- R2 Agendadas passaria a ser <= Contratos Pagos (47 ou menos, dependendo de quantos contratos efetivamente tiveram R2 agendada)
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
