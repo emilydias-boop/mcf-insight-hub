@@ -12,6 +12,7 @@ import { SdrStatusBadge } from "@/components/sdr-fechamento/SdrStatusBadge";
 import { useSdrPayouts } from "@/hooks/useSdrFechamento";
 import { formatCurrency } from "@/lib/formatters";
 import { TeamGoalsSummary } from "@/components/fechamento/TeamGoalsSummary";
+import { PayoutTableRow } from "@/components/fechamento/PayoutTableRow";
 import { useActiveBU } from "@/hooks/useActiveBU";
 import {
   Calculator,
