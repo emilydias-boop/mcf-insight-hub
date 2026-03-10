@@ -337,7 +337,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
 
         {/* ===== TABS ===== */}
         <Tabs defaultValue="general" className="mt-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="w-full">
             <TabsTrigger value="general" className="text-xs">
               <Settings className="h-3 w-3 mr-1" />
               Geral

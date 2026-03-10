@@ -413,7 +413,7 @@ export function CloserAvailabilityConfig({ open, onOpenChange, closers, isLoadin
 
             {/* Config Type Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="w-full">
                 <TabsTrigger value="availability">Disponibilidade</TabsTrigger>
                 <TabsTrigger value="blocked">Datas Bloqueadas</TabsTrigger>
               </TabsList>

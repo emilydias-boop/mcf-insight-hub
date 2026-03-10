@@ -185,7 +185,7 @@ export const CRMPermissionsManager = ({ open, onOpenChange }: CRMPermissionsMana
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="w-full">
               <TabsTrigger value="groups" className="flex items-center gap-2">
                 <Layers className="h-4 w-4" />
                 Grupos/Pipelines

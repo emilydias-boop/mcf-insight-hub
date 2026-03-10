@@ -150,7 +150,7 @@ export function WeeklyMetricsDetailDrawer({
         </SheetHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-[calc(100%-80px)]">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="w-full">
             <TabsTrigger value="resumo">Resumo</TabsTrigger>
             <TabsTrigger value="transacoes">Transações</TabsTrigger>
             <TabsTrigger value="custos">Custos</TabsTrigger>

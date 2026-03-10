@@ -154,7 +154,7 @@ export function QualificationFieldsManager({ open, onOpenChange }: Qualification
           onValueChange={(v) => setActiveTab(v as 'global' | 'group' | 'origin')}
           className="flex-1 flex flex-col overflow-hidden"
         >
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="w-full">
             <TabsTrigger value="global">Padrão</TabsTrigger>
             <TabsTrigger value="group">Por Grupo</TabsTrigger>
             <TabsTrigger value="origin">Por Origem</TabsTrigger>

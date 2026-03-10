@@ -377,7 +377,7 @@ export function TargetsConfigDialog() {
         </DialogHeader>
 
         <Tabs defaultValue="funnel" className="flex-1 flex flex-col min-h-0">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="w-full">
             <TabsTrigger value="funnel">Funil</TabsTrigger>
             <TabsTrigger value="vendas">Vendas</TabsTrigger>
             <TabsTrigger value="time">Time</TabsTrigger>

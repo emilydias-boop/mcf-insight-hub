@@ -26,7 +26,7 @@ const Financeiro = () => {
       </div>
 
       <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-full sm:max-w-lg text-xs sm:text-sm">
+        <TabsList className="w-full max-w-full sm:max-w-lg text-xs sm:text-sm">
           <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
           <TabsTrigger value="transacoes">Transações</TabsTrigger>
           <TabsTrigger value="receitas">Receitas</TabsTrigger>

@@ -456,7 +456,7 @@ export function R2MeetingDetailDrawer({
             {/* Tabbed Content */}
             {attendee && (
               <Tabs defaultValue="qualificacao" className="w-full">
-                <TabsList className="w-full grid grid-cols-3">
+                <TabsList className="w-full">
                   <TabsTrigger value="qualificacao" className="text-xs">Qualificação</TabsTrigger>
                   <TabsTrigger value="avaliacao" className="text-xs">Avaliação R2</TabsTrigger>
                   <TabsTrigger value="notas" className="text-xs">Notas</TabsTrigger>

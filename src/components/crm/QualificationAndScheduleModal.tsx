@@ -166,7 +166,7 @@ export function QualificationAndScheduleModal({
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="w-full">
               <TabsTrigger value="qualification" className="text-xs sm:text-sm">
                 <ClipboardList className="h-4 w-4 mr-1 sm:mr-2" />
                 Qualificação

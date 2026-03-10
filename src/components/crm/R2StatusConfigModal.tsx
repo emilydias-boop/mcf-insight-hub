@@ -71,7 +71,7 @@ export function R2StatusConfigModal({ open, onOpenChange }: R2StatusConfigModalP
         </DialogHeader>
 
         <Tabs defaultValue="status" className="mt-4">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="w-full">
             <TabsTrigger value="status">Status Finais</TabsTrigger>
             <TabsTrigger value="tags">Termômetros</TabsTrigger>
           </TabsList>

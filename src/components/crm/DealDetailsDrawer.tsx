@@ -168,7 +168,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               
               {/* ===== 5. ABAS (com scroll) ===== */}
               <Tabs defaultValue="timeline" className="mt-2">
-                <TabsList className="w-full grid grid-cols-6 bg-secondary">
+                <TabsList className="w-full bg-secondary">
                   <TabsTrigger value="timeline" className="text-xs">
                     <Clock className="h-3.5 w-3.5 mr-1" />
                     Timeline

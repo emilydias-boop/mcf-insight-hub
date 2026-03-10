@@ -57,7 +57,7 @@ const GRDetail = () => {
       
       {/* Tabs */}
       <Tabs defaultValue="performance" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="w-full">
           <TabsTrigger value="performance">Performance</TabsTrigger>
           <TabsTrigger value="parceiros">Parceiros</TabsTrigger>
           <TabsTrigger value="agenda">Agenda</TabsTrigger>

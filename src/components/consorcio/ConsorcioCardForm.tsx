@@ -886,7 +886,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
             />
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className={cn("grid w-full", tipoPessoa === 'pj' ? "grid-cols-5" : "grid-cols-4")}>
+              <TabsList className="w-full">
                 <TabsTrigger value="dados" className="relative">
                   {tipoPessoa === 'pf' ? 'Dados Pessoais' : 'Dados da Empresa'}
                   {getTabHasErrors('dados') && (

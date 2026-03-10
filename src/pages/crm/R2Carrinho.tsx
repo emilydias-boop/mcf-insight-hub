@@ -188,7 +188,7 @@ export default function R2Carrinho() {
 
       {/* Tabs */}
       <Tabs defaultValue="metricas" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="w-full">
           <TabsTrigger value="agendadas" className="flex items-center gap-2">
             📋 Todas R2s
             <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
