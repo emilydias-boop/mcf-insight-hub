@@ -201,16 +201,15 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         }
       }
 
-      // 8. Buscar R2 agendadas atribuídas a este closer (R2 cujo deal teve R1 com este closer)
-      // Pegar deal_ids dos attendees R1 deste closer
+      // 8. Buscar R2 agendadas atribuídas a este closer (R2 cujo deal teve R1 com contrato pago)
+      // Pegar deal_ids APENAS dos attendees com contract_paid/refunded (excluindo parceiros)
       const r1DealIds: string[] = [];
       for (const slot of (slots || [])) {
-        if ((slot as any).deal_id) {
-          r1DealIds.push((slot as any).deal_id);
-        }
-        // Also get deal_ids from attendees
         for (const att of (slot.meeting_slot_attendees || [])) {
-          if ((att as any).deal_id && !r1DealIds.includes((att as any).deal_id)) {
+          const attStatus = (att as any).status?.toLowerCase();
+          if ((att as any).deal_id && !(att as any).is_partner && 
+              ['contract_paid', 'refunded'].includes(attStatus) &&
+              !r1DealIds.includes((att as any).deal_id)) {
             r1DealIds.push((att as any).deal_id);
           }
         }
