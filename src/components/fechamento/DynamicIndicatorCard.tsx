@@ -125,9 +125,13 @@ export const DynamicIndicatorCard = ({
     const valorFinal = valorBase * mult;
 
     // Custom subtitle based on meta type
+    const isR2Agendadas = metrica.nome_metrica === 'r2_agendadas';
     const isPercentualMeta = metrica.meta_percentual && metrica.meta_percentual > 0;
     const isContratosFallback = !isPercentualMeta && metrica.nome_metrica === 'contratos';
-    const metaSubtitle = isPercentualMeta 
+    const pctR2 = isR2Agendadas ? (metrica.meta_percentual && metrica.meta_percentual > 0 ? metrica.meta_percentual : 100) : 0;
+    const metaSubtitle = isR2Agendadas
+      ? `${pctR2}% de ${kpi?.intermediacoes_contrato || 0} contratos = ${metaAjustada}`
+      : isPercentualMeta 
       ? `${metrica.meta_percentual}% de ${kpi?.reunioes_realizadas || 0} realiz. = ${metaAjustada}`
       : isContratosFallback
       ? `30% de ${kpi?.reunioes_realizadas || 0} realiz. = ${metaAjustada}`
