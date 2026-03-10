@@ -1,28 +1,39 @@
 
 
-## Problema: R2 Agendadas não funciona como indicador de variável
+## Objetivo
 
-### Diagnóstico
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-O `METRIC_CONFIG` para `r2_agendadas` (linha 310-316 de `useActiveMetricsForSdr.ts`) **não tem** `isDynamicCalc: true` nem `payoutPctField/payoutMultField/payoutValueField`. Isso causa:
+## Mudanças
 
-1. **Indicador visual**: Cai no fallback "simple card" (linha 212-240 de `DynamicIndicatorCard.tsx`) — mostra apenas o valor bruto + peso, sem barra de progresso, sem meta, sem multiplicador, sem valor R$
-2. **Cálculo do variável**: No `useCalculatedVariavel.ts` (linha 128-131), R2 Agendadas é **pulada** (`continue`) — não contribui para o variável total
-3. **KPI form**: O formulário de Closer não mostra R2 Agendadas — o campo não existe no form, então o coordenador não vê o valor automático
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### Correções
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-| # | Arquivo | Mudança |
-|---|---------|---------|
-| 1 | `useActiveMetricsForSdr.ts` | Adicionar `isDynamicCalc: true` ao config de `r2_agendadas` — isso faz o card renderizar como `SdrIndicatorCard` com meta/realizado/multiplicador/valor, e faz o `useCalculatedVariavel` incluí-lo no cálculo do variável |
-| 2 | `DynamicIndicatorCard.tsx` | Nenhuma mudança necessária — o código `isDynamicCalc` já lida com `meta_percentual`, `meta_valor`, e peso. Basta o config estar correto |
-| 3 | `useCalculatedVariavel.ts` | Nenhuma mudança necessária — já processa `isDynamicCalc` automaticamente |
-| 4 | `KpiEditForm.tsx` | Adicionar campo read-only de "R2 Agendadas" na seção Closer, mostrando o valor automático da agenda (`agendaMetrics.data.r2_agendadas`) para visibilidade |
+### 2. Hook `useCloserDetailData.ts`
 
-### Como vai funcionar após a correção
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-- **Config de Métricas**: Admin configura R2 Agendadas com peso (ex: 50%) e meta (ex: "Opcional" ou valor fixo)
-- **Card indicador**: Renderiza com barra de progresso, % de entrega, multiplicador, e valor R$ calculado = (variável × peso%) × multiplicador
-- **Variável**: R2 Agendadas contribui para o total do variável conforme o peso configurado
-- **Form KPI**: Mostra o valor automático da agenda no formulário do Closer
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

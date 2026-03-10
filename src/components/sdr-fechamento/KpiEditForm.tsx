@@ -339,8 +339,29 @@ export const KpiEditForm = ({
                   />
                 </div>
 
+                {/* Campo: R2 Agendadas - Auto (Agenda) */}
+                <div className="space-y-1">
+                  <Label className="flex items-center gap-1.5 text-xs">
+                    R2 Agendadas
+                    <Badge variant="outline" className="text-[10px] h-4 border-purple-500 text-purple-500">
+                      <Calendar className="h-2.5 w-2.5 mr-0.5" />
+                      Auto (Agenda)
+                    </Badge>
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground/70 block">
+                    R2 atribuídas ao Closer (via R1 original)
+                    {agendaMetrics.data && (
+                      <span className="ml-1 text-purple-500">• Agenda: {agendaMetrics.data.r2_agendadas}</span>
+                    )}
+                  </span>
+                  <div className="h-8 px-3 py-1.5 rounded-md border bg-muted/50 flex items-center text-sm">
+                    <span className="font-medium">{agendaMetrics.data?.r2_agendadas ?? 0}</span>
+                    <span className="text-muted-foreground/70 text-[10px] ml-1.5">(da Agenda)</span>
+                  </div>
+                </div>
+
                 {/* Campo: Vendas Parceria - Auto (Agenda) */}
-                <div className="space-y-1 col-span-2">
+                <div className="space-y-1">
                   <Label className="flex items-center gap-1.5 text-xs">
                     Vendas Parceria
                     <Badge variant="outline" className="text-[10px] h-4 border-purple-500 text-purple-500">
