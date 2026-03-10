@@ -79,7 +79,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
 
       if (slotsError) {
         console.error('[useCloserAgendaMetrics] Error fetching slots:', slotsError);
-        return { closerId, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0 };
+        return { closerId, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0, r2_agendadas: 0 };
       }
 
       // 5. Contar métricas baseadas nos attendees (EXCETO contratos_pagos)
