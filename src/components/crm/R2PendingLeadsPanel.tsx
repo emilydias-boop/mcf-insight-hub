@@ -53,6 +53,7 @@ import { R2CloserWithAvailability } from '@/hooks/useR2AgendaData';
 import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { cn } from '@/lib/utils';
+import { R2SemSucessoModal } from './R2SemSucessoModal';
 
 interface R2PendingLeadsPanelProps {
   closers: R2CloserWithAvailability[];
