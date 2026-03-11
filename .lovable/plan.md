@@ -1,38 +1,39 @@
 
 
-## Melhorias no Relatório de Qualificação R2
+## Objetivo
 
-O relatório atual mostra dados na tabela mas sem filtros por coluna, sem edição inline, sem histórico do lead, e sem exportação/cópia granular. Vou adicionar tudo isso.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Mudanças
+## Mudanças
 
-**1. `src/hooks/useR2QualificationReport.ts` — Adicionar `dealId` ao retorno**
-- Incluir `dealId` e `contactId` no `R2QualificationReportRow` para permitir edição inline e abrir histórico
-- Já temos o deal disponível na query, só precisa expor no mapeamento
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**2. `src/components/crm/R2QualificationReportPanel.tsx` — Reformular tabela**
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-- **Filtros por coluna**: Adicionar filtros dropdown acima da tabela para Estado, Renda, Profissão, Já Constrói, Terreno, Imóvel, Tempo MCF (todos os campos de qualificação). Filtros client-side sobre os dados já carregados
-- **Edição inline na tabela**: Cada célula de qualificação (estado, renda, profissao, etc.) vira um Select/Input editável ao clicar. Usa `useUpdateDealCustomFields` para salvar (mesmo hook do drawer). Mostrar valor como texto, ao clicar abre o select inline
-- **Histórico do lead**: Botão de "ver histórico" em cada linha que abre um Dialog/Drawer com a timeline do lead (reutilizar `useLeadFullTimeline`)
-- **Exportar Excel**: Já existe, manter e garantir que respeita os filtros de coluna aplicados
-- **Copiar leads**: Botão "Copiar" que copia os leads filtrados (nome + telefone + email) para clipboard em formato tabular
+### 2. Hook `useCloserDetailData.ts`
 
-**3. Novo componente: `src/components/crm/R2ReportLeadHistoryDialog.tsx`**
-- Dialog que recebe `dealId` e `contactId`
-- Renderiza timeline usando `useLeadFullTimeline`
-- Mostra eventos (ligações, reuniões, notas, mudanças de estágio)
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-### Fluxo
-1. Usuário abre aba Relatório → vê filtros gerais (período, closer, status) + filtros por campo de qualificação
-2. Clica em uma célula de qualificação → edita inline → salva automaticamente
-3. Clica no ícone de histórico → abre dialog com timeline completa do lead
-4. Clica "Exportar Excel" → exporta dados filtrados
-5. Clica "Copiar" → copia dados filtrados para clipboard
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-### Detalhes técnicos
-- Filtros de coluna: `useMemo` com `.filter()` encadeados sobre `data`
-- Edição inline: componente `EditableCell` que alterna entre texto e Select/Input
-- Usa as mesmas opções do `R2QualificationTab` (ESTADO_OPTIONS, RENDA_OPTIONS, etc.)
-- `useUpdateDealCustomFields` já invalida `r2-meetings-extended`; adicionar invalidação de `r2-qualification-report` no `onSuccess`
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
