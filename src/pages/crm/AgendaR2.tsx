@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   format,
@@ -68,6 +68,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useR2DailySlotsForView } from "@/hooks/useR2DailySlotsForView";
+import { useQueryClient } from "@tanstack/react-query";
 import { R2CloserWithAvailability } from "@/hooks/useR2AgendaData";
 import { useMyR2Closer } from "@/hooks/useMyR2Closer";
 import { useAuth } from "@/contexts/AuthContext";
@@ -98,6 +99,15 @@ export default function AgendaR2() {
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
   const [availabilityConfigOpen, setAvailabilityConfigOpen] = useState(false);
   const [statusConfigOpen, setStatusConfigOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  const handleAvailabilityConfigClose = useCallback((open: boolean) => {
+    setAvailabilityConfigOpen(open);
+    if (!open) {
+      queryClient.invalidateQueries({ queryKey: ['r2-daily-slots-view'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-closer-slots'] });
+    }
+  }, [queryClient]);
 
   // Auth e closer R2 do usuário logado
   const { role, allRoles } = useAuth();
@@ -861,7 +871,7 @@ export default function AgendaR2() {
       {/* R2 Closer Availability Config Modal */}
       <R2CloserAvailabilityConfig
         open={availabilityConfigOpen}
-        onOpenChange={setAvailabilityConfigOpen}
+        onOpenChange={handleAvailabilityConfigClose}
         closers={allClosers}
         isLoading={isLoadingAllClosers}
       />
