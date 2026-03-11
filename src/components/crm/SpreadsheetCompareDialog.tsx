@@ -401,6 +401,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
             });
             if (error) throw error;
             createdCount += (data as any).created || 0;
+            updatedCount += (data as any).updated || 0;
             skippedCount += (data as any).skipped || 0;
           }
         } else {
