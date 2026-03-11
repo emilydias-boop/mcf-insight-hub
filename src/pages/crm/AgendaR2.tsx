@@ -57,6 +57,8 @@ import { R2QualificationReportPanel } from "@/components/crm/R2QualificationRepo
 import { useR2PendingLeadsCount } from "@/hooks/useR2PendingLeads";
 import { useR2NoShowsCount } from "@/hooks/useR2NoShowLeads";
 import { useR2PreScheduledCount } from "@/hooks/useR2PreScheduledLeads";
+import { useR2SemSucessoCount } from "@/hooks/useR2SemSucesso";
+import { R2SemSucessoPanel } from "@/components/crm/R2SemSucessoPanel";
 import { R2PreScheduledTab } from "@/components/crm/R2PreScheduledTab";
 import { R2RescheduleModal } from "@/components/crm/R2RescheduleModal";
 import { R2MeetingRow } from "@/types/r2Agenda";
