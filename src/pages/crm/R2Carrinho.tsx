@@ -27,25 +27,14 @@ export default function R2Carrinho() {
   const [weekDate, setWeekDate] = useState(new Date());
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
-  const [ignoreOverride, setIgnoreOverride] = useState(false);
   const [selectedCarrinhoId, setSelectedCarrinhoId] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
-  const { override, saveOverride, removeOverride } = useCarrinhoWeekOverride();
   const { config, saveConfig } = useCarrinhoConfig();
 
-  // Compute stable weekStart/weekEnd once, respecting override only when not ignored
-  const activeOverride = override && !ignoreOverride;
-  const weekStart = useMemo(() => 
-    activeOverride ? parseISO(override.start) : getCustomWeekStart(weekDate),
-    [activeOverride, override, weekDate]
-  );
-  const weekEnd = useMemo(() => 
-    activeOverride ? parseISO(override.end) : getCustomWeekEnd(weekDate),
-    [activeOverride, override, weekDate]
-  );
+  const weekStart = useMemo(() => getCustomWeekStart(weekDate), [weekDate]);
+  const weekEnd = useMemo(() => getCustomWeekEnd(weekDate), [weekDate]);
 
   // Fetch KPIs
   const { data: kpis, isLoading: kpisLoading, refetch: refetchKpis } = useR2CarrinhoKPIs(weekStart, weekEnd);
