@@ -31,6 +31,7 @@ import {
   FileText,
   Download,
   Search,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,6 +58,8 @@ import { R2QualificationReportPanel } from "@/components/crm/R2QualificationRepo
 import { useR2PendingLeadsCount } from "@/hooks/useR2PendingLeads";
 import { useR2NoShowsCount } from "@/hooks/useR2NoShowLeads";
 import { useR2PreScheduledCount } from "@/hooks/useR2PreScheduledLeads";
+import { useR2SemSucessoCount } from "@/hooks/useR2SemSucesso";
+import { R2SemSucessoPanel } from "@/components/crm/R2SemSucessoPanel";
 import { R2PreScheduledTab } from "@/components/crm/R2PreScheduledTab";
 import { R2RescheduleModal } from "@/components/crm/R2RescheduleModal";
 import { R2MeetingRow } from "@/types/r2Agenda";
@@ -145,6 +148,7 @@ export default function AgendaR2() {
   const pendingCount = useR2PendingLeadsCount();
   const { data: noShowCount = 0 } = useR2NoShowsCount(rangeStart, rangeEnd);
   const preScheduledCount = useR2PreScheduledCount();
+  const semSucessoCount = useR2SemSucessoCount();
 
   // Fetch R2 configured slots for the "Por Closer" view
   const closerIds = useMemo(() => closers.map((c) => c.id), [closers]);
@@ -614,6 +618,15 @@ export default function AgendaR2() {
                     </Badge>
                   )}
                 </TabsTrigger>
+                <TabsTrigger value="semsucesso" className="gap-2">
+                  <XCircle className="h-4 w-4" />
+                  Sem Sucesso
+                  {semSucessoCount > 0 && (
+                    <Badge variant="outline" className="h-5 min-w-[20px] px-1.5 text-xs bg-destructive/10 text-destructive border-destructive/20">
+                      {semSucessoCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="report" className="gap-2">
                   <FileText className="h-4 w-4" />
                   Relatório
@@ -657,6 +670,11 @@ export default function AgendaR2() {
             {/* Pre-Scheduled Tab */}
             <TabsContent value="prescheduled" className="mt-0">
               <R2PreScheduledTab />
+            </TabsContent>
+
+            {/* Sem Sucesso Tab */}
+            <TabsContent value="semsucesso" className="mt-0">
+              <R2SemSucessoPanel closers={closersAsR2CloserWithAvailability} />
             </TabsContent>
             <TabsContent value="calendar" className="mt-0">
               {isLoadingMeetings || isLoadingClosers ? (

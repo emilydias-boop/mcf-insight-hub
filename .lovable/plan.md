@@ -1,44 +1,39 @@
 
 
-## Feature: "Sem Sucesso" para Pendentes R2
+## Objetivo
 
-### Resumo
-Adicionar opção "Sem Sucesso" no menu de 3 pontos da aba Pendentes. Ao clicar, abre um modal para registrar tentativas e observações. O lead vai para uma nova aba "Sem Sucesso" na Agenda R2, onde mantém todas as opções do menu (Agendar R2, Reembolso, Parceiro, Recorrência) para possibilitar retomada.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Mudanças
+## Mudanças
 
-#### 1. Novo hook: `src/hooks/useR2SemSucesso.ts`
-- **Mutation `useMarkR2SemSucesso`**: Atualiza o `meeting_slot_attendees.status` para `'sem_sucesso'` e salva metadata (tentativas, observação) no campo `custom_fields` ou em `deal_activities` como registro de atividade.
-- **Query `useR2SemSucessoLeads`**: Busca attendees com `status = 'sem_sucesso'` de meetings R1 com `contract_paid`. Retorna os mesmos dados do `R2PendingLead` para reaproveitar os componentes. Invalida `r2-pending-leads` e novo key `r2-sem-sucesso-leads`.
-- **Query `useR2SemSucessoCount`**: Retorna contagem para badge na tab.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-#### 2. Novo componente: `src/components/crm/R2SemSucessoModal.tsx`
-- Modal com campos:
-  - **Tentativas de contato** (input numérico)
-  - **Observação** (textarea)
-- Botão "Confirmar Sem Sucesso" chama `useMarkR2SemSucesso`
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-#### 3. Novo componente: `src/components/crm/R2SemSucessoPanel.tsx`
-- Lista de leads marcados como "Sem Sucesso", layout igual ao `R2PendingLeadsPanel`
-- Cada card mostra: nome, telefone, data R1, closer R1, tentativas, observação
-- Menu de 3 pontos com **todas as opções**: Agendar R2, Reembolso, Reconhecer Parceiro, Reconhecer Recorrência
-- Badge "Sem Sucesso" em vez de "Contrato Pago"
+### 2. Hook `useCloserDetailData.ts`
 
-#### 4. Atualizar `src/components/crm/R2PendingLeadsPanel.tsx`
-- Adicionar item "Sem Sucesso" no `DropdownMenuContent` (após Reconhecer Recorrência), com ícone `XCircle` vermelho
-- State para `semSucessoModalOpen` e `semSucessoLead`
-- Renderizar `<R2SemSucessoModal />`
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-#### 5. Atualizar `src/hooks/useR2PendingLeads.ts`
-- No filtro (Step 6, ~linha 198), adicionar exclusão de `status === 'sem_sucesso'` para que leads marcados saiam da lista de Pendentes
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-#### 6. Atualizar `src/pages/crm/AgendaR2.tsx`
-- Adicionar nova aba "Sem Sucesso" entre "No-Shows" e "Pré-Agendados" com badge de contagem
-- Renderizar `<R2SemSucessoPanel />` no `TabsContent`
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### Fluxo do Usuário
-1. Na aba Pendentes → 3 pontos → "Sem Sucesso"
-2. Modal abre → preenche tentativas e observação → confirma
-3. Lead sai de Pendentes e aparece na aba "Sem Sucesso"
-4. Na aba Sem Sucesso → 3 pontos → pode "Agendar R2" (retoma o lead) ou qualquer outra ação
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

@@ -12,7 +12,8 @@ import {
   RotateCcw,
   Copy,
   UserCheck,
-  Repeat
+  Repeat,
+  XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -52,6 +53,7 @@ import { R2CloserWithAvailability } from '@/hooks/useR2AgendaData';
 import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { cn } from '@/lib/utils';
+import { R2SemSucessoModal } from './R2SemSucessoModal';
 
 interface R2PendingLeadsPanelProps {
   closers: R2CloserWithAvailability[];
@@ -73,6 +75,8 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
   const [recurrenceDialogOpen, setRecurrenceDialogOpen] = useState(false);
   const [recurrenceLead, setRecurrenceLead] = useState<R2PendingLead | null>(null);
   const recognizeRecurrence = useRecognizeRecurrence();
+  const [semSucessoModalOpen, setSemSucessoModalOpen] = useState(false);
+  const [semSucessoLead, setSemSucessoLead] = useState<R2PendingLead | null>(null);
 
   const filteredLeads = useMemo(() => {
     if (r1CloserFilter === 'all') return pendingLeads;
@@ -269,6 +273,13 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
                             <Repeat className="h-4 w-4 mr-2 text-green-600" />
                             Reconhecer Recorrência
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setSemSucessoLead(lead);
+                            setSemSucessoModalOpen(true);
+                          }}>
+                            <XCircle className="h-4 w-4 mr-2 text-destructive" />
+                            Sem Sucesso
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -390,6 +401,17 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Sem Sucesso Modal */}
+      <R2SemSucessoModal
+        open={semSucessoModalOpen}
+        onOpenChange={(open) => {
+          setSemSucessoModalOpen(open);
+          if (!open) setSemSucessoLead(null);
+        }}
+        attendeeId={semSucessoLead?.id || ''}
+        leadName={semSucessoLead?.attendee_name || semSucessoLead?.deal?.contact?.name || 'Lead'}
+      />
     </>
   );
 }
