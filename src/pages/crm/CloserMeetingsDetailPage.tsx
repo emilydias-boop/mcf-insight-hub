@@ -14,7 +14,7 @@ import { CloserLeadsTable } from "@/components/closer/CloserLeadsTable";
 
 import { CloserRankingBlock } from "@/components/closer/CloserRankingBlock";
 import { CloserRevenueTab } from "@/components/closer/CloserRevenueTab";
-import { useCloserDetailData, CloserLead } from "@/hooks/useCloserDetailData";
+import { useCloserDetailData } from "@/hooks/useCloserDetailData";
 
 export default function CloserMeetingsDetailPage() {
   const { closerId } = useParams<{ closerId: string }>();
