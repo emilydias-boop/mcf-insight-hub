@@ -8,6 +8,7 @@ import { PerformanceReportPanel } from './PerformanceReportPanel';
 import { AcquisitionReportPanel } from './AcquisitionReportPanel';
 import { ProductsReportPanel } from './ProductsReportPanel';
 import { InvestigationReportPanel } from './InvestigationReportPanel';
+import { NaoComprouReportPanel } from './NaoComprouReportPanel';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { useAuth } from '@/contexts/AuthContext';
 import { BUProvider } from '@/contexts/BUContext';
