@@ -273,6 +273,10 @@ export default function LeadsLimbo() {
   const totalPages = showAll ? 1 : Math.ceil(filtered.length / pageSize);
 
   // Toggle selection
+  // Helper: can this row be selected for assignment?
+  const isSelectable = (r: LimboRow) =>
+    (r.status === 'sem_dono' && r.localDealId) || r.status === 'nao_encontrado';
+
   const toggleSelect = (idx: number) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
