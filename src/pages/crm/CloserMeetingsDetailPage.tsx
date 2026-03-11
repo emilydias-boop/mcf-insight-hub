@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CloserDetailHeader } from "@/components/closer/CloserDetailHeader";
 import { CloserDetailKPICards } from "@/components/closer/CloserDetailKPICards";
 import { CloserLeadsTable } from "@/components/closer/CloserLeadsTable";
-import { CloserLeadsFilters } from "@/components/closer/CloserLeadsFilters";
+
 import { CloserRankingBlock } from "@/components/closer/CloserRankingBlock";
 import { CloserRevenueTab } from "@/components/closer/CloserRevenueTab";
 import { useCloserDetailData, CloserLead } from "@/hooks/useCloserDetailData";
