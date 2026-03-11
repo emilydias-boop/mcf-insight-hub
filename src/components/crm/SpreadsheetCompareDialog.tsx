@@ -827,7 +827,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                 {counts.elsewhere > 0 && <p>• {counts.elsewhere} contatos de outras pipelines → <strong>criar deal aqui</strong> (sem duplicar contato)</p>}
                 {counts.notFound > 0 && <p>• {counts.notFound} novos → <strong>criar contato + deal</strong></p>}
                 {customTag && <p>• Tag: <Badge variant="outline" className="text-xs">{customTag}</Badge></p>}
-                {selectedStageId && pipelineStages && (
+                {selectedStageId && selectedStageId !== '__default__' && pipelineStages && (
                   <p>• Estágio: <strong>{pipelineStages.find((s: any) => s.id === selectedStageId)?.stage_name}</strong></p>
                 )}
                 {assignMode === 'distribute' && consorcioSdrs && (
