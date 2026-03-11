@@ -273,6 +273,13 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
                             <Repeat className="h-4 w-4 mr-2 text-green-600" />
                             Reconhecer Recorrência
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setSemSucessoLead(lead);
+                            setSemSucessoModalOpen(true);
+                          }}>
+                            <XCircle className="h-4 w-4 mr-2 text-destructive" />
+                            Sem Sucesso
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
