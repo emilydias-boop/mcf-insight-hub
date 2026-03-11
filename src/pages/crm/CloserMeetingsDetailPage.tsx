@@ -23,10 +23,7 @@ export default function CloserMeetingsDetailPage() {
   const activeBU = useActiveBU();
   const wso = getWeekStartsOn(activeBU);
 
-  // Filter states for each tab
-  const [filteredLeads, setFilteredLeads] = useState<CloserLead[]>([]);
-  const [filteredNoShows, setFilteredNoShows] = useState<CloserLead[]>([]);
-  const [filteredR2, setFilteredR2] = useState<CloserLead[]>([]);
+
 
   // Parse date range from query params
   const preset = searchParams.get("preset") || "month";
