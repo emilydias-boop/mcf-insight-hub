@@ -671,6 +671,11 @@ export default function AgendaR2() {
             <TabsContent value="prescheduled" className="mt-0">
               <R2PreScheduledTab />
             </TabsContent>
+
+            {/* Sem Sucesso Tab */}
+            <TabsContent value="semsucesso" className="mt-0">
+              <R2SemSucessoPanel closers={closersAsR2CloserWithAvailability} />
+            </TabsContent>
             <TabsContent value="calendar" className="mt-0">
               {isLoadingMeetings || isLoadingClosers ? (
                 <div className="space-y-2">
