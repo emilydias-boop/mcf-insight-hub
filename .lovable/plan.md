@@ -1,41 +1,39 @@
 
 
-## Problema: Tag "LEAD-SCORE" não aparece no card do Kanban
+## Objetivo
 
-### Causa raiz
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Linha 341 do `DealKanbanCard.tsx`:
-```typescript
-{deal.tags?.slice(0, 1).map((tag: any, idx: number) => (
-```
+## Mudanças
 
-Só mostra **1 tag** (`slice(0, 1)`). Como "base clint" é sempre a primeira no array, "LEAD-SCORE" fica oculta.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### Correção
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**Arquivo: `src/components/crm/DealKanbanCard.tsx`**
+### 2. Hook `useCloserDetailData.ts`
 
-1. Filtrar tags "base clint" (tag de sistema, sem valor visual) antes de exibir
-2. Mostrar até **2 tags** visíveis no card (excluindo "base clint")
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-```typescript
-// Antes:
-{deal.tags?.slice(0, 1).map(...)}
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-// Depois:
-{deal.tags
-  ?.filter((tag: any) => {
-    const name = typeof tag === 'string' ? tag : tag.name;
-    return name?.toLowerCase() !== 'base clint';
-  })
-  .slice(0, 2)
-  .map((tag: any, idx: number) => (
-    <Badge key={idx} variant="secondary" className="text-[10px] px-1.5 py-0"
-      style={{ backgroundColor: tag.color || undefined }}>
-      {typeof tag === 'string' ? tag : tag.name}
-    </Badge>
-  ))}
-```
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-Resultado: "LEAD-SCORE" (e outras tags relevantes) aparecerão diretamente no card do Kanban, enquanto "base clint" fica oculta por ser tag de sistema.
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

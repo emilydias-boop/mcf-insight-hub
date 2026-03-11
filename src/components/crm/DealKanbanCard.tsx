@@ -338,16 +338,22 @@ export const DealKanbanCard = ({
               Remarcado
             </Badge>
           )}
-          {deal.tags?.slice(0, 1).map((tag: any, idx: number) => (
-            <Badge
-              key={idx}
-              variant="secondary"
-              className="text-[10px] px-1.5 py-0"
-              style={{ backgroundColor: tag.color || undefined }}
-            >
-              {typeof tag === "string" ? tag : tag.name}
-            </Badge>
-          ))}
+          {deal.tags
+            ?.filter((tag: any) => {
+              const name = typeof tag === 'string' ? tag : tag.name;
+              return name?.toLowerCase() !== 'base clint';
+            })
+            .slice(0, 2)
+            .map((tag: any, idx: number) => (
+              <Badge
+                key={idx}
+                variant="secondary"
+                className="text-[10px] px-1.5 py-0"
+                style={{ backgroundColor: tag.color || undefined }}
+              >
+                {typeof tag === "string" ? tag : tag.name}
+              </Badge>
+            ))}
           {outsideInfo?.isOutside && (
             <Badge 
               variant="outline" 
