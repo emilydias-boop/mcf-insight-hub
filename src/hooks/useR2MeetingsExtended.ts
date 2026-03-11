@@ -222,8 +222,11 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
         }
       }
 
-      // Enrich attendees with status and thermometer objects, and map column names
-      return (meetings || []).map(meeting => {
+      // Filter out orphan meetings (no attendees) and enrich with status/thermometer objects
+      return (meetings || []).filter(meeting => {
+        const attendeesArr = ((meeting as Record<string, unknown>).attendees || []) as Array<Record<string, unknown>>;
+        return attendeesArr.length > 0;
+      }).map(meeting => {
         const meetingObj = meeting as Record<string, unknown>;
         const attendeesArr = (meetingObj.attendees || []) as Array<Record<string, unknown>>;
         const bookedById = meetingObj.booked_by as string | null;

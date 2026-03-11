@@ -126,6 +126,7 @@ export function useR2DailySlotsForView(
     enabled: !!startDate && !!endDate,
     staleTime: 5000,
     refetchOnWindowFocus: true,
+    refetchOnMount: true,
   });
 }
 

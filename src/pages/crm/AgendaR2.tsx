@@ -236,7 +236,7 @@ export default function AgendaR2() {
         deal_id: m.attendees?.[0]?.deal_id || null,
         contact_id: null,
         scheduled_at: m.scheduled_at,
-        duration_minutes: 40,
+        duration_minutes: 30,
         status: m.status,
         booked_by: null,
         notes: m.notes,

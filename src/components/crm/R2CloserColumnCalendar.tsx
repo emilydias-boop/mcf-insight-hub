@@ -111,8 +111,11 @@ export function R2CloserColumnCalendar({
   const isSlotAvailable = (closerId: string, hour: number, minute: number) => {
     // First check if slot is configured for this closer
     if (!isSlotConfiguredForCloser(closerId, hour, minute)) return false;
-    // Then check if there's no meeting
-    return getMeetingsForSlot(closerId, hour, minute).length === 0;
+    // Then check if there's no valid meeting (filter orphans without attendees)
+    const validMeetings = getMeetingsForSlot(closerId, hour, minute).filter(
+      m => m.attendees && m.attendees.length > 0
+    );
+    return validMeetings.length === 0;
   };
 
   // Filter time slots to only show configured times AND times with existing meetings
