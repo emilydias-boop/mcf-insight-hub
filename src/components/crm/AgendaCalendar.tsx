@@ -949,7 +949,7 @@ export function AgendaCalendar({
         {/* Time slots grid - 30min intervals with sticky header */}
         <div ref={scrollContainerRef} className="max-h-[calc(100vh-280px)] overflow-y-auto relative">
           {/* Header with days - sticky inside scroll container */}
-          <div className={cn('grid border-b bg-muted/50 sticky top-0 z-20', gridCols)}>
+          <div className={cn('grid border-b bg-muted/50 sticky top-0 z-20')} style={gridStyle}>
             <div className="min-w-[60px] w-[60px] flex-shrink-0 h-[52px] flex flex-col items-center justify-center text-xs font-medium text-muted-foreground border-r bg-muted/30 gap-0.5">
               <span>Hora</span>
               {onEditHours && (
