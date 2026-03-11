@@ -1,39 +1,37 @@
 
 
-## Objetivo
+## Diagnóstico do Problema
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+O toast mostrou "0 transferidos, 0 criados, 109 já existiam" — os leads não foram para o estágio "LEAD SCORE" porque:
 
-## Mudanças
+1. **`found_in_current` (35 leads)**: O `bulkTransfer` só atualiza `owner_id`/`owner_profile_id`, mas **não muda o `stage_id`**. Mesmo selecionando "LEAD SCORE", os deals ficam no estágio anterior.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+2. **`found_elsewhere` (98 leads)**: A edge function encontrou que esses contatos **já tinham deal nesta pipeline** e simplesmente fez `skipped++` sem atualizar nada (stage, owner, tags).
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+3. **`not_found` (11 leads)**: Mesmo caso — o contato foi encontrado por deduplicação (email/phone), já tinha deal nesta origin, e foi skipped.
 
-### 2. Hook `useCloserDetailData.ts`
+### Solução
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+#### 1. Edge Function `import-spreadsheet-leads` — Atualizar deals existentes em vez de pular
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+Quando `existingDeal` é encontrado (linha 137), em vez de apenas `skipped++`, **atualizar stage_id, owner e tags** do deal existente. Adicionar um contador `updated` no retorno.
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+```text
+Antes:  if (existingDeal?.length) { skipped++; continue; }
+Depois: if (existingDeal?.length) { UPDATE stage/owner/tags → updated++; continue; }
+```
 
-### 4. Dados exportados no Excel
+#### 2. `bulkTransfer` no `handleSmartImport` — Também mudar stage
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+Para `found_in_current`, após o `bulkTransfer` (que muda owner), fazer um update em batch do `stage_id` quando o usuário selecionou um estágio específico.
 
-Formato de data: `dd/MM/yyyy HH:mm`
+**Arquivo: `src/components/crm/SpreadsheetCompareDialog.tsx`** — Após o bulkTransfer dos `inCurrent`, se `stageId` definido, fazer `supabase.from('crm_deals').update({ stage_id: stageId }).in('id', dealIds)`.
 
-## Resultado
+#### 3. Retorno da edge function — Incluir `updated`
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+Atualizar o toast para mostrar: "X transferidos, Y criados, Z atualizados, W já estavam corretos".
+
+### Arquivos modificados
+- `supabase/functions/import-spreadsheet-leads/index.ts` — update em vez de skip
+- `src/components/crm/SpreadsheetCompareDialog.tsx` — stage update para `found_in_current` + toast com `updated`
 
