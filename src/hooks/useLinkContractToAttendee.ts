@@ -55,12 +55,21 @@ export function useLinkContractToAttendee() {
 
       if (txError) throw txError;
 
-      // 2. Update attendee status to contract_paid
+      // 2. Fetch sale_date from the transaction to use as contract_paid_at
+      const { data: txData } = await supabase
+        .from('hubla_transactions')
+        .select('sale_date')
+        .eq('id', transactionId)
+        .maybeSingle();
+
+      const contractPaidAt = txData?.sale_date || new Date().toISOString();
+
+      // 3. Update attendee status to contract_paid with real sale date
       const { error: attendeeError } = await supabase
         .from('meeting_slot_attendees')
         .update({ 
           status: 'contract_paid',
-          contract_paid_at: new Date().toISOString()
+          contract_paid_at: contractPaidAt
         })
         .eq('id', attendeeId);
 
