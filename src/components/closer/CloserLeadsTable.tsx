@@ -95,8 +95,14 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
       });
     }
 
+    if (sdrFilter !== "all") {
+      filtered = filtered.filter(l =>
+        l.booked_by_name === sdrFilter || l.r1_sdr_name === sdrFilter
+      );
+    }
+
     return filtered;
-  }, [leads, search, statusFilter]);
+  }, [leads, search, statusFilter, sdrFilter]);
 
   const handleExport = () => {
     const data = filteredLeads.map(l => ({
