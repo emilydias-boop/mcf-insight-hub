@@ -930,7 +930,7 @@ export function AgendaCalendar({
     } else if (isToday) {
       // For today without upcoming meetings, scroll to current time
       const currentHour = now.getHours();
-      const currentMinute = Math.floor(now.getMinutes() / 15) * 15;
+      const currentMinute = Math.floor(now.getMinutes() / 30) * 30;
       targetSlotIndex = timeSlots.findIndex(
         slot => slot.hour >= currentHour && (slot.hour > currentHour || slot.minute >= currentMinute)
       );
