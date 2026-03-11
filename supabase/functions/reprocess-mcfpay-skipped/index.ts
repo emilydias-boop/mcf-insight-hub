@@ -15,13 +15,17 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    // Fetch all skipped mcfpay webhooks
+    const body = await req.json().catch(() => ({}));
+    const batchLimit = body.limit || 15;
+
+    // Fetch skipped mcfpay webhooks
     const { data: skipped, error } = await supabase
       .from('bu_webhook_logs')
       .select('id, payload')
       .eq('bu_type', 'asaas')
       .eq('status', 'skipped')
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
+      .limit(batchLimit);
 
     if (error) throw error;
 
