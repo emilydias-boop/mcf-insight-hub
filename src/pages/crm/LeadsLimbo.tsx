@@ -142,6 +142,7 @@ export default function LeadsLimbo() {
   const { data: sdrs } = useActiveSdrs();
   const { data: profiles } = useProfilesByEmail();
   const assignMutation = useAssignLimboOwner();
+  const createNotFoundMutation = useCreateNotFoundDeals();
   const { data: latestUpload, isLoading: loadingUpload } = useLatestLimboUpload();
   const saveLimboUpload = useSaveLimboUpload();
 
