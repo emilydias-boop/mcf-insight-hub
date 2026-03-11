@@ -861,7 +861,7 @@ export default function AgendaR2() {
       {/* R2 Closer Availability Config Modal */}
       <R2CloserAvailabilityConfig
         open={availabilityConfigOpen}
-        onOpenChange={setAvailabilityConfigOpen}
+        onOpenChange={handleAvailabilityConfigClose}
         closers={allClosers}
         isLoading={isLoadingAllClosers}
       />
