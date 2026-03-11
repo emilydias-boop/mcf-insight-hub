@@ -63,7 +63,7 @@ export default function R2Carrinho() {
     [rawAprovadosData, config, selectedCarrinhoId]
   );
   const vendasData = useMemo(() => 
-    filterByCarrinho(rawVendasData, config, selectedCarrinhoId, item => item.original_scheduled_at || item.sale_date),
+    filterByCarrinho(rawVendasData, config, selectedCarrinhoId, item => item.r2_scheduled_at || item.original_scheduled_at || item.sale_date),
     [rawVendasData, config, selectedCarrinhoId]
   );
 
