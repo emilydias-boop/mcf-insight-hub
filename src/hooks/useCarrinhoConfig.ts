@@ -86,21 +86,8 @@ export function dateMatchesCarrinho(
   carrinho: CarrinhoItem
 ): boolean {
   const date = typeof scheduledAt === 'string' ? new Date(scheduledAt) : scheduledAt;
-  const dayOfWeek = getDay(date); // 0=Sun, 1=Mon, ...
-
-  if (!carrinho.dias.includes(dayOfWeek)) return false;
-
-  // If there's a cutoff time, check if the scheduled time is before it
-  if (carrinho.horario_corte) {
-    const [cutoffH, cutoffM] = carrinho.horario_corte.split(':').map(Number);
-    const h = getHours(date);
-    const m = getMinutes(date);
-    if (h > cutoffH || (h === cutoffH && m >= cutoffM)) {
-      return false;
-    }
-  }
-
-  return true;
+  const dayOfWeek = getDay(date);
+  return carrinho.dias.includes(dayOfWeek);
 }
 
 /**
