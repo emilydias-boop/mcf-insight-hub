@@ -394,28 +394,40 @@ export function useR2NoShowsCount(startDate?: Date, endDate?: Date) {
         noShowAttendeeDeals?.filter(a => a.deal_id && refundedDealIds.has(a.deal_id)).map(a => a.id) || []
       );
 
-      // Step 2.6: Check which deals already have a completed R2
+      // Step 2.6: Check which deals already have a completed or active R2
       const allDealIds = noShowAttendeeDeals?.filter(a => a.deal_id).map(a => a.deal_id as string) || [];
       let completedR2DealIds = new Set<string>();
+      let activeR2DealIds = new Set<string>();
       if (allDealIds.length > 0) {
-        const { data: completedR2 } = await supabase
-          .from('meeting_slot_attendees')
-          .select('deal_id, meeting_slot:meeting_slots!inner(meeting_type)')
-          .in('deal_id', allDealIds)
-          .in('status', ['completed', 'contract_paid'])
-          .eq('meeting_slot.meeting_type', 'r2');
+        const [{ data: completedR2 }, { data: activeR2 }] = await Promise.all([
+          supabase
+            .from('meeting_slot_attendees')
+            .select('deal_id, meeting_slot:meeting_slots!inner(meeting_type)')
+            .in('deal_id', allDealIds)
+            .in('status', ['completed', 'contract_paid'])
+            .eq('meeting_slot.meeting_type', 'r2'),
+          supabase
+            .from('meeting_slot_attendees')
+            .select('deal_id, meeting_slot:meeting_slots!inner(meeting_type)')
+            .in('deal_id', allDealIds)
+            .in('status', ['invited', 'scheduled', 'pre_scheduled'])
+            .eq('meeting_slot.meeting_type', 'r2'),
+        ]);
 
         completedR2DealIds = new Set(
           (completedR2 || []).map(a => a.deal_id).filter(Boolean) as string[]
         );
+        activeR2DealIds = new Set(
+          (activeR2 || []).map(a => a.deal_id).filter(Boolean) as string[]
+        );
       }
 
-      const noShowsWithCompletedR2 = new Set(
-        noShowAttendeeDeals?.filter(a => a.deal_id && completedR2DealIds.has(a.deal_id)).map(a => a.id) || []
+      const noShowsWithCompletedOrActiveR2 = new Set(
+        noShowAttendeeDeals?.filter(a => a.deal_id && (completedR2DealIds.has(a.deal_id) || activeR2DealIds.has(a.deal_id))).map(a => a.id) || []
       );
 
-      // Step 3: Count = total - rescheduled - refunded_deals - completed_r2
-      return noShowIds.length - rescheduledParentIds.size - noShowsWithRefundedDeals.size - noShowsWithCompletedR2.size;
+      // Step 3: Count = total - rescheduled - refunded_deals - completed_or_active_r2
+      return noShowIds.length - rescheduledParentIds.size - noShowsWithRefundedDeals.size - noShowsWithCompletedOrActiveR2.size;
     },
     staleTime: 5 * 60 * 1000,
   });
