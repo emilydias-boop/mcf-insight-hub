@@ -117,6 +117,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
           name: att.attendee_name,
           closerName: att.meeting_slot?.closer?.name || null,
           closerColor: att.meeting_slot?.closer?.color || null,
+          scheduledAt: att.meeting_slot?.scheduled_at || null,
         };
 
         if (email) {
