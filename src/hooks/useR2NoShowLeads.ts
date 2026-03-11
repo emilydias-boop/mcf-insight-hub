@@ -217,18 +217,30 @@ export function useR2NoShowLeads({
         });
       }
 
-      // Check which deals already have a completed R2 (should be excluded from no-show list)
+      // Check which deals already have a completed or active R2 (should be excluded from no-show list)
       let dealsWithCompletedR2 = new Set<string>();
+      let dealsWithActiveR2 = new Set<string>();
       if (dealIds.size > 0) {
-        const { data: completedR2 } = await supabase
-          .from('meeting_slot_attendees')
-          .select('deal_id, meeting_slot:meeting_slots!inner(meeting_type)')
-          .in('deal_id', Array.from(dealIds))
-          .in('status', ['completed', 'contract_paid'])
-          .eq('meeting_slot.meeting_type', 'r2');
+        const [{ data: completedR2 }, { data: activeR2 }] = await Promise.all([
+          supabase
+            .from('meeting_slot_attendees')
+            .select('deal_id, meeting_slot:meeting_slots!inner(meeting_type)')
+            .in('deal_id', Array.from(dealIds))
+            .in('status', ['completed', 'contract_paid'])
+            .eq('meeting_slot.meeting_type', 'r2'),
+          supabase
+            .from('meeting_slot_attendees')
+            .select('deal_id, meeting_slot:meeting_slots!inner(meeting_type)')
+            .in('deal_id', Array.from(dealIds))
+            .in('status', ['invited', 'scheduled', 'pre_scheduled'])
+            .eq('meeting_slot.meeting_type', 'r2'),
+        ]);
 
         dealsWithCompletedR2 = new Set(
           (completedR2 || []).map(a => a.deal_id).filter(Boolean) as string[]
+        );
+        dealsWithActiveR2 = new Set(
+          (activeR2 || []).map(a => a.deal_id).filter(Boolean) as string[]
         );
       }
 
