@@ -1051,7 +1051,7 @@ export function AgendaCalendar({
                   <div 
                     className={cn(
                       'min-w-[60px] w-[60px] flex-shrink-0 h-[48px] flex items-center justify-center text-xs border-r bg-muted/30',
-                      (minute === 15 || minute === 45) && 'text-muted-foreground/60',
+                      minute !== 0 && 'text-muted-foreground/60',
                       anyDayFull ? 'line-through text-muted-foreground/40' : 'text-muted-foreground',
                       onEditHours && 'cursor-pointer hover:bg-muted/50 hover:text-foreground transition-colors'
                     )}
