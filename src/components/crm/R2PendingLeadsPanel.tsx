@@ -401,6 +401,17 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Sem Sucesso Modal */}
+      <R2SemSucessoModal
+        open={semSucessoModalOpen}
+        onOpenChange={(open) => {
+          setSemSucessoModalOpen(open);
+          if (!open) setSemSucessoLead(null);
+        }}
+        attendeeId={semSucessoLead?.id || ''}
+        leadName={semSucessoLead?.attendee_name || semSucessoLead?.deal?.contact?.name || 'Lead'}
+      />
     </>
   );
 }
