@@ -303,7 +303,18 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
         toast.error('Nenhum SDR do Consórcio encontrado');
         return;
       }
-      sdrList = consorcioSdrs.map(s => ({ email: s.email || '', id: s.id, name: s.name }));
+      // Resolve real profile IDs from profiles table (sdr.id ≠ profiles.id)
+      const sdrEmails = consorcioSdrs.filter(s => s.email).map(s => s.email!);
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('email', sdrEmails);
+      
+      if (!profilesData?.length) {
+        toast.error('Não foi possível resolver os perfis dos SDRs');
+        return;
+      }
+      sdrList = profilesData.map(p => ({ email: p.email || '', id: p.id, name: p.full_name || p.email || '' }));
     } else {
       if (!selectedOwner) {
         toast.error('Selecione um SDR/Closer');
