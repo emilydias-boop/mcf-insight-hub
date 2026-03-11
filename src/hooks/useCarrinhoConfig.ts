@@ -77,22 +77,50 @@ export function useCarrinhoConfig() {
   return { config: config ?? DEFAULT_CONFIG, isLoading, saveConfig };
 }
 
-/**
- * Check if a date belongs to a specific carrinho based on day of week and cutoff time.
- * Returns true if the date falls within the carrinho's days, considering the cutoff hour.
- */
-export function dateMatchesCarrinho(
-  scheduledAt: string | Date,
-  carrinho: CarrinhoItem
-): boolean {
-  const date = typeof scheduledAt === 'string' ? new Date(scheduledAt) : scheduledAt;
-  const dayOfWeek = getDay(date);
-  return carrinho.dias.includes(dayOfWeek);
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + (m || 0);
 }
 
 /**
- * Filter an array of items by carrinho. If selectedCarrinhoId is null, return all.
- * getScheduledAt extracts the date from each item.
+ * Determine which carrinho a scheduled date belongs to.
+ * On shared days, uses horario_corte of the first carrinho to split.
+ */
+export function getCarrinhoForDate(
+  config: CarrinhoConfig,
+  scheduledAt: string | Date
+): number | null {
+  const date = typeof scheduledAt === 'string' ? new Date(scheduledAt) : scheduledAt;
+  const dayOfWeek = getDay(date);
+
+  const matching = config.carrinhos.filter(c => c.dias.includes(dayOfWeek));
+  if (matching.length === 0) return null;
+  if (matching.length === 1) return matching[0].id;
+
+  const first = matching[0];
+  const meetingMinutes = date.getHours() * 60 + date.getMinutes();
+  const cutoffMinutes = timeToMinutes(first.horario_corte);
+
+  return meetingMinutes <= cutoffMinutes ? first.id : matching[1].id;
+}
+
+/**
+ * Check if a date belongs to a specific carrinho.
+ */
+export function dateMatchesCarrinho(
+  scheduledAt: string | Date,
+  carrinho: CarrinhoItem,
+  config?: CarrinhoConfig
+): boolean {
+  if (config) {
+    return getCarrinhoForDate(config, scheduledAt) === carrinho.id;
+  }
+  const date = typeof scheduledAt === 'string' ? new Date(scheduledAt) : scheduledAt;
+  return carrinho.dias.includes(getDay(date));
+}
+
+/**
+ * Filter by carrinho with exclusive assignment on shared days.
  */
 export function filterByCarrinho<T>(
   items: T[],
@@ -101,7 +129,5 @@ export function filterByCarrinho<T>(
   getScheduledAt: (item: T) => string | Date
 ): T[] {
   if (!selectedCarrinhoId) return items;
-  const carrinho = config.carrinhos.find(c => c.id === selectedCarrinhoId);
-  if (!carrinho) return items;
-  return items.filter(item => dateMatchesCarrinho(getScheduledAt(item), carrinho));
+  return items.filter(item => getCarrinhoForDate(config, getScheduledAt(item)) === selectedCarrinhoId);
 }
