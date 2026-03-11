@@ -891,9 +891,11 @@ export function AgendaCalendar({
 
   // Day or Week view rendering with drag-and-drop
   const numCloserColumns = activeClosersForDayView.length || 1;
-  const gridCols = viewMode === 'day' 
-    ? `grid-cols-[60px_repeat(${numCloserColumns},1fr)]`
-    : `grid-cols-[60px_repeat(${viewDays.length},1fr)]`;
+  const gridStyle = {
+    gridTemplateColumns: viewMode === 'day'
+      ? `60px repeat(${numCloserColumns}, 1fr)`
+      : `60px repeat(${viewDays.length}, 1fr)`
+  };
   const currentTimePos = getCurrentTimePosition();
   
   
@@ -947,7 +949,7 @@ export function AgendaCalendar({
         {/* Time slots grid - 30min intervals with sticky header */}
         <div ref={scrollContainerRef} className="max-h-[calc(100vh-280px)] overflow-y-auto relative">
           {/* Header with days - sticky inside scroll container */}
-          <div className={cn('grid border-b bg-muted/50 sticky top-0 z-20', gridCols)}>
+          <div className={cn('grid border-b bg-muted/50 sticky top-0 z-20')} style={gridStyle}>
             <div className="min-w-[60px] w-[60px] flex-shrink-0 h-[52px] flex flex-col items-center justify-center text-xs font-medium text-muted-foreground border-r bg-muted/30 gap-0.5">
               <span>Hora</span>
               {onEditHours && (
@@ -1042,9 +1044,9 @@ export function AgendaCalendar({
                 key={`${hour}-${minute}`}
                 className={cn(
                   'grid border-b last:border-b-0',
-                  gridCols,
                   minute === 0 && 'border-t border-t-border/50'
                 )}
+                style={gridStyle}
               >
                   <div 
                     className={cn(

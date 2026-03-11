@@ -1,37 +1,39 @@
 
 
-## Diagnóstico: Layout do Calendário Semana quebrado
+## Objetivo
 
-### Causa raiz
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-O `gridCols` em `AgendaCalendar.tsx` (linha 894-896) usa template literals dinâmicos para gerar classes Tailwind:
+## Mudanças
 
-```text
-`grid-cols-[60px_repeat(${viewDays.length},1fr)]`
-```
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Tailwind JIT **não consegue detectar classes construídas dinamicamente** — o scanner de classes procura strings completas no código-fonte. Como `viewDays.length` é um valor runtime, a classe CSS `grid-cols-[60px_repeat(5,1fr)]` nunca é gerada. O grid colapsa em coluna única, empilhando os dias verticalmente.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-A view "Dia" do R1 funciona porque o número de closers pode coincidir com classes já geradas em outros contextos, ou renderiza diferentemente.
+### 2. Hook `useCloserDetailData.ts`
 
-### Correção
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-Substituir as classes Tailwind dinâmicas por **inline styles** (`style={{ gridTemplateColumns: ... }}`), que funcionam independentemente do Tailwind JIT.
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-### Arquivos a editar
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-**`src/components/crm/AgendaCalendar.tsx`**:
+### 4. Dados exportados no Excel
 
-1. **Linha ~894-896**: Trocar `gridCols` de classe Tailwind para um objeto de estilo inline:
-   ```typescript
-   const gridStyle = {
-     gridTemplateColumns: viewMode === 'day'
-       ? `60px repeat(${numCloserColumns}, 1fr)`
-       : `60px repeat(${viewDays.length}, 1fr)`
-   };
-   ```
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-2. **Todas as referências a `gridCols`** (header na linha ~950, cada time slot row na linha ~1044): Substituir `className={cn('grid ...', gridCols)}` por `className={cn('grid ...')} style={gridStyle}`.
+Formato de data: `dd/MM/yyyy HH:mm`
 
-Isso garante que o grid sempre terá as colunas corretas, independentemente do número de dias ou closers.
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
