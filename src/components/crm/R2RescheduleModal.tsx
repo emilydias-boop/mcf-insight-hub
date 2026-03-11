@@ -197,7 +197,7 @@ export function R2RescheduleModal({
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 h-[calc(90vh-120px)]">
+        <ScrollArea className="flex-1 h-[calc(90vh-180px)]">
           <div className="space-y-4 pr-4 pb-4">
             {/* Current Info */}
             <div className="bg-purple-50 dark:bg-purple-950/30 rounded-lg p-3 text-sm">
@@ -450,16 +450,19 @@ export function R2RescheduleModal({
               </div>
             </div>
 
-            {/* Submit */}
-            <Button 
-              className="w-full bg-purple-600 hover:bg-purple-700" 
-              onClick={handleSubmit}
-              disabled={!selectedDate || rescheduleMeeting.isPending || updateAttendee.isPending}
-            >
-              {rescheduleMeeting.isPending || updateAttendee.isPending ? 'Reagendando...' : 'Reagendar R2'}
-            </Button>
           </div>
         </ScrollArea>
+
+        {/* Submit - fixed outside scroll */}
+        <div className="flex-shrink-0 pt-4">
+          <Button 
+            className="w-full bg-purple-600 hover:bg-purple-700" 
+            onClick={handleSubmit}
+            disabled={!selectedDate || rescheduleMeeting.isPending || updateAttendee.isPending}
+          >
+            {rescheduleMeeting.isPending || updateAttendee.isPending ? 'Reagendando...' : 'Reagendar R2'}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
