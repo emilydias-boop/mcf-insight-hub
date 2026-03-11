@@ -124,7 +124,8 @@ export function useR2DailySlotsForView(
       return result;
     },
     enabled: !!startDate && !!endDate,
-    staleTime: 30000,
+    staleTime: 5000,
+    refetchOnWindowFocus: true,
   });
 }
 
