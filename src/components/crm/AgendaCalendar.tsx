@@ -433,7 +433,7 @@ export function AgendaCalendar({
       return isSameDay(meetingDate, day) &&
         meetingDate.getHours() === hour &&
         meetingDate.getMinutes() >= minute &&
-        meetingDate.getMinutes() < minute + 15;
+        meetingDate.getMinutes() < minute + 30;
     });
     
     // Count per closer
