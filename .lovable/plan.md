@@ -1,39 +1,31 @@
 
 
-## Objetivo
+## Problema: Deduplicação excessiva reduzindo faturamento
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Diagnóstico
+A deduplicação atual usa `PARTITION BY email + data + installment_number`, o que é muito amplo. Quando um cliente compra 2 produtos diferentes no mesmo dia (ex: A010 + ACESSO VITALÍCIO), ambos com `installment_number = 1`, a deduplicação remove um deles.
 
-## Mudanças
+Dados concretos:
+- 3.251 registros removidos pela deduplicação
+- **2.122 são de fontes legítimas** (hubla, kiwify) — não deveriam ser removidos
+- 888 registros "ACESSO VITALÍCIO" da hubla removidos incorretamente
+- 874 registros "A010" da hubla removidos incorretamente
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Solução
+Em vez de ROW_NUMBER() genérico, usar abordagem cirúrgica: **excluir apenas registros `make` genéricos ("Parceria") quando já existe um registro de fonte prioritária para o mesmo email + mesma data**.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Lógica SQL:
+```text
+-- Manter TODOS os registros normalmente
+-- EXCETO: registros make com product_name = 'Parceria' 
+-- QUANDO existir outro registro não-make para o mesmo email no mesmo dia
+```
 
-### 2. Hook `useCloserDetailData.ts`
+Isso resolve o caso do Samuel (Parceria do make é excluída porque mcfpay já tem A001) sem afetar vendas legítimas de produtos diferentes no mesmo dia.
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+### Correção adicional
+Incluir `'kiwify'` no filtro de sources — está faltando atualmente.
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Migration SQL
+Recriar ambas as RPCs (`get_all_hubla_transactions` e `get_hubla_transactions_by_bu`) removendo o ROW_NUMBER e usando NOT EXISTS para excluir apenas `make` "Parceria" duplicados.
 
