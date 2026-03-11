@@ -99,6 +99,15 @@ export default function AgendaR2() {
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
   const [availabilityConfigOpen, setAvailabilityConfigOpen] = useState(false);
   const [statusConfigOpen, setStatusConfigOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  const handleAvailabilityConfigClose = useCallback((open: boolean) => {
+    setAvailabilityConfigOpen(open);
+    if (!open) {
+      queryClient.invalidateQueries({ queryKey: ['r2-daily-slots-view'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-closer-slots'] });
+    }
+  }, [queryClient]);
 
   // Auth e closer R2 do usuário logado
   const { role, allRoles } = useAuth();
