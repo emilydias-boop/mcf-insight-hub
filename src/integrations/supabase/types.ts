@@ -6161,6 +6161,53 @@ export type Database = {
           },
         ]
       }
+      manual_sale_attributions: {
+        Row: {
+          business_unit: string | null
+          closer_id: string
+          contact_email: string | null
+          contact_name: string
+          contact_phone: string | null
+          contract_paid_at: string
+          created_at: string | null
+          created_by: string
+          id: string
+          notes: string | null
+        }
+        Insert: {
+          business_unit?: string | null
+          closer_id: string
+          contact_email?: string | null
+          contact_name: string
+          contact_phone?: string | null
+          contract_paid_at: string
+          created_at?: string | null
+          created_by: string
+          id?: string
+          notes?: string | null
+        }
+        Update: {
+          business_unit?: string | null
+          closer_id?: string
+          contact_email?: string | null
+          contact_name?: string
+          contact_phone?: string | null
+          contract_paid_at?: string
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_sale_attributions_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meeting_slot_attendees: {
         Row: {
           already_builds: boolean | null

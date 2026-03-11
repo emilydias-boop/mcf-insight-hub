@@ -389,6 +389,19 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         });
       });
 
+      // ========== MANUAL SALE ATTRIBUTIONS ==========
+      const { data: manualSales } = await supabase
+        .from('manual_sale_attributions' as any)
+        .select('closer_id')
+        .eq('business_unit', bu)
+        .gte('contract_paid_at', start)
+        .lte('contract_paid_at', end);
+
+      const manualByCloser = new Map<string, number>();
+      (manualSales as any[] || []).forEach((sale: any) => {
+        manualByCloser.set(sale.closer_id, (manualByCloser.get(sale.closer_id) || 0) + 1);
+      });
+
       // Calculate metrics for each R1 closer
       const metricsMap = new Map<string, R1CloserMetric>();
 
@@ -401,7 +414,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           r1_agendada: 0,
           r1_realizada: 0,
           noshow: 0,
-          contrato_pago: contractsByCloser.get(closer.id) || 0,
+          contrato_pago: (contractsByCloser.get(closer.id) || 0) + (manualByCloser.get(closer.id) || 0),
           outside: outsideByCloser.get(closer.id) || 0,
           r2_agendada: r2CountByCloser.get(closer.id) || 0,
         });
@@ -425,7 +438,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
             r1_agendada: 0,
             r1_realizada: 0,
             noshow: 0,
-            contrato_pago: contractsByCloser.get(closerId) || 0,
+            contrato_pago: (contractsByCloser.get(closerId) || 0) + (manualByCloser.get(closerId) || 0),
             outside: outsideByCloser.get(closerId) || 0,
             r2_agendada: r2CountByCloser.get(closerId) || 0,
           };

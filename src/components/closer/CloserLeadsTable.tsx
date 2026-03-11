@@ -303,9 +303,14 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
                     )}
                     <TableCell className="flex items-center gap-1">
                       {getStatusBadge(lead.status, lead.contract_paid_at)}
-                      {lead.is_followup && (
+                    {lead.is_followup && (
                         <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30 text-[10px] px-1.5">
                           Follow-up
+                        </Badge>
+                      )}
+                      {lead.is_manual && (
+                        <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/30 text-[10px] px-1.5">
+                          Manual
                         </Badge>
                       )}
                     </TableCell>
