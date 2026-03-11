@@ -272,6 +272,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
             is_extra: isExtra,
             original_week_start: originalWeekStart,
             original_scheduled_at: originalScheduledAt,
+            r2_scheduled_at: attendeeData?.scheduledAt || undefined,
           });
         }
       });

@@ -67,9 +67,10 @@ const formatCurrency = (value: number | null) => {
   }).format(value);
 };
 
-export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
+export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasListProps) {
   const queryClient = useQueryClient();
-  const { data: vendas = [], isLoading, refetch } = useR2CarrinhoVendas(weekStart, weekEnd);
+  const { data: allVendas = [], isLoading, refetch } = useR2CarrinhoVendas(weekStart, weekEnd);
+  const vendas = filteredVendas ?? allVendas;
   const { data: unlinkedTransactions = [], isLoading: isLoadingUnlinked } = useUnlinkedTransactions(weekStart);
   const deleteTransaction = useDeleteTransaction();
 

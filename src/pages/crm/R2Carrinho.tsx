@@ -291,7 +291,8 @@ export default function R2Carrinho() {
         <TabsContent value="vendas">
           <R2VendasList 
             weekStart={weekStart} 
-            weekEnd={weekEnd} 
+            weekEnd={weekEnd}
+            filteredVendas={selectedCarrinhoId ? vendasData : undefined}
           />
         </TabsContent>
 
