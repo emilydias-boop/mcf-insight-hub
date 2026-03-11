@@ -78,10 +78,7 @@ export default function CloserMeetingsDetailPage() {
     navigate(`/crm/reunioes-equipe?${params.toString()}`);
   };
 
-  // Stable callbacks for filters
-  const onFilterLeads = useCallback((f: CloserLead[]) => setFilteredLeads(f), []);
-  const onFilterNoShows = useCallback((f: CloserLead[]) => setFilteredNoShows(f), []);
-  const onFilterR2 = useCallback((f: CloserLead[]) => setFilteredR2(f), []);
+
 
   if (!closerId) {
     return (
