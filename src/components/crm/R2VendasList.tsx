@@ -56,6 +56,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 30, 40];
 interface R2VendasListProps {
   weekStart: Date;
   weekEnd: Date;
+  filteredVendas?: R2CarrinhoVenda[];
 }
 
 const formatCurrency = (value: number | null) => {
