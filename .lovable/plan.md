@@ -1,39 +1,35 @@
 
 
-## Objetivo
+## Problema
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+A aba **Vendas** não filtra por carrinho porque:
 
-## Mudanças
+1. **`R2VendasList` busca dados próprios** (linha 71) ignorando o filtro de carrinho aplicado no `R2Carrinho.tsx`
+2. **Falta o `scheduled_at` da reunião R2** nas vendas — o `filterByCarrinho` usa `sale_date` (data da transação) em vez da data da reunião R2 do lead, que é o que determina a qual carrinho a venda pertence
+3. Os KPIs de vendas no badge da aba também não refletem o filtro
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+## Solução
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### 1. `src/hooks/useR2CarrinhoVendas.ts` — Incluir `scheduled_at` da reunião R2
 
-### 2. Hook `useCloserDetailData.ts`
+- Ao montar cada `R2CarrinhoVenda`, incluir o campo `r2_scheduled_at` com o `meeting_slot.scheduled_at` do attendee aprovado correspondente
+- Isso permite que o `filterByCarrinho` use a data da reunião R2 (não a data da venda) para classificar em qual carrinho a venda pertence
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+### 2. `src/components/crm/R2VendasList.tsx` — Aceitar dados filtrados via props
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+- Adicionar prop opcional `vendas?: R2CarrinhoVenda[]` ao componente
+- Quando recebido, usar esses dados filtrados em vez de buscar independentemente
+- Manter o fetch próprio como fallback quando a prop não é passada
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+### 3. `src/pages/crm/R2Carrinho.tsx` — Passar dados filtrados e corrigir filtro
 
-### 4. Dados exportados no Excel
+- Passar `vendasData` filtrado como prop para `R2VendasList`
+- Corrigir o `filterByCarrinho` para usar `item.r2_scheduled_at` (data da reunião R2) em vez de `item.sale_date`
+- Atualizar o badge de vendas na aba para usar `vendasData.length` (já filtrado)
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+### Resultado
 
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+- Carrinho 1: mostra apenas vendas de leads cujas R2s caem no Carrinho 1
+- Carrinho 2: mostra apenas vendas de leads cujas R2s caem no Carrinho 2
+- Sem duplicação entre carrinhos
 
