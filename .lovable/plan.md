@@ -1,44 +1,39 @@
 
 
-## Deduplicação de Transações por Prioridade de Fonte
+## Objetivo
 
-### Problema
-As RPCs retornam transações de todas as fontes (hubla, mcfpay, make), causando duplicatas quando a mesma venda existe em múltiplas fontes. No caso do Samuel Barbosa, aparece tanto do `mcfpay` quanto do `make`.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Solução
-Adicionar deduplicação nas RPCs usando `ROW_NUMBER()` com prioridade de fonte: **hubla > kiwify > mcfpay > make**. Para cada combinação de `customer_email + product_name + installment_number`, manter apenas a transação da fonte com maior prioridade.
+## Mudanças
 
-### Migration SQL
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Recriar ambas as RPCs (`get_all_hubla_transactions` e `get_hubla_transactions_by_bu`) com a seguinte lógica:
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-```sql
-WITH ranked AS (
-  SELECT ht.*, pc.reference_price,
-    ROW_NUMBER() OVER (
-      PARTITION BY LOWER(ht.customer_email), ht.product_name, ht.installment_number
-      ORDER BY CASE ht.source
-        WHEN 'hubla' THEN 1
-        WHEN 'kiwify' THEN 2
-        WHEN 'mcfpay' THEN 3
-        WHEN 'manual' THEN 4
-        WHEN 'make' THEN 5
-        ELSE 6
-      END
-    ) AS rn
-  FROM hubla_transactions ht
-  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
-  WHERE [existing filters]
-)
-SELECT ... FROM ranked WHERE rn = 1
-ORDER BY sale_date DESC LIMIT p_limit;
-```
+### 2. Hook `useCloserDetailData.ts`
 
-Isso garante que:
-- Se existe uma transação `hubla` e uma `make` para o mesmo cliente/produto/parcela, só aparece a `hubla`
-- Se existe `mcfpay` e `make`, só aparece `mcfpay`
-- `make` só aparece se não existir nenhuma outra fonte
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-### Arquivos
-- Nova migration SQL com as duas RPCs atualizadas
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
