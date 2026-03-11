@@ -144,14 +144,14 @@ export function CarrinhoConfigDialog({
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Horário da reunião do carrinho</Label>
+                  <Label>Horário de corte do carrinho</Label>
                   <Input
                     type="time"
-                    value={carrinho.horario_reuniao}
-                    onChange={e => updateCarrinho(idx, { horario_reuniao: e.target.value, horario_corte: e.target.value })}
+                    value={carrinho.horario_corte}
+                    onChange={e => updateCarrinho(idx, { horario_corte: e.target.value, horario_reuniao: e.target.value })}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Horário em que acontece a reunião do carrinho (informativo)
+                    Em dias compartilhados entre carrinhos, reuniões até este horário ficam neste carrinho; após, vão para o próximo.
                   </p>
                 </div>
               </CardContent>
