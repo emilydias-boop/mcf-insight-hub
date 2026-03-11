@@ -1,40 +1,39 @@
 
 
-## Configuração de Carrinho por Semana
+## Objetivo
 
-Entendi o problema: hoje a configuração é **global** — ao alterar dias/horário de corte, isso muda para todas as semanas (passadas e futuras). Cada semana pode ter uma configuração diferente (ex: semana A tem carrinho na quarta às 12h, semana B na quinta às 14h).
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Solução: Salvar config por semana
+## Mudanças
 
-Em vez de uma única chave `carrinho_config` na tabela `settings`, cada semana terá sua própria configuração, usando a chave `carrinho_config_{weekStartDate}` (ex: `carrinho_config_2026-02-28`).
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### Mudanças
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**1. `src/hooks/useCarrinhoConfig.ts`**
-- O hook passa a receber `weekStart: Date` como parâmetro
-- A chave no banco muda de `carrinho_config` para `carrinho_config_YYYY-MM-DD` (baseada no sábado da semana)
-- Ao buscar: se não existir config para a semana, usa o DEFAULT (1 carrinho, todos os dias úteis)
-- Ao salvar: salva na chave específica da semana
-- Query key inclui a data da semana: `['carrinho-config', weekKey]`
+### 2. Hook `useCloserDetailData.ts`
 
-**2. `src/pages/crm/R2Carrinho.tsx`**
-- Passa `weekStart` para `useCarrinhoConfig(weekStart)`
-- O `saveConfig` já salva automaticamente para a semana sendo visualizada
-- Ao navegar entre semanas, a config carrega independentemente
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**3. `src/components/crm/CarrinhoConfigDialog.tsx`**
-- Adicionar indicação visual de qual semana está sendo configurada (ex: "Configurar Carrinhos — Semana 28/02 - 06/03")
-- Adicionar botão "Copiar da semana anterior" para facilitar quando a config é parecida
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-### Fluxo do usuário
-1. Navega para semana X → carrega config da semana X (ou default se não existir)
-2. Abre dialog → vê config daquela semana específica
-3. Altera e salva → salva apenas para semana X
-4. Navega para semana Y → carrega config da semana Y (independente)
-5. Pode copiar config de outra semana se quiser
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### Detalhes técnicos
-- Chave no banco: `carrinho_config_2026-02-28` (formato `YYYY-MM-DD` do sábado)
-- Não quebra configs antigas: a config global existente pode servir como fallback
-- `filterByCarrinho` e `getCarrinhoForDate` não mudam — recebem o `config` já resolvido
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

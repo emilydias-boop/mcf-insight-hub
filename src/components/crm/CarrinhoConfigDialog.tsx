@@ -13,6 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { CarrinhoConfig, CarrinhoItem } from '@/hooks/useCarrinhoConfig';
 import { Card, CardContent } from '@/components/ui/card';
+import { Copy } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const DAYS_OF_WEEK = [
   { value: 1, label: 'Seg' },
@@ -30,6 +33,10 @@ interface CarrinhoConfigDialogProps {
   config: CarrinhoConfig;
   onSave: (config: CarrinhoConfig) => void;
   isSaving: boolean;
+  weekStart?: Date;
+  weekEnd?: Date;
+  onCopyFromPrevious?: () => void;
+  isCopying?: boolean;
 }
 
 function makeDefaultCarrinho(id: number): CarrinhoItem {
@@ -48,6 +55,10 @@ export function CarrinhoConfigDialog({
   config,
   onSave,
   isSaving,
+  weekStart,
+  weekEnd,
+  onCopyFromPrevious,
+  isCopying,
 }: CarrinhoConfigDialogProps) {
   const [numCarrinhos, setNumCarrinhos] = useState(config.carrinhos.length);
   const [carrinhos, setCarrinhos] = useState<CarrinhoItem[]>(config.carrinhos);
@@ -92,14 +103,39 @@ export function CarrinhoConfigDialog({
     onOpenChange(false);
   };
 
+  const weekLabel = weekStart && weekEnd
+    ? `${format(weekStart, 'dd/MM', { locale: ptBR })} - ${format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}`
+    : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[540px]">
         <DialogHeader>
-          <DialogTitle>⚙️ Configurar Carrinhos</DialogTitle>
+          <DialogTitle>
+            ⚙️ Configurar Carrinhos
+            {weekLabel && (
+              <span className="block text-sm font-normal text-muted-foreground mt-1">
+                Semana {weekLabel}
+              </span>
+            )}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Copy from previous week button */}
+          {onCopyFromPrevious && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onCopyFromPrevious}
+              disabled={isCopying}
+              className="w-full"
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              {isCopying ? 'Copiando...' : 'Copiar da semana anterior'}
+            </Button>
+          )}
+
           <div className="space-y-2">
             <Label>Quantos carrinhos na semana?</Label>
             <Select value={String(numCarrinhos)} onValueChange={handleNumChange}>

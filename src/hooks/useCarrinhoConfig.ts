@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { getDay } from 'date-fns';
+import { getDay, format, subWeeks } from 'date-fns';
 
 export interface CarrinhoItem {
   id: number;
@@ -27,22 +27,44 @@ const DEFAULT_CONFIG: CarrinhoConfig = {
   ],
 };
 
-export function useCarrinhoConfig() {
+function getWeekKey(weekStart: Date): string {
+  return `carrinho_config_${format(weekStart, 'yyyy-MM-dd')}`;
+}
+
+export function useCarrinhoConfig(weekStart?: Date) {
   const queryClient = useQueryClient();
+  const weekKey = weekStart ? getWeekKey(weekStart) : 'carrinho_config';
 
   const { data: config, isLoading } = useQuery({
-    queryKey: ['carrinho-config'],
+    queryKey: ['carrinho-config', weekKey],
     queryFn: async (): Promise<CarrinhoConfig> => {
+      // Try week-specific key first
       const { data, error } = await supabase
         .from('settings')
         .select('value')
-        .eq('key', 'carrinho_config')
+        .eq('key', weekKey)
         .maybeSingle();
       if (error) throw error;
-      if (!data?.value) return DEFAULT_CONFIG;
-      const val = data.value as unknown as CarrinhoConfig;
-      if (!val.carrinhos || val.carrinhos.length === 0) return DEFAULT_CONFIG;
-      return val;
+      if (data?.value) {
+        const val = data.value as unknown as CarrinhoConfig;
+        if (val.carrinhos && val.carrinhos.length > 0) return val;
+      }
+
+      // Fallback: try global key (legacy)
+      if (weekKey !== 'carrinho_config') {
+        const { data: globalData, error: globalError } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'carrinho_config')
+          .maybeSingle();
+        if (globalError) throw globalError;
+        if (globalData?.value) {
+          const val = globalData.value as unknown as CarrinhoConfig;
+          if (val.carrinhos && val.carrinhos.length > 0) return val;
+        }
+      }
+
+      return DEFAULT_CONFIG;
     },
   });
 
@@ -51,30 +73,79 @@ export function useCarrinhoConfig() {
       const { data: existing } = await supabase
         .from('settings')
         .select('id')
-        .eq('key', 'carrinho_config')
+        .eq('key', weekKey)
         .maybeSingle();
 
       if (existing) {
         const { error } = await supabase
           .from('settings')
           .update({ value: newConfig as any, updated_at: new Date().toISOString() })
-          .eq('key', 'carrinho_config');
+          .eq('key', weekKey);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('settings')
-          .insert({ key: 'carrinho_config', value: newConfig as any });
+          .insert({ key: weekKey, value: newConfig as any });
         if (error) throw error;
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['carrinho-config'] });
+      queryClient.invalidateQueries({ queryKey: ['carrinho-config', weekKey] });
       toast.success('Configuração do carrinho salva!');
     },
     onError: () => toast.error('Erro ao salvar configuração'),
   });
 
-  return { config: config ?? DEFAULT_CONFIG, isLoading, saveConfig };
+  /** Copy config from previous week */
+  const copyFromPreviousWeek = useMutation({
+    mutationFn: async () => {
+      if (!weekStart) throw new Error('weekStart required');
+      const prevWeekStart = subWeeks(weekStart, 1);
+      const prevKey = getWeekKey(prevWeekStart);
+
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', prevKey)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data?.value) throw new Error('Nenhuma configuração encontrada na semana anterior');
+
+      const prevConfig = data.value as unknown as CarrinhoConfig;
+      if (!prevConfig.carrinhos || prevConfig.carrinhos.length === 0) {
+        throw new Error('Configuração da semana anterior está vazia');
+      }
+
+      // Save as current week
+      const { data: existing } = await supabase
+        .from('settings')
+        .select('id')
+        .eq('key', weekKey)
+        .maybeSingle();
+
+      if (existing) {
+        const { error: upErr } = await supabase
+          .from('settings')
+          .update({ value: prevConfig as any, updated_at: new Date().toISOString() })
+          .eq('key', weekKey);
+        if (upErr) throw upErr;
+      } else {
+        const { error: insErr } = await supabase
+          .from('settings')
+          .insert({ key: weekKey, value: prevConfig as any });
+        if (insErr) throw insErr;
+      }
+
+      return prevConfig;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['carrinho-config', weekKey] });
+      toast.success('Configuração copiada da semana anterior!');
+    },
+    onError: (err: Error) => toast.error(err.message || 'Erro ao copiar configuração'),
+  });
+
+  return { config: config ?? DEFAULT_CONFIG, isLoading, saveConfig, copyFromPreviousWeek };
 }
 
 function timeToMinutes(time: string): number {
