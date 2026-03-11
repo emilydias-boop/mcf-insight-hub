@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
-import { format, addWeeks, subWeeks, parseISO } from 'date-fns';
+import { format, addWeeks, subWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, RefreshCw, ShoppingCart, CalendarCog, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, ShoppingCart, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,8 +20,6 @@ import { useR2MeetingsExtended } from '@/hooks/useR2MeetingsExtended';
 import { R2MeetingDetailDrawer } from '@/components/crm/R2MeetingDetailDrawer';
 import { useQueryClient } from '@tanstack/react-query';
 import { useActiveBU } from '@/hooks/useActiveBU';
-import { useCarrinhoWeekOverride } from '@/hooks/useCarrinhoWeekOverride';
-import { CarrinhoWeekOverrideDialog } from '@/components/crm/CarrinhoWeekOverrideDialog';
 import { useCarrinhoConfig, filterByCarrinho } from '@/hooks/useCarrinhoConfig';
 import { CarrinhoConfigDialog } from '@/components/crm/CarrinhoConfigDialog';
 
