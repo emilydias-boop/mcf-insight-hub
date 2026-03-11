@@ -357,6 +357,18 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
           });
           updatedCount = transferResult.success;
         }
+
+        // Also update stage_id for found_in_current deals if a specific stage was selected
+        if (stageId) {
+          const allDealIds = inCurrent.map(r => r.localDealId!);
+          const { error: stageError } = await supabase
+            .from('crm_deals')
+            .update({ stage_id: stageId })
+            .in('id', allDealIds);
+          if (stageError) {
+            console.error('Error updating stage for existing deals:', stageError);
+          }
+        }
       }
 
       // 2. found_elsewhere → create deal with existing contact_id
@@ -389,6 +401,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
             });
             if (error) throw error;
             createdCount += (data as any).created || 0;
+            updatedCount += (data as any).updated || 0;
             skippedCount += (data as any).skipped || 0;
           }
         } else {
@@ -411,6 +424,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
           });
           if (error) throw error;
           createdCount += (data as any).created || 0;
+          updatedCount += (data as any).updated || 0;
           skippedCount += (data as any).skipped || 0;
         }
       }
@@ -440,6 +454,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
             });
             if (error) throw error;
             createdCount += (data as any).created || 0;
+            updatedCount += (data as any).updated || 0;
             skippedCount += (data as any).skipped || 0;
           }
         } else {
@@ -457,14 +472,17 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
           });
           if (error) throw error;
           createdCount += (data as any).created || 0;
+          updatedCount += (data as any).updated || 0;
           skippedCount += (data as any).skipped || 0;
         }
       }
 
       const distributionMsg = assignMode === 'distribute' ? ` (distribuídos entre ${sdrList.length} SDRs)` : '';
-      toast.success(
-        `✅ ${updatedCount} transferidos, ${createdCount} criados${skippedCount > 0 ? `, ${skippedCount} já existiam` : ''}${distributionMsg}`
-      );
+      const parts = [];
+      if (updatedCount > 0) parts.push(`${updatedCount} atualizados`);
+      if (createdCount > 0) parts.push(`${createdCount} criados`);
+      if (skippedCount > 0) parts.push(`${skippedCount} já estavam corretos`);
+      toast.success(`✅ ${parts.join(', ')}${distributionMsg}`);
     } catch (err: any) {
       toast.error(`Erro na importação: ${err.message}`);
     } finally {
