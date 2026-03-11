@@ -1,51 +1,39 @@
 
 
-## Fix: Slots fantasma ("Lead" sem dados) após transferência ou remoção de horário
+## Objetivo
 
-### Problema
-Após transferir um attendee para outro closer ou remover um horário, o slot original continua aparecendo no calendário mostrando "Lead" sem dados. Isso acontece por dois motivos:
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-1. **Slots com status `scheduled`/`rescheduled` mas sem attendees**: Após transferência, o attendee é movido mas o slot original pode não ser cancelado corretamente (ex: status permanece `scheduled` com 0 attendees).
-2. **Slots cancelados ainda sendo exibidos**: A query não filtra slots cancelados, e o filtro no componente (`getConsolidatedMeetingForSlot`) tenta filtrar mas falha em edge cases.
+## Mudanças
 
-### Solução
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**1. `src/components/crm/R2CloserColumnCalendar.tsx`** — `getConsolidatedMeetingForSlot`
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Adicionar filtro: qualquer meeting sem attendees (array vazio) deve ser tratado como inexistente, independente do status:
+### 2. Hook `useCloserDetailData.ts`
 
-```typescript
-const validMeetings = slotMeetings.filter(m => 
-  m.attendees && m.attendees.length > 0
-);
-if (validMeetings.length === 0) return undefined;
-```
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-Isso elimina slots fantasma no calendário visual.
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**2. `src/hooks/useR2AgendaMeetings.ts`** — query principal
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-Após o fetch, filtrar meetings que estão canceladas E sem attendees (limpeza no nível dos dados):
+### 4. Dados exportados no Excel
 
-```typescript
-return (data || [])
-  .filter(meeting => {
-    // Remove orphan slots: canceled with no attendees
-    if (meeting.status === 'canceled' && (!meeting.attendees || meeting.attendees.length === 0)) return false;
-    // Remove slots with no attendees at all (orphan scheduled slots)
-    if (!meeting.attendees || meeting.attendees.length === 0) return false;
-    return true;
-  })
-  .map(meeting => ({ ... }));
-```
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-**3. `src/hooks/useTransferR2Attendee.ts`** — cleanup mais robusto
+Formato de data: `dd/MM/yyyy HH:mm`
 
-Garantir que o slot original seja sempre cancelado quando ficar sem attendees (já faz isso, mas reforçar):
-- Sem mudança necessária, a lógica já está correta (linhas 148-159).
+## Resultado
 
-### Resumo
-- Componente do calendário: não renderizar slots sem attendees
-- Hook de dados: filtrar na query slots sem attendees  
-- Ambos cenários cobertos: transferência e remoção de horário
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
