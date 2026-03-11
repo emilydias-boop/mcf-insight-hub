@@ -472,7 +472,7 @@ export function AgendaCalendar({
       return isSameDay(meetingDate, day) &&
         meetingDate.getHours() === hour &&
         meetingDate.getMinutes() >= minute &&
-        meetingDate.getMinutes() < minute + 15;
+        meetingDate.getMinutes() < minute + 30;
     });
     return slotMeetings.length === 0;
   }, [isSlotConfigured, filteredMeetings]);
