@@ -413,6 +413,30 @@ Deno.serve(async (req) => {
       
       console.log(`[Asaas] Formato customizado detectado: data.purchase_id = ${paymentId}`);
       
+    } else if (isHublaFormat) {
+      // Formato Hubla/mcfpay: { type: "invoice.payment_succeeded", event: { user, invoice, product }, version }
+      const hublaEvent = body.event;
+      const invoice = hublaEvent?.invoice;
+      const user = hublaEvent?.user || invoice?.payer || {};
+      const product = hublaEvent?.product || {};
+      
+      paymentId = invoice?.id || `mcfpay_${Date.now()}`;
+      productName = product.name || invoice?.items?.[0]?.product?.name || 'Produto MCFPay';
+      
+      const subtotalCents = invoice?.amount?.subtotalCents || invoice?.amount?.totalCents || 0;
+      grossValue = subtotalCents / 100;
+      
+      // Extract seller net value from receivers
+      const sellerReceiver = (invoice?.receivers || []).find((r: any) => r.role === 'seller');
+      netValue = sellerReceiver ? (sellerReceiver.totalCents || 0) / 100 : grossValue;
+      
+      saleDate = invoice?.saleDate || invoice?.createdAt || new Date().toISOString();
+      customerName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || '';
+      customerEmail = user.email || '';
+      customerPhone = user.phone || '';
+      
+      console.log(`[Asaas] Formato Hubla/mcfpay detectado: invoice.id = ${paymentId}, product = ${productName}`);
+      
     } else {
       // Payload não reconhecido
       console.log('[Asaas] Payload sem payment ou data - formato desconhecido');
