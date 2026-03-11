@@ -1,39 +1,42 @@
 
 
-## Objetivo
+## Problema: `contract_paid_at` usa data de hoje em vez da data real da venda
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Diagnóstico
 
-## Mudanças
+No `useLinkContractToAttendee.ts` (linha 63), ao vincular um contrato:
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+```typescript
+contract_paid_at: new Date().toISOString()  // ← usa "agora"
+```
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Deveria usar o `sale_date` da transação Hubla. O William Lima teve reunião em 05/03, a transação Hubla tem `sale_date` da semana passada, mas ao vincular hoje (11/03) o `contract_paid_at` ficou como 11/03, fazendo o contrato aparecer no dia de hoje em vez do dia correto.
 
-### 2. Hook `useCloserDetailData.ts`
+A memória do projeto confirma: *"contract_paid_at deve refletir obrigatoriamente a data real da transação (sale_date) da Hubla"*.
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+### Correção
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**Arquivo: `src/hooks/useLinkContractToAttendee.ts`**
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+1. Antes de atualizar o attendee, buscar o `sale_date` da transação Hubla pelo `transactionId`
+2. Usar `sale_date` como valor de `contract_paid_at` (com fallback para `new Date()` caso não exista)
 
-### 4. Dados exportados no Excel
+```typescript
+// Buscar sale_date da transação
+const { data: txData } = await supabase
+  .from('hubla_transactions')
+  .select('sale_date')
+  .eq('id', transactionId)
+  .maybeSingle();
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+const contractPaidAt = txData?.sale_date || new Date().toISOString();
 
-Formato de data: `dd/MM/yyyy HH:mm`
+// Atualizar attendee com a data correta
+.update({ 
+  status: 'contract_paid',
+  contract_paid_at: contractPaidAt
+})
+```
 
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+Alteração de ~5 linhas em um único arquivo. Não afeta contratos já vinculados (para corrigir dados históricos seria necessário um script SQL separado).
 
