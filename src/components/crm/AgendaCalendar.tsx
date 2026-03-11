@@ -672,7 +672,7 @@ export function AgendaCalendar({
     const now = new Date();
     if (!isSameDay(day, now)) return false;
     const slotStart = setMinutes(setHours(day, hour), minute);
-    const slotEnd = setMinutes(setHours(day, hour), minute + 15);
+    const slotEnd = setMinutes(setHours(day, hour), minute + 30);
     return isWithinInterval(now, { start: slotStart, end: slotEnd });
   };
 
