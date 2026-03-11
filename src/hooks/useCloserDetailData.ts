@@ -481,6 +481,42 @@ export function useCloserDetailData({
     enabled: !!closerId,
   });
 
+  // Fetch manual sale attributions for this closer
+  const {
+    data: manualSales = [],
+    isLoading: isLoadingManual,
+    refetch: refetchManual,
+  } = useQuery({
+    queryKey: ['closer-manual-sales', closerId, start, end],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('manual_sale_attributions' as any)
+        .select('*')
+        .eq('closer_id', closerId)
+        .gte('contract_paid_at', start)
+        .lte('contract_paid_at', end);
+
+      if (error) throw error;
+
+      return ((data as any[]) || []).map((item: any) => ({
+        attendee_id: `manual-${item.id}`,
+        deal_id: `manual-${item.id}`,
+        deal_name: item.contact_name,
+        contact_name: item.contact_name,
+        contact_email: item.contact_email || null,
+        contact_phone: item.contact_phone || null,
+        status: 'contract_paid',
+        contract_paid_at: item.contract_paid_at,
+        scheduled_at: item.contract_paid_at,
+        booked_by_name: null,
+        origin_name: null,
+        is_followup: false,
+        is_manual: true,
+      } as CloserLead));
+    },
+    enabled: !!closerId,
+  });
+
   // Fetch R2 leads for this closer
   const {
     data: r2Leads = [],
