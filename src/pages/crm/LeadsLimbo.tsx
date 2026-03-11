@@ -767,7 +767,7 @@ export default function LeadsLimbo() {
                         const pageStart = page * pageSize;
                         const pageIndices = paged
                           .map((r, i) => ({ r, globalIdx: showAll ? i : pageStart + i }))
-                          .filter(({ r }) => r.status === 'sem_dono' && r.localDealId);
+                          .filter(({ r }) => isSelectable(r));
                         return pageIndices.length > 0 && pageIndices.every(({ globalIdx }) => selectedIds.has(globalIdx));
                       })()}
                       onCheckedChange={toggleSelectAll}
