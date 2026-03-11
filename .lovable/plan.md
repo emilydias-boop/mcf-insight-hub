@@ -1,39 +1,24 @@
 
 
-## Objetivo
+## Filtros duplicados na página de detalhe do Closer
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
 
-## Mudanças
+A página usa dois componentes de filtro empilhados:
+1. **`CloserLeadsFilters`** — busca por texto, status, SDR, e presets de data (Todos/Hoje/Semana/Mês/Custom)
+2. **`CloserLeadsTable`** — tem seus próprios filtros internos: busca por texto, status select, e badges de status com contagem
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+Ambos fazem a mesma coisa (filtrar por nome/email/telefone e por status), resultando em redundância visual e funcional.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Correção
 
-### 2. Hook `useCloserDetailData.ts`
+**Remover `CloserLeadsFilters`** das tabs de leads/noshows/r2 em `CloserMeetingsDetailPage.tsx`, pois o `CloserLeadsTable` já possui filtros completos (busca, status com contagem, exportação Excel).
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+O único recurso extra do `CloserLeadsFilters` é o filtro por SDR e os presets de data — mas o período já é controlado globalmente no header da página. O filtro de SDR pode ser adicionado ao `CloserLeadsTable` se necessário.
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+### Alterações
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+1. **`src/pages/crm/CloserMeetingsDetailPage.tsx`**: Remover os 3 `<CloserLeadsFilters>` das tabs leads, noshows e r2. Passar `leads`/`noShowLeads`/`r2Leads` diretamente para `CloserLeadsTable` (sem o intermediário de `filteredLeads` state). Remover os states e callbacks de `onFilterLeads`, `onFilterNoShows`, `onFilterR2`.
 
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+2. **`src/components/closer/CloserLeadsTable.tsx`**: Adicionar um filtro opcional de SDR (select dropdown) para manter essa funcionalidade que existia no `CloserLeadsFilters`.
 
