@@ -547,7 +547,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     setIsComparing(false);
     setIsImporting(false);
     setCustomTag('');
-    setSelectedStageId('');
+    setSelectedStageId('__default__');
     setAssignMode('single');
   };
 
