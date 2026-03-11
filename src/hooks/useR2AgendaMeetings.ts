@@ -83,16 +83,18 @@ export function useR2AgendaMeetings(startDate: Date, endDate: Date) {
 
       if (error) throw error;
       
-      // Map database column names to expected property names
-      return (data || []).map(meeting => ({
-        ...meeting,
-        attendees: (meeting.attendees || []).map((att: Record<string, unknown>) => ({
-          ...att,
-          name: att.attendee_name as string | null,
-          phone: att.attendee_phone as string | null,
-          email: null,
-        })),
-      })) as unknown as R2Meeting[];
+      // Filter out orphan slots (no attendees) and map column names
+      return (data || [])
+        .filter(meeting => meeting.attendees && meeting.attendees.length > 0)
+        .map(meeting => ({
+          ...meeting,
+          attendees: (meeting.attendees || []).map((att: Record<string, unknown>) => ({
+            ...att,
+            name: att.attendee_name as string | null,
+            phone: att.attendee_phone as string | null,
+            email: null,
+          })),
+        })) as unknown as R2Meeting[];
     }
   });
 }

@@ -73,12 +73,14 @@ export function R2CloserColumnCalendar({
   const getConsolidatedMeetingForSlot = (closerId: string, hour: number, minute: number): R2Meeting | undefined => {
     const slotMeetings = getMeetingsForSlot(closerId, hour, minute);
     if (slotMeetings.length === 0) return undefined;
-    if (slotMeetings.length === 1) return slotMeetings[0];
     
-    // Filter out canceled slots with no attendees
+    // Filter out any meeting without attendees (orphan/ghost slots)
     const validMeetings = slotMeetings.filter(m => 
-      m.status !== 'canceled' || (m.attendees && m.attendees.length > 0)
+      m.attendees && m.attendees.length > 0
     );
+    
+    if (validMeetings.length === 0) return undefined;
+    if (validMeetings.length === 1) return validMeetings[0];
     
     if (validMeetings.length === 0) {
       // All are empty canceled slots - treat as no meeting (slot is free)
