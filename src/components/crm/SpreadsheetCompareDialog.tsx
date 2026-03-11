@@ -737,7 +737,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                     <SelectValue placeholder="Primeiro estágio (padrão)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Primeiro estágio (padrão)</SelectItem>
+                    <SelectItem value="__default__">Primeiro estágio (padrão)</SelectItem>
                     {pipelineStages?.map((stage: any) => (
                       <SelectItem key={stage.id} value={stage.id}>{stage.stage_name}</SelectItem>
                     ))}
