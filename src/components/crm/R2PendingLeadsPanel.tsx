@@ -75,6 +75,8 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
   const [recurrenceDialogOpen, setRecurrenceDialogOpen] = useState(false);
   const [recurrenceLead, setRecurrenceLead] = useState<R2PendingLead | null>(null);
   const recognizeRecurrence = useRecognizeRecurrence();
+  const [semSucessoModalOpen, setSemSucessoModalOpen] = useState(false);
+  const [semSucessoLead, setSemSucessoLead] = useState<R2PendingLead | null>(null);
 
   const filteredLeads = useMemo(() => {
     if (r1CloserFilter === 'all') return pendingLeads;
