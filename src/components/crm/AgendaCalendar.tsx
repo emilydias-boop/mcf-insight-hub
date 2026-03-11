@@ -684,9 +684,9 @@ export function AgendaCalendar({
   }, [closers]);
 
   // Calculate how many slots a meeting occupies
-  // Each visual slot is 15 minutes
+  // Each visual slot is 30 minutes
   const getSlotsNeeded = (durationMinutes: number) => {
-    return Math.max(1, Math.ceil(durationMinutes / 15));
+    return Math.max(1, Math.ceil(durationMinutes / 30));
   };
 
   // Handle drag and drop
