@@ -330,7 +330,10 @@ Deno.serve(async (req) => {
     
     console.log('📦 [Asaas Webhook] Recebido:', JSON.stringify(body, null, 2));
 
-    const event = body.event;
+    // Detect format: Hubla/mcfpay sends type as string + event as object
+    // Asaas sends event as string + payment/data as object
+    const isHublaFormat = typeof body.event === 'object' && body.event !== null && typeof body.type === 'string';
+    const event = isHublaFormat ? body.type : body.event;
     const payment = body.payment;
 
     // Log do webhook
