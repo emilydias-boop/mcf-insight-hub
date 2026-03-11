@@ -787,15 +787,15 @@ export default function LeadsLimbo() {
               <TableBody>
                 {paged.map((row, idx) => {
                   const globalIdx = showAll ? idx : page * pageSize + idx;
-                  const isSemDono = row.status === 'sem_dono';
+                  const selectable = isSelectable(row);
                   return (
                     <TableRow
                       key={globalIdx}
-                      className={`cursor-pointer ${isSemDono ? 'bg-amber-500/5' : row.status === 'nao_encontrado' ? 'bg-destructive/5' : ''}`}
+                      className={`cursor-pointer ${row.status === 'sem_dono' ? 'bg-amber-500/5' : row.status === 'nao_encontrado' ? 'bg-destructive/5' : ''}`}
                       onClick={() => setSelectedLead(row)}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        {isSemDono && row.localDealId && (
+                        {selectable && (
                           <Checkbox
                             checked={selectedIds.has(globalIdx)}
                             onCheckedChange={() => toggleSelect(globalIdx)}
