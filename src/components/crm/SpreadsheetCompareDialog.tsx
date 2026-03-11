@@ -478,9 +478,11 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
       }
 
       const distributionMsg = assignMode === 'distribute' ? ` (distribuídos entre ${sdrList.length} SDRs)` : '';
-      toast.success(
-        `✅ ${updatedCount} transferidos, ${createdCount} criados${skippedCount > 0 ? `, ${skippedCount} já existiam` : ''}${distributionMsg}`
-      );
+      const parts = [];
+      if (updatedCount > 0) parts.push(`${updatedCount} atualizados`);
+      if (createdCount > 0) parts.push(`${createdCount} criados`);
+      if (skippedCount > 0) parts.push(`${skippedCount} já estavam corretos`);
+      toast.success(`✅ ${parts.join(', ')}${distributionMsg}`);
     } catch (err: any) {
       toast.error(`Erro na importação: ${err.message}`);
     } finally {
