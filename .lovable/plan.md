@@ -1,50 +1,39 @@
 
 
-## Correção: Distribuição Round-Robin — IDs errados e Luis Felipe incluído indevidamente
+## Objetivo
 
-### Problemas encontrados
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-**Dados do banco (`sdr` table, squad=consorcio, active=true, role_type=sdr):**
-- Cleiton Lima — sdr.id: `11111111-...0006`, profiles.id: `16828627-...`
-- Ithaline Clara — sdr.id: `3aa83069-...`, profiles.id: `411e4b5d-...`
-- Luis Felipe — sdr.id: `17fdd964-...`, profiles.id: `e459627e-...`
-- Ygor Ferreira — sdr.id: `929e60c5-...`, profiles.id: `d523e03f-...`
+## Mudanças
 
-**Problema 1**: Luis Felipe está com `role_type = 'sdr'` na tabela `sdr`, mas o usuário diz que ele não é SDR. Precisa mudar para `closer`.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**Problema 2**: O código na linha 306 usa `s.id` (ID da tabela `sdr`), mas o CRM precisa do `profiles.id` para `owner_profile_id`. Os IDs são completamente diferentes, causando falhas na atribuição.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### Correções
+### 2. Hook `useCloserDetailData.ts`
 
-#### 1. Banco de dados — Mudar Luis Felipe para closer
-```sql
-UPDATE sdr SET role_type = 'closer' WHERE email = 'luis.felipe@minhacasafinanciada.com';
-```
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-#### 2. `SpreadsheetCompareDialog.tsx` — Resolver profile IDs reais
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Na linha 301-306, após obter `consorcioSdrs`, buscar os `profiles.id` reais pelo email:
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-```typescript
-if (assignMode === 'distribute') {
-  const emails = consorcioSdrs.filter(s => s.email).map(s => s.email!);
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, email, full_name')
-    .in('email', emails);
+### 4. Dados exportados no Excel
 
-  sdrList = (profiles || []).map(p => ({
-    email: p.email,
-    id: p.id,  // UUID real do profiles
-    name: p.full_name || p.email,
-  }));
-}
-```
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-### Resultado esperado
-Apenas Cleiton, Ithaline e Ygor receberão leads no round-robin, com os `owner_profile_id` corretos.
+Formato de data: `dd/MM/yyyy HH:mm`
 
-### Arquivos modificados
-- SQL: `UPDATE sdr` para corrigir Luis Felipe
-- `src/components/crm/SpreadsheetCompareDialog.tsx` — resolver profile IDs reais
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
