@@ -1044,9 +1044,9 @@ export function AgendaCalendar({
                 key={`${hour}-${minute}`}
                 className={cn(
                   'grid border-b last:border-b-0',
-                  gridCols,
                   minute === 0 && 'border-t border-t-border/50'
                 )}
+                style={gridStyle}
               >
                   <div 
                     className={cn(
