@@ -60,7 +60,7 @@ const STATUS_BADGE_STYLES: Record<string, { label: string; className: string }> 
   contract_paid: { label: 'Contrato Pago', className: 'bg-emerald-600 text-white' },
 };
 
-const SLOT_HEIGHT = 48; // px per 15-min slot (matches h-[48px] in grid cells)
+const SLOT_HEIGHT = 48; // px per 30-min slot (matches h-[48px] in grid cells)
 const MAX_MEETINGS_PER_SLOT = 999; // No limit on meetings per slot
 
 import { Settings, Plus, ArrowRightLeft, DollarSign, UserCircle } from 'lucide-react';
