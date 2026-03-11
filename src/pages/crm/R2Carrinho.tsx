@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format, addWeeks, subWeeks, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, RefreshCw, ShoppingCart, CalendarCog } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, ShoppingCart, CalendarCog, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -22,16 +22,21 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useCarrinhoWeekOverride } from '@/hooks/useCarrinhoWeekOverride';
 import { CarrinhoWeekOverrideDialog } from '@/components/crm/CarrinhoWeekOverrideDialog';
+import { useCarrinhoConfig, filterByCarrinho } from '@/hooks/useCarrinhoConfig';
+import { CarrinhoConfigDialog } from '@/components/crm/CarrinhoConfigDialog';
 
 export default function R2Carrinho() {
   const [weekDate, setWeekDate] = useState(new Date());
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [ignoreOverride, setIgnoreOverride] = useState(false);
+  const [selectedCarrinhoId, setSelectedCarrinhoId] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
   const { override, saveOverride, removeOverride } = useCarrinhoWeekOverride();
+  const { config, saveConfig } = useCarrinhoConfig();
 
   // Compute stable weekStart/weekEnd once, respecting override only when not ignored
   const activeOverride = override && !ignoreOverride;
@@ -52,10 +57,41 @@ export default function R2Carrinho() {
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
 
   // Fetch data for each tab
-  const { data: agendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekStart, weekEnd, 'agendadas');
-  const { data: foraCarrinhoData = [], isLoading: foraCarrinhoLoading } = useR2ForaDoCarrinhoData(weekStart, weekEnd);
-  const { data: aprovadosData = [], isLoading: aprovadosLoading } = useR2CarrinhoData(weekStart, weekEnd, 'aprovados');
-  const { data: vendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd);
+  const { data: rawAgendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekStart, weekEnd, 'agendadas');
+  const { data: rawForaCarrinhoData = [], isLoading: foraCarrinhoLoading } = useR2ForaDoCarrinhoData(weekStart, weekEnd);
+  const { data: rawAprovadosData = [], isLoading: aprovadosLoading } = useR2CarrinhoData(weekStart, weekEnd, 'aprovados');
+  const { data: rawVendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd);
+
+  // Filter data by selected carrinho
+  const agendadasData = useMemo(() => 
+    filterByCarrinho(rawAgendadasData, config, selectedCarrinhoId, item => item.scheduled_at),
+    [rawAgendadasData, config, selectedCarrinhoId]
+  );
+  const foraCarrinhoData = useMemo(() => 
+    filterByCarrinho(rawForaCarrinhoData, config, selectedCarrinhoId, item => item.scheduled_at),
+    [rawForaCarrinhoData, config, selectedCarrinhoId]
+  );
+  const aprovadosData = useMemo(() => 
+    filterByCarrinho(rawAprovadosData, config, selectedCarrinhoId, item => item.scheduled_at),
+    [rawAprovadosData, config, selectedCarrinhoId]
+  );
+  const vendasData = useMemo(() => 
+    filterByCarrinho(rawVendasData, config, selectedCarrinhoId, item => item.original_scheduled_at || item.sale_date),
+    [rawVendasData, config, selectedCarrinhoId]
+  );
+
+  // Compute filtered KPIs from agendadas/aprovados/fora data when a carrinho is selected
+  const filteredKpis = useMemo(() => {
+    if (!selectedCarrinhoId || !kpis) return kpis;
+    // Recalculate from filtered data
+    return {
+      ...kpis,
+      r2Agendadas: agendadasData.filter(a => ['scheduled', 'invited', 'pending'].includes(a.meeting_status) && a.status !== 'rescheduled').length,
+      r2Realizadas: agendadasData.filter(a => a.meeting_status === 'completed').length,
+      foraDoCarrinho: foraCarrinhoData.length,
+      aprovados: aprovadosData.length,
+    };
+  }, [selectedCarrinhoId, kpis, agendadasData, foraCarrinhoData, aprovadosData]);
 
   // Fetch extended meeting data for the drawer
   const { data: meetingsExtended = [] } = useR2MeetingsExtended(weekStart, weekEnd);
@@ -108,13 +144,19 @@ export default function R2Carrinho() {
     return `${format(weekStart, 'dd/MM', { locale: ptBR })} - ${format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}`;
   }, [weekStart, weekEnd]);
 
+  const displayKpis = filteredKpis ?? kpis;
+
   const kpiCards = [
-    { label: 'Contratos (R1)', value: kpis?.contratosPagos ?? 0, color: 'bg-blue-500' },
-    { label: 'R2 Pendentes', value: kpis?.r2Agendadas ?? 0, color: 'bg-indigo-500' },
-    { label: 'R2 Realizadas', value: kpis?.r2Realizadas ?? 0, color: 'bg-green-500' },
-    { label: 'Fora do Carrinho', value: kpis?.foraDoCarrinho ?? 0, color: 'bg-red-500' },
-    { label: 'Aprovados', value: kpis?.aprovados ?? 0, color: 'bg-emerald-500' },
+    { label: 'Contratos (R1)', value: displayKpis?.contratosPagos ?? 0, color: 'bg-blue-500' },
+    { label: 'R2 Pendentes', value: displayKpis?.r2Agendadas ?? 0, color: 'bg-indigo-500' },
+    { label: 'R2 Realizadas', value: displayKpis?.r2Realizadas ?? 0, color: 'bg-green-500' },
+    { label: 'Fora do Carrinho', value: displayKpis?.foraDoCarrinho ?? 0, color: 'bg-red-500' },
+    { label: 'Aprovados', value: displayKpis?.aprovados ?? 0, color: 'bg-emerald-500' },
   ];
+
+  const selectedCarrinhoLabel = selectedCarrinhoId 
+    ? config.carrinhos.find(c => c.id === selectedCarrinhoId)?.label 
+    : null;
 
   return (
     <div className="space-y-6">
@@ -124,6 +166,11 @@ export default function R2Carrinho() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <ShoppingCart className="h-6 w-6" />
             Carrinho R2
+            {selectedCarrinhoLabel && (
+              <span className="text-base font-medium text-muted-foreground ml-1">
+                — {selectedCarrinhoLabel}
+              </span>
+            )}
           </h1>
           <p className="text-muted-foreground">
             Gestão semanal do funil de R2
@@ -136,6 +183,31 @@ export default function R2Carrinho() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Carrinho selector */}
+          {config.carrinhos.length > 1 && (
+            <div className="flex items-center border border-border rounded-md overflow-hidden mr-2">
+              <Button
+                variant={selectedCarrinhoId === null ? 'default' : 'ghost'}
+                size="sm"
+                className="rounded-none border-0"
+                onClick={() => setSelectedCarrinhoId(null)}
+              >
+                Todos
+              </Button>
+              {config.carrinhos.map(c => (
+                <Button
+                  key={c.id}
+                  variant={selectedCarrinhoId === c.id ? 'default' : 'ghost'}
+                  size="sm"
+                  className="rounded-none border-0"
+                  onClick={() => setSelectedCarrinhoId(c.id)}
+                >
+                  {c.label}
+                </Button>
+              ))}
+            </div>
+          )}
+
           <Button variant="outline" size="icon" onClick={handlePrevWeek}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -159,6 +231,15 @@ export default function R2Carrinho() {
             title="Ajustar Semana"
           >
             <CalendarCog className="h-4 w-4" />
+          </Button>
+
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setConfigDialogOpen(true)}
+            title="Configurar Carrinhos"
+          >
+            <Settings className="h-4 w-4" />
           </Button>
 
           <Button variant="outline" size="icon" onClick={handleRefresh}>
@@ -276,6 +357,15 @@ export default function R2Carrinho() {
         onSave={(data) => { saveOverride.mutate(data); setIgnoreOverride(false); }}
         onRemove={() => removeOverride.mutate()}
         isSaving={saveOverride.isPending}
+      />
+
+      {/* Carrinho Config Dialog */}
+      <CarrinhoConfigDialog
+        open={configDialogOpen}
+        onOpenChange={setConfigDialogOpen}
+        config={config}
+        onSave={(newConfig) => saveConfig.mutate(newConfig)}
+        isSaving={saveConfig.isPending}
       />
     </div>
   );
