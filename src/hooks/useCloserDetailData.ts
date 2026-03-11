@@ -36,6 +36,7 @@ export interface CloserLead {
   booked_by_name: string | null;
   origin_name: string | null;
   r1_sdr_name?: string | null;
+  is_followup?: boolean;
 }
 
 export interface CloserDetailData {
@@ -106,7 +107,7 @@ export function useCloserDetailData({
     enabled: !!closerId,
   });
 
-  // Fetch leads for this closer (completed/contract_paid)
+  // Fetch leads for this closer (completed/contract_paid) + follow-up contracts
   const {
     data: leads = [],
     isLoading: isLoadingLeads,
@@ -114,7 +115,7 @@ export function useCloserDetailData({
   } = useQuery({
     queryKey: ['closer-leads', closerId, start, end],
     queryFn: async () => {
-      // Fetch meeting slots for this closer with their attendees
+      // Query 1: meetings with scheduled_at in period (existing logic)
       const { data: meetings, error: meetingsError } = await supabase
         .from('meeting_slots')
         .select(`
@@ -137,10 +138,30 @@ export function useCloserDetailData({
 
       if (meetingsError) throw meetingsError;
 
-      // Filter attendees with completed/contract_paid status OR contract_paid_at preenchido
-      // FONTE DA VERDADE: contract_paid_at IS NOT NULL indica contrato pago
+      // Query 2: follow-up contracts — contract_paid_at in period but scheduled_at outside
+      const { data: followupAttendees, error: followupError } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          status,
+          deal_id,
+          attendee_name,
+          attendee_phone,
+          booked_by,
+          contract_paid_at,
+          meeting_slot:meeting_slots!inner(id, scheduled_at, meeting_type, closer_id)
+        `)
+        .eq('meeting_slot.closer_id', closerId)
+        .eq('meeting_slot.meeting_type', 'r1')
+        .not('contract_paid_at', 'is', null)
+        .gte('contract_paid_at', start)
+        .lte('contract_paid_at', end);
+
+      if (followupError) throw followupError;
+
+      // Build attendees from Query 1
       const relevantStatuses = ['completed', 'contract_paid'];
-      const attendeesWithDeals: {
+      const attendeesMap = new Map<string, {
         attendeeId: string;
         status: string;
         contractPaidAt: string | null;
@@ -149,18 +170,17 @@ export function useCloserDetailData({
         attendeePhone: string | null;
         bookedBy: string | null;
         scheduledAt: string;
-      }[] = [];
+        isFollowup: boolean;
+      }>();
 
       meetings?.forEach(meeting => {
         meeting.meeting_slot_attendees?.forEach(att => {
-          // Incluir se: status relevante OU contract_paid_at existe
           const hasRelevantStatus = relevantStatuses.includes(att.status);
           const hasContractPaid = !!(att as any).contract_paid_at;
           
           if (att.deal_id && (hasRelevantStatus || hasContractPaid)) {
-            attendeesWithDeals.push({
+            attendeesMap.set(att.id, {
               attendeeId: att.id,
-              // Usar 'contract_paid' como status de display se contract_paid_at existe
               status: hasContractPaid ? 'contract_paid' : att.status,
               contractPaidAt: (att as any).contract_paid_at || null,
               dealId: att.deal_id,
@@ -168,11 +188,33 @@ export function useCloserDetailData({
               attendeePhone: att.attendee_phone,
               bookedBy: att.booked_by,
               scheduledAt: meeting.scheduled_at,
+              isFollowup: false,
             });
           }
         });
       });
 
+      // Add follow-ups from Query 2 (only if not already present)
+      followupAttendees?.forEach(att => {
+        if (att.deal_id && !attendeesMap.has(att.id)) {
+          const slot = att.meeting_slot as any;
+          if (slot) {
+            attendeesMap.set(att.id, {
+              attendeeId: att.id,
+              status: 'contract_paid',
+              contractPaidAt: att.contract_paid_at,
+              dealId: att.deal_id,
+              attendeeName: att.attendee_name,
+              attendeePhone: att.attendee_phone,
+              bookedBy: att.booked_by,
+              scheduledAt: slot.scheduled_at,
+              isFollowup: true,
+            });
+          }
+        }
+      });
+
+      const attendeesWithDeals = Array.from(attendeesMap.values());
       if (attendeesWithDeals.length === 0) return [];
 
       // Fetch deal and contact info
@@ -237,6 +279,7 @@ export function useCloserDetailData({
           scheduled_at: att.scheduledAt,
           booked_by_name: att.bookedBy ? profilesMap[att.bookedBy] || null : null,
           origin_name: dealInfo?.originName,
+          is_followup: att.isFollowup,
         };
       }).sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
     },

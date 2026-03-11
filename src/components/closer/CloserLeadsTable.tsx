@@ -265,7 +265,14 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
                         {lead.booked_by_name || '-'}
                       </TableCell>
                     )}
-                    <TableCell>{getStatusBadge(lead.status, lead.contract_paid_at)}</TableCell>
+                    <TableCell className="flex items-center gap-1">
+                      {getStatusBadge(lead.status, lead.contract_paid_at)}
+                      {lead.is_followup && (
+                        <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30 text-[10px] px-1.5">
+                          Follow-up
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {lead.origin_name ? (
                         <Badge variant="outline" className="text-xs">
