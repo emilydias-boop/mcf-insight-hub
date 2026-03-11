@@ -1,39 +1,31 @@
 
+## Diagnóstico: Contratos de Follow-Up não aparecem
 
-## Objetivo
+### Problema 1: Painel Comercial mostra 3 contratos para Cristiane (deveria ser 4)
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+O hook `useR1CloserMetrics` conta contratos usando `contract_paid_at` no período. Para cada contrato, ele verifica se o `booked_by` é um SDR válido (linha 279-284). Se o follow-up do Flávio Mário (`flavius1313@gmail.com` / `flaviusmario@hotmail.com`) tem `contract_paid_at` fora do dia 10/03, ou se o `booked_by` do attendee não está na lista de SDRs ativos, ele é excluído.
 
-## Mudanças
+Ação: Verificar no banco os 4 attendees da Cristiane e seus `contract_paid_at` e `booked_by` para identificar qual está sendo filtrado. Se o contrato do Flávio ou Bruno foi pago fora do dia selecionado (ex: 09/03), ele não aparece no filtro de dia único.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Problema 2: Visão individual mostra apenas 2 vendas (sem follow-ups)
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+A query de "Leads Realizados" em `useCloserDetailData` (linha 118-136) filtra por `meeting_slots.scheduled_at` no período. Follow-ups onde a R1 aconteceu em uma semana anterior mas o `contract_paid_at` é na semana atual **não aparecem**, pois o `scheduled_at` da reunião está fora do range.
 
-### 2. Hook `useCloserDetailData.ts`
+### Correção
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**Arquivo: `src/hooks/useCloserDetailData.ts`**
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+Na query de leads (linhas 109-244), adicionar uma segunda query para buscar attendees com `contract_paid_at` no período, independente do `scheduled_at` da reunião. Isso captura follow-ups:
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+1. Query existente: busca meetings com `scheduled_at` no período (mantém)
+2. Nova query adicional: busca `meeting_slot_attendees` onde `contract_paid_at` está no período E `meeting_slot.closer_id = closerId` E `meeting_type = r1`, independente do `scheduled_at`
+3. Mesclar os resultados das duas queries (deduplicar por `attendee_id`)
+4. Marcar os follow-ups com um flag para que a UI possa diferenciá-los (ex: badge "Follow-up")
 
-### 4. Dados exportados no Excel
+Isso garante que a contagem de "Contrato Pago" no KPI card e a lista de leads estejam consistentes.
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+**Arquivo: `src/components/closer/CloserLeadsTable.tsx`** (se necessário)
+- Adicionar badge visual "Follow-up" para contratos pagos cuja `scheduled_at` é anterior ao período filtrado
 
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
-
+### Sobre o Problema 1
+Se o Painel Comercial realmente deveria mostrar 4 e não 3, preciso verificar os dados no banco. Se o filtro é "dia 10/03" e um dos 4 contratos foi pago em 09/03 ou 11/03, ele não aparecerá. Isso é comportamento esperado para filtro de dia único. Se o filtro é "semana", todos os 4 deveriam aparecer se pagos na mesma semana.
