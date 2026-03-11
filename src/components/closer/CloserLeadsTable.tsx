@@ -124,9 +124,10 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
   const clearFilters = () => {
     setSearch("");
     setStatusFilter("all");
+    setSdrFilter("all");
   };
 
-  const hasActiveFilters = search || statusFilter !== "all";
+  const hasActiveFilters = search || statusFilter !== "all" || sdrFilter !== "all";
 
   if (isLoading) {
     return (
