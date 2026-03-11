@@ -289,7 +289,7 @@ export default function LeadsLimbo() {
     const pageStart = page * pageSize;
     const pageIndices = paged
       .map((r, i) => ({ r, globalIdx: showAll ? i : pageStart + i }))
-      .filter(({ r }) => r.status === 'sem_dono' && r.localDealId);
+      .filter(({ r }) => isSelectable(r));
 
     const allPageSelected = pageIndices.length > 0 && pageIndices.every(({ globalIdx }) => selectedIds.has(globalIdx));
 
@@ -312,7 +312,7 @@ export default function LeadsLimbo() {
     const ids = new Set<number>();
     let added = 0;
     for (let i = 0; i < filtered.length && added < count; i++) {
-      if (filtered[i].status === 'sem_dono' && filtered[i].localDealId) {
+      if (isSelectable(filtered[i])) {
         ids.add(i);
         added++;
       }
@@ -323,7 +323,7 @@ export default function LeadsLimbo() {
   const selectAllFiltered = () => {
     const ids = new Set<number>();
     filtered.forEach((r, i) => {
-      if (r.status === 'sem_dono' && r.localDealId) ids.add(i);
+      if (isSelectable(r)) ids.add(i);
     });
     setSelectedIds(ids);
   };
