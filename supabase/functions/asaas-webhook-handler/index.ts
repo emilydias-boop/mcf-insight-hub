@@ -11,7 +11,7 @@ function getProductCategory(productName: string): string {
   const upper = productName.toUpperCase();
   
   if (upper.includes('A009') || upper.includes('A001')) {
-    return 'parceria';
+    return 'incorporador';
   }
   if (upper.includes('A000') && upper.includes('CONTRATO')) {
     return 'contrato';
@@ -21,6 +21,21 @@ function getProductCategory(productName: string): string {
   }
   // Categoria padrão para produtos não mapeados
   return 'outros';
+}
+
+// Buscar categoria do produto na tabela product_configurations (fallback para getProductCategory)
+async function getProductCategoryFromDB(supabase: any, productName: string): Promise<string> {
+  if (!productName) return 'outros';
+  try {
+    const { data } = await supabase
+      .from('product_configurations')
+      .select('product_category')
+      .eq('product_name', productName)
+      .limit(1)
+      .single();
+    if (data?.product_category) return data.product_category;
+  } catch (_) { /* fallback */ }
+  return getProductCategory(productName);
 }
 
 // Helper to normalize phone numbers for matching
@@ -454,8 +469,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Determinar categoria do produto
-    const productCategory = getProductCategory(productName);
+    // Determinar categoria do produto (busca no DB primeiro, fallback para lógica local)
+    const productCategory = await getProductCategoryFromDB(supabase, productName);
     console.log(`[Asaas] Produto: "${productName}" | Categoria: ${productCategory}`);
 
     // Gerar hubla_id único para evitar duplicatas

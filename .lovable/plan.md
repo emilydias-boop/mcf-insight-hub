@@ -1,28 +1,39 @@
 
 
-## Correção: Vendas mcfpay não aparecem no dashboard
+## Objetivo
 
-### Problema
-Duas causas encontradas:
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-1. **Categoria errada no webhook handler**: A função `getProductCategory()` mapeia A001/A009 como `'parceria'`, mas deveria ser `'incorporador'` (matching `product_configurations`). Isso causa o trigger incorreto da automação `autoMarkSaleComplete` e classifica as vendas na categoria errada.
+## Mudanças
 
-2. **RPC exclui source 'mcfpay'**: `get_all_hubla_transactions` filtra `source IN ('hubla', 'manual', 'make')`, excluindo completamente as transações do mcfpay.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### Correções
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**1. `supabase/functions/asaas-webhook-handler/index.ts`**
-- Corrigir `getProductCategory`: A001/A009 devem ser `'incorporador'`, não `'parceria'`
-- Idealmente, buscar a categoria da tabela `product_configurations` em vez de hardcodar
+### 2. Hook `useCloserDetailData.ts`
 
-**2. Migration SQL: Atualizar RPC**
-- Adicionar `'mcfpay'` ao filtro de source: `AND ht.source IN ('hubla', 'manual', 'make', 'mcfpay')`
-- Aplicar nas duas RPCs: `get_all_hubla_transactions` e `get_hubla_transactions_by_bu`
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**3. Corrigir dados existentes**
-- Atualizar `product_category` das transações mcfpay existentes para as categorias corretas (via query de correção usando JOIN com `product_configurations`)
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-### Dados afetados
-- 61 transações mcfpay no banco, maioria com categoria incorreta
-- Após correção, aparecerão na página de Vendas MCF Incorporador
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
