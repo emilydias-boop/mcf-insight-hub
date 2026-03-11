@@ -144,11 +144,6 @@ export default function R2Carrinho() {
           </h1>
           <p className="text-muted-foreground">
             Gestão semanal do funil de R2
-            {override && (
-              <span className="ml-2 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 px-2 py-0.5 rounded-full">
-                ⚠️ Semana customizada{override.label ? `: ${override.label}` : ''}
-              </span>
-            )}
           </p>
         </div>
 
