@@ -498,7 +498,7 @@ Deno.serve(async (req) => {
       customer_phone: customerPhone,
       sale_date: new Date(saleDate).toISOString(),
       sale_status: 'completed',
-      source: 'asaas',
+      source: sourceLabel,
       count_in_dashboard: true,
       raw_data: body
     };
