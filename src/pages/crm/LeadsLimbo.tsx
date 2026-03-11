@@ -21,7 +21,8 @@ import {
   LimboRow,
 } from '@/hooks/useLimboLeads';
 import { useLatestLimboUpload, useSaveLimboUpload } from '@/hooks/useLimboUpload';
-import { CLOSER_LIST } from '@/constants/team';
+import { useCreateNotFoundDeals } from '@/hooks/useSpreadsheetCompare';
+import { CLOSER_LIST, INSIDE_SALES_ORIGIN_ID } from '@/constants/team';
 
 type Step = 'upload' | 'mapping' | 'results';
 type StatusFilter = 'todos' | 'com_dono' | 'sem_dono' | 'nao_encontrado';
