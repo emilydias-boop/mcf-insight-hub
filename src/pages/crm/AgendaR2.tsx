@@ -68,6 +68,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useR2DailySlotsForView } from "@/hooks/useR2DailySlotsForView";
+import { useQueryClient } from "@tanstack/react-query";
 import { R2CloserWithAvailability } from "@/hooks/useR2AgendaData";
 import { useMyR2Closer } from "@/hooks/useMyR2Closer";
 import { useAuth } from "@/contexts/AuthContext";
