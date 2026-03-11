@@ -438,7 +438,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
             r1_agendada: 0,
             r1_realizada: 0,
             noshow: 0,
-            contrato_pago: contractsByCloser.get(closerId) || 0,
+            contrato_pago: (contractsByCloser.get(closerId) || 0) + (manualByCloser.get(closerId) || 0),
             outside: outsideByCloser.get(closerId) || 0,
             r2_agendada: r2CountByCloser.get(closerId) || 0,
           };
