@@ -351,7 +351,7 @@ Deno.serve(async (req) => {
     logId = logData?.id;
 
     // Processar eventos de pagamento confirmado (padrão Asaas) e purchase.completed (formato customizado)
-    const validEvents = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'purchase.completed'];
+    const validEvents = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'purchase.completed', 'invoice.payment_succeeded'];
     if (!validEvents.includes(event)) {
       console.log(`[Asaas] Evento ignorado: ${event}`);
       
