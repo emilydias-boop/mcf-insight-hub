@@ -193,9 +193,9 @@ export function useR2PendingLeads() {
       // Also filter out Outside leads whose R1 is not yet completed
       const pendingLeads = attendeesWithContact
         .filter(a => {
-          // 0. Fallback: exclude already recognized statuses
+          // 0. Fallback: exclude already recognized statuses and sem_sucesso
           const status = a.status;
-          if (status === 'partner_recognized' || status === 'recurrence_recognized') {
+          if (status === 'partner_recognized' || status === 'recurrence_recognized' || status === 'sem_sucesso') {
             return false;
           }
           // 1. Check by contact_id

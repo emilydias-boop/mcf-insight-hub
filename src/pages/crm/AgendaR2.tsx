@@ -617,6 +617,15 @@ export default function AgendaR2() {
                     </Badge>
                   )}
                 </TabsTrigger>
+                <TabsTrigger value="semsucesso" className="gap-2">
+                  <XCircle className="h-4 w-4" />
+                  Sem Sucesso
+                  {semSucessoCount > 0 && (
+                    <Badge variant="outline" className="h-5 min-w-[20px] px-1.5 text-xs bg-destructive/10 text-destructive border-destructive/20">
+                      {semSucessoCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="report" className="gap-2">
                   <FileText className="h-4 w-4" />
                   Relatório
