@@ -1,0 +1,130 @@
+
+-- Fix deduplication: use email + sale_date (same day) + installment instead of product_name
+-- This handles cases where make uses "Parceria" but mcfpay uses real product name
+
+CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(p_search text DEFAULT NULL::text, p_start_date text DEFAULT NULL::text, p_end_date text DEFAULT NULL::text, p_limit integer DEFAULT 5000, p_products text[] DEFAULT NULL::text[])
+ RETURNS TABLE(id uuid, hubla_id text, product_name text, product_category text, product_price numeric, net_value numeric, customer_name text, customer_email text, customer_phone text, sale_date timestamp with time zone, sale_status text, installment_number integer, total_installments integer, source text, gross_override numeric, reference_price numeric, linked_attendee_id uuid, sale_origin text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  RETURN QUERY
+  WITH ranked AS (
+    SELECT 
+      ht.id,
+      ht.hubla_id::text,
+      ht.product_name::text,
+      ht.product_category::text,
+      ht.product_price,
+      ht.net_value,
+      ht.customer_name::text,
+      ht.customer_email::text,
+      ht.customer_phone::text,
+      ht.sale_date,
+      ht.sale_status::text,
+      ht.installment_number,
+      ht.total_installments,
+      ht.source::text,
+      ht.gross_override,
+      pc.reference_price,
+      ht.linked_attendee_id,
+      ht.sale_origin::text,
+      ROW_NUMBER() OVER (
+        PARTITION BY LOWER(ht.customer_email), (ht.sale_date AT TIME ZONE 'America/Sao_Paulo')::date, ht.installment_number
+        ORDER BY CASE ht.source
+          WHEN 'hubla' THEN 1
+          WHEN 'kiwify' THEN 2
+          WHEN 'mcfpay' THEN 3
+          WHEN 'manual' THEN 4
+          WHEN 'make' THEN 5
+          ELSE 6
+        END
+      ) AS rn
+    FROM hubla_transactions ht
+    INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
+    WHERE pc.target_bu = 'incorporador'
+      AND ht.sale_status IN ('completed', 'refunded')
+      AND ht.source IN ('hubla', 'manual', 'make', 'mcfpay')
+      AND NOT (ht.source = 'make' AND LOWER(ht.product_name) IN ('contrato', 'ob construir para alugar'))
+      AND ht.hubla_id NOT LIKE 'newsale-%'
+      AND (p_search IS NULL OR (
+        ht.customer_name ILIKE '%' || p_search || '%' OR
+        ht.customer_email ILIKE '%' || p_search || '%' OR
+        ht.product_name ILIKE '%' || p_search || '%'
+      ))
+      AND (p_start_date IS NULL OR ht.sale_date >= p_start_date::timestamptz)
+      AND (p_end_date IS NULL OR ht.sale_date <= p_end_date::timestamptz)
+      AND (p_products IS NULL OR ht.product_name = ANY(p_products))
+  )
+  SELECT r.id, r.hubla_id, r.product_name, r.product_category, r.product_price, r.net_value, r.customer_name, r.customer_email, r.customer_phone, r.sale_date, r.sale_status, r.installment_number, r.total_installments, r.source, r.gross_override, r.reference_price, r.linked_attendee_id, r.sale_origin
+  FROM ranked r
+  WHERE r.rn = 1
+  ORDER BY r.sale_date DESC
+  LIMIT p_limit;
+END;
+$function$;
+
+-- Fix get_hubla_transactions_by_bu with same dedup logic
+CREATE OR REPLACE FUNCTION public.get_hubla_transactions_by_bu(p_bu text, p_search text DEFAULT NULL::text, p_start_date text DEFAULT NULL::text, p_end_date text DEFAULT NULL::text, p_limit integer DEFAULT 5000)
+ RETURNS TABLE(id uuid, hubla_id text, product_name text, product_category text, product_price numeric, net_value numeric, customer_name text, customer_email text, customer_phone text, sale_date timestamp with time zone, sale_status text, installment_number integer, total_installments integer, source text, gross_override numeric, reference_price numeric, linked_attendee_id uuid, sale_origin text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  RETURN QUERY
+  WITH ranked AS (
+    SELECT 
+      ht.id,
+      ht.hubla_id::text,
+      ht.product_name::text,
+      ht.product_category::text,
+      ht.product_price,
+      ht.net_value,
+      ht.customer_name::text,
+      ht.customer_email::text,
+      ht.customer_phone::text,
+      ht.sale_date,
+      ht.sale_status::text,
+      ht.installment_number,
+      ht.total_installments,
+      ht.source::text,
+      ht.gross_override,
+      COALESCE(
+        public.get_effective_price(pc.id, ht.sale_date),
+        pc.reference_price
+      ) as reference_price,
+      ht.linked_attendee_id,
+      ht.sale_origin::text,
+      ROW_NUMBER() OVER (
+        PARTITION BY LOWER(ht.customer_email), (ht.sale_date AT TIME ZONE 'America/Sao_Paulo')::date, ht.installment_number
+        ORDER BY CASE ht.source
+          WHEN 'hubla' THEN 1
+          WHEN 'kiwify' THEN 2
+          WHEN 'mcfpay' THEN 3
+          WHEN 'manual' THEN 4
+          WHEN 'make' THEN 5
+          ELSE 6
+        END
+      ) AS rn
+    FROM hubla_transactions ht
+    INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
+    WHERE pc.target_bu = p_bu
+      AND ht.sale_status IN ('completed', 'refunded')
+      AND ht.source IN ('hubla', 'manual', 'make', 'mcfpay')
+      AND ht.hubla_id NOT ILIKE 'newsale-%'
+      AND (p_search IS NULL OR 
+           ht.customer_name ILIKE '%' || p_search || '%' OR 
+           ht.customer_email ILIKE '%' || p_search || '%' OR
+           ht.product_name ILIKE '%' || p_search || '%')
+      AND (p_start_date IS NULL OR ht.sale_date >= p_start_date::timestamptz)
+      AND (p_end_date IS NULL OR ht.sale_date <= p_end_date::timestamptz)
+  )
+  SELECT r.id, r.hubla_id, r.product_name, r.product_category, r.product_price, r.net_value, r.customer_name, r.customer_email, r.customer_phone, r.sale_date, r.sale_status, r.installment_number, r.total_installments, r.source, r.gross_override, r.reference_price, r.linked_attendee_id, r.sale_origin
+  FROM ranked r
+  WHERE r.rn = 1
+  ORDER BY r.sale_date DESC
+  LIMIT p_limit;
+END;
+$function$;
