@@ -113,6 +113,8 @@ export function useR2QualificationReport(filters: QualificationFilters) {
           
           return {
             id: att.id,
+            dealId: deal?.id || null,
+            contactId: null, // contact is embedded, not a separate id in this query
             leadName: att.attendee_name || deal?.contact?.name || deal?.name || null,
             phone: att.attendee_phone || deal?.contact?.phone || null,
             email: deal?.contact?.email || null,

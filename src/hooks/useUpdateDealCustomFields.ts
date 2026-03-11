@@ -38,8 +38,8 @@ export function useUpdateDealCustomFields() {
       return { dealId, customFields: mergedFields };
     },
     onSuccess: () => {
-      // Invalidate R2 meetings to refresh drawer data
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-qualification-report'] });
     },
     onError: (error) => {
       console.error('Error updating deal custom fields:', error);
