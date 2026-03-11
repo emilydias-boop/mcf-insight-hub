@@ -209,12 +209,12 @@ export function AgendaCalendar({
     const firstSlot = timeSlots[0];
     const lastSlot = timeSlots[timeSlots.length - 1];
     const minMinutes = firstSlot.hour * 60 + firstSlot.minute;
-    const maxMinutes = lastSlot.hour * 60 + lastSlot.minute + 15;
+    const maxMinutes = lastSlot.hour * 60 + lastSlot.minute + 30;
     
     if (currentMinutes < minMinutes || currentMinutes >= maxMinutes) return null;
     
     // Calcular posição proporcional baseado nos minutos desde o primeiro slot
-    const slotIndex = (currentMinutes - minMinutes) / 15;
+    const slotIndex = (currentMinutes - minMinutes) / 30;
     return slotIndex * SLOT_HEIGHT;
   }, [currentTime, timeSlots]);
   
