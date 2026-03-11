@@ -1,39 +1,25 @@
 
 
-## Objetivo
+## Diagnóstico: Slot 17:00 não aparece na visão "Por Sócio"
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### O que aconteceu
 
-## Mudanças
+Ao adicionar o horário 17:00 para Jessica Martins via configuração "Por Data", o slot foi salvo corretamente no banco (o dialog mostra 5 slots: 13:00-17:00). Porém a visão "Por Sócio" do calendário não exibiu o botão "+ Livre" no 17:00 para ela.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+A linha do 17:00 EXISTE no calendário (Marcos Godoy aparece nesse horário para Claudia), mas a célula da Jessica Martins está vazia — sem reunião e sem botão "Livre". Isso indica que `isSlotConfiguredForCloser` retorna `false` para Jessica no 17:00.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Causa raiz
 
-### 2. Hook `useCloserDetailData.ts`
+O cache de `useR2DailySlotsForView` (staleTime: 30s) não foi refrescado a tempo. O console mostra **13 daily slots** — mas Jessica com 17:00 deveria gerar 14. O slot foi salvo, a invalidação disparou (`['r2-daily-slots-view']`), mas o refetch provavelmente retornou dados antigos por timing de replicação ou o componente da aba não disparou o refetch imediatamente.
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+### Correção
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+1. **Reduzir `staleTime`** de `useR2DailySlotsForView` de 30s para 5s — dados de configuração mudam frequentemente durante edição
+2. **Forçar refetch ao fechar o dialog de configuração** — adicionar callback `onClose` no dialog que dispara `queryClient.invalidateQueries(['r2-daily-slots-view'])` explicitamente
+3. **Adicionar `refetchOnWindowFocus: true`** ao hook para garantir dados frescos ao retornar à aba
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+### Arquivos a editar
 
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+- `src/hooks/useR2DailySlotsForView.ts` — reduzir staleTime e adicionar refetchOnWindowFocus
+- `src/pages/crm/AgendaR2.tsx` — invalidar cache do slots map ao fechar dialog de configuração de closers
 
