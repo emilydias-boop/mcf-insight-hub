@@ -48,6 +48,12 @@ const reportOptions: ReportTypeOption[] = [
     description: 'Consulta detalhada por closer/SDR ou lead',
     icon: Search,
   },
+  {
+    id: 'nao_comprou',
+    title: 'Não Comprou',
+    description: 'Leads aprovados que não compraram',
+    icon: UserX,
+  },
 ];
 
 interface ReportTypeSelectorProps {

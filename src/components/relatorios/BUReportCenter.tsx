@@ -94,6 +94,10 @@ export function BUReportCenter({
           <InvestigationReportPanel bu={bu} />
         )}
         
+        {selectedReport === 'nao_comprou' && (
+          <NaoComprouReportPanel bu={bu} />
+        )}
+        
         {/* Empty State */}
         {!selectedReport && (
           <Card>
