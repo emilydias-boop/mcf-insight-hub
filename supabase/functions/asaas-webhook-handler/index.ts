@@ -330,7 +330,10 @@ Deno.serve(async (req) => {
     
     console.log('📦 [Asaas Webhook] Recebido:', JSON.stringify(body, null, 2));
 
-    const event = body.event;
+    // Detect format: Hubla/mcfpay sends type as string + event as object
+    // Asaas sends event as string + payment/data as object
+    const isHublaFormat = typeof body.event === 'object' && body.event !== null && typeof body.type === 'string';
+    const event = isHublaFormat ? body.type : body.event;
     const payment = body.payment;
 
     // Log do webhook
@@ -348,7 +351,7 @@ Deno.serve(async (req) => {
     logId = logData?.id;
 
     // Processar eventos de pagamento confirmado (padrão Asaas) e purchase.completed (formato customizado)
-    const validEvents = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'purchase.completed'];
+    const validEvents = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'purchase.completed', 'invoice.payment_succeeded'];
     if (!validEvents.includes(event)) {
       console.log(`[Asaas] Evento ignorado: ${event}`);
       
@@ -410,6 +413,30 @@ Deno.serve(async (req) => {
       
       console.log(`[Asaas] Formato customizado detectado: data.purchase_id = ${paymentId}`);
       
+    } else if (isHublaFormat) {
+      // Formato Hubla/mcfpay: { type: "invoice.payment_succeeded", event: { user, invoice, product }, version }
+      const hublaEvent = body.event;
+      const invoice = hublaEvent?.invoice;
+      const user = hublaEvent?.user || invoice?.payer || {};
+      const product = hublaEvent?.product || {};
+      
+      paymentId = invoice?.id || `mcfpay_${Date.now()}`;
+      productName = product.name || invoice?.items?.[0]?.product?.name || 'Produto MCFPay';
+      
+      const subtotalCents = invoice?.amount?.subtotalCents || invoice?.amount?.totalCents || 0;
+      grossValue = subtotalCents / 100;
+      
+      // Extract seller net value from receivers
+      const sellerReceiver = (invoice?.receivers || []).find((r: any) => r.role === 'seller');
+      netValue = sellerReceiver ? (sellerReceiver.totalCents || 0) / 100 : grossValue;
+      
+      saleDate = invoice?.saleDate || invoice?.createdAt || new Date().toISOString();
+      customerName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || '';
+      customerEmail = user.email || '';
+      customerPhone = user.phone || '';
+      
+      console.log(`[Asaas] Formato Hubla/mcfpay detectado: invoice.id = ${paymentId}, product = ${productName}`);
+      
     } else {
       // Payload não reconhecido
       console.log('[Asaas] Payload sem payment ou data - formato desconhecido');
@@ -432,7 +459,8 @@ Deno.serve(async (req) => {
     console.log(`[Asaas] Produto: "${productName}" | Categoria: ${productCategory}`);
 
     // Gerar hubla_id único para evitar duplicatas
-    const hublaId = `asaas_${paymentId}`;
+    const sourceLabel = isHublaFormat ? 'mcfpay' : 'asaas';
+    const hublaId = `${sourceLabel}_${paymentId}`;
 
     // Verificar se já existe
     const { data: existing } = await supabase
@@ -470,7 +498,7 @@ Deno.serve(async (req) => {
       customer_phone: customerPhone,
       sale_date: new Date(saleDate).toISOString(),
       sale_status: 'completed',
-      source: 'asaas',
+      source: sourceLabel,
       count_in_dashboard: true,
       raw_data: body
     };
