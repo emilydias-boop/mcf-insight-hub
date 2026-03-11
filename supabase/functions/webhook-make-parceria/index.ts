@@ -431,21 +431,20 @@ Deno.serve(async (req) => {
     const saleDateObj = new Date(saleDate)
     const saleDateStr = saleDateObj.toISOString().split('T')[0] // YYYY-MM-DD
 
-    const { data: existingHubla } = await supabase
+    // Check all priority sources (hubla, kiwify, mcfpay) - not just hubla
+    const { data: existingPriority } = await supabase
       .from('hubla_transactions')
-      .select('id, net_value')
-      .eq('source', 'hubla')
+      .select('id, net_value, source')
+      .in('source', ['hubla', 'kiwify', 'mcfpay'])
       .ilike('customer_email', body.email.toLowerCase())
       .gte('sale_date', `${saleDateStr}T00:00:00`)
       .lte('sale_date', `${saleDateStr}T23:59:59`)
-      .gte('product_price', valorBruto * 0.95)
-      .lte('product_price', valorBruto * 1.05)
       .gt('net_value', 0)
       .limit(1)
       .maybeSingle()
 
-    if (existingHubla) {
-      console.log('⚠️ Registro Hubla equivalente encontrado! Marcando Make como count_in_dashboard=false:', existingHubla.id)
+    if (existingPriority) {
+      console.log(`⚠️ Registro ${existingPriority.source} equivalente encontrado! Marcando Make como count_in_dashboard=false:`, existingPriority.id)
       countInDashboard = false
     }
 
