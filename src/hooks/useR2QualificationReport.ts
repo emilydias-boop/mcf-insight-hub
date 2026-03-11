@@ -12,6 +12,8 @@ export interface QualificationFilters {
 
 export interface R2QualificationReportRow {
   id: string;
+  dealId: string | null;
+  contactId: string | null;
   leadName: string | null;
   phone: string | null;
   email: string | null;
