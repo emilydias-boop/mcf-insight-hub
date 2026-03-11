@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
-import { format, addWeeks, subWeeks, parseISO } from 'date-fns';
+import { format, addWeeks, subWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, RefreshCw, ShoppingCart, CalendarCog, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, ShoppingCart, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,8 +20,6 @@ import { useR2MeetingsExtended } from '@/hooks/useR2MeetingsExtended';
 import { R2MeetingDetailDrawer } from '@/components/crm/R2MeetingDetailDrawer';
 import { useQueryClient } from '@tanstack/react-query';
 import { useActiveBU } from '@/hooks/useActiveBU';
-import { useCarrinhoWeekOverride } from '@/hooks/useCarrinhoWeekOverride';
-import { CarrinhoWeekOverrideDialog } from '@/components/crm/CarrinhoWeekOverrideDialog';
 import { useCarrinhoConfig, filterByCarrinho } from '@/hooks/useCarrinhoConfig';
 import { CarrinhoConfigDialog } from '@/components/crm/CarrinhoConfigDialog';
 
@@ -29,25 +27,14 @@ export default function R2Carrinho() {
   const [weekDate, setWeekDate] = useState(new Date());
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
-  const [ignoreOverride, setIgnoreOverride] = useState(false);
   const [selectedCarrinhoId, setSelectedCarrinhoId] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
-  const { override, saveOverride, removeOverride } = useCarrinhoWeekOverride();
   const { config, saveConfig } = useCarrinhoConfig();
 
-  // Compute stable weekStart/weekEnd once, respecting override only when not ignored
-  const activeOverride = override && !ignoreOverride;
-  const weekStart = useMemo(() => 
-    activeOverride ? parseISO(override.start) : getCustomWeekStart(weekDate),
-    [activeOverride, override, weekDate]
-  );
-  const weekEnd = useMemo(() => 
-    activeOverride ? parseISO(override.end) : getCustomWeekEnd(weekDate),
-    [activeOverride, override, weekDate]
-  );
+  const weekStart = useMemo(() => getCustomWeekStart(weekDate), [weekDate]);
+  const weekEnd = useMemo(() => getCustomWeekEnd(weekDate), [weekDate]);
 
   // Fetch KPIs
   const { data: kpis, isLoading: kpisLoading, refetch: refetchKpis } = useR2CarrinhoKPIs(weekStart, weekEnd);
@@ -102,26 +89,9 @@ export default function R2Carrinho() {
     return meetingsExtended.find(m => m.id === selectedMeetingId) || null;
   }, [selectedMeetingId, meetingsExtended]);
 
-  const handlePrevWeek = () => {
-    if (activeOverride) {
-      setIgnoreOverride(true);
-      setWeekDate(subWeeks(parseISO(override.start), 1));
-    } else {
-      setWeekDate(subWeeks(weekDate, 1));
-    }
-  };
-  const handleNextWeek = () => {
-    if (activeOverride) {
-      setIgnoreOverride(true);
-      setWeekDate(addWeeks(parseISO(override.start), 1));
-    } else {
-      setWeekDate(addWeeks(weekDate, 1));
-    }
-  };
-  const handleToday = () => {
-    setIgnoreOverride(true);
-    setWeekDate(new Date());
-  };
+  const handlePrevWeek = () => setWeekDate(subWeeks(weekDate, 1));
+  const handleNextWeek = () => setWeekDate(addWeeks(weekDate, 1));
+  const handleToday = () => setWeekDate(new Date());
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
@@ -174,11 +144,6 @@ export default function R2Carrinho() {
           </h1>
           <p className="text-muted-foreground">
             Gestão semanal do funil de R2
-            {override && (
-              <span className="ml-2 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 px-2 py-0.5 rounded-full">
-                ⚠️ Semana customizada{override.label ? `: ${override.label}` : ''}
-              </span>
-            )}
           </p>
         </div>
 
@@ -222,15 +187,6 @@ export default function R2Carrinho() {
           
           <Button variant="outline" size="icon" onClick={handleNextWeek}>
             <ChevronRight className="h-4 w-4" />
-          </Button>
-
-          <Button
-            variant={override ? 'default' : 'outline'}
-            size="icon"
-            onClick={() => setOverrideDialogOpen(true)}
-            title="Ajustar Semana"
-          >
-            <CalendarCog className="h-4 w-4" />
           </Button>
 
           <Button
@@ -347,16 +303,6 @@ export default function R2Carrinho() {
             handleReschedule(selectedMeetingId);
           }
         }}
-      />
-
-      {/* Week Override Dialog */}
-      <CarrinhoWeekOverrideDialog
-        open={overrideDialogOpen}
-        onOpenChange={setOverrideDialogOpen}
-        currentOverride={override ? { start: parseISO(override.start), end: parseISO(override.end), label: override.label } : null}
-        onSave={(data) => { saveOverride.mutate(data); setIgnoreOverride(false); }}
-        onRemove={() => removeOverride.mutate()}
-        isSaving={saveOverride.isPending}
       />
 
       {/* Carrinho Config Dialog */}
