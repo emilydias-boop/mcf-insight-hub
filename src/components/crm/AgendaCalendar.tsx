@@ -923,7 +923,7 @@ export function AgendaCalendar({
       // Scroll to first meeting
       const meetingTime = parseISO(targetMeeting.scheduled_at);
       const meetingHour = meetingTime.getHours();
-      const meetingMinute = Math.floor(meetingTime.getMinutes() / 15) * 15;
+      const meetingMinute = Math.floor(meetingTime.getMinutes() / 30) * 30;
       targetSlotIndex = timeSlots.findIndex(
         slot => slot.hour === meetingHour && slot.minute === meetingMinute
       );
