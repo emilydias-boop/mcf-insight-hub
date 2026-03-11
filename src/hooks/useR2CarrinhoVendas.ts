@@ -58,6 +58,8 @@ export interface R2CarrinhoVenda {
   is_extra?: boolean;
   original_week_start?: string;
   original_scheduled_at?: string;
+  // Data da reunião R2 do attendee aprovado (para filtro de carrinho)
+  r2_scheduled_at?: string;
 }
 
 export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
@@ -104,7 +106,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
       // 2. Coletar emails e telefones normalizados dos aprovados
       const emailsSet = new Set<string>();
       const phonesSet = new Set<string>();
-      const attendeeMap = new Map<string, { name: string | null; closerName: string | null; closerColor: string | null }>();
+      const attendeeMap = new Map<string, { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt: string | null }>();
 
       approvedAttendees.forEach((att: any) => {
         const email = att.deal?.contact?.email?.toLowerCase();
@@ -115,6 +117,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
           name: att.attendee_name,
           closerName: att.meeting_slot?.closer?.name || null,
           closerColor: att.meeting_slot?.closer?.color || null,
+          scheduledAt: att.meeting_slot?.scheduled_at || null,
         };
 
         if (email) {
@@ -202,7 +205,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
 
         let matched = false;
         let isManualLink = false;
-        let attendeeData: { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt?: string | null } | undefined;
+        let attendeeData: { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt: string | null } | undefined;
         let linkedScheduledAt: string | null = null;
 
         // Match por email
@@ -269,6 +272,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
             is_extra: isExtra,
             original_week_start: originalWeekStart,
             original_scheduled_at: originalScheduledAt,
+            r2_scheduled_at: attendeeData?.scheduledAt || undefined,
           });
         }
       });
