@@ -39,6 +39,7 @@ const statusLabel = (s: string) => {
 export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: CloserLeadsTableProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sdrFilter, setSdrFilter] = useState("all");
 
   // Get unique statuses
   const statuses = useMemo(() => {
@@ -49,6 +50,20 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
     });
     return Array.from(set).sort();
   }, [leads]);
+
+  // Get unique SDR names
+  const sdrNames = useMemo(() => {
+    const set = new Set<string>();
+    leads.forEach(l => {
+      if (showR1Sdr) {
+        if (l.r1_sdr_name) set.add(l.r1_sdr_name);
+        if (l.booked_by_name) set.add(l.booked_by_name);
+      } else {
+        if (l.booked_by_name) set.add(l.booked_by_name);
+      }
+    });
+    return Array.from(set).sort();
+  }, [leads, showR1Sdr]);
 
   // Status counts
   const statusCounts = useMemo(() => {
