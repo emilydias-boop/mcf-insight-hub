@@ -891,9 +891,11 @@ export function AgendaCalendar({
 
   // Day or Week view rendering with drag-and-drop
   const numCloserColumns = activeClosersForDayView.length || 1;
-  const gridCols = viewMode === 'day' 
-    ? `grid-cols-[60px_repeat(${numCloserColumns},1fr)]`
-    : `grid-cols-[60px_repeat(${viewDays.length},1fr)]`;
+  const gridStyle = {
+    gridTemplateColumns: viewMode === 'day'
+      ? `60px repeat(${numCloserColumns}, 1fr)`
+      : `60px repeat(${viewDays.length}, 1fr)`
+  };
   const currentTimePos = getCurrentTimePosition();
   
   
