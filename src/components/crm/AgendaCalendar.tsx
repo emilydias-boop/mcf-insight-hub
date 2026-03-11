@@ -315,7 +315,7 @@ export function AgendaCalendar({
         isSameDay(meetingDate, day) &&
         meetingDate.getHours() === hour &&
         meetingDate.getMinutes() >= minute &&
-        meetingDate.getMinutes() < minute + 15
+        meetingDate.getMinutes() < minute + 30
       );
     });
   }, [filteredMeetings]);
