@@ -134,7 +134,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
   const [isComparing, setIsComparing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [customTag, setCustomTag] = useState('');
-  const [selectedStageId, setSelectedStageId] = useState<string>('');
+  const [selectedStageId, setSelectedStageId] = useState<string>('__default__');
   const [assignMode, setAssignMode] = useState<AssignMode>('single');
 
   const createNotFoundMutation = useCreateNotFoundDeals();
