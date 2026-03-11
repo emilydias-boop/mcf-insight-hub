@@ -60,7 +60,7 @@ const STATUS_BADGE_STYLES: Record<string, { label: string; className: string }> 
   contract_paid: { label: 'Contrato Pago', className: 'bg-emerald-600 text-white' },
 };
 
-const SLOT_HEIGHT = 48; // px per 15-min slot (matches h-[48px] in grid cells)
+const SLOT_HEIGHT = 48; // px per 30-min slot (matches h-[48px] in grid cells)
 const MAX_MEETINGS_PER_SLOT = 999; // No limit on meetings per slot
 
 import { Settings, Plus, ArrowRightLeft, DollarSign, UserCircle } from 'lucide-react';
@@ -190,10 +190,10 @@ export function AgendaCalendar({
       maxHour = DEFAULT_END_HOUR;
     }
 
-    const totalSlots = (maxHour - minHour) * 4;
+    const totalSlots = (maxHour - minHour) * 2;
     return Array.from({ length: totalSlots }, (_, i) => ({
-      hour: Math.floor(i / 4) + minHour,
-      minute: (i % 4) * 15,
+      hour: Math.floor(i / 2) + minHour,
+      minute: (i % 2) * 30,
       index: i,
     }));
   }, [meetingLinkSlots, r2DailySlotsMap, meetingType, meetings]);
@@ -209,12 +209,12 @@ export function AgendaCalendar({
     const firstSlot = timeSlots[0];
     const lastSlot = timeSlots[timeSlots.length - 1];
     const minMinutes = firstSlot.hour * 60 + firstSlot.minute;
-    const maxMinutes = lastSlot.hour * 60 + lastSlot.minute + 15;
+    const maxMinutes = lastSlot.hour * 60 + lastSlot.minute + 30;
     
     if (currentMinutes < minMinutes || currentMinutes >= maxMinutes) return null;
     
     // Calcular posição proporcional baseado nos minutos desde o primeiro slot
-    const slotIndex = (currentMinutes - minMinutes) / 15;
+    const slotIndex = (currentMinutes - minMinutes) / 30;
     return slotIndex * SLOT_HEIGHT;
   }, [currentTime, timeSlots]);
   
@@ -315,7 +315,7 @@ export function AgendaCalendar({
         isSameDay(meetingDate, day) &&
         meetingDate.getHours() === hour &&
         meetingDate.getMinutes() >= minute &&
-        meetingDate.getMinutes() < minute + 15
+        meetingDate.getMinutes() < minute + 30
       );
     });
   }, [filteredMeetings]);
@@ -356,8 +356,8 @@ export function AgendaCalendar({
       // Check if this slot is covered but NOT the start slot
       return slotTime >= meetingStart && slotTime < meetingEnd && 
              !(meetingStart.getHours() === hour && 
-               meetingStart.getMinutes() >= minute && 
-               meetingStart.getMinutes() < minute + 15);
+                meetingStart.getMinutes() >= minute && 
+                meetingStart.getMinutes() < minute + 30);
     });
   }, [filteredMeetings]);
 
@@ -411,7 +411,7 @@ export function AgendaCalendar({
       const matchesTime = isSameDay(meetingDate, day) &&
         meetingDate.getHours() === hour &&
         meetingDate.getMinutes() >= minute &&
-        meetingDate.getMinutes() < minute + 15;
+        meetingDate.getMinutes() < minute + 30;
       
       if (closerId) {
         return matchesTime && meeting.closer_id === closerId;
@@ -433,7 +433,7 @@ export function AgendaCalendar({
       return isSameDay(meetingDate, day) &&
         meetingDate.getHours() === hour &&
         meetingDate.getMinutes() >= minute &&
-        meetingDate.getMinutes() < minute + 15;
+        meetingDate.getMinutes() < minute + 30;
     });
     
     // Count per closer
@@ -472,7 +472,7 @@ export function AgendaCalendar({
       return isSameDay(meetingDate, day) &&
         meetingDate.getHours() === hour &&
         meetingDate.getMinutes() >= minute &&
-        meetingDate.getMinutes() < minute + 15;
+        meetingDate.getMinutes() < minute + 30;
     });
     return slotMeetings.length === 0;
   }, [isSlotConfigured, filteredMeetings]);
@@ -672,7 +672,7 @@ export function AgendaCalendar({
     const now = new Date();
     if (!isSameDay(day, now)) return false;
     const slotStart = setMinutes(setHours(day, hour), minute);
-    const slotEnd = setMinutes(setHours(day, hour), minute + 15);
+    const slotEnd = setMinutes(setHours(day, hour), minute + 30);
     return isWithinInterval(now, { start: slotStart, end: slotEnd });
   };
 
@@ -684,9 +684,9 @@ export function AgendaCalendar({
   }, [closers]);
 
   // Calculate how many slots a meeting occupies
-  // Each visual slot is 15 minutes
+  // Each visual slot is 30 minutes
   const getSlotsNeeded = (durationMinutes: number) => {
-    return Math.max(1, Math.ceil(durationMinutes / 15));
+    return Math.max(1, Math.ceil(durationMinutes / 30));
   };
 
   // Handle drag and drop
@@ -923,14 +923,14 @@ export function AgendaCalendar({
       // Scroll to first meeting
       const meetingTime = parseISO(targetMeeting.scheduled_at);
       const meetingHour = meetingTime.getHours();
-      const meetingMinute = Math.floor(meetingTime.getMinutes() / 15) * 15;
+      const meetingMinute = Math.floor(meetingTime.getMinutes() / 30) * 30;
       targetSlotIndex = timeSlots.findIndex(
         slot => slot.hour === meetingHour && slot.minute === meetingMinute
       );
     } else if (isToday) {
       // For today without upcoming meetings, scroll to current time
       const currentHour = now.getHours();
-      const currentMinute = Math.floor(now.getMinutes() / 15) * 15;
+      const currentMinute = Math.floor(now.getMinutes() / 30) * 30;
       targetSlotIndex = timeSlots.findIndex(
         slot => slot.hour >= currentHour && (slot.hour > currentHour || slot.minute >= currentMinute)
       );
@@ -1051,7 +1051,7 @@ export function AgendaCalendar({
                   <div 
                     className={cn(
                       'min-w-[60px] w-[60px] flex-shrink-0 h-[48px] flex items-center justify-center text-xs border-r bg-muted/30',
-                      (minute === 15 || minute === 45) && 'text-muted-foreground/60',
+                      minute !== 0 && 'text-muted-foreground/60',
                       anyDayFull ? 'line-through text-muted-foreground/40' : 'text-muted-foreground',
                       onEditHours && 'cursor-pointer hover:bg-muted/50 hover:text-foreground transition-colors'
                     )}

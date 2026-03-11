@@ -1,34 +1,39 @@
 
 
-## Plano: Mudar grid do calendário de 15 para 30 minutos
+## Objetivo
 
-### O que muda
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-O calendário atualmente gera slots de 15 em 15 minutos (08:00, 08:15, 08:30, 08:45...), resultando em 4 linhas por hora. Mudar para 30 minutos reduz para 2 linhas por hora, deixando o calendário mais compacto.
+## Mudanças
 
-### Alterações em `src/components/crm/AgendaCalendar.tsx`
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-1. **Geração de time slots** (linha ~193-198): Trocar divisor de 4 para 2, multiplicador de 15 para 30
-   ```typescript
-   const totalSlots = (maxHour - minHour) * 2;
-   // i / 2 + minHour, (i % 2) * 30
-   ```
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-2. **SLOT_HEIGHT** (linha 63): Manter 48px por slot (cada linha agora representa 30min)
+### 2. Hook `useCloserDetailData.ts`
 
-3. **Todas as referências a `15` minutos** (~15 ocorrências): Trocar para `30` nos cálculos de:
-   - Current time indicator position (`/ 15` → `/ 30`)
-   - Meeting matching (`minute + 15` → `minute + 30`)
-   - `getSlotsNeeded` (`/ 15` → `/ 30`)
-   - Scroll position calculations
-   - `isCurrentSlot` check
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-4. **Label do horário**: Remover a lógica que esmaece labels de `:15` e `:45` (não existirão mais)
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-5. **Meeting card height**: Com slots de 30min, uma reunião de 30min ocupa 1 slot (48px) em vez de 2. Cards ficam proporcionais.
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### Impacto
+### 4. Dados exportados no Excel
 
-- R1 e R2 usam o mesmo componente — ambos ficam com grid de 30min
-- Reuniões que começam em horários quebrados (ex: 09:15) serão agrupadas no slot 09:00
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
