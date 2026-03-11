@@ -1,41 +1,39 @@
 
 
-## Problema: Tags não aplicadas aos deals `found_in_current` + necessidade de reimportação
+## Objetivo
 
-### Diagnóstico
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Há **dois problemas** na última importação:
+## Mudanças
 
-1. **Tags não foram aplicadas para `found_in_current` (35 deals)**: O código atualiza `stage_id` (linha 373-382) mas **não inclui `tags`** no update. O `bulkTransfer` também só muda `owner_id`/`owner_profile_id`, ignorando tags completamente.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-2. **Profile IDs errados na importação anterior**: A correção dos profile IDs reais só foi aplicada agora. A importação anterior usou `sdr.id` incorretos, então os owners estão errados.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**Sim, será necessário reimportar** para corrigir os owners (profile IDs) e aplicar as tags corretamente.
+### 2. Hook `useCloserDetailData.ts`
 
-### Correção antes de reimportar
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**Arquivo: `src/components/crm/SpreadsheetCompareDialog.tsx`**
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-No bloco de update de `found_in_current` (linhas 373-382), adicionar `tags` ao update:
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-```typescript
-// Antes (só stage):
-.update({ stage_id: stageId })
+### 4. Dados exportados no Excel
 
-// Depois (stage + tags):
-const updateData: any = {};
-if (stageId) updateData.stage_id = stageId;
-if (tags?.length) updateData.tags = [...new Set(['base clint', ...tags])];
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-if (Object.keys(updateData).length > 0) {
-  await supabase.from('crm_deals')
-    .update(updateData)
-    .in('id', allDealIds);
-}
-```
+Formato de data: `dd/MM/yyyy HH:mm`
 
-Isso garante que, ao reimportar, tanto o estágio quanto a tag "LEAD-SCORE" serão aplicados a todos os deals — inclusive os que já existiam na pipeline.
+## Resultado
 
-### Arquivo modificado
-- `src/components/crm/SpreadsheetCompareDialog.tsx` — incluir tags no update de deals `found_in_current`
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

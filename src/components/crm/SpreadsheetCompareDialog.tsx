@@ -369,15 +369,19 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
           updatedCount = transferResult.success;
         }
 
-        // Also update stage_id for found_in_current deals if a specific stage was selected
-        if (stageId) {
+        // Update stage_id and tags for found_in_current deals
+        const updateData: any = {};
+        if (stageId) updateData.stage_id = stageId;
+        if (tags?.length) updateData.tags = [...new Set(['base clint', ...tags])];
+
+        if (Object.keys(updateData).length > 0) {
           const allDealIds = inCurrent.map(r => r.localDealId!);
-          const { error: stageError } = await supabase
+          const { error: updateError } = await supabase
             .from('crm_deals')
-            .update({ stage_id: stageId })
+            .update(updateData)
             .in('id', allDealIds);
-          if (stageError) {
-            console.error('Error updating stage for existing deals:', stageError);
+          if (updateError) {
+            console.error('Error updating stage/tags for existing deals:', updateError);
           }
         }
       }
