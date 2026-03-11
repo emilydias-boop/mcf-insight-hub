@@ -143,26 +143,16 @@ export function CarrinhoConfigDialog({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label>Horário de corte</Label>
-                    <Input
-                      type="time"
-                      value={carrinho.horario_corte}
-                      onChange={e => updateCarrinho(idx, { horario_corte: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      R2s antes desse horário entram neste carrinho
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Horário da reunião</Label>
-                    <Input
-                      type="time"
-                      value={carrinho.horario_reuniao}
-                      onChange={e => updateCarrinho(idx, { horario_reuniao: e.target.value })}
-                    />
-                  </div>
+                <div className="space-y-1">
+                  <Label>Horário da reunião do carrinho</Label>
+                  <Input
+                    type="time"
+                    value={carrinho.horario_reuniao}
+                    onChange={e => updateCarrinho(idx, { horario_reuniao: e.target.value, horario_corte: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Horário em que acontece a reunião do carrinho (informativo)
+                  </p>
                 </div>
               </CardContent>
             </Card>
