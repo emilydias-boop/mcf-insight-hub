@@ -58,6 +58,8 @@ export interface R2CarrinhoVenda {
   is_extra?: boolean;
   original_week_start?: string;
   original_scheduled_at?: string;
+  // Data da reunião R2 do attendee aprovado (para filtro de carrinho)
+  r2_scheduled_at?: string;
 }
 
 export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
