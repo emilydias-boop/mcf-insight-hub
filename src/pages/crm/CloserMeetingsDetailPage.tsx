@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -11,10 +11,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CloserDetailHeader } from "@/components/closer/CloserDetailHeader";
 import { CloserDetailKPICards } from "@/components/closer/CloserDetailKPICards";
 import { CloserLeadsTable } from "@/components/closer/CloserLeadsTable";
-import { CloserLeadsFilters } from "@/components/closer/CloserLeadsFilters";
+
 import { CloserRankingBlock } from "@/components/closer/CloserRankingBlock";
 import { CloserRevenueTab } from "@/components/closer/CloserRevenueTab";
-import { useCloserDetailData, CloserLead } from "@/hooks/useCloserDetailData";
+import { useCloserDetailData } from "@/hooks/useCloserDetailData";
 
 export default function CloserMeetingsDetailPage() {
   const { closerId } = useParams<{ closerId: string }>();
@@ -23,10 +23,7 @@ export default function CloserMeetingsDetailPage() {
   const activeBU = useActiveBU();
   const wso = getWeekStartsOn(activeBU);
 
-  // Filter states for each tab
-  const [filteredLeads, setFilteredLeads] = useState<CloserLead[]>([]);
-  const [filteredNoShows, setFilteredNoShows] = useState<CloserLead[]>([]);
-  const [filteredR2, setFilteredR2] = useState<CloserLead[]>([]);
+
 
   // Parse date range from query params
   const preset = searchParams.get("preset") || "month";
@@ -81,10 +78,7 @@ export default function CloserMeetingsDetailPage() {
     navigate(`/crm/reunioes-equipe?${params.toString()}`);
   };
 
-  // Stable callbacks for filters
-  const onFilterLeads = useCallback((f: CloserLead[]) => setFilteredLeads(f), []);
-  const onFilterNoShows = useCallback((f: CloserLead[]) => setFilteredNoShows(f), []);
-  const onFilterR2 = useCallback((f: CloserLead[]) => setFilteredR2(f), []);
+
 
   if (!closerId) {
     return (
@@ -182,8 +176,7 @@ export default function CloserMeetingsDetailPage() {
         <TabsContent value="leads">
           <Card className="bg-card border-border">
             <CardContent className="p-4">
-              <CloserLeadsFilters leads={leads} onFilter={onFilterLeads} />
-              <CloserLeadsTable leads={filteredLeads} isLoading={isLoading} />
+              <CloserLeadsTable leads={leads} isLoading={isLoading} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -191,8 +184,7 @@ export default function CloserMeetingsDetailPage() {
         <TabsContent value="noshows">
           <Card className="bg-card border-border">
             <CardContent className="p-4">
-              <CloserLeadsFilters leads={noShowLeads} onFilter={onFilterNoShows} />
-              <CloserLeadsTable leads={filteredNoShows} isLoading={isLoading} />
+              <CloserLeadsTable leads={noShowLeads} isLoading={isLoading} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -200,8 +192,7 @@ export default function CloserMeetingsDetailPage() {
         <TabsContent value="r2">
           <Card className="bg-card border-border">
             <CardContent className="p-4">
-              <CloserLeadsFilters leads={r2Leads} onFilter={onFilterR2} showR1Sdr />
-              <CloserLeadsTable leads={filteredR2} isLoading={isLoading} showR1Sdr />
+              <CloserLeadsTable leads={r2Leads} isLoading={isLoading} showR1Sdr />
             </CardContent>
           </Card>
         </TabsContent>

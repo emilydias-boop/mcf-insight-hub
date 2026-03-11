@@ -39,6 +39,7 @@ const statusLabel = (s: string) => {
 export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: CloserLeadsTableProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sdrFilter, setSdrFilter] = useState("all");
 
   // Get unique statuses
   const statuses = useMemo(() => {
@@ -49,6 +50,20 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
     });
     return Array.from(set).sort();
   }, [leads]);
+
+  // Get unique SDR names
+  const sdrNames = useMemo(() => {
+    const set = new Set<string>();
+    leads.forEach(l => {
+      if (showR1Sdr) {
+        if (l.r1_sdr_name) set.add(l.r1_sdr_name);
+        if (l.booked_by_name) set.add(l.booked_by_name);
+      } else {
+        if (l.booked_by_name) set.add(l.booked_by_name);
+      }
+    });
+    return Array.from(set).sort();
+  }, [leads, showR1Sdr]);
 
   // Status counts
   const statusCounts = useMemo(() => {
@@ -80,8 +95,14 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
       });
     }
 
+    if (sdrFilter !== "all") {
+      filtered = filtered.filter(l =>
+        l.booked_by_name === sdrFilter || l.r1_sdr_name === sdrFilter
+      );
+    }
+
     return filtered;
-  }, [leads, search, statusFilter]);
+  }, [leads, search, statusFilter, sdrFilter]);
 
   const handleExport = () => {
     const data = filteredLeads.map(l => ({
@@ -103,9 +124,10 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
   const clearFilters = () => {
     setSearch("");
     setStatusFilter("all");
+    setSdrFilter("all");
   };
 
-  const hasActiveFilters = search || statusFilter !== "all";
+  const hasActiveFilters = search || statusFilter !== "all" || sdrFilter !== "all";
 
   if (isLoading) {
     return (
@@ -204,6 +226,20 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
             ))}
           </SelectContent>
         </Select>
+
+        {sdrNames.length > 0 && (
+          <Select value={sdrFilter} onValueChange={setSdrFilter}>
+            <SelectTrigger className="w-[180px] h-9">
+              <SelectValue placeholder="SDR" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos SDRs</SelectItem>
+              {sdrNames.map(n => (
+                <SelectItem key={n} value={n}>{n}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
         {hasActiveFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-muted-foreground">
