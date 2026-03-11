@@ -5,6 +5,7 @@ import { ptBR } from "date-fns/locale";
 import { getWeekStartsOn } from "@/lib/businessDays";
 import { useActiveBU } from "@/hooks/useActiveBU";
 import { RefreshCw } from "lucide-react";
+import { ManualSaleAttributionDialog } from "@/components/closer/ManualSaleAttributionDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
