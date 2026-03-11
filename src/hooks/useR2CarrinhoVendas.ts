@@ -106,7 +106,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
       // 2. Coletar emails e telefones normalizados dos aprovados
       const emailsSet = new Set<string>();
       const phonesSet = new Set<string>();
-      const attendeeMap = new Map<string, { name: string | null; closerName: string | null; closerColor: string | null }>();
+      const attendeeMap = new Map<string, { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt: string | null }>();
 
       approvedAttendees.forEach((att: any) => {
         const email = att.deal?.contact?.email?.toLowerCase();
