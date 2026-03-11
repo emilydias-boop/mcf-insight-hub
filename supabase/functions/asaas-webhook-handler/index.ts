@@ -459,7 +459,8 @@ Deno.serve(async (req) => {
     console.log(`[Asaas] Produto: "${productName}" | Categoria: ${productCategory}`);
 
     // Gerar hubla_id único para evitar duplicatas
-    const hublaId = `asaas_${paymentId}`;
+    const sourceLabel = isHublaFormat ? 'mcfpay' : 'asaas';
+    const hublaId = `${sourceLabel}_${paymentId}`;
 
     // Verificar se já existe
     const { data: existing } = await supabase
