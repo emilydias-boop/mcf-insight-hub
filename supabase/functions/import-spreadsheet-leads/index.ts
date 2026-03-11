@@ -9,7 +9,7 @@ interface LeadInput {
   name: string;
   email: string;
   phone: string;
-  contact_id?: string; // When provided, skip contact creation
+  contact_id?: string;
 }
 
 Deno.serve(async (req) => {
@@ -43,7 +43,6 @@ Deno.serve(async (req) => {
     if (customStageId) {
       firstStageId = customStageId;
     } else {
-      // Get first stage of the pipeline
       const { data: stages, error: stagesError } = await supabase
         .from('crm_stages')
         .select('id, stage_name')
@@ -61,11 +60,11 @@ Deno.serve(async (req) => {
       firstStageId = stages[0].id;
     }
 
-    // Merge tags
     const baseTags = ['base clint'];
     const finalTags = customTags?.length ? [...baseTags, ...customTags] : baseTags;
     const timestamp = Date.now();
     let created = 0;
+    let updated = 0;
     let skipped = 0;
 
     for (let i = 0; i < leads.length; i++) {
@@ -77,11 +76,9 @@ Deno.serve(async (req) => {
       try {
         let contactId: string;
 
-        // If contact_id is provided, use it directly (contact already exists)
         if (lead.contact_id) {
           contactId = lead.contact_id;
         } else {
-          // Deduplicate contact: email → phone
           let existingContact: any = null;
 
           if (emailNorm) {
@@ -105,7 +102,6 @@ Deno.serve(async (req) => {
           if (existingContact) {
             contactId = existingContact.id;
           } else {
-            // Create contact
             const { data: newContact, error: contactError } = await supabase
               .from('crm_contacts')
               .insert({
@@ -129,17 +125,35 @@ Deno.serve(async (req) => {
         // Check if deal already exists for this contact in this origin
         const { data: existingDeal } = await supabase
           .from('crm_deals')
-          .select('id')
+          .select('id, stage_id, owner_id, tags')
           .eq('contact_id', contactId)
           .eq('origin_id', origin_id)
           .limit(1);
 
         if (existingDeal?.length) {
-          skipped++;
+          // UPDATE existing deal: stage, owner, tags
+          const updateData: any = {
+            stage_id: firstStageId,
+            tags: finalTags,
+          };
+          if (owner_email) updateData.owner_id = owner_email;
+          if (owner_profile_id) updateData.owner_profile_id = owner_profile_id;
+
+          const { error: updateError } = await supabase
+            .from('crm_deals')
+            .update(updateData)
+            .eq('id', existingDeal[0].id);
+
+          if (updateError) {
+            console.error(`Error updating deal for ${lead.name}:`, updateError);
+            skipped++;
+          } else {
+            updated++;
+          }
           continue;
         }
 
-        // Create deal with optional owner
+        // Create deal
         const dealData: any = {
           name: lead.name || 'Lead importado',
           contact_id: contactId,
@@ -149,12 +163,8 @@ Deno.serve(async (req) => {
           clint_id: `spreadsheet_import_${timestamp}_${i}`,
         };
 
-        if (owner_email) {
-          dealData.owner_id = owner_email;
-        }
-        if (owner_profile_id) {
-          dealData.owner_profile_id = owner_profile_id;
-        }
+        if (owner_email) dealData.owner_id = owner_email;
+        if (owner_profile_id) dealData.owner_profile_id = owner_profile_id;
 
         const { error: dealError } = await supabase
           .from('crm_deals')
@@ -173,7 +183,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ created, skipped, total: leads.length }), {
+    return new Response(JSON.stringify({ created, updated, skipped, total: leads.length }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {

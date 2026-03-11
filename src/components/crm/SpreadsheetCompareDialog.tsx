@@ -357,6 +357,18 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
           });
           updatedCount = transferResult.success;
         }
+
+        // Also update stage_id for found_in_current deals if a specific stage was selected
+        if (stageId) {
+          const allDealIds = inCurrent.map(r => r.localDealId!);
+          const { error: stageError } = await supabase
+            .from('crm_deals')
+            .update({ stage_id: stageId })
+            .in('id', allDealIds);
+          if (stageError) {
+            console.error('Error updating stage for existing deals:', stageError);
+          }
+        }
       }
 
       // 2. found_elsewhere → create deal with existing contact_id
