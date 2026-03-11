@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
           contact_id: contactId,
           origin_id: origin_id,
           stage_id: firstStageId,
-          tags: ['base clint'],
+          tags: finalTags,
           clint_id: `spreadsheet_import_${timestamp}_${i}`,
         };
 
