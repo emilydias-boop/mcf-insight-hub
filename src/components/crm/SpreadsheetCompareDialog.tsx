@@ -134,7 +134,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
   const [isComparing, setIsComparing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [customTag, setCustomTag] = useState('');
-  const [selectedStageId, setSelectedStageId] = useState<string>('');
+  const [selectedStageId, setSelectedStageId] = useState<string>('__default__');
   const [assignMode, setAssignMode] = useState<AssignMode>('single');
 
   const createNotFoundMutation = useCreateNotFoundDeals();
@@ -318,7 +318,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     setBatchProgress({ current: 0, total: 3 });
 
     const tags = customTag.trim() ? [customTag.trim()] : undefined;
-    const stageId = selectedStageId || undefined;
+    const stageId = selectedStageId === '__default__' ? undefined : selectedStageId;
 
     try {
       let updatedCount = 0;
@@ -547,7 +547,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     setIsComparing(false);
     setIsImporting(false);
     setCustomTag('');
-    setSelectedStageId('');
+    setSelectedStageId('__default__');
     setAssignMode('single');
   };
 
@@ -737,7 +737,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                     <SelectValue placeholder="Primeiro estágio (padrão)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Primeiro estágio (padrão)</SelectItem>
+                    <SelectItem value="__default__">Primeiro estágio (padrão)</SelectItem>
                     {pipelineStages?.map((stage: any) => (
                       <SelectItem key={stage.id} value={stage.id}>{stage.stage_name}</SelectItem>
                     ))}
@@ -827,7 +827,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                 {counts.elsewhere > 0 && <p>• {counts.elsewhere} contatos de outras pipelines → <strong>criar deal aqui</strong> (sem duplicar contato)</p>}
                 {counts.notFound > 0 && <p>• {counts.notFound} novos → <strong>criar contato + deal</strong></p>}
                 {customTag && <p>• Tag: <Badge variant="outline" className="text-xs">{customTag}</Badge></p>}
-                {selectedStageId && pipelineStages && (
+                {selectedStageId && selectedStageId !== '__default__' && pipelineStages && (
                   <p>• Estágio: <strong>{pipelineStages.find((s: any) => s.id === selectedStageId)?.stage_name}</strong></p>
                 )}
                 {assignMode === 'distribute' && consorcioSdrs && (
