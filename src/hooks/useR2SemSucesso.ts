@@ -10,36 +10,39 @@ interface MarkSemSucessoParams {
 }
 
 /**
- * Mutation to mark a pending R2 lead as "sem_sucesso"
+ * Mutation to mark a pending R2 lead as "sem_sucesso".
+ * Stores metadata as a JSON string in r2_observations and adds an attendee_note.
  */
 export function useMarkR2SemSucesso() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ attendeeId, tentativas, observacao }: MarkSemSucessoParams) => {
-      // Get current custom_fields
-      const { data: current } = await supabase
-        .from('meeting_slot_attendees')
-        .select('custom_fields')
-        .eq('id', attendeeId)
-        .single();
-
-      const existingFields = (current?.custom_fields as Record<string, unknown>) || {};
+      const metadata = JSON.stringify({
+        sem_sucesso: true,
+        tentativas,
+        observacao,
+        marked_at: new Date().toISOString(),
+      });
 
       const { error } = await supabase
         .from('meeting_slot_attendees')
         .update({
-          status: 'sem_sucesso' as any,
-          custom_fields: {
-            ...existingFields,
-            sem_sucesso_tentativas: tentativas,
-            sem_sucesso_observacao: observacao,
-            sem_sucesso_at: new Date().toISOString(),
-          },
+          status: 'sem_sucesso',
+          r2_observations: metadata,
         })
         .eq('id', attendeeId);
 
       if (error) throw error;
+
+      // Also add an attendee_note for audit trail
+      if (observacao) {
+        await supabase.from('attendee_notes').insert({
+          attendee_id: attendeeId,
+          note: `Sem Sucesso (${tentativas} tentativa${tentativas !== 1 ? 's' : ''}): ${observacao}`,
+          note_type: 'sem_sucesso',
+        });
+      }
     },
     onSuccess: () => {
       toast.success('Lead marcado como Sem Sucesso');
@@ -62,7 +65,7 @@ export function useRevertSemSucesso() {
     mutationFn: async (attendeeId: string) => {
       const { error } = await supabase
         .from('meeting_slot_attendees')
-        .update({ status: 'contract_paid' as any })
+        .update({ status: 'contract_paid' })
         .eq('id', attendeeId);
 
       if (error) throw error;
@@ -76,6 +79,11 @@ export function useRevertSemSucesso() {
       toast.error('Erro ao reverter: ' + err.message);
     },
   });
+}
+
+export interface R2SemSucessoLead extends R2PendingLead {
+  sem_sucesso_tentativas: number;
+  sem_sucesso_observacao: string;
 }
 
 /**
@@ -93,7 +101,7 @@ export function useR2SemSucessoLeads() {
           attendee_phone,
           deal_id,
           status,
-          custom_fields,
+          r2_observations,
           contract_paid_at,
           created_at,
           meeting_slot:meeting_slots!inner(
@@ -111,7 +119,7 @@ export function useR2SemSucessoLeads() {
             contact:crm_contacts(id, name, phone, email)
           )
         `)
-        .eq('status', 'sem_sucesso' as any)
+        .eq('status', 'sem_sucesso')
         .eq('meeting_slots.meeting_type', 'r1')
         .order('created_at', { ascending: false });
 
@@ -123,13 +131,28 @@ export function useR2SemSucessoLeads() {
         const slot = Array.isArray(a.meeting_slot) ? a.meeting_slot[0] : a.meeting_slot;
         const closer = slot?.closer ? (Array.isArray(slot.closer) ? slot.closer[0] : slot.closer) : null;
 
+        // Parse metadata from r2_observations
+        let tentativas = 0;
+        let observacao = '';
+        try {
+          const meta = JSON.parse(a.r2_observations || '{}');
+          if (meta.sem_sucesso) {
+            tentativas = meta.tentativas || 0;
+            observacao = meta.observacao || '';
+          }
+        } catch {
+          // not JSON, ignore
+        }
+
         return {
           ...a,
           contact_id: deal?.contact_id || deal?.contact?.id || null,
           meeting_slot: { ...slot, closer },
           deal,
           contract_paid_at: a.contract_paid_at || slot?.scheduled_at || a.created_at,
-        } as R2PendingLead & { custom_fields: Record<string, any> };
+          sem_sucesso_tentativas: tentativas,
+          sem_sucesso_observacao: observacao,
+        } as R2SemSucessoLead;
       });
     },
     staleTime: 30000,
