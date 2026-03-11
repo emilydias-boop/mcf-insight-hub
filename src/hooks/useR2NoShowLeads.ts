@@ -275,8 +275,8 @@ export function useR2NoShowLeads({
             return;
           }
 
-          // Skip if deal already has a completed R2
-          if (att.deal_id && dealsWithCompletedR2.has(att.deal_id)) {
+          // Skip if deal already has a completed or active R2
+          if (att.deal_id && (dealsWithCompletedR2.has(att.deal_id) || dealsWithActiveR2.has(att.deal_id))) {
             return;
           }
 
