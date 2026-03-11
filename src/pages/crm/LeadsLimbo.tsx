@@ -339,27 +339,79 @@ export default function LeadsLimbo() {
       toast.error('Perfil do SDR não encontrado');
       return;
     }
-    const dealIds = Array.from(selectedIds)
-      .map(i => filtered[i]?.localDealId)
-      .filter(Boolean) as string[];
 
-    if (!dealIds.length) {
-      toast.error('Nenhum deal selecionável');
+    const selectedRows = Array.from(selectedIds).map(i => filtered[i]).filter(Boolean);
+    const existingDeals = selectedRows.filter(r => r.status === 'sem_dono' && r.localDealId);
+    const notFoundLeads = selectedRows.filter(r => r.status === 'nao_encontrado');
+
+    const promises: Promise<void>[] = [];
+
+    // 1. Assign existing deals
+    if (existingDeals.length > 0) {
+      const dealIds = existingDeals.map(r => r.localDealId!);
+      promises.push(
+        new Promise((resolve, reject) => {
+          assignMutation.mutate(
+            { dealIds, ownerEmail: assignSdrEmail, ownerProfileId: profile.id },
+            {
+              onSuccess: () => {
+                setResults(prev =>
+                  prev.map(r => dealIds.includes(r.localDealId || '') ? { ...r, status: 'com_dono' as const, localOwner: assignSdrEmail } : r)
+                );
+                resolve();
+              },
+              onError: reject,
+            }
+          );
+        })
+      );
+    }
+
+    // 2. Create + assign not-found leads via edge function
+    if (notFoundLeads.length > 0) {
+      const leads = notFoundLeads.map(r => ({
+        name: r.excelName,
+        email: r.excelEmail,
+        phone: r.excelPhone || '',
+      }));
+      promises.push(
+        new Promise((resolve, reject) => {
+          createNotFoundMutation.mutate(
+            {
+              leads,
+              originId: INSIDE_SALES_ORIGIN_ID,
+              ownerEmail: assignSdrEmail,
+              ownerProfileId: profile.id,
+            },
+            {
+              onSuccess: () => {
+                // Update local state: mark these as com_dono
+                const notFoundNames = new Set(notFoundLeads.map(r => `${r.excelName}|${r.excelEmail}`));
+                setResults(prev =>
+                  prev.map(r =>
+                    r.status === 'nao_encontrado' && notFoundNames.has(`${r.excelName}|${r.excelEmail}`)
+                      ? { ...r, status: 'com_dono' as const, localOwner: assignSdrEmail }
+                      : r
+                  )
+                );
+                resolve();
+              },
+              onError: reject,
+            }
+          );
+        })
+      );
+    }
+
+    if (promises.length === 0) {
+      toast.error('Nenhum lead selecionável');
       return;
     }
 
-    assignMutation.mutate(
-      { dealIds, ownerEmail: assignSdrEmail, ownerProfileId: profile.id },
-      {
-        onSuccess: () => {
-          setResults(prev =>
-            prev.map(r => dealIds.includes(r.localDealId || '') ? { ...r, status: 'com_dono' as const, localOwner: assignSdrEmail } : r)
-          );
-          setSelectedIds(new Set());
-          setAssignSdrEmail('');
-        },
-      }
-    );
+    Promise.all(promises).then(() => {
+      setSelectedIds(new Set());
+      setAssignSdrEmail('');
+    });
   };
 
   // Export não encontrados
