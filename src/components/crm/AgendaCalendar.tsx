@@ -356,8 +356,8 @@ export function AgendaCalendar({
       // Check if this slot is covered but NOT the start slot
       return slotTime >= meetingStart && slotTime < meetingEnd && 
              !(meetingStart.getHours() === hour && 
-               meetingStart.getMinutes() >= minute && 
-               meetingStart.getMinutes() < minute + 15);
+                meetingStart.getMinutes() >= minute && 
+                meetingStart.getMinutes() < minute + 30);
     });
   }, [filteredMeetings]);
 
