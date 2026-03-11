@@ -184,8 +184,7 @@ export default function CloserMeetingsDetailPage() {
         <TabsContent value="noshows">
           <Card className="bg-card border-border">
             <CardContent className="p-4">
-              <CloserLeadsFilters leads={noShowLeads} onFilter={onFilterNoShows} />
-              <CloserLeadsTable leads={filteredNoShows} isLoading={isLoading} />
+              <CloserLeadsTable leads={noShowLeads} isLoading={isLoading} />
             </CardContent>
           </Card>
         </TabsContent>
