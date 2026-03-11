@@ -1,55 +1,39 @@
 
 
-## Plano: Importação com colunas extras, tag, estágio e distribuição igualitária entre SDRs do Consórcio
+## Objetivo
 
-### Contexto
-A planilha do Consórcio tem 11 colunas (Cliente, Telefone, Estado/Cidade, Profissão, Empresário, Score, Nível, Imóvel Quitado, Terreno, Badges, Gerente). Hoje o dialog só mostra Nome/Email/Tel e atribui a **um** SDR. Precisa:
-1. Mostrar colunas extras na tabela de resultados
-2. Permitir adicionar uma tag aos deals criados
-3. Permitir escolher um estágio específico
-4. **Distribuir igualitariamente** entre os SDRs do Consórcio (round-robin) em vez de atribuir a um só
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Alterações
+## Mudanças
 
-#### 1. `SpreadsheetRow` — campo `extraColumns`
-**`src/hooks/useSpreadsheetCompare.ts`**: Adicionar `extraColumns?: Record<string, string>` à interface `SpreadsheetRow`.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-#### 2. `SpreadsheetCompareDialog.tsx` — Colunas extras + Tag + Estágio + Distribuição
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**Preservar colunas extras**: No `handleCompare`, incluir todas as colunas não-mapeadas (nome/email/phone) como `extraColumns` em cada `SpreadsheetRow`. Renderizar dinamicamente na tabela de resultados com scroll horizontal.
+### 2. Hook `useCloserDetailData.ts`
 
-**Tag input**: Campo de texto para digitar uma tag (ex: "sem carta consórcio"). Passada para a edge function.
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**Stage selector**: Select que busca estágios da pipeline atual (`crm_stages` by `origin_id`). Default = primeiro estágio.
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**Modo de atribuição**: Trocar o select de SDR único por duas opções:
-- **SDR único** (comportamento atual)
-- **Distribuir igualmente** entre SDRs do Consórcio (usa `useSdrsFromSquad('consorcio')`)
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-Quando "Distribuir igualmente" estiver selecionado, o `handleSmartImport` faz round-robin: lead 1 → SDR A, lead 2 → SDR B, lead 3 → SDR C, etc. Cada lote enviado à edge function agrupa leads pelo SDR correspondente.
+### 4. Dados exportados no Excel
 
-#### 3. Edge Function `import-spreadsheet-leads`
-Aceitar parâmetros opcionais:
-- `tags: string[]` — mesclado com `['base clint']`
-- `stage_id: string` — usado no lugar do primeiro estágio quando fornecido
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-Alteração de ~5 linhas na edge function.
+Formato de data: `dd/MM/yyyy HH:mm`
 
-#### 4. Fluxo de distribuição round-robin (client-side)
+## Resultado
 
-```text
-leads = [L1, L2, L3, L4, L5, L6, L7, L8, L9]
-SDRs  = [Ana, Bia, Carlos]
-
-Ana   → L1, L4, L7
-Bia   → L2, L5, L8
-Carlos→ L3, L6, L9
-```
-
-O client agrupa por SDR e faz N chamadas à edge function (uma por SDR), cada uma com `owner_email` e `owner_profile_id` do respectivo SDR.
-
-### Arquivos modificados
-- `src/hooks/useSpreadsheetCompare.ts` — interface `SpreadsheetRow`
-- `src/components/crm/SpreadsheetCompareDialog.tsx` — UI completa (colunas extras, tag, estágio, distribuição)
-- `supabase/functions/import-spreadsheet-leads/index.ts` — aceitar `tags` e `stage_id`
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

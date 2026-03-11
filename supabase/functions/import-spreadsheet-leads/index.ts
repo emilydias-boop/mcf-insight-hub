@@ -22,11 +22,13 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const { leads, origin_id, owner_email, owner_profile_id } = await req.json() as {
+    const { leads, origin_id, owner_email, owner_profile_id, tags: customTags, stage_id: customStageId } = await req.json() as {
       leads: LeadInput[];
       origin_id: string;
       owner_email?: string;
       owner_profile_id?: string;
+      tags?: string[];
+      stage_id?: string;
     };
 
     if (!leads?.length || !origin_id) {
@@ -36,22 +38,32 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get first stage of the pipeline
-    const { data: stages, error: stagesError } = await supabase
-      .from('crm_stages')
-      .select('id, stage_name')
-      .eq('origin_id', origin_id)
-      .order('stage_order', { ascending: true })
-      .limit(1);
+    let firstStageId: string;
 
-    if (stagesError || !stages?.length) {
-      return new Response(JSON.stringify({ error: 'Could not find stages for this pipeline' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (customStageId) {
+      firstStageId = customStageId;
+    } else {
+      // Get first stage of the pipeline
+      const { data: stages, error: stagesError } = await supabase
+        .from('crm_stages')
+        .select('id, stage_name')
+        .eq('origin_id', origin_id)
+        .order('stage_order', { ascending: true })
+        .limit(1);
+
+      if (stagesError || !stages?.length) {
+        return new Response(JSON.stringify({ error: 'Could not find stages for this pipeline' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      firstStageId = stages[0].id;
     }
 
-    const firstStageId = stages[0].id;
+    // Merge tags
+    const baseTags = ['base clint'];
+    const finalTags = customTags?.length ? [...baseTags, ...customTags] : baseTags;
     const timestamp = Date.now();
     let created = 0;
     let skipped = 0;
@@ -133,7 +145,7 @@ Deno.serve(async (req) => {
           contact_id: contactId,
           origin_id: origin_id,
           stage_id: firstStageId,
-          tags: ['base clint'],
+          tags: finalTags,
           clint_id: `spreadsheet_import_${timestamp}_${i}`,
         };
 

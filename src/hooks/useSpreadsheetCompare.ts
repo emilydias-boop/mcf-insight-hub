@@ -22,6 +22,8 @@ export interface SpreadsheetRow {
   localOwner?: string;
   // Origin info (for found_elsewhere)
   originName?: string;
+  // Extra columns from spreadsheet (unmapped)
+  extraColumns?: Record<string, string>;
 }
 
 function normalize(val: string | null | undefined): string {
