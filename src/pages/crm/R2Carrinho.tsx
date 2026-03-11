@@ -190,15 +190,6 @@ export default function R2Carrinho() {
           </Button>
 
           <Button
-            variant={override ? 'default' : 'outline'}
-            size="icon"
-            onClick={() => setOverrideDialogOpen(true)}
-            title="Ajustar Semana"
-          >
-            <CalendarCog className="h-4 w-4" />
-          </Button>
-
-          <Button
             variant="outline"
             size="icon"
             onClick={() => setConfigDialogOpen(true)}
