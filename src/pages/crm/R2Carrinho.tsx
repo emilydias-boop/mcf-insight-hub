@@ -305,16 +305,6 @@ export default function R2Carrinho() {
         }}
       />
 
-      {/* Week Override Dialog */}
-      <CarrinhoWeekOverrideDialog
-        open={overrideDialogOpen}
-        onOpenChange={setOverrideDialogOpen}
-        currentOverride={override ? { start: parseISO(override.start), end: parseISO(override.end), label: override.label } : null}
-        onSave={(data) => { saveOverride.mutate(data); setIgnoreOverride(false); }}
-        onRemove={() => removeOverride.mutate()}
-        isSaving={saveOverride.isPending}
-      />
-
       {/* Carrinho Config Dialog */}
       <CarrinhoConfigDialog
         open={configDialogOpen}
