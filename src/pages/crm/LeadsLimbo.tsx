@@ -745,8 +745,8 @@ export default function LeadsLimbo() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button size="sm" onClick={handleBulkAssign} disabled={assignMutation.isPending}>
-                {assignMutation.isPending ? 'Atribuindo...' : `Atribuir ${selectedIds.size} leads`}
+              <Button size="sm" onClick={handleBulkAssign} disabled={assignMutation.isPending || createNotFoundMutation.isPending}>
+                {(assignMutation.isPending || createNotFoundMutation.isPending) ? 'Atribuindo...' : `Atribuir ${selectedIds.size} leads`}
               </Button>
               <Button size="sm" variant="ghost" onClick={() => { setSelectedIds(new Set()); setSelectCount(''); }}>Limpar</Button>
             </>
