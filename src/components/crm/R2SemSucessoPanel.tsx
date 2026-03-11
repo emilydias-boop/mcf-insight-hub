@@ -1,11 +1,9 @@
 import { useState, useMemo } from 'react';
-import { format, parseISO, formatDistanceToNow } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { format, parseISO } from 'date-fns';
 import {
-  Calendar, Phone, User, Clock, AlertCircle, MoreVertical,
+  Calendar, Phone, User, AlertCircle, MoreVertical,
   RotateCcw, UserCheck, Repeat, XCircle, Undo2,
 } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -18,7 +16,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useR2SemSucessoLeads, useRevertSemSucesso } from '@/hooks/useR2SemSucesso';
+import { useR2SemSucessoLeads, useRevertSemSucesso, R2SemSucessoLead } from '@/hooks/useR2SemSucesso';
 import { R2PendingLead } from '@/hooks/useR2PendingLeads';
 import { R2QuickScheduleModal } from './R2QuickScheduleModal';
 import { RefundModal } from './RefundModal';
@@ -26,7 +24,6 @@ import { useRecognizePartner } from '@/hooks/useRecognizePartner';
 import { useRecognizeRecurrence } from '@/hooks/useRecognizeRecurrence';
 import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
 import { R2CloserWithAvailability } from '@/hooks/useR2AgendaData';
-import { cn } from '@/lib/utils';
 
 interface R2SemSucessoPanelProps {
   closers: R2CloserWithAvailability[];
@@ -49,7 +46,6 @@ export function R2SemSucessoPanel({ closers }: R2SemSucessoPanelProps) {
   const [recurrenceLead, setRecurrenceLead] = useState<R2PendingLead | null>(null);
   const recognizeRecurrence = useRecognizeRecurrence();
 
-  // Convert closers for modal
   const closersForModal = useMemo(() => {
     return closers.map(c => ({
       id: c.id,
@@ -93,7 +89,7 @@ export function R2SemSucessoPanel({ closers }: R2SemSucessoPanelProps) {
   return (
     <>
       <div className="mb-4 flex items-center gap-4">
-        <Badge variant="outline" className="text-sm py-1 px-3 bg-red-500/10 text-red-600 border-red-500/20">
+        <Badge variant="outline" className="text-sm py-1 px-3 bg-destructive/10 text-destructive border-destructive/20">
           {leads.length} sem sucesso
         </Badge>
         <span className="text-sm text-muted-foreground">
@@ -103,25 +99,25 @@ export function R2SemSucessoPanel({ closers }: R2SemSucessoPanelProps) {
 
       <ScrollArea className="h-[500px] pr-4">
         <div className="space-y-3">
-          {leads.map((lead: any) => {
+          {leads.map((lead: R2SemSucessoLead) => {
             const leadName = lead.attendee_name || lead.deal?.contact?.name || lead.deal?.name || 'Lead';
             const phone = lead.attendee_phone || lead.deal?.contact?.phone;
             const r1Date = lead.meeting_slot?.scheduled_at
               ? parseISO(lead.meeting_slot.scheduled_at)
               : null;
             const closerName = lead.meeting_slot?.closer?.name || 'Closer não identificado';
-            const tentativas = lead.custom_fields?.sem_sucesso_tentativas || 0;
-            const observacao = lead.custom_fields?.sem_sucesso_observacao || '';
+            const tentativas = lead.sem_sucesso_tentativas || 0;
+            const observacao = lead.sem_sucesso_observacao || '';
 
             return (
-              <Card key={lead.id} className="border-l-4 border-l-red-400 hover:bg-muted/50 transition-colors">
+              <Card key={lead.id} className="border-l-4 border-l-destructive hover:bg-muted/50 transition-colors">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <User className="h-4 w-4 text-muted-foreground shrink-0" />
                         <span className="font-medium truncate">{leadName}</span>
-                        <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 shrink-0">
+                        <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 shrink-0">
                           Sem Sucesso
                         </Badge>
                         {tentativas > 0 && (
@@ -140,7 +136,7 @@ export function R2SemSucessoPanel({ closers }: R2SemSucessoPanelProps) {
 
                       {observacao && (
                         <p className="text-xs text-muted-foreground mb-1 italic line-clamp-2">
-                          "{observacao}"
+                          &ldquo;{observacao}&rdquo;
                         </p>
                       )}
 
@@ -158,7 +154,6 @@ export function R2SemSucessoPanel({ closers }: R2SemSucessoPanelProps) {
                       </div>
                     </div>
 
-                    {/* Actions Menu */}
                     <div className="shrink-0">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -171,32 +166,32 @@ export function R2SemSucessoPanel({ closers }: R2SemSucessoPanelProps) {
                             setSelectedLead(lead);
                             setScheduleModalOpen(true);
                           }}>
-                            <Calendar className="h-4 w-4 mr-2 text-purple-600" />
+                            <Calendar className="h-4 w-4 mr-2 text-primary" />
                             Agendar R2
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => revertSemSucesso.mutate(lead.id)}>
-                            <Undo2 className="h-4 w-4 mr-2 text-blue-600" />
+                            <Undo2 className="h-4 w-4 mr-2 text-primary" />
                             Voltar para Pendentes
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => {
                             setRefundLead(lead);
                             setRefundModalOpen(true);
                           }}>
-                            <RotateCcw className="h-4 w-4 mr-2 text-orange-600" />
+                            <RotateCcw className="h-4 w-4 mr-2 text-warning" />
                             Reembolso
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => {
                             setPartnerLead(lead);
                             setPartnerDialogOpen(true);
                           }}>
-                            <UserCheck className="h-4 w-4 mr-2 text-blue-600" />
+                            <UserCheck className="h-4 w-4 mr-2 text-primary" />
                             Reconhecer Parceiro
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => {
                             setRecurrenceLead(lead);
                             setRecurrenceDialogOpen(true);
                           }}>
-                            <Repeat className="h-4 w-4 mr-2 text-green-600" />
+                            <Repeat className="h-4 w-4 mr-2 text-primary" />
                             Reconhecer Recorrência
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -210,7 +205,6 @@ export function R2SemSucessoPanel({ closers }: R2SemSucessoPanelProps) {
         </div>
       </ScrollArea>
 
-      {/* Schedule Modal */}
       <R2QuickScheduleModal
         open={scheduleModalOpen}
         onOpenChange={(open) => { setScheduleModalOpen(open); if (!open) setSelectedLead(null); }}
@@ -234,7 +228,6 @@ export function R2SemSucessoPanel({ closers }: R2SemSucessoPanelProps) {
         } : undefined}
       />
 
-      {/* Refund Modal */}
       <RefundModal
         open={refundModalOpen}
         onOpenChange={(open) => { setRefundModalOpen(open); if (!open) setRefundLead(null); }}
@@ -245,7 +238,6 @@ export function R2SemSucessoPanel({ closers }: R2SemSucessoPanelProps) {
         meetingType="r1"
       />
 
-      {/* Partner Recognition */}
       <AlertDialog open={partnerDialogOpen} onOpenChange={setPartnerDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -277,7 +269,6 @@ export function R2SemSucessoPanel({ closers }: R2SemSucessoPanelProps) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Recurrence Recognition */}
       <AlertDialog open={recurrenceDialogOpen} onOpenChange={setRecurrenceDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
