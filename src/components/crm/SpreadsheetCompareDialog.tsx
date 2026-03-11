@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Upload, FileSpreadsheet, Search, CheckCircle2, XCircle, Download, Tag, ClipboardPaste, UserPlus, Loader2, ArrowRightLeft } from 'lucide-react';
+import { Upload, FileSpreadsheet, Search, CheckCircle2, XCircle, Download, Tag, ClipboardPaste, UserPlus, Loader2, ArrowRightLeft, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -17,9 +17,11 @@ import { DealStatus, getDealStatusLabel, getDealStatusColor } from '@/lib/dealSt
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useSdrsFromSquad } from '@/hooks/useSdrsFromSquad';
 
 type Step = 'upload' | 'mapping' | 'results';
 type StatusFilter = 'all' | 'found_in_current' | 'found_elsewhere' | 'not_found';
+type AssignMode = 'single' | 'distribute';
 
 const COLUMN_KEYS = ['name', 'email', 'phone'] as const;
 type ColumnKey = typeof COLUMN_KEYS[number];
@@ -31,7 +33,7 @@ const COLUMN_LABELS: Record<ColumnKey, string> = {
 };
 
 const AUTO_MAP_HINTS: Record<ColumnKey, string[]> = {
-  name: ['nome', 'name', 'lead', 'contato', 'contact'],
+  name: ['nome', 'name', 'lead', 'contato', 'contact', 'cliente'],
   email: ['email', 'e-mail', 'mail'],
   phone: ['telefone', 'phone', 'celular', 'tel', 'whatsapp'],
 };
@@ -68,7 +70,7 @@ function detectSeparator(lines: string[]): string {
 /** Check if line looks like a header */
 function looksLikeHeader(line: string): boolean {
   const lower = line.toLowerCase();
-  const headerWords = ['nome', 'name', 'telefone', 'phone', 'email', 'contato', 'celular'];
+  const headerWords = ['nome', 'name', 'telefone', 'phone', 'email', 'contato', 'celular', 'cliente'];
   return headerWords.some(w => lower.includes(w));
 }
 
@@ -131,9 +133,15 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
   const [selectedOwner, setSelectedOwner] = useState<string | null>(null);
   const [isComparing, setIsComparing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [customTag, setCustomTag] = useState('');
+  const [selectedStageId, setSelectedStageId] = useState<string>('');
+  const [assignMode, setAssignMode] = useState<AssignMode>('single');
 
   const createNotFoundMutation = useCreateNotFoundDeals();
   const bulkTransfer = useBulkTransfer();
+
+  // SDRs do Consórcio for distribution
+  const { data: consorcioSdrs } = useSdrsFromSquad('consorcio');
 
   // Query available SDRs/Closers
   const { data: availableUsers, isLoading: loadingUsers } = useQuery({
@@ -148,6 +156,27 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     },
     enabled: open && step === 'results',
   });
+
+  // Query stages for the current pipeline
+  const { data: pipelineStages } = useQuery({
+    queryKey: ['pipeline-stages', originId],
+    queryFn: async () => {
+      if (!originId) return [];
+      const { data } = await supabase
+        .from('crm_stages')
+        .select('id, stage_name, stage_order')
+        .eq('origin_id', originId)
+        .order('stage_order', { ascending: true });
+      return data || [];
+    },
+    enabled: !!originId && open && step === 'results',
+  });
+
+  // Detect extra columns (not mapped to name/email/phone)
+  const extraColumnHeaders = useMemo(() => {
+    const mappedValues = new Set(Object.values(columnMapping).filter(Boolean));
+    return headers.filter(h => !mappedValues.has(h));
+  }, [headers, columnMapping]);
 
   const processFileData = useCallback((hdrs: string[], data: any[]) => {
     setHeaders(hdrs);
@@ -211,11 +240,23 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
       return;
     }
 
-    const rows = rawData.map((row) => ({
-      name: String(row[columnMapping.name] || ''),
-      email: String(row[columnMapping.email] || ''),
-      phone: String(row[columnMapping.phone] || ''),
-    }));
+    // Build extra columns map
+    const mappedValues = new Set(Object.values(columnMapping).filter(Boolean));
+
+    const rows = rawData.map((row) => {
+      const extraColumns: Record<string, string> = {};
+      for (const h of headers) {
+        if (!mappedValues.has(h)) {
+          extraColumns[h] = String(row[h] || '');
+        }
+      }
+      return {
+        name: String(row[columnMapping.name] || ''),
+        email: String(row[columnMapping.email] || ''),
+        phone: String(row[columnMapping.phone] || ''),
+        extraColumns,
+      };
+    });
 
     setIsComparing(true);
     try {
@@ -224,7 +265,14 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
         originId,
         (current, total) => setBatchProgress({ current, total })
       );
-      setResults(compared);
+
+      // Merge extraColumns back into results
+      const resultsWithExtras = compared.map((r, i) => ({
+        ...r,
+        extraColumns: rows[i]?.extraColumns,
+      }));
+
+      setResults(resultsWithExtras);
       setSelectedOwner(null);
       setStep('results');
 
@@ -238,88 +286,184 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
       setIsComparing(false);
       setBatchProgress(null);
     }
-  }, [rawData, columnMapping, originId]);
+  }, [rawData, columnMapping, originId, headers]);
 
   // Smart import: handle all 3 categories
   const handleSmartImport = useCallback(async () => {
-    if (!originId || !selectedOwner) {
-      toast.error('Selecione um SDR/Closer');
+    if (!originId) {
+      toast.error('Pipeline não identificada');
       return;
     }
 
-    const user = availableUsers?.find((u: any) => u.email === selectedOwner);
-    if (!user) return;
+    // Determine SDR list based on assign mode
+    let sdrList: Array<{ email: string; id: string; name: string }> = [];
+
+    if (assignMode === 'distribute') {
+      if (!consorcioSdrs?.length) {
+        toast.error('Nenhum SDR do Consórcio encontrado');
+        return;
+      }
+      sdrList = consorcioSdrs.map(s => ({ email: s.email || '', id: s.id, name: s.name }));
+    } else {
+      if (!selectedOwner) {
+        toast.error('Selecione um SDR/Closer');
+        return;
+      }
+      const user = availableUsers?.find((u: any) => u.email === selectedOwner);
+      if (!user) return;
+      sdrList = [{ email: user.email, id: user.id, name: user.full_name || user.email }];
+    }
 
     setIsImporting(true);
     setBatchProgress({ current: 0, total: 3 });
+
+    const tags = customTag.trim() ? [customTag.trim()] : undefined;
+    const stageId = selectedStageId || undefined;
 
     try {
       let updatedCount = 0;
       let createdCount = 0;
       let skippedCount = 0;
 
-      // 1. found_in_current → update owner
+      // 1. found_in_current → update owner (use first SDR for single, round-robin for distribute)
       const inCurrent = results.filter(r => r.matchStatus === 'found_in_current' && r.localDealId);
       if (inCurrent.length > 0) {
         setBatchProgress({ current: 1, total: 3 });
-        const transferResult = await bulkTransfer.mutateAsync({
-          dealIds: inCurrent.map(r => r.localDealId!),
-          newOwnerEmail: user.email,
-          newOwnerName: user.full_name || user.email,
-          newOwnerProfileId: user.id,
-        });
-        updatedCount = transferResult.success;
+        if (assignMode === 'distribute') {
+          // Group by SDR round-robin
+          const groups = new Map<string, string[]>();
+          inCurrent.forEach((r, i) => {
+            const sdr = sdrList[i % sdrList.length];
+            if (!groups.has(sdr.email)) groups.set(sdr.email, []);
+            groups.get(sdr.email)!.push(r.localDealId!);
+          });
+          for (const [email, dealIds] of groups) {
+            const sdr = sdrList.find(s => s.email === email)!;
+            const result = await bulkTransfer.mutateAsync({
+              dealIds,
+              newOwnerEmail: sdr.email,
+              newOwnerName: sdr.name,
+              newOwnerProfileId: sdr.id,
+            });
+            updatedCount += result.success;
+          }
+        } else {
+          const sdr = sdrList[0];
+          const transferResult = await bulkTransfer.mutateAsync({
+            dealIds: inCurrent.map(r => r.localDealId!),
+            newOwnerEmail: sdr.email,
+            newOwnerName: sdr.name,
+            newOwnerProfileId: sdr.id,
+          });
+          updatedCount = transferResult.success;
+        }
       }
 
       // 2. found_elsewhere → create deal with existing contact_id
       const elsewhere = results.filter(r => r.matchStatus === 'found_elsewhere' && r.contactId);
       if (elsewhere.length > 0) {
         setBatchProgress({ current: 2, total: 3 });
-        const elseLeads = elsewhere.map(r => ({
-          name: r.localContactName || r.excelName,
-          email: r.localContactEmail || r.excelEmail,
-          phone: r.localContactPhone || r.excelPhone,
-          contact_id: r.contactId!,
-        }));
-
-        const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
-          body: {
-            leads: elseLeads,
-            origin_id: originId,
-            owner_email: user.email,
-            owner_profile_id: user.id,
-          },
-        });
-        if (error) throw error;
-        createdCount += (data as any).created || 0;
-        skippedCount += (data as any).skipped || 0;
+        if (assignMode === 'distribute') {
+          const groups = new Map<string, typeof elsewhere>();
+          elsewhere.forEach((r, i) => {
+            const sdr = sdrList[i % sdrList.length];
+            if (!groups.has(sdr.email)) groups.set(sdr.email, []);
+            groups.get(sdr.email)!.push(r);
+          });
+          for (const [email, leads] of groups) {
+            const sdr = sdrList.find(s => s.email === email)!;
+            const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
+              body: {
+                leads: leads.map(r => ({
+                  name: r.localContactName || r.excelName,
+                  email: r.localContactEmail || r.excelEmail,
+                  phone: r.localContactPhone || r.excelPhone,
+                  contact_id: r.contactId!,
+                })),
+                origin_id: originId,
+                owner_email: sdr.email,
+                owner_profile_id: sdr.id,
+                tags,
+                stage_id: stageId,
+              },
+            });
+            if (error) throw error;
+            createdCount += (data as any).created || 0;
+            skippedCount += (data as any).skipped || 0;
+          }
+        } else {
+          const sdr = sdrList[0];
+          const elseLeads = elsewhere.map(r => ({
+            name: r.localContactName || r.excelName,
+            email: r.localContactEmail || r.excelEmail,
+            phone: r.localContactPhone || r.excelPhone,
+            contact_id: r.contactId!,
+          }));
+          const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
+            body: {
+              leads: elseLeads,
+              origin_id: originId,
+              owner_email: sdr.email,
+              owner_profile_id: sdr.id,
+              tags,
+              stage_id: stageId,
+            },
+          });
+          if (error) throw error;
+          createdCount += (data as any).created || 0;
+          skippedCount += (data as any).skipped || 0;
+        }
       }
 
       // 3. not_found → create contact + deal
       const notFound = results.filter(r => r.matchStatus === 'not_found');
       if (notFound.length > 0) {
         setBatchProgress({ current: 3, total: 3 });
-        const newLeads = notFound.map(r => ({
-          name: r.excelName,
-          email: r.excelEmail,
-          phone: r.excelPhone,
-        }));
-
-        const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
-          body: {
-            leads: newLeads,
-            origin_id: originId,
-            owner_email: user.email,
-            owner_profile_id: user.id,
-          },
-        });
-        if (error) throw error;
-        createdCount += (data as any).created || 0;
-        skippedCount += (data as any).skipped || 0;
+        if (assignMode === 'distribute') {
+          const groups = new Map<string, typeof notFound>();
+          notFound.forEach((r, i) => {
+            const sdr = sdrList[i % sdrList.length];
+            if (!groups.has(sdr.email)) groups.set(sdr.email, []);
+            groups.get(sdr.email)!.push(r);
+          });
+          for (const [email, leads] of groups) {
+            const sdr = sdrList.find(s => s.email === email)!;
+            const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
+              body: {
+                leads: leads.map(r => ({ name: r.excelName, email: r.excelEmail, phone: r.excelPhone })),
+                origin_id: originId,
+                owner_email: sdr.email,
+                owner_profile_id: sdr.id,
+                tags,
+                stage_id: stageId,
+              },
+            });
+            if (error) throw error;
+            createdCount += (data as any).created || 0;
+            skippedCount += (data as any).skipped || 0;
+          }
+        } else {
+          const sdr = sdrList[0];
+          const newLeads = notFound.map(r => ({ name: r.excelName, email: r.excelEmail, phone: r.excelPhone }));
+          const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
+            body: {
+              leads: newLeads,
+              origin_id: originId,
+              owner_email: sdr.email,
+              owner_profile_id: sdr.id,
+              tags,
+              stage_id: stageId,
+            },
+          });
+          if (error) throw error;
+          createdCount += (data as any).created || 0;
+          skippedCount += (data as any).skipped || 0;
+        }
       }
 
+      const distributionMsg = assignMode === 'distribute' ? ` (distribuídos entre ${sdrList.length} SDRs)` : '';
       toast.success(
-        `✅ ${updatedCount} transferidos, ${createdCount} criados${skippedCount > 0 ? `, ${skippedCount} já existiam` : ''}`
+        `✅ ${updatedCount} transferidos, ${createdCount} criados${skippedCount > 0 ? `, ${skippedCount} já existiam` : ''}${distributionMsg}`
       );
     } catch (err: any) {
       toast.error(`Erro na importação: ${err.message}`);
@@ -327,7 +471,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
       setIsImporting(false);
       setBatchProgress(null);
     }
-  }, [originId, selectedOwner, availableUsers, results, bulkTransfer]);
+  }, [originId, selectedOwner, assignMode, consorcioSdrs, availableUsers, results, bulkTransfer, customTag, selectedStageId]);
 
   // Counts
   const counts = useMemo(() => {
@@ -352,7 +496,8 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
         r.excelName.toLowerCase().includes(s) ||
         r.excelEmail.toLowerCase().includes(s) ||
         r.excelPhone.includes(searchText) ||
-        (r.localContactName || '').toLowerCase().includes(s)
+        (r.localContactName || '').toLowerCase().includes(s) ||
+        Object.values(r.extraColumns || {}).some(v => v.toLowerCase().includes(s))
       );
     }
 
@@ -360,19 +505,28 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
   }, [results, statusFilter, searchText]);
 
   const handleExport = useCallback(() => {
-    const exportData = filteredResults.map(r => ({
-      'Nome (Planilha)': r.excelName,
-      'Email (Planilha)': r.excelEmail,
-      'Telefone (Planilha)': r.excelPhone,
-      'Status': r.matchStatus === 'found_in_current' ? 'Já nesta pipeline'
-        : r.matchStatus === 'found_elsewhere' ? 'Em outra pipeline'
-        : 'Não encontrado',
-      'Pipeline Origem': r.originName || '',
-      'Nome (Sistema)': r.localContactName || '',
-      'Email (Sistema)': r.localContactEmail || '',
-      'Telefone (Sistema)': r.localContactPhone || '',
-      'Estágio': r.localStageName || '',
-    }));
+    const exportData = filteredResults.map(r => {
+      const base: Record<string, string> = {
+        'Nome (Planilha)': r.excelName,
+        'Email (Planilha)': r.excelEmail,
+        'Telefone (Planilha)': r.excelPhone,
+        'Status': r.matchStatus === 'found_in_current' ? 'Já nesta pipeline'
+          : r.matchStatus === 'found_elsewhere' ? 'Em outra pipeline'
+          : 'Não encontrado',
+        'Pipeline Origem': r.originName || '',
+        'Nome (Sistema)': r.localContactName || '',
+        'Email (Sistema)': r.localContactEmail || '',
+        'Telefone (Sistema)': r.localContactPhone || '',
+        'Estágio': r.localStageName || '',
+      };
+      // Add extra columns
+      if (r.extraColumns) {
+        for (const [key, val] of Object.entries(r.extraColumns)) {
+          base[key] = val;
+        }
+      }
+      return base;
+    });
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
@@ -392,6 +546,9 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     setSelectedOwner(null);
     setIsComparing(false);
     setIsImporting(false);
+    setCustomTag('');
+    setSelectedStageId('');
+    setAssignMode('single');
   };
 
   const getStatusIcon = (status: SpreadsheetRow['matchStatus']) => {
@@ -413,9 +570,13 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     }
   };
 
+  const canImport = assignMode === 'distribute'
+    ? (consorcioSdrs?.length ?? 0) > 0
+    : !!selectedOwner;
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleReset(); onOpenChange(v); }}>
-      <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
@@ -501,6 +662,16 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                 </div>
               ))}
             </div>
+
+            {extraColumnHeaders.length > 0 && (
+              <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded border">
+                <span className="font-medium">Colunas extras detectadas:</span>{' '}
+                {extraColumnHeaders.join(', ')}
+                <br />
+                <span className="text-muted-foreground">Estas colunas serão preservadas e exibidas nos resultados.</span>
+              </div>
+            )}
+
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={handleReset}>Voltar</Button>
               <Button size="sm" onClick={handleCompare} disabled={isComparing}>
@@ -546,62 +717,122 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
               </Badge>
             </div>
 
-            {/* SDR Selector + Import */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 p-3 border rounded-lg bg-muted/50">
-              <div className="flex items-center gap-2 flex-1">
-                <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="text-xs font-medium">
-                  Importar todos para esta pipeline com SDR:
-                </span>
+            {/* Tag + Stage */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium flex items-center gap-1">
+                  <Tag className="h-3 w-3" /> Tag (opcional)
+                </label>
+                <Input
+                  placeholder="Ex: sem carta consórcio"
+                  value={customTag}
+                  onChange={(e) => setCustomTag(e.target.value)}
+                  className="h-8 text-xs"
+                />
               </div>
-              <div className="flex items-center gap-2">
-                <Select value={selectedOwner || ''} onValueChange={setSelectedOwner}>
-                  <SelectTrigger className="h-8 text-xs w-[200px]">
-                    <SelectValue placeholder="Selecionar SDR/Closer" />
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Estágio (opcional)</label>
+                <Select value={selectedStageId} onValueChange={setSelectedStageId}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Primeiro estágio (padrão)" />
                   </SelectTrigger>
                   <SelectContent>
-                    {loadingUsers ? (
-                      <div className="flex items-center justify-center py-4">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      </div>
-                    ) : (
-                      availableUsers?.map((user: any) => (
-                        <SelectItem key={user.id} value={user.email}>
-                          <span className="flex items-center gap-2">
-                            {user.full_name || user.email}
-                            <span className="text-muted-foreground text-xs">
-                              ({user.user_roles?.[0]?.role?.toUpperCase()})
-                            </span>
-                          </span>
-                        </SelectItem>
-                      ))
-                    )}
+                    <SelectItem value="">Primeiro estágio (padrão)</SelectItem>
+                    {pipelineStages?.map((stage: any) => (
+                      <SelectItem key={stage.id} value={stage.id}>{stage.stage_name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            {/* Assignment Mode + SDR Selector + Import */}
+            <div className="flex flex-col gap-2 p-3 border rounded-lg bg-muted/50">
+              <div className="flex items-center gap-3">
+                <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-xs font-medium">Modo de atribuição:</span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={assignMode === 'single' ? 'default' : 'outline'}
+                    className="text-xs h-7 px-3"
+                    onClick={() => setAssignMode('single')}
+                  >
+                    SDR único
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={assignMode === 'distribute' ? 'default' : 'outline'}
+                    className="text-xs h-7 px-3"
+                    onClick={() => setAssignMode('distribute')}
+                  >
+                    <Users className="h-3 w-3 mr-1" />
+                    Distribuir igualmente
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {assignMode === 'single' ? (
+                  <Select value={selectedOwner || ''} onValueChange={setSelectedOwner}>
+                    <SelectTrigger className="h-8 text-xs w-[250px]">
+                      <SelectValue placeholder="Selecionar SDR/Closer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {loadingUsers ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        </div>
+                      ) : (
+                        availableUsers?.map((user: any) => (
+                          <SelectItem key={user.id} value={user.email}>
+                            <span className="flex items-center gap-2">
+                              {user.full_name || user.email}
+                              <span className="text-muted-foreground text-xs">
+                                ({user.user_roles?.[0]?.role?.toUpperCase()})
+                              </span>
+                            </span>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    {consorcioSdrs?.length
+                      ? `${consorcioSdrs.length} SDRs do Consórcio: ${consorcioSdrs.map(s => s.name.split(' ')[0]).join(', ')}`
+                      : 'Carregando SDRs...'}
+                  </div>
+                )}
                 <Button
                   size="sm"
-                  className="text-xs h-8"
+                  className="text-xs h-8 ml-auto"
                   onClick={handleSmartImport}
-                  disabled={!selectedOwner || isImporting || results.length === 0}
+                  disabled={!canImport || isImporting || results.length === 0}
                 >
                   {isImporting ? (
                     <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Importando...</>
                   ) : (
-                    <>
-                      Importar {results.length} leads
-                    </>
+                    <>Importar {results.length} leads</>
                   )}
                 </Button>
               </div>
             </div>
 
             {/* What will happen */}
-            {selectedOwner && (
+            {canImport && (
               <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded border space-y-1">
                 <p className="font-medium">Ao importar:</p>
                 {counts.inCurrent > 0 && <p>• {counts.inCurrent} leads já nesta pipeline → <strong>transferir owner</strong></p>}
                 {counts.elsewhere > 0 && <p>• {counts.elsewhere} contatos de outras pipelines → <strong>criar deal aqui</strong> (sem duplicar contato)</p>}
                 {counts.notFound > 0 && <p>• {counts.notFound} novos → <strong>criar contato + deal</strong></p>}
+                {customTag && <p>• Tag: <Badge variant="outline" className="text-xs">{customTag}</Badge></p>}
+                {selectedStageId && pipelineStages && (
+                  <p>• Estágio: <strong>{pipelineStages.find((s: any) => s.id === selectedStageId)?.stage_name}</strong></p>
+                )}
+                {assignMode === 'distribute' && consorcioSdrs && (
+                  <p>• Distribuição round-robin entre {consorcioSdrs.length} SDRs</p>
+                )}
               </div>
             )}
 
@@ -620,7 +851,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
               <div className="relative flex-1">
                 <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por nome, email ou telefone..."
+                  placeholder="Buscar por nome, email, telefone ou colunas extras..."
                   className="pl-8 h-8 text-xs"
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
@@ -636,9 +867,12 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs sticky left-0 bg-background z-10">Status</TableHead>
                     <TableHead className="text-xs">Nome (Planilha)</TableHead>
                     <TableHead className="text-xs">Tel (Planilha)</TableHead>
+                    {extraColumnHeaders.map(h => (
+                      <TableHead key={h} className="text-xs whitespace-nowrap">{h}</TableHead>
+                    ))}
                     <TableHead className="text-xs">Nome (Sistema)</TableHead>
                     <TableHead className="text-xs">Tel (Sistema)</TableHead>
                     <TableHead className="text-xs">Pipeline / Estágio</TableHead>
@@ -647,7 +881,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                 <TableBody>
                   {filteredResults.slice(0, 200).map((row, i) => (
                     <TableRow key={i} className={row.matchStatus === 'not_found' ? 'opacity-60' : ''}>
-                      <TableCell className="py-1">
+                      <TableCell className="py-1 sticky left-0 bg-background z-10">
                         <div className="flex items-center gap-1">
                           {getStatusIcon(row.matchStatus)}
                           <span className="text-xs">{getStatusLabel(row.matchStatus)}</span>
@@ -655,6 +889,11 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                       </TableCell>
                       <TableCell className="text-xs py-1">{row.excelName}</TableCell>
                       <TableCell className="text-xs py-1">{row.excelPhone}</TableCell>
+                      {extraColumnHeaders.map(h => (
+                        <TableCell key={h} className="text-xs py-1 whitespace-nowrap">
+                          {row.extraColumns?.[h] || '—'}
+                        </TableCell>
+                      ))}
                       <TableCell className="text-xs py-1">{row.localContactName || '—'}</TableCell>
                       <TableCell className="text-xs py-1">{row.localContactPhone || '—'}</TableCell>
                       <TableCell className="text-xs py-1">
@@ -668,14 +907,14 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                   ))}
                   {filteredResults.length > 200 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-2">
+                      <TableCell colSpan={6 + extraColumnHeaders.length} className="text-center text-xs text-muted-foreground py-2">
                         Mostrando 200 de {filteredResults.length} resultados.
                       </TableCell>
                     </TableRow>
                   )}
                   {filteredResults.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-4">
+                      <TableCell colSpan={6 + extraColumnHeaders.length} className="text-center text-xs text-muted-foreground py-4">
                         Nenhum resultado encontrado
                       </TableCell>
                     </TableRow>
