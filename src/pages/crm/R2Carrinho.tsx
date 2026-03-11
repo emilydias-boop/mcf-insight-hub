@@ -89,26 +89,9 @@ export default function R2Carrinho() {
     return meetingsExtended.find(m => m.id === selectedMeetingId) || null;
   }, [selectedMeetingId, meetingsExtended]);
 
-  const handlePrevWeek = () => {
-    if (activeOverride) {
-      setIgnoreOverride(true);
-      setWeekDate(subWeeks(parseISO(override.start), 1));
-    } else {
-      setWeekDate(subWeeks(weekDate, 1));
-    }
-  };
-  const handleNextWeek = () => {
-    if (activeOverride) {
-      setIgnoreOverride(true);
-      setWeekDate(addWeeks(parseISO(override.start), 1));
-    } else {
-      setWeekDate(addWeeks(weekDate, 1));
-    }
-  };
-  const handleToday = () => {
-    setIgnoreOverride(true);
-    setWeekDate(new Date());
-  };
+  const handlePrevWeek = () => setWeekDate(subWeeks(weekDate, 1));
+  const handleNextWeek = () => setWeekDate(addWeeks(weekDate, 1));
+  const handleToday = () => setWeekDate(new Date());
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
