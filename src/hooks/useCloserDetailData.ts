@@ -36,6 +36,7 @@ export interface CloserLead {
   booked_by_name: string | null;
   origin_name: string | null;
   r1_sdr_name?: string | null;
+  is_followup?: boolean;
 }
 
 export interface CloserDetailData {
