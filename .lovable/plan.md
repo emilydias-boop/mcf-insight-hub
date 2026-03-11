@@ -1,39 +1,22 @@
 
 
-## Objetivo
+## Fix: No-show persiste após reagendamento via "+ Agendar R2"
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+Quando um lead dá no-show e é reagendado pelo botão "Reagendar R2" (no card de no-show), o sistema usa `parent_attendee_id` para vincular o novo attendee ao original, e o filtro de no-shows detecta isso e remove da lista.
 
-## Mudanças
+Porém, quando o reagendamento é feito via **"+ Agendar R2"** (botão geral), nenhum `parent_attendee_id` é setado. O filtro não detecta que o deal já tem uma nova R2 agendada, e o lead continua aparecendo na aba No-Shows.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Solução
+Adicionar uma verificação por `deal_id` no hook `useR2NoShowLeads`: se o deal do no-show já possui outro attendee R2 com status ativo (`invited`, `scheduled`, `pre_scheduled`, `completed`, `contract_paid`), excluir da lista de no-shows.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Mudanças
 
-### 2. Hook `useCloserDetailData.ts`
+**`src/hooks/useR2NoShowLeads.ts`**
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+1. **Na função `useR2NoShowLeads`** (após a query de `dealsWithCompletedR2`, ~linha 233): adicionar query para buscar deals que já possuem um attendee R2 com status ativo (`invited`, `scheduled`, `pre_scheduled`). Criar set `dealsWithActiveR2`. No loop de transformação (~linha 267), adicionar filtro: `if (att.deal_id && dealsWithActiveR2.has(att.deal_id)) return;`
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+2. **Na função `useR2NoShowsCount`** (~linha 385): mesma lógica — buscar deals com attendee R2 ativo e subtrair do count final.
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+Isso cobre ambos os cenários: reagendamento via botão dedicado (parent_attendee_id) e via agendamento geral (deal com nova R2 ativa).
 
