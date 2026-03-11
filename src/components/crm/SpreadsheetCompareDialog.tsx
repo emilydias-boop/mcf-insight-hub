@@ -318,7 +318,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     setBatchProgress({ current: 0, total: 3 });
 
     const tags = customTag.trim() ? [customTag.trim()] : undefined;
-    const stageId = selectedStageId || undefined;
+    const stageId = selectedStageId === '__default__' ? undefined : selectedStageId;
 
     try {
       let updatedCount = 0;
