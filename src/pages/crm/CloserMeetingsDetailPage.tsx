@@ -103,7 +103,14 @@ export default function CloserMeetingsDetailPage() {
       />
 
       {/* Refresh button */}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {closerId && closerInfo && (
+          <ManualSaleAttributionDialog
+            closerId={closerId}
+            closerName={closerInfo.name}
+            onSuccess={() => refetch()}
+          />
+        )}
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
           <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? "animate-spin" : ""}`} />
           Atualizar
