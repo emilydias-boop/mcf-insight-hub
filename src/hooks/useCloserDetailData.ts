@@ -727,9 +727,15 @@ export function useCloserDetailData({
     };
   }, [closerMetrics, allClosers, closerId]);
 
+  // Merge manual sales into leads list
+  const leadsWithManual = useMemo(() => {
+    const combined = [...leads, ...manualSales];
+    return combined.sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+  }, [leads, manualSales]);
+
   // Combine all leads into a single sorted array
   const allLeads = useMemo(() => {
-    const combined = [...leads, ...noShowLeads, ...scheduledLeads];
+    const combined = [...leadsWithManual, ...noShowLeads, ...scheduledLeads];
     // Deduplicate by attendee_id
     const seen = new Set<string>();
     const unique = combined.filter(l => {
@@ -738,7 +744,7 @@ export function useCloserDetailData({
       return true;
     });
     return unique.sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
-  }, [leads, noShowLeads, scheduledLeads]);
+  }, [leadsWithManual, noShowLeads, scheduledLeads]);
 
   const refetch = () => {
     refetchMetrics();
@@ -746,6 +752,7 @@ export function useCloserDetailData({
     refetchNoShows();
     refetchScheduled();
     refetchR2();
+    refetchManual();
   };
 
   return {
@@ -753,12 +760,12 @@ export function useCloserDetailData({
     closerMetrics,
     teamAverages,
     ranking,
-    leads,
+    leads: leadsWithManual,
     noShowLeads,
     r2Leads,
     allLeads,
     allClosers,
-    isLoading: isLoadingMetrics || isLoadingCloser || isLoadingLeads || isLoadingNoShows || isLoadingScheduled || isLoadingR2,
+    isLoading: isLoadingMetrics || isLoadingCloser || isLoadingLeads || isLoadingNoShows || isLoadingScheduled || isLoadingR2 || isLoadingManual,
     error: metricsError,
     refetch,
   };
