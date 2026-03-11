@@ -197,7 +197,7 @@ export function R2RescheduleModal({
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 h-[calc(90vh-120px)]">
+        <ScrollArea className="flex-1 h-[calc(90vh-180px)]">
           <div className="space-y-4 pr-4 pb-4">
             {/* Current Info */}
             <div className="bg-purple-50 dark:bg-purple-950/30 rounded-lg p-3 text-sm">
