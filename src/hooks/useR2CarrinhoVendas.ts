@@ -205,7 +205,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
 
         let matched = false;
         let isManualLink = false;
-        let attendeeData: { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt?: string | null } | undefined;
+        let attendeeData: { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt: string | null } | undefined;
         let linkedScheduledAt: string | null = null;
 
         // Match por email
