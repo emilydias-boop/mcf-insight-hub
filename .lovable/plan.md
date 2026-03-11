@@ -1,29 +1,39 @@
 
 
-## Plano: Permitir criar e atribuir leads "Não Encontrados" a um SDR
+## Objetivo
 
-### Problema
-Atualmente, a seleção (checkbox) e atribuição só funciona para leads `sem_dono` que já têm `localDealId`. Leads `nao_encontrado` não existem no sistema — não têm contato nem deal criado.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Solução
-Expandir a lógica de seleção para incluir `nao_encontrado`, e ao clicar "Atribuir", usar a edge function `import-spreadsheet-leads` (já existente) para criar contato + deal na Pipeline Inside Sales, já com o SDR como owner.
+## Mudanças
 
-### Alterações
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**Arquivo: `src/pages/crm/LeadsLimbo.tsx`**
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-1. **Expandir seleção para `nao_encontrado`**: Remover a restrição `r.status === 'sem_dono' && r.localDealId` dos métodos `toggleSelect`, `toggleSelectAll`, `selectByCount`, `selectAllFiltered` e do checkbox na tabela. Permitir selecionar rows que sejam `sem_dono` (com dealId) OU `nao_encontrado`.
+### 2. Hook `useCloserDetailData.ts`
 
-2. **Atualizar `handleBulkAssign`**: Separar os selecionados em dois grupos:
-   - **Com deal** (`sem_dono` + `localDealId`): usar `assignMutation` existente (atualizar owner)
-   - **Sem deal** (`nao_encontrado`): usar `useCreateNotFoundDeals` do `useSpreadsheetCompare.ts` passando `{ leads, originId: INSIDE_SALES_ORIGIN_ID, ownerEmail, ownerProfileId }`
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-3. **Importar `useCreateNotFoundDeals`** de `useSpreadsheetCompare.ts` e `INSIDE_SALES_ORIGIN_ID` (já importado).
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-4. **Atualizar contadores**: O botão "Selecionar todos filtrados" deve mostrar a contagem correta (sem_dono + nao_encontrado).
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-5. **Feedback**: Após criação, atualizar os resultados locais mudando status de `nao_encontrado` para `com_dono`.
+### 4. Dados exportados no Excel
 
-### Nenhuma alteração no banco de dados
-A edge function `import-spreadsheet-leads` já cria contato + deal com owner. Não precisa de migração SQL.
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

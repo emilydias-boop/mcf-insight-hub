@@ -21,7 +21,8 @@ import {
   LimboRow,
 } from '@/hooks/useLimboLeads';
 import { useLatestLimboUpload, useSaveLimboUpload } from '@/hooks/useLimboUpload';
-import { CLOSER_LIST } from '@/constants/team';
+import { useCreateNotFoundDeals } from '@/hooks/useSpreadsheetCompare';
+import { CLOSER_LIST, INSIDE_SALES_ORIGIN_ID } from '@/constants/team';
 
 type Step = 'upload' | 'mapping' | 'results';
 type StatusFilter = 'todos' | 'com_dono' | 'sem_dono' | 'nao_encontrado';
@@ -141,6 +142,7 @@ export default function LeadsLimbo() {
   const { data: sdrs } = useActiveSdrs();
   const { data: profiles } = useProfilesByEmail();
   const assignMutation = useAssignLimboOwner();
+  const createNotFoundMutation = useCreateNotFoundDeals();
   const { data: latestUpload, isLoading: loadingUpload } = useLatestLimboUpload();
   const saveLimboUpload = useSaveLimboUpload();
 
@@ -271,6 +273,10 @@ export default function LeadsLimbo() {
   const totalPages = showAll ? 1 : Math.ceil(filtered.length / pageSize);
 
   // Toggle selection
+  // Helper: can this row be selected for assignment?
+  const isSelectable = (r: LimboRow) =>
+    (r.status === 'sem_dono' && r.localDealId) || r.status === 'nao_encontrado';
+
   const toggleSelect = (idx: number) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -283,7 +289,7 @@ export default function LeadsLimbo() {
     const pageStart = page * pageSize;
     const pageIndices = paged
       .map((r, i) => ({ r, globalIdx: showAll ? i : pageStart + i }))
-      .filter(({ r }) => r.status === 'sem_dono' && r.localDealId);
+      .filter(({ r }) => isSelectable(r));
 
     const allPageSelected = pageIndices.length > 0 && pageIndices.every(({ globalIdx }) => selectedIds.has(globalIdx));
 
@@ -306,7 +312,7 @@ export default function LeadsLimbo() {
     const ids = new Set<number>();
     let added = 0;
     for (let i = 0; i < filtered.length && added < count; i++) {
-      if (filtered[i].status === 'sem_dono' && filtered[i].localDealId) {
+      if (isSelectable(filtered[i])) {
         ids.add(i);
         added++;
       }
@@ -317,7 +323,7 @@ export default function LeadsLimbo() {
   const selectAllFiltered = () => {
     const ids = new Set<number>();
     filtered.forEach((r, i) => {
-      if (r.status === 'sem_dono' && r.localDealId) ids.add(i);
+      if (isSelectable(r)) ids.add(i);
     });
     setSelectedIds(ids);
   };
@@ -333,27 +339,79 @@ export default function LeadsLimbo() {
       toast.error('Perfil do SDR não encontrado');
       return;
     }
-    const dealIds = Array.from(selectedIds)
-      .map(i => filtered[i]?.localDealId)
-      .filter(Boolean) as string[];
 
-    if (!dealIds.length) {
-      toast.error('Nenhum deal selecionável');
+    const selectedRows = Array.from(selectedIds).map(i => filtered[i]).filter(Boolean);
+    const existingDeals = selectedRows.filter(r => r.status === 'sem_dono' && r.localDealId);
+    const notFoundLeads = selectedRows.filter(r => r.status === 'nao_encontrado');
+
+    const promises: Promise<void>[] = [];
+
+    // 1. Assign existing deals
+    if (existingDeals.length > 0) {
+      const dealIds = existingDeals.map(r => r.localDealId!);
+      promises.push(
+        new Promise((resolve, reject) => {
+          assignMutation.mutate(
+            { dealIds, ownerEmail: assignSdrEmail, ownerProfileId: profile.id },
+            {
+              onSuccess: () => {
+                setResults(prev =>
+                  prev.map(r => dealIds.includes(r.localDealId || '') ? { ...r, status: 'com_dono' as const, localOwner: assignSdrEmail } : r)
+                );
+                resolve();
+              },
+              onError: reject,
+            }
+          );
+        })
+      );
+    }
+
+    // 2. Create + assign not-found leads via edge function
+    if (notFoundLeads.length > 0) {
+      const leads = notFoundLeads.map(r => ({
+        name: r.excelName,
+        email: r.excelEmail,
+        phone: r.excelPhone || '',
+      }));
+      promises.push(
+        new Promise((resolve, reject) => {
+          createNotFoundMutation.mutate(
+            {
+              leads,
+              originId: INSIDE_SALES_ORIGIN_ID,
+              ownerEmail: assignSdrEmail,
+              ownerProfileId: profile.id,
+            },
+            {
+              onSuccess: () => {
+                // Update local state: mark these as com_dono
+                const notFoundNames = new Set(notFoundLeads.map(r => `${r.excelName}|${r.excelEmail}`));
+                setResults(prev =>
+                  prev.map(r =>
+                    r.status === 'nao_encontrado' && notFoundNames.has(`${r.excelName}|${r.excelEmail}`)
+                      ? { ...r, status: 'com_dono' as const, localOwner: assignSdrEmail }
+                      : r
+                  )
+                );
+                resolve();
+              },
+              onError: reject,
+            }
+          );
+        })
+      );
+    }
+
+    if (promises.length === 0) {
+      toast.error('Nenhum lead selecionável');
       return;
     }
 
-    assignMutation.mutate(
-      { dealIds, ownerEmail: assignSdrEmail, ownerProfileId: profile.id },
-      {
-        onSuccess: () => {
-          setResults(prev =>
-            prev.map(r => dealIds.includes(r.localDealId || '') ? { ...r, status: 'com_dono' as const, localOwner: assignSdrEmail } : r)
-          );
-          setSelectedIds(new Set());
-          setAssignSdrEmail('');
-        },
-      }
-    );
+    Promise.all(promises).then(() => {
+      setSelectedIds(new Set());
+      setAssignSdrEmail('');
+    });
   };
 
   // Export não encontrados
@@ -671,7 +729,7 @@ export default function LeadsLimbo() {
             </Button>
           </div>
           <Button size="sm" variant="outline" onClick={selectAllFiltered}>
-            Selecionar todos filtrados ({filtered.filter(r => r.status === 'sem_dono' && r.localDealId).length})
+            Selecionar todos filtrados ({filtered.filter(r => isSelectable(r)).length})
           </Button>
           {selectedIds.size > 0 && (
             <>
@@ -687,8 +745,8 @@ export default function LeadsLimbo() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button size="sm" onClick={handleBulkAssign} disabled={assignMutation.isPending}>
-                {assignMutation.isPending ? 'Atribuindo...' : `Atribuir ${selectedIds.size} leads`}
+              <Button size="sm" onClick={handleBulkAssign} disabled={assignMutation.isPending || createNotFoundMutation.isPending}>
+                {(assignMutation.isPending || createNotFoundMutation.isPending) ? 'Atribuindo...' : `Atribuir ${selectedIds.size} leads`}
               </Button>
               <Button size="sm" variant="ghost" onClick={() => { setSelectedIds(new Set()); setSelectCount(''); }}>Limpar</Button>
             </>
@@ -709,7 +767,7 @@ export default function LeadsLimbo() {
                         const pageStart = page * pageSize;
                         const pageIndices = paged
                           .map((r, i) => ({ r, globalIdx: showAll ? i : pageStart + i }))
-                          .filter(({ r }) => r.status === 'sem_dono' && r.localDealId);
+                          .filter(({ r }) => isSelectable(r));
                         return pageIndices.length > 0 && pageIndices.every(({ globalIdx }) => selectedIds.has(globalIdx));
                       })()}
                       onCheckedChange={toggleSelectAll}
@@ -729,15 +787,15 @@ export default function LeadsLimbo() {
               <TableBody>
                 {paged.map((row, idx) => {
                   const globalIdx = showAll ? idx : page * pageSize + idx;
-                  const isSemDono = row.status === 'sem_dono';
+                  const selectable = isSelectable(row);
                   return (
                     <TableRow
                       key={globalIdx}
-                      className={`cursor-pointer ${isSemDono ? 'bg-amber-500/5' : row.status === 'nao_encontrado' ? 'bg-destructive/5' : ''}`}
+                      className={`cursor-pointer ${row.status === 'sem_dono' ? 'bg-amber-500/5' : row.status === 'nao_encontrado' ? 'bg-destructive/5' : ''}`}
                       onClick={() => setSelectedLead(row)}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        {isSemDono && row.localDealId && (
+                        {selectable && (
                           <Checkbox
                             checked={selectedIds.has(globalIdx)}
                             onCheckedChange={() => toggleSelect(globalIdx)}
