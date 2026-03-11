@@ -31,10 +31,10 @@ export default function R2Carrinho() {
   const [selectedCarrinhoId, setSelectedCarrinhoId] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
-  const { config, saveConfig } = useCarrinhoConfig();
-
   const weekStart = useMemo(() => getCustomWeekStart(weekDate), [weekDate]);
   const weekEnd = useMemo(() => getCustomWeekEnd(weekDate), [weekDate]);
+
+  const { config, saveConfig, copyFromPreviousWeek } = useCarrinhoConfig(weekStart);
 
   // Fetch KPIs
   const { data: kpis, isLoading: kpisLoading, refetch: refetchKpis } = useR2CarrinhoKPIs(weekStart, weekEnd);
@@ -70,7 +70,6 @@ export default function R2Carrinho() {
   // Compute filtered KPIs from agendadas/aprovados/fora data when a carrinho is selected
   const filteredKpis = useMemo(() => {
     if (!selectedCarrinhoId || !kpis) return kpis;
-    // Recalculate from filtered data
     return {
       ...kpis,
       r2Agendadas: agendadasData.filter(a => ['scheduled', 'invited', 'pending'].includes(a.meeting_status) && a.status !== 'rescheduled').length,
@@ -99,6 +98,7 @@ export default function R2Carrinho() {
     queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-vendas'] });
     queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+    queryClient.invalidateQueries({ queryKey: ['carrinho-config'] });
   };
 
   const handleReschedule = (meetingId: string) => {
@@ -127,6 +127,15 @@ export default function R2Carrinho() {
   const selectedCarrinhoLabel = selectedCarrinhoId 
     ? config.carrinhos.find(c => c.id === selectedCarrinhoId)?.label 
     : null;
+
+  const handleCopyFromPrevious = () => {
+    copyFromPreviousWeek.mutate(undefined, {
+      onSuccess: () => {
+        setConfigDialogOpen(false);
+        setTimeout(() => setConfigDialogOpen(true), 100);
+      },
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -312,6 +321,10 @@ export default function R2Carrinho() {
         config={config}
         onSave={(newConfig) => saveConfig.mutate(newConfig)}
         isSaving={saveConfig.isPending}
+        weekStart={weekStart}
+        weekEnd={weekEnd}
+        onCopyFromPrevious={handleCopyFromPrevious}
+        isCopying={copyFromPreviousWeek.isPending}
       />
     </div>
   );
