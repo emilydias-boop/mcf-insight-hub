@@ -190,10 +190,10 @@ export function AgendaCalendar({
       maxHour = DEFAULT_END_HOUR;
     }
 
-    const totalSlots = (maxHour - minHour) * 4;
+    const totalSlots = (maxHour - minHour) * 2;
     return Array.from({ length: totalSlots }, (_, i) => ({
-      hour: Math.floor(i / 4) + minHour,
-      minute: (i % 4) * 15,
+      hour: Math.floor(i / 2) + minHour,
+      minute: (i % 2) * 30,
       index: i,
     }));
   }, [meetingLinkSlots, r2DailySlotsMap, meetingType, meetings]);
