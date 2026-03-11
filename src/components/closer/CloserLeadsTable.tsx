@@ -227,6 +227,20 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
           </SelectContent>
         </Select>
 
+        {sdrNames.length > 0 && (
+          <Select value={sdrFilter} onValueChange={setSdrFilter}>
+            <SelectTrigger className="w-[180px] h-9">
+              <SelectValue placeholder="SDR" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos SDRs</SelectItem>
+              {sdrNames.map(n => (
+                <SelectItem key={n} value={n}>{n}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
         {hasActiveFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-muted-foreground">
             <X className="h-4 w-4 mr-1" />
