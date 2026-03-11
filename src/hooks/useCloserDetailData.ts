@@ -37,6 +37,7 @@ export interface CloserLead {
   origin_name: string | null;
   r1_sdr_name?: string | null;
   is_followup?: boolean;
+  is_manual?: boolean;
 }
 
 export interface CloserDetailData {
