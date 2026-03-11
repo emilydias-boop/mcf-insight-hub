@@ -1,46 +1,39 @@
 
 
-## Relatório "Não Comprou" — Leads que saíram do carrinho R2 sem comprar
+## Objetivo
 
-### Resumo
-Quando o usuário marca "Não Comprou" em um lead aprovado no Carrinho R2, esse lead já é marcado com `carrinho_status = 'nao_comprou'` na tabela `meeting_slot_attendees`. Vou criar um novo tipo de relatório na Central de Relatórios da BU Incorporador que lista esses leads com histórico completo, filtros e exportação.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Mudanças
+## Mudanças
 
-**1. Novo tipo de relatório: `ReportTypeSelector.tsx`**
-- Adicionar `'nao_comprou'` ao tipo `ReportType`
-- Novo card: título "Não Comprou", descrição "Leads aprovados que não compraram", ícone `UserX`
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**2. Novo hook: `src/hooks/useNaoComprouReport.ts`**
-- Buscar `meeting_slot_attendees` com `carrinho_status = 'nao_comprou'` e `meeting_type = 'r2'`
-- Joins: `meeting_slots` (data R2, closer), `crm_deals` (deal info, contact_id), `crm_contacts` (nome, email, telefone)
-- Buscar R1 info: closer R1, data R1 (dos campos já existentes `r1_date`, `r1_closer_name` ou via attendee R1)
-- Buscar histórico de ligações (`calls` por deal_id): total de ligações, primeira ligação, última ligação
-- Buscar notas do closer (`closer_notes`, `attendee_notes`)
-- Filtros: período (por `carrinho_updated_at`), closer R2, closer R1
-- Retornar interface `NaoComprouLead` com: nome, telefone, email, closer R1, data R1, closer R2, data R2, total ligações, última ligação, notas do closer, motivo/observações
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**3. Novo componente: `src/components/relatorios/NaoComprouReportPanel.tsx`**
-- Filtros: período (DatePicker range baseado em `carrinho_updated_at`), closer R2, closer R1
-- Tabela com colunas: Nome, Telefone, Email, Closer R1, Data R1, Closer R2, Data R2, Ligações, Última Ligação, Notas
-- Botão "Exportar CSV/Excel" para disparo futuro
-- Botão "Copiar Relatório" (clipboard)
-- Linha expansível ou drawer para ver histórico completo do lead (timeline resumida)
+### 2. Hook `useCloserDetailData.ts`
 
-**4. Integrar no `BUReportCenter.tsx`**
-- Adicionar renderização condicional para `selectedReport === 'nao_comprou'`
-- Importar `NaoComprouReportPanel`
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**5. Atualizar `bu-incorporador/Relatorios.tsx`**
-- Adicionar `'nao_comprou'` ao array `availableReports`
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**6. Opcional: na `R2AprovadosList.tsx`**
-- Ao clicar "Não Comprou", após atualizar o status, exibir toast com link para o relatório ("Ver em Relatórios → Não Comprou")
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### Arquivos a editar/criar
-- `src/components/relatorios/ReportTypeSelector.tsx` — adicionar tipo
-- `src/hooks/useNaoComprouReport.ts` — novo hook de dados
-- `src/components/relatorios/NaoComprouReportPanel.tsx` — novo painel
-- `src/components/relatorios/BUReportCenter.tsx` — integrar painel
-- `src/pages/bu-incorporador/Relatorios.tsx` — adicionar ao availableReports
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
