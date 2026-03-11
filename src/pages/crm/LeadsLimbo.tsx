@@ -729,7 +729,7 @@ export default function LeadsLimbo() {
             </Button>
           </div>
           <Button size="sm" variant="outline" onClick={selectAllFiltered}>
-            Selecionar todos filtrados ({filtered.filter(r => r.status === 'sem_dono' && r.localDealId).length})
+            Selecionar todos filtrados ({filtered.filter(r => isSelectable(r)).length})
           </Button>
           {selectedIds.size > 0 && (
             <>
