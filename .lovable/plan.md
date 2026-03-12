@@ -1,39 +1,33 @@
 
 
-## Objetivo
+## Problema: Pipeline solo não permite configurar Distribuição de Dono
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Causa raiz
 
-## Mudanças
+Em `Negocios.tsx` (linha 738-744), quando há uma única pipeline (`hasSinglePipeline`), o `PipelineConfigModal` é aberto com `targetType="group"` e o `selectedPipelineId` (que é um group ID).
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+Porém em `PipelineConfigModal.tsx` (linha 215), a seção "Distribuição de dono" verifica `if (targetType !== 'origin')` e bloqueia o acesso mostrando: *"A distribuição de leads só está disponível para origins específicas"*.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Resultado: o usuário não consegue configurar distribuição nem outras funcionalidades que dependem de uma origin.
 
-### 2. Hook `useCloserDetailData.ts`
+### Correção
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**Arquivo: `src/components/crm/PipelineConfigModal.tsx`**
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+Quando `targetType === 'group'`, buscar as origins filhas desse grupo. Se houver apenas 1 origin, usar automaticamente seu ID para a distribuição. Se houver múltiplas, exibir um seletor para o usuário escolher qual origin configurar.
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+1. Adicionar query para buscar origins do grupo: `crm_origins` filtrado por `group_id = targetId`
+2. Na seção `distribution`, em vez de bloquear para groups:
+   - Se há 1 origin filha: renderizar `LeadDistributionConfig` com essa origin
+   - Se há múltiplas origins: exibir `Select` para escolher a origin, depois renderizar o config
+   - Se há 0 origins: mostrar mensagem informativa
+3. Aplicar a mesma lógica para `webhooks` e `incoming-webhooks` no tab de Integrações (que também usam `originId`)
 
-### 4. Dados exportados no Excel
+**Arquivo: `src/pages/crm/Negocios.tsx`**
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+Manter como está. A correção fica toda no modal.
 
-Formato de data: `dd/MM/yyyy HH:mm`
+### Resultado
 
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+O ícone de engrenagem na pipeline solo abrirá o modal e permitirá configurar distribuição de dono, webhooks e demais funcionalidades mesmo sendo um group, resolvendo automaticamente para a(s) origin(s) filha(s).
 
