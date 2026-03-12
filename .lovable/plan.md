@@ -1,22 +1,39 @@
 
 
-## Fix: Leads reaparecem após transferência no Limbo
+## Objetivo
 
-### Problema
-Quando leads são transferidos (atribuídos a um SDR), o estado local `results` é atualizado corretamente (status muda para `com_dono`), mas os **dados persistidos** na tabela `limbo_uploads` no Supabase não são atualizados. Ao recarregar a página, o sistema carrega os resultados antigos e os leads reaparecem com o status original.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Solução
+## Mudanças
 
-**1. Novo mutation em `src/hooks/useLimboUpload.ts`**
-- Criar `useUpdateLimboResults()` — mutation que faz UPDATE na `limbo_uploads` atualizando `comparison_results` pelo ID do upload mais recente
-- Invalidar `['limbo-upload-latest']` no `onSuccess`
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**2. Sincronizar após atribuição em `src/pages/crm/LeadsLimbo.tsx`**
-- Após o `Promise.all` bem-sucedido no `handleBulkAssign`, chamar o novo mutation para persistir o estado atualizado de `results` de volta no Supabase
-- Usar o `latestUpload.id` para saber qual registro atualizar
-- Isso garante que ao recarregar a página, os leads já apareçam com `com_dono` e não voltem ao status anterior
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### Detalhes técnicos
-- O update é um simples `supabase.from('limbo_uploads').update({ comparison_results: updatedResults }).eq('id', uploadId)`
-- A chamada é feita depois que o `setResults` local já atualizou, usando o valor mais recente do state
+### 2. Hook `useCloserDetailData.ts`
+
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

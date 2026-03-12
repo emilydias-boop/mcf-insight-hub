@@ -20,7 +20,7 @@ import {
   useAssignLimboOwner,
   LimboRow,
 } from '@/hooks/useLimboLeads';
-import { useLatestLimboUpload, useSaveLimboUpload } from '@/hooks/useLimboUpload';
+import { useLatestLimboUpload, useSaveLimboUpload, useUpdateLimboResults } from '@/hooks/useLimboUpload';
 import { useCreateNotFoundDeals } from '@/hooks/useSpreadsheetCompare';
 import { CLOSER_LIST, INSIDE_SALES_ORIGIN_ID } from '@/constants/team';
 
@@ -145,6 +145,7 @@ export default function LeadsLimbo() {
   const createNotFoundMutation = useCreateNotFoundDeals();
   const { data: latestUpload, isLoading: loadingUpload } = useLatestLimboUpload();
   const saveLimboUpload = useSaveLimboUpload();
+  const updateLimboResults = useUpdateLimboResults();
 
   // Load persisted data from Supabase on mount
   useEffect(() => {
@@ -411,6 +412,14 @@ export default function LeadsLimbo() {
     Promise.all(promises).then(() => {
       setSelectedIds(new Set());
       setAssignSdrEmail('');
+      // Persist updated results to Supabase so they survive page reload
+      if (latestUpload?.id) {
+        // Use a callback to get the latest state
+        setResults(prev => {
+          updateLimboResults.mutate({ uploadId: latestUpload.id, results: prev });
+          return prev;
+        });
+      }
     });
   };
 
