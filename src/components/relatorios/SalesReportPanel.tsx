@@ -473,7 +473,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   // Reset página ao mudar filtros
   useMemo(() => {
     setCurrentPage(1);
-  }, [selectedChannel, selectedSource, selectedOriginId, selectedCloserId, searchTerm, dateRange]);
+  }, [selectedChannel, selectedSource, selectedOriginId, selectedCloserId, selectedCloserR2Id, selectedSdr, searchTerm, dateRange]);
   
   const handlePageSizeChange = (value: string) => {
     setItemsPerPage(Number(value));
