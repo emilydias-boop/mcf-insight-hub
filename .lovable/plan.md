@@ -1,50 +1,44 @@
 
 
-## Nova aba "Histórico de Compras" no Relatório do Consórcio
+## Nova aba "Cross-BU" no Relatório do Consórcio
 
-O objetivo é criar uma nova aba de relatório que cruza os leads do Consórcio (tabela `consortium_cards`) com o histórico completo de compras em todas as BUs (tabela `hubla_transactions`), exibindo dados de contato e todas as transações associadas.
+Criar uma nova aba de relatório no estilo lista/tabela flat (igual ao "Transações no Período" do Incorporador mostrado na screenshot), que cruza leads do Consórcio com compras em todas as BUs.
 
-### 1. Novo ReportType: `cross_history`
+### Mudanças
 
-**`src/components/relatorios/ReportTypeSelector.tsx`**
-- Adicionar `'cross_history'` ao type `ReportType`
-- Adicionar opção com ícone `Users` (ou `History`), título "Histórico Parceiros", descrição "Compras cross-BU dos leads"
+#### 1. `src/components/relatorios/ReportTypeSelector.tsx`
+- Adicionar `'cross_bu'` ao union type `ReportType`
+- Nova opção: ícone `History`, título "Cross-BU", descrição "Compras do lead em todas as BUs"
 
-### 2. Novo componente: `CrossHistoryReportPanel.tsx`
+#### 2. Novo `src/components/relatorios/CrossBUReportPanel.tsx`
 
-**`src/components/relatorios/CrossHistoryReportPanel.tsx`**
+**Dados:**
+1. Query 1: Buscar todos os `consortium_cards` (campos: `id`, `nome_completo`, `email`, `telefone`, `grupo`, `cota`, `origem`)
+2. Query 2: Com os emails encontrados, buscar `hubla_transactions` via `.in('customer_email', emails)` — sem filtro de BU, trazendo todo o histórico cross-BU
+3. Join client-side: para cada transação, anexar dados de contato do lead do consórcio
 
-Hook de dados (`useQuery`):
-1. Buscar emails únicos de `consortium_cards` (campo `email`) — são os leads do Consórcio
-2. Com esses emails, buscar todas as transações em `hubla_transactions` (cross-BU, sem filtro de BU)
-3. Também buscar dados de contato: `nome_completo`, `email`, `telefone` de `consortium_cards`
+**Filtros** (mesma row de filtros do SalesReportPanel):
+- Busca por nome/email/telefone
+- Período (DateRange com presets Hoje/Semana/Mês/Custom)
+- Filtro por produto (Select dinâmico)
+- Filtro por status (completed, refunded, etc.)
+- Botão Limpar + Exportar Excel
 
-UI:
-- Filtros: Busca por nome/email, período (DateRange), filtro por produto
-- KPI cards: Total de leads com compras, Total de transações, Faturamento bruto total
-- Tabela principal com colunas: **Cliente** (nome + email + telefone), **Produto**, **Data**, **Bruto**, **Líquido**, **Parcela**, **Fonte**, **Tipo** (Novo/Recorrente), **Status**
-- Agrupamento visual por cliente (ou flat com cliente repetido)
-- Botão de exportar Excel
-- Paginação
+**KPI Cards** (4 cards como no SalesReportPanel):
+- Total de Leads (emails únicos)
+- Total de Transações
+- Faturamento Bruto
+- Ticket Médio
 
-### 3. Registrar no BUReportCenter
+**Tabela flat** (igual ao screenshot):
+| Data | Cliente | Email | Telefone | Grupo/Cota | Produto | Bruto | Líquido | Parcela | Fonte | Status |
 
-**`src/components/relatorios/BUReportCenter.tsx`**
-- Importar `CrossHistoryReportPanel`
-- Adicionar case `selectedReport === 'cross_history'`
+**Paginação** idêntica ao SalesReportPanel (25/50/100 por página)
 
-**`src/pages/bu-consorcio/Relatorio.tsx`**
-- Adicionar `'cross_history'` ao array `availableReports`
+#### 3. `src/components/relatorios/BUReportCenter.tsx`
+- Importar `CrossBUReportPanel`
+- Adicionar case `selectedReport === 'cross_bu'` renderizando `<CrossBUReportPanel bu={bu} />`
 
-### Fluxo de dados
-
-```text
-consortium_cards (email) ──► hubla_transactions (customer_email)
-       │                              │
-       └─ nome, email, telefone       └─ product_name, product_price,
-                                         net_value, sale_date, source,
-                                         installment_number, sale_status
-```
-
-A query busca todos os emails de `consortium_cards`, depois faz `hubla_transactions.in('customer_email', emails)` para trazer o histórico completo cross-BU. Isso mostra exatamente o que o usuário quer: quem comprou consórcio E o que mais comprou nas outras BUs (parceria, contrato, A010, etc).
+#### 4. `src/pages/bu-consorcio/Relatorio.tsx`
+- Adicionar `'cross_bu'` ao array `availableReports`
 
