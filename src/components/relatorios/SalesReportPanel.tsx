@@ -360,19 +360,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     }
   };
 
-  // Unique SDR names for filter dropdown
-  const sdrOptions = useMemo(() => {
-    const set = new Set<string>();
-    // From classified data
-    acquisitionClassified.forEach(c => {
-      if (c.sdrName && !AUTOMATIC_ORIGIN_NAMES.has(c.sdrName)) set.add(c.sdrName);
-    });
-    // From CRM deal owners
-    sdrByEmail.forEach(name => {
-      if (name && !AUTOMATIC_ORIGIN_NAMES.has(name)) set.add(name);
-    });
-    return Array.from(set).sort();
-  }, [acquisitionClassified, sdrByEmail]);
+  // sdrOptions moved after sdrByEmail declaration below
 
   // Has active filters?
   const hasActiveFilters = searchTerm || selectedChannel !== 'all' || selectedSource !== 'all' ||
