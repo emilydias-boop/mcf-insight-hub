@@ -601,96 +601,136 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     <div className="space-y-6">
       {/* Filters */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="flex-1 min-w-[180px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Período</label>
+        <CardContent className="pt-6 space-y-3">
+          {/* Row 1: Date presets + DatePicker + Search */}
+          <div className="flex flex-wrap items-center gap-2">
+            {(['today', 'week', 'month', 'custom'] as DatePreset[]).map(p => (
+              <Button
+                key={p}
+                variant={datePreset === p ? 'default' : 'outline'}
+                size="sm"
+                className="h-8"
+                onClick={() => {
+                  if (p === 'custom') {
+                    setDatePreset('custom');
+                  } else {
+                    handleDatePreset(p);
+                  }
+                }}
+              >
+                {p === 'today' ? 'Hoje' : p === 'week' ? 'Semana' : p === 'month' ? 'Mês' : 'Custom'}
+              </Button>
+            ))}
+
+            <div className="min-w-[200px]">
               <DatePickerCustom
                 mode="range"
                 selected={dateRange}
-                onSelect={(range) => range && setDateRange(range as DateRange)}
+                onSelect={(range) => {
+                  if (range) {
+                    setDateRange(range as DateRange);
+                    setDatePreset('custom');
+                  }
+                }}
                 placeholder="Selecione o período"
               />
             </div>
-            
-            <div className="w-[200px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Buscar</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Nome, email ou telefone..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
+
+            <div className="relative flex-1 min-w-[200px] max-w-[300px]">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Nome, email ou telefone..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 h-9"
+              />
             </div>
-            
-            <div className="w-[120px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Fonte</label>
-              <Select value={selectedSource} onValueChange={setSelectedSource}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Fonte" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  <SelectItem value="hubla">Hubla</SelectItem>
-                  <SelectItem value="make">Make</SelectItem>
-                  <SelectItem value="manual">Manual</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="w-[160px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Closer</label>
-              <Select value={selectedCloserId} onValueChange={setSelectedCloserId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Closer" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {closers.map(closer => (
-                    <SelectItem key={closer.id} value={closer.id}>
-                      {closer.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="w-[160px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Pipeline</label>
-              <Select value={selectedOriginId} onValueChange={setSelectedOriginId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Pipeline" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {origins.map(origin => (
-                    <SelectItem key={origin.id} value={origin.id}>
-                      {origin.display_name || origin.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="w-[120px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Canal</label>
-              <Select value={selectedChannel} onValueChange={setSelectedChannel}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Canal" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="a010">A010</SelectItem>
-                  <SelectItem value="bio">BIO</SelectItem>
-                  <SelectItem value="live">LIVE</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <Button onClick={handleExportExcel} disabled={filteredTransactions.length === 0}>
+          </div>
+
+          {/* Row 2: SDR, Closer R1, Closer R2, Canal, Pipeline, Fonte, Limpar, Excel */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={selectedSdr} onValueChange={setSelectedSdr}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="SDR" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos SDRs</SelectItem>
+                {sdrOptions.map(name => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedCloserId} onValueChange={setSelectedCloserId}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="Closer R1" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos R1</SelectItem>
+                {closers.map(closer => (
+                  <SelectItem key={closer.id} value={closer.id}>{closer.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedCloserR2Id} onValueChange={setSelectedCloserR2Id}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="Closer R2" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos R2</SelectItem>
+                {r2Closers.map(closer => (
+                  <SelectItem key={closer.id} value={closer.id}>{closer.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedChannel} onValueChange={setSelectedChannel}>
+              <SelectTrigger className="w-[120px] h-9">
+                <SelectValue placeholder="Canal" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="a010">A010</SelectItem>
+                <SelectItem value="bio">BIO</SelectItem>
+                <SelectItem value="live">LIVE</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedOriginId} onValueChange={setSelectedOriginId}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="Pipeline" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {origins.map(origin => (
+                  <SelectItem key={origin.id} value={origin.id}>
+                    {origin.display_name || origin.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedSource} onValueChange={setSelectedSource}>
+              <SelectTrigger className="w-[120px] h-9">
+                <SelectValue placeholder="Fonte" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="hubla">Hubla</SelectItem>
+                <SelectItem value="make">Make</SelectItem>
+                <SelectItem value="manual">Manual</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearAllFilters} className="h-9 px-2 text-muted-foreground">
+                <X className="h-4 w-4 mr-1" />
+                Limpar
+              </Button>
+            )}
+
+            <Button size="sm" className="h-9 ml-auto" onClick={handleExportExcel} disabled={filteredTransactions.length === 0}>
               <FileSpreadsheet className="h-4 w-4 mr-2" />
               Excel
             </Button>
