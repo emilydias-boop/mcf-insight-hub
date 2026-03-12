@@ -36,6 +36,13 @@ import { PipelineStagesEditor } from './PipelineStagesEditor';
 import { LeadDistributionConfig } from './LeadDistributionConfig';
 import { WebhookConfigEditor } from './webhooks/WebhookConfigEditor';
 import { IncomingWebhookEditor } from './webhooks/IncomingWebhookEditor';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface PipelineConfigModalProps {
   open: boolean;
