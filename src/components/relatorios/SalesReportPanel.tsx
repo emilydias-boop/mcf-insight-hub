@@ -1147,7 +1147,16 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                           }
                         </TableCell>
                         <TableCell className="text-right font-mono whitespace-nowrap">
-                          {formatCurrency(row.gross_override || row.product_price || 0)}
+                          {(() => {
+                            const grossVal = shouldUseBUFilter
+                              ? (row.product_price || row.net_value || 0)
+                              : getDeduplicatedGross(row, globalFirstIds.has(row.id));
+                            const rawVal = row.gross_override || row.product_price || 0;
+                            const isDeduplicated = grossVal === 0 && rawVal > 0;
+                            return isDeduplicated 
+                              ? <span className="text-muted-foreground line-through">{formatCurrency(rawVal)}</span>
+                              : formatCurrency(grossVal);
+                          })()}
                         </TableCell>
                         <TableCell className="text-right font-mono text-success whitespace-nowrap">
                           {formatCurrency(row.net_value || 0)}
