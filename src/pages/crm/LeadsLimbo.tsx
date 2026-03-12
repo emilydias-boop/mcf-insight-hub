@@ -412,6 +412,14 @@ export default function LeadsLimbo() {
     Promise.all(promises).then(() => {
       setSelectedIds(new Set());
       setAssignSdrEmail('');
+      // Persist updated results to Supabase so they survive page reload
+      if (latestUpload?.id) {
+        // Use a callback to get the latest state
+        setResults(prev => {
+          updateLimboResults.mutate({ uploadId: latestUpload.id, results: prev });
+          return prev;
+        });
+      }
     });
   };
 
