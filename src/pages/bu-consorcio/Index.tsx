@@ -127,10 +127,18 @@ function calcularProximoVencimento(diaVencimento: number): Date {
   return nextDueDate;
 }
 
-type PeriodType = 'month' | 'lastMonth' | 'custom';
+const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
+  const date = subMonths(new Date(), i);
+  return {
+    value: String(i),
+    label: format(date, 'MMMM yyyy', { locale: ptBR }),
+    start: startOfMonth(date),
+    end: endOfMonth(date),
+  };
+});
 
 export default function ConsorcioPage() {
-  const [period, setPeriod] = useState<PeriodType>('month');
+  const [monthOffset, setMonthOffset] = useState<string>('0');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
