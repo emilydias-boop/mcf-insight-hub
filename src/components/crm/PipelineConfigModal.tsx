@@ -109,6 +109,7 @@ export const PipelineConfigModal = ({
   const queryClient = useQueryClient();
 
   // Fetch target data
+  console.log('[PipelineConfigModal] open:', open, 'targetType:', targetType, 'targetId:', targetId, 'preferredOriginId:', preferredOriginId);
   const { data: targetData, isLoading } = useQuery({
     queryKey: ['pipeline-config-target', targetType, targetId],
     queryFn: async () => {
