@@ -209,10 +209,11 @@ export const PipelineConfigModal = ({
   const updateMutation = useMutation({
     mutationFn: async (updates: { name?: string; display_name?: string; description?: string }) => {
       const table = targetType === 'origin' ? 'crm_origins' : 'crm_groups';
+      const updateId = targetType === 'origin' ? targetId : effectiveGroupId;
       const { error } = await supabase
         .from(table)
         .update(updates)
-        .eq('id', targetId);
+        .eq('id', updateId);
       if (error) throw error;
     },
     onSuccess: () => {
