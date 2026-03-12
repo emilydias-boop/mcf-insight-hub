@@ -526,7 +526,7 @@ export const PipelineConfigModal = ({
                 {activeStagesSection === 'kanban-stages' && (
                   <PipelineStagesEditor 
                     targetType={targetType} 
-                    targetId={targetId} 
+                    targetId={effectiveGroupId} 
                   />
                 )}
                 {activeStagesSection === 'activities' && (
