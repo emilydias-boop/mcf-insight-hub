@@ -1,39 +1,33 @@
 
 
-## Objetivo
+## Problema: Filtro de período só mostra 2 meses
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+O `Select` nas linhas 354-366 do `src/pages/bu-consorcio/Index.tsx` está hardcoded com apenas 2 opções: mês atual e mês anterior.
 
-## Mudanças
+### Correção
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+Substituir as 2 `SelectItem` fixas por uma lista dinâmica dos últimos **12 meses**, gerada com `subMonths`. O `period` state mudará de `'month' | 'lastMonth' | 'custom'` para armazenar o índice do mês (ex: `"0"` = mês atual, `"1"` = mês anterior, etc.), e o cálculo de `startDate`/`endDate` será atualizado para usar esse índice.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Mudanças
 
-### 2. Hook `useCloserDetailData.ts`
+**Arquivo: `src/pages/bu-consorcio/Index.tsx`**
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+1. Gerar array de 12 meses:
+```typescript
+const monthOptions = Array.from({ length: 12 }, (_, i) => {
+  const date = subMonths(now, i);
+  return {
+    value: String(i),
+    label: format(date, 'MMMM yyyy', { locale: ptBR }),
+    start: startOfMonth(date),
+    end: endOfMonth(date),
+  };
+});
+```
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+2. Mudar state de `period` para `monthOffset` (string `"0"` a `"11"`), default `"0"`.
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+3. Calcular `startDate`/`endDate` a partir do offset selecionado.
 
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+4. Renderizar os 12 meses no `SelectContent`.
 
