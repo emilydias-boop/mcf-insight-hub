@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,13 @@ import { PipelineStagesEditor } from './PipelineStagesEditor';
 import { LeadDistributionConfig } from './LeadDistributionConfig';
 import { WebhookConfigEditor } from './webhooks/WebhookConfigEditor';
 import { IncomingWebhookEditor } from './webhooks/IncomingWebhookEditor';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface PipelineConfigModalProps {
   open: boolean;
@@ -91,6 +98,7 @@ export const PipelineConfigModal = ({
   const [activeSection, setActiveSection] = useState<GeneralSection>('settings');
   const [activeStagesSection, setActiveStagesSection] = useState<StagesSection>('kanban-stages');
   const [activeIntegrationSection, setActiveIntegrationSection] = useState<IntegrationSection>('webhooks');
+  const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   // Fetch target data
@@ -117,6 +125,28 @@ export const PipelineConfigModal = ({
     },
     enabled: open && !!targetId,
   });
+
+  // Fetch child origins when target is a group
+  const { data: groupOrigins = [] } = useQuery({
+    queryKey: ['crm-group-origins', targetId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_origins')
+        .select('id, name, display_name')
+        .eq('group_id', targetId)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && !!targetId && targetType === 'group',
+  });
+
+  // Resolve the active origin ID for origin-dependent features
+  const resolvedOriginId = useMemo(() => {
+    if (targetType === 'origin') return targetId;
+    if (groupOrigins.length === 1) return groupOrigins[0].id;
+    return selectedOriginId;
+  }, [targetType, targetId, groupOrigins, selectedOriginId]);
 
   // Update mutation
   const updateMutation = useMutation({
@@ -152,6 +182,56 @@ export const PipelineConfigModal = ({
     updateMutation.mutate({
       display_name: formData.display_name || undefined,
     });
+  };
+
+  // Helper to render origin-dependent content with auto-resolution for groups
+  const renderOriginDependentContent = (
+    renderContent: (originId: string, originName: string) => React.ReactNode,
+    featureName: string
+  ) => {
+    if (targetType === 'origin') {
+      return renderContent(targetId, displayName);
+    }
+    
+    if (groupOrigins.length === 0) {
+      return (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Nenhuma origin encontrada neste grupo para configurar {featureName}.
+          </p>
+        </div>
+      );
+    }
+    
+    if (groupOrigins.length === 1) {
+      return renderContent(groupOrigins[0].id, groupOrigins[0].display_name || groupOrigins[0].name);
+    }
+    
+    // Multiple origins: show selector
+    return (
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label>Selecione a origin para configurar {featureName}</Label>
+          <Select value={selectedOriginId || ''} onValueChange={setSelectedOriginId}>
+            <SelectTrigger className="w-[300px]">
+              <SelectValue placeholder="Escolha uma origin..." />
+            </SelectTrigger>
+            <SelectContent>
+              {groupOrigins.map((origin) => (
+                <SelectItem key={origin.id} value={origin.id}>
+                  {origin.display_name || origin.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {resolvedOriginId && renderContent(
+          resolvedOriginId,
+          groupOrigins.find(o => o.id === resolvedOriginId)?.display_name || 
+          groupOrigins.find(o => o.id === resolvedOriginId)?.name || ''
+        )}
+      </div>
+    );
   };
 
   const renderGeneralContent = () => {
@@ -212,23 +292,14 @@ export const PipelineConfigModal = ({
         );
 
       case 'distribution':
-        if (targetType !== 'origin') {
-          return (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                A distribuição de leads só está disponível para origins específicas, não para grupos/pipelines.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Selecione uma origin no menu lateral para configurar a distribuição.
-              </p>
-            </div>
-          );
-        }
-        return (
-          <LeadDistributionConfig 
-            originId={targetId}
-            originName={displayName}
-          />
+        return renderOriginDependentContent(
+          (originId, originName) => (
+            <LeadDistributionConfig 
+              originId={originId}
+              originName={originName}
+            />
+          ),
+          'distribuição de leads'
         );
 
       case 'permissions':
@@ -430,13 +501,19 @@ export const PipelineConfigModal = ({
                   {integrationSections.find((s) => s.id === activeIntegrationSection)?.label}
                 </h3>
                 
-                {activeIntegrationSection === 'webhooks' && (
-                  <WebhookConfigEditor originId={targetId} />
-                )}
+                {activeIntegrationSection === 'webhooks' && 
+                  renderOriginDependentContent(
+                    (originId) => <WebhookConfigEditor originId={originId} />,
+                    'webhooks de saída'
+                  )
+                }
 
-                {activeIntegrationSection === 'incoming-webhooks' && (
-                  <IncomingWebhookEditor originId={targetId} />
-                )}
+                {activeIntegrationSection === 'incoming-webhooks' && 
+                  renderOriginDependentContent(
+                    (originId) => <IncomingWebhookEditor originId={originId} />,
+                    'webhooks de entrada'
+                  )
+                }
                 
                 {activeIntegrationSection === 'leads-live' && (
                   <div className="space-y-4">
