@@ -399,15 +399,24 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     return { totalGross, totalNet, count, avgTicket };
   }, [filteredTransactions, globalFirstIds]);
 
+  // Names that are origin labels, not real person names
+  const AUTOMATIC_ORIGIN_NAMES = new Set(['A010', 'Lançamento', 'Renovação', 'Vitalício', 'Live', 'Bio Instagram', 'Outros', 'Contrato', 'Sem Closer', 'Sem SDR', 'Closer Desconhecido', 'SDR Desconhecido']);
+
   // Helper to get enriched data for a transaction
   const getEnrichedData = (row: any) => {
     const info = classifiedByTxId.get(row.id);
     const email = (row.customer_email || '').toLowerCase().trim();
+
+    const closerR1 = info?.closerName && !AUTOMATIC_ORIGIN_NAMES.has(info.closerName)
+      ? info.closerName : '-';
+    const sdr = info?.sdrName && !AUTOMATIC_ORIGIN_NAMES.has(info.sdrName)
+      ? info.sdrName : '-';
+
     return {
       canal: info?.origin || '-',
-      closerR1: info?.closerName || '-',
+      closerR1,
       closerR2: r2CloserByEmail.get(email) || '-',
-      sdr: info?.sdrName || '-',
+      sdr,
       dtContrato: contractDates.get(email) || null,
       dtParceria: partnershipDates.get(email) || null,
     };

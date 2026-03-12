@@ -1,52 +1,39 @@
 
 
-## Problema: Closer R1, R2, SDR mostram nome do produto/canal ao invés de nomes reais
+## Objetivo
 
-### Causa raiz
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-No `useAcquisitionReport.ts` (linhas 322-334), para origens automáticas (A010, Vitalício, Lançamento, Renovação), o hook retorna o **nome da origem** como `closerName` e `sdrName`:
+## Mudanças
 
-```typescript
-const closerName = closerId
-  ? (closerNameMap.get(closerId) || 'Closer Desconhecido')
-  : (isAutomatic ? origin : 'Sem Closer');  // ← "A010", "Vitalício" etc.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-const sdrName = sdrId
-  ? (...)
-  : (isAutomatic ? origin : 'Sem SDR');  // ← mesma coisa
-```
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Isso é útil para agregação por dimensão (tabela de aquisição), mas na tabela de transações aparece "A010" na coluna Closer R1, confundindo com o produto.
+### 2. Hook `useCloserDetailData.ts`
 
-### Correção
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**Arquivo: `src/components/relatorios/SalesReportPanel.tsx`**
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-No `getEnrichedData`, filtrar valores que são nomes de origem automática e substituí-los por `'-'`:
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-```typescript
-const AUTOMATIC_ORIGIN_NAMES = new Set(['A010', 'Lançamento', 'Renovação', 'Vitalício', 'Live', 'Bio Instagram', 'Outros', 'Contrato']);
+### 4. Dados exportados no Excel
 
-const getEnrichedData = (row: any) => {
-  const info = classifiedByTxId.get(row.id);
-  const email = (row.customer_email || '').toLowerCase().trim();
-  
-  // Only show actual person names, not origin labels
-  const closerR1 = info?.closerName && !AUTOMATIC_ORIGIN_NAMES.has(info.closerName) && info.closerName !== 'Sem Closer'
-    ? info.closerName : '-';
-  const sdr = info?.sdrName && !AUTOMATIC_ORIGIN_NAMES.has(info.sdrName) && info.sdrName !== 'Sem SDR'
-    ? info.sdrName : '-';
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-  return {
-    canal: info?.origin || '-',
-    closerR1,
-    closerR2: r2CloserByEmail.get(email) || '-',
-    sdr,
-    dtContrato: contractDates.get(email) || null,
-    dtParceria: partnershipDates.get(email) || null,
-  };
-};
-```
+Formato de data: `dd/MM/yyyy HH:mm`
 
-Isso garante que Closer R1, Closer R2, SDR só exibam nomes de pessoas reais. Quando não houver atribuição, mostra `'-'`.
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
