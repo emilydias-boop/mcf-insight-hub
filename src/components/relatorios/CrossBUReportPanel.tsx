@@ -220,10 +220,10 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
 
   // Stats
   const stats = useMemo(() => {
-    const uniqueEmails = new Set(filteredRows.map(r => r.email.toLowerCase()));
+    const uniqueNames = new Set(filteredRows.map(r => r.nome.toUpperCase().trim()));
     const totalGross = filteredRows.reduce((s, r) => s + r.bruto, 0);
     return {
-      leads: uniqueEmails.size,
+      leads: uniqueNames.size,
       count: filteredRows.length,
       totalGross,
       avgTicket: filteredRows.length > 0 ? totalGross / filteredRows.length : 0,
