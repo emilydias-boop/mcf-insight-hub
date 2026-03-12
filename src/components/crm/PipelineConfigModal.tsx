@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -100,10 +100,16 @@ export const PipelineConfigModal = ({
   const [activeSection, setActiveSection] = useState<GeneralSection>('settings');
   const [activeStagesSection, setActiveStagesSection] = useState<StagesSection>('kanban-stages');
   const [activeIntegrationSection, setActiveIntegrationSection] = useState<IntegrationSection>('webhooks');
-  const [selectedOriginId, setSelectedOriginId] = useState<string | null>(preferredOriginId || null);
+  const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
+
+  // Reset selected origin when targetId changes
+  useEffect(() => {
+    setSelectedOriginId(null);
+  }, [targetId]);
   const queryClient = useQueryClient();
 
   // Fetch target data
+  console.log('[PipelineConfigModal] open:', open, 'targetType:', targetType, 'targetId:', targetId, 'preferredOriginId:', preferredOriginId);
   const { data: targetData, isLoading } = useQuery({
     queryKey: ['pipeline-config-target', targetType, targetId],
     queryFn: async () => {
@@ -126,6 +132,7 @@ export const PipelineConfigModal = ({
       }
     },
     enabled: open && !!targetId,
+    staleTime: 0,
   });
 
   // Fetch child origins when target is a group
@@ -138,9 +145,11 @@ export const PipelineConfigModal = ({
         .eq('group_id', targetId)
         .order('name');
       if (error) throw error;
+      console.log('[PipelineConfigModal] groupOrigins loaded:', data?.length, 'for group:', targetId);
       return data || [];
     },
     enabled: open && !!targetId && targetType === 'group',
+    staleTime: 0,
   });
 
   // Pre-select preferredOriginId when group origins load
@@ -157,7 +166,7 @@ export const PipelineConfigModal = ({
     if (targetType === 'origin') return targetId;
     if (groupOrigins.length === 1) return groupOrigins[0].id;
     return effectiveSelectedOriginId;
-  }, [targetType, targetId, groupOrigins, selectedOriginId]);
+  }, [targetType, targetId, groupOrigins, effectiveSelectedOriginId]);
 
   // Update mutation
   const updateMutation = useMutation({
