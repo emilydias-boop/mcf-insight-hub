@@ -502,6 +502,11 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
       });
     }
     
+    // Filtro por produto
+    if (selectedProduct !== 'all') {
+      filtered = filtered.filter(t => t.product_name === selectedProduct);
+    }
+
     // Filtro por busca textual
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
