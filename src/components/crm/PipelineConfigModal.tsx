@@ -49,6 +49,7 @@ interface PipelineConfigModalProps {
   onOpenChange: (open: boolean) => void;
   targetType: 'origin' | 'group';
   targetId: string;
+  preferredOriginId?: string;
 }
 
 type GeneralSection = 
@@ -93,12 +94,13 @@ export const PipelineConfigModal = ({
   onOpenChange,
   targetType,
   targetId,
+  preferredOriginId,
 }: PipelineConfigModalProps) => {
   const [activeTab, setActiveTab] = useState<'general' | 'stages' | 'integrations'>('general');
   const [activeSection, setActiveSection] = useState<GeneralSection>('settings');
   const [activeStagesSection, setActiveStagesSection] = useState<StagesSection>('kanban-stages');
   const [activeIntegrationSection, setActiveIntegrationSection] = useState<IntegrationSection>('webhooks');
-  const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
+  const [selectedOriginId, setSelectedOriginId] = useState<string | null>(preferredOriginId || null);
   const queryClient = useQueryClient();
 
   // Fetch target data
@@ -118,7 +120,7 @@ export const PipelineConfigModal = ({
           .from('crm_groups')
           .select('*')
           .eq('id', targetId)
-          .single();
+          .maybeSingle();
         if (error) throw error;
         return data;
       }
@@ -141,11 +143,20 @@ export const PipelineConfigModal = ({
     enabled: open && !!targetId && targetType === 'group',
   });
 
+  // Pre-select preferredOriginId when group origins load
+  const effectiveSelectedOriginId = useMemo(() => {
+    if (selectedOriginId) return selectedOriginId;
+    if (preferredOriginId && groupOrigins.some(o => o.id === preferredOriginId)) {
+      return preferredOriginId;
+    }
+    return null;
+  }, [selectedOriginId, preferredOriginId, groupOrigins]);
+
   // Resolve the active origin ID for origin-dependent features
   const resolvedOriginId = useMemo(() => {
     if (targetType === 'origin') return targetId;
     if (groupOrigins.length === 1) return groupOrigins[0].id;
-    return selectedOriginId;
+    return effectiveSelectedOriginId;
   }, [targetType, targetId, groupOrigins, selectedOriginId]);
 
   // Update mutation
@@ -212,7 +223,7 @@ export const PipelineConfigModal = ({
       <div className="space-y-4">
         <div className="space-y-2">
           <Label>Selecione a origin para configurar {featureName}</Label>
-          <Select value={selectedOriginId || ''} onValueChange={setSelectedOriginId}>
+          <Select value={effectiveSelectedOriginId || ''} onValueChange={setSelectedOriginId}>
             <SelectTrigger className="w-[300px]">
               <SelectValue placeholder="Escolha uma origin..." />
             </SelectTrigger>
@@ -391,7 +402,7 @@ export const PipelineConfigModal = ({
           <DialogHeader className="px-6 py-4 border-b shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Layers className="h-5 w-5" />
-              Configurar: {displayName}
+              Configurar: {displayName || (isLoading ? 'Carregando...' : 'Pipeline não encontrada')}
             </DialogTitle>
           </DialogHeader>
 
