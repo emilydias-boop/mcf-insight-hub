@@ -32,6 +32,21 @@ interface ConsorcioLead {
   origem: string | null;
 }
 
+interface HublaTransactionRaw {
+  id: string;
+  product_name: string | null;
+  product_price: number | null;
+  net_value: number | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  sale_date: string | null;
+  sale_status: string | null;
+  installment_number: number | null;
+  total_installments: number | null;
+  source: string | null;
+}
+
 interface HublaTransaction {
   id: string;
   product_name: string | null;
