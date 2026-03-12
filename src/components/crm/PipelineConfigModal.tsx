@@ -98,6 +98,7 @@ export const PipelineConfigModal = ({
   const [activeSection, setActiveSection] = useState<GeneralSection>('settings');
   const [activeStagesSection, setActiveStagesSection] = useState<StagesSection>('kanban-stages');
   const [activeIntegrationSection, setActiveIntegrationSection] = useState<IntegrationSection>('webhooks');
+  const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   // Fetch target data
