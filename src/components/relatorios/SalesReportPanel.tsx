@@ -44,6 +44,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
   const [selectedCloserR2Id, setSelectedCloserR2Id] = useState<string>('all');
   const [selectedSdr, setSelectedSdr] = useState<string>('all');
+  const [selectedProduct, setSelectedProduct] = useState<string>('all');
   const [selectedOriginId, setSelectedOriginId] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
