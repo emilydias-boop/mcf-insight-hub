@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileSpreadsheet, DollarSign, ShoppingCart, TrendingUp, Loader2, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X } from 'lucide-react';
+import { FileSpreadsheet, DollarSign, ShoppingCart, TrendingUp, Loader2, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X, Users, List } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
@@ -31,6 +31,26 @@ const normalizePhone = (phone: string | null | undefined): string => {
 };
 
 type DatePreset = 'today' | 'week' | 'month' | 'custom';
+type ViewMode = 'transactions' | 'by_client';
+
+interface ByClientRow {
+  nome: string;
+  email: string;
+  telefone: string;
+  totalTx: number;
+  brutoA010: number;
+  brutoContrato: number;
+  brutoParceria: number;
+  brutoOutros: number;
+  brutoTotal: number;
+  liquidoTotal: number;
+  primeiraCompra: string | null;
+  ultimaCompra: string | null;
+  closerR1: string;
+  closerR2: string;
+  sdr: string;
+  stageAtual: string | null;
+}
 
 export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -48,6 +68,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   const [selectedOriginId, setSelectedOriginId] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [viewMode, setViewMode] = useState<ViewMode>('transactions');
   
   const PAGE_SIZE_OPTIONS = [25, 50, 100];
   
@@ -525,8 +546,6 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     return filtered;
   }, [transactions, selectedChannel, selectedSource, selectedOriginId, selectedCloserId, selectedCloserR2Id, selectedSdr, selectedProduct, searchTerm, attendees, classifiedByTxId, r2CloserByEmail, r2CloserNameMap, sdrByEmail]);
   
-  // Paginação
-  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
   const paginatedTransactions = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredTransactions.slice(start, start + itemsPerPage);
@@ -584,8 +603,109 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     };
   };
   
+  // Aggregated by-client view
+  const byClientRows = useMemo((): ByClientRow[] => {
+    if (viewMode !== 'by_client') return [];
+    const map = new Map<string, ByClientRow & { _txIds: string[] }>();
+
+    filteredTransactions.forEach(tx => {
+      const key = (tx.customer_email || '').toLowerCase().trim() || `name:${(tx.customer_name || '').toUpperCase().trim()}`;
+      const enriched = getEnrichedData(tx);
+      const grossVal = shouldUseBUFilter
+        ? (tx.product_price || tx.net_value || 0)
+        : getDeduplicatedGross(tx, globalFirstIds.has(tx.id));
+      const category = (tx.product_category || '').toLowerCase();
+
+      let existing = map.get(key);
+      if (!existing) {
+        existing = {
+          nome: tx.customer_name || '-',
+          email: tx.customer_email || '-',
+          telefone: tx.customer_phone || '-',
+          totalTx: 0,
+          brutoA010: 0,
+          brutoContrato: 0,
+          brutoParceria: 0,
+          brutoOutros: 0,
+          brutoTotal: 0,
+          liquidoTotal: 0,
+          primeiraCompra: null,
+          ultimaCompra: null,
+          closerR1: '-',
+          closerR2: '-',
+          sdr: '-',
+          stageAtual: null,
+          _txIds: [],
+        };
+        map.set(key, existing);
+      }
+
+      existing.totalTx += 1;
+      existing.liquidoTotal += (tx.net_value || 0);
+      existing.brutoTotal += grossVal;
+
+      if (category === 'a010') existing.brutoA010 += grossVal;
+      else if (category === 'contrato') existing.brutoContrato += grossVal;
+      else if (category === 'parceria') existing.brutoParceria += grossVal;
+      else existing.brutoOutros += grossVal;
+
+      // Dates
+      if (tx.sale_date) {
+        if (!existing.primeiraCompra || tx.sale_date < existing.primeiraCompra) existing.primeiraCompra = tx.sale_date;
+        if (!existing.ultimaCompra || tx.sale_date > existing.ultimaCompra) existing.ultimaCompra = tx.sale_date;
+      }
+
+      // Enrichment: pick first non-dash values
+      if (existing.closerR1 === '-' && enriched.closerR1 !== '-') existing.closerR1 = enriched.closerR1;
+      if (existing.closerR2 === '-' && enriched.closerR2 !== '-') existing.closerR2 = enriched.closerR2;
+      if (existing.sdr === '-' && enriched.sdr !== '-') existing.sdr = enriched.sdr;
+      if (!existing.stageAtual && enriched.stageAtual) existing.stageAtual = enriched.stageAtual;
+      if (existing.telefone === '-' && tx.customer_phone) existing.telefone = tx.customer_phone;
+    });
+
+    return Array.from(map.values())
+      .sort((a, b) => b.brutoTotal - a.brutoTotal);
+  }, [filteredTransactions, viewMode, globalFirstIds, shouldUseBUFilter]);
+
+  // Pagination source based on view mode
+  const paginationSource = viewMode === 'by_client' ? byClientRows : filteredTransactions;
+  const totalPaginationItems = paginationSource.length;
+  const totalPages = Math.ceil(totalPaginationItems / itemsPerPage);
+
+  const paginatedByClient = useMemo(() => {
+    if (viewMode !== 'by_client') return [];
+    const start = (currentPage - 1) * itemsPerPage;
+    return byClientRows.slice(start, start + itemsPerPage);
+  }, [byClientRows, currentPage, itemsPerPage, viewMode]);
+
   // Export to Excel
   const handleExportExcel = () => {
+    if (viewMode === 'by_client') {
+      const exportData = byClientRows.map(row => ({
+        'Cliente': row.nome,
+        'Email': row.email,
+        'Telefone': row.telefone,
+        'SDR': row.sdr,
+        'Closer R1': row.closerR1,
+        'Closer R2': row.closerR2,
+        'Qtd Tx': row.totalTx,
+        'Bruto A010': row.brutoA010,
+        'Bruto Contrato': row.brutoContrato,
+        'Bruto Parceria': row.brutoParceria,
+        'Bruto Outros': row.brutoOutros,
+        'Bruto Total': row.brutoTotal,
+        'Líquido Total': row.liquidoTotal,
+        '1ª Compra': row.primeiraCompra ? format(parseISO(row.primeiraCompra), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Última Compra': row.ultimaCompra ? format(parseISO(row.ultimaCompra), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Stage Atual': row.stageAtual || '',
+      }));
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Por Cliente');
+      XLSX.writeFile(wb, `vendas_por_cliente_${bu}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+      return;
+    }
+
     const exportData = filteredTransactions.map(row => {
       const enriched = getEnrichedData(row);
       return {
@@ -843,10 +963,32 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
       {/* Data Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5" />
-            Transações no Período
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              {viewMode === 'by_client' ? 'Vendas por Cliente' : 'Transações no Período'}
+            </CardTitle>
+            <div className="flex items-center gap-1 bg-muted rounded-md p-1">
+              <Button
+                variant={viewMode === 'transactions' ? 'default' : 'ghost'}
+                size="sm"
+                className="h-7 px-3 text-xs"
+                onClick={() => { setViewMode('transactions'); setCurrentPage(1); }}
+              >
+                <List className="h-3.5 w-3.5 mr-1" />
+                Transações
+              </Button>
+              <Button
+                variant={viewMode === 'by_client' ? 'default' : 'ghost'}
+                size="sm"
+                className="h-7 px-3 text-xs"
+                onClick={() => { setViewMode('by_client'); setCurrentPage(1); }}
+              >
+                <Users className="h-3.5 w-3.5 mr-1" />
+                Por Cliente
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -859,6 +1001,72 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
+              {viewMode === 'by_client' ? (
+                /* ===== BY CLIENT TABLE ===== */
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>SDR</TableHead>
+                      <TableHead>Closer R1</TableHead>
+                      <TableHead>Closer R2</TableHead>
+                      <TableHead className="text-center">Qtd Tx</TableHead>
+                      <TableHead className="text-right">Bruto A010</TableHead>
+                      <TableHead className="text-right">Bruto Contrato</TableHead>
+                      <TableHead className="text-right">Bruto Parceria</TableHead>
+                      <TableHead className="text-right">Bruto Outros</TableHead>
+                      <TableHead className="text-right">Bruto Total</TableHead>
+                      <TableHead className="text-right">Líquido Total</TableHead>
+                      <TableHead>1ª Compra</TableHead>
+                      <TableHead>Última Compra</TableHead>
+                      <TableHead>Stage</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedByClient.map((row, idx) => (
+                      <TableRow key={row.email + idx}>
+                        <TableCell className="max-w-[150px] truncate font-medium">{row.nome}</TableCell>
+                        <TableCell className="max-w-[180px] truncate text-sm text-muted-foreground">{row.email}</TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">{row.sdr}</TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">{row.closerR1}</TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">{row.closerR2}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="secondary">{row.totalTx}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono whitespace-nowrap">
+                          {row.brutoA010 > 0 ? formatCurrency(row.brutoA010) : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono whitespace-nowrap">
+                          {row.brutoContrato > 0 ? formatCurrency(row.brutoContrato) : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono whitespace-nowrap">
+                          {row.brutoParceria > 0 ? formatCurrency(row.brutoParceria) : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono whitespace-nowrap">
+                          {row.brutoOutros > 0 ? formatCurrency(row.brutoOutros) : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold whitespace-nowrap">
+                          {formatCurrency(row.brutoTotal)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-success whitespace-nowrap">
+                          {formatCurrency(row.liquidoTotal)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {row.primeiraCompra ? format(parseISO(row.primeiraCompra), 'dd/MM/yy', { locale: ptBR }) : '-'}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {row.ultimaCompra ? format(parseISO(row.ultimaCompra), 'dd/MM/yy', { locale: ptBR }) : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {row.stageAtual ? <Badge variant="outline">{row.stageAtual}</Badge> : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                /* ===== TRANSACTIONS TABLE ===== */
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -948,6 +1156,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                   })}
                 </TableBody>
               </Table>
+              )}
               {/* Controles de Paginação */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4 border-t">
                 <div className="flex items-center gap-4">
@@ -965,44 +1174,24 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                     </Select>
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredTransactions.length)} a {Math.min(currentPage * itemsPerPage, filteredTransactions.length)} de {filteredTransactions.length} transações
+                    Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, totalPaginationItems)} a {Math.min(currentPage * itemsPerPage, totalPaginationItems)} de {totalPaginationItems} {viewMode === 'by_client' ? 'clientes' : 'transações'}
                   </span>
                 </div>
                 
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentPage(1)}
-                    disabled={currentPage === 1}
-                  >
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
                     <ChevronsLeft className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                  >
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <span className="px-3 text-sm">
                     Página {currentPage} de {totalPages || 1}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage >= totalPages}
-                  >
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentPage(totalPages)}
-                    disabled={currentPage >= totalPages}
-                  >
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage >= totalPages}>
                     <ChevronsRight className="h-4 w-4" />
                   </Button>
                 </div>
