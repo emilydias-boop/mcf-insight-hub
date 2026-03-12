@@ -108,10 +108,48 @@ export const PipelineConfigModal = ({
   }, [targetId]);
   const queryClient = useQueryClient();
 
-  // Fetch target data
-  console.log('[PipelineConfigModal] open:', open, 'targetType:', targetType, 'targetId:', targetId, 'preferredOriginId:', preferredOriginId);
+  // === AUTO-RECOVERY: resolve targetId when targetType=group but ID is actually an origin ===
+  const { data: resolvedTarget } = useQuery({
+    queryKey: ['pipeline-config-resolve-target', targetType, targetId],
+    queryFn: async () => {
+      if (targetType !== 'group') {
+        return { effectiveGroupId: null, isOriginFallback: false };
+      }
+      // First try as group
+      const { data: groupData } = await supabase
+        .from('crm_groups')
+        .select('id, name, display_name')
+        .eq('id', targetId)
+        .maybeSingle();
+      
+      if (groupData) {
+        return { effectiveGroupId: null, isOriginFallback: false }; // targetId IS a valid group
+      }
+      
+      // Not a group — try as origin and resolve its group_id
+      const { data: originData } = await supabase
+        .from('crm_origins')
+        .select('id, name, display_name, group_id')
+        .eq('id', targetId)
+        .maybeSingle();
+      
+      if (originData?.group_id) {
+        console.log('[PipelineConfigModal] Auto-recovery: targetId was origin, resolved group_id:', originData.group_id);
+        return { effectiveGroupId: originData.group_id, isOriginFallback: true };
+      }
+      
+      return { effectiveGroupId: null, isOriginFallback: false };
+    },
+    enabled: open && !!targetId && targetType === 'group',
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // The effective group ID to use for all group-dependent queries
+  const effectiveGroupId = resolvedTarget?.effectiveGroupId || targetId;
+
+  // Fetch target data (using effectiveGroupId for groups)
   const { data: targetData, isLoading } = useQuery({
-    queryKey: ['pipeline-config-target', targetType, targetId],
+    queryKey: ['pipeline-config-target', targetType, effectiveGroupId],
     queryFn: async () => {
       if (targetType === 'origin') {
         const { data, error } = await supabase
@@ -125,7 +163,7 @@ export const PipelineConfigModal = ({
         const { data, error } = await supabase
           .from('crm_groups')
           .select('*')
-          .eq('id', targetId)
+          .eq('id', effectiveGroupId)
           .maybeSingle();
         if (error) throw error;
         return data;
@@ -135,20 +173,19 @@ export const PipelineConfigModal = ({
     staleTime: 0,
   });
 
-  // Fetch child origins when target is a group
+  // Fetch child origins when target is a group (using effectiveGroupId)
   const { data: groupOrigins = [] } = useQuery({
-    queryKey: ['crm-group-origins', targetId],
+    queryKey: ['crm-group-origins', effectiveGroupId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('crm_origins')
         .select('id, name, display_name')
-        .eq('group_id', targetId)
+        .eq('group_id', effectiveGroupId)
         .order('name');
       if (error) throw error;
-      console.log('[PipelineConfigModal] groupOrigins loaded:', data?.length, 'for group:', targetId);
       return data || [];
     },
-    enabled: open && !!targetId && targetType === 'group',
+    enabled: open && !!effectiveGroupId && targetType === 'group',
     staleTime: 0,
   });
 
