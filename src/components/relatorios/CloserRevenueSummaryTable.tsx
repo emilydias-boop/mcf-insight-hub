@@ -86,6 +86,7 @@ export function CloserRevenueSummaryTable({
   bu,
 }: CloserRevenueSummaryTableProps) {
   const [selectedCloser, setSelectedCloser] = useState<{ id: string; name: string } | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
 
   const { summaryData, closerTransactionsMap } = useMemo(() => {
     // Filtrar apenas transações que pertencem à BU Incorporador (allowlist)
