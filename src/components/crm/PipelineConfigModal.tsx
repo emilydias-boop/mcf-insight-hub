@@ -251,8 +251,6 @@ export const PipelineConfigModal = ({
           ),
           'distribuição de leads'
         );
-          />
-        );
 
       case 'permissions':
         return (
