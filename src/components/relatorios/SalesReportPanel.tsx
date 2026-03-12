@@ -31,6 +31,26 @@ const normalizePhone = (phone: string | null | undefined): string => {
 };
 
 type DatePreset = 'today' | 'week' | 'month' | 'custom';
+type ViewMode = 'transactions' | 'by_client';
+
+interface ByClientRow {
+  nome: string;
+  email: string;
+  telefone: string;
+  totalTx: number;
+  brutoA010: number;
+  brutoContrato: number;
+  brutoParceria: number;
+  brutoOutros: number;
+  brutoTotal: number;
+  liquidoTotal: number;
+  primeiraCompra: string | null;
+  ultimaCompra: string | null;
+  closerR1: string;
+  closerR2: string;
+  sdr: string;
+  stageAtual: string | null;
+}
 
 export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
