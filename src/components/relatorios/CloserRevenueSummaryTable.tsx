@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Users } from 'lucide-react';
+import { ChevronDown, Users } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 import { CloserRevenueDetailDialog } from './CloserRevenueDetailDialog';
@@ -84,6 +86,7 @@ export function CloserRevenueSummaryTable({
   bu,
 }: CloserRevenueSummaryTableProps) {
   const [selectedCloser, setSelectedCloser] = useState<{ id: string; name: string } | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
 
   const { summaryData, closerTransactionsMap } = useMemo(() => {
     // Filtrar apenas transações que pertencem à BU Incorporador (allowlist)
@@ -303,97 +306,114 @@ export function CloserRevenueSummaryTable({
 
   return (
     <>
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Users className="h-5 w-5" />
-            Faturamento por Closer
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Closer</TableHead>
-                <TableHead className="text-right">Transações</TableHead>
-                <TableHead className="text-right">Faturamento Bruto</TableHead>
-                <TableHead className="text-right">Receita Líquida</TableHead>
-                <TableHead className="text-right">Ticket Médio</TableHead>
-                <TableHead className="text-right">% do Total</TableHead>
-                <TableHead className="text-right">Outside</TableHead>
-                <TableHead className="text-right">Fat. Outside</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {summaryData.rows.map((row) => (
-                <TableRow key={row.name}>
-                  <TableCell>
-                    <button
-                      className={`font-medium text-left hover:underline cursor-pointer ${
-                        row.id === '__unassigned__' ? 'text-muted-foreground' : 
-                        row.id === '__launch__' ? 'text-amber-500' :
-                        row.id === '__a010__' ? 'text-blue-400' :
-                        row.id === '__renovacao__' ? 'text-teal-400' :
-                        row.id === '__vitalicio__' ? 'text-purple-400' :
-                        'text-primary'
-                      }`}
-                      onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
-                    >
-                      {row.id === '__launch__' ? '🚀 ' : 
-                       row.id === '__a010__' ? '📊 ' : 
-                       row.id === '__renovacao__' ? '🔄 ' :
-                       row.id === '__vitalicio__' ? '♾️ ' : ''}{row.name}
-                    </button>
-                  </TableCell>
-                  <TableCell className="text-right">{row.count}</TableCell>
-                  <TableCell className="text-right font-mono">
-                    {formatCurrency(row.gross)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-success">
-                    {formatCurrency(row.net)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    {formatCurrency(row.count > 0 ? row.net / row.count : 0)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {summaryData.totalGross > 0
-                      ? ((row.gross / summaryData.totalGross) * 100).toFixed(1)
-                      : '0.0'}%
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {row.outsideCount > 0 ? row.outsideCount : '-'}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-muted-foreground">
-                    {row.outsideGross > 0 ? formatCurrency(row.outsideGross) : '-'}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-            <TableFooter>
-              <TableRow>
-                <TableCell className="font-bold">Total</TableCell>
-                <TableCell className="text-right font-bold">{summaryData.totalCount}</TableCell>
-                <TableCell className="text-right font-mono font-bold">
-                  {formatCurrency(summaryData.totalGross)}
-                </TableCell>
-                <TableCell className="text-right font-mono font-bold text-success">
-                  {formatCurrency(summaryData.totalNet)}
-                </TableCell>
-                <TableCell className="text-right font-mono font-bold">
-                  {formatCurrency(summaryData.totalCount > 0 ? summaryData.totalNet / summaryData.totalCount : 0)}
-                </TableCell>
-                <TableCell className="text-right font-bold">100%</TableCell>
-                <TableCell className="text-right font-bold text-muted-foreground">
-                  {summaryData.totalOutsideCount > 0 ? summaryData.totalOutsideCount : '-'}
-                </TableCell>
-                <TableCell className="text-right font-mono font-bold text-muted-foreground">
-                  {summaryData.totalOutsideGross > 0 ? formatCurrency(summaryData.totalOutsideGross) : '-'}
-                </TableCell>
-              </TableRow>
-            </TableFooter>
-          </Table>
-        </CardContent>
-      </Card>
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors">
+              <CardTitle className="flex items-center justify-between text-base">
+                <span className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Faturamento por Closer
+                </span>
+                <span className="flex items-center gap-2">
+                  <Badge variant="secondary" className="font-mono text-xs">
+                    {summaryData.totalCount} transações
+                  </Badge>
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {formatCurrency(summaryData.totalGross)}
+                  </Badge>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                </span>
+              </CardTitle>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Closer</TableHead>
+                    <TableHead className="text-right">Transações</TableHead>
+                    <TableHead className="text-right">Faturamento Bruto</TableHead>
+                    <TableHead className="text-right">Receita Líquida</TableHead>
+                    <TableHead className="text-right">Ticket Médio</TableHead>
+                    <TableHead className="text-right">% do Total</TableHead>
+                    <TableHead className="text-right">Outside</TableHead>
+                    <TableHead className="text-right">Fat. Outside</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {summaryData.rows.map((row) => (
+                    <TableRow key={row.name}>
+                      <TableCell>
+                        <button
+                          className={`font-medium text-left hover:underline cursor-pointer ${
+                            row.id === '__unassigned__' ? 'text-muted-foreground' : 
+                            row.id === '__launch__' ? 'text-amber-500' :
+                            row.id === '__a010__' ? 'text-blue-400' :
+                            row.id === '__renovacao__' ? 'text-teal-400' :
+                            row.id === '__vitalicio__' ? 'text-purple-400' :
+                            'text-primary'
+                          }`}
+                          onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
+                        >
+                          {row.id === '__launch__' ? '🚀 ' : 
+                           row.id === '__a010__' ? '📊 ' : 
+                           row.id === '__renovacao__' ? '🔄 ' :
+                           row.id === '__vitalicio__' ? '♾️ ' : ''}{row.name}
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-right">{row.count}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        {formatCurrency(row.gross)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-success">
+                        {formatCurrency(row.net)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {formatCurrency(row.count > 0 ? row.net / row.count : 0)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {summaryData.totalGross > 0
+                          ? ((row.gross / summaryData.totalGross) * 100).toFixed(1)
+                          : '0.0'}%
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {row.outsideCount > 0 ? row.outsideCount : '-'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
+                        {row.outsideGross > 0 ? formatCurrency(row.outsideGross) : '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell className="font-bold">Total</TableCell>
+                    <TableCell className="text-right font-bold">{summaryData.totalCount}</TableCell>
+                    <TableCell className="text-right font-mono font-bold">
+                      {formatCurrency(summaryData.totalGross)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-bold text-success">
+                      {formatCurrency(summaryData.totalNet)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-bold">
+                      {formatCurrency(summaryData.totalCount > 0 ? summaryData.totalNet / summaryData.totalCount : 0)}
+                    </TableCell>
+                    <TableCell className="text-right font-bold">100%</TableCell>
+                    <TableCell className="text-right font-bold text-muted-foreground">
+                      {summaryData.totalOutsideCount > 0 ? summaryData.totalOutsideCount : '-'}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-bold text-muted-foreground">
+                      {summaryData.totalOutsideGross > 0 ? formatCurrency(summaryData.totalOutsideGross) : '-'}
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+              </Table>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {selectedCloser && (
         <CloserRevenueDetailDialog
