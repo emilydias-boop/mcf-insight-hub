@@ -505,22 +505,22 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     const exportData = filteredTransactions.map(row => {
       const enriched = getEnrichedData(row);
       return {
-        'Data': row.sale_date ? format(parseISO(row.sale_date), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Data Atualização': row.sale_date ? format(parseISO(row.sale_date), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Cliente': row.customer_name || '',
         'Produto': row.product_name || '',
         'Canal': enriched.canal,
+        'SDR': enriched.sdr,
         'Closer R1': enriched.closerR1,
         'Closer R2': enriched.closerR2,
-        'SDR': enriched.sdr,
-        'Cliente': row.customer_name || '',
+        'Dt A010': enriched.dtA010 ? format(parseISO(enriched.dtA010), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Dt Contrato': enriched.dtContrato ? format(parseISO(enriched.dtContrato), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Dt Parceria': enriched.dtParceria ? format(parseISO(enriched.dtParceria), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Bruto': shouldUseBUFilter ? (row.product_price || row.net_value || 0) : getDeduplicatedGross(row, globalFirstIds.has(row.id)),
+        'Líquido': row.net_value || 0,
+        'Parcela': row.installment_number ? `${row.installment_number}/${row.total_installments}` : '-',
+        'Stage Atual': enriched.stageAtual || '',
         'Email': row.customer_email || '',
         'Telefone': row.customer_phone || '',
-        'Dt. Contrato': enriched.dtContrato ? format(parseISO(enriched.dtContrato), 'dd/MM/yyyy', { locale: ptBR }) : '',
-        'Dt. Parceria': enriched.dtParceria ? format(parseISO(enriched.dtParceria), 'dd/MM/yyyy', { locale: ptBR }) : '',
-        'Valor Bruto': shouldUseBUFilter ? (row.product_price || row.net_value || 0) : getDeduplicatedGross(row, globalFirstIds.has(row.id)),
-        'Valor Líquido': row.net_value || 0,
-        'Parcela': row.installment_number ? `${row.installment_number}/${row.total_installments}` : '-',
-        'Status': row.sale_status || '',
-        'Fonte': row.source || '',
       };
     });
     
