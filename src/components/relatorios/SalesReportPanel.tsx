@@ -726,19 +726,20 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Data</TableHead>
+                    <TableHead>Data Atualização</TableHead>
+                    <TableHead>Cliente</TableHead>
                     <TableHead>Produto</TableHead>
                     <TableHead>Canal</TableHead>
+                    <TableHead>SDR</TableHead>
                     <TableHead>Closer R1</TableHead>
                     <TableHead>Closer R2</TableHead>
-                    <TableHead>SDR</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Dt. Contrato</TableHead>
-                    <TableHead>Dt. Parceria</TableHead>
+                    <TableHead>Dt A010</TableHead>
+                    <TableHead>Dt Contrato</TableHead>
+                    <TableHead>Dt Parceria</TableHead>
                     <TableHead className="text-right">Bruto</TableHead>
                     <TableHead className="text-right">Líquido</TableHead>
                     <TableHead>Parcela</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Stage Atual</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
