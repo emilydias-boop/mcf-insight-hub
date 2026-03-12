@@ -704,6 +704,18 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
               </SelectContent>
             </Select>
 
+            <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+              <SelectTrigger className="w-[200px] h-9">
+                <SelectValue placeholder="Produto" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos Produtos</SelectItem>
+                {productOptions.map(name => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Select value={selectedChannel} onValueChange={setSelectedChannel}>
               <SelectTrigger className="w-[120px] h-9">
                 <SelectValue placeholder="Canal" />
