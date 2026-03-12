@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FileSpreadsheet, DollarSign, ShoppingCart, TrendingUp, Loader2, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X, Users } from 'lucide-react';
@@ -35,6 +34,7 @@ interface ConsorcioLead {
 interface HublaTransactionRaw {
   id: string;
   product_name: string | null;
+  product_category: string | null;
   product_price: number | null;
   net_value: number | null;
   customer_name: string | null;
@@ -47,19 +47,29 @@ interface HublaTransactionRaw {
   source: string | null;
 }
 
-interface CrossBURow {
-  txId: string;
+interface CrossBULeadRow {
+  key: string;
   nome: string;
   email: string;
   telefone: string;
   grupoCota: string;
-  produto: string;
-  saleDate: string | null;
-  bruto: number;
-  liquido: number;
-  parcela: string;
-  fonte: string;
-  status: string;
+  totalTx: number;
+  brutoA010: number;
+  brutoContrato: number;
+  brutoParceria: number;
+  brutoOutros: number;
+  brutoTotal: number;
+  liquidoTotal: number;
+  primeiraCompra: string | null;
+  ultimaCompra: string | null;
+}
+
+function classifyCategory(cat: string | null): 'a010' | 'contrato' | 'parceria' | 'outros' {
+  const c = (cat || '').toLowerCase().trim();
+  if (c === 'a010') return 'a010';
+  if (c === 'contrato') return 'contrato';
+  if (c === 'parceria') return 'parceria';
+  return 'outros';
 }
 
 export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
@@ -69,8 +79,6 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
   });
   const [datePreset, setDatePreset] = useState<DatePreset>('month');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
 
@@ -100,7 +108,7 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Build name→leads[] map (one name can have multiple cotas)
+  // Build name→leads[] map
   const nameToLeads = useMemo(() => {
     const m = new Map<string, ConsorcioLead[]>();
     leads.forEach(l => {
@@ -114,7 +122,7 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
     return m;
   }, [leads]);
 
-  // Query 2: Fetch ALL hubla_transactions in date range, then filter client-side by name
+  // Query 2: Fetch hubla_transactions in date range (with product_category)
   const { data: transactions = [], isLoading: loadingTx } = useQuery({
     queryKey: ['cross-bu-transactions-by-name', dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     queryFn: async () => {
@@ -126,7 +134,7 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
       while (hasMore && offset < 5000) {
         let query = supabase
           .from('hubla_transactions')
-          .select('id, product_name, product_price, net_value, customer_name, customer_email, customer_phone, sale_date, sale_status, installment_number, total_installments, source')
+          .select('id, product_name, product_category, product_price, net_value, customer_name, customer_email, customer_phone, sale_date, sale_status, installment_number, total_installments, source')
           .order('sale_date', { ascending: false })
           .range(offset, offset + pageSize - 1);
 
@@ -153,78 +161,81 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
 
   const isLoading = loadingLeads || loadingTx;
 
-  // Join: filter transactions that match consortium lead names, build flat rows
-  const allRows: CrossBURow[] = useMemo(() => {
+  // Aggregate: group transactions by normalized name, sum by category
+  const allRows: CrossBULeadRow[] = useMemo(() => {
     if (nameToLeads.size === 0) return [];
-    return transactions
-      .filter(tx => {
-        const txName = (tx.customer_name || '').toUpperCase().trim();
-        return txName && nameToLeads.has(txName);
-      })
-      .map(tx => {
-        const txName = (tx.customer_name || '').toUpperCase().trim();
-        const matchedLeads = nameToLeads.get(txName) || [];
-        // Build grupo/cota string from all matched leads
-        const grupoCota = matchedLeads.length > 0
-          ? matchedLeads.map(l => `${l.grupo || '-'}/${l.cota || '-'}`).join(', ')
-          : '-';
-        return {
-          txId: tx.id,
+
+    const grouped = new Map<string, CrossBULeadRow>();
+
+    transactions.forEach(tx => {
+      const txName = (tx.customer_name || '').toUpperCase().trim();
+      if (!txName || !nameToLeads.has(txName)) return;
+
+      const matchedLeads = nameToLeads.get(txName) || [];
+      const grupoCota = matchedLeads.map(l => `${l.grupo || '-'}/${l.cota || '-'}`).join(', ');
+      const cat = classifyCategory(tx.product_category);
+      const bruto = tx.product_price || 0;
+      const liquido = tx.net_value || 0;
+
+      const existing = grouped.get(txName);
+      if (existing) {
+        existing.totalTx += 1;
+        if (cat === 'a010') existing.brutoA010 += bruto;
+        else if (cat === 'contrato') existing.brutoContrato += bruto;
+        else if (cat === 'parceria') existing.brutoParceria += bruto;
+        else existing.brutoOutros += bruto;
+        existing.brutoTotal += bruto;
+        existing.liquidoTotal += liquido;
+        if (tx.sale_date && (!existing.primeiraCompra || tx.sale_date < existing.primeiraCompra)) {
+          existing.primeiraCompra = tx.sale_date;
+        }
+        if (tx.sale_date && (!existing.ultimaCompra || tx.sale_date > existing.ultimaCompra)) {
+          existing.ultimaCompra = tx.sale_date;
+        }
+        // Enrich email/phone if missing
+        if (existing.email === '-' && tx.customer_email) existing.email = tx.customer_email;
+        if (existing.telefone === '-' && tx.customer_phone) existing.telefone = tx.customer_phone;
+      } else {
+        grouped.set(txName, {
+          key: txName,
           nome: tx.customer_name || '-',
           email: tx.customer_email || matchedLeads[0]?.email || '-',
           telefone: tx.customer_phone || matchedLeads[0]?.telefone || '-',
           grupoCota,
-          produto: tx.product_name || '-',
-          saleDate: tx.sale_date,
-          bruto: tx.product_price || 0,
-          liquido: tx.net_value || 0,
-          parcela: tx.installment_number ? `${tx.installment_number}/${tx.total_installments || '?'}` : '-',
-          fonte: tx.source || '-',
-          status: tx.sale_status || '-',
-        };
-      });
+          totalTx: 1,
+          brutoA010: cat === 'a010' ? bruto : 0,
+          brutoContrato: cat === 'contrato' ? bruto : 0,
+          brutoParceria: cat === 'parceria' ? bruto : 0,
+          brutoOutros: cat === 'outros' ? bruto : 0,
+          brutoTotal: bruto,
+          liquidoTotal: liquido,
+          primeiraCompra: tx.sale_date,
+          ultimaCompra: tx.sale_date,
+        });
+      }
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => b.brutoTotal - a.brutoTotal);
   }, [transactions, nameToLeads]);
-
-  // Unique products/statuses for filters
-  const productOptions = useMemo(() => {
-    const s = new Set<string>();
-    allRows.forEach(r => { if (r.produto !== '-') s.add(r.produto); });
-    return Array.from(s).sort();
-  }, [allRows]);
-
-  const statusOptions = useMemo(() => {
-    const s = new Set<string>();
-    allRows.forEach(r => { if (r.status !== '-') s.add(r.status); });
-    return Array.from(s).sort();
-  }, [allRows]);
 
   // Filtered rows
   const filteredRows = useMemo(() => {
-    let rows = [...allRows];
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      rows = rows.filter(r =>
-        r.nome.toLowerCase().includes(term) ||
-        r.email.toLowerCase().includes(term) ||
-        r.telefone.includes(term)
-      );
-    }
-    if (selectedProduct !== 'all') {
-      rows = rows.filter(r => r.produto === selectedProduct);
-    }
-    if (selectedStatus !== 'all') {
-      rows = rows.filter(r => r.status === selectedStatus);
-    }
-    return rows;
-  }, [allRows, searchTerm, selectedProduct, selectedStatus]);
+    if (!searchTerm) return allRows;
+    const term = searchTerm.toLowerCase();
+    return allRows.filter(r =>
+      r.nome.toLowerCase().includes(term) ||
+      r.email.toLowerCase().includes(term) ||
+      r.telefone.includes(term)
+    );
+  }, [allRows, searchTerm]);
 
   // Stats
   const stats = useMemo(() => {
-    const uniqueNames = new Set(filteredRows.map(r => r.nome.toUpperCase().trim()));
-    const totalGross = filteredRows.reduce((s, r) => s + r.bruto, 0);
+    const totalTx = filteredRows.reduce((s, r) => s + r.totalTx, 0);
+    const totalGross = filteredRows.reduce((s, r) => s + r.brutoTotal, 0);
     return {
-      leads: uniqueNames.size,
-      count: filteredRows.length,
+      leads: filteredRows.length,
+      totalTx,
       totalGross,
       avgTicket: filteredRows.length > 0 ? totalGross / filteredRows.length : 0,
     };
@@ -248,11 +259,9 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
     }
   };
 
-  const hasActiveFilters = searchTerm || selectedProduct !== 'all' || selectedStatus !== 'all';
+  const hasActiveFilters = !!searchTerm;
   const clearAllFilters = () => {
     setSearchTerm('');
-    setSelectedProduct('all');
-    setSelectedStatus('all');
     setCurrentPage(1);
   };
 
@@ -264,17 +273,19 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
   // Export Excel
   const handleExportExcel = () => {
     const data = filteredRows.map(r => ({
-      'Data': r.saleDate ? format(parseISO(r.saleDate), 'dd/MM/yyyy', { locale: ptBR }) : '-',
       'Cliente': r.nome,
       'Email': r.email,
       'Telefone': r.telefone,
       'Grupo/Cota': r.grupoCota,
-      'Produto': r.produto,
-      'Bruto': r.bruto,
-      'Líquido': r.liquido,
-      'Parcela': r.parcela,
-      'Fonte': r.fonte,
-      'Status': r.status,
+      'Qtd Transações': r.totalTx,
+      'Bruto A010': r.brutoA010,
+      'Bruto Contrato': r.brutoContrato,
+      'Bruto Parceria': r.brutoParceria,
+      'Bruto Outros': r.brutoOutros,
+      'Bruto Total': r.brutoTotal,
+      'Líquido Total': r.liquidoTotal,
+      '1ª Compra': r.primeiraCompra ? format(parseISO(r.primeiraCompra), 'dd/MM/yyyy', { locale: ptBR }) : '-',
+      'Última Compra': r.ultimaCompra ? format(parseISO(r.ultimaCompra), 'dd/MM/yyyy', { locale: ptBR }) : '-',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -288,7 +299,6 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap items-center gap-3">
-            {/* Date presets */}
             <div className="flex gap-1">
               {(['today', 'week', 'month', 'custom'] as DatePreset[]).map(preset => (
                 <Button
@@ -318,30 +328,6 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
                 className="pl-8 w-[220px] h-9"
               />
             </div>
-
-            <Select value={selectedProduct} onValueChange={v => { setSelectedProduct(v); setCurrentPage(1); }}>
-              <SelectTrigger className="w-[200px] h-9">
-                <SelectValue placeholder="Produto" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos Produtos</SelectItem>
-                {productOptions.map(p => (
-                  <SelectItem key={p} value={p}>{p}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedStatus} onValueChange={v => { setSelectedStatus(v); setCurrentPage(1); }}>
-              <SelectTrigger className="w-[140px] h-9">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {statusOptions.map(s => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
 
             {hasActiveFilters && (
               <Button variant="ghost" size="sm" onClick={clearAllFilters} className="h-9 px-2 text-muted-foreground">
@@ -381,7 +367,7 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Transações</p>
-                <p className="text-3xl font-bold">{stats.count}</p>
+                <p className="text-3xl font-bold">{stats.totalTx}</p>
               </div>
             </div>
           </CardContent>
@@ -406,7 +392,7 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
                 <TrendingUp className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Ticket Médio</p>
+                <p className="text-sm text-muted-foreground">Ticket Médio / Lead</p>
                 <p className="text-2xl font-bold">{formatCurrency(stats.avgTicket)}</p>
               </div>
             </div>
@@ -419,7 +405,7 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ShoppingCart className="h-5 w-5" />
-            Transações Cross-BU dos Leads do Consórcio
+            Leads do Consórcio — Compras Cross-BU (Agrupado)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -429,49 +415,59 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
             </div>
           ) : filteredRows.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              Nenhuma transação encontrada no período selecionado.
+              Nenhum lead com transações encontrado no período selecionado.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Data</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Telefone</TableHead>
                     <TableHead>Grupo/Cota</TableHead>
-                    <TableHead>Produto</TableHead>
-                    <TableHead className="text-right">Bruto</TableHead>
-                    <TableHead className="text-right">Líquido</TableHead>
-                    <TableHead>Parcela</TableHead>
-                    <TableHead>Fonte</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="text-center">Qtd Tx</TableHead>
+                    <TableHead className="text-right">A010</TableHead>
+                    <TableHead className="text-right">Contrato</TableHead>
+                    <TableHead className="text-right">Parceria</TableHead>
+                    <TableHead className="text-right">Outros</TableHead>
+                    <TableHead className="text-right">Bruto Total</TableHead>
+                    <TableHead className="text-right">Líquido Total</TableHead>
+                    <TableHead>1ª Compra</TableHead>
+                    <TableHead>Última Compra</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedRows.map((row, index) => (
-                    <TableRow key={row.txId || index}>
-                      <TableCell className="whitespace-nowrap">
-                        {row.saleDate ? format(parseISO(row.saleDate), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
-                      </TableCell>
-                      <TableCell className="max-w-[150px] truncate">{row.nome}</TableCell>
+                  {paginatedRows.map((row) => (
+                    <TableRow key={row.key}>
+                      <TableCell className="max-w-[160px] truncate font-medium">{row.nome}</TableCell>
                       <TableCell className="max-w-[180px] truncate text-sm">{row.email}</TableCell>
                       <TableCell className="whitespace-nowrap text-sm">{row.telefone}</TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">{row.grupoCota}</TableCell>
-                      <TableCell className="font-medium max-w-[180px] truncate">{row.produto}</TableCell>
+                      <TableCell className="whitespace-nowrap text-sm max-w-[200px] truncate">{row.grupoCota}</TableCell>
+                      <TableCell className="text-center">{row.totalTx}</TableCell>
                       <TableCell className="text-right font-mono whitespace-nowrap">
-                        {formatCurrency(row.bruto)}
+                        {row.brutoA010 > 0 ? formatCurrency(row.brutoA010) : '-'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono whitespace-nowrap">
+                        {row.brutoContrato > 0 ? formatCurrency(row.brutoContrato) : '-'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono whitespace-nowrap">
+                        {row.brutoParceria > 0 ? formatCurrency(row.brutoParceria) : '-'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono whitespace-nowrap">
+                        {row.brutoOutros > 0 ? formatCurrency(row.brutoOutros) : '-'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold whitespace-nowrap">
+                        {formatCurrency(row.brutoTotal)}
                       </TableCell>
                       <TableCell className="text-right font-mono text-success whitespace-nowrap">
-                        {formatCurrency(row.liquido)}
+                        {formatCurrency(row.liquidoTotal)}
                       </TableCell>
-                      <TableCell>{row.parcela}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{row.fonte}</Badge>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {row.primeiraCompra ? format(parseISO(row.primeiraCompra), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{row.status}</Badge>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {row.ultimaCompra ? format(parseISO(row.ultimaCompra), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -495,7 +491,7 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
                     </Select>
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredRows.length)} a {Math.min(currentPage * itemsPerPage, filteredRows.length)} de {filteredRows.length} transações
+                    Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredRows.length)} a {Math.min(currentPage * itemsPerPage, filteredRows.length)} de {filteredRows.length} leads
                   </span>
                 </div>
 
