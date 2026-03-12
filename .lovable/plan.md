@@ -1,42 +1,39 @@
 
 
-## Adicionar colunas detalhadas na tabela de Transações do relatório de Vendas
+## Objetivo
 
-### Objetivo
-Adicionar 6 novas colunas na tabela "Transações no Período" do `SalesReportPanel`: **Canal de Venda** (Lançamento/A010/Live/etc), **Closer R1**, **Closer R2**, **SDR**, **Data Contrato** e **Data Parceria**.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Abordagem
+## Mudanças
 
-**1. Usar `useAcquisitionReport` como fonte de dados classificados**
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-O hook `useAcquisitionReport` já faz todo o matching entre transações → attendees R1 → closers → SDRs. Em vez de duplicar essa lógica no `SalesReportPanel`, vamos consumir o `classified` array que já contém `closerName`, `sdrName`, `origin` e `channel` por transação.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**2. Adicionar query de Closers R2**
+### 2. Hook `useCloserDetailData.ts`
 
-Nova query buscando `meeting_slot_attendees` com `meeting_type = 'r2'`, criando um mapa `email → closer R2 name` por matching com os contatos das transações.
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**3. Adicionar datas de contrato e parceria por cliente**
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Nova query buscando da `hubla_transactions` a primeira `sale_date` onde `product_category = 'contrato'` e `product_category = 'parceria'` agrupado por `customer_email`, criando mapas `email → data`.
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### Mudanças
+### 4. Dados exportados no Excel
 
-**Arquivo: `src/components/relatorios/SalesReportPanel.tsx`**
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-1. Importar e usar `useAcquisitionReport` no lugar das queries duplicadas de closers/attendees (já compartilham query keys, sem custo extra de fetch)
-2. Adicionar query de **R2 closers**: buscar `meeting_slot_attendees` + `meeting_slots(closer_id, meeting_type='r2')` + `closers(name)` no período, construir mapa `email → r2CloserName`
-3. Adicionar query de **datas contrato/parceria**: buscar min `sale_date` de `hubla_transactions` por `customer_email` onde `product_category in ('contrato', 'parceria')`, construir mapas `email → date`
-4. Na tabela de transações, cruzar cada `tx.customer_email` com os `classified` data e os novos mapas para exibir:
-   - **Canal**: `origin` do classified (Lançamento, A010, Live, etc) — substitui o `detectSalesChannel` simplificado
-   - **Closer R1**: `closerName` do classified
-   - **Closer R2**: do mapa R2
-   - **SDR**: `sdrName` do classified
-   - **Dt. Contrato**: do mapa de datas
-   - **Dt. Parceria**: do mapa de datas
-5. Atualizar o export Excel com as novas colunas
-6. Remover queries duplicadas que já vêm do `useAcquisitionReport`
+Formato de data: `dd/MM/yyyy HH:mm`
 
-### Resultado visual na tabela
+## Resultado
 
-| Data | Produto | Canal | Closer R1 | Closer R2 | SDR | Cliente | Dt. Contrato | Dt. Parceria | Bruto | Líquido | Parcela | Status |
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
