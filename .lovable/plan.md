@@ -1,56 +1,39 @@
 
 
-## Problema: SDR só aparece quando tem Closer
+## Objetivo
 
-### Causa raiz
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-No `useAcquisitionReport.ts` (linhas 310-334), o SDR é extraído do **mesmo `matchedAttendee`** que o Closer R1. O `matchedAttendee` vem do match email/telefone com `meeting_slot_attendees` de reuniões R1.
+## Mudanças
 
-Fluxo atual:
-1. Se a origem é automática (A010, Vitalício, etc.) → `matchedAttendee = null` → SDR = nome da origem
-2. Se não é automática mas não há match de email/telefone na agenda R1 → `matchedAttendee = null` → SDR = "Sem SDR"
-3. Só quando há match na agenda R1 → `matchedAttendee` existe → pega `booked_by` ou `owner_profile_id` → SDR real
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Ou seja, SDR só é preenchido quando a transação faz match com um attendee R1 (que é o mesmo match que traz o Closer).
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### Correção
+### 2. Hook `useCloserDetailData.ts`
 
-Adicionar no `SalesReportPanel.tsx` uma **query independente de SDR** que busca o `owner_profile_id` dos `crm_deals` pelo email do cliente, sem depender do match com a agenda R1.
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**Arquivo: `src/components/relatorios/SalesReportPanel.tsx`**
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-1. Nova query: buscar `crm_deals` com `crm_contacts(email)` e `profiles(full_name)` via `owner_profile_id`, construindo mapa `email → sdrName`
-2. No `getEnrichedData`, usar o SDR do `classifiedByTxId` como prioridade, e fazer fallback para o mapa independente de CRM deals quando o classified retorna '-'
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-```typescript
-// Nova query de SDR independente via CRM deals
-const { data: crmDealOwners = [] } = useQuery({
-  queryKey: ['crm-deal-owners-by-email', dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from('crm_deals')
-      .select('owner_profile_id, contact:crm_contacts!contact_id(email), owner:profiles!crm_deals_owner_profile_id_fkey(full_name)')
-      .not('owner_profile_id', 'is', null);
-    if (error) throw error;
-    return data || [];
-  },
-});
+### 4. Dados exportados no Excel
 
-const sdrByEmail = useMemo(() => {
-  const m = new Map<string, string>();
-  crmDealOwners.forEach(d => {
-    const email = (d.contact?.email || '').toLowerCase().trim();
-    const name = d.owner?.full_name;
-    if (email && name) m.set(email, name);
-  });
-  return m;
-}, [crmDealOwners]);
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-// Atualizar getEnrichedData:
-const sdr = (info?.sdrName && !AUTOMATIC_ORIGIN_NAMES.has(info.sdrName))
-  ? info.sdrName
-  : (sdrByEmail.get(email) || '-');
-```
+Formato de data: `dd/MM/yyyy HH:mm`
 
-Isso garante que o SDR apareça mesmo sem match de Closer R1, bastando o lead ter um deal no CRM com owner atribuído.
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
