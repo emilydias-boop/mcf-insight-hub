@@ -605,8 +605,109 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     };
   };
   
+  // Aggregated by-client view
+  const byClientRows = useMemo((): ByClientRow[] => {
+    if (viewMode !== 'by_client') return [];
+    const map = new Map<string, ByClientRow & { _txIds: string[] }>();
+
+    filteredTransactions.forEach(tx => {
+      const key = (tx.customer_email || '').toLowerCase().trim() || `name:${(tx.customer_name || '').toUpperCase().trim()}`;
+      const enriched = getEnrichedData(tx);
+      const grossVal = shouldUseBUFilter
+        ? (tx.product_price || tx.net_value || 0)
+        : getDeduplicatedGross(tx, globalFirstIds.has(tx.id));
+      const category = (tx.product_category || '').toLowerCase();
+
+      let existing = map.get(key);
+      if (!existing) {
+        existing = {
+          nome: tx.customer_name || '-',
+          email: tx.customer_email || '-',
+          telefone: tx.customer_phone || '-',
+          totalTx: 0,
+          brutoA010: 0,
+          brutoContrato: 0,
+          brutoParceria: 0,
+          brutoOutros: 0,
+          brutoTotal: 0,
+          liquidoTotal: 0,
+          primeiraCompra: null,
+          ultimaCompra: null,
+          closerR1: '-',
+          closerR2: '-',
+          sdr: '-',
+          stageAtual: null,
+          _txIds: [],
+        };
+        map.set(key, existing);
+      }
+
+      existing.totalTx += 1;
+      existing.liquidoTotal += (tx.net_value || 0);
+      existing.brutoTotal += grossVal;
+
+      if (category === 'a010') existing.brutoA010 += grossVal;
+      else if (category === 'contrato') existing.brutoContrato += grossVal;
+      else if (category === 'parceria') existing.brutoParceria += grossVal;
+      else existing.brutoOutros += grossVal;
+
+      // Dates
+      if (tx.sale_date) {
+        if (!existing.primeiraCompra || tx.sale_date < existing.primeiraCompra) existing.primeiraCompra = tx.sale_date;
+        if (!existing.ultimaCompra || tx.sale_date > existing.ultimaCompra) existing.ultimaCompra = tx.sale_date;
+      }
+
+      // Enrichment: pick first non-dash values
+      if (existing.closerR1 === '-' && enriched.closerR1 !== '-') existing.closerR1 = enriched.closerR1;
+      if (existing.closerR2 === '-' && enriched.closerR2 !== '-') existing.closerR2 = enriched.closerR2;
+      if (existing.sdr === '-' && enriched.sdr !== '-') existing.sdr = enriched.sdr;
+      if (!existing.stageAtual && enriched.stageAtual) existing.stageAtual = enriched.stageAtual;
+      if (existing.telefone === '-' && tx.customer_phone) existing.telefone = tx.customer_phone;
+    });
+
+    return Array.from(map.values())
+      .sort((a, b) => b.brutoTotal - a.brutoTotal);
+  }, [filteredTransactions, viewMode, globalFirstIds, shouldUseBUFilter]);
+
+  // Pagination source based on view mode
+  const paginationSource = viewMode === 'by_client' ? byClientRows : filteredTransactions;
+  const totalPaginationItems = paginationSource.length;
+  const totalPages = Math.ceil(totalPaginationItems / itemsPerPage);
+
+  const paginatedByClient = useMemo(() => {
+    if (viewMode !== 'by_client') return [];
+    const start = (currentPage - 1) * itemsPerPage;
+    return byClientRows.slice(start, start + itemsPerPage);
+  }, [byClientRows, currentPage, itemsPerPage, viewMode]);
+
   // Export to Excel
   const handleExportExcel = () => {
+    if (viewMode === 'by_client') {
+      const exportData = byClientRows.map(row => ({
+        'Cliente': row.nome,
+        'Email': row.email,
+        'Telefone': row.telefone,
+        'SDR': row.sdr,
+        'Closer R1': row.closerR1,
+        'Closer R2': row.closerR2,
+        'Qtd Tx': row.totalTx,
+        'Bruto A010': row.brutoA010,
+        'Bruto Contrato': row.brutoContrato,
+        'Bruto Parceria': row.brutoParceria,
+        'Bruto Outros': row.brutoOutros,
+        'Bruto Total': row.brutoTotal,
+        'Líquido Total': row.liquidoTotal,
+        '1ª Compra': row.primeiraCompra ? format(parseISO(row.primeiraCompra), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Última Compra': row.ultimaCompra ? format(parseISO(row.ultimaCompra), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Stage Atual': row.stageAtual || '',
+      }));
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Por Cliente');
+      XLSX.writeFile(wb, `vendas_por_cliente_${bu}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+      return;
+    }
+
     const exportData = filteredTransactions.map(row => {
       const enriched = getEnrichedData(row);
       return {
