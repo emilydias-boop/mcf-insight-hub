@@ -280,7 +280,7 @@ export default function ReunioesEquipe() {
   // Enrich teamKPIs with data from closerMetrics (source of truth)
   const enrichedKPIs = useMemo(() => ({
     ...teamKPIs,
-    totalAgendamentos: r1FromClosers.r1Agendada,
+    // totalAgendamentos vem do spread de teamKPIs (created_at, esforço real do SDR)
     totalR1Agendada: r1FromClosers.r1Agendada,
     totalRealizadas: r1FromClosers.r1Realizada,
     totalNoShows: r1FromClosers.noShows,
