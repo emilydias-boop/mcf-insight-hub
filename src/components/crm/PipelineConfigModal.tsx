@@ -49,6 +49,7 @@ interface PipelineConfigModalProps {
   onOpenChange: (open: boolean) => void;
   targetType: 'origin' | 'group';
   targetId: string;
+  preferredOriginId?: string;
 }
 
 type GeneralSection = 

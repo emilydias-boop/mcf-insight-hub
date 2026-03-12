@@ -735,12 +735,13 @@ const Negocios = () => {
       />
       
       {/* Modal de configuração inline para single pipeline */}
-      {hasSinglePipeline && selectedPipelineId && (
+      {hasSinglePipeline && buAllowedGroups[0] && (
         <PipelineConfigModal
           open={configModalOpen}
           onOpenChange={setConfigModalOpen}
           targetType="group"
-          targetId={selectedPipelineId}
+          targetId={buAllowedGroups[0]}
+          preferredOriginId={selectedPipelineId || undefined}
         />
       )}
       {/* Dialog de importação de planilha */}
