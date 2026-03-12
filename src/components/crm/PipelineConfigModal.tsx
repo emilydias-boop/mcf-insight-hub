@@ -402,7 +402,7 @@ export const PipelineConfigModal = ({
           <DialogHeader className="px-6 py-4 border-b shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Layers className="h-5 w-5" />
-              Configurar: {displayName}
+              Configurar: {displayName || (isLoading ? 'Carregando...' : 'Pipeline não encontrada')}
             </DialogTitle>
           </DialogHeader>
 
