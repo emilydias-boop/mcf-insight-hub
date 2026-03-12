@@ -145,6 +145,7 @@ export const PipelineConfigModal = ({
         .eq('group_id', targetId)
         .order('name');
       if (error) throw error;
+      console.log('[PipelineConfigModal] groupOrigins loaded:', data?.length, 'for group:', targetId);
       return data || [];
     },
     enabled: open && !!targetId && targetType === 'group',
