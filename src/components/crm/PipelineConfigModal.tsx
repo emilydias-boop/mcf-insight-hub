@@ -147,6 +147,7 @@ export const PipelineConfigModal = ({
       return data || [];
     },
     enabled: open && !!targetId && targetType === 'group',
+    staleTime: 0,
   });
 
   // Pre-select preferredOriginId when group origins load
