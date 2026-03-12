@@ -440,8 +440,12 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     // Filtro por SDR
     if (selectedSdr !== 'all') {
       filtered = filtered.filter(t => {
-        const enriched = getEnrichedData(t);
-        return enriched.sdr === selectedSdr;
+        const info = classifiedByTxId.get(t.id);
+        const email = (t.customer_email || '').toLowerCase().trim();
+        const sdrName = (info?.sdrName && !new Set(['A010', 'Lançamento', 'Renovação', 'Vitalício', 'Live', 'Bio Instagram', 'Outros', 'Contrato', 'Sem Closer', 'Sem SDR', 'Closer Desconhecido', 'SDR Desconhecido']).has(info.sdrName))
+          ? info.sdrName
+          : (sdrByEmail.get(email) || '-');
+        return sdrName === selectedSdr;
       });
     }
     
