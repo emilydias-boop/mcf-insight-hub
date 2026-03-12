@@ -296,8 +296,9 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
             </div>
 
             <DatePickerCustom
-              dateRange={dateRange}
-              onDateRangeChange={(range) => { setDateRange(range); setDatePreset('custom'); setCurrentPage(1); }}
+              selected={dateRange}
+              onSelect={(range) => { setDateRange(range as DateRange); setDatePreset('custom'); setCurrentPage(1); }}
+              mode="range"
             />
 
             <div className="relative">
