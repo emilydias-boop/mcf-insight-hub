@@ -223,7 +223,7 @@ export const PipelineConfigModal = ({
       <div className="space-y-4">
         <div className="space-y-2">
           <Label>Selecione a origin para configurar {featureName}</Label>
-          <Select value={selectedOriginId || ''} onValueChange={setSelectedOriginId}>
+          <Select value={effectiveSelectedOriginId || ''} onValueChange={setSelectedOriginId}>
             <SelectTrigger className="w-[300px]">
               <SelectValue placeholder="Escolha uma origin..." />
             </SelectTrigger>
