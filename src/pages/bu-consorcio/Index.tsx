@@ -127,10 +127,18 @@ function calcularProximoVencimento(diaVencimento: number): Date {
   return nextDueDate;
 }
 
-type PeriodType = 'month' | 'lastMonth' | 'custom';
+const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
+  const date = subMonths(new Date(), i);
+  return {
+    value: String(i),
+    label: format(date, 'MMMM yyyy', { locale: ptBR }),
+    start: startOfMonth(date),
+    end: endOfMonth(date),
+  };
+});
 
 export default function ConsorcioPage() {
-  const [period, setPeriod] = useState<PeriodType>('month');
+  const [monthOffset, setMonthOffset] = useState<string>('0');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
@@ -159,20 +167,9 @@ export default function ConsorcioPage() {
 
   // Calculate date range based on period
   const now = new Date();
-  let startDate: Date;
-  let endDate: Date;
-
-  if (period === 'month') {
-    startDate = startOfMonth(now);
-    endDate = endOfMonth(now);
-  } else if (period === 'lastMonth') {
-    const lastMonth = subMonths(now, 1);
-    startDate = startOfMonth(lastMonth);
-    endDate = endOfMonth(lastMonth);
-  } else {
-    startDate = startOfMonth(now);
-    endDate = endOfMonth(now);
-  }
+  const selectedMonth = MONTH_OPTIONS[Number(monthOffset)] || MONTH_OPTIONS[0];
+  const startDate = selectedMonth.start;
+  const endDate = selectedMonth.end;
 
   const filters = {
     startDate: dateRangeFilter.startDate || startDate,
@@ -235,7 +232,7 @@ export default function ConsorcioPage() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, tipoFilter, vendedorFilter, period, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, dateRangeFilter]);
+  }, [statusFilter, tipoFilter, vendedorFilter, monthOffset, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, dateRangeFilter]);
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
@@ -351,17 +348,16 @@ export default function ConsorcioPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <Select value={period} onValueChange={(v) => setPeriod(v as PeriodType)}>
-            <SelectTrigger className="w-40">
+          <Select value={monthOffset} onValueChange={setMonthOffset}>
+            <SelectTrigger className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="month">
-                {format(now, 'MMMM yyyy', { locale: ptBR })}
-              </SelectItem>
-              <SelectItem value="lastMonth">
-                {format(subMonths(now, 1), 'MMMM yyyy', { locale: ptBR })}
-              </SelectItem>
+              {MONTH_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Button 
