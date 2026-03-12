@@ -1,39 +1,44 @@
 
 
-## Objetivo
+## Adicionar visão "Por Cliente" no Relatório de Vendas do Incorporador
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Objetivo
+Adicionar uma visão agregada por cliente no `SalesReportPanel`, similar ao que foi feito no Cross-BU do Consórcio — agrupando transações por cliente com colunas separadas para A010, Contrato, Parceria e Outros.
 
-## Mudanças
+### Mudanças
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**Arquivo: `src/components/relatorios/SalesReportPanel.tsx`**
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+1. **Novo estado `viewMode`**: toggle entre `'transactions'` (atual) e `'by_client'` (agrupado)
+   - Dois botões/tabs acima da tabela: "Transações" | "Por Cliente"
 
-### 2. Hook `useCloserDetailData.ts`
+2. **Lógica de agrupamento** (novo `useMemo`):
+   - Agrupa `filteredTransactions` por `UPPER(TRIM(customer_email))` (email é mais confiável no Incorporador, diferente do Consórcio)
+   - Para cada cliente agrega:
+     - `nome`, `email`, `telefone`
+     - `totalTx` (quantidade)
+     - `brutoA010` (soma bruto onde `product_category = 'a010'`)
+     - `brutoContrato` (soma bruto onde `product_category = 'contrato'`)
+     - `brutoParceria` (soma bruto onde `product_category = 'parceria'`)
+     - `brutoOutros` (soma bruto das demais categorias)
+     - `brutoTotal`, `liquidoTotal`
+     - `primeiraCompra`, `ultimaCompra` (datas min/max)
+     - `closerR1`, `closerR2`, `sdr` (do enrichment, pega o primeiro não-vazio)
+     - `stageAtual` (do enrichment)
+   - Usa `getDeduplicatedGross()` para calcular bruto (mantendo consistência com a lógica existente)
+   - Ordena por `brutoTotal` desc
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+3. **Nova tabela "Por Cliente"** (renderizada quando `viewMode === 'by_client'`):
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+| Cliente | Email | SDR | Closer R1 | Closer R2 | Qtd Tx | Bruto A010 | Bruto Contrato | Bruto Parceria | Bruto Outros | Bruto Total | Líquido Total | 1ª Compra | Última Compra | Stage |
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+4. **Paginação**: reutiliza os mesmos controles existentes, aplicados sobre o array agrupado
 
-### 4. Dados exportados no Excel
+5. **Export Excel**: quando `viewMode === 'by_client'`, exporta o formato agrupado
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+6. **KPIs e CloserRevenueSummaryTable**: permanecem iguais (baseados em `filteredTransactions`, não mudam com o viewMode)
 
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Escopo
+- Apenas `src/components/relatorios/SalesReportPanel.tsx` é alterado
+- A tabela "Transações no Período" atual continua existindo — é apenas um toggle de visualização
 
