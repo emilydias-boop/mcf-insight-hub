@@ -6,6 +6,7 @@ import { ContractReportPanel } from './ContractReportPanel';
 import { SalesReportPanel } from './SalesReportPanel';
 import { PerformanceReportPanel } from './PerformanceReportPanel';
 import { AcquisitionReportPanel } from './AcquisitionReportPanel';
+import { CarrinhoReportPanel } from './CarrinhoReportPanel';
 import { ProductsReportPanel } from './ProductsReportPanel';
 import { InvestigationReportPanel } from './InvestigationReportPanel';
 import { NaoComprouReportPanel } from './NaoComprouReportPanel';
@@ -96,6 +97,10 @@ export function BUReportCenter({
         
         {selectedReport === 'nao_comprou' && (
           <NaoComprouReportPanel bu={bu} />
+        )}
+        
+        {selectedReport === 'carrinho' && (
+          <CarrinhoReportPanel bu={bu} />
         )}
         
         {/* Empty State */}

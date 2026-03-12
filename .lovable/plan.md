@@ -1,47 +1,39 @@
 
 
-## Plano: Substituir relatório "Desempenho" por "Carrinho"
+## Objetivo
 
-### O que muda
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Remover o report type `performance` do Incorporador e adicionar um novo tipo `carrinho` que mostra contratos pagos na semana, com informações de agendamento, reembolsos, e atribuição (Closer R1, R2, SDR).
+## Mudanças
 
-### Arquivos a modificar/criar
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**1. `src/components/relatorios/ReportTypeSelector.tsx`**
-- Adicionar novo tipo `'carrinho'` ao `ReportType`
-- Adicionar opção com ícone `ShoppingCart`, título "Carrinho", descrição "Contratos da semana com atribuição"
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**2. `src/pages/bu-incorporador/Relatorios.tsx`**
-- Trocar `'performance'` por `'carrinho'` na lista `availableReports`
+### 2. Hook `useCloserDetailData.ts`
 
-**3. `src/components/relatorios/BUReportCenter.tsx`**
-- Importar e renderizar `CarrinhoReportPanel` quando `selectedReport === 'carrinho'`
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**4. Novo: `src/hooks/useCarrinhoReport.ts`**
-- Hook que busca contratos pagos na semana selecionada
-- Query `hubla_transactions` filtrando por `sale_date` no período, `product_category = 'incorporador'`
-- Para cada contrato, verificar se está **agendado** (tem `linked_attendee_id` → meeting_slot_attendees → meeting_slots com meeting_type r2) ou **não agendado**
-- Buscar Closer R1 via R1 meeting (deal → meeting_slot_attendees R1 → meeting_slots.closer)
-- Buscar Closer R2 via R2 meeting (linked_attendee → meeting_slots.closer)
-- Buscar SDR via crm_deals.owner_profile_id → profiles.full_name (fallback) ou booked_by do attendee R1
-- Verificar reembolsos: status `refunded` na transação ou attendee status
-- Retornar array com: nome do lead, email, data de compra, agendado/não agendado, Closer R1, Closer R2, SDR, reembolso (sim/não)
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**5. Novo: `src/components/relatorios/CarrinhoReportPanel.tsx`**
-- Seletor de período (semana) com DatePicker
-- KPI cards no topo: Total Contratos, Agendados, Não Agendados, Reembolsos
-- Tabela com colunas: Nome, Email, Data Compra, Status (Agendado/Não Agendado), Reembolso, Closer R1, Closer R2, SDR
-- Filtros por Closer R2, status (agendado/não agendado)
-- Exportar Excel
-- Segue o mesmo padrão visual do `NaoComprouReportPanel`
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### Dados e lógica
+### 4. Dados exportados no Excel
 
-- **Agendado**: contrato com `linked_attendee_id` que aponta para um attendee em meeting R2 da semana
-- **Não agendado**: contrato sem vínculo com meeting R2, ou com meeting R2 fora da semana
-- **Reembolso**: transação com `refund_amount > 0` ou attendee com `status = 'refunded'`
-- **Closer R1**: via deal_id → meeting_slot_attendees (R1) → meeting_slots.closer
-- **Closer R2**: via linked_attendee_id → meeting_slots.closer
-- **SDR**: via deal_id → crm_deals.owner_profile_id → profiles.full_name
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
