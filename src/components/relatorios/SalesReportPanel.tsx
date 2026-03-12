@@ -753,6 +753,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                             : '-'
                           }
                         </TableCell>
+                        <TableCell className="max-w-[150px] truncate">{row.customer_name || '-'}</TableCell>
                         <TableCell className="font-medium max-w-[180px] truncate">
                           {row.product_name || '-'}
                         </TableCell>
@@ -762,15 +763,20 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm whitespace-nowrap">
+                          {enriched.sdr}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">
                           {enriched.closerR1}
                         </TableCell>
                         <TableCell className="text-sm whitespace-nowrap">
                           {enriched.closerR2}
                         </TableCell>
-                        <TableCell className="text-sm whitespace-nowrap">
-                          {enriched.sdr}
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {enriched.dtA010 
+                            ? format(parseISO(enriched.dtA010), 'dd/MM/yy', { locale: ptBR })
+                            : '-'
+                          }
                         </TableCell>
-                        <TableCell className="max-w-[150px] truncate">{row.customer_name || '-'}</TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                           {enriched.dtContrato 
                             ? format(parseISO(enriched.dtContrato), 'dd/MM/yy', { locale: ptBR })
@@ -796,9 +802,10 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                           }
                         </TableCell>
                         <TableCell>
-                          <Badge variant={row.sale_status === 'paid' ? 'default' : 'secondary'}>
-                            {row.sale_status || '-'}
-                          </Badge>
+                          {enriched.stageAtual 
+                            ? <Badge variant="outline">{enriched.stageAtual}</Badge>
+                            : '-'
+                          }
                         </TableCell>
                       </TableRow>
                     );
