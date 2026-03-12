@@ -7,8 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileSpreadsheet, DollarSign, ShoppingCart, TrendingUp, Loader2, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
-import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
+import { FileSpreadsheet, DollarSign, ShoppingCart, TrendingUp, Loader2, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X } from 'lucide-react';
+import { format, parseISO, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import { useAllHublaTransactions, TransactionFilters } from '@/hooks/useAllHublaTransactions';
@@ -30,15 +30,20 @@ const normalizePhone = (phone: string | null | undefined): string => {
   return (phone || '').replace(/\D/g, '');
 };
 
+type DatePreset = 'today' | 'week' | 'month' | 'custom';
+
 export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date()),
   });
+  const [datePreset, setDatePreset] = useState<DatePreset>('month');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedChannel, setSelectedChannel] = useState<string>('all');
   const [selectedSource, setSelectedSource] = useState<string>('all');
   const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
+  const [selectedCloserR2Id, setSelectedCloserR2Id] = useState<string>('all');
+  const [selectedSdr, setSelectedSdr] = useState<string>('all');
   const [selectedOriginId, setSelectedOriginId] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -342,106 +347,18 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     });
   }, [rawAttendees, bu, closerIdSet]);
   
-  // Dados filtrados
-  const filteredTransactions = useMemo(() => {
-    let filtered = [...transactions];
-    
-    // Filtro por fonte (Hubla/Make)
-    if (selectedSource !== 'all') {
-      filtered = filtered.filter(t => t.source === selectedSource);
+  // Date preset handler
+  const handleDatePreset = (preset: DatePreset) => {
+    const now = new Date();
+    setDatePreset(preset);
+    if (preset === 'today') {
+      setDateRange({ from: startOfDay(now), to: endOfDay(now) });
+    } else if (preset === 'week') {
+      setDateRange({ from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) });
+    } else if (preset === 'month') {
+      setDateRange({ from: startOfMonth(now), to: endOfMonth(now) });
     }
-    
-    // Filtro por pipeline (origin/categoria)
-    if (selectedOriginId !== 'all') {
-      filtered = filtered.filter(t => t.product_category === selectedOriginId);
-    }
-    
-    // Filtro por canal
-    if (selectedChannel !== 'all') {
-      filtered = filtered.filter(t => {
-        const info = classifiedByTxId.get(t.id);
-        const channel = info?.channel || '';
-        return channel === selectedChannel.toUpperCase();
-      });
-    }
-    
-    // Filtro por closer (via matching com attendees)
-    if (selectedCloserId !== 'all') {
-      const closerAttendees = attendees.filter((a: any) => 
-        a.meeting_slots?.closer_id === selectedCloserId
-      );
-      
-      const closerEmails = new Set(
-        closerAttendees
-          .map((a: any) => a.crm_deals?.crm_contacts?.email?.toLowerCase())
-          .filter(Boolean)
-      );
-      
-      const closerPhones = new Set(
-        closerAttendees
-          .map((a: any) => normalizePhone(a.crm_deals?.crm_contacts?.phone))
-          .filter((p: string) => p.length >= 8)
-      );
-      
-      filtered = filtered.filter(t => {
-        const txEmail = (t.customer_email || '').toLowerCase();
-        const txPhone = normalizePhone(t.customer_phone);
-        
-        return closerEmails.has(txEmail) || 
-               (txPhone.length >= 8 && closerPhones.has(txPhone));
-      });
-    }
-    
-    // Filtro por busca textual
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim();
-      const termDigits = searchTerm.replace(/\D/g, '');
-      
-      filtered = filtered.filter(t => {
-        const nameMatch = (t.customer_name || '').toLowerCase().includes(term);
-        const emailMatch = (t.customer_email || '').toLowerCase().includes(term);
-        const phoneMatch = termDigits.length >= 4 && 
-          (t.customer_phone || '').replace(/\D/g, '').includes(termDigits);
-        
-        return nameMatch || emailMatch || phoneMatch;
-      });
-    }
-    
-    return filtered;
-  }, [transactions, selectedChannel, selectedSource, selectedOriginId, selectedCloserId, searchTerm, attendees, classifiedByTxId]);
-  
-  // Paginação
-  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
-  const paginatedTransactions = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredTransactions.slice(start, start + itemsPerPage);
-  }, [filteredTransactions, currentPage, itemsPerPage]);
-  
-  // Reset página ao mudar filtros
-  useMemo(() => {
-    setCurrentPage(1);
-  }, [selectedChannel, selectedSource, selectedOriginId, selectedCloserId, searchTerm, dateRange]);
-  
-  const handlePageSizeChange = (value: string) => {
-    setItemsPerPage(Number(value));
-    setCurrentPage(1);
   };
-  
-  // Calculate stats from filtered data
-  const stats = useMemo(() => {
-    const totalGross = filteredTransactions.reduce((sum, t) => {
-      if (shouldUseBUFilter) {
-        return sum + (t.product_price || t.net_value || 0);
-      }
-      const isFirst = globalFirstIds.has(t.id);
-      return sum + getDeduplicatedGross(t, isFirst);
-    }, 0);
-    const totalNet = filteredTransactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
-    const count = filteredTransactions.length;
-    const avgTicket = count > 0 ? totalNet / count : 0;
-    
-    return { totalGross, totalNet, count, avgTicket };
-  }, [filteredTransactions, globalFirstIds]);
 
   // Independent SDR query via CRM deals (fallback when no R1 attendee match)
   const { data: crmDealOwners = [] } = useQuery({
@@ -474,6 +391,157 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
 
   // Names that are origin labels, not real person names
   const AUTOMATIC_ORIGIN_NAMES = new Set(['A010', 'Lançamento', 'Renovação', 'Vitalício', 'Live', 'Bio Instagram', 'Outros', 'Contrato', 'Sem Closer', 'Sem SDR', 'Closer Desconhecido', 'SDR Desconhecido']);
+
+  // Unique SDR names for filter dropdown
+  const sdrOptions = useMemo(() => {
+    const set = new Set<string>();
+    acquisitionClassified.forEach(c => {
+      if (c.sdrName && !AUTOMATIC_ORIGIN_NAMES.has(c.sdrName)) set.add(c.sdrName);
+    });
+    sdrByEmail.forEach(name => {
+      if (name && !AUTOMATIC_ORIGIN_NAMES.has(name)) set.add(name);
+    });
+    return Array.from(set).sort();
+  }, [acquisitionClassified, sdrByEmail]);
+
+  // Has active filters?
+  const hasActiveFilters = searchTerm || selectedChannel !== 'all' || selectedSource !== 'all' ||
+    selectedCloserId !== 'all' || selectedCloserR2Id !== 'all' || selectedSdr !== 'all' || selectedOriginId !== 'all';
+
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setSelectedChannel('all');
+    setSelectedSource('all');
+    setSelectedCloserId('all');
+    setSelectedCloserR2Id('all');
+    setSelectedSdr('all');
+    setSelectedOriginId('all');
+  };
+
+  // Dados filtrados
+  const filteredTransactions = useMemo(() => {
+    let filtered = [...transactions];
+    
+    // Filtro por fonte (Hubla/Make)
+    if (selectedSource !== 'all') {
+      filtered = filtered.filter(t => t.source === selectedSource);
+    }
+    
+    // Filtro por pipeline (origin/categoria)
+    if (selectedOriginId !== 'all') {
+      filtered = filtered.filter(t => t.product_category === selectedOriginId);
+    }
+    
+    // Filtro por canal
+    if (selectedChannel !== 'all') {
+      filtered = filtered.filter(t => {
+        const info = classifiedByTxId.get(t.id);
+        const channel = info?.channel || '';
+        return channel === selectedChannel.toUpperCase();
+      });
+    }
+    
+    // Filtro por closer R1 (via matching com attendees)
+    if (selectedCloserId !== 'all') {
+      const closerAttendees = attendees.filter((a: any) => 
+        a.meeting_slots?.closer_id === selectedCloserId
+      );
+      
+      const closerEmails = new Set(
+        closerAttendees
+          .map((a: any) => a.crm_deals?.crm_contacts?.email?.toLowerCase())
+          .filter(Boolean)
+      );
+      
+      const closerPhones = new Set(
+        closerAttendees
+          .map((a: any) => normalizePhone(a.crm_deals?.crm_contacts?.phone))
+          .filter((p: string) => p.length >= 8)
+      );
+      
+      filtered = filtered.filter(t => {
+        const txEmail = (t.customer_email || '').toLowerCase();
+        const txPhone = normalizePhone(t.customer_phone);
+        
+        return closerEmails.has(txEmail) || 
+               (txPhone.length >= 8 && closerPhones.has(txPhone));
+      });
+    }
+
+    // Filtro por Closer R2
+    if (selectedCloserR2Id !== 'all') {
+      const r2Name = r2CloserNameMap.get(selectedCloserR2Id);
+      if (r2Name) {
+        filtered = filtered.filter(t => {
+          const email = (t.customer_email || '').toLowerCase().trim();
+          return r2CloserByEmail.get(email) === r2Name;
+        });
+      }
+    }
+
+    // Filtro por SDR
+    if (selectedSdr !== 'all') {
+      filtered = filtered.filter(t => {
+        const info = classifiedByTxId.get(t.id);
+        const email = (t.customer_email || '').toLowerCase().trim();
+        const sdrName = (info?.sdrName && !new Set(['A010', 'Lançamento', 'Renovação', 'Vitalício', 'Live', 'Bio Instagram', 'Outros', 'Contrato', 'Sem Closer', 'Sem SDR', 'Closer Desconhecido', 'SDR Desconhecido']).has(info.sdrName))
+          ? info.sdrName
+          : (sdrByEmail.get(email) || '-');
+        return sdrName === selectedSdr;
+      });
+    }
+    
+    // Filtro por busca textual
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      const termDigits = searchTerm.replace(/\D/g, '');
+      
+      filtered = filtered.filter(t => {
+        const nameMatch = (t.customer_name || '').toLowerCase().includes(term);
+        const emailMatch = (t.customer_email || '').toLowerCase().includes(term);
+        const phoneMatch = termDigits.length >= 4 && 
+          (t.customer_phone || '').replace(/\D/g, '').includes(termDigits);
+        
+        return nameMatch || emailMatch || phoneMatch;
+      });
+    }
+    
+    return filtered;
+  }, [transactions, selectedChannel, selectedSource, selectedOriginId, selectedCloserId, selectedCloserR2Id, selectedSdr, searchTerm, attendees, classifiedByTxId, r2CloserByEmail, r2CloserNameMap, sdrByEmail]);
+  
+  // Paginação
+  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredTransactions.slice(start, start + itemsPerPage);
+  }, [filteredTransactions, currentPage, itemsPerPage]);
+  
+  // Reset página ao mudar filtros
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [selectedChannel, selectedSource, selectedOriginId, selectedCloserId, selectedCloserR2Id, selectedSdr, searchTerm, dateRange]);
+  
+  const handlePageSizeChange = (value: string) => {
+    setItemsPerPage(Number(value));
+    setCurrentPage(1);
+  };
+  
+  // Calculate stats from filtered data
+  const stats = useMemo(() => {
+    const totalGross = filteredTransactions.reduce((sum, t) => {
+      if (shouldUseBUFilter) {
+        return sum + (t.product_price || t.net_value || 0);
+      }
+      const isFirst = globalFirstIds.has(t.id);
+      return sum + getDeduplicatedGross(t, isFirst);
+    }, 0);
+    const totalNet = filteredTransactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
+    const count = filteredTransactions.length;
+    const avgTicket = count > 0 ? totalNet / count : 0;
+    
+    return { totalGross, totalNet, count, avgTicket };
+  }, [filteredTransactions, globalFirstIds]);
+
 
   // Helper to get enriched data for a transaction
   const getEnrichedData = (row: any) => {
@@ -536,96 +604,136 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     <div className="space-y-6">
       {/* Filters */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="flex-1 min-w-[180px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Período</label>
+        <CardContent className="pt-6 space-y-3">
+          {/* Row 1: Date presets + DatePicker + Search */}
+          <div className="flex flex-wrap items-center gap-2">
+            {(['today', 'week', 'month', 'custom'] as DatePreset[]).map(p => (
+              <Button
+                key={p}
+                variant={datePreset === p ? 'default' : 'outline'}
+                size="sm"
+                className="h-8"
+                onClick={() => {
+                  if (p === 'custom') {
+                    setDatePreset('custom');
+                  } else {
+                    handleDatePreset(p);
+                  }
+                }}
+              >
+                {p === 'today' ? 'Hoje' : p === 'week' ? 'Semana' : p === 'month' ? 'Mês' : 'Custom'}
+              </Button>
+            ))}
+
+            <div className="min-w-[200px]">
               <DatePickerCustom
                 mode="range"
                 selected={dateRange}
-                onSelect={(range) => range && setDateRange(range as DateRange)}
+                onSelect={(range) => {
+                  if (range) {
+                    setDateRange(range as DateRange);
+                    setDatePreset('custom');
+                  }
+                }}
                 placeholder="Selecione o período"
               />
             </div>
-            
-            <div className="w-[200px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Buscar</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Nome, email ou telefone..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
+
+            <div className="relative flex-1 min-w-[200px] max-w-[300px]">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Nome, email ou telefone..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 h-9"
+              />
             </div>
-            
-            <div className="w-[120px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Fonte</label>
-              <Select value={selectedSource} onValueChange={setSelectedSource}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Fonte" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  <SelectItem value="hubla">Hubla</SelectItem>
-                  <SelectItem value="make">Make</SelectItem>
-                  <SelectItem value="manual">Manual</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="w-[160px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Closer</label>
-              <Select value={selectedCloserId} onValueChange={setSelectedCloserId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Closer" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {closers.map(closer => (
-                    <SelectItem key={closer.id} value={closer.id}>
-                      {closer.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="w-[160px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Pipeline</label>
-              <Select value={selectedOriginId} onValueChange={setSelectedOriginId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Pipeline" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {origins.map(origin => (
-                    <SelectItem key={origin.id} value={origin.id}>
-                      {origin.display_name || origin.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="w-[120px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Canal</label>
-              <Select value={selectedChannel} onValueChange={setSelectedChannel}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Canal" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="a010">A010</SelectItem>
-                  <SelectItem value="bio">BIO</SelectItem>
-                  <SelectItem value="live">LIVE</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <Button onClick={handleExportExcel} disabled={filteredTransactions.length === 0}>
+          </div>
+
+          {/* Row 2: SDR, Closer R1, Closer R2, Canal, Pipeline, Fonte, Limpar, Excel */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={selectedSdr} onValueChange={setSelectedSdr}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="SDR" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos SDRs</SelectItem>
+                {sdrOptions.map(name => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedCloserId} onValueChange={setSelectedCloserId}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="Closer R1" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos R1</SelectItem>
+                {closers.map(closer => (
+                  <SelectItem key={closer.id} value={closer.id}>{closer.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedCloserR2Id} onValueChange={setSelectedCloserR2Id}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="Closer R2" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos R2</SelectItem>
+                {r2Closers.map(closer => (
+                  <SelectItem key={closer.id} value={closer.id}>{closer.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedChannel} onValueChange={setSelectedChannel}>
+              <SelectTrigger className="w-[120px] h-9">
+                <SelectValue placeholder="Canal" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="a010">A010</SelectItem>
+                <SelectItem value="bio">BIO</SelectItem>
+                <SelectItem value="live">LIVE</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedOriginId} onValueChange={setSelectedOriginId}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="Pipeline" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {origins.map(origin => (
+                  <SelectItem key={origin.id} value={origin.id}>
+                    {origin.display_name || origin.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedSource} onValueChange={setSelectedSource}>
+              <SelectTrigger className="w-[120px] h-9">
+                <SelectValue placeholder="Fonte" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="hubla">Hubla</SelectItem>
+                <SelectItem value="make">Make</SelectItem>
+                <SelectItem value="manual">Manual</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearAllFilters} className="h-9 px-2 text-muted-foreground">
+                <X className="h-4 w-4 mr-1" />
+                Limpar
+              </Button>
+            )}
+
+            <Button size="sm" className="h-9 ml-auto" onClick={handleExportExcel} disabled={filteredTransactions.length === 0}>
               <FileSpreadsheet className="h-4 w-4 mr-2" />
               Excel
             </Button>
