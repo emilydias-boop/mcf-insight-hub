@@ -1,5 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { FileText, DollarSign, BarChart3, Target, Package, Search, UserX, ShoppingCart } from 'lucide-react';
+import { FileText, DollarSign, BarChart3, Target, Package, Search, UserX, ShoppingCart, History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type ReportType = 'contracts' | 'sales' | 'performance' | 'acquisition' | 'products' | 'investigation' | 'nao_comprou' | 'carrinho';
