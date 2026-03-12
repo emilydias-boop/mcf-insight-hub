@@ -1,39 +1,50 @@
 
 
-## Objetivo
+## Nova aba "Histórico de Compras" no Relatório do Consórcio
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+O objetivo é criar uma nova aba de relatório que cruza os leads do Consórcio (tabela `consortium_cards`) com o histórico completo de compras em todas as BUs (tabela `hubla_transactions`), exibindo dados de contato e todas as transações associadas.
 
-## Mudanças
+### 1. Novo ReportType: `cross_history`
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**`src/components/relatorios/ReportTypeSelector.tsx`**
+- Adicionar `'cross_history'` ao type `ReportType`
+- Adicionar opção com ícone `Users` (ou `History`), título "Histórico Parceiros", descrição "Compras cross-BU dos leads"
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### 2. Novo componente: `CrossHistoryReportPanel.tsx`
 
-### 2. Hook `useCloserDetailData.ts`
+**`src/components/relatorios/CrossHistoryReportPanel.tsx`**
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+Hook de dados (`useQuery`):
+1. Buscar emails únicos de `consortium_cards` (campo `email`) — são os leads do Consórcio
+2. Com esses emails, buscar todas as transações em `hubla_transactions` (cross-BU, sem filtro de BU)
+3. Também buscar dados de contato: `nome_completo`, `email`, `telefone` de `consortium_cards`
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+UI:
+- Filtros: Busca por nome/email, período (DateRange), filtro por produto
+- KPI cards: Total de leads com compras, Total de transações, Faturamento bruto total
+- Tabela principal com colunas: **Cliente** (nome + email + telefone), **Produto**, **Data**, **Bruto**, **Líquido**, **Parcela**, **Fonte**, **Tipo** (Novo/Recorrente), **Status**
+- Agrupamento visual por cliente (ou flat com cliente repetido)
+- Botão de exportar Excel
+- Paginação
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+### 3. Registrar no BUReportCenter
 
-### 4. Dados exportados no Excel
+**`src/components/relatorios/BUReportCenter.tsx`**
+- Importar `CrossHistoryReportPanel`
+- Adicionar case `selectedReport === 'cross_history'`
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+**`src/pages/bu-consorcio/Relatorio.tsx`**
+- Adicionar `'cross_history'` ao array `availableReports`
 
-Formato de data: `dd/MM/yyyy HH:mm`
+### Fluxo de dados
 
-## Resultado
+```text
+consortium_cards (email) ──► hubla_transactions (customer_email)
+       │                              │
+       └─ nome, email, telefone       └─ product_name, product_price,
+                                         net_value, sale_date, source,
+                                         installment_number, sale_status
+```
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+A query busca todos os emails de `consortium_cards`, depois faz `hubla_transactions.in('customer_email', emails)` para trazer o histórico completo cross-BU. Isso mostra exatamente o que o usuário quer: quem comprou consórcio E o que mais comprou nas outras BUs (parceria, contrato, A010, etc).
 
