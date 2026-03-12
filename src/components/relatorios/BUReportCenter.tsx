@@ -104,6 +104,10 @@ export function BUReportCenter({
           <CarrinhoReportPanel bu={bu} />
         )}
         
+        {selectedReport === 'cross_bu' && (
+          <CrossBUReportPanel bu={bu} />
+        )}
+        
         {/* Empty State */}
         {!selectedReport && (
           <Card>

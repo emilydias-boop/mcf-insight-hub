@@ -60,6 +60,12 @@ const reportOptions: ReportTypeOption[] = [
     description: 'Contratos da semana com atribuição',
     icon: ShoppingCart,
   },
+  {
+    id: 'cross_bu',
+    title: 'Cross-BU',
+    description: 'Compras do lead em todas as BUs',
+    icon: History,
+  },
 ];
 
 interface ReportTypeSelectorProps {
