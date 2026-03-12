@@ -126,6 +126,28 @@ export const PipelineConfigModal = ({
     enabled: open && !!targetId,
   });
 
+  // Fetch child origins when target is a group
+  const { data: groupOrigins = [] } = useQuery({
+    queryKey: ['crm-group-origins', targetId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_origins')
+        .select('id, name, display_name')
+        .eq('group_id', targetId)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && !!targetId && targetType === 'group',
+  });
+
+  // Resolve the active origin ID for origin-dependent features
+  const resolvedOriginId = useMemo(() => {
+    if (targetType === 'origin') return targetId;
+    if (groupOrigins.length === 1) return groupOrigins[0].id;
+    return selectedOriginId;
+  }, [targetType, targetId, groupOrigins, selectedOriginId]);
+
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async (updates: { name?: string; display_name?: string; description?: string }) => {
