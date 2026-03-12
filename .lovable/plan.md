@@ -1,53 +1,39 @@
 
 
-## Diagnóstico: KPI "AGENDAMENTOS" mostra R1 Agendada em vez de Agendamentos
+## Objetivo
 
-**O problema está na linha 283 de `ReunioesEquipe.tsx`:**
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-```typescript
-totalAgendamentos: r1FromClosers.r1Agendada,  // ← ERRADO
-```
+## Mudanças
 
-O `enrichedKPIs` sobrescreve `totalAgendamentos` (que vem correto do `teamKPIs` — soma dos `agendamentos` por SDR baseados em `created_at`) com `r1FromClosers.r1Agendada` (reuniões agendadas PARA o período, baseadas em `scheduled_at`).
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Ou seja, o card "AGENDAMENTOS" mostra o mesmo valor de "R1 Agendada", quando deveria mostrar o total de agendamentos criados no período.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**Contexto dos dados:**
-- `teamKPIs.totalAgendamentos` = soma de `bySDR[].agendamentos` = contagem por `created_at` (correto)
-- `r1FromClosers.r1Agendada` = contagem por `scheduled_at` (é o que deve aparecer em "R1 Agendada", não em "Agendamentos")
+### 2. Hook `useCloserDetailData.ts`
 
-### Correção
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**Arquivo: `src/pages/crm/ReunioesEquipe.tsx` (linha 283)**
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Remover a sobrescrita de `totalAgendamentos`:
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-```typescript
-// ANTES:
-totalAgendamentos: r1FromClosers.r1Agendada,
+### 4. Dados exportados no Excel
 
-// DEPOIS:
-// não sobrescrever — manter o valor original de teamKPIs.totalAgendamentos
-```
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-O `enrichedKPIs` ficará:
-```typescript
-const enrichedKPIs = useMemo(() => ({
-  ...teamKPIs,
-  // totalAgendamentos vem do spread de teamKPIs (correto, por created_at)
-  totalR1Agendada: r1FromClosers.r1Agendada,
-  totalRealizadas: r1FromClosers.r1Realizada,
-  totalNoShows: r1FromClosers.noShows,
-  totalContratos: contractsFromClosers.total,
-  totalOutside: contractsFromClosers.outside,
-  taxaNoShow: ...,
-  taxaConversao: ...,
-}), [teamKPIs, contractsFromClosers, r1FromClosers]);
-```
+Formato de data: `dd/MM/yyyy HH:mm`
 
-Isso faz com que:
-- **Card "AGENDAMENTOS"** → `teamKPIs.totalAgendamentos` (created_at, esforço do SDR no dia)
-- **Coluna "R1 Agendada"** na tabela → `r1Agendada` (scheduled_at, reuniões marcadas para o período)
+## Resultado
 
-Mesma correção aplica-se aos memos `dayValues`, `weekValues`, `monthValues` que já leem `totalAgendamentos` — automaticamente corrigidos ao remover a sobrescrita.
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
