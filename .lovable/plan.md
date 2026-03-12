@@ -1,39 +1,22 @@
 
 
-## Objetivo
+## Adicionar filtro por Produto ao SalesReportPanel
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Mudanças em `src/components/relatorios/SalesReportPanel.tsx`
 
-## Mudanças
+**1. Novo state**
+- `const [selectedProduct, setSelectedProduct] = useState<string>('all')`
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**2. Derivar lista de produtos únicos**
+- `useMemo` sobre `transactions` para extrair `product_name` distintos, ordenados alfabeticamente
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+**3. Filtro no `filteredTransactions`**
+- Se `selectedProduct !== 'all'`, filtrar `t.product_name === selectedProduct`
+- Adicionar ao array de dependências do `useMemo`
 
-### 2. Hook `useCloserDetailData.ts`
+**4. UI — Select na Row 2 dos filtros**
+- Adicionar `<Select>` de Produto entre Closer R2 e Canal (ou posição similar), com `SelectItem` para cada produto único
+- Largura `w-[200px]` (nomes de produto são mais longos)
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
-
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+**5. Integrar no `hasActiveFilters`, `clearAllFilters`, e reset de `currentPage`**
 
