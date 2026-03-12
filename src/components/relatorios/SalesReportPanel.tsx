@@ -399,6 +399,35 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     return { totalGross, totalNet, count, avgTicket };
   }, [filteredTransactions, globalFirstIds]);
 
+  // Independent SDR query via CRM deals (fallback when no R1 attendee match)
+  const { data: crmDealOwners = [] } = useQuery({
+    queryKey: ['crm-deal-owners-by-email', bu],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_deals')
+        .select('owner_profile_id, crm_contacts!contact_id(email), profiles!crm_deals_owner_profile_id_fkey(full_name)')
+        .not('owner_profile_id', 'is', null)
+        .not('contact_id', 'is', null);
+      if (error) throw error;
+      return (data || []) as unknown as Array<{
+        owner_profile_id: string;
+        crm_contacts: { email: string | null } | null;
+        profiles: { full_name: string | null } | null;
+      }>;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const sdrByEmail = useMemo(() => {
+    const m = new Map<string, string>();
+    crmDealOwners.forEach(d => {
+      const email = (d.crm_contacts?.email || '').toLowerCase().trim();
+      const name = d.profiles?.full_name;
+      if (email && name) m.set(email, name);
+    });
+    return m;
+  }, [crmDealOwners]);
+
   // Names that are origin labels, not real person names
   const AUTOMATIC_ORIGIN_NAMES = new Set(['A010', 'Lançamento', 'Renovação', 'Vitalício', 'Live', 'Bio Instagram', 'Outros', 'Contrato', 'Sem Closer', 'Sem SDR', 'Closer Desconhecido', 'SDR Desconhecido']);
 
@@ -409,8 +438,9 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
 
     const closerR1 = info?.closerName && !AUTOMATIC_ORIGIN_NAMES.has(info.closerName)
       ? info.closerName : '-';
-    const sdr = info?.sdrName && !AUTOMATIC_ORIGIN_NAMES.has(info.sdrName)
-      ? info.sdrName : '-';
+    const sdr = (info?.sdrName && !AUTOMATIC_ORIGIN_NAMES.has(info.sdrName))
+      ? info.sdrName
+      : (sdrByEmail.get(email) || '-');
 
     return {
       canal: info?.origin || '-',
