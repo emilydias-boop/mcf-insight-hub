@@ -143,11 +143,20 @@ export const PipelineConfigModal = ({
     enabled: open && !!targetId && targetType === 'group',
   });
 
+  // Pre-select preferredOriginId when group origins load
+  const effectiveSelectedOriginId = useMemo(() => {
+    if (selectedOriginId) return selectedOriginId;
+    if (preferredOriginId && groupOrigins.some(o => o.id === preferredOriginId)) {
+      return preferredOriginId;
+    }
+    return null;
+  }, [selectedOriginId, preferredOriginId, groupOrigins]);
+
   // Resolve the active origin ID for origin-dependent features
   const resolvedOriginId = useMemo(() => {
     if (targetType === 'origin') return targetId;
     if (groupOrigins.length === 1) return groupOrigins[0].id;
-    return selectedOriginId;
+    return effectiveSelectedOriginId;
   }, [targetType, targetId, groupOrigins, selectedOriginId]);
 
   // Update mutation
