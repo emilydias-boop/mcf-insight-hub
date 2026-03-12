@@ -131,6 +131,7 @@ export const PipelineConfigModal = ({
       }
     },
     enabled: open && !!targetId,
+    staleTime: 0,
   });
 
   // Fetch child origins when target is a group
