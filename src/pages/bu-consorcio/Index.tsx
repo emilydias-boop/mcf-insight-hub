@@ -348,17 +348,16 @@ export default function ConsorcioPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <Select value={period} onValueChange={(v) => setPeriod(v as PeriodType)}>
-            <SelectTrigger className="w-40">
+          <Select value={monthOffset} onValueChange={setMonthOffset}>
+            <SelectTrigger className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="month">
-                {format(now, 'MMMM yyyy', { locale: ptBR })}
-              </SelectItem>
-              <SelectItem value="lastMonth">
-                {format(subMonths(now, 1), 'MMMM yyyy', { locale: ptBR })}
-              </SelectItem>
+              {MONTH_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Button 
