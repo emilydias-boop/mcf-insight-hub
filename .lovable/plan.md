@@ -1,39 +1,48 @@
 
 
-## Objetivo
+## Corrigir visão "Por Cliente" — Bruto por categoria usando preço de referência
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+Na visão "Por Cliente", o bruto por categoria (A010, Contrato, Parceria, Outros) está usando `getDeduplicatedGross()` que zera transações duplicadas do mesmo cliente+produto. Isso faz com que o Andre, que tem 2 transações A001, mostre o bruto correto no total (16.5k), mas o líquido da segunda transação (2.3k) ainda é somado. O problema é que no campo "Bruto Outros" pode aparecer 3k da segunda transação em vez de 0.
 
-## Mudanças
+Além disso, o **bruto por categoria deveria usar o preço de referência** (a primeira transação do grupo) e **somar todos os líquidos** incluindo P2 e parceria.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Solução
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+**Arquivo: `src/components/relatorios/SalesReportPanel.tsx`**
 
-### 2. Hook `useCloserDetailData.ts`
+Ajustar a lógica de `byClientRows` (linhas ~606-668):
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+1. **Bruto por categoria**: Manter `getDeduplicatedGross()` para o cálculo — ele já retorna 0 para duplicatas e o preço de referência para a primeira. A soma por categoria já funciona corretamente.
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+2. **Líquido**: Já soma todos os `net_value` (incluindo P2 e parceria) — isso está correto.
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+3. **Problema real**: A segunda transação A001 do Andre tem `product_price = 3000` e `getDeduplicatedGross` pode estar retornando 3000 ao invés de 0 se o `globalFirstIds` não está detectando corretamente a duplicata (pode ser que as duas transações têm datas diferentes ou product_names ligeiramente diferentes que quebram a deduplicação).
 
-### 4. Dados exportados no Excel
+4. **Fix**: Na aggregação `byClientRows`, usar uma deduplicação **local** por `email+product_category` ao invés de depender do `globalFirstIds`:
+   - Para cada grupo `email+category`, apenas a **primeira transação** (por data) conta o bruto (usando preço de referência via `getDeduplicatedGross` com `isFirst=true`)
+   - Transações subsequentes do mesmo `email+category` contribuem apenas com o líquido
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+5. **Implementação concreta**:
+```typescript
+// Dentro do loop de byClientRows:
+const localFirstByCategory = new Map<string, boolean>();
+// Pré-ordenar filteredTransactions por sale_date asc
+const sorted = [...filteredTransactions].sort((a,b) => 
+  (a.sale_date || '').localeCompare(b.sale_date || '')
+);
+sorted.forEach(tx => {
+  const key = email + '|' + category;
+  const isFirstForCategory = !localFirstByCategory.has(key);
+  if (isFirstForCategory) localFirstByCategory.set(key, true);
+  
+  const grossVal = isFirstForCategory 
+    ? getDeduplicatedGross(tx, true)  // força isFirst=true para pegar referência
+    : 0;
+  // ... soma grossVal na categoria correspondente
+});
+```
 
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Escopo
+- Apenas `src/components/relatorios/SalesReportPanel.tsx`, lógica do `byClientRows` useMemo
 
