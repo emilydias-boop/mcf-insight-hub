@@ -603,20 +603,33 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     };
   };
   
-  // Aggregated by-client view
+  // Aggregated by-client view — local dedup by email+category
   const byClientRows = useMemo((): ByClientRow[] => {
     if (viewMode !== 'by_client') return [];
     const map = new Map<string, ByClientRow & { _txIds: string[] }>();
+    const localFirstByCategory = new Map<string, boolean>();
 
-    filteredTransactions.forEach(tx => {
-      const key = (tx.customer_email || '').toLowerCase().trim() || `name:${(tx.customer_name || '').toUpperCase().trim()}`;
+    // Sort by sale_date asc so first transaction per category is the earliest
+    const sorted = [...filteredTransactions].sort((a, b) =>
+      (a.sale_date || '').localeCompare(b.sale_date || '')
+    );
+
+    sorted.forEach(tx => {
+      const email = (tx.customer_email || '').toLowerCase().trim();
+      const clientKey = email || `name:${(tx.customer_name || '').toUpperCase().trim()}`;
       const enriched = getEnrichedData(tx);
-      const grossVal = shouldUseBUFilter
-        ? (tx.product_price || tx.net_value || 0)
-        : getDeduplicatedGross(tx, globalFirstIds.has(tx.id));
       const category = (tx.product_category || '').toLowerCase();
 
-      let existing = map.get(key);
+      // Local dedup: only first tx per email+category gets gross
+      const dedupKey = `${clientKey}|${category}`;
+      const isFirstForCategory = !localFirstByCategory.has(dedupKey);
+      if (isFirstForCategory) localFirstByCategory.set(dedupKey, true);
+
+      const grossVal = shouldUseBUFilter
+        ? (isFirstForCategory ? (tx.product_price || tx.net_value || 0) : 0)
+        : getDeduplicatedGross(tx, isFirstForCategory);
+
+      let existing = map.get(clientKey);
       if (!existing) {
         existing = {
           nome: tx.customer_name || '-',
@@ -637,7 +650,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
           stageAtual: null,
           _txIds: [],
         };
-        map.set(key, existing);
+        map.set(clientKey, existing);
       }
 
       existing.totalTx += 1;
@@ -665,7 +678,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
 
     return Array.from(map.values())
       .sort((a, b) => b.brutoTotal - a.brutoTotal);
-  }, [filteredTransactions, viewMode, globalFirstIds, shouldUseBUFilter]);
+  }, [filteredTransactions, viewMode, shouldUseBUFilter]);
 
   // Pagination source based on view mode
   const paginationSource = viewMode === 'by_client' ? byClientRows : filteredTransactions;
