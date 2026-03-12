@@ -94,12 +94,13 @@ export const PipelineConfigModal = ({
   onOpenChange,
   targetType,
   targetId,
+  preferredOriginId,
 }: PipelineConfigModalProps) => {
   const [activeTab, setActiveTab] = useState<'general' | 'stages' | 'integrations'>('general');
   const [activeSection, setActiveSection] = useState<GeneralSection>('settings');
   const [activeStagesSection, setActiveStagesSection] = useState<StagesSection>('kanban-stages');
   const [activeIntegrationSection, setActiveIntegrationSection] = useState<IntegrationSection>('webhooks');
-  const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
+  const [selectedOriginId, setSelectedOriginId] = useState<string | null>(preferredOriginId || null);
   const queryClient = useQueryClient();
 
   // Fetch target data
