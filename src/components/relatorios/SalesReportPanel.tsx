@@ -19,24 +19,11 @@ import { BusinessUnit } from '@/hooks/useMyBU';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
+import { useAcquisitionReport } from '@/hooks/useAcquisitionReport';
 
 interface SalesReportPanelProps {
   bu: BusinessUnit;
 }
-
-// Detectar canal de vendas baseado nas tags do Clint ou nome do produto
-const detectSalesChannel = (productName: string | null): 'A010' | 'BIO' | 'LIVE' => {
-  const name = (productName || '').toLowerCase();
-  // Detectar canal baseado no nome do produto
-  if (name.includes('a010')) {
-    return 'A010';
-  }
-  if (name.includes('bio') || name.includes('instagram')) {
-    return 'BIO';
-  }
-  
-  return 'LIVE';
-};
 
 // Normaliza telefone para comparação
 const normalizePhone = (phone: string | null | undefined): string => {
@@ -84,15 +71,33 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   const transactions = shouldUseBUFilter ? buTransactions : allTransactions;
   const isLoading = shouldUseBUFilter ? loadingBU : loadingAll;
   
-  // Closers R1 — mesma query do useAcquisitionReport (filtrada por BU)
-  const { data: closers = [] } = useQuery({
-    queryKey: ['acquisition-closers', bu],
+  // Use useAcquisitionReport to get classified data (closerName, sdrName, origin, channel)
+  const { classified: acquisitionClassified, closers, globalFirstIds } = useAcquisitionReport(dateRange, bu);
+
+  // Build lookup: txId → classified info
+  const classifiedByTxId = useMemo(() => {
+    const m = new Map<string, { closerName: string; sdrName: string; origin: string; channel: string }>();
+    acquisitionClassified.forEach(c => {
+      m.set(c.tx.id, { closerName: c.closerName, sdrName: c.sdrName, origin: c.origin, channel: c.channel });
+    });
+    return m;
+  }, [acquisitionClassified]);
+
+  // R2 Closers query
+  interface R2AttendeeMatch {
+    deal_id: string | null;
+    meeting_slots: { closer_id: string | null } | null;
+    crm_deals: { crm_contacts: { email: string | null; phone: string | null } | null } | null;
+  }
+
+  const { data: r2Closers = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['r2-closers', bu],
     queryFn: async () => {
       let query = supabase
         .from('closers')
-        .select('id, name, email, color, bu')
+        .select('id, name')
         .eq('is_active', true)
-        .or('meeting_type.is.null,meeting_type.eq.r1');
+        .eq('meeting_type', 'r2');
       if (bu) query = query.eq('bu', bu);
       const { data, error } = await query.order('name');
       if (error) throw error;
@@ -101,9 +106,108 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     staleTime: 5 * 60 * 1000,
   });
 
+  const r2CloserNameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    r2Closers.forEach(c => m.set(c.id, c.name));
+    return m;
+  }, [r2Closers]);
+
+  const { data: r2Attendees = [] } = useQuery<R2AttendeeMatch[]>({
+    queryKey: ['r2-attendees', dateRange?.from?.toISOString(), dateRange?.to?.toISOString(), bu],
+    queryFn: async (): Promise<R2AttendeeMatch[]> => {
+      if (!dateRange?.from) return [];
+      const lookback = new Date(dateRange.from);
+      lookback.setDate(lookback.getDate() - 30);
+      const startDate = lookback.toISOString();
+      const endDate = dateRange.to
+        ? new Date(new Date(dateRange.to).setHours(23, 59, 59, 999)).toISOString()
+        : new Date(new Date(dateRange.from).setHours(23, 59, 59, 999)).toISOString();
+      
+      const all: R2AttendeeMatch[] = [];
+      let offset = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('meeting_slot_attendees')
+          .select(`
+            deal_id,
+            meeting_slots!inner(closer_id),
+            crm_deals!deal_id(crm_contacts!contact_id(email, phone))
+          `)
+          .eq('meeting_slots.meeting_type', 'r2')
+          .gte('meeting_slots.scheduled_at', startDate)
+          .lte('meeting_slots.scheduled_at', endDate)
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        const batch = (data || []) as unknown as R2AttendeeMatch[];
+        all.push(...batch);
+        hasMore = batch.length >= pageSize;
+        offset += pageSize;
+      }
+      return all;
+    },
+    enabled: !!dateRange?.from,
+  });
+
+  // R2 closer lookup by email
+  const r2CloserByEmail = useMemo(() => {
+    const m = new Map<string, string>();
+    r2Attendees.forEach(a => {
+      const closerId = a.meeting_slots?.closer_id;
+      const email = (a.crm_deals?.crm_contacts?.email || '').toLowerCase().trim();
+      if (closerId && email) {
+        const name = r2CloserNameMap.get(closerId);
+        if (name) m.set(email, name);
+      }
+    });
+    return m;
+  }, [r2Attendees, r2CloserNameMap]);
+
+  // Contract & Partnership dates query
+  const { data: contractDates = new Map<string, string>() } = useQuery({
+    queryKey: ['contract-dates', dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, sale_date')
+        .eq('product_category', 'contrato')
+        .not('customer_email', 'is', null)
+        .order('sale_date', { ascending: true });
+      if (error) throw error;
+      const m = new Map<string, string>();
+      (data || []).forEach((r: { customer_email: string | null; sale_date: string }) => {
+        const email = (r.customer_email || '').toLowerCase().trim();
+        if (email && !m.has(email)) m.set(email, r.sale_date);
+      });
+      return m;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: partnershipDates = new Map<string, string>() } = useQuery({
+    queryKey: ['partnership-dates', dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, sale_date')
+        .eq('product_category', 'parceria')
+        .not('customer_email', 'is', null)
+        .order('sale_date', { ascending: true });
+      if (error) throw error;
+      const m = new Map<string, string>();
+      (data || []).forEach((r: { customer_email: string | null; sale_date: string }) => {
+        const email = (r.customer_email || '').toLowerCase().trim();
+        if (email && !m.has(email)) m.set(email, r.sale_date);
+      });
+      return m;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Set de IDs válidos de closers da BU para filtrar attendees
   const closerIdSet = useMemo(() => new Set(closers.map(c => c.id)), [closers]);
-  
+
   // Interface para origins
   interface OriginOption {
     id: string;
@@ -127,19 +231,8 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
       );
     },
   });
-  
-  // IDs de primeira transação (para deduplicação do bruto)
-  const { data: globalFirstIds = new Set<string>() } = useQuery({
-    queryKey: ['global-first-transaction-ids'],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_first_transaction_ids');
-      if (error) throw error;
-      return new Set((data || []).map((r: { id: string }) => r.id));
-    },
-    staleTime: 1000 * 60 * 5, // 5 minutos
-  });
-  
-  // Interface para attendees
+
+  // Interface para attendees (kept for closer filter)
   interface AttendeeMatch {
     id: string;
     attendee_phone: string | null;
@@ -148,8 +241,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     crm_deals: { crm_contacts: { email: string | null; phone: string | null } | null } | null;
   }
 
-  // Attendees para matching com closers — mesma queryKey do useAcquisitionReport
-  // Inclui lookback de 30 dias antes do período para capturar outsides
+  // Attendees for closer filter — same queryKey as useAcquisitionReport
   const { data: rawAttendees = [] } = useQuery<AttendeeMatch[]>({
     queryKey: ['attendees-acquisition-sdr', dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     queryFn: async (): Promise<AttendeeMatch[]> => {
@@ -223,7 +315,8 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     // Filtro por canal
     if (selectedChannel !== 'all') {
       filtered = filtered.filter(t => {
-        const channel = detectSalesChannel(t.product_name);
+        const info = classifiedByTxId.get(t.id);
+        const channel = info?.channel || '';
         return channel === selectedChannel.toUpperCase();
       });
     }
@@ -271,7 +364,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     }
     
     return filtered;
-  }, [transactions, selectedChannel, selectedSource, selectedOriginId, selectedCloserId, searchTerm, attendees]);
+  }, [transactions, selectedChannel, selectedSource, selectedOriginId, selectedCloserId, searchTerm, attendees, classifiedByTxId]);
   
   // Paginação
   const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
@@ -290,7 +383,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     setCurrentPage(1);
   };
   
-  // Calculate stats from filtered data (usando deduplicação consistente com Transações/Fechamento)
+  // Calculate stats from filtered data
   const stats = useMemo(() => {
     const totalGross = filteredTransactions.reduce((sum, t) => {
       if (shouldUseBUFilter) {
@@ -305,24 +398,44 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     
     return { totalGross, totalNet, count, avgTicket };
   }, [filteredTransactions, globalFirstIds]);
+
+  // Helper to get enriched data for a transaction
+  const getEnrichedData = (row: any) => {
+    const info = classifiedByTxId.get(row.id);
+    const email = (row.customer_email || '').toLowerCase().trim();
+    return {
+      canal: info?.origin || '-',
+      closerR1: info?.closerName || '-',
+      closerR2: r2CloserByEmail.get(email) || '-',
+      sdr: info?.sdrName || '-',
+      dtContrato: contractDates.get(email) || null,
+      dtParceria: partnershipDates.get(email) || null,
+    };
+  };
   
   // Export to Excel
   const handleExportExcel = () => {
-    const exportData = filteredTransactions.map(row => ({
-      'Data': row.sale_date ? format(parseISO(row.sale_date), 'dd/MM/yyyy', { locale: ptBR }) : '',
-      'Produto': row.product_name || '',
-      'Canal': detectSalesChannel(row.product_name),
-      'Categoria': row.product_category || '',
-      'Cliente': row.customer_name || '',
-      'Email': row.customer_email || '',
-      'Telefone': row.customer_phone || '',
-      'Valor Bruto': shouldUseBUFilter ? (row.product_price || row.net_value || 0) : getDeduplicatedGross(row, globalFirstIds.has(row.id)),
-      'Valor Líquido': row.net_value || 0,
-      'Parcela': row.installment_number ? `${row.installment_number}/${row.total_installments}` : '-',
-      'Status': row.sale_status || '',
-      'Fonte': row.source || '',
-      'Tags': '',
-    }));
+    const exportData = filteredTransactions.map(row => {
+      const enriched = getEnrichedData(row);
+      return {
+        'Data': row.sale_date ? format(parseISO(row.sale_date), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Produto': row.product_name || '',
+        'Canal': enriched.canal,
+        'Closer R1': enriched.closerR1,
+        'Closer R2': enriched.closerR2,
+        'SDR': enriched.sdr,
+        'Cliente': row.customer_name || '',
+        'Email': row.customer_email || '',
+        'Telefone': row.customer_phone || '',
+        'Dt. Contrato': enriched.dtContrato ? format(parseISO(enriched.dtContrato), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Dt. Parceria': enriched.dtParceria ? format(parseISO(enriched.dtParceria), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Valor Bruto': shouldUseBUFilter ? (row.product_price || row.net_value || 0) : getDeduplicatedGross(row, globalFirstIds.has(row.id)),
+        'Valor Líquido': row.net_value || 0,
+        'Parcela': row.installment_number ? `${row.installment_number}/${row.total_installments}` : '-',
+        'Status': row.sale_status || '',
+        'Fonte': row.source || '',
+      };
+    });
     
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
@@ -529,41 +642,63 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                     <TableHead>Data</TableHead>
                     <TableHead>Produto</TableHead>
                     <TableHead>Canal</TableHead>
+                    <TableHead>Closer R1</TableHead>
+                    <TableHead>Closer R2</TableHead>
+                    <TableHead>SDR</TableHead>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead className="text-right">Valor Bruto</TableHead>
-                    <TableHead className="text-right">Valor Líquido</TableHead>
+                    <TableHead>Dt. Contrato</TableHead>
+                    <TableHead>Dt. Parceria</TableHead>
+                    <TableHead className="text-right">Bruto</TableHead>
+                    <TableHead className="text-right">Líquido</TableHead>
                     <TableHead>Parcela</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                 {paginatedTransactions.map((row, index) => {
-                    const channel = detectSalesChannel(row.product_name);
+                    const enriched = getEnrichedData(row);
                     return (
                       <TableRow key={row.id || index}>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap">
                           {row.sale_date 
                             ? format(parseISO(row.sale_date), 'dd/MM/yyyy', { locale: ptBR })
                             : '-'
                           }
                         </TableCell>
-                        <TableCell className="font-medium max-w-[200px] truncate">
+                        <TableCell className="font-medium max-w-[180px] truncate">
                           {row.product_name || '-'}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={channel === 'A010' ? 'default' : channel === 'BIO' ? 'secondary' : 'outline'}>
-                            {channel}
+                          <Badge variant="outline" className="whitespace-nowrap">
+                            {enriched.canal}
                           </Badge>
                         </TableCell>
-                        <TableCell>{row.customer_name || '-'}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {row.customer_email || '-'}
+                        <TableCell className="text-sm whitespace-nowrap">
+                          {enriched.closerR1}
                         </TableCell>
-                        <TableCell className="text-right font-mono">
+                        <TableCell className="text-sm whitespace-nowrap">
+                          {enriched.closerR2}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">
+                          {enriched.sdr}
+                        </TableCell>
+                        <TableCell className="max-w-[150px] truncate">{row.customer_name || '-'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {enriched.dtContrato 
+                            ? format(parseISO(enriched.dtContrato), 'dd/MM/yy', { locale: ptBR })
+                            : '-'
+                          }
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {enriched.dtParceria 
+                            ? format(parseISO(enriched.dtParceria), 'dd/MM/yy', { locale: ptBR })
+                            : '-'
+                          }
+                        </TableCell>
+                        <TableCell className="text-right font-mono whitespace-nowrap">
                           {formatCurrency(row.gross_override || row.product_price || 0)}
                         </TableCell>
-                        <TableCell className="text-right font-mono text-success">
+                        <TableCell className="text-right font-mono text-success whitespace-nowrap">
                           {formatCurrency(row.net_value || 0)}
                         </TableCell>
                         <TableCell>
