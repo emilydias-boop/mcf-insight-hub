@@ -205,6 +205,50 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     staleTime: 5 * 60 * 1000,
   });
 
+  // A010 dates query — first purchase with product_category = 'a010'
+  const { data: a010Dates = new Map<string, string>() } = useQuery({
+    queryKey: ['a010-dates'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, sale_date')
+        .eq('product_category', 'a010')
+        .not('customer_email', 'is', null)
+        .order('sale_date', { ascending: true });
+      if (error) throw error;
+      const m = new Map<string, string>();
+      (data || []).forEach((r: { customer_email: string | null; sale_date: string }) => {
+        const email = (r.customer_email || '').toLowerCase().trim();
+        if (email && !m.has(email)) m.set(email, r.sale_date);
+      });
+      return m;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Stage atual por email — deal mais recente do CRM
+  const { data: stageByEmail = new Map<string, { stageName: string; color: string }>() } = useQuery({
+    queryKey: ['deal-stage-by-email'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_deals')
+        .select('stage, updated_at, crm_contacts!contact_id(email)')
+        .not('contact_id', 'is', null)
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      const m = new Map<string, { stageName: string; color: string }>();
+      (data || []).forEach((d: any) => {
+        const email = (d.crm_contacts?.email || '').toLowerCase().trim();
+        const stage = d.stage || '';
+        if (email && stage && !m.has(email)) {
+          m.set(email, { stageName: stage, color: '' });
+        }
+      });
+      return m;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Set de IDs válidos de closers da BU para filtrar attendees
   const closerIdSet = useMemo(() => new Set(closers.map(c => c.id)), [closers]);
 
@@ -442,13 +486,17 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
       ? info.sdrName
       : (sdrByEmail.get(email) || '-');
 
+    const stageInfo = stageByEmail.get(email);
+
     return {
       canal: info?.origin || '-',
       closerR1,
       closerR2: r2CloserByEmail.get(email) || '-',
       sdr,
+      dtA010: a010Dates.get(email) || null,
       dtContrato: contractDates.get(email) || null,
       dtParceria: partnershipDates.get(email) || null,
+      stageAtual: stageInfo?.stageName || null,
     };
   };
   
@@ -457,22 +505,22 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     const exportData = filteredTransactions.map(row => {
       const enriched = getEnrichedData(row);
       return {
-        'Data': row.sale_date ? format(parseISO(row.sale_date), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Data Atualização': row.sale_date ? format(parseISO(row.sale_date), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Cliente': row.customer_name || '',
         'Produto': row.product_name || '',
         'Canal': enriched.canal,
+        'SDR': enriched.sdr,
         'Closer R1': enriched.closerR1,
         'Closer R2': enriched.closerR2,
-        'SDR': enriched.sdr,
-        'Cliente': row.customer_name || '',
+        'Dt A010': enriched.dtA010 ? format(parseISO(enriched.dtA010), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Dt Contrato': enriched.dtContrato ? format(parseISO(enriched.dtContrato), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Dt Parceria': enriched.dtParceria ? format(parseISO(enriched.dtParceria), 'dd/MM/yyyy', { locale: ptBR }) : '',
+        'Bruto': shouldUseBUFilter ? (row.product_price || row.net_value || 0) : getDeduplicatedGross(row, globalFirstIds.has(row.id)),
+        'Líquido': row.net_value || 0,
+        'Parcela': row.installment_number ? `${row.installment_number}/${row.total_installments}` : '-',
+        'Stage Atual': enriched.stageAtual || '',
         'Email': row.customer_email || '',
         'Telefone': row.customer_phone || '',
-        'Dt. Contrato': enriched.dtContrato ? format(parseISO(enriched.dtContrato), 'dd/MM/yyyy', { locale: ptBR }) : '',
-        'Dt. Parceria': enriched.dtParceria ? format(parseISO(enriched.dtParceria), 'dd/MM/yyyy', { locale: ptBR }) : '',
-        'Valor Bruto': shouldUseBUFilter ? (row.product_price || row.net_value || 0) : getDeduplicatedGross(row, globalFirstIds.has(row.id)),
-        'Valor Líquido': row.net_value || 0,
-        'Parcela': row.installment_number ? `${row.installment_number}/${row.total_installments}` : '-',
-        'Status': row.sale_status || '',
-        'Fonte': row.source || '',
       };
     });
     
@@ -678,19 +726,20 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Data</TableHead>
+                    <TableHead>Data Atualização</TableHead>
+                    <TableHead>Cliente</TableHead>
                     <TableHead>Produto</TableHead>
                     <TableHead>Canal</TableHead>
+                    <TableHead>SDR</TableHead>
                     <TableHead>Closer R1</TableHead>
                     <TableHead>Closer R2</TableHead>
-                    <TableHead>SDR</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Dt. Contrato</TableHead>
-                    <TableHead>Dt. Parceria</TableHead>
+                    <TableHead>Dt A010</TableHead>
+                    <TableHead>Dt Contrato</TableHead>
+                    <TableHead>Dt Parceria</TableHead>
                     <TableHead className="text-right">Bruto</TableHead>
                     <TableHead className="text-right">Líquido</TableHead>
                     <TableHead>Parcela</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Stage Atual</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -704,6 +753,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                             : '-'
                           }
                         </TableCell>
+                        <TableCell className="max-w-[150px] truncate">{row.customer_name || '-'}</TableCell>
                         <TableCell className="font-medium max-w-[180px] truncate">
                           {row.product_name || '-'}
                         </TableCell>
@@ -713,15 +763,20 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm whitespace-nowrap">
+                          {enriched.sdr}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">
                           {enriched.closerR1}
                         </TableCell>
                         <TableCell className="text-sm whitespace-nowrap">
                           {enriched.closerR2}
                         </TableCell>
-                        <TableCell className="text-sm whitespace-nowrap">
-                          {enriched.sdr}
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {enriched.dtA010 
+                            ? format(parseISO(enriched.dtA010), 'dd/MM/yy', { locale: ptBR })
+                            : '-'
+                          }
                         </TableCell>
-                        <TableCell className="max-w-[150px] truncate">{row.customer_name || '-'}</TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                           {enriched.dtContrato 
                             ? format(parseISO(enriched.dtContrato), 'dd/MM/yy', { locale: ptBR })
@@ -747,9 +802,10 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                           }
                         </TableCell>
                         <TableCell>
-                          <Badge variant={row.sale_status === 'paid' ? 'default' : 'secondary'}>
-                            {row.sale_status || '-'}
-                          </Badge>
+                          {enriched.stageAtual 
+                            ? <Badge variant="outline">{enriched.stageAtual}</Badge>
+                            : '-'
+                          }
                         </TableCell>
                       </TableRow>
                     );

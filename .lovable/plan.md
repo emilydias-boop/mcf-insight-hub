@@ -1,50 +1,39 @@
 
 
-## Reorganizar tabela de Transações + adicionar Dt A010 e Stage Atual
+## Objetivo
 
-### O que muda
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-A tabela "Transações no Período" será reorganizada com nova ordem de colunas e dois novos dados:
+## Mudanças
 
-**Nova ordem:**
-Data Atualização | Cliente | Produto | Canal | SDR | Closer R1 | Closer R2 | Dt A010 | Dt Contrato | Dt Parceria | Bruto | Líquido | Parcela | Stage Atual
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**Novos dados:**
-1. **Dt A010** — data da primeira compra com `product_category = 'a010'` do cliente (porta de entrada)
-2. **Stage Atual** — estágio atual do deal no CRM (ex: "Agendado R1", "Contrato Pago"), obtido via `crm_deals` + `crm_stages`
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### Implementação — `src/components/relatorios/SalesReportPanel.tsx`
+### 2. Hook `useCloserDetailData.ts`
 
-**1. Nova query: A010 dates (similar às queries de contrato/parceria existentes)**
-```typescript
-const { data: a010Dates } = useQuery({
-  queryKey: ['a010-dates'],
-  queryFn: async () => {
-    // Busca primeiro sale_date por email onde product_category = 'a010'
-    // Retorna Map<email, date>
-  },
-});
-```
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**2. Nova query: Stage atual por email**
-```typescript
-const { data: stageByEmail } = useQuery({
-  queryKey: ['deal-stage-by-email'],
-  queryFn: async () => {
-    // crm_deals JOIN crm_contacts (email) JOIN crm_stages (stage_name, color)
-    // Pega o deal mais recente (updated_at desc) por email
-    // Retorna Map<email, { stage_name, color }>
-  },
-});
-```
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**3. Atualizar `getEnrichedData`** — incluir `dtA010` e `stageAtual` (nome + cor)
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-**4. Reordenar colunas** no `<TableHeader>` e `<TableBody>`:
-- "Data" passa a ser `sale_date` (data da transação / atualização)
-- "Cliente" sobe para segunda posição
-- "Status" (`sale_status`) é substituído por "Stage Atual" com badge colorida
-- Remover coluna "Status" antiga
+### 4. Dados exportados no Excel
 
-**5. Atualizar Excel export** — mesma nova ordem e novos campos (Dt A010, Stage Atual)
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
