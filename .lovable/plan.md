@@ -1,44 +1,39 @@
 
 
-## Nova aba "Cross-BU" no Relatório do Consórcio
+## Objetivo
 
-Criar uma nova aba de relatório no estilo lista/tabela flat (igual ao "Transações no Período" do Incorporador mostrado na screenshot), que cruza leads do Consórcio com compras em todas as BUs.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Mudanças
+## Mudanças
 
-#### 1. `src/components/relatorios/ReportTypeSelector.tsx`
-- Adicionar `'cross_bu'` ao union type `ReportType`
-- Nova opção: ícone `History`, título "Cross-BU", descrição "Compras do lead em todas as BUs"
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-#### 2. Novo `src/components/relatorios/CrossBUReportPanel.tsx`
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**Dados:**
-1. Query 1: Buscar todos os `consortium_cards` (campos: `id`, `nome_completo`, `email`, `telefone`, `grupo`, `cota`, `origem`)
-2. Query 2: Com os emails encontrados, buscar `hubla_transactions` via `.in('customer_email', emails)` — sem filtro de BU, trazendo todo o histórico cross-BU
-3. Join client-side: para cada transação, anexar dados de contato do lead do consórcio
+### 2. Hook `useCloserDetailData.ts`
 
-**Filtros** (mesma row de filtros do SalesReportPanel):
-- Busca por nome/email/telefone
-- Período (DateRange com presets Hoje/Semana/Mês/Custom)
-- Filtro por produto (Select dinâmico)
-- Filtro por status (completed, refunded, etc.)
-- Botão Limpar + Exportar Excel
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**KPI Cards** (4 cards como no SalesReportPanel):
-- Total de Leads (emails únicos)
-- Total de Transações
-- Faturamento Bruto
-- Ticket Médio
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**Tabela flat** (igual ao screenshot):
-| Data | Cliente | Email | Telefone | Grupo/Cota | Produto | Bruto | Líquido | Parcela | Fonte | Status |
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-**Paginação** idêntica ao SalesReportPanel (25/50/100 por página)
+### 4. Dados exportados no Excel
 
-#### 3. `src/components/relatorios/BUReportCenter.tsx`
-- Importar `CrossBUReportPanel`
-- Adicionar case `selectedReport === 'cross_bu'` renderizando `<CrossBUReportPanel bu={bu} />`
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-#### 4. `src/pages/bu-consorcio/Relatorio.tsx`
-- Adicionar `'cross_bu'` ao array `availableReports`
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

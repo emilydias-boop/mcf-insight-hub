@@ -10,6 +10,7 @@ import { CarrinhoReportPanel } from './CarrinhoReportPanel';
 import { ProductsReportPanel } from './ProductsReportPanel';
 import { InvestigationReportPanel } from './InvestigationReportPanel';
 import { NaoComprouReportPanel } from './NaoComprouReportPanel';
+import { CrossBUReportPanel } from './CrossBUReportPanel';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { useAuth } from '@/contexts/AuthContext';
 import { BUProvider } from '@/contexts/BUContext';
@@ -101,6 +102,10 @@ export function BUReportCenter({
         
         {selectedReport === 'carrinho' && (
           <CarrinhoReportPanel bu={bu} />
+        )}
+        
+        {selectedReport === 'cross_bu' && (
+          <CrossBUReportPanel bu={bu} />
         )}
         
         {/* Empty State */}
