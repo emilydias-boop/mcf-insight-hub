@@ -486,13 +486,17 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
       ? info.sdrName
       : (sdrByEmail.get(email) || '-');
 
+    const stageInfo = stageByEmail.get(email);
+
     return {
       canal: info?.origin || '-',
       closerR1,
       closerR2: r2CloserByEmail.get(email) || '-',
       sdr,
+      dtA010: a010Dates.get(email) || null,
       dtContrato: contractDates.get(email) || null,
       dtParceria: partnershipDates.get(email) || null,
+      stageAtual: stageInfo?.stageName || null,
     };
   };
   
