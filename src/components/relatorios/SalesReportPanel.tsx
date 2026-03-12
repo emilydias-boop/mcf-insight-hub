@@ -528,6 +528,18 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   // Names that are origin labels, not real person names
   const AUTOMATIC_ORIGIN_NAMES = new Set(['A010', 'Lançamento', 'Renovação', 'Vitalício', 'Live', 'Bio Instagram', 'Outros', 'Contrato', 'Sem Closer', 'Sem SDR', 'Closer Desconhecido', 'SDR Desconhecido']);
 
+  // Unique SDR names for filter dropdown
+  const sdrOptions = useMemo(() => {
+    const set = new Set<string>();
+    acquisitionClassified.forEach(c => {
+      if (c.sdrName && !AUTOMATIC_ORIGIN_NAMES.has(c.sdrName)) set.add(c.sdrName);
+    });
+    sdrByEmail.forEach(name => {
+      if (name && !AUTOMATIC_ORIGIN_NAMES.has(name)) set.add(name);
+    });
+    return Array.from(set).sort();
+  }, [acquisitionClassified, sdrByEmail]);
+
   // Helper to get enriched data for a transaction
   const getEnrichedData = (row: any) => {
     const info = classifiedByTxId.get(row.id);
