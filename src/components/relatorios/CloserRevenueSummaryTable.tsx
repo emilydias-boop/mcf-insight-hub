@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Users } from 'lucide-react';
+import { ChevronDown, Users } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 import { CloserRevenueDetailDialog } from './CloserRevenueDetailDialog';
