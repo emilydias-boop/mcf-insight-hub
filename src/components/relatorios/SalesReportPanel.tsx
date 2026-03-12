@@ -30,15 +30,20 @@ const normalizePhone = (phone: string | null | undefined): string => {
   return (phone || '').replace(/\D/g, '');
 };
 
+type DatePreset = 'today' | 'week' | 'month' | 'custom';
+
 export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date()),
   });
+  const [datePreset, setDatePreset] = useState<DatePreset>('month');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedChannel, setSelectedChannel] = useState<string>('all');
   const [selectedSource, setSelectedSource] = useState<string>('all');
   const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
+  const [selectedCloserR2Id, setSelectedCloserR2Id] = useState<string>('all');
+  const [selectedSdr, setSelectedSdr] = useState<string>('all');
   const [selectedOriginId, setSelectedOriginId] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
