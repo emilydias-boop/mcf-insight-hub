@@ -405,9 +405,18 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     return Array.from(set).sort();
   }, [acquisitionClassified, sdrByEmail]);
 
+  // Unique product names for filter
+  const productOptions = useMemo(() => {
+    const set = new Set<string>();
+    transactions.forEach(t => {
+      if (t.product_name) set.add(t.product_name);
+    });
+    return Array.from(set).sort();
+  }, [transactions]);
+
   // Has active filters?
   const hasActiveFilters = searchTerm || selectedChannel !== 'all' || selectedSource !== 'all' ||
-    selectedCloserId !== 'all' || selectedCloserR2Id !== 'all' || selectedSdr !== 'all' || selectedOriginId !== 'all';
+    selectedCloserId !== 'all' || selectedCloserR2Id !== 'all' || selectedSdr !== 'all' || selectedProduct !== 'all' || selectedOriginId !== 'all';
 
   const clearAllFilters = () => {
     setSearchTerm('');
@@ -416,6 +425,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     setSelectedCloserId('all');
     setSelectedCloserR2Id('all');
     setSelectedSdr('all');
+    setSelectedProduct('all');
     setSelectedOriginId('all');
   };
 
