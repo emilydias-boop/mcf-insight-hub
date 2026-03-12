@@ -242,22 +242,15 @@ export const PipelineConfigModal = ({
         );
 
       case 'distribution':
-        if (targetType !== 'origin') {
-          return (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                A distribuição de leads só está disponível para origins específicas, não para grupos/pipelines.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Selecione uma origin no menu lateral para configurar a distribuição.
-              </p>
-            </div>
-          );
-        }
-        return (
-          <LeadDistributionConfig 
-            originId={targetId}
-            originName={displayName}
+        return renderOriginDependentContent(
+          (originId, originName) => (
+            <LeadDistributionConfig 
+              originId={originId}
+              originName={originName}
+            />
+          ),
+          'distribuição de leads'
+        );
           />
         );
 
