@@ -54,6 +54,12 @@ const reportOptions: ReportTypeOption[] = [
     description: 'Leads aprovados que não compraram',
     icon: UserX,
   },
+  {
+    id: 'carrinho',
+    title: 'Carrinho',
+    description: 'Contratos da semana com atribuição',
+    icon: ShoppingCart,
+  },
 ];
 
 interface ReportTypeSelectorProps {

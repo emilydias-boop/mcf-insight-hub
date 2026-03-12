@@ -99,6 +99,10 @@ export function BUReportCenter({
           <NaoComprouReportPanel bu={bu} />
         )}
         
+        {selectedReport === 'carrinho' && (
+          <CarrinhoReportPanel bu={bu} />
+        )}
+        
         {/* Empty State */}
         {!selectedReport && (
           <Card>
