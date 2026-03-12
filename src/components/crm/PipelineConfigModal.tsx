@@ -164,7 +164,7 @@ export const PipelineConfigModal = ({
     if (targetType === 'origin') return targetId;
     if (groupOrigins.length === 1) return groupOrigins[0].id;
     return effectiveSelectedOriginId;
-  }, [targetType, targetId, groupOrigins, selectedOriginId]);
+  }, [targetType, targetId, groupOrigins, effectiveSelectedOriginId]);
 
   // Update mutation
   const updateMutation = useMutation({
