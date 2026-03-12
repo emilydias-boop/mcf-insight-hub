@@ -360,7 +360,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     }
   };
 
-  // sdrOptions moved after sdrByEmail declaration below
+  
 
   // Has active filters?
   const hasActiveFilters = searchTerm || selectedChannel !== 'all' || selectedSource !== 'all' ||
