@@ -1001,6 +1001,72 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
+              {viewMode === 'by_client' ? (
+                /* ===== BY CLIENT TABLE ===== */
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>SDR</TableHead>
+                      <TableHead>Closer R1</TableHead>
+                      <TableHead>Closer R2</TableHead>
+                      <TableHead className="text-center">Qtd Tx</TableHead>
+                      <TableHead className="text-right">Bruto A010</TableHead>
+                      <TableHead className="text-right">Bruto Contrato</TableHead>
+                      <TableHead className="text-right">Bruto Parceria</TableHead>
+                      <TableHead className="text-right">Bruto Outros</TableHead>
+                      <TableHead className="text-right">Bruto Total</TableHead>
+                      <TableHead className="text-right">Líquido Total</TableHead>
+                      <TableHead>1ª Compra</TableHead>
+                      <TableHead>Última Compra</TableHead>
+                      <TableHead>Stage</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedByClient.map((row, idx) => (
+                      <TableRow key={row.email + idx}>
+                        <TableCell className="max-w-[150px] truncate font-medium">{row.nome}</TableCell>
+                        <TableCell className="max-w-[180px] truncate text-sm text-muted-foreground">{row.email}</TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">{row.sdr}</TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">{row.closerR1}</TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">{row.closerR2}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="secondary">{row.totalTx}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono whitespace-nowrap">
+                          {row.brutoA010 > 0 ? formatCurrency(row.brutoA010) : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono whitespace-nowrap">
+                          {row.brutoContrato > 0 ? formatCurrency(row.brutoContrato) : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono whitespace-nowrap">
+                          {row.brutoParceria > 0 ? formatCurrency(row.brutoParceria) : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono whitespace-nowrap">
+                          {row.brutoOutros > 0 ? formatCurrency(row.brutoOutros) : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold whitespace-nowrap">
+                          {formatCurrency(row.brutoTotal)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-success whitespace-nowrap">
+                          {formatCurrency(row.liquidoTotal)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {row.primeiraCompra ? format(parseISO(row.primeiraCompra), 'dd/MM/yy', { locale: ptBR }) : '-'}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {row.ultimaCompra ? format(parseISO(row.ultimaCompra), 'dd/MM/yy', { locale: ptBR }) : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {row.stageAtual ? <Badge variant="outline">{row.stageAtual}</Badge> : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                /* ===== TRANSACTIONS TABLE ===== */
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1090,6 +1156,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                   })}
                 </TableBody>
               </Table>
+              )}
               {/* Controles de Paginação */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4 border-t">
                 <div className="flex items-center gap-4">
@@ -1107,44 +1174,24 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                     </Select>
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredTransactions.length)} a {Math.min(currentPage * itemsPerPage, filteredTransactions.length)} de {filteredTransactions.length} transações
+                    Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, totalPaginationItems)} a {Math.min(currentPage * itemsPerPage, totalPaginationItems)} de {totalPaginationItems} {viewMode === 'by_client' ? 'clientes' : 'transações'}
                   </span>
                 </div>
                 
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentPage(1)}
-                    disabled={currentPage === 1}
-                  >
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
                     <ChevronsLeft className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                  >
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <span className="px-3 text-sm">
                     Página {currentPage} de {totalPages || 1}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage >= totalPages}
-                  >
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentPage(totalPages)}
-                    disabled={currentPage >= totalPages}
-                  >
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage >= totalPages}>
                     <ChevronsRight className="h-4 w-4" />
                   </Button>
                 </div>
