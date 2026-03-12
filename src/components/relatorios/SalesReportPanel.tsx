@@ -44,6 +44,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
   const [selectedCloserR2Id, setSelectedCloserR2Id] = useState<string>('all');
   const [selectedSdr, setSelectedSdr] = useState<string>('all');
+  const [selectedProduct, setSelectedProduct] = useState<string>('all');
   const [selectedOriginId, setSelectedOriginId] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -404,9 +405,18 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     return Array.from(set).sort();
   }, [acquisitionClassified, sdrByEmail]);
 
+  // Unique product names for filter
+  const productOptions = useMemo(() => {
+    const set = new Set<string>();
+    transactions.forEach(t => {
+      if (t.product_name) set.add(t.product_name);
+    });
+    return Array.from(set).sort();
+  }, [transactions]);
+
   // Has active filters?
   const hasActiveFilters = searchTerm || selectedChannel !== 'all' || selectedSource !== 'all' ||
-    selectedCloserId !== 'all' || selectedCloserR2Id !== 'all' || selectedSdr !== 'all' || selectedOriginId !== 'all';
+    selectedCloserId !== 'all' || selectedCloserR2Id !== 'all' || selectedSdr !== 'all' || selectedProduct !== 'all' || selectedOriginId !== 'all';
 
   const clearAllFilters = () => {
     setSearchTerm('');
@@ -415,6 +425,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     setSelectedCloserId('all');
     setSelectedCloserR2Id('all');
     setSelectedSdr('all');
+    setSelectedProduct('all');
     setSelectedOriginId('all');
   };
 
@@ -491,6 +502,11 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
       });
     }
     
+    // Filtro por produto
+    if (selectedProduct !== 'all') {
+      filtered = filtered.filter(t => t.product_name === selectedProduct);
+    }
+
     // Filtro por busca textual
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
@@ -507,7 +523,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     }
     
     return filtered;
-  }, [transactions, selectedChannel, selectedSource, selectedOriginId, selectedCloserId, selectedCloserR2Id, selectedSdr, searchTerm, attendees, classifiedByTxId, r2CloserByEmail, r2CloserNameMap, sdrByEmail]);
+  }, [transactions, selectedChannel, selectedSource, selectedOriginId, selectedCloserId, selectedCloserR2Id, selectedSdr, selectedProduct, searchTerm, attendees, classifiedByTxId, r2CloserByEmail, r2CloserNameMap, sdrByEmail]);
   
   // Paginação
   const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
@@ -519,7 +535,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   // Reset página ao mudar filtros
   useMemo(() => {
     setCurrentPage(1);
-  }, [selectedChannel, selectedSource, selectedOriginId, selectedCloserId, selectedCloserR2Id, selectedSdr, searchTerm, dateRange]);
+  }, [selectedChannel, selectedSource, selectedOriginId, selectedCloserId, selectedCloserR2Id, selectedSdr, selectedProduct, searchTerm, dateRange]);
   
   const handlePageSizeChange = (value: string) => {
     setItemsPerPage(Number(value));
@@ -684,6 +700,18 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                 <SelectItem value="all">Todos R2</SelectItem>
                 {r2Closers.map(closer => (
                   <SelectItem key={closer.id} value={closer.id}>{closer.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+              <SelectTrigger className="w-[200px] h-9">
+                <SelectValue placeholder="Produto" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos Produtos</SelectItem>
+                {productOptions.map(name => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
