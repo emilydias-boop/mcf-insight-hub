@@ -68,6 +68,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   const [selectedOriginId, setSelectedOriginId] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [viewMode, setViewMode] = useState<ViewMode>('transactions');
   
   const PAGE_SIZE_OPTIONS = [25, 50, 100];
   
