@@ -120,7 +120,7 @@ export const PipelineConfigModal = ({
           .from('crm_groups')
           .select('*')
           .eq('id', targetId)
-          .single();
+          .maybeSingle();
         if (error) throw error;
         return data;
       }
