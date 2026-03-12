@@ -963,10 +963,32 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
       {/* Data Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5" />
-            Transações no Período
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              {viewMode === 'by_client' ? 'Vendas por Cliente' : 'Transações no Período'}
+            </CardTitle>
+            <div className="flex items-center gap-1 bg-muted rounded-md p-1">
+              <Button
+                variant={viewMode === 'transactions' ? 'default' : 'ghost'}
+                size="sm"
+                className="h-7 px-3 text-xs"
+                onClick={() => { setViewMode('transactions'); setCurrentPage(1); }}
+              >
+                <List className="h-3.5 w-3.5 mr-1" />
+                Transações
+              </Button>
+              <Button
+                variant={viewMode === 'by_client' ? 'default' : 'ghost'}
+                size="sm"
+                className="h-7 px-3 text-xs"
+                onClick={() => { setViewMode('by_client'); setCurrentPage(1); }}
+              >
+                <Users className="h-3.5 w-3.5 mr-1" />
+                Por Cliente
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
