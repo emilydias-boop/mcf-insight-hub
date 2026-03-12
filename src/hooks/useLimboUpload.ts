@@ -40,6 +40,24 @@ export function useLatestLimboUpload() {
   });
 }
 
+// Update comparison_results on existing upload
+export function useUpdateLimboResults() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ uploadId, results }: { uploadId: string; results: LimboRow[] }) => {
+      const { error } = await supabase
+        .from('limbo_uploads')
+        .update({ comparison_results: results as any })
+        .eq('id', uploadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['limbo-upload-latest'] });
+    },
+  });
+}
+
 // Save upload + comparison results
 export function useSaveLimboUpload() {
   const queryClient = useQueryClient();
