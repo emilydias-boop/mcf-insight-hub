@@ -32,13 +32,14 @@ interface ConsorcioLead {
   origem: string | null;
 }
 
-interface HublaTransaction {
+interface HublaTransactionRaw {
   id: string;
   product_name: string | null;
   product_price: number | null;
   net_value: number | null;
   customer_name: string | null;
   customer_email: string | null;
+  customer_phone: string | null;
   sale_date: string | null;
   sale_status: string | null;
   installment_number: number | null;
@@ -99,32 +100,35 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Build email→lead map
-  const emailToLead = useMemo(() => {
-    const m = new Map<string, ConsorcioLead>();
+  // Build name→leads[] map (one name can have multiple cotas)
+  const nameToLeads = useMemo(() => {
+    const m = new Map<string, ConsorcioLead[]>();
     leads.forEach(l => {
-      const email = (l.email || '').toLowerCase().trim();
-      if (email) m.set(email, l);
+      const name = (l.nome_completo || '').toUpperCase().trim();
+      if (name) {
+        const existing = m.get(name) || [];
+        existing.push(l);
+        m.set(name, existing);
+      }
     });
     return m;
   }, [leads]);
 
-  const leadEmails = useMemo(() => Array.from(emailToLead.keys()).filter(Boolean), [emailToLead]);
-
-  // Query 2: Fetch hubla_transactions for those emails (batched)
+  // Query 2: Fetch ALL hubla_transactions in date range, then filter client-side by name
   const { data: transactions = [], isLoading: loadingTx } = useQuery({
-    queryKey: ['cross-bu-transactions', leadEmails.length, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
+    queryKey: ['cross-bu-transactions-by-name', dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     queryFn: async () => {
-      if (leadEmails.length === 0) return [];
-      const all: HublaTransaction[] = [];
-      const batchSize = 200;
+      const all: HublaTransactionRaw[] = [];
+      let offset = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      for (let i = 0; i < leadEmails.length; i += batchSize) {
-        const batch = leadEmails.slice(i, i + batchSize);
+      while (hasMore && offset < 5000) {
         let query = supabase
           .from('hubla_transactions')
-          .select('id, product_name, product_price, net_value, customer_name, customer_email, sale_date, sale_status, installment_number, total_installments, source')
-          .in('customer_email', batch);
+          .select('id, product_name, product_price, net_value, customer_name, customer_email, customer_phone, sale_date, sale_status, installment_number, total_installments, source')
+          .order('sale_date', { ascending: false })
+          .range(offset, offset + pageSize - 1);
 
         if (dateRange?.from) {
           const start = format(dateRange.from, 'yyyy-MM-dd') + 'T00:00:00-03:00';
@@ -135,47 +139,51 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
           query = query.lte('sale_date', end);
         }
 
-        // Paginate within each batch
-        let offset = 0;
-        let hasMore = true;
-        while (hasMore) {
-          const { data, error } = await query.range(offset, offset + 999);
-          if (error) throw error;
-          const rows = (data || []) as HublaTransaction[];
-          all.push(...rows);
-          hasMore = rows.length >= 1000;
-          offset += 1000;
-        }
+        const { data, error } = await query;
+        if (error) throw error;
+        const rows = (data || []) as HublaTransactionRaw[];
+        all.push(...rows);
+        hasMore = rows.length >= pageSize;
+        offset += pageSize;
       }
       return all;
     },
-    enabled: leadEmails.length > 0,
     staleTime: 5 * 60 * 1000,
   });
 
   const isLoading = loadingLeads || loadingTx;
 
-  // Join: build flat rows
+  // Join: filter transactions that match consortium lead names, build flat rows
   const allRows: CrossBURow[] = useMemo(() => {
-    return transactions.map(tx => {
-      const email = (tx.customer_email || '').toLowerCase().trim();
-      const lead = emailToLead.get(email);
-      return {
-        txId: tx.id,
-        nome: lead?.nome_completo || tx.customer_name || '-',
-        email: lead?.email || tx.customer_email || '-',
-        telefone: lead?.telefone || '-',
-        grupoCota: lead ? `${lead.grupo || '-'}/${lead.cota || '-'}` : '-',
-        produto: tx.product_name || '-',
-        saleDate: tx.sale_date,
-        bruto: tx.product_price || 0,
-        liquido: tx.net_value || 0,
-        parcela: tx.installment_number ? `${tx.installment_number}/${tx.total_installments || '?'}` : '-',
-        fonte: tx.source || '-',
-        status: tx.sale_status || '-',
-      };
-    });
-  }, [transactions, emailToLead]);
+    if (nameToLeads.size === 0) return [];
+    return transactions
+      .filter(tx => {
+        const txName = (tx.customer_name || '').toUpperCase().trim();
+        return txName && nameToLeads.has(txName);
+      })
+      .map(tx => {
+        const txName = (tx.customer_name || '').toUpperCase().trim();
+        const matchedLeads = nameToLeads.get(txName) || [];
+        // Build grupo/cota string from all matched leads
+        const grupoCota = matchedLeads.length > 0
+          ? matchedLeads.map(l => `${l.grupo || '-'}/${l.cota || '-'}`).join(', ')
+          : '-';
+        return {
+          txId: tx.id,
+          nome: tx.customer_name || '-',
+          email: tx.customer_email || matchedLeads[0]?.email || '-',
+          telefone: tx.customer_phone || matchedLeads[0]?.telefone || '-',
+          grupoCota,
+          produto: tx.product_name || '-',
+          saleDate: tx.sale_date,
+          bruto: tx.product_price || 0,
+          liquido: tx.net_value || 0,
+          parcela: tx.installment_number ? `${tx.installment_number}/${tx.total_installments || '?'}` : '-',
+          fonte: tx.source || '-',
+          status: tx.sale_status || '-',
+        };
+      });
+  }, [transactions, nameToLeads]);
 
   // Unique products/statuses for filters
   const productOptions = useMemo(() => {
@@ -212,10 +220,10 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
 
   // Stats
   const stats = useMemo(() => {
-    const uniqueEmails = new Set(filteredRows.map(r => r.email.toLowerCase()));
+    const uniqueNames = new Set(filteredRows.map(r => r.nome.toUpperCase().trim()));
     const totalGross = filteredRows.reduce((s, r) => s + r.bruto, 0);
     return {
-      leads: uniqueEmails.size,
+      leads: uniqueNames.size,
       count: filteredRows.length,
       totalGross,
       avgTicket: filteredRows.length > 0 ? totalGross / filteredRows.length : 0,

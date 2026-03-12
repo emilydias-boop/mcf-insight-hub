@@ -1,40 +1,39 @@
 
 
-## Fix: Cross-BU report not finding leads (email field empty)
+## Objetivo
 
-### Problema raiz
-A tabela `consortium_cards` tem **0 emails preenchidos** (de 215 registros). O código atual faz match por email, o que resulta em zero resultados. Os nomes (`nome_completo`) existem em 203 registros e batem com `customer_name` da `hubla_transactions` quando normalizados (UPPER/TRIM).
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Solução
+## Mudanças
 
-**Alterar `CrossBUReportPanel.tsx`** para fazer matching por **nome** ao invés de email:
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-1. **Query 1 (consortium_cards)**: Buscar `nome_completo` (já faz), criar map `UPPER(nome) → lead[]` (array, pois um nome pode ter múltiplas cotas)
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-2. **Query 2 (hubla_transactions)**: Em vez de `.in('customer_email', emails)`, buscar por nomes:
-   - Extrair nomes únicos dos leads
-   - Fazer query com `.in('customer_name', nomes)` — mas isso é case-sensitive no Supabase
-   - Alternativa: usar uma abordagem de buscar todas as transações no período e filtrar client-side pelo nome (upper/trim comparison), já que o `.in()` do Supabase não suporta case-insensitive matching nativo para arrays grandes
-   - Melhor abordagem: buscar transações pelo período e depois fazer join client-side por nome normalizado
+### 2. Hook `useCloserDetailData.ts`
 
-3. **Join client-side**: `UPPER(TRIM(tx.customer_name))` === `UPPER(TRIM(lead.nome_completo))`
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-4. **Grupo/Cota**: Como um lead pode ter múltiplas cotas (ex: JOSECLER tem 9), mostrar a transação com os dados do lead mas no campo Grupo/Cota exibir "múltiplas" ou listar todas as cotas separadas
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-5. **Enriquecer com dados do Hubla**: Já que `consortium_cards` não tem email/telefone, pegar esses dados do `customer_email` e `customer_phone` da `hubla_transactions`
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### Mudanças em arquivo
+### 4. Dados exportados no Excel
 
-**`src/components/relatorios/CrossBUReportPanel.tsx`**:
-- Map: `UPPER(TRIM(nome))` → `ConsorcioLead[]` (array para múltiplas cotas)
-- Query transações: buscar por período sem filtro de email, depois filtrar client-side por nomes que existem no map
-- Ou usar RPC/chunked `.or()` queries com `customer_name.ilike` para performance
-- Grupo/Cota: se lead tem múltiplas cotas, mostrar todas (ex: "7253/1405, 7258/4991, ...")
-- Email e telefone: preencher do `hubla_transactions` (`customer_email`, `customer_phone`)
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-### Preocupação de performance
-Buscar todas as transações do período pode ser pesado. Para mitigar:
-- Manter limite de 5000 transações
-- Fazer o filter por nomes client-side após fetch
-- Usar `.ilike` em batches de nomes se necessário
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
