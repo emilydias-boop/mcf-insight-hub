@@ -205,6 +205,50 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     staleTime: 5 * 60 * 1000,
   });
 
+  // A010 dates query — first purchase with product_category = 'a010'
+  const { data: a010Dates = new Map<string, string>() } = useQuery({
+    queryKey: ['a010-dates'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, sale_date')
+        .eq('product_category', 'a010')
+        .not('customer_email', 'is', null)
+        .order('sale_date', { ascending: true });
+      if (error) throw error;
+      const m = new Map<string, string>();
+      (data || []).forEach((r: { customer_email: string | null; sale_date: string }) => {
+        const email = (r.customer_email || '').toLowerCase().trim();
+        if (email && !m.has(email)) m.set(email, r.sale_date);
+      });
+      return m;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Stage atual por email — deal mais recente do CRM
+  const { data: stageByEmail = new Map<string, { stageName: string; color: string }>() } = useQuery({
+    queryKey: ['deal-stage-by-email'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_deals')
+        .select('stage, updated_at, crm_contacts!contact_id(email)')
+        .not('contact_id', 'is', null)
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      const m = new Map<string, { stageName: string; color: string }>();
+      (data || []).forEach((d: any) => {
+        const email = (d.crm_contacts?.email || '').toLowerCase().trim();
+        const stage = d.stage || '';
+        if (email && stage && !m.has(email)) {
+          m.set(email, { stageName: stage, color: '' });
+        }
+      });
+      return m;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Set de IDs válidos de closers da BU para filtrar attendees
   const closerIdSet = useMemo(() => new Set(closers.map(c => c.id)), [closers]);
 
