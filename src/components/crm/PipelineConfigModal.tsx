@@ -100,7 +100,12 @@ export const PipelineConfigModal = ({
   const [activeSection, setActiveSection] = useState<GeneralSection>('settings');
   const [activeStagesSection, setActiveStagesSection] = useState<StagesSection>('kanban-stages');
   const [activeIntegrationSection, setActiveIntegrationSection] = useState<IntegrationSection>('webhooks');
-  const [selectedOriginId, setSelectedOriginId] = useState<string | null>(preferredOriginId || null);
+  const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
+
+  // Reset selected origin when targetId changes
+  useEffect(() => {
+    setSelectedOriginId(null);
+  }, [targetId]);
   const queryClient = useQueryClient();
 
   // Fetch target data
