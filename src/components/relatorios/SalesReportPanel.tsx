@@ -347,6 +347,47 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     });
   }, [rawAttendees, bu, closerIdSet]);
   
+  // Date preset handler
+  const handleDatePreset = (preset: DatePreset) => {
+    const now = new Date();
+    setDatePreset(preset);
+    if (preset === 'today') {
+      setDateRange({ from: startOfDay(now), to: endOfDay(now) });
+    } else if (preset === 'week') {
+      setDateRange({ from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) });
+    } else if (preset === 'month') {
+      setDateRange({ from: startOfMonth(now), to: endOfMonth(now) });
+    }
+  };
+
+  // Unique SDR names for filter dropdown
+  const sdrOptions = useMemo(() => {
+    const set = new Set<string>();
+    // From classified data
+    acquisitionClassified.forEach(c => {
+      if (c.sdrName && !AUTOMATIC_ORIGIN_NAMES.has(c.sdrName)) set.add(c.sdrName);
+    });
+    // From CRM deal owners
+    sdrByEmail.forEach(name => {
+      if (name && !AUTOMATIC_ORIGIN_NAMES.has(name)) set.add(name);
+    });
+    return Array.from(set).sort();
+  }, [acquisitionClassified, sdrByEmail]);
+
+  // Has active filters?
+  const hasActiveFilters = searchTerm || selectedChannel !== 'all' || selectedSource !== 'all' ||
+    selectedCloserId !== 'all' || selectedCloserR2Id !== 'all' || selectedSdr !== 'all' || selectedOriginId !== 'all';
+
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setSelectedChannel('all');
+    setSelectedSource('all');
+    setSelectedCloserId('all');
+    setSelectedCloserR2Id('all');
+    setSelectedSdr('all');
+    setSelectedOriginId('all');
+  };
+
   // Dados filtrados
   const filteredTransactions = useMemo(() => {
     let filtered = [...transactions];
@@ -370,7 +411,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
       });
     }
     
-    // Filtro por closer (via matching com attendees)
+    // Filtro por closer R1 (via matching com attendees)
     if (selectedCloserId !== 'all') {
       const closerAttendees = attendees.filter((a: any) => 
         a.meeting_slots?.closer_id === selectedCloserId
@@ -396,6 +437,25 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                (txPhone.length >= 8 && closerPhones.has(txPhone));
       });
     }
+
+    // Filtro por Closer R2
+    if (selectedCloserR2Id !== 'all') {
+      const r2Name = r2CloserNameMap.get(selectedCloserR2Id);
+      if (r2Name) {
+        filtered = filtered.filter(t => {
+          const email = (t.customer_email || '').toLowerCase().trim();
+          return r2CloserByEmail.get(email) === r2Name;
+        });
+      }
+    }
+
+    // Filtro por SDR
+    if (selectedSdr !== 'all') {
+      filtered = filtered.filter(t => {
+        const enriched = getEnrichedData(t);
+        return enriched.sdr === selectedSdr;
+      });
+    }
     
     // Filtro por busca textual
     if (searchTerm.trim()) {
@@ -413,7 +473,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     }
     
     return filtered;
-  }, [transactions, selectedChannel, selectedSource, selectedOriginId, selectedCloserId, searchTerm, attendees, classifiedByTxId]);
+  }, [transactions, selectedChannel, selectedSource, selectedOriginId, selectedCloserId, selectedCloserR2Id, selectedSdr, searchTerm, attendees, classifiedByTxId, r2CloserByEmail, r2CloserNameMap]);
   
   // Paginação
   const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
