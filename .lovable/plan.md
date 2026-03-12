@@ -1,39 +1,29 @@
 
 
-## Objetivo
+## Diagnóstico: Pipeline solo ainda não configurável
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+Verifiquei o código, o banco de dados e as policies RLS. Tudo parece correto:
+- O grupo `a6f3cbfc-...` (Perpétuo - X1) existe no banco
+- Tem 11 origins filhas (incluindo PIPELINE INSIDE SALES)
+- RLS permite SELECT para todos os autenticados
+- O `Negocios.tsx` passa `buAllowedGroups[0]` como `targetId`
 
-## Mudanças
+O screenshot mostra "Configurar:" sem nome e "Nenhuma origin encontrada" -- o que indica que tanto `targetData` quanto `groupOrigins` retornam vazios/null, mesmo com dados corretos no banco.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**Causa provável**: O modal pode estar sendo montado antes do `targetId` estar estável, ou o react-query está cacheando um resultado vazio de uma execução anterior (quando o `targetId` era diferente). Também há um bug na dependency array do `resolvedOriginId` (usa `selectedOriginId` em vez de `effectiveSelectedOriginId`).
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Correções
 
-### 2. Hook `useCloserDetailData.ts`
+**Arquivo: `src/components/crm/PipelineConfigModal.tsx`**
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+1. **Adicionar console.log temporário** para debugar o `targetId` e `groupOrigins` recebidos (remover depois)
+2. **Corrigir dependency array** do `resolvedOriginId`: trocar `selectedOriginId` por `effectiveSelectedOriginId`
+3. **Resetar estado interno quando modal abre com novo targetId**: Garantir que `selectedOriginId` é resetado ao trocar de `targetId` (useEffect)
+4. **Adicionar `refetchOnMount: true`** nas queries de `targetData` e `groupOrigins` para evitar cache stale
+5. **Fallback visual melhorado**: Se `targetData` for null após loading, mostrar mensagem de erro com o `targetId` para debugging
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**Arquivo: `src/pages/crm/Negocios.tsx`**
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+6. **Adicionar console.log** no render do PipelineConfigModal para confirmar qual `targetId` está sendo passado
+7. **Guard extra**: Garantir que `buAllowedGroups[0]` é uma string válida (não undefined) antes de renderizar o modal
 
