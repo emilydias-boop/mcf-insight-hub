@@ -184,6 +184,56 @@ export const PipelineConfigModal = ({
     });
   };
 
+  // Helper to render origin-dependent content with auto-resolution for groups
+  const renderOriginDependentContent = (
+    renderContent: (originId: string, originName: string) => React.ReactNode,
+    featureName: string
+  ) => {
+    if (targetType === 'origin') {
+      return renderContent(targetId, displayName);
+    }
+    
+    if (groupOrigins.length === 0) {
+      return (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Nenhuma origin encontrada neste grupo para configurar {featureName}.
+          </p>
+        </div>
+      );
+    }
+    
+    if (groupOrigins.length === 1) {
+      return renderContent(groupOrigins[0].id, groupOrigins[0].display_name || groupOrigins[0].name);
+    }
+    
+    // Multiple origins: show selector
+    return (
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label>Selecione a origin para configurar {featureName}</Label>
+          <Select value={selectedOriginId || ''} onValueChange={setSelectedOriginId}>
+            <SelectTrigger className="w-[300px]">
+              <SelectValue placeholder="Escolha uma origin..." />
+            </SelectTrigger>
+            <SelectContent>
+              {groupOrigins.map((origin) => (
+                <SelectItem key={origin.id} value={origin.id}>
+                  {origin.display_name || origin.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {resolvedOriginId && renderContent(
+          resolvedOriginId,
+          groupOrigins.find(o => o.id === resolvedOriginId)?.display_name || 
+          groupOrigins.find(o => o.id === resolvedOriginId)?.name || ''
+        )}
+      </div>
+    );
+  };
+
   const renderGeneralContent = () => {
     switch (activeSection) {
       case 'settings':
