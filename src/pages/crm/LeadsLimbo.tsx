@@ -145,6 +145,7 @@ export default function LeadsLimbo() {
   const createNotFoundMutation = useCreateNotFoundDeals();
   const { data: latestUpload, isLoading: loadingUpload } = useLatestLimboUpload();
   const saveLimboUpload = useSaveLimboUpload();
+  const updateLimboResults = useUpdateLimboResults();
 
   // Load persisted data from Supabase on mount
   useEffect(() => {
