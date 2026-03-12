@@ -167,20 +167,9 @@ export default function ConsorcioPage() {
 
   // Calculate date range based on period
   const now = new Date();
-  let startDate: Date;
-  let endDate: Date;
-
-  if (period === 'month') {
-    startDate = startOfMonth(now);
-    endDate = endOfMonth(now);
-  } else if (period === 'lastMonth') {
-    const lastMonth = subMonths(now, 1);
-    startDate = startOfMonth(lastMonth);
-    endDate = endOfMonth(lastMonth);
-  } else {
-    startDate = startOfMonth(now);
-    endDate = endOfMonth(now);
-  }
+  const selectedMonth = MONTH_OPTIONS[Number(monthOffset)] || MONTH_OPTIONS[0];
+  const startDate = selectedMonth.start;
+  const endDate = selectedMonth.end;
 
   const filters = {
     startDate: dateRangeFilter.startDate || startDate,
