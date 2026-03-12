@@ -523,7 +523,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     }
     
     return filtered;
-  }, [transactions, selectedChannel, selectedSource, selectedOriginId, selectedCloserId, selectedCloserR2Id, selectedSdr, searchTerm, attendees, classifiedByTxId, r2CloserByEmail, r2CloserNameMap, sdrByEmail]);
+  }, [transactions, selectedChannel, selectedSource, selectedOriginId, selectedCloserId, selectedCloserR2Id, selectedSdr, selectedProduct, searchTerm, attendees, classifiedByTxId, r2CloserByEmail, r2CloserNameMap, sdrByEmail]);
   
   // Paginação
   const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
