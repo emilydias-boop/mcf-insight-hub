@@ -501,13 +501,19 @@ export const PipelineConfigModal = ({
                   {integrationSections.find((s) => s.id === activeIntegrationSection)?.label}
                 </h3>
                 
-                {activeIntegrationSection === 'webhooks' && (
-                  <WebhookConfigEditor originId={targetId} />
-                )}
+                {activeIntegrationSection === 'webhooks' && 
+                  renderOriginDependentContent(
+                    (originId) => <WebhookConfigEditor originId={originId} />,
+                    'webhooks de saída'
+                  )
+                }
 
-                {activeIntegrationSection === 'incoming-webhooks' && (
-                  <IncomingWebhookEditor originId={targetId} />
-                )}
+                {activeIntegrationSection === 'incoming-webhooks' && 
+                  renderOriginDependentContent(
+                    (originId) => <IncomingWebhookEditor originId={originId} />,
+                    'webhooks de entrada'
+                  )
+                }
                 
                 {activeIntegrationSection === 'leads-live' && (
                   <div className="space-y-4">
