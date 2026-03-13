@@ -135,6 +135,7 @@ Deno.serve(async (req) => {
     const stats = {
       total: emails.length,
       already_has_deal: 0,
+      skipped_partners: 0,
       contacts_created: 0,
       deals_created: 0,
       a010_sales_upserted: 0,
