@@ -135,6 +135,7 @@ Deno.serve(async (req) => {
     const stats = {
       total: emails.length,
       already_has_deal: 0,
+      skipped_partners: 0,
       contacts_created: 0,
       deals_created: 0,
       a010_sales_upserted: 0,
@@ -150,6 +151,22 @@ Deno.serve(async (req) => {
       if (existingContactId && existingDealContactIds.has(existingContactId)) {
         stats.already_has_deal++;
         details.push({ email, name: buyer.name, action: 'already_has_deal' });
+        continue;
+      }
+
+      // Verificar se é parceiro (comprou parceria/incorporador)
+      const { data: partnerCheck } = await supabase
+        .from('hubla_transactions')
+        .select('id')
+        .ilike('customer_email', email)
+        .in('product_category', ['parceria', 'incorporador'])
+        .eq('sale_status', 'completed')
+        .limit(1)
+        .maybeSingle();
+
+      if (partnerCheck) {
+        stats.skipped_partners++;
+        details.push({ email, name: buyer.name, action: 'skipped_partner' });
         continue;
       }
 
