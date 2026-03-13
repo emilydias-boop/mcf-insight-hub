@@ -1,39 +1,46 @@
 
 
-## Objetivo
+## Limpeza: Remover parceiros do backfill
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+O backfill criou 21 deals para contatos que já são parceiros (compraram A001, A004, A009, Parceria, etc.). Os webhooks normais bloqueiam esses leads via `checkIfPartner`, mas o backfill não tinha essa verificação.
 
-## Mudanças
+### Solução (2 partes)
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**1. Remover os 21 deals de parceiros do pipeline Inside Sales**
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Criar e executar uma edge function temporária `cleanup-backfill-partners` que:
+- Busca deals com tag `Backfill-Offer`
+- Cruza com `hubla_transactions` onde `product_category IN ('parceria', 'incorporador')`
+- Registra esses 21 contatos na tabela `partner_returns` (para rastreabilidade)
+- Deleta os 21 deals do pipeline
 
-### 2. Hook `useCloserDetailData.ts`
+**2. Corrigir o backfill para o futuro**
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+Adicionar a verificação de parceiro no `backfill-a010-offer-leads/index.ts`, antes de criar o deal:
+```typescript
+// Check if contact is a partner
+const { data: partnerCheck } = await supabase
+  .from('hubla_transactions')
+  .select('id')
+  .ilike('customer_email', email)
+  .in('product_category', ['parceria', 'incorporador'])
+  .limit(1)
+  .maybeSingle();
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+if (partnerCheck) {
+  // Register in partner_returns and skip
+  stats.skipped_partners++;
+  continue;
+}
+```
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+### Impacto
+- **Antes**: 169 deals no pipeline
+- **Depois**: 148 deals legítimos (169 - 21 parceiros)
+- Os 21 parceiros ficam registrados em `partner_returns` para auditoria
 
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Arquivos alterados
+- `supabase/functions/cleanup-backfill-partners/index.ts` (novo, temporário)
+- `supabase/functions/backfill-a010-offer-leads/index.ts` (adicionar verificação de parceiro)
 
