@@ -1,39 +1,36 @@
 
 
-## Objetivo
+## Fix: Backfill deals com stage_id NULL → "Novo Lead"
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+Os 169 deals criados pelo backfill ficaram com `stage_id = NULL` porque a query usou `.ilike('name', ...)` mas a coluna correta é `stage_name`.
 
-## Mudanças
+### Solução (2 partes)
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**1. Corrigir os 169 deals existentes**
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Atualizar diretamente via a edge function `fix-null-stages`. Porém essa function pega o primeiro estágio por `stage_order` (que seria "Lead Gratuito", order 1). Precisamos de uma abordagem específica:
 
-### 2. Hook `useCloserDetailData.ts`
+Alterar a função `fix-null-stages/index.ts` para, quando o origin for PIPELINE INSIDE SALES, usar especificamente o estágio "Novo Lead" em vez do primeiro por ordem. Ou, mais simples: apenas corrigir no `backfill-a010-offer-leads` e re-rodar.
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**Abordagem escolhida**: Corrigir o bug no `backfill-a010-offer-leads/index.ts` (coluna `name` → `stage_name`) e fazer um UPDATE direto dos 169 deals existentes.
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**2. Fix no `backfill-a010-offer-leads/index.ts`**
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+Linha ~56: trocar `.ilike('name', '%Novo Lead%')` por `.ilike('stage_name', '%Novo Lead%')`
 
-### 4. Dados exportados no Excel
+**3. UPDATE dos 169 deals**
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+```sql
+UPDATE crm_deals 
+SET stage_id = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b'
+WHERE tags @> ARRAY['Backfill-Offer'] 
+  AND stage_id IS NULL;
+```
 
-Formato de data: `dd/MM/yyyy HH:mm`
+Isso coloca todos os 169 deals do backfill na stage "Novo Lead" — todos são de fato novos (nenhum tem histórico de atividades/movimentações).
 
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Escopo
+- Fix: `supabase/functions/backfill-a010-offer-leads/index.ts` (coluna `name` → `stage_name`)
+- Migration SQL: UPDATE dos 169 deals para stage "Novo Lead"
 
