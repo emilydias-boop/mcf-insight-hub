@@ -296,3 +296,6 @@ verify_jwt = false
 
 [functions.backfill-a010-offer-leads]
 verify_jwt = false
+
+[functions.cleanup-backfill-partners]
+verify_jwt = false
