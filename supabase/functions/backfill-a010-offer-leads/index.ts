@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
       .from('crm_stages')
       .select('id')
       .eq('origin_id', originId)
-      .ilike('name', '%Novo Lead%')
+      .ilike('stage_name', '%Novo Lead%')
       .limit(1)
       .maybeSingle();
 
