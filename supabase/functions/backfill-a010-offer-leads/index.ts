@@ -200,8 +200,19 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Distribuir para SDR
+        let ownerEmail: string | null = null;
+        let ownerProfileId: string | null = null;
+        const { data: nextOwner } = await supabase.rpc('get_next_lead_owner', { p_origin_id: originId });
+        if (nextOwner) {
+          ownerEmail = nextOwner;
+          const { data: profile } = await supabase
+            .from('profiles').select('id').ilike('email', nextOwner).limit(1).maybeSingle();
+          ownerProfileId = profile?.id || null;
+        }
+
         // Criar deal
-        const { error: de } = await supabase
+        const { data: newDeal, error: de } = await supabase
           .from('crm_deals')
           .insert({
             clint_id: `hubla-bf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -210,10 +221,14 @@ Deno.serve(async (req) => {
             origin_id: originId,
             stage_id: stageId,
             value: buyer.net_value,
+            owner_id: ownerEmail,
+            owner_profile_id: ownerProfileId,
             tags: ['A010', 'Hubla', 'Backfill-Offer'],
-            custom_fields: { source: 'hubla', product: buyer.product_name, sale_date: buyer.sale_date },
+            custom_fields: { source: 'hubla', product: buyer.product_name, sale_date: buyer.sale_date, distributed: true, deal_user_original: ownerEmail },
             data_source: 'webhook',
-          });
+          })
+          .select('id')
+          .single();
         if (de) throw de;
         stats.deals_created++;
 
