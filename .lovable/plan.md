@@ -1,39 +1,68 @@
 
 
-## Objetivo
+## Fix: A010 com Order Bump não cria lead no CRM (invoice.payment_succeeded)
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+No bloco `invoice.payment_succeeded` com items (linha 1671-1811), quando o order bump vem no slot 0 e o A010 vem no slot 1:
+- `isOffer = i > 0` → A010 fica com `isOffer = true`
+- O check na linha 1753 (`productCategory === 'a010' && !isOffer`) **falha**
+- Resultado: nenhum lead é criado no CRM
 
-## Mudanças
+O `NewSale` **não** deve criar lead — é apenas intenção de compra. A criação de lead deve acontecer apenas no `invoice.payment_succeeded`.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Solução
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+**Arquivo: `supabase/functions/hubla-webhook-handler/index.ts`**
 
-### 2. Hook `useCloserDetailData.ts`
+**Após o loop de items** (depois da linha 1811, antes do `}`), adicionar um scan pós-loop que verifica se algum item A010 ficou como `isOffer=true` e não criou lead:
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+```typescript
+// Pós-loop: Se algum item A010 ficou como offer e não criou lead, criar agora
+if (installment === 1) {
+  const a010ItemIndex = items.findIndex((item: any, idx: number) => {
+    const name = item.product?.name || item.offer?.name || item.name || '';
+    const code = item.product?.code || item.product_code || null;
+    return idx > 0 && mapProductCategory(name, code) === 'a010';
+  });
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+  if (a010ItemIndex >= 0) {
+    const a010Item = items[a010ItemIndex];
+    const a010Name = a010Item.product?.name || a010Item.offer?.name || a010Item.name || 'A010';
+    const a010Price = parseFloat(a010Item.price || a010Item.amount || 0);
+    const payer = invoice?.payer || {};
+    const user = body.event?.user || {};
+    const customerEmail = payer.email || user.email || null;
+    const customerPhone = payer.phone || user.phone || null;
+    const customerName = `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || user.name || null;
+    const saleDate = new Date(invoice.saleDate || invoice.created_at || invoice.createdAt || Date.now()).toISOString();
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+    console.log(`🔄 [A010 como offer] Detectado no slot ${a010ItemIndex}, criando lead...`);
 
-### 4. Dados exportados no Excel
+    // a010_sales
+    await supabase.from('a010_sales').upsert({
+      customer_name: customerName || 'Cliente Desconhecido',
+      customer_email: customerEmail,
+      customer_phone: customerPhone,
+      net_value: a010Price,
+      sale_date: saleDate,
+      status: 'completed',
+    }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+    // CRM contact + deal
+    await createOrUpdateCRMContact(supabase, {
+      email: customerEmail,
+      phone: customerPhone,
+      name: customerName,
+      originName: 'A010 Hubla',
+      productName: a010Name,
+      value: a010Price,
+    });
+  }
+}
+```
 
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Escopo
+- Apenas `supabase/functions/hubla-webhook-handler/index.ts`
+- Bloco `invoice.payment_succeeded` com items — pós-loop (após linha 1811)
+- Deploy automático da edge function
 
