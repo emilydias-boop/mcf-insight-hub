@@ -1,39 +1,42 @@
 
 
-## Objetivo
+## Backfill A010 Offer Leads com Distribuição para SDRs
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema Atual
+A função `backfill-a010-offer-leads` cria deals sem `owner_id` — os leads entram no pipeline mas não são atribuídos a nenhum SDR.
 
-## Mudanças
+### Solução
+Adicionar chamada ao RPC `get_next_lead_owner(p_origin_id)` durante a criação de cada deal, igual ao fluxo dos webhooks. Também buscar o `owner_profile_id` correspondente para manter consistência.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Alteração: `supabase/functions/backfill-a010-offer-leads/index.ts`
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+No bloco de criação do deal (linhas 203-217), antes do insert:
 
-### 2. Hook `useCloserDetailData.ts`
+1. Chamar `supabase.rpc('get_next_lead_owner', { p_origin_id: originId })` para obter o email do próximo SDR
+2. Se retornar um email, buscar o `profile.id` correspondente
+3. Inserir o deal com `owner_id` e `owner_profile_id` preenchidos
+4. Adicionar `distributed: true` nos `custom_fields`
+5. Registrar atividade de `owner_change` no `deal_activities` para rastreabilidade
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+```typescript
+// Antes do insert do deal:
+let ownerEmail: string | null = null;
+let ownerProfileId: string | null = null;
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+const { data: nextOwner } = await supabase.rpc('get_next_lead_owner', { p_origin_id: originId });
+if (nextOwner) {
+  ownerEmail = nextOwner;
+  const { data: profile } = await supabase
+    .from('profiles').select('id').ilike('email', nextOwner).limit(1).maybeSingle();
+  ownerProfileId = profile?.id || null;
+}
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+// No insert do deal, adicionar:
+owner_id: ownerEmail,
+owner_profile_id: ownerProfileId,
+custom_fields: { ..., distributed: true, deal_user_original: ownerEmail },
+```
 
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Depois: Executar com `dry_run: false`
+Após deploy, chamar a function para criar e distribuir os ~1155 deals.
 
