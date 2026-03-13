@@ -1,39 +1,23 @@
 
 
-## Objetivo
+## Executar cleanup-backfill-partners
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Passo 1: Deploy da função
+A função `cleanup-backfill-partners` já existe no código e está registrada no `config.toml`. Precisa ser deployada.
 
-## Mudanças
+### Passo 2: Executar com `dry_run: true`
+Chamar a função com `{ "dry_run": true }` para listar os 21 parceiros que seriam removidos, sem alterar nada.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Passo 3: Validar resultado
+Revisar a lista retornada — confirmar que são de fato parceiros (emails com transações em `parceria`/`incorporador`).
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Passo 4: Executar com `dry_run: false`
+Chamar a função com `{ "dry_run": false }` para:
+- Registrar os 21 deals na tabela `partner_returns` (auditoria)
+- Deletar os 21 deals do pipeline
 
-### 2. Hook `useCloserDetailData.ts`
-
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
-
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Resultado esperado
+- **Antes**: 169 deals com tag `Backfill-Offer`
+- **Depois**: ~148 deals legítimos no pipeline
+- 21 parceiros registrados em `partner_returns` com `return_source: 'backfill-cleanup'`
 
