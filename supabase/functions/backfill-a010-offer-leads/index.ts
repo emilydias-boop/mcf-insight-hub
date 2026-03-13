@@ -154,17 +154,21 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Verificar se é parceiro (comprou parceria/incorporador)
-      const { data: partnerCheck } = await supabase
+      // Verificar se é parceiro (usando product_name como checkIfPartner)
+      const PARTNER_PATTERNS = ['A001', 'A002', 'A003', 'A004', 'A009', 'INCORPORADOR', 'ANTICRISE'];
+      const { data: partnerTxs } = await supabase
         .from('hubla_transactions')
-        .select('id')
+        .select('product_name')
         .ilike('customer_email', email)
-        .in('product_category', ['parceria', 'incorporador'])
-        .eq('sale_status', 'completed')
-        .limit(1)
-        .maybeSingle();
+        .eq('sale_status', 'completed');
 
-      if (partnerCheck) {
+      const isPartner = (partnerTxs || []).some(tx => {
+        if (!tx.product_name) return false;
+        const upperName = tx.product_name.toUpperCase();
+        return PARTNER_PATTERNS.some(p => upperName.includes(p));
+      });
+
+      if (isPartner) {
         stats.skipped_partners++;
         details.push({ email, name: buyer.name, action: 'skipped_partner' });
         continue;

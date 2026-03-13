@@ -50,7 +50,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3. Buscar quais desses emails são parceiros (compraram parceria/incorporador)
+    // 3. Buscar quais desses emails são parceiros (usando product_name como checkIfPartner)
+    const PARTNER_PATTERNS = ['A001', 'A002', 'A003', 'A004', 'A009', 'INCORPORADOR', 'ANTICRISE'];
     const allEmails = [...new Set(Array.from(contactEmails.values()).map(c => c.email))];
     const partnerEmails = new Set<string>();
 
@@ -58,13 +59,15 @@ Deno.serve(async (req) => {
       const batch = allEmails.slice(i, i + 200);
       const { data: partnerTx } = await supabase
         .from('hubla_transactions')
-        .select('customer_email, product_name, product_category')
+        .select('customer_email, product_name')
         .in('customer_email', batch)
-        .in('product_category', ['parceria', 'incorporador'])
         .eq('sale_status', 'completed');
 
       for (const tx of partnerTx || []) {
-        if (tx.customer_email) partnerEmails.add(tx.customer_email.toLowerCase().trim());
+        if (!tx.customer_email || !tx.product_name) continue;
+        const upperName = tx.product_name.toUpperCase();
+        const isPartner = PARTNER_PATTERNS.some(p => upperName.includes(p));
+        if (isPartner) partnerEmails.add(tx.customer_email.toLowerCase().trim());
       }
     }
 
