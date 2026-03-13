@@ -1,39 +1,39 @@
 
 
-## Objetivo
+## Backfill: A010 com Order Bump — Criar contatos e deals no CRM
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Contexto
+65 clientes compraram A010 como order bump (`hubla_id LIKE '%-offer-%'`, `product_category = 'a010'`) mas nunca tiveram contato/deal criado no CRM porque o webhook tratava o A010 como "offer" e pulava a criação.
 
-## Mudanças
+### Solução
+Criar uma nova Edge Function `backfill-a010-offer-leads` que:
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+1. Busca transações A010 que são offers: `product_category = 'a010'` AND `hubla_id LIKE '%-offer-%'`
+2. Deduplica por `customer_email`
+3. Para cada email, verifica se já existe contato no `crm_contacts`
+4. Verifica se já existe deal no pipeline "PIPELINE INSIDE SALES" para aquele contato
+5. Cria contato + deal (usando a mesma lógica do `createOrUpdateCRMContact`) para os que não têm
+6. Também insere em `a010_sales` se não existir
+7. Suporta `dry_run` (default: true)
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Arquivo
+- `supabase/functions/backfill-a010-offer-leads/index.ts` — nova Edge Function
+- `supabase/config.toml` — adicionar `[functions.backfill-a010-offer-leads]` com `verify_jwt = false`
 
-### 2. Hook `useCloserDetailData.ts`
+### Lógica principal
+```text
+1. Query: hubla_transactions WHERE product_category='a010' AND hubla_id LIKE '%-offer-%'
+2. Deduplica por email (lowercase)
+3. Batch lookup: crm_contacts por email
+4. Batch lookup: crm_deals por contact_id + origin_id (PIPELINE INSIDE SALES)
+5. Para cada email sem deal:
+   - Criar crm_contacts se não existe
+   - Criar crm_deals com stage "Novo Lead", tags ['A010','Hubla','Backfill-Offer']
+   - Upsert a010_sales
+6. Retornar stats + details
+```
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
-
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Segurança
+- Reutiliza o padrão existente de `backfill-construir-alugar` (partner check não necessário — já são leads legítimos)
+- `dry_run = true` por default para preview seguro
 
