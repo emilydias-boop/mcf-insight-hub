@@ -232,6 +232,16 @@ Deno.serve(async (req) => {
         if (de) throw de;
         stats.deals_created++;
 
+        // Registrar atividade de distribuição
+        if (newDeal?.id && ownerEmail) {
+          await supabase.from('deal_activities').insert({
+            deal_id: newDeal.id,
+            activity_type: 'owner_change',
+            description: `Backfill: Lead distribuído para ${ownerEmail}`,
+            metadata: { owner_email: ownerEmail, source: 'backfill-a010-offer', distributed: true },
+          });
+        }
+
         // Upsert a010_sales
         await supabase.from('a010_sales').upsert({
           customer_name: buyer.name || 'Cliente Desconhecido',
@@ -243,7 +253,7 @@ Deno.serve(async (req) => {
         }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
         stats.a010_sales_upserted++;
 
-        details.push({ email, name: buyer.name, action: 'created', contact_id: contactId });
+        details.push({ email, name: buyer.name, action: 'created', contact_id: contactId, owner: ownerEmail });
       } catch (err: any) {
         stats.errors++;
         details.push({ email, name: buyer.name, action: 'error', error: err.message });
