@@ -1,31 +1,39 @@
 
 
-## Corrigir detecção de Outside: query de parceiros muito ampla
+## Objetivo
 
-### Problema
-A query `partnerTransactions` em `useOutsideDetectionForDeals.ts` usa lógica invertida: busca "tudo que NÃO é contrato" como parceiro. Isso inclui A010, cursos e outros produtos legítimos, causando falsos negativos na detecção Outside.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Epson comprou A010 (curso) + Contrato (hoje), sem R1 → deveria ser Outside, mas A010 o marca como "parceiro" indevidamente.
+## Mudanças
 
-### Correção
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**`src/hooks/useOutsideDetectionForDeals.ts`** — linhas 105-118
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Substituir a query genérica por uma que busca **especificamente** produtos de parceria, alinhando com `checkIfPartner` do backend:
+### 2. Hook `useCloserDetailData.ts`
 
-```typescript
-// Partner products: detect emails that bought actual partnership products
-batchedIn<{ customer_email: string | null }>(
-  (chunk) =>
-    supabase
-      .from('hubla_transactions')
-      .select('customer_email')
-      .in('customer_email', chunk)
-      .eq('sale_status', 'completed')
-      .or('product_name.ilike.%A001%,product_name.ilike.%A002%,product_name.ilike.%A003%,product_name.ilike.%A004%,product_name.ilike.%A009%,product_name.ilike.%INCORPORADOR%,product_name.ilike.%ANTICRISE%'),
-  uniqueEmails
-),
-```
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-Isso garante que apenas emails com compras de parceria real sejam excluídos da detecção Outside. A010, cursos e outros produtos não serão mais tratados como parceria.
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
