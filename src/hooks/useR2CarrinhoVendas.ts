@@ -94,8 +94,8 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
             )
           )
         `)
-      .gte('meeting_slot.scheduled_at', weekStart.toISOString())
-      .lte('meeting_slot.scheduled_at', endOfDay(weekEnd).toISOString())
+      .gte('meeting_slot.scheduled_at', effectiveStart.toISOString())
+      .lt('meeting_slot.scheduled_at', effectiveEnd.toISOString())
         .eq('meeting_slot.meeting_type', 'r2')
         .eq('r2_status_id', '24d9a326-378b-4191-a4b3-d0ec8b9d23eb');
 
