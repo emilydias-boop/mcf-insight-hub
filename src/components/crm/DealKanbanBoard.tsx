@@ -15,7 +15,15 @@ import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBatchDealActivitySummary, ActivitySummary } from '@/hooks/useDealActivitySummary';
 import { SalesChannel } from '@/hooks/useBulkA010Check';
-import { Inbox, ChevronDown, ClipboardCopy } from 'lucide-react';
+import { Inbox, ChevronDown, ClipboardCopy, Phone, Mail, Table2, Settings2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { CopyLeadsFormatDialog, buildCopyLeadData, CopyLeadData } from './CopyLeadsFormatDialog';
 
 interface Deal {
   id: string;
@@ -79,7 +87,10 @@ export const DealKanbanBoard = ({
     dealName: string;
     newStageName: string;
   }>({ open: false, dealId: '', dealName: '', newStageName: '' });
-  
+
+  // State para dialog de cópia personalizada
+  const [copyDialogData, setCopyDialogData] = useState<{ open: boolean; leads: CopyLeadData[] }>({ open: false, leads: [] });
+
   // stage_permissions is the sole source of truth for visibility
   const visibleStages = useMemo(() => {
     const activeStages = (stages || []).filter((s: any) => s.is_active);
@@ -271,31 +282,69 @@ export const DealKanbanBoard = ({
                             currentSort={stageSorts[stage.id] || 'newest'}
                             onSortChange={(sort) => handleSortChange(stage.id, sort)}
                           />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            title="Copiar nome e telefone dos leads"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (stageDeals.length === 0) {
-                                toast.info('Nenhum lead neste estágio');
-                                return;
-                              }
-                              const text = stageDeals.map((d: any) => {
-                                const name = d.crm_contacts?.name || d.name || 'Sem nome';
-                                const phone = d.crm_contacts?.phone || '(sem telefone)';
-                                return `${name} - ${phone}`;
-                              }).join('\n');
-                              navigator.clipboard.writeText(text).then(() => {
-                                toast.success(`${stageDeals.length} lead(s) copiado(s) para a área de transferência`);
-                              }).catch(() => {
-                                toast.error('Erro ao copiar');
-                              });
-                            }}
-                          >
-                            <ClipboardCopy className="h-3.5 w-3.5" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" title="Copiar leads">
+                                <ClipboardCopy className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                              <DropdownMenuItem onClick={() => {
+                                if (stageDeals.length === 0) { toast.info('Nenhum lead neste estágio'); return; }
+                                const text = stageDeals.map((d: any) => d.crm_contacts?.phone || '(sem telefone)').join('\n');
+                                navigator.clipboard.writeText(text).then(() => toast.success(`${stageDeals.length} telefone(s) copiado(s)`));
+                              }}>
+                                <Phone className="h-4 w-4 mr-2" /> Só telefone
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                if (stageDeals.length === 0) { toast.info('Nenhum lead neste estágio'); return; }
+                                const text = stageDeals.map((d: any) => {
+                                  const name = d.crm_contacts?.name || d.name || 'Sem nome';
+                                  const phone = d.crm_contacts?.phone || '(sem telefone)';
+                                  return `${name} - ${phone}`;
+                                }).join('\n');
+                                navigator.clipboard.writeText(text).then(() => toast.success(`${stageDeals.length} lead(s) copiado(s)`));
+                              }}>
+                                <ClipboardCopy className="h-4 w-4 mr-2" /> Nome + Telefone
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                if (stageDeals.length === 0) { toast.info('Nenhum lead neste estágio'); return; }
+                                const text = stageDeals.map((d: any) => {
+                                  const name = d.crm_contacts?.name || d.name || 'Sem nome';
+                                  const phone = d.crm_contacts?.phone || '(sem telefone)';
+                                  const email = d.crm_contacts?.email || '(sem email)';
+                                  return `${name} - ${phone} - ${email}`;
+                                }).join('\n');
+                                navigator.clipboard.writeText(text).then(() => toast.success(`${stageDeals.length} lead(s) copiado(s)`));
+                              }}>
+                                <Mail className="h-4 w-4 mr-2" /> Nome + Telefone + Email
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                if (stageDeals.length === 0) { toast.info('Nenhum lead neste estágio'); return; }
+                                const header = 'Nome\tTelefone\tEmail\tEstágio\tData entrada\tLigações';
+                                const rows = stageDeals.map((d: any) => {
+                                  const name = d.crm_contacts?.name || d.name || 'Sem nome';
+                                  const phone = d.crm_contacts?.phone || '';
+                                  const email = d.crm_contacts?.email || '';
+                                  const date = d.created_at ? new Date(d.created_at).toLocaleDateString('pt-BR') : '-';
+                                  const act = activitySummaries?.get(d.id?.toLowerCase?.()?.trim?.());
+                                  const calls = act?.totalCalls ?? 0;
+                                  return `${name}\t${phone}\t${email}\t${stage.stage_name}\t${date}\t${calls}`;
+                                }).join('\n');
+                                navigator.clipboard.writeText(`${header}\n${rows}`).then(() => toast.success(`${stageDeals.length} lead(s) copiado(s) (tabulado)`));
+                              }}>
+                                <Table2 className="h-4 w-4 mr-2" /> Completo (planilha)
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => {
+                                if (stageDeals.length === 0) { toast.info('Nenhum lead neste estágio'); return; }
+                                const leads = buildCopyLeadData(stageDeals, stage.stage_name, activitySummaries, channelMap);
+                                setCopyDialogData({ open: true, leads });
+                              }}>
+                                <Settings2 className="h-4 w-4 mr-2" /> Personalizado...
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                           <Badge variant="secondary">{stageDeals.length}</Badge>
                         </div>
                       </div>
@@ -387,6 +436,12 @@ export const DealKanbanBoard = ({
         dealId={stageChangeModal.dealId}
         dealName={stageChangeModal.dealName}
         newStageName={stageChangeModal.newStageName}
+      />
+
+      <CopyLeadsFormatDialog
+        open={copyDialogData.open}
+        onOpenChange={(open) => setCopyDialogData(prev => ({ ...prev, open }))}
+        leads={copyDialogData.leads}
       />
     </>
   );

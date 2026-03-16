@@ -1,47 +1,39 @@
 
 
-## Copiar leads do Kanban com opções de formato
+## Objetivo
 
-### Problema atual
-O botão de copiar no header de cada coluna do Kanban copia apenas `Nome - Telefone`. O SDR precisa de mais opções para diferentes contextos de trabalho.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Solução
+## Mudanças
 
-Substituir o botão simples por um **DropdownMenu** com as seguintes opções de cópia:
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-| Opção | Formato |
-|-------|---------|
-| Só telefone | `(11) 99999-0000` |
-| Nome + Telefone | `João Silva - (11) 99999-0000` (atual) |
-| Nome + Telefone + Email | `João Silva - (11) 99999-0000 - joao@email.com` |
-| Completo (tabulado) | `Nome \t Telefone \t Email \t Stage \t Data entrada \t Ligações` |
-| Personalizado | Abre dialog com checkboxes para o SDR escolher quais campos incluir |
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Campos disponíveis no personalizado: Nome, Telefone, Email, Stage, Data de entrada, Nº ligações, Tentativas, Responsável (owner), Origem, Canal (LIVE/A010/BIO), Tags.
+### 2. Hook `useCloserDetailData.ts`
 
-### Arquivos
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**Editar `src/components/crm/DealKanbanBoard.tsx`** (linhas 274-298)
-- Substituir o `<Button>` por um `<DropdownMenu>` com as opções de cópia
-- Extrair lógica de formatação para uma função helper
-- Usar `activitySummary` para dados de ligações/tentativas
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**Criar `src/components/crm/CopyLeadsFormatDialog.tsx`**
-- Dialog com checkboxes para escolha personalizada de campos
-- Preview do formato antes de copiar
-- Separador configurável (nova linha, tabulação, vírgula)
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### Dados disponíveis nos deals
+### 4. Dados exportados no Excel
 
-Cada `deal` no stageDeals já contém:
-- `crm_contacts.name`, `.phone`, `.email`
-- `deal.created_at` (data de entrada)
-- `deal.owner_id` (responsável)
-- `deal.crm_origins?.name` (origem)
-- `activitySummary?.total_calls`, `.total_attempts` (ligações)
-- `salesChannel` (canal)
-- `deal.tags`
-- Stage name vem do loop (`stage.stage_name`)
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-Todos os dados necessários já estão carregados no cliente.
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
