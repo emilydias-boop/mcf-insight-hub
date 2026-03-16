@@ -26,6 +26,8 @@ export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date, carrinho
   return useQuery({
     queryKey: ['r2-fora-carrinho-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
     queryFn: async (): Promise<R2ForaDoCarrinhoAttendee[]> => {
+      const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig);
+
       // First get the status options to map IDs to names/colors
       const { data: statusOptions } = await supabase
         .from('r2_status_options')
@@ -63,8 +65,8 @@ export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date, carrinho
           )
         `)
         .eq('meeting_type', 'r2')
-        .gte('scheduled_at', getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig).effectiveStart.toISOString())
-        .lt('scheduled_at', getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig).effectiveEnd.toISOString());
+        .gte('scheduled_at', effectiveStart.toISOString())
+        .lt('scheduled_at', effectiveEnd.toISOString());
 
       if (!meetings) return [];
 
