@@ -1,35 +1,39 @@
 
 
-## Análise: Diferença entre 97 (Relatório) e 108 (Painel)
+## Objetivo
 
-### Investigação no banco de dados
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Consultei diretamente o banco e encontrei **99 contratos** no período de março (não 108 e não 97). Detalhamento:
+## Mudanças
 
-| Status do attendee | Qtd | Contado no Relatório? | Contado no Painel? |
-|---|---|---|---|
-| `contract_paid` | 93 | Sim | Sim |
-| `refunded` | 4 | Sim (após fix anterior) | Sim |
-| `sem_sucesso` (com `contract_paid_at`) | 2 | **Não** | Sim |
-| **Total** | **99** | **97** | **99** |
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### Causa da diferença de 97 vs 99
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-O relatório de contratos filtra por `status IN ('contract_paid', 'refunded')`, mas existem **2 attendees** com status `sem_sucesso` que possuem `contract_paid_at` preenchido (lead pagou, mas depois o closer marcou como "sem sucesso"). O painel SDR e os closerMetrics usam `contract_paid_at IS NOT NULL` como critério, por isso capturam esses 2.
+### 2. Hook `useCloserDetailData.ts`
 
-### Sobre o 108
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-A RPC `get_sdr_metrics_from_agenda` retorna soma de 99 contratos. O `useR1CloserMetrics` também resulta em 99. O número 108 pode refletir dados de um momento anterior (cache ou dados que mudaram desde o screenshot). Atualmente o banco tem 99.
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-### Solução
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-Alinhar o relatório de contratos para usar a mesma lógica do painel — `contract_paid_at IS NOT NULL` em vez de filtrar por status:
+### 4. Dados exportados no Excel
 
-**Arquivo: `src/hooks/useContractReport.ts`**
-- Linha 98: Substituir `.in('status', ['contract_paid', 'refunded'])` por `.not('contract_paid_at', 'is', null)` e remover o filtro de status
-- Isso captura qualquer attendee que teve pagamento registrado, independente do status atual
-- Manter `isRefunded: row.status === 'refunded'` para badge visual
-- Adicionar `isPartner = false` filter (atualmente ausente no relatório)
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-Resultado: o relatório passará de 97 para 99, alinhando com a fonte de verdade (`contract_paid_at`).
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

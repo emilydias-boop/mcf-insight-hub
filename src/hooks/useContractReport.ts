@@ -95,7 +95,7 @@ export const useContractReport = (
             )
           )
         `)
-        .in('status', ['contract_paid', 'refunded'])
+        .not('contract_paid_at', 'is', null)
         .gte('contract_paid_at', startISO)
         .lte('contract_paid_at', endISO);
       
