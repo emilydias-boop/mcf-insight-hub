@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfDay, endOfDay } from 'date-fns';
+import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
+import { getCarrinhoWeekBoundaries } from '@/lib/carrinhoWeekBoundaries';
 
 export interface R2ForaDoCarrinhoAttendee {
   id: string;
