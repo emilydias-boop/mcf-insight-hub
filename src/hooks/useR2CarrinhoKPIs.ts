@@ -14,20 +14,22 @@ export interface R2CarrinhoKPIs {
   emAnalise: number;
 }
 
-export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date) {
+export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig) {
   return useQuery({
     queryKey: ['r2-carrinho-kpis', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
     queryFn: async (): Promise<R2CarrinhoKPIs> => {
+      const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig);
+
       // ===== CONTRATOS PAGOS =====
       // Count unique contracts (A000) paid in the week from hubla_transactions
-      // This aligns with the "Vendas MCF Incorporador" tab
+      // Uses carrinho boundaries (previous Friday corte → current Friday corte)
       const { data: contratosTx } = await supabase
         .from('hubla_transactions')
         .select('customer_email')
         .ilike('product_name', '%A000%')
         .eq('product_category', 'incorporador')
-        .gte('sale_date', startOfDay(weekStart).toISOString())
-        .lte('sale_date', endOfDay(weekEnd).toISOString());
+        .gte('sale_date', effectiveStart.toISOString())
+        .lt('sale_date', effectiveEnd.toISOString());
 
       // Deduplicate by email (one contract per customer)
       const uniqueContracts = new Set(
