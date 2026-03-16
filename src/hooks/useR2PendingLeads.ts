@@ -1,6 +1,29 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+const BATCH_SIZE = 200;
+
+/**
+ * Splits a large array into chunks of BATCH_SIZE, runs a query for each chunk in parallel,
+ * and concatenates the results.
+ */
+async function batchedInQuery<T>(
+  ids: string[],
+  queryFn: (batch: string[]) => Promise<{ data: T[] | null; error: any }>
+): Promise<T[]> {
+  if (ids.length === 0) return [];
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    chunks.push(ids.slice(i, i + BATCH_SIZE));
+  }
+  const results = await Promise.all(chunks.map(async (chunk) => {
+    const { data, error } = await queryFn(chunk);
+    if (error) throw error;
+    return data || [];
+  }));
+  return results.flat();
+}
+
 export interface R2PendingLead {
   id: string;
   attendee_name: string;
@@ -110,12 +133,10 @@ export function useR2PendingLeads() {
       }
 
       // Step 3: Get ALL deals belonging to these contacts
-      const { data: allDealsForContacts, error: dealsError } = await supabase
-        .from('crm_deals')
-        .select('id, contact_id')
-        .in('contact_id', Array.from(contactIds));
-
-      if (dealsError) throw dealsError;
+      const allDealsForContacts = await batchedInQuery<{ id: string; contact_id: string | null }>(
+        Array.from(contactIds),
+        (batch) => supabase.from('crm_deals').select('id, contact_id').in('contact_id', batch) as any
+      );
 
       // Create a map: contact_id -> all deal_ids for that contact
       const contactToDealIds = new Map<string, Set<string>>();
@@ -141,21 +162,19 @@ export function useR2PendingLeads() {
         })) as R2PendingLead[];
       }
 
-      // Step 4: Get R2 attendees for ALL deals of these contacts
-      const { data: r2Attendees, error: r2Error } = await supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          deal_id,
-          meeting_slot:meeting_slots!inner(meeting_type)
-        `)
-        .in('deal_id', Array.from(allDealIds))
-        .eq('meeting_slots.meeting_type', 'r2');
-
-      if (r2Error) throw r2Error;
+      // Step 4: Get R2 attendees for ALL deals of these contacts (batched)
+      const r2Attendees = await batchedInQuery<any>(
+        Array.from(allDealIds),
+        (batch) => supabase
+          .from('meeting_slot_attendees')
+          .select(`deal_id, meeting_slot:meeting_slots!inner(meeting_type)`)
+          .in('deal_id', batch)
+          .eq('meeting_slots.meeting_type', 'r2') as any
+      );
 
       // Create a set of deal_ids that have R2
       const dealsWithR2 = new Set(
-        ((r2Attendees as any[]) || []).map(a => a.deal_id)
+        (r2Attendees || []).map(a => a.deal_id)
       );
 
       // Step 4b: Get ALL R2 attendees by name/phone (fallback correlation)
@@ -285,22 +304,25 @@ export function useR2PendingLeads() {
       });
 
       if (allDealIdsForContacts.size > 0) {
-        const { data: latestAttendees } = await supabase
-          .from('meeting_slot_attendees')
-          .select(`
-            deal_id,
-            meeting_slot:meeting_slots!inner(
-              scheduled_at,
-              meeting_type,
-              closer:closers(id, name)
-            )
-          `)
-          .in('deal_id', Array.from(allDealIdsForContacts))
-          .eq('meeting_slots.meeting_type', 'r1')
-          .order('meeting_slots(scheduled_at)', { ascending: false });
+        const latestAttendees = await batchedInQuery<any>(
+          Array.from(allDealIdsForContacts),
+          (batch) => supabase
+            .from('meeting_slot_attendees')
+            .select(`
+              deal_id,
+              meeting_slot:meeting_slots!inner(
+                scheduled_at,
+                meeting_type,
+                closer:closers(id, name)
+              )
+            `)
+            .in('deal_id', batch)
+            .eq('meeting_slots.meeting_type', 'r1')
+            .order('meeting_slots(scheduled_at)', { ascending: false }) as any
+        );
 
         // Sort attendees by scheduled_at DESC (client-side) since Supabase nested ordering is unreliable
-        const sortedAttendees = ((latestAttendees as any[]) || [])
+        const sortedAttendees = (latestAttendees || [])
           .map(att => {
             const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
            const closer = Array.isArray(slot?.closer) ? slot?.closer[0] : slot?.closer;
