@@ -16,6 +16,7 @@ export const FinanceiroCobrancas = () => {
   const [selectedSub, setSelectedSub] = useState<BillingSubscription | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const syncMutation = useSyncBillingFromHubla();
 
   const { data: kpis, isLoading: loadingKpis } = useBillingKPIs();
   const { data: subscriptions = [], isLoading: loadingSubs } = useBillingSubscriptions(filters);
