@@ -1,39 +1,46 @@
 
 
-## Objetivo
+## Plano: Corrigir timeout da Edge Function "Mover Parceiros"
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
 
-## Mudanças
+A Edge Function encontrou **1913 deals de parceiros** para mover, mas está sofrendo **timeout** (~60s) porque:
+1. Atualiza deals **um por um** (2 queries por deal = ~3800 queries)
+2. No dry_run, retorna um array com 1913 objetos de detalhes, o que também é lento
+3. O dialog mostra vazio porque a resposta nunca chega
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Solução
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Reescrever a Edge Function para usar **batch updates** e otimizar o fluxo:
 
-### 2. Hook `useCloserDetailData.ts`
+**Edge Function (`supabase/functions/move-partners-to-venda-realizada/index.ts`)**:
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+1. **Dry run simplificado**: Retornar apenas os stats (contagens) + primeiros 50 exemplos no `details`, sem listar todos os 1.9k
+2. **Batch update por stage**: Agrupar deals pelo `targetStageId` e fazer um único `UPDATE ... IN (ids)` por grupo em vez de 1913 updates individuais
+3. **Batch insert activities**: Inserir `deal_activities` em batches de 100 em vez de um por um
+4. **Tags**: Fazer update de tags em batch separado (deals que já têm vs não têm a tag "Parceiro")
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**Componente (`MovePartnersButton.tsx`)**:
+- Sem mudanças necessárias, apenas a função precisa responder mais rápido
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+### Detalhes técnicos
 
-### 4. Dados exportados no Excel
+Fluxo otimizado:
+```text
+1. Identificação (igual ao atual) → stats
+2. Dry run: retorna stats + 50 exemplos
+3. Execução real:
+   a. Agrupar deals por target_stage_id
+   b. Para cada grupo: UPDATE crm_deals SET stage_id=X WHERE id IN (batch de 200)
+   c. Batch insert deal_activities (100 por vez)
+   d. Retornar stats
+```
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+### Arquivos
 
-Formato de data: `dd/MM/yyyy HH:mm`
+| Arquivo | Alteração |
+|---|---|
+| `supabase/functions/move-partners-to-venda-realizada/index.ts` | Reescrever com batch updates |
 
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+Após editar, a função será redeployada.
 
