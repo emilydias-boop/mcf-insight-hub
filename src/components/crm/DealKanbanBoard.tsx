@@ -108,6 +108,10 @@ export const DealKanbanBoard = ({
       const summaryB = summaries?.get(b.id.toLowerCase().trim());
       
       switch (sort) {
+        case 'stage_newest':
+          return new Date((b as any).stage_moved_at || (b as any).created_at || 0).getTime() - new Date((a as any).stage_moved_at || (a as any).created_at || 0).getTime();
+        case 'stage_oldest':
+          return new Date((a as any).stage_moved_at || (a as any).created_at || 0).getTime() - new Date((b as any).stage_moved_at || (b as any).created_at || 0).getTime();
         case 'newest':
           return new Date((b as any).created_at || 0).getTime() - new Date((a as any).created_at || 0).getTime();
         case 'oldest':
@@ -150,7 +154,7 @@ export const DealKanbanBoard = ({
       const stageDeals = deals.filter(deal => 
         deal && deal.id && deal.name && deal.stage_id === stage.id
       );
-      const sortOption = stageSorts[stage.id] || 'newest'; // Default: mais novo primeiro
+      const sortOption = stageSorts[stage.id] || 'stage_newest'; // Default: recente na stage primeiro
       map[stage.id] = sortDeals(stageDeals, sortOption, activitySummaries);
     });
     return map;

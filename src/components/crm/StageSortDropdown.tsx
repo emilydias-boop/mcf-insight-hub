@@ -14,6 +14,8 @@ import { ArrowUpDown, Check, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type SortOption = 
+  | 'stage_newest'
+  | 'stage_oldest'
   | 'newest' 
   | 'oldest' 
   | 'most_activities' 
@@ -26,6 +28,11 @@ interface SortOptionItem {
   label: string;
   icon?: 'up' | 'down';
 }
+
+const stageOptions: SortOptionItem[] = [
+  { value: 'stage_newest', label: 'Recente na Stage', icon: 'down' },
+  { value: 'stage_oldest', label: 'Antigo na Stage', icon: 'up' },
+];
 
 const sortOptions: SortOptionItem[] = [
   { value: 'newest', label: 'Mais Novo', icon: 'down' },
@@ -48,7 +55,7 @@ interface StageSortDropdownProps {
 }
 
 export const StageSortDropdown = ({ currentSort, onSortChange }: StageSortDropdownProps) => {
-  const isDescending = ['newest', 'most_activities', 'most_calls'].includes(currentSort);
+  const isDescending = ['stage_newest', 'newest', 'most_activities', 'most_calls'].includes(currentSort);
   
   const renderOption = (option: SortOptionItem) => (
     <button
@@ -98,7 +105,13 @@ export const StageSortDropdown = ({ currentSort, onSortChange }: StageSortDropdo
           </TooltipContent>
         </Tooltip>
         
-        <PopoverContent className="w-44 p-1.5" align="start">
+        <PopoverContent className="w-48 p-1.5" align="start">
+          <div className="space-y-0.5">
+            {stageOptions.map(renderOption)}
+          </div>
+          
+          <div className="my-1.5 border-t" />
+          
           <div className="space-y-0.5">
             {sortOptions.map(renderOption)}
           </div>

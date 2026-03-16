@@ -1,26 +1,39 @@
 
 
-## Ordenar cards do Kanban por tempo na stage (mais recente primeiro)
+## Objetivo
 
-### Problema
-O sort padrão "Mais Novo" ordena por `created_at` (data de criação do deal no sistema). Isso faz com que um lead que acabou de entrar numa stage (ex: Contrato Pago há 1h) fique abaixo de leads que estão ali há dias, porque foram criados antes no sistema.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Alterações
+## Mudanças
 
-**`src/components/crm/StageSortDropdown.tsx`**
-- Adicionar duas novas opções ao tipo `SortOption`: `'stage_newest'` e `'stage_oldest'`
-- Adicionar grupo de opções "Por Stage": `{ value: 'stage_newest', label: 'Recente na Stage' }` e `{ value: 'stage_oldest', label: 'Antigo na Stage' }`
-- Renderizar esse novo grupo no popover
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**`src/components/crm/DealKanbanBoard.tsx`**
-- Mudar o default sort de `'newest'` para `'stage_newest'` (linha 153)
-- Adicionar cases no `sortDeals` switch:
-  - `'stage_newest'`: ordena por `stage_moved_at` descendente (mais recente primeiro)
-  - `'stage_oldest'`: ordena por `stage_moved_at` ascendente
-- Fallback para `created_at` quando `stage_moved_at` for null
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### Resultado
-- Por padrão, leads que entraram mais recentemente na stage aparecem no topo
-- O Epson (1h na stage) aparecerá acima de leads com 24d
-- O usuário pode trocar para qualquer outro critério via dropdown
+### 2. Hook `useCloserDetailData.ts`
+
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
