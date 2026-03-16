@@ -3,7 +3,9 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } f
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { BillingSubscription, SUBSCRIPTION_STATUS_LABELS, QUITACAO_STATUS_LABELS } from '@/types/billing';
+import { Input } from '@/components/ui/input';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { BillingSubscription, BillingInstallment, SUBSCRIPTION_STATUS_LABELS } from '@/types/billing';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { useBillingInstallments, useMarkInstallmentPaid } from '@/hooks/useBillingInstallments';
 import { useBillingAgreements } from '@/hooks/useBillingAgreements';
@@ -12,8 +14,10 @@ import { CobrancaInstallments } from './CobrancaInstallments';
 import { CobrancaAgreements } from './CobrancaAgreements';
 import { CobrancaHistory } from './CobrancaHistory';
 import { CreateAgreementModal } from './CreateAgreementModal';
+import { EditSubscriptionModal } from './EditSubscriptionModal';
+import { RegisterPaymentModal } from './RegisterPaymentModal';
 import { toast } from 'sonner';
-import { Plus, Handshake, Ban, CheckCircle2 } from 'lucide-react';
+import { Handshake, Ban, CheckCircle2, Pencil, DollarSign, MessageSquarePlus, Send } from 'lucide-react';
 import { useUpdateSubscription } from '@/hooks/useBillingSubscriptions';
 
 interface CobrancaDetailDrawerProps {
@@ -32,6 +36,11 @@ const statusColors: Record<string, string> = {
 
 export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: CobrancaDetailDrawerProps) => {
   const [showAgreementModal, setShowAgreementModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedInstallment, setSelectedInstallment] = useState<BillingInstallment | null>(null);
+  const [showObsInput, setShowObsInput] = useState(false);
+  const [obsText, setObsText] = useState('');
 
   const { data: installments = [], isLoading: loadingInst } = useBillingInstallments(subscription?.id || null);
   const { data: agreements = [], isLoading: loadingAg } = useBillingAgreements(subscription?.id || null);
@@ -47,7 +56,7 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
   const saldoDevedor = subscription.valor_total_contrato - totalPago;
   const parcelasPagas = installments.filter(i => i.status === 'pago').length;
 
-  const handleMarkPaid = async (inst: any) => {
+  const handleMarkPaid = async (inst: BillingInstallment) => {
     try {
       await markPaid.mutateAsync({
         id: inst.id,
@@ -64,6 +73,11 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
     } catch {
       toast.error('Erro ao marcar parcela como paga');
     }
+  };
+
+  const handleRegisterPayment = (inst: BillingInstallment) => {
+    setSelectedInstallment(inst);
+    setShowPaymentModal(true);
   };
 
   const handleCancelSubscription = async () => {
@@ -95,6 +109,22 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
     }
   };
 
+  const handleAddObs = async () => {
+    if (!obsText.trim()) return;
+    try {
+      await addHistory.mutateAsync({
+        subscription_id: subscription.id,
+        tipo: 'observacao',
+        descricao: obsText.trim(),
+      });
+      toast.success('Observação adicionada');
+      setObsText('');
+      setShowObsInput(false);
+    } catch {
+      toast.error('Erro ao adicionar observação');
+    }
+  };
+
   return (
     <>
       <Drawer open={open} onOpenChange={onOpenChange}>
@@ -110,7 +140,6 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
               </Badge>
             </div>
 
-            {/* Summary cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
               <div className="bg-muted/50 rounded-lg p-3">
                 <span className="text-xs text-muted-foreground">Total Contrato</span>
@@ -130,22 +159,76 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
               </div>
             </div>
 
-            {/* Quick actions */}
             <div className="flex gap-2 mt-4 flex-wrap">
+              <Button size="sm" variant="outline" onClick={() => setShowEditModal(true)}>
+                <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+              </Button>
               <Button size="sm" variant="outline" onClick={() => setShowAgreementModal(true)}>
                 <Handshake className="h-3.5 w-3.5 mr-1" /> Criar Acordo
               </Button>
+              <Button size="sm" variant="outline" onClick={() => setShowObsInput(!showObsInput)}>
+                <MessageSquarePlus className="h-3.5 w-3.5 mr-1" /> Observação
+              </Button>
               {subscription.status !== 'cancelada' && subscription.status !== 'quitada' && (
                 <>
-                  <Button size="sm" variant="outline" onClick={handleFinalize}>
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Quitar
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={handleCancelSubscription}>
-                    <Ban className="h-3.5 w-3.5 mr-1" /> Cancelar
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button size="sm" variant="outline">
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Quitar
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Quitar contrato?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Isso marcará o contrato como quitado e não poderá ser desfeito facilmente. Deseja continuar?
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleFinalize}>Confirmar Quitação</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button size="sm" variant="destructive">
+                        <Ban className="h-3.5 w-3.5 mr-1" /> Cancelar
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Cancelar assinatura?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          A assinatura será cancelada e as cobranças futuras serão encerradas. Deseja continuar?
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Voltar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleCancelSubscription} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                          Confirmar Cancelamento
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </>
               )}
             </div>
+
+            {showObsInput && (
+              <div className="flex gap-2 mt-3">
+                <Input
+                  placeholder="Digite a observação..."
+                  value={obsText}
+                  onChange={(e) => setObsText(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddObs()}
+                  className="flex-1"
+                />
+                <Button size="sm" onClick={handleAddObs} disabled={addHistory.isPending || !obsText.trim()}>
+                  <Send className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
           </DrawerHeader>
 
           <div className="overflow-y-auto p-4">
@@ -156,7 +239,12 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
                 <TabsTrigger value="historico">Histórico</TabsTrigger>
               </TabsList>
               <TabsContent value="parcelas" className="mt-4">
-                <CobrancaInstallments installments={installments} isLoading={loadingInst} onMarkPaid={handleMarkPaid} />
+                <CobrancaInstallments
+                  installments={installments}
+                  isLoading={loadingInst}
+                  onMarkPaid={handleMarkPaid}
+                  onRegisterPayment={handleRegisterPayment}
+                />
               </TabsContent>
               <TabsContent value="acordos" className="mt-4">
                 <CobrancaAgreements agreements={agreements} isLoading={loadingAg} />
@@ -169,11 +257,9 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
         </DrawerContent>
       </Drawer>
 
-      <CreateAgreementModal
-        subscriptionId={subscription.id}
-        open={showAgreementModal}
-        onOpenChange={setShowAgreementModal}
-      />
+      <CreateAgreementModal subscriptionId={subscription.id} open={showAgreementModal} onOpenChange={setShowAgreementModal} />
+      <EditSubscriptionModal subscription={subscription} open={showEditModal} onOpenChange={setShowEditModal} />
+      <RegisterPaymentModal installment={selectedInstallment} subscriptionId={subscription.id} open={showPaymentModal} onOpenChange={setShowPaymentModal} />
     </>
   );
 };

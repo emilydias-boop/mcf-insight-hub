@@ -1,5 +1,7 @@
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { BillingFilters, SUBSCRIPTION_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/billing';
 import { Search } from 'lucide-react';
 
@@ -10,7 +12,7 @@ interface CobrancaFiltersProps {
 
 export const CobrancaFilters = ({ filters, onFiltersChange }: CobrancaFiltersProps) => {
   return (
-    <div className="flex flex-wrap gap-3">
+    <div className="flex flex-wrap gap-3 items-end">
       <div className="relative flex-1 min-w-[200px] max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -57,6 +59,25 @@ export const CobrancaFilters = ({ filters, onFiltersChange }: CobrancaFiltersPro
         value={filters.responsavel || ''}
         onChange={(e) => onFiltersChange({ ...filters, responsavel: e.target.value })}
       />
+
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Switch
+            id="inadimplentes"
+            checked={filters.inadimplentes || false}
+            onCheckedChange={(checked) => onFiltersChange({ ...filters, inadimplentes: checked })}
+          />
+          <Label htmlFor="inadimplentes" className="text-xs cursor-pointer">Inadimplentes</Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="quitados"
+            checked={filters.quitados || false}
+            onCheckedChange={(checked) => onFiltersChange({ ...filters, quitados: checked })}
+          />
+          <Label htmlFor="quitados" className="text-xs cursor-pointer">Quitados</Label>
+        </div>
+      </div>
     </div>
   );
 };
