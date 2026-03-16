@@ -108,6 +108,10 @@ export const DealKanbanBoard = ({
       const summaryB = summaries?.get(b.id.toLowerCase().trim());
       
       switch (sort) {
+        case 'stage_newest':
+          return new Date((b as any).stage_moved_at || (b as any).created_at || 0).getTime() - new Date((a as any).stage_moved_at || (a as any).created_at || 0).getTime();
+        case 'stage_oldest':
+          return new Date((a as any).stage_moved_at || (a as any).created_at || 0).getTime() - new Date((b as any).stage_moved_at || (b as any).created_at || 0).getTime();
         case 'newest':
           return new Date((b as any).created_at || 0).getTime() - new Date((a as any).created_at || 0).getTime();
         case 'oldest':
