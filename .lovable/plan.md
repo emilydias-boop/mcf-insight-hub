@@ -1,30 +1,39 @@
 
 
-## Recalcular datas subsequentes ao editar qualquer parcela (não só a 1ª)
+## Objetivo
 
-### Problema
-Atualmente, o checkbox "Recalcular datas das demais parcelas" aparece **apenas para a parcela 1** (`isPrimeiraParcela`). Quando você altera a data da parcela 1 para janeiro e marca recalcular, a parcela 2 vai para fevereiro corretamente. Porém, se a parcela 2 já estava com data errada (março) e você quer corrigir editando a parcela 1, precisa marcar o checkbox.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-O problema maior é que **não é possível recalcular a partir de qualquer parcela**, só da primeira. Se a parcela 2 está em março e deveria ser fevereiro, você não consegue editar a parcela 2 e pedir para recalcular as demais a partir dela.
+## Mudanças
 
-### Solução
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**1. `EditInstallmentDialog.tsx`** -- Mostrar checkbox de recalcular para **qualquer parcela**, não só a primeira
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-- Remover a condição `isPrimeiraParcela` do bloco do checkbox
-- Ajustar o texto: "Recalcular datas das parcelas seguintes a partir desta"
+### 2. Hook `useCloserDetailData.ts`
 
-**2. `ConsorcioCardDrawer.tsx`** -- Ajustar lógica de recalcular para começar da parcela editada + 1
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-- Atualmente usa `recalcularDatasAPartirDe(novaDataBase, diaVencimento, totalParcelas, 2)` (sempre a partir da parcela 2)
-- Mudar para usar o `numero_parcela` da parcela editada + 1 como ponto de partida
-- Exemplo: se editou a parcela 1 com data 19/01/2026, recalcula parcelas 2, 3, 4... a partir de fevereiro
-- Se editou a parcela 5 com data 19/05/2026, recalcula parcelas 6, 7, 8... a partir de junho
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-### Arquivos
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-| Ação | Arquivo |
-|------|---------|
-| Editar | `src/components/consorcio/EditInstallmentDialog.tsx` -- remover condição `isPrimeiraParcela` do checkbox |
-| Editar | `src/components/consorcio/ConsorcioCardDrawer.tsx` -- usar `numero_parcela` da parcela editada como base do recalculo |
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
