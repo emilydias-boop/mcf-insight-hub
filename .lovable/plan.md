@@ -1,39 +1,27 @@
 
 
-## Objetivo
+## Diagnóstico: 5 contratos no painel vs 6 na Hubla (13/03)
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Causa raiz
 
-## Mudanças
+O contrato do **Rafael Andrade Oliveira** (`rafaelandrade4143@gmail.com`) não aparece no dia 13/03 no painel porque o campo `contract_paid_at` do attendee (`04af9854`) está com o valor errado:
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+| Campo | Valor | Dia BRT |
+|-------|-------|---------|
+| `contract_paid_at` (attendee) | `2026-03-12 23:30 UTC` | **12/03** (20:30 BRT) |
+| `sale_date` (Hubla) | `2026-03-13 14:57 UTC` | **13/03** (11:57 BRT) |
+| `scheduled_at` (reunião) | `2026-03-12 23:30 UTC` | **12/03** |
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+O `contract_paid_at` foi preenchido com o `scheduled_at` da reunião em vez da `sale_date` real da transação Hubla. Resultado: o painel conta esse contrato no dia **12/03** (data errada), não no **13/03**.
 
-### 2. Hook `useCloserDetailData.ts`
+### Solução
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**1. Corrigir o dado pontual (migration SQL)**
+- Atualizar o `contract_paid_at` do attendee `04af9854-29b9-4ffa-8875-4107a615dd1b` para `2026-03-13 14:57:29.563+00` (sale_date real).
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**2. Verificar e corrigir outros registros com o mesmo problema**
+- Executar uma query que compara `contract_paid_at` dos attendees vinculados vs `sale_date` das transações Hubla, identificando discrepâncias onde a diferença é maior que 1 hora.
+- Atualizar em lote os `contract_paid_at` para refletir a `sale_date` real.
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+A migration fará ambos os passos em uma única execução.
 
