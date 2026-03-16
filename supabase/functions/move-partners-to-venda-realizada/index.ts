@@ -36,13 +36,12 @@ Deno.serve(async (req) => {
     }
     console.log(`📊 ${vendaRealizadaByOrigin.size} stages "Venda Realizada" encontrados`);
 
-    // Collect stage IDs that ARE "Venda Realizada" to exclude deals already there
     const vendaRealizadaStageIds = new Set(
       (vendaRealizadaStages || []).map(s => s.id)
     );
     vendaRealizadaStageIds.add(FALLBACK_VENDA_REALIZADA_STAGE);
 
-    // 2. Buscar todos os deals com contatos
+    // 2. Buscar todos os deals
     const allDeals: any[] = [];
     let page = 0;
     const PAGE_SIZE = 1000;
@@ -59,11 +58,10 @@ Deno.serve(async (req) => {
     }
     console.log(`📊 ${allDeals.length} deals totais`);
 
-    // Filter out deals already in Venda Realizada
     const dealsNotInVR = allDeals.filter(d => !vendaRealizadaStageIds.has(d.stage_id));
     console.log(`📊 ${dealsNotInVR.length} deals fora de Venda Realizada`);
 
-    // 3. Buscar emails dos contatos desses deals
+    // 3. Buscar emails dos contatos
     const contactIds = [...new Set(dealsNotInVR.map(d => d.contact_id).filter(Boolean))];
     const contactEmails = new Map<string, string>();
 
@@ -100,7 +98,7 @@ Deno.serve(async (req) => {
     }
     console.log(`🤝 ${partnerEmails.size} emails de parceiros encontrados`);
 
-    // 5. Filtrar deals de parceiros que não estão em Venda Realizada
+    // 5. Filtrar deals de parceiros fora de VR
     const partnerDeals = dealsNotInVR.filter(d => {
       const email = contactEmails.get(d.contact_id);
       return email && partnerEmails.has(email);
@@ -115,63 +113,102 @@ Deno.serve(async (req) => {
       moved: 0,
       errors: 0,
     };
-    const details: any[] = [];
 
-    // 6. Mover cada deal
+    // 6. Dry run: retornar stats + primeiros 50 exemplos
+    if (dry_run) {
+      const details = partnerDeals.slice(0, 50).map(deal => ({
+        deal_id: deal.id,
+        deal_name: deal.name,
+        email: contactEmails.get(deal.contact_id) || '',
+        target_stage: vendaRealizadaByOrigin.get(deal.origin_id) || FALLBACK_VENDA_REALIZADA_STAGE,
+        action: 'would_move',
+      }));
+      stats.moved = partnerDeals.length;
+
+      return new Response(JSON.stringify({ dry_run: true, stats, details, success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // 7. Execução real: batch updates agrupados por target_stage_id
+    const dealsByTargetStage = new Map<string, any[]>();
     for (const deal of partnerDeals) {
-      const email = contactEmails.get(deal.contact_id) || '';
       const targetStageId = vendaRealizadaByOrigin.get(deal.origin_id) || FALLBACK_VENDA_REALIZADA_STAGE;
+      if (!dealsByTargetStage.has(targetStageId)) dealsByTargetStage.set(targetStageId, []);
+      dealsByTargetStage.get(targetStageId)!.push(deal);
+    }
 
-      if (dry_run) {
-        details.push({
-          deal_id: deal.id,
-          deal_name: deal.name,
-          email,
-          target_stage: targetStageId,
-          action: 'would_move',
-        });
-        stats.moved++;
-        continue;
-      }
+    const BATCH_SIZE = 200;
+    const now = new Date().toISOString();
 
-      try {
-        // Update deal
-        const existingTags: string[] = Array.isArray(deal.tags) ? deal.tags : [];
-        const newTags = existingTags.includes('Parceiro') ? existingTags : [...existingTags, 'Parceiro'];
+    for (const [targetStageId, deals] of dealsByTargetStage) {
+      // Batch update stage_id + updated_at
+      for (let i = 0; i < deals.length; i += BATCH_SIZE) {
+        const batch = deals.slice(i, i + BATCH_SIZE);
+        const ids = batch.map(d => d.id);
 
         const { error: updateErr } = await supabase
           .from('crm_deals')
-          .update({
-            stage_id: targetStageId,
-            tags: newTags,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', deal.id);
+          .update({ stage_id: targetStageId, updated_at: now })
+          .in('id', ids);
 
-        if (updateErr) throw updateErr;
-
-        // Register activity
-        await supabase.from('deal_activities').insert({
-          deal_id: deal.id,
-          activity_type: 'stage_change',
-          description: `Parceiro detectado: movido automaticamente para Venda Realizada`,
-          from_stage: deal.stage_id,
-          to_stage: targetStageId,
-          metadata: { source: 'move-partners-to-venda-realizada', email },
-        });
-
-        stats.moved++;
-        details.push({ deal_id: deal.id, deal_name: deal.name, email, action: 'moved' });
-      } catch (err: any) {
-        stats.errors++;
-        details.push({ deal_id: deal.id, deal_name: deal.name, email, action: 'error', error: err.message });
-        console.error(`❌ ${email}:`, err.message);
+        if (updateErr) {
+          console.error(`❌ Batch update error for stage ${targetStageId}:`, updateErr.message);
+          stats.errors += batch.length;
+          continue;
+        }
+        stats.moved += batch.length;
       }
     }
 
+    // 8. Batch add tag "Parceiro" to deals that don't have it
+    const dealsNeedingTag = partnerDeals.filter(d => {
+      const tags: string[] = Array.isArray(d.tags) ? d.tags : [];
+      return !tags.includes('Parceiro');
+    });
+
+    for (let i = 0; i < dealsNeedingTag.length; i += BATCH_SIZE) {
+      const batch = dealsNeedingTag.slice(i, i + BATCH_SIZE);
+      // Tag updates need individual calls since each deal may have different existing tags
+      const promises = batch.map(deal => {
+        const existingTags: string[] = Array.isArray(deal.tags) ? deal.tags : [];
+        return supabase
+          .from('crm_deals')
+          .update({ tags: [...existingTags, 'Parceiro'] })
+          .eq('id', deal.id);
+      });
+      await Promise.all(promises);
+    }
+
+    // 9. Batch insert deal_activities
+    const ACTIVITY_BATCH = 100;
+    const activities = partnerDeals.map(deal => ({
+      deal_id: deal.id,
+      activity_type: 'stage_change',
+      description: 'Parceiro detectado: movido automaticamente para Venda Realizada',
+      from_stage: deal.stage_id,
+      to_stage: vendaRealizadaByOrigin.get(deal.origin_id) || FALLBACK_VENDA_REALIZADA_STAGE,
+      metadata: { source: 'move-partners-to-venda-realizada', email: contactEmails.get(deal.contact_id) || '' },
+    }));
+
+    for (let i = 0; i < activities.length; i += ACTIVITY_BATCH) {
+      const batch = activities.slice(i, i + ACTIVITY_BATCH);
+      const { error: actErr } = await supabase.from('deal_activities').insert(batch);
+      if (actErr) {
+        console.error(`❌ Activity insert batch error:`, actErr.message);
+      }
+    }
+
+    const details = partnerDeals.slice(0, 50).map(deal => ({
+      deal_id: deal.id,
+      deal_name: deal.name,
+      email: contactEmails.get(deal.contact_id) || '',
+      action: 'moved',
+    }));
+
     console.log(`✅ Stats: ${JSON.stringify(stats)}`);
 
-    return new Response(JSON.stringify({ dry_run, stats, details, success: true }), {
+    return new Response(JSON.stringify({ dry_run: false, stats, details, success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
