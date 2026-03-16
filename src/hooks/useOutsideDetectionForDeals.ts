@@ -65,8 +65,8 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
       // 2. Collect unique deal IDs for R1 meeting lookup
       const dealIds = deals.map(d => d.id);
 
-      // 3. Fetch contract transactions, non-contract products, R1 meetings, AND linked attendees in parallel
-      const [contracts, nonContractProducts, r1Attendees, linkedAttendees] = await Promise.all([
+      // 3. Fetch contract transactions, non-contract products, R1 meetings, AND partner transactions in parallel
+      const [contracts, nonContractProducts, r1Attendees, partnerTransactions] = await Promise.all([
         // Contracts (for outside detection) - now also fetch linked_attendee_id
         batchedIn<{ customer_email: string | null; sale_date: string; product_name: string | null; linked_attendee_id: string | null }>(
           (chunk) =>
@@ -102,19 +102,28 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
               .eq('meeting_slots.meeting_type', 'r1') as any,
           dealIds
         ),
-        // Fetch which deal each linked_attendee_id belongs to
-        // This lets us know if a contract is linked to a DIFFERENT deal
-        batchedIn<{ id: string; deal_id: string | null }>(
+        // Partner products: detect emails that already bought partnership products
+        batchedIn<{ customer_email: string | null }>(
           (chunk) =>
             supabase
-              .from('meeting_slot_attendees')
-              .select('id, deal_id')
-              .in('id', chunk),
-          // We'll filter to only linked_attendee_ids after contracts are fetched
-          // For now, pass empty - we'll do this after
-          []
+              .from('hubla_transactions')
+              .select('customer_email')
+              .in('customer_email', chunk)
+              .eq('sale_status', 'completed')
+              .not('product_name', 'ilike', '%contrato%')
+              .not('product_name', 'ilike', '%Construir para Alugar%')
+              .not('product_name', 'ilike', '%P2%')
+              .not('product_name', 'ilike', '%Suplemento%'),
+          uniqueEmails
         ),
       ]);
+
+      // Build set of partner emails (those who bought non-contract, non-ignored products)
+      const partnerEmails = new Set<string>();
+      for (const pt of partnerTransactions) {
+        const email = pt.customer_email?.toLowerCase().trim();
+        if (email) partnerEmails.add(email);
+      }
 
       // 3b. Now fetch the deal_ids for linked_attendee_ids from contracts
       const linkedAttendeeIds = contracts
