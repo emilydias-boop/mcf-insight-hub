@@ -112,7 +112,7 @@ export function EditInstallmentDialog({
       data_pagamento: dataPagamento ? formatDateForDB(dataPagamento) : null,
       status,
       observacao: observacao.trim() || undefined,
-      recalcularDemais: isPrimeiraParcela ? recalcularDemais : undefined,
+      recalcularDemais: recalcularDemais || undefined,
     });
   };
 
