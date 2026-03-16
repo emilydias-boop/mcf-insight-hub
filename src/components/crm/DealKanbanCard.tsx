@@ -355,12 +355,21 @@ export const DealKanbanCard = ({
               </Badge>
             ))}
           {outsideInfo?.isOutside && (
-            <Badge 
-              variant="outline" 
-              className="text-[10px] px-1.5 py-0 font-semibold bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-950 dark:text-yellow-400 dark:border-yellow-700 gap-0.5"
-            >
-              {outsideInfo.productName ? `$ ${outsideInfo.productName}` : '$ Outside'}
-            </Badge>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge 
+                  variant="outline" 
+                  className="text-[10px] px-1.5 py-0 font-semibold bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-950 dark:text-yellow-400 dark:border-yellow-700 gap-0.5"
+                >
+                  $ Outside
+                </Badge>
+              </TooltipTrigger>
+              {outsideInfo.productName && (
+                <TooltipContent side="top" className="text-xs">
+                  {outsideInfo.productName}
+                </TooltipContent>
+              )}
+            </Tooltip>
           )}
           {priority && <span className={priority.color}>{priority.icon}</span>}
           
