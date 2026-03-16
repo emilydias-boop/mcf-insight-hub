@@ -1,23 +1,39 @@
 
 
-## Plano: Separar Outside em KPI próprio
+## Objetivo
 
-### Situação atual
-O card "Contratos" mostra 108, que é a soma de `contrato_pago` (99) + `outside` (9). O tooltip diferencia, mas visualmente é um único número.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Alteração
+## Mudanças
 
-**Arquivo: `src/components/sdr/TeamKPICards.tsx`**
-1. No card "Contratos" (linha 71-77): mudar o valor para mostrar apenas contratos sem outside: `(kpis.totalContratos || 0) - (kpis.totalOutside || 0)`
-2. Adicionar novo card "Outside" logo após "Contratos", com:
-   - Valor: `kpis.totalOutside`
-   - Ícone: `LogOut` ou `ExternalLink` (Lucide)
-   - Cor: `text-rose-400` / `bg-rose-400/10`
-   - Tooltip: "Leads que compraram contrato antes da reunião R1"
-3. Ajustar o grid: de `lg:grid-cols-7` para `lg:grid-cols-8` (e de `8` para `9` quando `isToday`)
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### Resultado
-- Card "Contratos": 99 (apenas contratos da agenda)
-- Card "Outside": 9 (vendas pré-reunião)
-- Total lógico permanece 108, mas separado visualmente
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+
+### 2. Hook `useCloserDetailData.ts`
+
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
