@@ -327,7 +327,7 @@ export const DealKanbanBoard = ({
                                   const phone = d.crm_contacts?.phone || '';
                                   const email = d.crm_contacts?.email || '';
                                   const date = d.created_at ? new Date(d.created_at).toLocaleDateString('pt-BR') : '-';
-                                  const act = activitySummaryMap?.get(d.id?.toLowerCase?.()?.trim?.());
+                                  const act = activitySummaries?.get(d.id?.toLowerCase?.()?.trim?.());
                                   const calls = act?.totalCalls ?? 0;
                                   return `${name}\t${phone}\t${email}\t${stage.stage_name}\t${date}\t${calls}`;
                                 }).join('\n');
