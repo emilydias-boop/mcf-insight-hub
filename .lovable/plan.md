@@ -1,47 +1,39 @@
 
 
-## Plano: Corrigir redirecionamento do link de reset de senha
+## Objetivo
 
-### Problema
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Dois problemas identificados:
+## Mudanças
 
-1. **URL errada**: Os `redirectTo` usam `window.location.origin` (que resolve para `mcf-insight-hub.lovable.app` ou preview do Lovable) em vez de `https://mcfgestao.com`
-2. **Sem página de reset**: Não existe rota `/reset-password`. O usuário é redirecionado para `/auth` e logado automaticamente sem conseguir definir a senha
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### Locais afetados
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-| Arquivo | Linha | redirectTo atual |
-|---|---|---|
-| `src/contexts/AuthContext.tsx` | 372 | `${window.location.origin}/auth` |
-| `src/hooks/useUserMutations.ts` | 184 | `${window.location.origin}/auth?mode=reset` |
-| `supabase/functions/create-user/index.ts` | 275-277 | `${origin}/auth?mode=reset` |
+### 2. Hook `useCloserDetailData.ts`
 
-### Solução
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**1. Definir URL canônica** — Usar `https://mcfgestao.com` como domínio fixo em todos os redirects
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**2. Criar página `/reset-password`** — Nova rota pública com formulário para definir nova senha:
-- Detecta sessão de recovery via `onAuthStateChange` (evento `PASSWORD_RECOVERY`)
-- Mostra formulário com nova senha + confirmação
-- Chama `supabase.auth.updateUser({ password })` para atualizar
-- Redireciona para `/auth` após sucesso
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-**3. Atualizar todos os redirectTo**:
-- `src/contexts/AuthContext.tsx` → `https://mcfgestao.com/reset-password`
-- `src/hooks/useUserMutations.ts` → `https://mcfgestao.com/reset-password`
-- `supabase/functions/create-user/index.ts` → `https://mcfgestao.com/reset-password`
+### 4. Dados exportados no Excel
 
-**4. Adicionar rota em `src/App.tsx`**:
-- `<Route path="/reset-password" element={<ResetPassword />} />` (rota pública, fora do layout protegido)
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-### Arquivos
+Formato de data: `dd/MM/yyyy HH:mm`
 
-| Arquivo | Alteração |
-|---|---|
-| `src/pages/ResetPassword.tsx` | **Novo** — página de definição de senha |
-| `src/App.tsx` | Adicionar rota `/reset-password` |
-| `src/contexts/AuthContext.tsx` | Alterar redirectTo para `https://mcfgestao.com/reset-password` |
-| `src/hooks/useUserMutations.ts` | Alterar redirectTo para `https://mcfgestao.com/reset-password` |
-| `supabase/functions/create-user/index.ts` | Alterar origin fallback e redirectTo para `https://mcfgestao.com/reset-password` |
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

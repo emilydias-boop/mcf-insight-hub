@@ -25,6 +25,7 @@ const PriceCacheInitializer = () => {
 };
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
+import ResetPassword from "./pages/ResetPassword";
 import Receita from "./pages/receita/Index";
 import ReceitaOverview from "./pages/receita/Overview";
 import A010 from "./pages/receita/A010";
@@ -159,8 +160,9 @@ const App = () => (
           <AuthProvider>
             <TwilioProvider>
             <Routes>
-            {/* Public auth route */}
+            {/* Public routes */}
             <Route path="/auth" element={<Auth />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             
             {/* Protected routes */}
             <Route
