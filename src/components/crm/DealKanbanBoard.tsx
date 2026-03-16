@@ -282,31 +282,69 @@ export const DealKanbanBoard = ({
                             currentSort={stageSorts[stage.id] || 'newest'}
                             onSortChange={(sort) => handleSortChange(stage.id, sort)}
                           />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            title="Copiar nome e telefone dos leads"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (stageDeals.length === 0) {
-                                toast.info('Nenhum lead neste estágio');
-                                return;
-                              }
-                              const text = stageDeals.map((d: any) => {
-                                const name = d.crm_contacts?.name || d.name || 'Sem nome';
-                                const phone = d.crm_contacts?.phone || '(sem telefone)';
-                                return `${name} - ${phone}`;
-                              }).join('\n');
-                              navigator.clipboard.writeText(text).then(() => {
-                                toast.success(`${stageDeals.length} lead(s) copiado(s) para a área de transferência`);
-                              }).catch(() => {
-                                toast.error('Erro ao copiar');
-                              });
-                            }}
-                          >
-                            <ClipboardCopy className="h-3.5 w-3.5" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" title="Copiar leads">
+                                <ClipboardCopy className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                              <DropdownMenuItem onClick={() => {
+                                if (stageDeals.length === 0) { toast.info('Nenhum lead neste estágio'); return; }
+                                const text = stageDeals.map((d: any) => d.crm_contacts?.phone || '(sem telefone)').join('\n');
+                                navigator.clipboard.writeText(text).then(() => toast.success(`${stageDeals.length} telefone(s) copiado(s)`));
+                              }}>
+                                <Phone className="h-4 w-4 mr-2" /> Só telefone
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                if (stageDeals.length === 0) { toast.info('Nenhum lead neste estágio'); return; }
+                                const text = stageDeals.map((d: any) => {
+                                  const name = d.crm_contacts?.name || d.name || 'Sem nome';
+                                  const phone = d.crm_contacts?.phone || '(sem telefone)';
+                                  return `${name} - ${phone}`;
+                                }).join('\n');
+                                navigator.clipboard.writeText(text).then(() => toast.success(`${stageDeals.length} lead(s) copiado(s)`));
+                              }}>
+                                <ClipboardCopy className="h-4 w-4 mr-2" /> Nome + Telefone
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                if (stageDeals.length === 0) { toast.info('Nenhum lead neste estágio'); return; }
+                                const text = stageDeals.map((d: any) => {
+                                  const name = d.crm_contacts?.name || d.name || 'Sem nome';
+                                  const phone = d.crm_contacts?.phone || '(sem telefone)';
+                                  const email = d.crm_contacts?.email || '(sem email)';
+                                  return `${name} - ${phone} - ${email}`;
+                                }).join('\n');
+                                navigator.clipboard.writeText(text).then(() => toast.success(`${stageDeals.length} lead(s) copiado(s)`));
+                              }}>
+                                <Mail className="h-4 w-4 mr-2" /> Nome + Telefone + Email
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                if (stageDeals.length === 0) { toast.info('Nenhum lead neste estágio'); return; }
+                                const header = 'Nome\tTelefone\tEmail\tEstágio\tData entrada\tLigações';
+                                const rows = stageDeals.map((d: any) => {
+                                  const name = d.crm_contacts?.name || d.name || 'Sem nome';
+                                  const phone = d.crm_contacts?.phone || '';
+                                  const email = d.crm_contacts?.email || '';
+                                  const date = d.created_at ? new Date(d.created_at).toLocaleDateString('pt-BR') : '-';
+                                  const act = activitySummaryMap?.get(d.id?.toLowerCase?.()?.trim?.());
+                                  const calls = act?.totalCalls ?? 0;
+                                  return `${name}\t${phone}\t${email}\t${stage.stage_name}\t${date}\t${calls}`;
+                                }).join('\n');
+                                navigator.clipboard.writeText(`${header}\n${rows}`).then(() => toast.success(`${stageDeals.length} lead(s) copiado(s) (tabulado)`));
+                              }}>
+                                <Table2 className="h-4 w-4 mr-2" /> Completo (planilha)
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => {
+                                if (stageDeals.length === 0) { toast.info('Nenhum lead neste estágio'); return; }
+                                const leads = buildCopyLeadData(stageDeals, stage.stage_name, activitySummaryMap, channelMap);
+                                setCopyDialogData({ open: true, leads });
+                              }}>
+                                <Settings2 className="h-4 w-4 mr-2" /> Personalizado...
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                           <Badge variant="secondary">{stageDeals.length}</Badge>
                         </div>
                       </div>
