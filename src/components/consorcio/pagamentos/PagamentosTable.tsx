@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Eye, ChevronLeft, ChevronRight, MoreHorizontal, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { PagamentoRow, StatusParcela, SituacaoCota } from '@/hooks/useConsorcioPagamentos';
 import { usePayInstallment } from '@/hooks/useConsorcio';
@@ -33,13 +34,15 @@ interface Props {
   data: PagamentoRow[];
   isLoading: boolean;
   page: number;
+  pageSize: number;
   totalPages: number;
   totalItems: number;
   onPageChange: (p: number) => void;
+  onPageSizeChange: (size: number) => void;
   onViewDetail: (row: PagamentoRow) => void;
 }
 
-export function PagamentosTable({ data, isLoading, page, totalPages, totalItems, onPageChange, onViewDetail }: Props) {
+export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail }: Props) {
   const payInstallment = usePayInstallment();
 
   const handleMarkAsPaid = (row: PagamentoRow) => {
@@ -141,14 +144,30 @@ export function PagamentosTable({ data, isLoading, page, totalPages, totalItems,
         <span>
           {totalItems.toLocaleString('pt-BR')} parcelas encontradas
         </span>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span>Página {page} de {totalPages || 1}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs">Itens por página:</span>
+            <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
+              <SelectTrigger className="h-8 w-[80px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+                <SelectItem value="200">200</SelectItem>
+                <SelectItem value="9999">Todos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span>Página {page} de {totalPages || 1}</span>
+            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>
