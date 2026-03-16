@@ -296,6 +296,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
       'Pipeline': row.originName,
       'Canal': row.salesChannel,
       'Estágio': row.currentStage,
+      'Reembolsado': row.isRefunded ? 'Sim' : 'Não',
       'Produto': row.productName,
       'Valor': row.netValue ? `R$ ${row.netValue.toFixed(2)}` : '',
       'Profissão': (row.customFields as any)?.profissao || '',
