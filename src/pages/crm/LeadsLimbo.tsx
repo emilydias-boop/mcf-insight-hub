@@ -139,6 +139,7 @@ export default function LeadsLimbo() {
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const loadedRef = useRef(false);
   const revalidatedRef = useRef(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const { data: localDeals, isLoading: loadingDeals } = useInsideSalesDeals();
   const { data: sdrs } = useActiveSdrs();
@@ -179,6 +180,7 @@ export default function LeadsLimbo() {
     }
 
     revalidatedRef.current = true;
+    setIsSyncing(true);
     revalidateLimboResults(results, localDeals).then(({ updated, changed }) => {
       if (changed) {
         setResults(updated);
@@ -187,6 +189,8 @@ export default function LeadsLimbo() {
           updateLimboResults.mutate({ uploadId: latestUpload.id, results: updated });
         }
       }
+    }).finally(() => {
+      setIsSyncing(false);
     });
   }, [results, localDeals, loadingDeals, latestUpload?.id]);
 
@@ -609,6 +613,12 @@ export default function LeadsLimbo() {
         <div>
           <h2 className="text-2xl font-bold text-foreground">Resultados da Comparação</h2>
           <p className="text-muted-foreground text-sm mt-1">Pipeline Inside Sales — {results.length} leads analisados</p>
+          {isSyncing && (
+            <div className="flex items-center gap-2 mt-1">
+              <Skeleton className="h-3 w-3 rounded-full animate-pulse" />
+              <span className="text-xs text-primary font-medium">Sincronizando com CRM atual...</span>
+            </div>
+          )}
           {latestUpload && (
             <div className="flex items-center gap-2 mt-1">
               <Clock className="h-3 w-3 text-muted-foreground" />
