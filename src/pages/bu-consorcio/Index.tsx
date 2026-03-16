@@ -47,6 +47,7 @@ import { ConsorcioPeriodFilter, DateRangeFilter } from '@/components/consorcio/C
 import { STATUS_OPTIONS, CATEGORIA_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
 import { PendingRegistrationsList } from '@/components/consorcio/PendingRegistrationsList';
 import { ContemplationTab } from '@/components/consorcio/ContemplationTab';
+import { ConsorcioPagamentosTab } from '@/components/consorcio/pagamentos/ConsorcioPagamentosTab';
 import { useConsorcioCategoriaOptions, useConsorcioOrigemOptions, useConsorcioTipoOptions } from '@/hooks/useConsorcioConfigOptions';
 import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
 import {
