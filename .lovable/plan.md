@@ -1,39 +1,24 @@
 
 
-## Objetivo
+## Plano: Incluir contratos reembolsados no relatório
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### O que é "refunded"
 
-## Mudanças
+O status `refunded` indica que o contrato **foi pago** pelo cliente, mas depois houve **solicitação de reembolso**. Para fins de performance comercial, ele conta como venda realizada — o closer vendeu, o SDR agendou. Por isso o painel SDR (108) inclui ambos e é o número correto.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Problema
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+O relatório de contratos (`useContractReport.ts` linha 97) filtra apenas `status = 'contract_paid'`, excluindo os `refunded`. Isso causa a diferença de 108 vs 93.
 
-### 2. Hook `useCloserDetailData.ts`
+### Solução
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**Arquivo: `src/hooks/useContractReport.ts`**
+- Alterar `.eq('status', 'contract_paid')` para `.in('status', ['contract_paid', 'refunded'])`
+- Adicionar campo `isRefunded: boolean` ao `ContractReportRow` para que o relatório possa diferenciar visualmente (ex: badge "Reembolsado")
+- No mapeamento dos dados, incluir `isRefunded: row.status === 'refunded'`
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**Arquivo: componente de tabela do relatório** (se houver coluna de status)
+- Mostrar badge/indicador quando `isRefunded = true` para manter a transparência
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+Resultado: o relatório passará a mostrar 108 contratos, alinhado com o painel SDR.
 
