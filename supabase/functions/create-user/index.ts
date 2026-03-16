@@ -126,14 +126,16 @@ Deno.serve(async (req) => {
 
     console.log(`User created with ID: ${newUser.user.id}`);
 
-    // Insert role into user_roles table
+    // Delete auto-assigned roles from trigger (auto_assign_first_admin adds 'viewer')
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", newUser.user.id);
+
+    // Insert correct role into user_roles table
     const { error: roleInsertError } = await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: newUser.user.id, role });
 
     if (roleInsertError) {
       console.error("Error inserting role:", roleInsertError);
-      // Don't fail the whole operation, role can be set later
     }
 
     // Update profile with squad if provided
