@@ -1151,19 +1151,21 @@ export function useAddMeetingAttendee() {
       isPartner?: boolean;
       parentAttendeeId?: string;
     }) => {
-      // Se for sócio, herdar booked_by e deal_id do parent
-      let inheritedBookedBy: string | null = null;
+      // Se for sócio, herdar deal_id do parent mas usar o usuário logado como booked_by
       let inheritedDealId: string | null = null;
       if (parentAttendeeId) {
         const { data: parentData } = await supabase
           .from('meeting_slot_attendees')
-          .select('booked_by, deal_id')
+          .select('deal_id')
           .eq('id', parentAttendeeId)
           .maybeSingle();
         
-        inheritedBookedBy = parentData?.booked_by || null;
         inheritedDealId = parentData?.deal_id || null;
       }
+
+      // Usar o usuário logado atual como booked_by (quem realmente adicionou o sócio)
+      const { data: { user } } = await supabase.auth.getUser();
+      const currentUserId = user?.id || null;
 
       const { error } = await supabase.from('meeting_slot_attendees').insert({
         meeting_slot_id: meetingSlotId,
@@ -1174,7 +1176,7 @@ export function useAddMeetingAttendee() {
         is_partner: isPartner,
         status: 'invited',
         parent_attendee_id: parentAttendeeId || null,
-        booked_by: inheritedBookedBy,
+        booked_by: currentUserId,
       });
 
       if (error) throw error;
