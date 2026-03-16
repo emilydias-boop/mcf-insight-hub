@@ -76,9 +76,11 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
         data={data}
         isLoading={isLoading}
         page={page}
+        pageSize={pageSize}
         totalPages={totalPages}
         totalItems={totalItems}
         onPageChange={setPage}
+        onPageSizeChange={handlePageSizeChange}
         onViewDetail={handleViewDetail}
       />
 

@@ -144,14 +144,30 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
         <span>
           {totalItems.toLocaleString('pt-BR')} parcelas encontradas
         </span>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span>Página {page} de {totalPages || 1}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs">Itens por página:</span>
+            <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
+              <SelectTrigger className="h-8 w-[80px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+                <SelectItem value="200">200</SelectItem>
+                <SelectItem value="9999">Todos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span>Página {page} de {totalPages || 1}</span>
+            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>
