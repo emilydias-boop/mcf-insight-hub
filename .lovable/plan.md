@@ -1,39 +1,55 @@
 
 
-## Objetivo
+## Diagnóstico: Contratos do Carrinho não consideram o horário de corte nas fronteiras da semana
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Situação atual
 
-## Mudanças
+O sistema usa as fronteiras de semana customizada (Sábado 00:00 a Sexta 23:59) para buscar tanto transações quanto reuniões R2. Para a semana 07/03-13/03:
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+- **Transações**: `sale_date >= '2026-03-07 00:00'` e `sale_date <= '2026-03-13 23:59'`
+- **Reuniões R2**: mesmo intervalo de datas
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Problema
 
-### 2. Hook `useCloserDetailData.ts`
+O carrinho tem `horario_corte: 12:00`. A última reunião do carrinho da semana anterior (01/03-06/03) acontece na **sexta 06/03 às 12:00**. Contratos vendidos **entre 06/03 12:00 e 07/03 00:00** não são capturados em nenhum carrinho:
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+- Semana anterior (01-06/03): busca até 06/03 23:59, mas esses contratos são POSTERIORES ao último carrinho da semana
+- Semana atual (07-13/03): busca a partir de 07/03 00:00, não captura vendas da sexta à tarde
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+O correto é: **contratos vendidos após o horário de corte da sexta (12:00 do dia 06/03) devem pertencer ao carrinho da semana seguinte (07-13/03)**.
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+### Solução
 
-### 4. Dados exportados no Excel
+Ajustar a fronteira de início das queries de transações para usar o `horario_corte` do último dia da semana anterior, em vez de meia-noite do primeiro dia.
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+**Arquivos afetados:**
 
-Formato de data: `dd/MM/yyyy HH:mm`
+1. **`src/hooks/useR2CarrinhoVendas.ts`** (linhas 146-147)
+   - Calcular `effectiveStart` como: sexta-feira anterior (weekStart - 1 dia) ao meio-dia (horario_corte da config)
+   - Calcular `effectiveEnd` como: sexta-feira atual (weekEnd) ao meio-dia
+   - Usar esses valores nas queries de `sale_date`
 
-## Resultado
+2. **`src/hooks/useR2CarrinhoKPIs.ts`** (linhas 22-28 e 40-55)
+   - Aplicar a mesma lógica de fronteiras ajustadas para `contratosPagos` e reuniões R2
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+3. **`src/hooks/useR2CarrinhoData.ts`** (linhas ~70-80)
+   - Ajustar as queries de `meeting_slots.scheduled_at` para usar fronteiras baseadas no horário de corte
+
+4. **Criar um helper compartilhado** (ex: `getCarrinhoWeekBoundaries(weekStart, weekEnd, config)`)
+   - Recebe a config do carrinho para extrair o `horario_corte`
+   - Retorna `{ effectiveStart: Date, effectiveEnd: Date }` 
+   - `effectiveStart` = dia anterior ao weekStart + horario_corte (ex: 06/03 12:00)
+   - `effectiveEnd` = weekEnd + horario_corte (ex: 13/03 12:00)
+   - Todos os hooks usam esse helper para consistência
+
+### Exemplo concreto (semana 07-13/03, corte 12:00)
+
+| Antes | Depois |
+|-------|--------|
+| `sale_date >= 07/03 00:00` | `sale_date >= 06/03 12:00` |
+| `sale_date <= 13/03 23:59` | `sale_date < 14/03 12:00` |
+
+### Observação
+
+Os hooks `useR2CarrinhoVendas`, `useR2CarrinhoKPIs` e `useR2CarrinhoData` precisarão receber a `config` do carrinho como parâmetro (ou buscá-la internamente) para calcular as fronteiras corretas. A página `R2Carrinho.tsx` já possui a config carregada via `useCarrinhoConfig`.
 
