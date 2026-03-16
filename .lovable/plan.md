@@ -1,60 +1,39 @@
 
 
-## Etapa 2: Melhorias e funcionalidades faltantes do módulo de Cobrança
+## Objetivo
 
-### O que já existe
-- 5 tabelas criadas com RLS
-- Aba Cobranças com KPIs, filtros básicos, tabela e drawer de detalhe
-- Criar assinatura + gerar parcelas
-- Criar acordo + gerar parcelas do acordo
-- Marcar parcela como paga (1 clique)
-- Cancelar/quitar assinatura
-- Histórico de movimentações
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### O que falta (escopo desta etapa)
+## Mudanças
 
-**1. Editar Assinatura** — `EditSubscriptionModal.tsx`
-- Permitir alterar dados do contrato (responsável, observações, forma de pagamento, produto)
-- Botão "Editar" no drawer do detalhe
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**2. Registrar Pagamento com detalhes** — `RegisterPaymentModal.tsx`
-- Modal para registrar pagamento com campos: valor pago, data do pagamento, forma de pagamento, observações
-- Diferente do "Marcar como paga" (1 clique com valor cheio), este permite valor parcial, data retroativa, etc.
-- Acessível via botão no drawer
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**3. Parcelas do Acordo visíveis** — Expandir `CobrancaAgreements.tsx`
-- Mostrar as parcelas de cada acordo (billing_agreement_installments) dentro do card do acordo
-- Permitir marcar parcela do acordo como paga
-- Botão para editar status do acordo (em_andamento → cumprido/quebrado)
+### 2. Hook `useCloserDetailData.ts`
 
-**4. Editar Acordo** — `EditAgreementModal.tsx`
-- Alterar status, observações, responsável de um acordo existente
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**5. Adicionar Observação ao Histórico**
-- Botão no drawer para adicionar nota/observação manual ao histórico (tipo `observacao`)
-- Input inline ou mini-modal
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**6. Filtros avançados nos CobrancaFilters**
-- Filtro por range de vencimento (data de/até)
-- Toggle "Inadimplentes" (status = atrasada)
-- Toggle "Quitados" (status_quitacao = quitado)
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-**7. Confirmação para ações destrutivas**
-- AlertDialog antes de cancelar assinatura ou quitar contrato
+### 4. Dados exportados no Excel
 
-### Componentes a criar/editar
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-| Ação | Arquivo |
-|------|---------|
-| Criar | `EditSubscriptionModal.tsx` |
-| Criar | `RegisterPaymentModal.tsx` |
-| Criar | `EditAgreementModal.tsx` |
-| Editar | `CobrancaAgreements.tsx` — expandir com parcelas do acordo e ações |
-| Editar | `CobrancaDetailDrawer.tsx` — adicionar botões Editar, Registrar Pagamento, Observação |
-| Editar | `CobrancaFilters.tsx` — adicionar filtros de data e toggles |
-| Editar | `useBillingSubscriptions.ts` — suportar filtros de vencimento via join com installments |
-| Criar | Hook `useMarkAgreementInstallmentPaid` em `useBillingAgreements.ts` |
+Formato de data: `dd/MM/yyyy HH:mm`
 
-### Sem alterações de schema
-Todas as tabelas e campos necessários já existem. Esta etapa é 100% frontend.
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

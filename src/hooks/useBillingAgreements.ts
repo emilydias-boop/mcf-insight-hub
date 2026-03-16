@@ -80,3 +80,21 @@ export const useUpdateAgreement = () => {
     },
   });
 };
+
+export const useMarkAgreementInstallmentPaid = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, data_pagamento }: { id: string; data_pagamento: string }) => {
+      const { error } = await supabase
+        .from('billing_agreement_installments')
+        .update({ status: 'pago', data_pagamento } as any)
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['billing-agreement-installments'] });
+      queryClient.invalidateQueries({ queryKey: ['billing-agreements'] });
+    },
+  });
+};
