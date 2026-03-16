@@ -22,7 +22,7 @@ export interface R2ForaDoCarrinhoAttendee {
 
 const FORA_DO_CARRINHO_STATUSES = ['Reembolso', 'Desistente', 'Reprovado', 'Próxima Semana', 'Cancelado'];
 
-export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date) {
+export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig) {
   return useQuery({
     queryKey: ['r2-fora-carrinho-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
     queryFn: async (): Promise<R2ForaDoCarrinhoAttendee[]> => {
