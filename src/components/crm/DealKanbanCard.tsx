@@ -262,6 +262,7 @@ export const DealKanbanCard = ({
   };
 
   const timeAgoShort = deal.created_at ? getShortTimeAgo(deal.created_at) : null;
+  const stageTimeShort = deal.stage_moved_at ? getShortTimeAgo(deal.stage_moved_at) : null;
   const totalCalls = activitySummary?.totalCalls || 0;
   const maxAttempts = activitySummary?.maxAttempts || 5;
   const displayPhone = contactPhone || extractPhoneFromDeal(deal, contact);
@@ -391,8 +392,23 @@ export const DealKanbanCard = ({
           )}
         </div>
 
-        {/* Linha 2: Nome do Lead */}
-        <div className="font-medium text-sm truncate">{contactName || deal.name}</div>
+        {/* Linha 2: Nome do Lead + tempo na stage */}
+        <div className="flex items-center justify-between gap-1">
+          <span className="font-medium text-sm truncate">{contactName || deal.name}</span>
+          {stageTimeShort && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground shrink-0">
+                  <Clock className="h-3 w-3" />
+                  {stageTimeShort}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>Há {stageTimeShort} nesta stage</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
 
         {/* Linha 3: Barra inferior compacta */}
         <div className="flex items-center justify-between text-xs border-t border-border/50 pt-1.5">
