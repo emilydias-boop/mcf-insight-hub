@@ -133,12 +133,10 @@ export function useR2PendingLeads() {
       }
 
       // Step 3: Get ALL deals belonging to these contacts
-      const allDealsForContacts = await batchedInQuery(
+      const allDealsForContacts = await batchedInQuery<{ id: string; contact_id: string | null }>(
         Array.from(contactIds),
-        (batch) => supabase.from('crm_deals').select('id, contact_id').in('contact_id', batch)
+        (batch) => supabase.from('crm_deals').select('id, contact_id').in('contact_id', batch) as any
       );
-
-      if (dealsError) throw dealsError;
 
       // Create a map: contact_id -> all deal_ids for that contact
       const contactToDealIds = new Map<string, Set<string>>();
