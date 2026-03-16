@@ -154,7 +154,7 @@ export const DealKanbanBoard = ({
       const stageDeals = deals.filter(deal => 
         deal && deal.id && deal.name && deal.stage_id === stage.id
       );
-      const sortOption = stageSorts[stage.id] || 'newest'; // Default: mais novo primeiro
+      const sortOption = stageSorts[stage.id] || 'stage_newest'; // Default: recente na stage primeiro
       map[stage.id] = sortDeals(stageDeals, sortOption, activitySummaries);
     });
     return map;

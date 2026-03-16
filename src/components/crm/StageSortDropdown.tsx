@@ -105,7 +105,13 @@ export const StageSortDropdown = ({ currentSort, onSortChange }: StageSortDropdo
           </TooltipContent>
         </Tooltip>
         
-        <PopoverContent className="w-44 p-1.5" align="start">
+        <PopoverContent className="w-48 p-1.5" align="start">
+          <div className="space-y-0.5">
+            {stageOptions.map(renderOption)}
+          </div>
+          
+          <div className="my-1.5 border-t" />
+          
           <div className="space-y-0.5">
             {sortOptions.map(renderOption)}
           </div>
