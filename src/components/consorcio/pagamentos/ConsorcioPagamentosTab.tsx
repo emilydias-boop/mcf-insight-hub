@@ -28,6 +28,11 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
     setPage(1);
   };
 
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setPage(1);
+  };
+
   const handleViewDetail = (row: PagamentoRow) => {
     setDetailRow(row);
     setDrawerOpen(true);
