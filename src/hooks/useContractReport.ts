@@ -216,6 +216,7 @@ export const useContractReport = (
           salesChannel,
           contactEmail,
           contactTags,
+          isRefunded: row.status === 'refunded',
           customFields,
         };
       });
