@@ -174,7 +174,7 @@ export function useR2PendingLeads() {
 
       // Create a set of deal_ids that have R2
       const dealsWithR2 = new Set(
-        ((r2Attendees as any[]) || []).map(a => a.deal_id)
+        (r2Attendees || []).map(a => a.deal_id)
       );
 
       // Step 4b: Get ALL R2 attendees by name/phone (fallback correlation)
