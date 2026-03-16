@@ -25,6 +25,7 @@ export interface ContractReportRow {
   salesChannel: 'a010' | 'bio' | 'live';
   contactEmail: string | null;
   contactTags: string[];
+  isRefunded: boolean;
   customFields: {
     profissao?: string;
     renda?: string;
