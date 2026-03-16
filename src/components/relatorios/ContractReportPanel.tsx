@@ -40,6 +40,7 @@ interface UnifiedContractRow {
   salesChannel: string;
   productName: string;
   netValue: number | null;
+  isRefunded: boolean;
   customFields: Record<string, unknown>;
 }
 
