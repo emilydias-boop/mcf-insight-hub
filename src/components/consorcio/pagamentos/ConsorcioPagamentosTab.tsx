@@ -17,10 +17,11 @@ interface Props {
 export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
   const [filters, setFilters] = useState<PagamentosFiltersState>(defaultFilters);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(200);
   const [detailRow, setDetailRow] = useState<PagamentoRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const { data, allData, isLoading, kpis, alertData, totalItems, totalPages, filterOptions } = useConsorcioPagamentos(filters, page, 50, selectedMonth);
+  const { data, allData, isLoading, kpis, alertData, totalItems, totalPages, filterOptions } = useConsorcioPagamentos(filters, page, pageSize, selectedMonth);
 
   const handleFilterChange = (f: PagamentosFiltersState) => {
     setFilters(f);
