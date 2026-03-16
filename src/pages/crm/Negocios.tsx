@@ -616,6 +616,7 @@ const Negocios = () => {
             {(role === 'admin' || role === 'manager') && (
               <>
                 <OutsideDistributionButton />
+                <MovePartnersButton />
                 <Button
                   variant="outline"
                   size="sm"

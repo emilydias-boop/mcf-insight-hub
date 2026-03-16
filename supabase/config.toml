@@ -299,3 +299,6 @@ verify_jwt = false
 
 [functions.cleanup-backfill-partners]
 verify_jwt = false
+
+[functions.move-partners-to-venda-realizada]
+verify_jwt = false
