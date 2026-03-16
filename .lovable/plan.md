@@ -1,56 +1,39 @@
 
 
-## Corrigir `stage_moved_at` para refletir tempo real na stage
+## Objetivo
 
-### Problema raiz
-O campo `stage_moved_at` nao esta sendo atualizado de forma confiavel quando deals mudam de stage. A logica client-side no `useUpdateCRMDeal` esta correta, mas webhooks (upsert com `onConflict: 'clint_id'`) e o trigger de replicacao podem sobrescrever o valor. Resultado: o relogio ao lado do nome mostra o mesmo tempo que o tempo no sistema.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Solucao
+## Mudanças
 
-**1. Criar trigger no banco de dados** (via SQL no Supabase)
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Trigger `BEFORE UPDATE` em `crm_deals` que detecta mudanca em `stage_id` e seta `stage_moved_at = now()` automaticamente. Isso garante que qualquer caminho (UI, webhook, edge function) atualize o campo corretamente.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-```sql
-CREATE OR REPLACE FUNCTION update_stage_moved_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.stage_id IS DISTINCT FROM OLD.stage_id THEN
-    NEW.stage_moved_at = now();
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+### 2. Hook `useCloserDetailData.ts`
 
-CREATE TRIGGER trg_update_stage_moved_at
-  BEFORE UPDATE ON crm_deals
-  FOR EACH ROW
-  EXECUTE FUNCTION update_stage_moved_at();
-```
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**2. Backfill dos dados existentes** (via SQL)
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Para deals que tem `stage_moved_at ≈ created_at` mas possuem historico de mudanca de stage em `deal_activities`, atualizar com a data da ultima mudanca registrada:
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-```sql
-UPDATE crm_deals d
-SET stage_moved_at = sub.last_move
-FROM (
-  SELECT deal_id::uuid AS did, MAX(created_at) AS last_move
-  FROM deal_activities
-  WHERE activity_type IN ('stage_change','stage_changed')
-  GROUP BY deal_id
-) sub
-WHERE d.id = sub.did
-  AND ABS(EXTRACT(EPOCH FROM (d.stage_moved_at - d.created_at))) < 120;
-```
+### 4. Dados exportados no Excel
 
-**3. Limpar logica duplicada no client** (`src/hooks/useCRMData.ts`)
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-Remover as linhas 587-591 que setam `stage_moved_at` manualmente no mutation, ja que o trigger cuida disso. Manter `last_worked_at` que nao tem trigger.
+Formato de data: `dd/MM/yyyy HH:mm`
 
-### Resultado
-- O relogio ao lado do nome mostrara o tempo correto na stage atual
-- O tempo no canto inferior direito continua mostrando tempo no sistema
-- Qualquer caminho de mudanca de stage (drag, webhook, edge function) sera coberto pelo trigger
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

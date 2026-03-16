@@ -583,11 +583,9 @@ export const useUpdateCRMDeal = () => {
         }
       }
       
-      // Update stage_moved_at when stage changes
+      // Update last_worked_at when stage changes (stage_moved_at is handled by DB trigger)
       if (deal.stage_id && previousStageId !== deal.stage_id) {
-       const now = new Date().toISOString();
-       deal.stage_moved_at = now;
-       deal.last_worked_at = now;
+       deal.last_worked_at = new Date().toISOString();
       }
       
       // Helper to perform the actual update
