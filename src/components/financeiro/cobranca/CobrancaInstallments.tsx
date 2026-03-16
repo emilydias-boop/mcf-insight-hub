@@ -3,12 +3,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { BillingInstallment, INSTALLMENT_STATUS_LABELS } from '@/types/billing';
 import { formatCurrency, formatDate } from '@/lib/formatters';
-import { Check } from 'lucide-react';
+import { Check, DollarSign } from 'lucide-react';
 
 interface CobrancaInstallmentsProps {
   installments: BillingInstallment[];
   isLoading: boolean;
   onMarkPaid?: (installment: BillingInstallment) => void;
+  onRegisterPayment?: (installment: BillingInstallment) => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -18,7 +19,7 @@ const statusColors: Record<string, string> = {
   cancelado: 'bg-gray-100 text-gray-800',
 };
 
-export const CobrancaInstallments = ({ installments, isLoading, onMarkPaid }: CobrancaInstallmentsProps) => {
+export const CobrancaInstallments = ({ installments, isLoading, onMarkPaid, onRegisterPayment }: CobrancaInstallmentsProps) => {
   if (isLoading) return <div className="text-center py-4 text-muted-foreground">Carregando parcelas...</div>;
   if (installments.length === 0) return <div className="text-center py-4 text-muted-foreground">Nenhuma parcela cadastrada</div>;
 
@@ -49,10 +50,19 @@ export const CobrancaInstallments = ({ installments, isLoading, onMarkPaid }: Co
             </TableCell>
             <TableCell>{inst.data_pagamento ? formatDate(inst.data_pagamento) : '-'}</TableCell>
             <TableCell>
-              {inst.status !== 'pago' && inst.status !== 'cancelado' && onMarkPaid && (
-                <Button size="sm" variant="ghost" onClick={() => onMarkPaid(inst)}>
-                  <Check className="h-3.5 w-3.5 mr-1" /> Pagar
-                </Button>
+              {inst.status !== 'pago' && inst.status !== 'cancelado' && (
+                <div className="flex gap-1">
+                  {onMarkPaid && (
+                    <Button size="sm" variant="ghost" onClick={() => onMarkPaid(inst)} title="Marcar como paga (valor cheio)">
+                      <Check className="h-3.5 w-3.5 mr-1" /> Pagar
+                    </Button>
+                  )}
+                  {onRegisterPayment && (
+                    <Button size="sm" variant="ghost" onClick={() => onRegisterPayment(inst)} title="Registrar pagamento com detalhes">
+                      <DollarSign className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
               )}
             </TableCell>
           </TableRow>
