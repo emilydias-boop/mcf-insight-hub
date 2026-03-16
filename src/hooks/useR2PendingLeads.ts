@@ -133,10 +133,10 @@ export function useR2PendingLeads() {
       }
 
       // Step 3: Get ALL deals belonging to these contacts
-      const { data: allDealsForContacts, error: dealsError } = await supabase
-        .from('crm_deals')
-        .select('id, contact_id')
-        .in('contact_id', Array.from(contactIds));
+      const allDealsForContacts = await batchedInQuery(
+        Array.from(contactIds),
+        (batch) => supabase.from('crm_deals').select('id, contact_id').in('contact_id', batch)
+      );
 
       if (dealsError) throw dealsError;
 
