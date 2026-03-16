@@ -872,7 +872,7 @@ export default function ConsorcioPage() {
         </TabsContent>
 
         <TabsContent value="pagamentos">
-          <ConsorcioPagamentosTab />
+          <ConsorcioPagamentosTab selectedMonth={{ start: format(startDate, 'yyyy-MM-dd'), end: format(endDate, 'yyyy-MM-dd') }} />
         </TabsContent>
       </Tabs>
     </div>

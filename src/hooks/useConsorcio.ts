@@ -512,6 +512,7 @@ export function usePayInstallment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['consortium-card-details'] });
       queryClient.invalidateQueries({ queryKey: ['consortium-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pagamentos-all'] });
       toast.success('Parcela marcada como paga!');
     },
     onError: (error) => {
