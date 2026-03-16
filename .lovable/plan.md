@@ -1,39 +1,28 @@
 
 
-## Objetivo
+## Plano: Tag "Outside" visível no Kanban
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+O badge atual de Outside mostra `$ A010 - Consultoria...` (o nome do produto), que não comunica claramente que o lead é "Outside". O usuário quer ver a palavra **"Outside"** de forma explícita no card.
 
-## Mudanças
+### Solução
+Alterar o badge de Outside no `DealKanbanCard.tsx` para exibir **"Outside"** como texto principal, com o nome do produto como tooltip (hover). Isso mantém a informação do produto acessível sem poluir visualmente o card.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Arquivo alterado
+**`src/components/crm/DealKanbanCard.tsx`** (linhas 357-364)
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Trocar:
+```tsx
+{outsideInfo.productName ? `$ ${outsideInfo.productName}` : '$ Outside'}
+```
 
-### 2. Hook `useCloserDetailData.ts`
+Por um badge com:
+- Texto fixo: **`Outside`** (com ícone `$`)
+- Tooltip com o nome do produto (ex: "A010 - Consultoria...")
+- Manter o mesmo estilo amarelo já existente
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
-
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### O que NÃO muda
+- O lead permanece em "Novo Lead" (comportamento correto, não há movimentação automática para Outside)
+- A lógica de detecção no `useOutsideDetectionForDeals` permanece igual
+- Nenhuma alteração no banco de dados
 
