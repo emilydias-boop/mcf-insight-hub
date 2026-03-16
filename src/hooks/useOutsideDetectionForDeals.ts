@@ -191,7 +191,7 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         }
       }
 
-      // 5. Build dealId -> earliest R1 scheduled_at
+      // 5. Build dealId -> earliest R1 scheduled_at (across all pipelines)
       const earliestR1 = new Map<string, Date>();
       for (const a of r1Attendees) {
         if (!a.deal_id) continue;
@@ -200,6 +200,32 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         const existing = earliestR1.get(a.deal_id);
         if (!existing || scheduledAt < existing) {
           earliestR1.set(a.deal_id, scheduledAt);
+        }
+      }
+
+      // 5b. Map R1s from sibling deals back to current deals via email
+      //     If a sibling deal has an R1, the current deal should also "see" it
+      for (const [email, currentDealEntries] of emailToDealIds) {
+        const allSiblingDealIds = emailToAllDealIds.get(email);
+        if (!allSiblingDealIds) continue;
+
+        // Find earliest R1 across ALL deals for this email
+        let earliestR1ForEmail: Date | undefined;
+        for (const siblingId of allSiblingDealIds) {
+          const r1Date = earliestR1.get(siblingId);
+          if (r1Date && (!earliestR1ForEmail || r1Date < earliestR1ForEmail)) {
+            earliestR1ForEmail = r1Date;
+          }
+        }
+
+        if (!earliestR1ForEmail) continue;
+
+        // Apply to all current deals for this email
+        for (const entry of currentDealEntries) {
+          const existing = earliestR1.get(entry.dealId);
+          if (!existing || earliestR1ForEmail < existing) {
+            earliestR1.set(entry.dealId, earliestR1ForEmail);
+          }
         }
       }
 
