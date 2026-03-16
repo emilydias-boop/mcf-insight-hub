@@ -1,37 +1,39 @@
 
 
-## Diagnóstico: MovePartners moveu deals do Consórcio indevidamente
+## Objetivo
 
-### Causa raiz
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-A Edge Function `move-partners-to-venda-realizada` (linha 49-58) busca **TODOS os deals de TODAS as BUs** sem nenhum filtro de origin/pipeline:
+## Mudanças
 
-```text
-crm_deals.select('id, name, contact_id, origin_id, stage_id, tags, value')
-  → sem filtro de origin_id ou BU
-```
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Depois, identifica "parceiros" por email em `hubla_transactions` com produtos Incorporador (A001, A002, A003, A004, A009, INCORPORADOR, ANTICRISE). Se um contato do Consórcio comprou um produto A001/A009 no Incorporador, a função move o deal do Consórcio para "Venda Realizada" — mesmo que esse deal seja de outra BU.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### Impacto
+### 2. Hook `useCloserDetailData.ts`
 
-Deals do Consórcio (e potencialmente outras BUs) que tinham contatos com compras de produtos Incorporador foram movidos para "Venda Realizada" indevidamente.
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-### Solução
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-1. **Corrigir a Edge Function** para filtrar apenas deals da BU Incorporador, usando a tabela `bu_origin_mapping` ou filtrando por `origin_id` das origens do Incorporador.
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-2. **Reverter os deals do Consórcio** afetados — consultar `deal_activities` onde `metadata->source = 'move-partners-to-venda-realizada'` e o `from_stage` pertence a uma origin do Consórcio, restaurando o `stage_id` original.
+### 4. Dados exportados no Excel
 
-### Implementação
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-**Arquivo: `supabase/functions/move-partners-to-venda-realizada/index.ts`**
-- Após buscar os stages "Venda Realizada", buscar os `origin_id` mapeados para a BU `incorporador` na tabela `bu_origin_mapping`
-- Filtrar `allDeals` para incluir apenas deals cujo `origin_id` pertença ao Incorporador
-- Isso impede que deals de Consórcio/Crédito/etc. sejam movidos
+Formato de data: `dd/MM/yyyy HH:mm`
 
-**Reversão dos dados (SQL via Supabase)**
-- Consultar `deal_activities` com `metadata->>'source' = 'move-partners-to-venda-realizada'` para identificar deals movidos indevidamente
-- Filtrar aqueles cujo `from_stage` pertence a uma origin do Consórcio (origin_id do consórcio)
-- Atualizar o `stage_id` desses deals de volta para o valor `from_stage` original
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

@@ -22,7 +22,21 @@ Deno.serve(async (req) => {
     const { dry_run = true } = await req.json().catch(() => ({ dry_run: true }));
     console.log(`🔄 Move Partners to Venda Realizada - dry_run: ${dry_run}`);
 
-    // 1. Buscar stages "Venda Realizada" por origin_id
+    // 1. Buscar origin_ids da BU Incorporador via bu_origin_mapping
+    const incorporadorOriginIds = await getIncorporadorOriginIds(supabase);
+    console.log(`🏢 ${incorporadorOriginIds.size} origens do Incorporador encontradas`);
+
+    if (incorporadorOriginIds.size === 0) {
+      return new Response(JSON.stringify({ 
+        error: 'Nenhuma origin mapeada para BU Incorporador', 
+        success: false 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // 2. Buscar stages "Venda Realizada" por origin_id
     const { data: vendaRealizadaStages, error: stagesErr } = await supabase
       .from('crm_stages')
       .select('id, stage_name, origin_id')
@@ -34,21 +48,23 @@ Deno.serve(async (req) => {
     for (const s of vendaRealizadaStages || []) {
       if (s.origin_id) vendaRealizadaByOrigin.set(s.origin_id, s.id);
     }
-    console.log(`📊 ${vendaRealizadaByOrigin.size} stages "Venda Realizada" encontrados`);
 
     const vendaRealizadaStageIds = new Set(
       (vendaRealizadaStages || []).map(s => s.id)
     );
     vendaRealizadaStageIds.add(FALLBACK_VENDA_REALIZADA_STAGE);
 
-    // 2. Buscar todos os deals
+    // 3. Buscar deals APENAS da BU Incorporador
     const allDeals: any[] = [];
     let page = 0;
     const PAGE_SIZE = 1000;
+    const originFilter = [...incorporadorOriginIds];
+
     while (true) {
       const { data, error } = await supabase
         .from('crm_deals')
         .select('id, name, contact_id, origin_id, stage_id, tags, value')
+        .in('origin_id', originFilter)
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
       if (error) throw error;
       if (!data || data.length === 0) break;
@@ -56,12 +72,12 @@ Deno.serve(async (req) => {
       if (data.length < PAGE_SIZE) break;
       page++;
     }
-    console.log(`📊 ${allDeals.length} deals totais`);
+    console.log(`📊 ${allDeals.length} deals do Incorporador`);
 
     const dealsNotInVR = allDeals.filter(d => !vendaRealizadaStageIds.has(d.stage_id));
     console.log(`📊 ${dealsNotInVR.length} deals fora de Venda Realizada`);
 
-    // 3. Buscar emails dos contatos
+    // 4. Buscar emails dos contatos
     const contactIds = [...new Set(dealsNotInVR.map(d => d.contact_id).filter(Boolean))];
     const contactEmails = new Map<string, string>();
 
@@ -76,7 +92,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. Identificar parceiros via hubla_transactions
+    // 5. Identificar parceiros via hubla_transactions
     const allEmails = [...new Set(Array.from(contactEmails.values()))];
     const partnerEmails = new Set<string>();
 
@@ -98,7 +114,7 @@ Deno.serve(async (req) => {
     }
     console.log(`🤝 ${partnerEmails.size} emails de parceiros encontrados`);
 
-    // 5. Filtrar deals de parceiros fora de VR
+    // 6. Filtrar deals de parceiros fora de VR
     const partnerDeals = dealsNotInVR.filter(d => {
       const email = contactEmails.get(d.contact_id);
       return email && partnerEmails.has(email);
@@ -114,7 +130,7 @@ Deno.serve(async (req) => {
       errors: 0,
     };
 
-    // 6. Dry run: retornar stats + primeiros 50 exemplos
+    // 7. Dry run
     if (dry_run) {
       const details = partnerDeals.slice(0, 50).map(deal => ({
         deal_id: deal.id,
@@ -130,7 +146,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 7. Execução real: batch updates agrupados por target_stage_id
+    // 8. Execução real
     const dealsByTargetStage = new Map<string, any[]>();
     for (const deal of partnerDeals) {
       const targetStageId = vendaRealizadaByOrigin.get(deal.origin_id) || FALLBACK_VENDA_REALIZADA_STAGE;
@@ -142,7 +158,6 @@ Deno.serve(async (req) => {
     const now = new Date().toISOString();
 
     for (const [targetStageId, deals] of dealsByTargetStage) {
-      // Batch update stage_id + updated_at
       for (let i = 0; i < deals.length; i += BATCH_SIZE) {
         const batch = deals.slice(i, i + BATCH_SIZE);
         const ids = batch.map(d => d.id);
@@ -161,7 +176,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 8. Batch add tag "Parceiro" to deals that don't have it
+    // 9. Add tag "Parceiro"
     const dealsNeedingTag = partnerDeals.filter(d => {
       const tags: string[] = Array.isArray(d.tags) ? d.tags : [];
       return !tags.includes('Parceiro');
@@ -169,7 +184,6 @@ Deno.serve(async (req) => {
 
     for (let i = 0; i < dealsNeedingTag.length; i += BATCH_SIZE) {
       const batch = dealsNeedingTag.slice(i, i + BATCH_SIZE);
-      // Tag updates need individual calls since each deal may have different existing tags
       const promises = batch.map(deal => {
         const existingTags: string[] = Array.isArray(deal.tags) ? deal.tags : [];
         return supabase
@@ -180,7 +194,7 @@ Deno.serve(async (req) => {
       await Promise.all(promises);
     }
 
-    // 9. Batch insert deal_activities
+    // 10. Insert deal_activities
     const ACTIVITY_BATCH = 100;
     const activities = partnerDeals.map(deal => ({
       deal_id: deal.id,
@@ -219,3 +233,40 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+/**
+ * Resolve all origin IDs belonging to BU Incorporador
+ * Uses bu_origin_mapping to find groups and direct origins, then expands groups
+ */
+async function getIncorporadorOriginIds(supabase: any): Promise<Set<string>> {
+  const { data: mappings, error } = await supabase
+    .from('bu_origin_mapping')
+    .select('entity_type, entity_id')
+    .eq('bu', 'incorporador');
+
+  if (error) throw error;
+
+  const directOrigins = (mappings || [])
+    .filter((m: any) => m.entity_type === 'origin')
+    .map((m: any) => m.entity_id);
+
+  const groupIds = (mappings || [])
+    .filter((m: any) => m.entity_type === 'group')
+    .map((m: any) => m.entity_id);
+
+  const result = new Set<string>(directOrigins);
+
+  if (groupIds.length > 0) {
+    const { data: childOrigins, error: childErr } = await supabase
+      .from('crm_origins')
+      .select('id')
+      .in('group_id', groupIds);
+
+    if (childErr) throw childErr;
+    for (const o of childOrigins || []) {
+      result.add(o.id);
+    }
+  }
+
+  return result;
+}
