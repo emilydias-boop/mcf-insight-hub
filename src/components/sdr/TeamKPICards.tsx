@@ -6,7 +6,8 @@ import {
   FileText, 
   TrendingUp, 
   AlertTriangle,
-  Clock
+  Clock,
+  ExternalLink
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
