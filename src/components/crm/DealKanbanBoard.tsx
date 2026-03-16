@@ -338,7 +338,7 @@ export const DealKanbanBoard = ({
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => {
                                 if (stageDeals.length === 0) { toast.info('Nenhum lead neste estágio'); return; }
-                                const leads = buildCopyLeadData(stageDeals, stage.stage_name, activitySummaryMap, channelMap);
+                                const leads = buildCopyLeadData(stageDeals, stage.stage_name, activitySummaries, channelMap);
                                 setCopyDialogData({ open: true, leads });
                               }}>
                                 <Settings2 className="h-4 w-4 mr-2" /> Personalizado...
