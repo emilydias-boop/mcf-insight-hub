@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { FinanceiroPagamentos } from '@/components/financeiro/FinanceiroPagamentos';
 import { FinanceiroReceitas } from '@/components/financeiro/FinanceiroReceitas';
 import { FinanceiroTransacoes } from '@/components/financeiro/FinanceiroTransacoes';
-import { FinanceiroCobrancas } from '@/components/financeiro/cobranca/FinanceiroCobrancas';
 
 const Financeiro = () => {
   const { role } = useAuth();
@@ -23,7 +22,7 @@ const Financeiro = () => {
     <div className="space-y-4 sm:space-y-6">
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-foreground">Financeiro</h1>
-        <p className="text-sm text-muted-foreground hidden sm:block">Gestão de pagamentos, receitas e cobranças</p>
+        <p className="text-sm text-muted-foreground hidden sm:block">Gestão de pagamentos, receitas e transações</p>
       </div>
 
       <Tabs defaultValue={defaultTab} className="w-full">
@@ -31,7 +30,6 @@ const Financeiro = () => {
           <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
           <TabsTrigger value="transacoes">Transações</TabsTrigger>
           <TabsTrigger value="receitas">Receitas</TabsTrigger>
-          <TabsTrigger value="cobrancas">Cobranças</TabsTrigger>
         </TabsList>
 
         <TabsContent value="pagamentos" className="mt-6">
@@ -44,10 +42,6 @@ const Financeiro = () => {
 
         <TabsContent value="receitas" className="mt-6">
           <FinanceiroReceitas />
-        </TabsContent>
-
-        <TabsContent value="cobrancas" className="mt-6">
-          <FinanceiroCobrancas />
         </TabsContent>
       </Tabs>
     </div>
