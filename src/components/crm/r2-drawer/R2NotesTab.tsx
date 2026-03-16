@@ -41,8 +41,9 @@ export function R2NotesTab({ attendee }: R2NotesTabProps) {
   const [newNoteText, setNewNoteText] = useState('');
   
   const contactEmail = attendee?.deal?.contact?.email;
+  const contactPhone = attendee?.deal?.contact?.phone;
   const { data: leadNotes } = useLeadNotes(attendee?.deal_id, attendee?.id);
-  const { data: purchaseHistory } = useLeadPurchaseHistory(contactEmail);
+  const { data: purchaseHistory } = useLeadPurchaseHistory(contactEmail, contactPhone);
   const addNote = useAddAttendeeNote();
 
   const handleAddNote = () => {
