@@ -437,6 +437,12 @@ export const DealKanbanBoard = ({
         dealName={stageChangeModal.dealName}
         newStageName={stageChangeModal.newStageName}
       />
+
+      <CopyLeadsFormatDialog
+        open={copyDialogData.open}
+        onOpenChange={(open) => setCopyDialogData(prev => ({ ...prev, open }))}
+        leads={copyDialogData.leads}
+      />
     </>
   );
 };
