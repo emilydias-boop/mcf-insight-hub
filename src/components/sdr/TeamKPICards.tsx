@@ -70,11 +70,19 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje }: TeamKP
     },
     {
       title: "Contratos",
-      value: kpis.totalContratos,
+      value: (kpis.totalContratos || 0) - (kpis.totalOutside || 0),
       icon: FileText,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
-      tooltip: `Contratos: ${(kpis.totalContratos || 0) - (kpis.totalOutside || 0)} | Outside: ${kpis.totalOutside || 0}`
+      tooltip: "Contratos pagos (excluindo outside)"
+    },
+    {
+      title: "Outside",
+      value: kpis.totalOutside || 0,
+      icon: ExternalLink,
+      color: "text-rose-400",
+      bgColor: "bg-rose-400/10",
+      tooltip: "Leads que compraram contrato antes da reunião R1"
     },
     {
       title: "Taxa Conversão",
@@ -96,7 +104,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje }: TeamKP
 
   return (
     <TooltipProvider>
-      <div className={`grid grid-cols-2 md:grid-cols-4 ${isToday ? 'lg:grid-cols-8' : 'lg:grid-cols-7'} gap-3`}>
+      <div className={`grid grid-cols-2 md:grid-cols-4 ${isToday ? 'lg:grid-cols-9' : 'lg:grid-cols-8'} gap-3`}>
         {cards.map((card) => (
           <Tooltip key={card.title}>
             <TooltipTrigger asChild>
