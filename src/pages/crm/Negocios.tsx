@@ -39,6 +39,7 @@ import { useDealOwnerOptions } from '@/hooks/useDealOwnerOptions';
 import { useUniqueDealTags } from '@/hooks/useUniqueDealTags';
 import { useOutsideDetectionForDeals } from '@/hooks/useOutsideDetectionForDeals';
 import { OutsideDistributionButton } from '@/components/crm/OutsideDistributionButton';
+import { MovePartnersButton } from '@/components/crm/MovePartnersButton';
 import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDialog';
 
 const Negocios = () => {
@@ -615,6 +616,7 @@ const Negocios = () => {
             {(role === 'admin' || role === 'manager') && (
               <>
                 <OutsideDistributionButton />
+                <MovePartnersButton />
                 <Button
                   variant="outline"
                   size="sm"
