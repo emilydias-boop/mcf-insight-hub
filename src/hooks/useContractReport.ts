@@ -58,6 +58,7 @@ export const useContractReport = (
           status,
           deal_id,
           contract_paid_at,
+          is_partner,
           meeting_slots!inner (
             id,
             scheduled_at,
@@ -96,6 +97,7 @@ export const useContractReport = (
           )
         `)
         .not('contract_paid_at', 'is', null)
+        .eq('is_partner', false)
         .gte('contract_paid_at', startISO)
         .lte('contract_paid_at', endISO);
       
