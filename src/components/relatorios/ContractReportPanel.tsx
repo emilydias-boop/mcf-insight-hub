@@ -175,6 +175,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
           salesChannel: row.salesChannel.toUpperCase(),
           productName: 'Contrato R1',
           netValue: null,
+          isRefunded: row.isRefunded,
           customFields: row.customFields,
         });
       });
