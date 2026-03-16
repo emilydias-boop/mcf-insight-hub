@@ -162,17 +162,15 @@ export function useR2PendingLeads() {
         })) as R2PendingLead[];
       }
 
-      // Step 4: Get R2 attendees for ALL deals of these contacts
-      const { data: r2Attendees, error: r2Error } = await supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          deal_id,
-          meeting_slot:meeting_slots!inner(meeting_type)
-        `)
-        .in('deal_id', Array.from(allDealIds))
-        .eq('meeting_slots.meeting_type', 'r2');
-
-      if (r2Error) throw r2Error;
+      // Step 4: Get R2 attendees for ALL deals of these contacts (batched)
+      const r2Attendees = await batchedInQuery<any>(
+        Array.from(allDealIds),
+        (batch) => supabase
+          .from('meeting_slot_attendees')
+          .select(`deal_id, meeting_slot:meeting_slots!inner(meeting_type)`)
+          .in('deal_id', batch)
+          .eq('meeting_slots.meeting_type', 'r2') as any
+      );
 
       // Create a set of deal_ids that have R2
       const dealsWithR2 = new Set(
