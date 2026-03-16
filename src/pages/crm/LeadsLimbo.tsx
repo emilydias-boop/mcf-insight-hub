@@ -180,6 +180,7 @@ export default function LeadsLimbo() {
     }
 
     revalidatedRef.current = true;
+    setIsSyncing(true);
     revalidateLimboResults(results, localDeals).then(({ updated, changed }) => {
       if (changed) {
         setResults(updated);
@@ -188,6 +189,8 @@ export default function LeadsLimbo() {
           updateLimboResults.mutate({ uploadId: latestUpload.id, results: updated });
         }
       }
+    }).finally(() => {
+      setIsSyncing(false);
     });
   }, [results, localDeals, loadingDeals, latestUpload?.id]);
 
