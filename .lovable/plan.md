@@ -1,39 +1,70 @@
 
 
-## Objetivo
+## Redesenhar Modais de Criar/Editar Assinatura com Produto Selecionavel e UX Inteligente
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema atual
+Os modais de criar e editar assinatura usam inputs de texto livre para produto e categoria, sem integração com `product_configurations`. Falta lógica condicional (ex: mostrar campos de parcelas só quando relevante) e campos editáveis do lead.
 
-## Mudanças
+### Solução
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**1. CreateSubscriptionModal.tsx** -- Reescrever completamente
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Seções organizadas:
 
-### 2. Hook `useCloserDetailData.ts`
+**Seção 1 - Dados do Lead** (editáveis)
+- Nome do Cliente * (input)
+- Email (input)
+- Telefone (input)
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**Seção 2 - Produto e BU**
+- **Produto** -- Select/Combobox pesquisavel com dados de `product_configurations` (is_active=true). Ao selecionar, preenche automaticamente:
+  - `valor_total_contrato` = `reference_price` (bruto, 1x)
+  - `product_category` = categoria do produto
+  - `target_bu` como Categoria/BU (select com `TARGET_BU_OPTIONS`)
+- **Categoria (BU)** -- Select pre-preenchido pela seleção do produto, editavel para override
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**Seção 3 - Financeiro Condicional**
+- Valor Total do Contrato (pre-preenchido, editavel)
+- Tem entrada? (toggle/checkbox) -- se sim, mostra campo Valor Entrada
+- **Forma de Pagamento** -- Select (PIX, Cartão, Boleto, Outro)
+- **Logica condicional**: se forma != pagamento unico:
+  - Nº de Parcelas (input number)
+  - Valor de cada parcela (calculado automaticamente: `(total - entrada) / parcelas`, editavel)
+  - Data do 1º Vencimento (date picker)
+  - Intervalo entre parcelas: Select (mensal / quinzenal / customizado)
+  - Se customizado: permitir datas individuais para cada parcela (mini-lista editavel)
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+**Seção 4 - Complementar**
+- Responsável Financeiro
+- Observações
+- Data Início (default: hoje)
 
-### 4. Dados exportados no Excel
+**2. EditSubscriptionModal.tsx** -- Atualizar
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+Mesma lógica do Create mas com dados pre-carregados:
+- Produto como Combobox (valor atual pre-selecionado)
+- Categoria/BU como Select
+- Campos do lead editaveis (nome, email, telefone)
+- Forma de pagamento como Select
+- Responsavel, observações
 
-Formato de data: `dd/MM/yyyy HH:mm`
+**3. Hook `useProductConfigurationsForBilling`**
 
-## Resultado
+Query simples que busca `product_configurations` (is_active=true) retornando `id, product_name, product_code, reference_price, product_category, target_bu`. Reutiliza o hook existente `useProductConfigurations`.
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Arquivos
+
+| Ação | Arquivo |
+|------|---------|
+| Reescrever | `src/components/financeiro/cobranca/CreateSubscriptionModal.tsx` |
+| Reescrever | `src/components/financeiro/cobranca/EditSubscriptionModal.tsx` |
+| Manter | `useProductConfigurations.ts` (já existe, será importado) |
+| Manter | `useBillingSubscriptions.ts`, `useBillingInstallments.ts` (sem alteração) |
+
+### Comportamento chave
+
+- Ao selecionar produto no Combobox, auto-preenche valor e BU
+- Forma de pagamento condiciona visibilidade dos campos de parcelamento
+- Parcelas geradas com datas calculadas (mensal por padrão, editavel)
+- `billing_installments` criadas com as datas definidas pelo usuario (não mais sempre addMonths fixo)
 
