@@ -1,6 +1,29 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+const BATCH_SIZE = 200;
+
+/**
+ * Splits a large array into chunks of BATCH_SIZE, runs a query for each chunk in parallel,
+ * and concatenates the results.
+ */
+async function batchedInQuery<T>(
+  ids: string[],
+  queryFn: (batch: string[]) => Promise<{ data: T[] | null; error: any }>
+): Promise<T[]> {
+  if (ids.length === 0) return [];
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    chunks.push(ids.slice(i, i + BATCH_SIZE));
+  }
+  const results = await Promise.all(chunks.map(async (chunk) => {
+    const { data, error } = await queryFn(chunk);
+    if (error) throw error;
+    return data || [];
+  }));
+  return results.flat();
+}
+
 export interface R2PendingLead {
   id: string;
   attendee_name: string;
