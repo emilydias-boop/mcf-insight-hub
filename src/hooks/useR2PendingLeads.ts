@@ -304,19 +304,22 @@ export function useR2PendingLeads() {
       });
 
       if (allDealIdsForContacts.size > 0) {
-        const { data: latestAttendees } = await supabase
-          .from('meeting_slot_attendees')
-          .select(`
-            deal_id,
-            meeting_slot:meeting_slots!inner(
-              scheduled_at,
-              meeting_type,
-              closer:closers(id, name)
-            )
-          `)
-          .in('deal_id', Array.from(allDealIdsForContacts))
-          .eq('meeting_slots.meeting_type', 'r1')
-          .order('meeting_slots(scheduled_at)', { ascending: false });
+        const latestAttendees = await batchedInQuery<any>(
+          Array.from(allDealIdsForContacts),
+          (batch) => supabase
+            .from('meeting_slot_attendees')
+            .select(`
+              deal_id,
+              meeting_slot:meeting_slots!inner(
+                scheduled_at,
+                meeting_type,
+                closer:closers(id, name)
+              )
+            `)
+            .in('deal_id', batch)
+            .eq('meeting_slots.meeting_type', 'r1')
+            .order('meeting_slots(scheduled_at)', { ascending: false }) as any
+        );
 
         // Sort attendees by scheduled_at DESC (client-side) since Supabase nested ordering is unreliable
         const sortedAttendees = ((latestAttendees as any[]) || [])
