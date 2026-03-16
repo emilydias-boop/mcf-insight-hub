@@ -1,39 +1,27 @@
 
 
-## Objetivo
+## Diagnóstico: "Bad Request" nos Leads Pendentes R2
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Causa raiz
 
-## Mudanças
+O hook `useR2PendingLeads.ts` na **Step 3** (linha 113-116) busca todos os deals de todos os contact_ids dos leads com contrato pago. Depois, na **Step 4** (linha 145-152), passa **todos** esses deal_ids num único `.in('deal_id', ...)`. 
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+O problema é que o número de deal_ids cresceu tanto que a URL da requisição REST excede o limite do Supabase (aproximadamente 4000-8000 caracteres). A rede mostra claramente um `Status: 400 (Bad Request)` nessa query com centenas de UUIDs no filtro.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+A mesma situação acontece na Step 3 (`.in('contact_id', ...)` com muitos contact_ids) e na Step 7 (linha 288-300, outra `.in('deal_id', ...)`).
 
-### 2. Hook `useCloserDetailData.ts`
+### Solução
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**Arquivo: `src/hooks/useR2PendingLeads.ts`**
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+Criar uma função utilitária `batchedIn` que divide arrays grandes em lotes de ~200 itens e faz múltiplas queries em paralelo, concatenando os resultados. Aplicar em 3 pontos:
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+1. **Step 3** (linha 113-116): `crm_deals.in('contact_id', ...)` — batch por contact_ids
+2. **Step 4** (linha 145-152): `meeting_slot_attendees.in('deal_id', ...)` — batch por deal_ids  
+3. **Step 7** (linha 288-300): `meeting_slot_attendees.in('deal_id', ...)` — batch por deal_ids
 
-### 4. Dados exportados no Excel
+A função utilitária receberá o array, dividirá em chunks de 200, executará as queries em paralelo com `Promise.all`, e juntará os resultados.
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Resultado
+A query não ultrapassará o limite de URL, eliminando o erro "Bad Request".
 
