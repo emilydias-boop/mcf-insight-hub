@@ -181,7 +181,7 @@ export const useSendPasswordReset = () => {
   return useMutation({
     mutationFn: async ({ email }: { email: string }) => {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth?mode=reset`,
+        redirectTo: `https://mcfgestao.com/reset-password`,
       });
 
       if (error) throw error;

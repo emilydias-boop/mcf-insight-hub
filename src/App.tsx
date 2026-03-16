@@ -159,8 +159,9 @@ const App = () => (
           <AuthProvider>
             <TwilioProvider>
             <Routes>
-            {/* Public auth route */}
+            {/* Public routes */}
             <Route path="/auth" element={<Auth />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             
             {/* Protected routes */}
             <Route
