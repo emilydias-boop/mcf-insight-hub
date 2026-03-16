@@ -37,17 +37,17 @@ export default function R2Carrinho() {
   const { config, saveConfig, copyFromPreviousWeek } = useCarrinhoConfig(weekStart);
 
   // Fetch KPIs
-  const { data: kpis, isLoading: kpisLoading, refetch: refetchKpis } = useR2CarrinhoKPIs(weekStart, weekEnd);
+  const { data: kpis, isLoading: kpisLoading, refetch: refetchKpis } = useR2CarrinhoKPIs(weekStart, weekEnd, config);
   
   // Fetch status options
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
 
   // Fetch data for each tab
-  const { data: rawAgendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekStart, weekEnd, 'agendadas');
-  const { data: rawForaCarrinhoData = [], isLoading: foraCarrinhoLoading } = useR2ForaDoCarrinhoData(weekStart, weekEnd);
-  const { data: rawAprovadosData = [], isLoading: aprovadosLoading } = useR2CarrinhoData(weekStart, weekEnd, 'aprovados');
-  const { data: rawVendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd);
+  const { data: rawAgendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekStart, weekEnd, 'agendadas', config);
+  const { data: rawForaCarrinhoData = [], isLoading: foraCarrinhoLoading } = useR2ForaDoCarrinhoData(weekStart, weekEnd, config);
+  const { data: rawAprovadosData = [], isLoading: aprovadosLoading } = useR2CarrinhoData(weekStart, weekEnd, 'aprovados', config);
+  const { data: rawVendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd, config);
 
   // Filter data by selected carrinho
   const agendadasData = useMemo(() => 
