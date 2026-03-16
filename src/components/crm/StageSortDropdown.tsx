@@ -55,7 +55,7 @@ interface StageSortDropdownProps {
 }
 
 export const StageSortDropdown = ({ currentSort, onSortChange }: StageSortDropdownProps) => {
-  const isDescending = ['newest', 'most_activities', 'most_calls'].includes(currentSort);
+  const isDescending = ['stage_newest', 'newest', 'most_activities', 'most_calls'].includes(currentSort);
   
   const renderOption = (option: SortOptionItem) => (
     <button
