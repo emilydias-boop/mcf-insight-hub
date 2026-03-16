@@ -662,6 +662,34 @@ export const useDeleteCRMDeal = () => {
   
   return useMutation({
     mutationFn: async (id: string) => {
+      // Delete dependent records first to avoid FK constraint errors
+      await supabase.from('deal_activities').delete().eq('deal_id', id);
+      await supabase.from('deal_tasks').delete().eq('deal_id', id);
+      await supabase.from('automation_queue').delete().eq('deal_id', id);
+      await supabase.from('automation_logs').delete().eq('deal_id', id);
+
+      // Delete meeting slot attendees via meeting_slots
+      const { data: slots } = await supabase
+        .from('meeting_slots')
+        .select('id')
+        .eq('deal_id', id);
+      
+      if (slots && slots.length > 0) {
+        const slotIds = slots.map(s => s.id);
+        await supabase.from('attendee_notes').delete().in('attendee_id',
+          (await supabase.from('meeting_slot_attendees').select('id').in('meeting_slot_id', slotIds)).data?.map(a => a.id) || []
+        );
+        await supabase.from('attendee_movement_logs').delete().in('attendee_id',
+          (await supabase.from('meeting_slot_attendees').select('id').in('meeting_slot_id', slotIds)).data?.map(a => a.id) || []
+        );
+        await supabase.from('meeting_slot_attendees').delete().in('meeting_slot_id', slotIds);
+        await supabase.from('meeting_slots').delete().eq('deal_id', id);
+      }
+
+      // Delete calls linked to the deal
+      await supabase.from('calls').delete().eq('deal_id', id);
+
+      // Finally delete the deal
       const { error } = await supabase
         .from('crm_deals')
         .delete()

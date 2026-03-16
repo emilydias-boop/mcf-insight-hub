@@ -271,19 +271,14 @@ Deno.serve(async (req) => {
       console.error("Error updating profile name:", nameUpdateError);
     }
 
-    // Generate password reset link so user can set their password
-    const { data: resetData, error: resetError } = await supabaseAdmin.auth.admin.generateLink({
-      type: "recovery",
-      email,
-      options: {
-        redirectTo: `${req.headers.get("origin") || "https://mcf-insight-hub.lovable.app"}/auth?mode=reset`,
-      },
+    // Send password reset email so user can set their password
+    const origin = req.headers.get("origin") || "https://mcf-insight-hub.lovable.app";
+    const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+      redirectTo: `${origin}/auth?mode=reset`,
     });
 
     if (resetError) {
-      console.error("Error generating reset link:", resetError);
-      // User is created, but we couldn't send the reset link
-      // They can use "Forgot Password" later
+      console.error("Error sending reset email:", resetError);
     }
 
     console.log(`User ${email} created successfully`);
