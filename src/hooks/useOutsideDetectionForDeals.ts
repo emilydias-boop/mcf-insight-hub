@@ -110,10 +110,7 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
               .select('customer_email')
               .in('customer_email', chunk)
               .eq('sale_status', 'completed')
-              .not('product_name', 'ilike', '%contrato%')
-              .not('product_name', 'ilike', '%Construir para Alugar%')
-              .not('product_name', 'ilike', '%P2%')
-              .not('product_name', 'ilike', '%Suplemento%'),
+              .or('product_name.ilike.%A001%,product_name.ilike.%A002%,product_name.ilike.%A003%,product_name.ilike.%A004%,product_name.ilike.%A009%,product_name.ilike.%INCORPORADOR%,product_name.ilike.%ANTICRISE%'),
           uniqueEmails
         ),
       ]);
