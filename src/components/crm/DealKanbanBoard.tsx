@@ -15,7 +15,7 @@ import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBatchDealActivitySummary, ActivitySummary } from '@/hooks/useDealActivitySummary';
 import { SalesChannel } from '@/hooks/useBulkA010Check';
-import { Inbox, ChevronDown } from 'lucide-react';
+import { Inbox, ChevronDown, ClipboardCopy } from 'lucide-react';
 
 interface Deal {
   id: string;
