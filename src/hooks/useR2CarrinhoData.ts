@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { toast } from 'sonner';
+import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
+import { getCarrinhoWeekBoundaries } from '@/lib/carrinhoWeekBoundaries';
 
 export interface R2CarrinhoAttendee {
   id: string;
@@ -28,10 +30,11 @@ export interface R2CarrinhoAttendee {
   contract_paid_at: string | null;
 }
 
-export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados') {
+export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados', carrinhoConfig?: CarrinhoConfig) {
   return useQuery({
     queryKey: ['r2-carrinho-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), filter],
     queryFn: async (): Promise<R2CarrinhoAttendee[]> => {
+      const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig);
       // Get R2 status options (all, including inactive, for proper name mapping)
       const { data: statusOptions } = await supabase
         .from('r2_status_options')
@@ -81,8 +84,8 @@ export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agen
           )
         `)
         .eq('meeting_type', 'r2')
-        .gte('scheduled_at', startOfDay(weekStart).toISOString())
-        .lte('scheduled_at', endOfDay(weekEnd).toISOString())
+        .gte('scheduled_at', effectiveStart.toISOString())
+        .lt('scheduled_at', effectiveEnd.toISOString())
         .order('scheduled_at', { ascending: true });
 
       // Apply meeting status filter

@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
 import { endOfDay, format } from 'date-fns';
+import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
+import { getCarrinhoWeekBoundaries } from '@/lib/carrinhoWeekBoundaries';
 import { getCachedPrecoReferencia } from './useProductPricesCache';
 
 // Helper para normalização consistente (apenas dígitos, últimos 11)
@@ -62,11 +64,11 @@ export interface R2CarrinhoVenda {
   r2_scheduled_at?: string;
 }
 
-export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
-
+export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig) {
   return useQuery({
     queryKey: ['r2-carrinho-vendas', weekStart.toISOString(), weekEnd.toISOString()],
     queryFn: async () => {
+      const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig);
       // 1. Buscar attendees aprovados da semana com dados do closer
       const { data: approvedAttendees, error: attendeesError } = await supabase
         .from('meeting_slot_attendees')
@@ -92,8 +94,8 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
             )
           )
         `)
-      .gte('meeting_slot.scheduled_at', weekStart.toISOString())
-      .lte('meeting_slot.scheduled_at', endOfDay(weekEnd).toISOString())
+      .gte('meeting_slot.scheduled_at', effectiveStart.toISOString())
+      .lt('meeting_slot.scheduled_at', effectiveEnd.toISOString())
         .eq('meeting_slot.meeting_type', 'r2')
         .eq('r2_status_id', '24d9a326-378b-4191-a4b3-d0ec8b9d23eb');
 
@@ -143,8 +145,8 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
         .from('hubla_transactions')
         .select('*')
         .eq('product_category', 'parceria')
-        .gte('sale_date', weekStart.toISOString())
-        .lte('sale_date', endOfDay(weekEnd).toISOString())
+        .gte('sale_date', effectiveStart.toISOString())
+        .lt('sale_date', effectiveEnd.toISOString())
         .order('sale_date', { ascending: false });
 
       // Construir filtro OR para emails e telefones
