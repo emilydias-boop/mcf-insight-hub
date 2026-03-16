@@ -87,7 +87,10 @@ export const DealKanbanBoard = ({
     dealName: string;
     newStageName: string;
   }>({ open: false, dealId: '', dealName: '', newStageName: '' });
-  
+
+  // State para dialog de cópia personalizada
+  const [copyDialogData, setCopyDialogData] = useState<{ open: boolean; leads: CopyLeadData[] }>({ open: false, leads: [] });
+
   // stage_permissions is the sole source of truth for visibility
   const visibleStages = useMemo(() => {
     const activeStages = (stages || []).filter((s: any) => s.is_active);
