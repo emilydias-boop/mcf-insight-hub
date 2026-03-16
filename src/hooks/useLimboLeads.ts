@@ -180,7 +180,7 @@ export function compareExcelWithLocal(
   });
 }
 
-// Revalidate persisted limbo results against current CRM data
+// Revalidate persisted limbo results against current CRM data (batched)
 export async function revalidateLimboResults(
   results: LimboRow[],
   localDeals: any[]
@@ -201,59 +201,12 @@ export async function revalidateLimboResults(
     }
   }
 
-  // Collect emails of still-unresolved leads for global search
-  const unresolvedEmails: string[] = [];
-  const unresolvedPhones: string[] = [];
-  for (const r of results) {
-    if (r.status === 'nao_encontrado' || r.status === 'sem_dono') {
-      const emailKey = normalize(r.excelEmail);
-      if (emailKey) unresolvedEmails.push(emailKey);
-      const phone = (r.excelPhone || '').replace(/\D/g, '');
-      if (phone.length >= 9) unresolvedPhones.push(phone.slice(-9));
-    }
-  }
-
-  // Global search: batch lookup contacts by email
-  const globalContactMap = new Map<string, { hasOwner: boolean; ownerEmail: string }>();
-  const BATCH = 50;
-  for (let i = 0; i < unresolvedEmails.length; i += BATCH) {
-    const batch = unresolvedEmails.slice(i, i + BATCH);
-    // Search contacts by email
-    for (const email of batch) {
-      const { data: contacts } = await supabase
-        .from('crm_contacts')
-        .select('id')
-        .ilike('email', email)
-        .limit(1);
-
-      if (contacts?.length) {
-        const contactId = contacts[0].id;
-        // Check if contact has any deal with owner
-        const { data: deals } = await supabase
-          .from('crm_deals')
-          .select('id, owner_id')
-          .eq('contact_id', contactId)
-          .limit(1);
-
-        if (deals?.length) {
-          globalContactMap.set(email, {
-            hasOwner: !!deals[0].owner_id,
-            ownerEmail: deals[0].owner_id || '',
-          });
-        }
-      }
-    }
-  }
-
+  // First pass: resolve using local Inside Sales deals
   let changed = false;
-  const updated = results.map((r) => {
-    // Already has owner — skip
+  const firstPass = results.map((r) => {
     if (r.status === 'com_dono') return r;
-
     const emailKey = normalize(r.excelEmail);
     const nameKey = normalize(r.excelName);
-
-    // Check against current Inside Sales deals first
     const localMatch = (emailKey ? byEmail.get(emailKey) : null) || (nameKey ? byName.get(nameKey) : null);
 
     if (localMatch) {
@@ -266,8 +219,77 @@ export async function revalidateLimboResults(
         return { ...r, status: 'sem_dono' as const, localDealId: localMatch.id };
       }
     }
+    return r;
+  });
 
-    // Check global contact search results
+  // Collect unique emails of still-unresolved leads for global batched search
+  const unresolvedEmailSet = new Set<string>();
+  for (const r of firstPass) {
+    if (r.status === 'nao_encontrado' || r.status === 'sem_dono') {
+      const emailKey = normalize(r.excelEmail);
+      if (emailKey) unresolvedEmailSet.add(emailKey);
+    }
+  }
+  const unresolvedEmails = Array.from(unresolvedEmailSet);
+
+  // Batched global search: find contacts by email using .in()
+  const BATCH = 200;
+  const globalContactMap = new Map<string, { hasOwner: boolean; ownerEmail: string }>();
+
+  // Step 1: Batch fetch contact IDs by email
+  const emailToContactId = new Map<string, string>();
+  for (let i = 0; i < unresolvedEmails.length; i += BATCH) {
+    const batch = unresolvedEmails.slice(i, i + BATCH);
+    const { data: contacts } = await supabase
+      .from('crm_contacts')
+      .select('id, email')
+      .in('email', batch);
+
+    if (contacts) {
+      for (const c of contacts) {
+        if (c.email) emailToContactId.set(normalize(c.email), c.id);
+      }
+    }
+  }
+
+  // Step 2: Batch fetch deals for those contact IDs
+  const contactIds = Array.from(new Set(emailToContactId.values()));
+  const contactIdToDeals = new Map<string, { owner_id: string | null }[]>();
+
+  for (let i = 0; i < contactIds.length; i += BATCH) {
+    const batch = contactIds.slice(i, i + BATCH);
+    const { data: deals } = await supabase
+      .from('crm_deals')
+      .select('id, owner_id, contact_id')
+      .in('contact_id', batch);
+
+    if (deals) {
+      for (const d of deals) {
+        const cid = (d as any).contact_id as string;
+        if (!contactIdToDeals.has(cid)) contactIdToDeals.set(cid, []);
+        contactIdToDeals.get(cid)!.push({ owner_id: d.owner_id });
+      }
+    }
+  }
+
+  // Build global map: email -> has owner?
+  for (const [email, contactId] of emailToContactId) {
+    const deals = contactIdToDeals.get(contactId);
+    if (deals?.length) {
+      // Prioritize deals with owner
+      const withOwner = deals.find(d => !!d.owner_id);
+      globalContactMap.set(email, {
+        hasOwner: !!withOwner,
+        ownerEmail: withOwner?.owner_id || '',
+      });
+    }
+  }
+
+  // Second pass: resolve using global search results
+  const updated = firstPass.map((r) => {
+    if (r.status === 'com_dono') return r;
+
+    const emailKey = normalize(r.excelEmail);
     if (emailKey && globalContactMap.has(emailKey)) {
       const info = globalContactMap.get(emailKey)!;
       if (info.hasOwner) {
