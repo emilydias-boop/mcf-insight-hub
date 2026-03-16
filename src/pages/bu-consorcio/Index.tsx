@@ -870,6 +870,10 @@ export default function ConsorcioPage() {
         <TabsContent value="contemplacao">
           <ContemplationTab />
         </TabsContent>
+
+        <TabsContent value="pagamentos">
+          <ConsorcioPagamentosTab />
+        </TabsContent>
       </Tabs>
     </div>
   );
