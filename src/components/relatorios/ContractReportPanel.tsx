@@ -510,18 +510,25 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
                   {unifiedData.map(row => (
                     <TableRow key={row.id}>
                       <TableCell>
-                        <Badge 
-                          variant={row.source === 'agenda' ? 'default' : row.source === 'pending' ? 'destructive' : 'secondary'}
-                          className={
-                            row.source === 'agenda' 
-                              ? 'bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30'
-                              : row.source === 'pending'
-                                ? 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/30'
-                                : ''
-                          }
-                        >
-                          {row.source === 'agenda' ? 'Agenda' : row.source === 'pending' ? 'Pendente' : 'Hubla'}
-                        </Badge>
+                        <div className="flex items-center gap-1.5">
+                          <Badge 
+                            variant={row.source === 'agenda' ? 'default' : row.source === 'pending' ? 'destructive' : 'secondary'}
+                            className={
+                              row.source === 'agenda' 
+                                ? 'bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30'
+                                : row.source === 'pending'
+                                  ? 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/30'
+                                  : ''
+                            }
+                          >
+                            {row.source === 'agenda' ? 'Agenda' : row.source === 'pending' ? 'Pendente' : 'Hubla'}
+                          </Badge>
+                          {row.isRefunded && (
+                            <Badge variant="destructive" className="bg-destructive/20 text-destructive border-destructive/30 text-[10px] px-1.5">
+                              Reembolsado
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="font-medium">{row.closerName}</TableCell>
                       <TableCell>
