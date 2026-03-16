@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 interface CreateUserRequest {
@@ -126,14 +126,16 @@ Deno.serve(async (req) => {
 
     console.log(`User created with ID: ${newUser.user.id}`);
 
-    // Insert role into user_roles table
+    // Delete auto-assigned roles from trigger (auto_assign_first_admin adds 'viewer')
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", newUser.user.id);
+
+    // Insert correct role into user_roles table
     const { error: roleInsertError } = await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: newUser.user.id, role });
 
     if (roleInsertError) {
       console.error("Error inserting role:", roleInsertError);
-      // Don't fail the whole operation, role can be set later
     }
 
     // Update profile with squad if provided
@@ -269,19 +271,14 @@ Deno.serve(async (req) => {
       console.error("Error updating profile name:", nameUpdateError);
     }
 
-    // Generate password reset link so user can set their password
-    const { data: resetData, error: resetError } = await supabaseAdmin.auth.admin.generateLink({
-      type: "recovery",
-      email,
-      options: {
-        redirectTo: `${req.headers.get("origin") || "https://mcf-insight-hub.lovable.app"}/auth?mode=reset`,
-      },
+    // Send password reset email so user can set their password
+    const origin = req.headers.get("origin") || "https://mcf-insight-hub.lovable.app";
+    const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+      redirectTo: `${origin}/auth?mode=reset`,
     });
 
     if (resetError) {
-      console.error("Error generating reset link:", resetError);
-      // User is created, but we couldn't send the reset link
-      // They can use "Forgot Password" later
+      console.error("Error sending reset email:", resetError);
     }
 
     console.log(`User ${email} created successfully`);

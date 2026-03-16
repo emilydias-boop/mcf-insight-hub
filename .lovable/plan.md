@@ -1,71 +1,39 @@
 
 
-## Plano: Corrigir criação de usuário, duplicação e exclusão de lead
+## Objetivo
 
-### 1. Fix CORS nas Edge Functions (causa do "Failed to fetch")
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-**Arquivos**: `supabase/functions/create-user/index.ts`, `supabase/functions/delete-user/index.ts`
+## Mudanças
 
-Atualizar `corsHeaders` em ambos para incluir headers do supabase-js v2:
-```typescript
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
-```
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### 2. Fix duplicação de usuários na lista
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**Arquivo**: `supabase/functions/create-user/index.ts`
+### 2. Hook `useCloserDetailData.ts`
 
-O trigger `auto_assign_first_admin` insere automaticamente uma role `viewer` quando o auth user é criado. Depois a função insere outra role (ex: `sdr`). Resultado: 2 roles = 2 linhas na view `user_performance_summary`.
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**Correção**: Antes de inserir a role correta, deletar todas as roles automáticas do usuário recém-criado:
-```typescript
-// Delete auto-assigned roles from trigger
-await supabaseAdmin.from("user_roles").delete().eq("user_id", newUser.user.id);
-// Then insert correct role
-await supabaseAdmin.from("user_roles").insert({ user_id: newUser.user.id, role });
-```
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-### 3. Fix envio de email de senha
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-**Arquivo**: `supabase/functions/create-user/index.ts`
+### 4. Dados exportados no Excel
 
-Substituir `admin.generateLink` (que apenas gera mas não envia) por `inviteUserByEmail` ou `resetPasswordForEmail`. Como o user já foi criado com `email_confirm: true`, usar `resetPasswordForEmail` via admin client para disparar o email:
-```typescript
-const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-  redirectTo: `${origin}/auth?mode=reset`,
-});
-```
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-### 4. Fix exclusão de lead
+Formato de data: `dd/MM/yyyy HH:mm`
 
-**Arquivo**: `src/hooks/useCRMData.ts` (`useDeleteCRMDeal`)
+## Resultado
 
-O delete direto em `crm_deals` pode falhar por FK constraints (tabelas filhas como `deal_activities`, `meeting_slot_attendees`, etc.) ou por RLS (policy exige admin).
-
-**Correção**: Antes de deletar o deal, limpar registros dependentes:
-```typescript
-// Delete dependents first
-await supabase.from('deal_activities').delete().eq('deal_id', id);
-await supabase.from('deal_tasks').delete().eq('deal_id', id);
-await supabase.from('meeting_slot_attendees').delete().in('meeting_slot_id', slotIds);
-await supabase.from('meeting_slots').delete().eq('deal_id', id);
-// Then delete the deal
-await supabase.from('crm_deals').delete().eq('id', id);
-```
-
-Também melhorar a mensagem de erro para ser mais descritiva.
-
-### Resumo de arquivos alterados
-
-| Arquivo | Alteração |
-|---|---|
-| `supabase/functions/create-user/index.ts` | Fix CORS, fix duplicação (delete roles antes de inserir), fix email (usar resetPasswordForEmail) |
-| `supabase/functions/delete-user/index.ts` | Fix CORS headers |
-| `src/hooks/useCRMData.ts` | Limpar dependências antes de deletar deal |
-
-### Deploy necessário
-As edge functions `create-user` e `delete-user` precisarão ser re-deployadas após as alterações.
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
