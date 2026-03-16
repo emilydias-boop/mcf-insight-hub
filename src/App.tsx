@@ -83,6 +83,7 @@ import RHColaboradores from "./pages/rh/Colaboradores";
 import ConfiguracoesRH from "./pages/rh/Configuracoes";
 import ProvaEquipe from "./pages/rh/ProvaEquipe";
 import Financeiro from "./pages/Financeiro";
+import Cobrancas from "./pages/Cobrancas";
 import MeuRH from "./pages/MeuRH";
 import MinhasReunioes from "./pages/sdr/MinhasReunioes";
 import ReunioesEquipe from "./pages/crm/ReunioesEquipe";
