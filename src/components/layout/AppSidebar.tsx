@@ -225,6 +225,7 @@ const menuItems: MenuItem[] = [
       { title: "Custos", url: "/custos" },
       { title: "Despesas", url: "/custos/despesas" },
       { title: "Pagamentos", url: "/financeiro", requiredRoles: ["admin", "financeiro"] },
+      { title: "Cobranças", url: "/cobrancas", requiredRoles: ["admin", "financeiro"] },
     ],
   },
 
