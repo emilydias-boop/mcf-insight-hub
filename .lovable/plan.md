@@ -1,39 +1,33 @@
 
 
-## Objetivo
+## Diagnóstico: Sócio herdando SDR errado
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema encontrado
+No arquivo `src/hooks/useAgendaData.ts`, na função `useAddMeetingAttendee` (linha 1154-1177), quando um sócio é adicionado a uma reunião, o código **herda o `booked_by` do participante principal** (parent attendee):
 
-## Mudanças
+```typescript
+// Linha 1164 - PROBLEMA: herda o booked_by do parent
+inheritedBookedBy = parentData?.booked_by || null;
+// ...
+// Linha 1177 - insere com o booked_by herdado
+booked_by: inheritedBookedBy,
+```
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+Isso significa que se **Carol Souza** agendou o lead original, e depois **Evellyn** adiciona o sócio desse lead, o sócio fica com `booked_by = Carol Souza` em vez de `booked_by = Evellyn`.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Como o `booked_by` é usado para atribuição de SDR nas métricas e na jornada do lead, o sócio aparece nos números de Carol Souza.
 
-### 2. Hook `useCloserDetailData.ts`
+### Solução
+Alterar `useAddMeetingAttendee` para usar o **usuário logado atual** (`auth.uid()`) como `booked_by` do sócio, em vez de herdar do parent. O `deal_id` continua sendo herdado (correto, pois o sócio compartilha o mesmo deal).
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+### Alteração
+**`src/hooks/useAgendaData.ts`** — na função `useAddMeetingAttendee`:
+- Obter o `user.id` atual via `supabase.auth.getUser()`
+- Usar o user ID do usuário logado como `booked_by` para o sócio
+- Manter herança de `deal_id` do parent (comportamento correto)
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Impacto
+- Sócios adicionados a partir dessa correção terão o SDR correto (quem realmente adicionou)
+- Sócios já existentes com `booked_by` errado **não** serão corrigidos automaticamente (pode ser feito via SQL se necessário)
+- Nenhuma alteração no banco de dados necessária
 
