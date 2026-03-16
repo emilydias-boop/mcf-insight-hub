@@ -1,39 +1,36 @@
 
 
-## Objetivo
+## Plano: Filtrar parceiros da detecção de Outside
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
+O hook `useOutsideDetectionForDeals` busca transações com `product_category IN ['contrato', 'incorporador']` e `product_name ILIKE '%contrato%'`. Porém, **não verifica se o contato já é parceiro** (comprou A001, A009, A002, A003, A004, Incorporador, Anticrise). Parceiros que possuem contrato aparecem como "Outside" quando na verdade são vendas realizadas de parceiros existentes.
 
-## Mudanças
+### Solução
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**Arquivo**: `src/hooks/useOutsideDetectionForDeals.ts`
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Adicionar uma query paralela para buscar emails de parceiros (mesma lógica do `checkIfPartner` usado nos webhooks) e excluí-los do resultado Outside. Deals de parceiros receberão um flag `isPartner: true` em vez de `isOutside: true`.
 
-### 2. Hook `useCloserDetailData.ts`
+Alterações:
+1. Na query paralela (step 3), adicionar busca de transações de parceiros:
+   - `hubla_transactions` com `sale_status = 'completed'` onde `product_name` contém A001, A002, A003, A004, A009, INCORPORADOR ou ANTICRISE
+2. Construir um `Set<string>` de emails de parceiros
+3. No step 6 (determinação de Outside), **pular** emails que são parceiros — esses deals NÃO devem ser marcados como Outside
+4. Expandir o tipo de retorno para incluir `isPartner` para que o UI possa diferenciar
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**Arquivo**: `src/components/crm/DealKanbanCard.tsx`
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+Atualizar o tipo `outsideInfo` para incluir `isPartner` e não mostrar badge Outside para parceiros.
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+**Arquivo**: `src/pages/crm/Negocios.tsx`
 
-### 4. Dados exportados no Excel
+Atualizar filtro `outsideFilter` para excluir parceiros dos resultados Outside.
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+### Resumo
 
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+| Arquivo | Alteração |
+|---|---|
+| `src/hooks/useOutsideDetectionForDeals.ts` | Buscar emails de parceiros e excluí-los da detecção Outside |
+| `src/components/crm/DealKanbanCard.tsx` | Adaptar tipo para `isPartner` |
+| `src/pages/crm/Negocios.tsx` | Filtro Outside ignora parceiros |
 
