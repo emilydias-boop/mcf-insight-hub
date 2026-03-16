@@ -242,6 +242,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
           salesChannel: '—',
           productName: tx.productName,
           netValue: tx.netValue,
+          isRefunded: false,
           customFields: {},
         });
       });
