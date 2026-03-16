@@ -10,23 +10,39 @@ export interface PurchaseHistoryItem {
   source: string | null;
 }
 
-export function useLeadPurchaseHistory(email: string | null | undefined) {
-  return useQuery({
-    queryKey: ['lead-purchase-history', email],
-    queryFn: async (): Promise<PurchaseHistoryItem[]> => {
-      if (!email) return [];
+export function useLeadPurchaseHistory(email: string | null | undefined, phone?: string | null) {
+  // Extract 9-digit phone suffix for matching
+  const phoneSuffix = phone ? phone.replace(/\D/g, '').slice(-9) : '';
+  const hasPhone = phoneSuffix.length >= 8;
+  const hasEmail = !!email;
 
-      const { data, error } = await supabase
+  return useQuery({
+    queryKey: ['lead-purchase-history', email, phoneSuffix],
+    queryFn: async (): Promise<PurchaseHistoryItem[]> => {
+      if (!hasEmail && !hasPhone) return [];
+
+      let query = supabase
         .from('hubla_transactions')
         .select('id, product_name, product_price, sale_date, sale_status, source')
-        .eq('customer_email', email)
-        .in('source', ['hubla', 'kiwify', 'manual'])
+        .in('source', ['hubla', 'kiwify', 'manual', 'make']);
+
+      if (hasEmail && hasPhone) {
+        // Search by email OR phone suffix
+        query = query.or(`customer_email.eq.${email},customer_phone.ilike.%${phoneSuffix}`);
+      } else if (hasEmail) {
+        query = query.eq('customer_email', email);
+      } else {
+        // Only phone
+        query = query.ilike('customer_phone', `%${phoneSuffix}`);
+      }
+
+      const { data, error } = await query
         .order('sale_date', { ascending: false })
         .limit(20);
 
       if (error) throw error;
       return (data || []) as PurchaseHistoryItem[];
     },
-    enabled: !!email,
+    enabled: hasEmail || hasPhone,
   });
 }

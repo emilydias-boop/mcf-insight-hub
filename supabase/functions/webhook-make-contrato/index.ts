@@ -307,6 +307,48 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       }
     }
 
+    // 📧 ENRIQUECER CONTATO: Se match por telefone e contato não tem email, salvar email da compra
+    if (matchingAttendee.deal_id && data.customerEmail) {
+      try {
+        const { data: dealData } = await supabase
+          .from('crm_deals')
+          .select('contact_id')
+          .eq('id', matchingAttendee.deal_id)
+          .maybeSingle();
+
+        if (dealData?.contact_id) {
+          const { data: contact } = await supabase
+            .from('crm_contacts')
+            .select('email, phone')
+            .eq('id', dealData.contact_id)
+            .maybeSingle();
+
+          const updates: Record<string, string> = {};
+          if (!contact?.email && data.customerEmail) {
+            updates.email = data.customerEmail.toLowerCase().trim();
+          }
+          if (!contact?.phone && data.customerPhone) {
+            updates.phone = data.customerPhone;
+          }
+
+          if (Object.keys(updates).length > 0) {
+            const { error: enrichError } = await supabase
+              .from('crm_contacts')
+              .update(updates)
+              .eq('id', dealData.contact_id);
+
+            if (enrichError) {
+              console.error('⚠️ [ENRICH] Erro ao enriquecer contato:', enrichError.message);
+            } else {
+              console.log(`📧 [ENRICH] Contato ${dealData.contact_id} enriquecido:`, JSON.stringify(updates));
+            }
+          }
+        }
+      } catch (enrichErr: any) {
+        console.error('⚠️ [ENRICH] Erro:', enrichErr.message);
+      }
+    }
+
     console.log(`🎉 [AUTO-PAGO] Contrato marcado como pago automaticamente!`);
     
     return {
