@@ -138,6 +138,7 @@ export default function LeadsLimbo() {
   const [selectedLead, setSelectedLead] = useState<LimboRow | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const loadedRef = useRef(false);
+  const revalidatedRef = useRef(false);
 
   const { data: localDeals, isLoading: loadingDeals } = useInsideSalesDeals();
   const { data: sdrs } = useActiveSdrs();
