@@ -7,17 +7,32 @@ export const useSyncBillingFromHubla = () => {
 
   return useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('sync-billing-from-hubla', {
-        method: 'POST',
-      });
-      if (error) throw error;
-      return data;
+      let offset = 0;
+      let totalSubsCreated = 0;
+      let totalSubsUpdated = 0;
+      let totalInstallments = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase.functions.invoke('sync-billing-from-hubla', {
+          body: { offset, batchSize: 100 },
+        });
+        if (error) throw error;
+        
+        totalSubsCreated += data.subsCreated || 0;
+        totalSubsUpdated += data.subsUpdated || 0;
+        totalInstallments += data.installmentsCreated || 0;
+        hasMore = data.hasMore === true;
+        offset = data.nextOffset || 0;
+      }
+
+      return { subsCreated: totalSubsCreated, subsUpdated: totalSubsUpdated, installmentsCreated: totalInstallments };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['billing-subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['billing-kpis'] });
       toast.success(
-        `Sincronização concluída: ${data.subsCreated} assinaturas criadas, ${data.subsUpdated} atualizadas, ${data.installmentsCreated} parcelas criadas`
+        `Sincronização concluída: ${data.subsCreated} criadas, ${data.subsUpdated} atualizadas, ${data.installmentsCreated} parcelas`
       );
     },
     onError: (error: any) => {
