@@ -62,8 +62,31 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
       const uniqueEmails = Array.from(emailToDealIds.keys());
       if (!uniqueEmails.length) return result;
 
-      // 2. Collect unique deal IDs for R1 meeting lookup
-      const dealIds = deals.map(d => d.id);
+      // 2. Fetch ALL deal_ids for these contacts (cross-pipeline R1 lookup)
+      const allDealsForEmails = await batchedIn<{ id: string; crm_contacts: { email: string } }>(
+        (chunk) =>
+          supabase
+            .from('crm_deals')
+            .select('id, crm_contacts!inner(email)')
+            .in('crm_contacts.email', chunk) as any,
+        uniqueEmails
+      );
+
+      // Build email -> all deal_ids map (including sibling deals from other pipelines)
+      const emailToAllDealIds = new Map<string, Set<string>>();
+      for (const d of allDealsForEmails) {
+        const email = (d.crm_contacts as any)?.email?.toLowerCase().trim();
+        if (!email) continue;
+        if (!emailToAllDealIds.has(email)) emailToAllDealIds.set(email, new Set());
+        emailToAllDealIds.get(email)!.add(d.id);
+      }
+
+      // Expanded deal IDs: current deals + all sibling deals from same contacts
+      const expandedDealIds = new Set<string>(deals.map(d => d.id));
+      for (const dealSet of emailToAllDealIds.values()) {
+        for (const id of dealSet) expandedDealIds.add(id);
+      }
+      const allDealIds = Array.from(expandedDealIds);
 
       // 3. Fetch contract transactions, non-contract products, R1 meetings, AND partner transactions in parallel
       const [contracts, nonContractProducts, r1Attendees, partnerTransactions] = await Promise.all([
@@ -92,7 +115,7 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
               .order('sale_date', { ascending: false }),
           uniqueEmails
         ),
-        // R1 meetings by deal_id
+        // R1 meetings by expanded deal_ids (includes sibling deals from other pipelines)
         batchedIn<{ deal_id: string | null; meeting_slots: { scheduled_at: string; meeting_type: string | null } }>(
           (chunk) =>
             supabase
@@ -100,7 +123,7 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
               .select('deal_id, meeting_slots!inner(scheduled_at, meeting_type)')
               .in('deal_id', chunk)
               .eq('meeting_slots.meeting_type', 'r1') as any,
-          dealIds
+          allDealIds
         ),
         // Partner products: detect emails that already bought partnership products
         batchedIn<{ customer_email: string | null }>(
@@ -168,7 +191,7 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         }
       }
 
-      // 5. Build dealId -> earliest R1 scheduled_at
+      // 5. Build dealId -> earliest R1 scheduled_at (across all pipelines)
       const earliestR1 = new Map<string, Date>();
       for (const a of r1Attendees) {
         if (!a.deal_id) continue;
@@ -177,6 +200,32 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         const existing = earliestR1.get(a.deal_id);
         if (!existing || scheduledAt < existing) {
           earliestR1.set(a.deal_id, scheduledAt);
+        }
+      }
+
+      // 5b. Map R1s from sibling deals back to current deals via email
+      //     If a sibling deal has an R1, the current deal should also "see" it
+      for (const [email, currentDealEntries] of emailToDealIds) {
+        const allSiblingDealIds = emailToAllDealIds.get(email);
+        if (!allSiblingDealIds) continue;
+
+        // Find earliest R1 across ALL deals for this email
+        let earliestR1ForEmail: Date | undefined;
+        for (const siblingId of allSiblingDealIds) {
+          const r1Date = earliestR1.get(siblingId);
+          if (r1Date && (!earliestR1ForEmail || r1Date < earliestR1ForEmail)) {
+            earliestR1ForEmail = r1Date;
+          }
+        }
+
+        if (!earliestR1ForEmail) continue;
+
+        // Apply to all current deals for this email
+        for (const entry of currentDealEntries) {
+          const existing = earliestR1.get(entry.dealId);
+          if (!existing || earliestR1ForEmail < existing) {
+            earliestR1.set(entry.dealId, earliestR1ForEmail);
+          }
         }
       }
 
