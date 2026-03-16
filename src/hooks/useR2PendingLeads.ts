@@ -322,7 +322,7 @@ export function useR2PendingLeads() {
         );
 
         // Sort attendees by scheduled_at DESC (client-side) since Supabase nested ordering is unreliable
-        const sortedAttendees = ((latestAttendees as any[]) || [])
+        const sortedAttendees = (latestAttendees || [])
           .map(att => {
             const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
            const closer = Array.isArray(slot?.closer) ? slot?.closer[0] : slot?.closer;
