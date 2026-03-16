@@ -3,12 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BillingSubscription, BillingFilters } from '@/types/billing';
 import { useBillingSubscriptions, useBillingKPIs } from '@/hooks/useBillingSubscriptions';
+import { useSyncBillingFromHubla } from '@/hooks/useSyncBillingFromHubla';
 import { CobrancaKPIs } from './CobrancaKPIs';
 import { CobrancaFilters } from './CobrancaFilters';
 import { CobrancaTable } from './CobrancaTable';
 import { CobrancaDetailDrawer } from './CobrancaDetailDrawer';
 import { CreateSubscriptionModal } from './CreateSubscriptionModal';
-import { Plus } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 
 export const FinanceiroCobrancas = () => {
   const [filters, setFilters] = useState<BillingFilters>({});
