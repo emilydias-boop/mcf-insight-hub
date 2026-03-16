@@ -262,6 +262,7 @@ export const DealKanbanCard = ({
   };
 
   const timeAgoShort = deal.created_at ? getShortTimeAgo(deal.created_at) : null;
+  const stageTimeShort = deal.stage_moved_at ? getShortTimeAgo(deal.stage_moved_at) : null;
   const totalCalls = activitySummary?.totalCalls || 0;
   const maxAttempts = activitySummary?.maxAttempts || 5;
   const displayPhone = contactPhone || extractPhoneFromDeal(deal, contact);
