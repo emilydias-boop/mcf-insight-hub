@@ -14,6 +14,8 @@ import { ArrowUpDown, Check, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type SortOption = 
+  | 'stage_newest'
+  | 'stage_oldest'
   | 'newest' 
   | 'oldest' 
   | 'most_activities' 
@@ -26,6 +28,11 @@ interface SortOptionItem {
   label: string;
   icon?: 'up' | 'down';
 }
+
+const stageOptions: SortOptionItem[] = [
+  { value: 'stage_newest', label: 'Recente na Stage', icon: 'down' },
+  { value: 'stage_oldest', label: 'Antigo na Stage', icon: 'up' },
+];
 
 const sortOptions: SortOptionItem[] = [
   { value: 'newest', label: 'Mais Novo', icon: 'down' },
