@@ -34,13 +34,15 @@ interface Props {
   data: PagamentoRow[];
   isLoading: boolean;
   page: number;
+  pageSize: number;
   totalPages: number;
   totalItems: number;
   onPageChange: (p: number) => void;
+  onPageSizeChange: (size: number) => void;
   onViewDetail: (row: PagamentoRow) => void;
 }
 
-export function PagamentosTable({ data, isLoading, page, totalPages, totalItems, onPageChange, onViewDetail }: Props) {
+export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail }: Props) {
   const payInstallment = usePayInstallment();
 
   const handleMarkAsPaid = (row: PagamentoRow) => {
