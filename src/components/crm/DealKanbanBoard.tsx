@@ -15,7 +15,15 @@ import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBatchDealActivitySummary, ActivitySummary } from '@/hooks/useDealActivitySummary';
 import { SalesChannel } from '@/hooks/useBulkA010Check';
-import { Inbox, ChevronDown, ClipboardCopy } from 'lucide-react';
+import { Inbox, ChevronDown, ClipboardCopy, Phone, Mail, Table2, Settings2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { CopyLeadsFormatDialog, buildCopyLeadData, CopyLeadData } from './CopyLeadsFormatDialog';
 
 interface Deal {
   id: string;
