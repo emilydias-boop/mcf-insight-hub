@@ -1,39 +1,76 @@
 
 
-## Objetivo
+## Nova aba "Pagamentos" no módulo Consórcio
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Visão geral
 
-## Mudanças
+Criar uma nova aba principal "Pagamentos" ao lado de Cotas / Cadastros Pendentes / Contemplação. Essa aba será um painel operacional financeiro que consolida todas as 51.539 parcelas de 215 cotas, com KPIs, alertas, filtros e ações inline.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+Os dados já existem nas tabelas `consortium_installments` e `consortium_cards` -- não é necessário criar tabelas novas. A aba apenas consulta e exibe os dados existentes com lógica de status automática.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Arquivos a criar
 
-### 2. Hook `useCloserDetailData.ts`
+**1. `src/components/consorcio/pagamentos/ConsorcioPagamentosTab.tsx`**
+Componente principal da aba. Orquestra KPIs, alertas, filtros e tabela. Contém:
+- Hook customizado para buscar parcelas com JOIN em `consortium_cards` (nome, grupo, cota, status, vendedor, origem)
+- Lógica de status automático baseada em data:
+  - `pago`: já tem `data_pagamento`
+  - `vencendo`: vencimento nos próximos 7 dias
+  - `vencida`/`atrasada`: vencimento passado sem pagamento
+  - `pendente`: vencimento futuro
+- Cálculo de situação da cota (adimplente/pendente/em atraso/quitada) agregando parcelas por `card_id`
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**2. `src/components/consorcio/pagamentos/PagamentosKPIs.tsx`**
+Cards no topo com: Total recebido, Total pendente, Total em atraso, Parcelas pagas, Parcelas pendentes, Parcelas vencidas, Cotas inadimplentes, Cotas quitadas.
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**3. `src/components/consorcio/pagamentos/PagamentosAlerts.tsx`**
+Banner de alerta no topo: X parcelas em atraso, Y cotas com atraso, R$ Z em aberto.
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+**4. `src/components/consorcio/pagamentos/PagamentosTable.tsx`**
+Tabela paginada com colunas: Cliente, Grupo, Cota, Nº Parcela, Tipo, Valor, Vencimento, Data Pgto, Status (badge colorido), Situação Cota (badge), Responsável, Ações.
 
-### 4. Dados exportados no Excel
+**5. `src/components/consorcio/pagamentos/PagamentosFilters.tsx`**
+Barra de filtros: busca textual, status parcela, situação cota, vencimento, grupo, responsável, origem, tipo, período, toggles "apenas inadimplentes" / "apenas quitadas" / "vencendo esta semana".
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+**6. `src/components/consorcio/pagamentos/PagamentoDetailDrawer.tsx`**
+Drawer lateral ao clicar numa linha: histórico de pagamentos da cota, parcelas pagas/pendentes/atrasadas, observações, link para abrir a cota completa.
 
-Formato de data: `dd/MM/yyyy HH:mm`
+**7. `src/hooks/useConsorcioPagamentos.ts`**
+Hook que faz query paginada no Supabase:
+```sql
+SELECT i.*, c.nome_completo, c.grupo, c.cota, c.status as cota_status, 
+       c.vendedor_name, c.origem, c.tipo_produto, c.razao_social, c.tipo_pessoa
+FROM consortium_installments i
+JOIN consortium_cards c ON c.id = i.card_id
+```
+Com filtros dinâmicos. Retorna também os KPIs agregados via query separada.
 
-## Resultado
+### Arquivo a editar
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+**`src/pages/bu-consorcio/Index.tsx`**
+- Importar `ConsorcioPagamentosTab`
+- Adicionar `<TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>` na linha 386 (após contemplação)
+- Adicionar `<TabsContent value="pagamentos"><ConsorcioPagamentosTab /></TabsContent>`
+
+### Lógica de status automático
+
+Calculada no frontend ao receber os dados:
+
+| Condição | Status parcela |
+|----------|---------------|
+| `status = 'pago'` ou `data_pagamento` preenchido | Paga |
+| Vencimento em até 7 dias, sem pagamento | Vencendo |
+| Vencimento passado, sem pagamento | Atrasada |
+| Vencimento futuro, sem pagamento | Pendente |
+
+| Condição | Situação cota |
+|----------|--------------|
+| Todas parcelas pagas | Quitada |
+| Nenhuma atrasada, tem pendentes | Pendente |
+| Qualquer parcela atrasada | Em atraso |
+| Cota cancelada | Cancelada |
+
+### Performance
+
+Com 51k parcelas, a query precisa ser paginada no servidor. O hook usará `.range(from, to)` do Supabase com limit de 50 por página. Os KPIs serão calculados com uma query `SELECT COUNT/SUM` separada que roda uma vez e é cacheada.
 
