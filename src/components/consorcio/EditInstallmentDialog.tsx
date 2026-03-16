@@ -80,7 +80,7 @@ export function EditInstallmentDialog({
   const [observacao, setObservacao] = useState('');
   const [recalcularDemais, setRecalcularDemais] = useState(false);
 
-  const isPrimeiraParcela = installment?.numero_parcela === 1;
+  const isUltimaParcela = installment?.numero_parcela === undefined;
 
   // Reset form when installment changes
   useEffect(() => {
