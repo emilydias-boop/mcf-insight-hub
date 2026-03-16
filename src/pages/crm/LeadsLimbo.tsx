@@ -18,6 +18,7 @@ import {
   useProfilesByEmail,
   compareExcelWithLocal,
   useAssignLimboOwner,
+  revalidateLimboResults,
   LimboRow,
 } from '@/hooks/useLimboLeads';
 import { useLatestLimboUpload, useSaveLimboUpload, useUpdateLimboResults } from '@/hooks/useLimboUpload';
@@ -137,6 +138,7 @@ export default function LeadsLimbo() {
   const [selectedLead, setSelectedLead] = useState<LimboRow | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const loadedRef = useRef(false);
+  const revalidatedRef = useRef(false);
 
   const { data: localDeals, isLoading: loadingDeals } = useInsideSalesDeals();
   const { data: sdrs } = useActiveSdrs();
@@ -163,7 +165,32 @@ export default function LeadsLimbo() {
     }
   }, [latestUpload, loadingUpload]);
 
-  // Handle file upload
+  // Revalidate persisted results against current CRM data
+  useEffect(() => {
+    if (revalidatedRef.current) return;
+    if (!loadedRef.current) return;
+    if (results.length === 0) return;
+    if (loadingDeals || !localDeals) return;
+
+    const hasUnresolved = results.some(r => r.status === 'nao_encontrado' || r.status === 'sem_dono');
+    if (!hasUnresolved) {
+      revalidatedRef.current = true;
+      return;
+    }
+
+    revalidatedRef.current = true;
+    revalidateLimboResults(results, localDeals).then(({ updated, changed }) => {
+      if (changed) {
+        setResults(updated);
+        toast.info('Resultados atualizados com dados atuais do CRM');
+        if (latestUpload?.id) {
+          updateLimboResults.mutate({ uploadId: latestUpload.id, results: updated });
+        }
+      }
+    });
+  }, [results, localDeals, loadingDeals, latestUpload?.id]);
+
+
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;

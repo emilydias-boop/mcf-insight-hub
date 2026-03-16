@@ -180,6 +180,108 @@ export function compareExcelWithLocal(
   });
 }
 
+// Revalidate persisted limbo results against current CRM data
+export async function revalidateLimboResults(
+  results: LimboRow[],
+  localDeals: any[]
+): Promise<{ updated: LimboRow[]; changed: boolean }> {
+  // Build indexes from current local deals
+  const byEmail = new Map<string, any>();
+  const byName = new Map<string, any>();
+
+  for (const deal of localDeals) {
+    const contact = deal.crm_contacts;
+    if (contact?.email) {
+      const key = normalize(contact.email);
+      if (key && !byEmail.has(key)) byEmail.set(key, deal);
+    }
+    if (contact?.name) {
+      const key = normalize(contact.name);
+      if (key && !byName.has(key)) byName.set(key, deal);
+    }
+  }
+
+  // Collect emails of still-unresolved leads for global search
+  const unresolvedEmails: string[] = [];
+  const unresolvedPhones: string[] = [];
+  for (const r of results) {
+    if (r.status === 'nao_encontrado' || r.status === 'sem_dono') {
+      const emailKey = normalize(r.excelEmail);
+      if (emailKey) unresolvedEmails.push(emailKey);
+      const phone = (r.excelPhone || '').replace(/\D/g, '');
+      if (phone.length >= 9) unresolvedPhones.push(phone.slice(-9));
+    }
+  }
+
+  // Global search: batch lookup contacts by email
+  const globalContactMap = new Map<string, { hasOwner: boolean; ownerEmail: string }>();
+  const BATCH = 50;
+  for (let i = 0; i < unresolvedEmails.length; i += BATCH) {
+    const batch = unresolvedEmails.slice(i, i + BATCH);
+    // Search contacts by email
+    for (const email of batch) {
+      const { data: contacts } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', email)
+        .limit(1);
+
+      if (contacts?.length) {
+        const contactId = contacts[0].id;
+        // Check if contact has any deal with owner
+        const { data: deals } = await supabase
+          .from('crm_deals')
+          .select('id, owner_id')
+          .eq('contact_id', contactId)
+          .limit(1);
+
+        if (deals?.length) {
+          globalContactMap.set(email, {
+            hasOwner: !!deals[0].owner_id,
+            ownerEmail: deals[0].owner_id || '',
+          });
+        }
+      }
+    }
+  }
+
+  let changed = false;
+  const updated = results.map((r) => {
+    // Already has owner — skip
+    if (r.status === 'com_dono') return r;
+
+    const emailKey = normalize(r.excelEmail);
+    const nameKey = normalize(r.excelName);
+
+    // Check against current Inside Sales deals first
+    const localMatch = (emailKey ? byEmail.get(emailKey) : null) || (nameKey ? byName.get(nameKey) : null);
+
+    if (localMatch) {
+      if (localMatch.owner_id) {
+        changed = true;
+        return { ...r, status: 'com_dono' as const, localDealId: localMatch.id, localOwner: localMatch.owner_id };
+      }
+      if (r.status === 'nao_encontrado') {
+        changed = true;
+        return { ...r, status: 'sem_dono' as const, localDealId: localMatch.id };
+      }
+    }
+
+    // Check global contact search results
+    if (emailKey && globalContactMap.has(emailKey)) {
+      const info = globalContactMap.get(emailKey)!;
+      if (info.hasOwner) {
+        changed = true;
+        return { ...r, status: 'com_dono' as const, localOwner: info.ownerEmail };
+      }
+    }
+
+    return r;
+  });
+
+  return { updated, changed };
+}
+
 // Mutation para atribuir owner a deals sem dono
 export function useAssignLimboOwner() {
   const queryClient = useQueryClient();
