@@ -183,15 +183,16 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
     const { recalcularDemais, ...installmentData } = data;
     await updateInstallment.mutateAsync(installmentData);
     
-    // If recalculating subsequent installments from parcela 1
-    if (data.recalcularDemais && card?.installments) {
+    // If recalculating subsequent installments from the edited parcela
+    if (data.recalcularDemais && card?.installments && selectedInstallment) {
       const [year, month, day] = data.data_vencimento.split('-').map(Number);
       const novaDataBase = new Date(year, month - 1, day);
       const diaVencimento = novaDataBase.getDate();
       const totalParcelas = card.installments.length;
+      const parcelaInicial = selectedInstallment.numero_parcela + 1;
       
-      // Recalculate dates for parcelas 2+
-      const novasDatas = recalcularDatasAPartirDe(novaDataBase, diaVencimento, totalParcelas, 2);
+      // Recalculate dates starting from the next installment
+      const novasDatas = recalcularDatasAPartirDe(novaDataBase, diaVencimento, totalParcelas, parcelaInicial);
       
       // Batch update all subsequent installments
       for (const { numeroParcela, dataVencimento } of novasDatas) {

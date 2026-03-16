@@ -257,24 +257,22 @@ export function EditInstallmentDialog({
           </div>
 
           {/* Row 4: Recalcular demais (only for parcela 1) */}
-          {isPrimeiraParcela && (
-            <div className="flex items-start gap-3 p-3 border rounded-lg bg-muted/30">
-              <Checkbox
-                id="recalcularDemais"
-                checked={recalcularDemais}
-                onCheckedChange={(checked) => setRecalcularDemais(checked === true)}
-              />
-              <div className="space-y-1">
-                <label htmlFor="recalcularDemais" className="text-sm font-medium cursor-pointer flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  Recalcular datas das demais parcelas
-                </label>
-                <p className="text-xs text-muted-foreground">
-                  Ao ativar, todas as parcelas seguintes terão suas datas recalculadas a partir desta data de vencimento.
-                </p>
-              </div>
+          <div className="flex items-start gap-3 p-3 border rounded-lg bg-muted/30">
+            <Checkbox
+              id="recalcularDemais"
+              checked={recalcularDemais}
+              onCheckedChange={(checked) => setRecalcularDemais(checked === true)}
+            />
+            <div className="space-y-1">
+              <label htmlFor="recalcularDemais" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                Recalcular datas das parcelas seguintes a partir desta
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Ao ativar, todas as parcelas após a #{installment.numero_parcela} terão suas datas recalculadas a partir desta data de vencimento.
+              </p>
             </div>
-          )}
+          </div>
 
           {/* Row 5: Observação */}
           <div className="space-y-2">
