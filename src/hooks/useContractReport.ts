@@ -25,6 +25,7 @@ export interface ContractReportRow {
   salesChannel: 'a010' | 'bio' | 'live';
   contactEmail: string | null;
   contactTags: string[];
+  isRefunded: boolean;
   customFields: {
     profissao?: string;
     renda?: string;
@@ -94,7 +95,7 @@ export const useContractReport = (
             )
           )
         `)
-        .eq('status', 'contract_paid')
+        .in('status', ['contract_paid', 'refunded'])
         .gte('contract_paid_at', startISO)
         .lte('contract_paid_at', endISO);
       
@@ -215,6 +216,7 @@ export const useContractReport = (
           salesChannel,
           contactEmail,
           contactTags,
+          isRefunded: row.status === 'refunded',
           customFields,
         };
       });

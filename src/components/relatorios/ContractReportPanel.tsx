@@ -40,6 +40,7 @@ interface UnifiedContractRow {
   salesChannel: string;
   productName: string;
   netValue: number | null;
+  isRefunded: boolean;
   customFields: Record<string, unknown>;
 }
 
@@ -174,6 +175,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
           salesChannel: row.salesChannel.toUpperCase(),
           productName: 'Contrato R1',
           netValue: null,
+          isRefunded: row.isRefunded,
           customFields: row.customFields,
         });
       });
@@ -197,6 +199,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
           salesChannel: '—',
           productName: tx.productName,
           netValue: tx.netValue,
+          isRefunded: false,
           customFields: {},
         });
       });
@@ -217,6 +220,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
           salesChannel: '—',
           productName: tx.productName,
           netValue: tx.netValue,
+          isRefunded: false,
           customFields: {},
         });
       });
@@ -238,6 +242,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
           salesChannel: '—',
           productName: tx.productName,
           netValue: tx.netValue,
+          isRefunded: false,
           customFields: {},
         });
       });
@@ -291,6 +296,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
       'Pipeline': row.originName,
       'Canal': row.salesChannel,
       'Estágio': row.currentStage,
+      'Reembolsado': row.isRefunded ? 'Sim' : 'Não',
       'Produto': row.productName,
       'Valor': row.netValue ? `R$ ${row.netValue.toFixed(2)}` : '',
       'Profissão': (row.customFields as any)?.profissao || '',
@@ -505,18 +511,25 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
                   {unifiedData.map(row => (
                     <TableRow key={row.id}>
                       <TableCell>
-                        <Badge 
-                          variant={row.source === 'agenda' ? 'default' : row.source === 'pending' ? 'destructive' : 'secondary'}
-                          className={
-                            row.source === 'agenda' 
-                              ? 'bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30'
-                              : row.source === 'pending'
-                                ? 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/30'
-                                : ''
-                          }
-                        >
-                          {row.source === 'agenda' ? 'Agenda' : row.source === 'pending' ? 'Pendente' : 'Hubla'}
-                        </Badge>
+                        <div className="flex items-center gap-1.5">
+                          <Badge 
+                            variant={row.source === 'agenda' ? 'default' : row.source === 'pending' ? 'destructive' : 'secondary'}
+                            className={
+                              row.source === 'agenda' 
+                                ? 'bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30'
+                                : row.source === 'pending'
+                                  ? 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/30'
+                                  : ''
+                            }
+                          >
+                            {row.source === 'agenda' ? 'Agenda' : row.source === 'pending' ? 'Pendente' : 'Hubla'}
+                          </Badge>
+                          {row.isRefunded && (
+                            <Badge variant="destructive" className="bg-destructive/20 text-destructive border-destructive/30 text-[10px] px-1.5">
+                              Reembolsado
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="font-medium">{row.closerName}</TableCell>
                       <TableCell>
