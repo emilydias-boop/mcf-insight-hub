@@ -64,11 +64,11 @@ export interface R2CarrinhoVenda {
   r2_scheduled_at?: string;
 }
 
-export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date) {
-
+export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig) {
   return useQuery({
     queryKey: ['r2-carrinho-vendas', weekStart.toISOString(), weekEnd.toISOString()],
     queryFn: async () => {
+      const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig);
       // 1. Buscar attendees aprovados da semana com dados do closer
       const { data: approvedAttendees, error: attendeesError } = await supabase
         .from('meeting_slot_attendees')
