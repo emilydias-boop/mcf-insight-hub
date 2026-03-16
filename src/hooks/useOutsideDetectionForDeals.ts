@@ -184,8 +184,12 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
       }
 
       // 6. Determine Outside: has contract AND (no R1 OR contract <= R1)
+      //    NEW: Skip partners (emails that bought A001, A009, etc.) — they are NOT outside
       //    NEW: Skip contracts that are linked to a DIFFERENT deal's attendee
       for (const [email, dealEntries] of emailToDealIds) {
+        // Skip partners entirely — their contract is a legitimate sale, not "outside"
+        if (partnerEmails.has(email)) continue;
+
         const emailContracts = contractsByEmail.get(email);
         if (!emailContracts || emailContracts.length === 0) continue;
 
@@ -195,27 +199,20 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         const hasLinkedContracts = emailContracts.some(c => c.linkedDealId !== null);
 
         for (const entry of dealEntries) {
-          // Filter contracts relevant to this deal:
-          // - If linked contracts exist, skip unlinked ones (duplicates)
-          // - Contract IS linked to an attendee of THIS deal → applies
-          // - Contract IS linked to an attendee of ANOTHER deal → SKIP
           const relevantContracts = emailContracts.filter(c => {
-            if (hasLinkedContracts && !c.linkedDealId) return false; // Ignore orphan duplicates
-            if (!c.linkedDealId) return true; // No linked contracts exist, consider all
-            return c.linkedDealId === entry.dealId; // Linked to THIS deal
+            if (hasLinkedContracts && !c.linkedDealId) return false;
+            if (!c.linkedDealId) return true;
+            return c.linkedDealId === entry.dealId;
           });
 
-          if (relevantContracts.length === 0) continue; // All contracts belong to other deals
+          if (relevantContracts.length === 0) continue;
 
-          // Find earliest relevant contract
           const earliestContract = relevantContracts.reduce((min, c) => c.date < min.date ? c : min, relevantContracts[0]);
 
           const r1Date = earliestR1.get(entry.dealId);
           if (!r1Date) {
-            // Has contract but no R1 meeting -> Outside
             result.set(entry.dealId, { isOutside: true, productName: displayName });
           } else {
-            // Has contract and R1 -> Outside if contract was paid before/on R1
             const isOutside = earliestContract.date <= r1Date;
             if (isOutside) {
               result.set(entry.dealId, { isOutside: true, productName: displayName });
