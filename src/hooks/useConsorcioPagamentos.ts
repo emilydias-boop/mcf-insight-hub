@@ -94,19 +94,23 @@ function calcSituacaoCota(parcelas: Array<{ status_calculado: StatusParcela }>, 
   return 'pendente';
 }
 
-export function useConsorcioPagamentos(filters: PagamentosFiltersState, page: number, pageSize: number = 50) {
-  // Fetch ALL installments with card data for KPIs + filtering
+export function useConsorcioPagamentos(
+  filters: PagamentosFiltersState,
+  page: number,
+  pageSize: number = 50,
+  selectedMonth?: { start: string; end: string }
+) {
+  // Fetch installments filtered by selected month
   const { data: rawData, isLoading, refetch } = useQuery({
-    queryKey: ['consorcio-pagamentos-all'],
+    queryKey: ['consorcio-pagamentos-all', selectedMonth?.start, selectedMonth?.end],
     queryFn: async () => {
-      // Fetch installments in batches
       const allInstallments: any[] = [];
       let from = 0;
       const batchSize = 1000;
       let hasMore = true;
       
       while (hasMore) {
-        const { data, error } = await supabase
+        let query = supabase
           .from('consortium_installments')
           .select(`
             id, card_id, numero_parcela, tipo, valor_parcela, valor_comissao,
@@ -116,8 +120,18 @@ export function useConsorcioPagamentos(filters: PagamentosFiltersState, page: nu
               status, vendedor_name, origem, tipo_produto
             )
           `)
-          .order('data_vencimento', { ascending: true })
-          .range(from, from + batchSize - 1);
+          .order('data_vencimento', { ascending: true });
+
+        // Filter by selected month
+        if (selectedMonth) {
+          query = query
+            .gte('data_vencimento', selectedMonth.start)
+            .lte('data_vencimento', selectedMonth.end);
+        }
+
+        query = query.range(from, from + batchSize - 1);
+        
+        const { data, error } = await query;
         
         if (error) throw error;
         if (!data || data.length === 0) {
@@ -131,14 +145,13 @@ export function useConsorcioPagamentos(filters: PagamentosFiltersState, page: nu
       
       return allInstallments;
     },
-    staleTime: 5 * 60 * 1000, // 5 min cache
+    staleTime: 5 * 60 * 1000,
   });
 
   // Process: compute statuses and flatten
   const processedData = useMemo(() => {
     if (!rawData) return [];
     
-    // First pass: compute status for each installment
     const withStatus = rawData.map((inst: any) => {
       const card = inst.consortium_cards as any;
       const status_calculado = calcStatusParcela(inst);
@@ -155,11 +168,11 @@ export function useConsorcioPagamentos(filters: PagamentosFiltersState, page: nu
         tipo_produto: card?.tipo_produto,
         status_calculado,
         cliente_nome: card?.tipo_pessoa === 'pj' ? (card?.razao_social || 'Sem nome') : (card?.nome_completo || 'Sem nome'),
-        situacao_cota: '' as SituacaoCota, // computed below
+        situacao_cota: '' as SituacaoCota,
       } as PagamentoRow;
     });
 
-    // Second pass: compute situacao_cota grouped by card_id
+    // Compute situacao_cota grouped by card_id
     const byCard = new Map<string, PagamentoRow[]>();
     for (const row of withStatus) {
       const arr = byCard.get(row.card_id) || [];

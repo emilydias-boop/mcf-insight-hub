@@ -1,43 +1,39 @@
 
 
-## Ajustes na aba Pagamentos: filtro por mês, KPIs dinâmicos e ações de status
+## Objetivo
 
-### Problemas identificados
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-1. **Não acompanha o mês selecionado**: O `ConsorcioPagamentosTab` não recebe o `monthOffset` do Index.tsx. Carrega todas as 51k parcelas sem filtro de mês.
-2. **KPIs não filtram por mês**: Os KPIs são calculados sobre TODOS os dados, não sobre o mês selecionado.
-3. **Sem ação de marcar como pago**: A tabela só tem botão de "ver detalhes" (Eye), sem possibilidade de alterar status.
+## Mudanças
 
-### Solução
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**1. Passar o mês selecionado para a aba Pagamentos**
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-- **`Index.tsx`**: Passar `monthOffset` (ou `startDate`/`endDate`) como prop para `<ConsorcioPagamentosTab />`
-- **`ConsorcioPagamentosTab.tsx`**: Receber `selectedMonth: { start: Date; end: Date }` e passá-lo ao hook
+### 2. Hook `useCloserDetailData.ts`
 
-**2. Hook `useConsorcioPagamentos.ts` -- filtrar por mês**
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-- Receber parâmetro `selectedMonth: { start: string; end: string }` 
-- Na query Supabase, adicionar `.gte('data_vencimento', start).lte('data_vencimento', end)` para só buscar parcelas do mês
-- KPIs e alertas passam a ser calculados automaticamente sobre os dados do mês filtrado
-- Isso também resolve performance (busca ~200-500 parcelas em vez de 51k)
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**3. Ações na tabela -- marcar como pago e editar status**
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-- **`PagamentosTable.tsx`**: Adicionar dropdown de ações por linha com:
-  - "Marcar como Paga" (chama `usePayInstallment` existente de `useConsorcio.ts` com `dataPagamento = hoje`)
-  - "Abrir Cota" (navega para o drawer da cota)
-  - "Ver Detalhes" (mantém o drawer atual)
-- Reutilizar o mutation `usePayInstallment` já existente que faz `UPDATE consortium_installments SET status='pago', data_pagamento=...`
-- Após mutação, invalidar também `queryKey: ['consorcio-pagamentos-all']` para atualizar a lista
+### 4. Dados exportados no Excel
 
-### Arquivos
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-| Ação | Arquivo |
-|------|---------|
-| Editar | `src/pages/bu-consorcio/Index.tsx` -- passar `selectedMonth` ao `ConsorcioPagamentosTab` |
-| Editar | `src/components/consorcio/pagamentos/ConsorcioPagamentosTab.tsx` -- receber prop de mês, passar ao hook |
-| Editar | `src/hooks/useConsorcioPagamentos.ts` -- filtrar query por mês, KPIs sobre dados do mês |
-| Editar | `src/components/consorcio/pagamentos/PagamentosTable.tsx` -- adicionar dropdown de ações (pagar, abrir cota) |
-| Editar | `src/hooks/useConsorcio.ts` -- invalidar cache de pagamentos no `usePayInstallment` |
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

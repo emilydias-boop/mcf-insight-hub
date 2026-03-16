@@ -1,10 +1,19 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, ChevronLeft, ChevronRight, MoreHorizontal, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { PagamentoRow, StatusParcela, SituacaoCota } from '@/hooks/useConsorcioPagamentos';
+import { usePayInstallment } from '@/hooks/useConsorcio';
+import { format } from 'date-fns';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const statusBadgeConfig: Record<StatusParcela, { label: string; className: string }> = {
   paga: { label: 'Paga', className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' },
@@ -31,6 +40,15 @@ interface Props {
 }
 
 export function PagamentosTable({ data, isLoading, page, totalPages, totalItems, onPageChange, onViewDetail }: Props) {
+  const payInstallment = usePayInstallment();
+
+  const handleMarkAsPaid = (row: PagamentoRow) => {
+    payInstallment.mutate({
+      installmentId: row.id,
+      dataPagamento: format(new Date(), 'yyyy-MM-dd'),
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -69,6 +87,7 @@ export function PagamentosTable({ data, isLoading, page, totalPages, totalItems,
             data.map(row => {
               const statusCfg = statusBadgeConfig[row.status_calculado];
               const situacaoCfg = situacaoBadgeConfig[row.situacao_cota];
+              const isPaid = row.status_calculado === 'paga';
               return (
                 <TableRow key={row.id} className={row.status_calculado === 'atrasada' ? 'bg-destructive/5' : ''}>
                   <TableCell className="font-medium max-w-[160px] truncate">{row.cliente_nome}</TableCell>
@@ -87,9 +106,28 @@ export function PagamentosTable({ data, isLoading, page, totalPages, totalItems,
                   </TableCell>
                   <TableCell className="max-w-[120px] truncate">{row.vendedor_name || '-'}</TableCell>
                   <TableCell className="text-center">
-                    <Button variant="ghost" size="icon" onClick={() => onViewDetail(row)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {!isPaid && (
+                          <>
+                            <DropdownMenuItem onClick={() => handleMarkAsPaid(row)}>
+                              <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
+                              Marcar como Paga
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
+                        <DropdownMenuItem onClick={() => onViewDetail(row)}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          Ver Detalhes
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               );

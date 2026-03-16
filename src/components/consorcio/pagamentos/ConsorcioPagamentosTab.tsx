@@ -10,13 +10,17 @@ import { Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 
-export function ConsorcioPagamentosTab() {
+interface Props {
+  selectedMonth: { start: string; end: string };
+}
+
+export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
   const [filters, setFilters] = useState<PagamentosFiltersState>(defaultFilters);
   const [page, setPage] = useState(1);
   const [detailRow, setDetailRow] = useState<PagamentoRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const { data, allData, isLoading, kpis, alertData, totalItems, totalPages, filterOptions } = useConsorcioPagamentos(filters, page);
+  const { data, allData, isLoading, kpis, alertData, totalItems, totalPages, filterOptions } = useConsorcioPagamentos(filters, page, 50, selectedMonth);
 
   const handleFilterChange = (f: PagamentosFiltersState) => {
     setFilters(f);
