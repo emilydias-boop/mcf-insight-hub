@@ -63,8 +63,8 @@ export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date, carrinho
           )
         `)
         .eq('meeting_type', 'r2')
-        .gte('scheduled_at', startOfDay(weekStart).toISOString())
-        .lte('scheduled_at', endOfDay(weekEnd).toISOString());
+        .gte('scheduled_at', getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig).effectiveStart.toISOString())
+        .lt('scheduled_at', getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig).effectiveEnd.toISOString());
 
       if (!meetings) return [];
 

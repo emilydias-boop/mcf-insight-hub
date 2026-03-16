@@ -55,8 +55,8 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
           )
         `)
         .eq('meeting_type', 'r2')
-        .gte('scheduled_at', startOfDay(weekStart).toISOString())
-        .lte('scheduled_at', endOfDay(weekEnd).toISOString());
+        .gte('scheduled_at', effectiveStart.toISOString())
+        .lt('scheduled_at', effectiveEnd.toISOString());
 
       // ===== R2 AGENDADAS =====
       // Count ATTENDEES (not slots) in scheduled/invited/pending meetings

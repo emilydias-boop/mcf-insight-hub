@@ -145,8 +145,8 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
         .from('hubla_transactions')
         .select('*')
         .eq('product_category', 'parceria')
-        .gte('sale_date', weekStart.toISOString())
-        .lte('sale_date', endOfDay(weekEnd).toISOString())
+        .gte('sale_date', effectiveStart.toISOString())
+        .lt('sale_date', effectiveEnd.toISOString())
         .order('sale_date', { ascending: false });
 
       // Construir filtro OR para emails e telefones
