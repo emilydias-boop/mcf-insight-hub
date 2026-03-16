@@ -65,8 +65,8 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
       // 2. Collect unique deal IDs for R1 meeting lookup
       const dealIds = deals.map(d => d.id);
 
-      // 3. Fetch contract transactions, non-contract products, R1 meetings, AND linked attendees in parallel
-      const [contracts, nonContractProducts, r1Attendees, linkedAttendees] = await Promise.all([
+      // 3. Fetch contract transactions, non-contract products, R1 meetings, AND partner transactions in parallel
+      const [contracts, nonContractProducts, r1Attendees, partnerTransactions] = await Promise.all([
         // Contracts (for outside detection) - now also fetch linked_attendee_id
         batchedIn<{ customer_email: string | null; sale_date: string; product_name: string | null; linked_attendee_id: string | null }>(
           (chunk) =>
@@ -102,19 +102,28 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
               .eq('meeting_slots.meeting_type', 'r1') as any,
           dealIds
         ),
-        // Fetch which deal each linked_attendee_id belongs to
-        // This lets us know if a contract is linked to a DIFFERENT deal
-        batchedIn<{ id: string; deal_id: string | null }>(
+        // Partner products: detect emails that already bought partnership products
+        batchedIn<{ customer_email: string | null }>(
           (chunk) =>
             supabase
-              .from('meeting_slot_attendees')
-              .select('id, deal_id')
-              .in('id', chunk),
-          // We'll filter to only linked_attendee_ids after contracts are fetched
-          // For now, pass empty - we'll do this after
-          []
+              .from('hubla_transactions')
+              .select('customer_email')
+              .in('customer_email', chunk)
+              .eq('sale_status', 'completed')
+              .not('product_name', 'ilike', '%contrato%')
+              .not('product_name', 'ilike', '%Construir para Alugar%')
+              .not('product_name', 'ilike', '%P2%')
+              .not('product_name', 'ilike', '%Suplemento%'),
+          uniqueEmails
         ),
       ]);
+
+      // Build set of partner emails (those who bought non-contract, non-ignored products)
+      const partnerEmails = new Set<string>();
+      for (const pt of partnerTransactions) {
+        const email = pt.customer_email?.toLowerCase().trim();
+        if (email) partnerEmails.add(email);
+      }
 
       // 3b. Now fetch the deal_ids for linked_attendee_ids from contracts
       const linkedAttendeeIds = contracts
@@ -175,8 +184,12 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
       }
 
       // 6. Determine Outside: has contract AND (no R1 OR contract <= R1)
+      //    NEW: Skip partners (emails that bought A001, A009, etc.) — they are NOT outside
       //    NEW: Skip contracts that are linked to a DIFFERENT deal's attendee
       for (const [email, dealEntries] of emailToDealIds) {
+        // Skip partners entirely — their contract is a legitimate sale, not "outside"
+        if (partnerEmails.has(email)) continue;
+
         const emailContracts = contractsByEmail.get(email);
         if (!emailContracts || emailContracts.length === 0) continue;
 
@@ -186,27 +199,20 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         const hasLinkedContracts = emailContracts.some(c => c.linkedDealId !== null);
 
         for (const entry of dealEntries) {
-          // Filter contracts relevant to this deal:
-          // - If linked contracts exist, skip unlinked ones (duplicates)
-          // - Contract IS linked to an attendee of THIS deal → applies
-          // - Contract IS linked to an attendee of ANOTHER deal → SKIP
           const relevantContracts = emailContracts.filter(c => {
-            if (hasLinkedContracts && !c.linkedDealId) return false; // Ignore orphan duplicates
-            if (!c.linkedDealId) return true; // No linked contracts exist, consider all
-            return c.linkedDealId === entry.dealId; // Linked to THIS deal
+            if (hasLinkedContracts && !c.linkedDealId) return false;
+            if (!c.linkedDealId) return true;
+            return c.linkedDealId === entry.dealId;
           });
 
-          if (relevantContracts.length === 0) continue; // All contracts belong to other deals
+          if (relevantContracts.length === 0) continue;
 
-          // Find earliest relevant contract
           const earliestContract = relevantContracts.reduce((min, c) => c.date < min.date ? c : min, relevantContracts[0]);
 
           const r1Date = earliestR1.get(entry.dealId);
           if (!r1Date) {
-            // Has contract but no R1 meeting -> Outside
             result.set(entry.dealId, { isOutside: true, productName: displayName });
           } else {
-            // Has contract and R1 -> Outside if contract was paid before/on R1
             const isOutside = earliestContract.date <= r1Date;
             if (isOutside) {
               result.set(entry.dealId, { isOutside: true, productName: displayName });
