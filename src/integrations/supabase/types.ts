@@ -1285,6 +1285,332 @@ export type Database = {
         }
         Relationships: []
       }
+      billing_agreement_installments: {
+        Row: {
+          agreement_id: string
+          created_at: string
+          data_pagamento: string | null
+          data_vencimento: string
+          id: string
+          numero_parcela: number
+          status: Database["public"]["Enums"]["billing_installment_status"]
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          agreement_id: string
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          id?: string
+          numero_parcela: number
+          status?: Database["public"]["Enums"]["billing_installment_status"]
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          agreement_id?: string
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          id?: string
+          numero_parcela?: number
+          status?: Database["public"]["Enums"]["billing_installment_status"]
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_agreement_installments_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "billing_agreements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_agreements: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_negociacao: string
+          data_primeiro_vencimento: string | null
+          forma_pagamento:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          id: string
+          motivo_negociacao: string | null
+          novo_valor_negociado: number
+          observacoes: string | null
+          quantidade_parcelas: number
+          responsavel: string
+          status: Database["public"]["Enums"]["billing_agreement_status"]
+          subscription_id: string
+          updated_at: string
+          valor_original_divida: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_negociacao?: string
+          data_primeiro_vencimento?: string | null
+          forma_pagamento?:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          id?: string
+          motivo_negociacao?: string | null
+          novo_valor_negociado?: number
+          observacoes?: string | null
+          quantidade_parcelas?: number
+          responsavel: string
+          status?: Database["public"]["Enums"]["billing_agreement_status"]
+          subscription_id: string
+          updated_at?: string
+          valor_original_divida?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_negociacao?: string
+          data_primeiro_vencimento?: string | null
+          forma_pagamento?:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          id?: string
+          motivo_negociacao?: string | null
+          novo_valor_negociado?: number
+          observacoes?: string | null
+          quantidade_parcelas?: number
+          responsavel?: string
+          status?: Database["public"]["Enums"]["billing_agreement_status"]
+          subscription_id?: string
+          updated_at?: string
+          valor_original_divida?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_agreements_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "billing_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_history: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          forma_pagamento:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          id: string
+          metadata: Json | null
+          responsavel: string | null
+          status: string | null
+          subscription_id: string
+          tipo: Database["public"]["Enums"]["billing_history_type"]
+          valor: number | null
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          forma_pagamento?:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          id?: string
+          metadata?: Json | null
+          responsavel?: string | null
+          status?: string | null
+          subscription_id: string
+          tipo: Database["public"]["Enums"]["billing_history_type"]
+          valor?: number | null
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          forma_pagamento?:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          id?: string
+          metadata?: Json | null
+          responsavel?: string | null
+          status?: string | null
+          subscription_id?: string
+          tipo?: Database["public"]["Enums"]["billing_history_type"]
+          valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_history_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "billing_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_installments: {
+        Row: {
+          created_at: string
+          data_pagamento: string | null
+          data_vencimento: string
+          forma_pagamento:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          hubla_transaction_id: string | null
+          id: string
+          numero_parcela: number
+          observacoes: string | null
+          status: Database["public"]["Enums"]["billing_installment_status"]
+          subscription_id: string
+          updated_at: string
+          valor_liquido: number | null
+          valor_original: number
+          valor_pago: number | null
+        }
+        Insert: {
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          forma_pagamento?:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          hubla_transaction_id?: string | null
+          id?: string
+          numero_parcela: number
+          observacoes?: string | null
+          status?: Database["public"]["Enums"]["billing_installment_status"]
+          subscription_id: string
+          updated_at?: string
+          valor_liquido?: number | null
+          valor_original?: number
+          valor_pago?: number | null
+        }
+        Update: {
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          forma_pagamento?:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          hubla_transaction_id?: string | null
+          id?: string
+          numero_parcela?: number
+          observacoes?: string | null
+          status?: Database["public"]["Enums"]["billing_installment_status"]
+          subscription_id?: string
+          updated_at?: string
+          valor_liquido?: number | null
+          valor_original?: number
+          valor_pago?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_installments_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "billing_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_subscriptions: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string | null
+          data_fim_prevista: string | null
+          data_inicio: string | null
+          deal_id: string | null
+          forma_pagamento:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          id: string
+          observacoes: string | null
+          product_category: string | null
+          product_name: string
+          responsavel_financeiro: string | null
+          status: Database["public"]["Enums"]["billing_subscription_status"]
+          status_quitacao: Database["public"]["Enums"]["billing_quitacao_status"]
+          total_parcelas: number
+          updated_at: string
+          updated_by: string | null
+          valor_entrada: number | null
+          valor_total_contrato: number
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_email?: string | null
+          customer_name: string
+          customer_phone?: string | null
+          data_fim_prevista?: string | null
+          data_inicio?: string | null
+          deal_id?: string | null
+          forma_pagamento?:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          id?: string
+          observacoes?: string | null
+          product_category?: string | null
+          product_name: string
+          responsavel_financeiro?: string | null
+          status?: Database["public"]["Enums"]["billing_subscription_status"]
+          status_quitacao?: Database["public"]["Enums"]["billing_quitacao_status"]
+          total_parcelas?: number
+          updated_at?: string
+          updated_by?: string | null
+          valor_entrada?: number | null
+          valor_total_contrato?: number
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_email?: string | null
+          customer_name?: string
+          customer_phone?: string | null
+          data_fim_prevista?: string | null
+          data_inicio?: string | null
+          deal_id?: string | null
+          forma_pagamento?:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          id?: string
+          observacoes?: string | null
+          product_category?: string | null
+          product_name?: string
+          responsavel_financeiro?: string | null
+          status?: Database["public"]["Enums"]["billing_subscription_status"]
+          status_quitacao?: Database["public"]["Enums"]["billing_quitacao_status"]
+          total_parcelas?: number
+          updated_at?: string
+          updated_by?: string | null
+          valor_entrada?: number | null
+          valor_total_contrato?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_subscriptions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_subscriptions_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bu_origin_mapping: {
         Row: {
           bu: string
@@ -10213,6 +10539,35 @@ export type Database = {
         | "failed"
         | "cancelled"
       automation_trigger: "enter" | "exit"
+      billing_agreement_status:
+        | "em_aberto"
+        | "em_andamento"
+        | "cumprido"
+        | "quebrado"
+      billing_history_type:
+        | "entrada_paga"
+        | "parcela_paga"
+        | "parcela_atrasada"
+        | "boleto_gerado"
+        | "tentativa_cobranca"
+        | "acordo_realizado"
+        | "cancelamento"
+        | "quitacao"
+        | "observacao"
+      billing_installment_status: "pendente" | "pago" | "atrasado" | "cancelado"
+      billing_payment_method:
+        | "pix"
+        | "credit_card"
+        | "bank_slip"
+        | "boleto"
+        | "outro"
+      billing_quitacao_status: "em_aberto" | "parcialmente_pago" | "quitado"
+      billing_subscription_status:
+        | "em_dia"
+        | "atrasada"
+        | "cancelada"
+        | "finalizada"
+        | "quitada"
       flag_category:
         | "desempenho"
         | "comportamento"
@@ -10476,6 +10831,39 @@ export const Constants = {
         "cancelled",
       ],
       automation_trigger: ["enter", "exit"],
+      billing_agreement_status: [
+        "em_aberto",
+        "em_andamento",
+        "cumprido",
+        "quebrado",
+      ],
+      billing_history_type: [
+        "entrada_paga",
+        "parcela_paga",
+        "parcela_atrasada",
+        "boleto_gerado",
+        "tentativa_cobranca",
+        "acordo_realizado",
+        "cancelamento",
+        "quitacao",
+        "observacao",
+      ],
+      billing_installment_status: ["pendente", "pago", "atrasado", "cancelado"],
+      billing_payment_method: [
+        "pix",
+        "credit_card",
+        "bank_slip",
+        "boleto",
+        "outro",
+      ],
+      billing_quitacao_status: ["em_aberto", "parcialmente_pago", "quitado"],
+      billing_subscription_status: [
+        "em_dia",
+        "atrasada",
+        "cancelada",
+        "finalizada",
+        "quitada",
+      ],
       flag_category: [
         "desempenho",
         "comportamento",
