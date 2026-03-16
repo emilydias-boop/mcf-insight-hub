@@ -1,66 +1,39 @@
 
 
-## Auto-popular Cobranças com dados da Hubla
+## Objetivo
 
-### Dados disponíveis
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Sim, a Hubla envia dados de **boleto** (`bank_slip`), **cartão** (`credit_card`) e **PIX** parcelado. A tabela `hubla_transactions` já tem:
+## Mudanças
 
-- **1.498 assinaturas parceladas** únicas (combinação cliente + produto)
-- **1.836 registros de parcelas** pagas (event_type = `invoice.payment_succeeded`)
-- Cada registro tem `installment_number`, `total_installments`, `product_price`, `net_value`, `payment_method`, `sale_date`
-- Boleto: 13 parcelas de 10 clientes | Cartão: 1.795 parcelas de 953 clientes | PIX parcelado: 26 parcelas de 17 clientes
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### Plano de implementação
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**1. Edge Function `sync-billing-from-hubla`**
+### 2. Hook `useCloserDetailData.ts`
 
-Cria uma edge function que lê `hubla_transactions` parceladas e popula automaticamente as tabelas de billing:
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-- Agrupa por `customer_email + product_name` para criar uma `billing_subscription` por contrato
-- Para cada assinatura, cria `billing_installments` (1 a `total_installments`)
-  - Parcelas já pagas na Hubla: status `pago`, com `data_pagamento`, `valor_pago`, `hubla_transaction_id`
-  - Parcelas futuras sem registro: status `pendente`, com `data_vencimento` estimada (baseada no intervalo entre parcelas existentes)
-  - Parcelas vencidas sem registro: status `atrasado`
-- Calcula `valor_total_contrato` = `product_price * total_installments`
-- Define `status` da assinatura: `em_dia`, `atrasada` ou `quitada` conforme parcelas pagas vs total
-- Define `status_quitacao`: `quitado` se todas pagas, `parcialmente_pago` se algumas, `em_aberto` se nenhuma
-- Usa upsert para não duplicar em execuções repetidas (chave: `customer_email + product_name + sale_date da primeira parcela`)
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**2. Botão "Sincronizar com Hubla" na página**
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-- Adicionar botão na página `/cobrancas` ao lado de "Nova Assinatura"
-- Chama a edge function e mostra progresso/resultado
-- Permite re-sincronizar para pegar novas parcelas pagas
+### 4. Dados exportados no Excel
 
-**3. Webhook automático (futuro)**
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-- Quando o `hubla-webhook-handler` recebe `invoice.payment_succeeded` de parcela, atualizar automaticamente o `billing_installment` correspondente
+Formato de data: `dd/MM/yyyy HH:mm`
 
-### Detalhes da sincronização
+## Resultado
 
-```text
-hubla_transactions (parcelada)          →  billing_subscriptions
-─────────────────────────────────────      ───────────────────
-customer_email + product_name (grupo)  →  1 subscription
-product_price * total_installments     →  valor_total_contrato
-payment_method                         →  forma_pagamento
-min(sale_date) do grupo                →  data_inicio
-
-hubla_transactions (cada parcela)       →  billing_installments
-─────────────────────────────────────      ───────────────────
-installment_number                     →  numero_parcela
-net_value                              →  valor_pago + valor_liquido
-product_price                          →  valor_original
-sale_date                              →  data_pagamento
-id                                     →  hubla_transaction_id
-```
-
-### Arquivos
-
-| Acao | Arquivo |
-|------|---------|
-| Criar | `supabase/functions/sync-billing-from-hubla/index.ts` |
-| Editar | `src/components/financeiro/cobranca/FinanceiroCobrancas.tsx` — botao sincronizar |
-| Criar | `src/hooks/useSyncBillingFromHubla.ts` — hook para chamar a edge function |
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
