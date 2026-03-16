@@ -15,7 +15,7 @@ import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBatchDealActivitySummary, ActivitySummary } from '@/hooks/useDealActivitySummary';
 import { SalesChannel } from '@/hooks/useBulkA010Check';
-import { Inbox, ChevronDown } from 'lucide-react';
+import { Inbox, ChevronDown, ClipboardCopy } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -271,6 +271,31 @@ export const DealKanbanBoard = ({
                             currentSort={stageSorts[stage.id] || 'newest'}
                             onSortChange={(sort) => handleSortChange(stage.id, sort)}
                           />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            title="Copiar nome e telefone dos leads"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (stageDeals.length === 0) {
+                                toast.info('Nenhum lead neste estágio');
+                                return;
+                              }
+                              const text = stageDeals.map((d: any) => {
+                                const name = d.crm_contacts?.name || d.name || 'Sem nome';
+                                const phone = d.crm_contacts?.phone || '(sem telefone)';
+                                return `${name} - ${phone}`;
+                              }).join('\n');
+                              navigator.clipboard.writeText(text).then(() => {
+                                toast.success(`${stageDeals.length} lead(s) copiado(s) para a área de transferência`);
+                              }).catch(() => {
+                                toast.error('Erro ao copiar');
+                              });
+                            }}
+                          >
+                            <ClipboardCopy className="h-3.5 w-3.5" />
+                          </Button>
                           <Badge variant="secondary">{stageDeals.length}</Badge>
                         </div>
                       </div>

@@ -1,34 +1,39 @@
 
 
-## Plano: Botão "Copiar Leads" por estágio no Kanban
+## Objetivo
 
-### Problema
-O usuário precisa copiar rapidamente nome e telefone de todos os leads de um estágio do Kanban para fazer disparos de mensagens.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Solução
-Adicionar um botão de "Copiar" no header de cada coluna do Kanban que copia nome e telefone de todos os leads daquele estágio para a área de transferência, formatado para disparo.
+## Mudanças
 
-### Alterações
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**1. `src/components/crm/DealKanbanBoard.tsx`**
-- Adicionar um botão `Copy` (ícone de clipboard) no header de cada coluna, ao lado do badge de contagem
-- Ao clicar, percorre todos os `stageDeals` daquela coluna, extrai `deal.crm_contacts?.name` e `deal.crm_contacts?.phone`, e copia para o clipboard
-- Formato copiado: uma linha por lead com `Nome - Telefone` (ex: `João Silva - 11999998888`)
-- Leads sem telefone serão incluídos com indicação `(sem telefone)`
-- Exibir toast confirmando quantos leads foram copiados
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### Formato da cópia
+### 2. Hook `useCloserDetailData.ts`
 
-```text
-Cláudia Monique Costa Valente - 11999991234
-Thiago de Oliveira Pereira - 21988887777
-Daniel Marinho Alves - (sem telefone)
-```
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-### Detalhes técnicos
-- Os dados de contato (`name`, `phone`) já estão disponíveis via join `crm_contacts` no query `useCRMDeals`
-- Acessível via `deal.crm_contacts?.phone` e `deal.crm_contacts?.name`
-- Usar `navigator.clipboard.writeText()` para copiar
-- O botão ficará visível sempre (não depende do modo de seleção)
-- Import do ícone `ClipboardCopy` do lucide-react
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
