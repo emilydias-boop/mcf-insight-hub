@@ -613,6 +613,12 @@ export default function LeadsLimbo() {
         <div>
           <h2 className="text-2xl font-bold text-foreground">Resultados da Comparação</h2>
           <p className="text-muted-foreground text-sm mt-1">Pipeline Inside Sales — {results.length} leads analisados</p>
+          {isSyncing && (
+            <div className="flex items-center gap-2 mt-1">
+              <Skeleton className="h-3 w-3 rounded-full animate-pulse" />
+              <span className="text-xs text-primary font-medium">Sincronizando com CRM atual...</span>
+            </div>
+          )}
           {latestUpload && (
             <div className="flex items-center gap-2 mt-1">
               <Clock className="h-3 w-3 text-muted-foreground" />
