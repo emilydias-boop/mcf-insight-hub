@@ -254,14 +254,14 @@ serve(async (req) => {
       console.log('[WEBHOOK-RECEIVER] Novo contato criado:', contactId);
     }
 
-    // 8. Check for existing deal (duplicata recente nas últimas 24h)
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // 8. Check for existing deal (any deal for same contact+origin, respecting UNIQUE constraint)
     const { data: existingDeal } = await supabase
       .from('crm_deals')
       .select('id')
       .eq('contact_id', contactId)
       .eq('origin_id', endpoint.origin_id)
-      .gte('created_at', twentyFourHoursAgo)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (existingDeal) {
@@ -469,7 +469,38 @@ function cleanCpf(val: unknown): string | null {
   return clean.length >= 11 ? clean : null;
 }
 
-// Get a field from payload supporting both snake_case and camelCase
+// Parse date fields: DDMMYYYY, DD/MM/YYYY, YYYY-MM-DD → YYYY-MM-DD or null
+function parseDateField(val: unknown): string | null {
+  if (!val || typeof val !== 'string') return null;
+  const trimmed = val.trim();
+  if (!trimmed) return null;
+
+  // Already ISO: YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  // DDMMYYYY (8 digits, no separator)
+  if (/^\d{8}$/.test(trimmed)) {
+    const day = trimmed.slice(0, 2);
+    const month = trimmed.slice(2, 4);
+    const year = trimmed.slice(4, 8);
+    const d = new Date(`${year}-${month}-${day}`);
+    return isNaN(d.getTime()) ? null : `${year}-${month}-${day}`;
+  }
+
+  // DD/MM/YYYY
+  const slashMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (slashMatch) {
+    const [, day, month, year] = slashMatch;
+    const d = new Date(`${year}-${month}-${day}`);
+    return isNaN(d.getTime()) ? null : `${year}-${month}-${day}`;
+  }
+
+  return null;
+}
+
+
 function getField(payload: any, ...keys: string[]): unknown {
   for (const key of keys) {
     if (payload[key] !== undefined && payload[key] !== null && payload[key] !== '') return payload[key];
@@ -495,7 +526,7 @@ async function upsertLeadProfile(
       nome_completo: getField(payload, 'nome_completo', 'name') as string || null,
       cpf: cpfClean,
       whatsapp: normalizedPhone || (getField(payload, 'whatsapp') as string) || null,
-      data_nascimento: getField(payload, 'data_nascimento') as string || null,
+      data_nascimento: parseDateField(getField(payload, 'data_nascimento') as string) || null,
       estado_cidade: getField(payload, 'estado_cidade') as string || null,
       estado_civil: getField(payload, 'estado_civil') as string || null,
       num_filhos: parseNum(getField(payload, 'num_filhos')) as number | null,
