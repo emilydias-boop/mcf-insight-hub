@@ -203,6 +203,21 @@ function exportToExcel(attendees: InvestigationAttendee[], filename: string, enr
   XLSX.writeFile(wb, `${filename}.xlsx`);
 }
 
+function exportDailyToExcel(daily: import('@/hooks/useInvestigationByPeriod').DailyMetric[], filename: string) {
+  const rows = daily.map(d => ({
+    'Data': format(new Date(d.date + 'T12:00:00'), 'dd/MM/yyyy'),
+    'Agendadas': d.agendadas,
+    'Realizadas': d.realizadas,
+    'No-Shows': d.noShows,
+    'Contratos Pagos': d.contratosPagos,
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Dia a Dia');
+  XLSX.writeFile(wb, `${filename}-dia-a-dia.xlsx`);
+}
+
 export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) {
   const [tab, setTab] = useState('closer');
   const [selectedId, setSelectedId] = useState<string | null>(null);
