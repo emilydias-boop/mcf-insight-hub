@@ -422,10 +422,44 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
               <MetricCard icon={XCircle} label="Taxa No-Show" value={`${periodData.summary.taxaNoShow.toFixed(1)}%`} color="bg-destructive/10 text-destructive" />
             </div>
 
+            {/* Target Progress Cards */}
+            {(dailyTargets.agendadas || dailyTargets.realizadas || dailyTargets.contratosPagos) && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Target className="h-4 w-4" />
+                    Atingimento de Meta ({daysInPeriod === 1 ? 'Diária' : `${daysInPeriod} dias`})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {dailyTargets.agendadas && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium">Agendadas</p>
+                        <MetricProgressCell value={periodData.summary.total} target={periodTargets.agendadas} />
+                      </div>
+                    )}
+                    {dailyTargets.realizadas && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium">Realizadas</p>
+                        <MetricProgressCell value={periodData.summary.realizadas + periodData.summary.contratosPagos} target={periodTargets.realizadas} />
+                      </div>
+                    )}
+                    {dailyTargets.contratosPagos && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium">Contratos Pagos</p>
+                        <MetricProgressCell value={periodData.summary.contratosPagos} target={periodTargets.contratosPagos} />
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Charts Grid: Evolution + Distribution */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
-                <InvestigationEvolutionChart data={periodData.daily} />
+                <InvestigationEvolutionChart data={periodData.daily} dailyTargets={dailyTargets} />
               </div>
               <div>
                 <InvestigationDistributionChart summary={periodData.summary} />
@@ -438,6 +472,8 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
                 data={comparisonData}
                 highlightId={isAll ? null : selectedId}
                 title={`Comparativo - ${selectedType === 'closer' ? 'Closers' : 'SDRs'}`}
+                dailyTargets={dailyTargets}
+                daysInPeriod={daysInPeriod}
               />
             )}
 
