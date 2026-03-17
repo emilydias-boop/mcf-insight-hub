@@ -33,8 +33,8 @@ export function useMeetingSlotsKPIs(startDate: Date, endDate: Date) {
         throw error;
       }
 
-      // Filter out partners and rescheduled attendees from metrics
-      const attendees = (data || []).filter((a) => !a.is_partner && a.status !== 'rescheduled');
+      // Filter out partners from metrics
+      const attendees = (data || []).filter((a) => !a.is_partner);
 
       // R1 Agendada: ALL attendees that were scheduled for the period (excludes only cancelled)
       // This keeps the count stable as meetings are marked completed/no_show

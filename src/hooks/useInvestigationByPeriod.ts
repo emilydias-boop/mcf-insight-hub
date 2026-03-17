@@ -159,8 +159,8 @@ export function useInvestigationByPeriod(
         }
       }
 
-      // Filter out partners and rescheduled attendees
-      const nonPartner = attendees.filter(a => !a.is_partner && a.status !== 'rescheduled');
+      // Filter out partners
+      const nonPartner = attendees.filter(a => !a.is_partner);
 
       // Group by day
       const dayMap = new Map<string, DailyMetric>();
