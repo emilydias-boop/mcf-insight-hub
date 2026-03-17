@@ -20,6 +20,7 @@ import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { QualificationSummaryCard } from './qualification/QualificationSummaryCard';
 import { QualificationAndScheduleModal } from './QualificationAndScheduleModal';
 import { LossReasonCard } from './LossReasonCard';
+import { LeadProfileSection } from './LeadProfileSection';
 import { CrossPipelineHistory } from './CrossPipelineHistory';
 import { Phone, History, StickyNote, CheckSquare, AlertTriangle, Clock, Package } from 'lucide-react';
 import { DealProdutosAdquiridosTab } from './DealProdutosAdquiridosTab';
