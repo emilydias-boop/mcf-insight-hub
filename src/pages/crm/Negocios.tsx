@@ -638,6 +638,11 @@ const Negocios = () => {
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''}
+                {crossPipelineDeals.length > 0 && (
+                  <span className="ml-1 text-primary font-medium">
+                    ({crossPipelineDeals.length} em outras pipelines)
+                  </span>
+                )}
               </p>
             </div>
           </div>
