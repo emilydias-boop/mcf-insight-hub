@@ -66,6 +66,13 @@ export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) 
 
   const handleEdit = (id: string) => {
     setEditingEndpoint(id);
+    setDuplicateData(null);
+    setIsFormOpen(true);
+  };
+
+  const handleDuplicate = (endpoint: WebhookEndpoint) => {
+    setEditingEndpoint(null);
+    setDuplicateData(endpoint);
     setIsFormOpen(true);
   };
 
