@@ -1,19 +1,25 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
-import { Search, Download, Users, CheckCircle, XCircle, FileCheck, Calendar, User, ShoppingCart, Tag } from 'lucide-react';
+import { Search, Download, Users, CheckCircle, XCircle, FileCheck, Calendar, User, ShoppingCart, Tag, Percent, TrendingUp } from 'lucide-react';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
+import { useGestorSDRs } from '@/hooks/useGestorSDRs';
 import { useInvestigationByCloser, useInvestigationByLead, InvestigationAttendee, LeadProfile, LeadFinancials } from '@/hooks/useInvestigationReport';
+import { useInvestigationByPeriod } from '@/hooks/useInvestigationByPeriod';
+import { useCloserComparison } from '@/hooks/useCloserComparison';
+import { InvestigationEvolutionChart } from '@/components/relatorios/InvestigationEvolutionChart';
+import { InvestigationRankingChart } from '@/components/relatorios/InvestigationRankingChart';
 import { formatMeetingStatus } from '@/utils/formatMeetingStatus';
 import { BusinessUnit } from '@/hooks/useMyBU';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { DateRange } from 'react-day-picker';
 import * as XLSX from 'xlsx';
 
 interface InvestigationReportPanelProps {
@@ -38,7 +44,7 @@ function StageBadge({ name, color }: { name: string | null; color: string | null
   );
 }
 
-function MetricCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: number; color: string }) {
+function MetricCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: number | string; color: string }) {
   return (
     <Card>
       <CardContent className="pt-4 pb-4 flex items-center gap-3">
@@ -196,14 +202,38 @@ function exportToExcel(attendees: InvestigationAttendee[], filename: string, enr
 
 export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) {
   const [tab, setTab] = useState('closer');
-  const [closerId, setCloserId] = useState<string | null>(null);
-  const [date, setDate] = useState<Date | null>(new Date());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<'closer' | 'sdr'>('closer');
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  });
+  const [singleDate, setSingleDate] = useState<Date | null>(new Date());
   const [searchTerm, setSearchTerm] = useState('');
   const [searchInput, setSearchInput] = useState('');
 
   const { data: closers = [] } = useGestorClosers();
-  const closerQuery = useInvestigationByCloser(tab === 'closer' ? closerId : null, tab === 'closer' ? date : null);
+  const { data: sdrs = [] } = useGestorSDRs();
+
+  // Original single-day query for table data
+  const closerQuery = useInvestigationByCloser(
+    tab === 'closer' && selectedType === 'closer' ? selectedId : null,
+    tab === 'closer' ? singleDate : null
+  );
   const leadQuery = useInvestigationByLead(tab === 'lead' ? searchTerm : '');
+
+  // New period-based queries for charts
+  const periodQuery = useInvestigationByPeriod(
+    tab === 'closer' ? selectedId : null,
+    selectedType,
+    dateRange?.from || null,
+    dateRange?.to || null
+  );
+  const comparisonQuery = useCloserComparison(
+    tab === 'closer' ? dateRange?.from || null : null,
+    tab === 'closer' ? dateRange?.to || null : null,
+    selectedType === 'closer' ? selectedId : null
+  );
 
   const activeData = tab === 'closer' ? closerQuery.data : leadQuery.data;
   const isLoading = tab === 'closer' ? closerQuery.isLoading : leadQuery.isLoading;
@@ -213,13 +243,27 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
   const financials = activeData?.financials || null;
   const isLeadTab = tab === 'lead';
 
+  const periodData = periodQuery.data;
+  const comparisonData = comparisonQuery.data || [];
+
   const handleLeadSearch = () => {
     setSearchTerm(searchInput.trim());
   };
 
-  const selectedCloserName = closers.find(c => c.id === closerId)?.name || 'closer';
+  const handlePersonSelect = (value: string) => {
+    // Format: "closer:id" or "sdr:id"
+    const [type, id] = value.split(':');
+    setSelectedType(type as 'closer' | 'sdr');
+    setSelectedId(id);
+  };
+
+  const selectedValue = selectedId ? `${selectedType}:${selectedId}` : '';
+  const selectedName = selectedType === 'closer'
+    ? closers.find(c => c.id === selectedId)?.name
+    : sdrs.find(s => s.id === selectedId)?.name;
+
   const exportFilename = tab === 'closer'
-    ? `investigacao_${selectedCloserName}_${date ? format(date, 'yyyy-MM-dd') : ''}`
+    ? `investigacao_${selectedName || 'closer'}_${singleDate ? format(singleDate, 'yyyy-MM-dd') : ''}`
     : `investigacao_lead_${searchTerm}`;
 
   return (
@@ -230,7 +274,7 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
           Investigação
         </CardTitle>
         <CardDescription>
-          Consulta detalhada por closer/SDR (dia específico) ou busca por lead
+          Performance por closer/SDR com evolução no período, ou busca por lead
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -243,27 +287,51 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
           <TabsContent value="closer" className="space-y-4 mt-4">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1">
-                <label className="text-sm font-medium text-muted-foreground mb-1 block">Closer</label>
-                <Select value={closerId || ''} onValueChange={setCloserId}>
+                <label className="text-sm font-medium text-muted-foreground mb-1 block">Closer / SDR</label>
+                <Select value={selectedValue} onValueChange={handlePersonSelect}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione um closer" />
+                    <SelectValue placeholder="Selecione um closer ou SDR" />
                   </SelectTrigger>
                   <SelectContent>
-                    {closers.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
+                    {closers.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel>Closers</SelectLabel>
+                        {closers.map(c => (
+                          <SelectItem key={`closer:${c.id}`} value={`closer:${c.id}`}>{c.name}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                    {sdrs.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel>SDRs</SelectLabel>
+                        {sdrs.map(s => (
+                          <SelectItem key={`sdr:${s.id}`} value={`sdr:${s.id}`}>{s.name}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="w-full sm:w-[220px]">
-                <label className="text-sm font-medium text-muted-foreground mb-1 block">Data</label>
+              <div className="w-full sm:w-[300px]">
+                <label className="text-sm font-medium text-muted-foreground mb-1 block">Período (gráficos)</label>
                 <DatePickerCustom
-                  mode="single"
-                  selected={date || undefined}
-                  onSelect={(d) => setDate(d as Date)}
-                  placeholder="Selecione a data"
+                  mode="range"
+                  selected={dateRange}
+                  onSelect={(d) => setDateRange(d as DateRange)}
+                  placeholder="Selecione o período"
                 />
               </div>
+              {selectedType === 'closer' && (
+                <div className="w-full sm:w-[200px]">
+                  <label className="text-sm font-medium text-muted-foreground mb-1 block">Dia (tabela)</label>
+                  <DatePickerCustom
+                    mode="single"
+                    selected={singleDate || undefined}
+                    onSelect={(d) => setSingleDate(d as Date)}
+                    placeholder="Selecione o dia"
+                  />
+                </div>
+              )}
             </div>
           </TabsContent>
 
@@ -296,8 +364,54 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
           </div>
         )}
 
-        {/* Metrics */}
-        {metrics && metrics.total > 0 && (
+        {/* Period KPIs + Charts (closer/sdr tab only) */}
+        {!isLeadTab && selectedId && periodData && periodData.summary.total > 0 && (
+          <div className="space-y-4">
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+              <MetricCard icon={Users} label="Total Leads" value={periodData.summary.total} color="bg-primary/10 text-primary" />
+              <MetricCard icon={CheckCircle} label="Realizadas" value={periodData.summary.realizadas} color="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" />
+              <MetricCard icon={XCircle} label="No-Shows" value={periodData.summary.noShows} color="bg-destructive/10 text-destructive" />
+              <MetricCard icon={FileCheck} label="Contrato Pago" value={periodData.summary.contratosPagos} color="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" />
+              <MetricCard icon={Calendar} label="Agendadas" value={periodData.summary.agendadas} color="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" />
+              <MetricCard icon={Percent} label="Comparecimento" value={`${periodData.summary.taxaComparecimento.toFixed(1)}%`} color="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" />
+              <MetricCard icon={TrendingUp} label="Conversão" value={`${periodData.summary.taxaConversao.toFixed(1)}%`} color="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" />
+              <MetricCard icon={XCircle} label="Taxa No-Show" value={`${periodData.summary.taxaNoShow.toFixed(1)}%`} color="bg-destructive/10 text-destructive" />
+            </div>
+
+            {/* Evolution Chart */}
+            <InvestigationEvolutionChart data={periodData.daily} />
+
+            {/* Ranking Chart */}
+            {selectedType === 'closer' && comparisonData.length > 1 && (
+              <InvestigationRankingChart data={comparisonData} highlightId={selectedId} />
+            )}
+          </div>
+        )}
+
+        {/* Period loading */}
+        {!isLeadTab && selectedId && periodQuery.isLoading && (
+          <div className="text-center py-4 text-muted-foreground text-sm">Carregando dados do período...</div>
+        )}
+
+        {/* Metrics for single-day table (closer only) */}
+        {!isLeadTab && selectedType === 'closer' && metrics && metrics.total > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-muted-foreground mb-2">
+              Detalhamento do dia {singleDate ? format(singleDate, 'dd/MM/yyyy', { locale: ptBR }) : ''}
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <MetricCard icon={Users} label="Total Leads" value={metrics.total} color="bg-primary/10 text-primary" />
+              <MetricCard icon={CheckCircle} label="Realizadas" value={metrics.completed} color="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" />
+              <MetricCard icon={XCircle} label="No-Shows" value={metrics.noShow} color="bg-destructive/10 text-destructive" />
+              <MetricCard icon={FileCheck} label="Contrato Pago" value={metrics.contractPaid} color="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" />
+              <MetricCard icon={Calendar} label="Agendadas" value={metrics.scheduled} color="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" />
+            </div>
+          </div>
+        )}
+
+        {/* Lead tab metrics */}
+        {isLeadTab && metrics && metrics.total > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <MetricCard icon={Users} label="Total Leads" value={metrics.total} color="bg-primary/10 text-primary" />
             <MetricCard icon={CheckCircle} label="Realizadas" value={metrics.completed} color="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" />
@@ -312,7 +426,7 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
           <div className="text-center py-8 text-muted-foreground">Carregando dados...</div>
         )}
 
-        {/* Results */}
+        {/* Results Table */}
         {!isLoading && attendees.length > 0 && (
           <>
             <div className="flex justify-end">
@@ -326,11 +440,21 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
         )}
 
         {/* Empty state */}
-        {!isLoading && attendees.length === 0 && ((tab === 'closer' && closerId && date) || (tab === 'lead' && searchTerm.length >= 3)) && (
+        {!isLoading && attendees.length === 0 && ((tab === 'closer' && selectedId && singleDate && selectedType === 'closer') || (tab === 'lead' && searchTerm.length >= 3)) && (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">
               <Search className="h-10 w-10 mx-auto mb-3 opacity-40" />
-              <p>Nenhum resultado encontrado</p>
+              <p>Nenhum resultado encontrado para o dia selecionado</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Empty period state */}
+        {!isLeadTab && selectedId && !periodQuery.isLoading && periodData && periodData.summary.total === 0 && (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              <TrendingUp className="h-10 w-10 mx-auto mb-3 opacity-40" />
+              <p>Nenhum dado encontrado no período selecionado</p>
             </CardContent>
           </Card>
         )}
