@@ -25,17 +25,24 @@ export const DuplicateToInsideDialog = ({
   const [selectedSdr, setSelectedSdr] = useState('');
   const [selectedStage, setSelectedStage] = useState('');
 
-  // Fetch SDR profiles
+  // Fetch profiles with roles via join
   const { data: sdrs = [] } = useQuery({
     queryKey: ['sdr-profiles-for-duplicate'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('id, name, email, role')
-        .in('role', ['sdr', 'closer', 'admin', 'manager'])
-        .order('name');
+        .from('user_roles')
+        .select('user_id, role, profiles!user_roles_user_id_profiles_fkey(id, full_name, email)')
+        .in('role', ['sdr', 'closer', 'admin', 'manager']);
       if (error) throw error;
-      return data || [];
+      return (data || [])
+        .filter((r: any) => r.profiles?.full_name)
+        .map((r: any) => ({
+          id: r.profiles.id as string,
+          name: r.profiles.full_name as string,
+          email: r.profiles.email as string,
+          role: r.role as string,
+        }))
+        .sort((a: any, b: any) => a.name.localeCompare(b.name));
     },
     enabled: open,
   });
@@ -46,9 +53,9 @@ export const DuplicateToInsideDialog = ({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('crm_stages')
-        .select('id, name, order_index')
+        .select('id, stage_name, stage_order')
         .eq('origin_id', INSIDE_SALES_ORIGIN_ID)
-        .order('order_index');
+        .order('stage_order');
       if (error) throw error;
       return data || [];
     },
@@ -63,7 +70,7 @@ export const DuplicateToInsideDialog = ({
   }, [stages, selectedStage]);
 
   const handleConfirm = () => {
-    const sdr = sdrs.find(s => s.id === selectedSdr);
+    const sdr = sdrs.find((s: any) => s.id === selectedSdr);
     if (!sdr || !selectedStage) return;
     onConfirm(sdr.email, sdr.id, selectedStage);
   };
@@ -86,7 +93,7 @@ export const DuplicateToInsideDialog = ({
                 <SelectValue placeholder="Selecione o SDR..." />
               </SelectTrigger>
               <SelectContent>
-                {sdrs.map(sdr => (
+                {sdrs.map((sdr: any) => (
                   <SelectItem key={sdr.id} value={sdr.id}>
                     {sdr.name} ({sdr.role})
                   </SelectItem>
@@ -104,7 +111,7 @@ export const DuplicateToInsideDialog = ({
               <SelectContent>
                 {stages.map(stage => (
                   <SelectItem key={stage.id} value={stage.id}>
-                    {stage.name}
+                    {stage.stage_name}
                   </SelectItem>
                 ))}
               </SelectContent>
