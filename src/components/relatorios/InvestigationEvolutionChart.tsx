@@ -1,12 +1,19 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts';
 import { DailyMetric } from '@/hooks/useInvestigationByPeriod';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { TrendingUp } from 'lucide-react';
 
+export interface DailyTargets {
+  agendadas?: number;
+  realizadas?: number;
+  contratosPagos?: number;
+}
+
 interface Props {
   data: DailyMetric[];
+  dailyTargets?: DailyTargets;
 }
 
 function movingAvg(arr: number[], window: number): (number | null)[] {
@@ -17,7 +24,7 @@ function movingAvg(arr: number[], window: number): (number | null)[] {
   });
 }
 
-export function InvestigationEvolutionChart({ data }: Props) {
+export function InvestigationEvolutionChart({ data, dailyTargets }: Props) {
   if (data.length === 0) return null;
 
   const totals = data.map(d => d.agendadas);
@@ -52,6 +59,33 @@ export function InvestigationEvolutionChart({ data }: Props) {
               }}
             />
             <Legend />
+            {dailyTargets?.agendadas && (
+              <ReferenceLine
+                y={dailyTargets.agendadas}
+                stroke="hsl(var(--primary))"
+                strokeDasharray="8 4"
+                strokeWidth={1.5}
+                label={{ value: `Meta Agend. ${dailyTargets.agendadas}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(var(--primary))' }}
+              />
+            )}
+            {dailyTargets?.realizadas && (
+              <ReferenceLine
+                y={dailyTargets.realizadas}
+                stroke="hsl(142 71% 45%)"
+                strokeDasharray="8 4"
+                strokeWidth={1.5}
+                label={{ value: `Meta Realiz. ${dailyTargets.realizadas}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(142 71% 45%)' }}
+              />
+            )}
+            {dailyTargets?.contratosPagos && (
+              <ReferenceLine
+                y={dailyTargets.contratosPagos}
+                stroke="hsl(45 93% 47%)"
+                strokeDasharray="8 4"
+                strokeWidth={1.5}
+                label={{ value: `Meta Contr. ${dailyTargets.contratosPagos}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(45 93% 47%)' }}
+              />
+            )}
             <Bar dataKey="agendadas" fill="hsl(var(--primary))" name="Agendadas" radius={[2, 2, 0, 0]} />
             <Bar dataKey="realizadas" fill="hsl(142 71% 45%)" name="Realizadas" radius={[2, 2, 0, 0]} />
             <Bar dataKey="noShows" fill="hsl(var(--destructive))" name="No-Shows" radius={[2, 2, 0, 0]} />
