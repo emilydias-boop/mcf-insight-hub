@@ -217,8 +217,35 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
 
   const { data: closers = [] } = useGestorClosers();
   const { data: sdrs = [] } = useGestorSDRs();
+  const { data: teamTargets = [] } = useSdrTeamTargets('sdr_');
 
   const isAll = selectedId === '__all__';
+
+  // Extract daily targets from team_targets
+  const dailyTargets = useMemo((): DailyTargets => {
+    const findTarget = (type: string): number | undefined => {
+      const t = teamTargets.find((tt: SdrTarget) => tt.target_type === type);
+      return t && t.target_value > 0 ? t.target_value : undefined;
+    };
+    return {
+      agendadas: findTarget('sdr_agendamento_dia'),
+      realizadas: findTarget('sdr_r1_realizada_dia'),
+      contratosPagos: findTarget('sdr_contrato_dia'),
+    };
+  }, [teamTargets]);
+
+  // Calculate days in period for target scaling
+  const daysInPeriod = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) return 1;
+    return differenceInCalendarDays(dateRange.to, dateRange.from) + 1;
+  }, [dateRange]);
+
+  // Period target = daily target * days
+  const periodTargets = useMemo(() => ({
+    agendadas: dailyTargets.agendadas ? dailyTargets.agendadas * daysInPeriod : 0,
+    realizadas: dailyTargets.realizadas ? dailyTargets.realizadas * daysInPeriod : 0,
+    contratosPagos: dailyTargets.contratosPagos ? dailyTargets.contratosPagos * daysInPeriod : 0,
+  }), [dailyTargets, daysInPeriod]);
 
   // Original single-day query for table data (only for individual closers)
   const closerQuery = useInvestigationByCloser(
@@ -251,7 +278,6 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
 
   const periodData = periodQuery.data;
   const comparisonData = comparisonQuery.data || [];
-
   const handleLeadSearch = () => {
     setSearchTerm(searchInput.trim());
   };
