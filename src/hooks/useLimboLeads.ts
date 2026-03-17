@@ -407,11 +407,11 @@ export function useDuplicateToInsideSales() {
         if (!contactId) {
           const { data: newContact, error: cErr } = await supabase
             .from('crm_contacts')
-            .insert({
+            .insert([{
               name: lead.name,
               email: lead.email || null,
               phone: lead.phone || null,
-            })
+            }])
             .select('id')
             .single();
           if (cErr) throw cErr;
