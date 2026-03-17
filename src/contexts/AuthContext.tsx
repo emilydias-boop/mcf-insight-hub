@@ -166,6 +166,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           initialSessionHandled.current = true;
         }
         
+        // SIGNED_IN during init: mark as handled to prevent getSession timeout from clearing it
+        if (event === 'SIGNED_IN' && !initialSessionHandled.current && newSession) {
+          console.log('[Auth] SIGNED_IN during init, marking as handled');
+          initialSessionHandled.current = true;
+          handleSession(newSession);
+          return;
+        }
+        
         // Session restoration: SIGNED_IN fires when returning to tab/page
         // After initial session is handled, just update state without navigation
         if (event === 'SIGNED_IN' && initialSessionHandled.current && newSession) {
