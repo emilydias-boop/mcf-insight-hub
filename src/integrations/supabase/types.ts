@@ -10632,6 +10632,7 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sync_crm_deals_to_gr_wallets: { Args: never; Returns: number }
+      update_overdue_billing_status: { Args: never; Returns: undefined }
       upsert_deals_smart: { Args: { deals_data: Json }; Returns: undefined }
       user_has_permission: {
         Args: {
