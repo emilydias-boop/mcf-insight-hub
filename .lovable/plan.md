@@ -1,39 +1,36 @@
 
 
-## Objetivo
+## Corrigir Webhook ClientData Inside — 2 bugs
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Bug 1: Upsert `lead_profiles` falhando (erro 42P10)
+O índice `idx_lead_profiles_contact` é parcial (`WHERE contact_id IS NOT NULL`), o que impede o Postgres de usá-lo no `ON CONFLICT`. Solução: criar uma constraint UNIQUE real (não parcial) em `contact_id`.
 
-## Mudanças
+**Migration SQL:**
+```sql
+DROP INDEX IF EXISTS idx_lead_profiles_contact;
+ALTER TABLE lead_profiles ADD CONSTRAINT lead_profiles_contact_id_unique UNIQUE (contact_id);
+```
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Bug 2: Validação de campos obrigatórios antes do field_mapping
+Linha 77 do `webhook-lead-receiver/index.ts` verifica `payload['name']`, mas o ClientData envia `nome_completo`. O `field_mapping` só é aplicado depois. Solução: aplicar o field_mapping reverso antes da validação (se `nome_completo` mapeia para `name`, verificar se `payload['nome_completo']` existe).
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+**Alteração em `webhook-lead-receiver/index.ts` (linhas 75-85):**
+Antes da validação, inverter o field_mapping para criar aliases no payload:
+```typescript
+// Apply reverse field mapping so required_fields validation works
+if (endpoint.field_mapping) {
+  for (const [sourceField, targetField] of Object.entries(endpoint.field_mapping)) {
+    if (payload[sourceField] !== undefined && !payload[targetField]) {
+      payload[targetField] = payload[sourceField];
+    }
+  }
+}
+// Then validate required_fields
+```
 
-### 2. Hook `useCloserDetailData.ts`
-
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
-
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+### Arquivos
+| Arquivo | Ação |
+|---|---|
+| Migration SQL | Substituir índice parcial por UNIQUE constraint em `contact_id` |
+| `supabase/functions/webhook-lead-receiver/index.ts` | Aplicar field_mapping reverso antes da validação de required_fields (linha ~75) |
 
