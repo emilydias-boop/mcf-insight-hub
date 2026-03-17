@@ -1,71 +1,39 @@
 
 
-## Evolucionar o painel de Investigacao com graficos de performance e SDRs
+## Objetivo
 
-### Problemas identificados
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-1. **Dropdown so mostra Closers** -- O filtro usa `useGestorClosers()` que consulta apenas a tabela `closers`. SDRs nao aparecem.
-2. **Sem graficos de performance** -- Atualmente so exibe uma tabela de atendimentos de um unico dia. Nao ha evolucao dia a dia, taxas de conversao, nem comparacao com outros closers/SDRs.
-3. **Filtro e apenas por dia** -- Nao permite selecionar um periodo (date range) para ver evolucao.
+## Mudanças
 
-### Plano de implementacao
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-#### 1. Adicionar SDRs ao dropdown (InvestigationReportPanel.tsx)
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-- Criar um hook `useGestorSDRs` (ou reutilizar dados de `employees` com `cargo LIKE '%SDR%'` ou da `SDR_LIST` + `profiles`) que retorne `{ id, name, email, type: 'sdr' }`.
-- Alterar o dropdown para combinar closers e SDRs em grupos separados (com `<SelectGroup>` label "Closers" e "SDRs").
-- Armazenar tambem o `type` selecionado ('closer' | 'sdr') para direcionar a query correta.
+### 2. Hook `useCloserDetailData.ts`
 
-#### 2. Trocar filtro de data unica para date range
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-- Substituir o `DatePickerCustom mode="single"` por `mode="range"` com `startDate`/`endDate`.
-- Manter o default como mes atual.
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-#### 3. Criar hook `useInvestigationByPeriod` (novo hook)
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-- Recebe `closerId | sdrEmail`, `startDate`, `endDate`, `type: 'closer' | 'sdr'`.
-- Para closers: query `meeting_slots` por `closer_id` no range, join `meeting_slot_attendees`.
-- Para SDRs: query `meeting_slot_attendees` por `booked_by` (profile_id do SDR) no range, join `meeting_slots`.
-- Retorna dados agrupados por dia: `{ date, agendadas, realizadas, noShows, contratosPagos }`.
-- Tambem retorna metricas consolidadas do periodo (totais + taxas).
+### 4. Dados exportados no Excel
 
-#### 4. Criar hook `useCloserComparison` (novo hook)
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-- Para o periodo selecionado, busca metricas de TODOS os closers/SDRs ativos.
-- Retorna array rankeado por contratos pagos (ou conversao), para comparar o selecionado com os demais.
+Formato de data: `dd/MM/yyyy HH:mm`
 
-#### 5. Adicionar graficos ao painel (InvestigationReportPanel.tsx)
+## Resultado
 
-Apos os MetricCards, adicionar:
-
-**a) Grafico de Evolucao Dia a Dia** (BarChart com recharts)
-- Eixo X: dias do periodo
-- Barras: Agendadas, Realizadas, No-Shows, Contratos Pagos
-- Mostra a tendencia visual da performance ao longo do tempo
-
-**b) KPIs de Periodo** (cards adicionais)
-- Taxa de Comparecimento (Realizadas / Agendadas)
-- Taxa de Conversao (Contratos / Realizadas)
-- Taxa de No-Show
-
-**c) Grafico de Comparacao / Ranking** (BarChart horizontal)
-- Todos os closers/SDRs no periodo
-- Barras horizontais mostrando contratos, com o selecionado destacado
-- Permite ver posicao relativa
-
-#### 6. Manter tabela de atendimentos
-
-- A tabela existente continua abaixo dos graficos, agora mostrando todos os atendimentos do periodo (nao mais apenas 1 dia).
-- Adicionar paginacao ou limite se o periodo for longo.
-
-### Arquivos a criar/editar
-
-| Arquivo | Acao |
-|---|---|
-| `src/hooks/useInvestigationByPeriod.ts` | Novo -- query por periodo com agrupamento diario |
-| `src/hooks/useCloserComparison.ts` | Novo -- ranking de todos closers/SDRs no periodo |
-| `src/hooks/useGestorSDRs.ts` | Novo -- lista SDRs ativos para o dropdown |
-| `src/components/relatorios/InvestigationReportPanel.tsx` | Refatorar -- adicionar SDRs, date range, graficos, ranking |
-| `src/components/relatorios/InvestigationEvolutionChart.tsx` | Novo -- grafico de evolucao dia a dia |
-| `src/components/relatorios/InvestigationRankingChart.tsx` | Novo -- grafico comparativo horizontal |
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
