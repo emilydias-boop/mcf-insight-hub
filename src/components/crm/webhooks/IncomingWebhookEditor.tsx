@@ -235,6 +235,7 @@ export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) 
         onOpenChange={handleFormClose}
         originId={originId}
         endpointId={editingEndpoint}
+        duplicateData={duplicateData}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

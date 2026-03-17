@@ -242,7 +242,7 @@ export const IncomingWebhookFormDialog = ({
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? 'Editar Webhook de Entrada' : 'Novo Webhook de Entrada'}
+            {isEditing ? 'Editar Webhook de Entrada' : isDuplicating ? 'Duplicar Webhook de Entrada' : 'Novo Webhook de Entrada'}
           </DialogTitle>
         </DialogHeader>
 
