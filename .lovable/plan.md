@@ -1,26 +1,39 @@
 
 
-## Corrigir visibilidade do Ulysses e simplificar UI cross-pipeline
+## Objetivo
 
-### Problema 1: Ulysses na origin errada
-O deal `b65a15ba` (Ulysses Inácio da Luz) foi vinculado à origin **"PIPE LINE - INSIDE SALES"** (`57013597`, grupo `b98e3746`) em vez de **"PIPELINE INSIDE SALES"** (`e3c04f21`, grupo `a6f3cbfc`). São origins diferentes em grupos diferentes, por isso não aparece no Kanban do Inside Sales.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-**Fix**: UPDATE do deal para mover para a origin correta com o estágio equivalente:
-- `origin_id` → `e3c04f21` (PIPELINE INSIDE SALES)
-- `stage_id` → `155f9eab` (Reunião 02 Realizada - nessa origin)
+## Mudanças
 
-### Problema 2: Seção cross-pipeline feia
-A lista expandida com cards clicáveis ocupa muito espaço e polui a visão do Kanban.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**Fix**: Substituir a seção expandida por apenas um banner informativo compacto no contador de oportunidades, tipo:
-> "1 oportunidade (+ 2 em outras pipelines)"
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Ao clicar no texto "em outras pipelines", abrir um toast ou tooltip listando os deals e permitir abrir o drawer. Remover toda a seção expandida `div` com a lista de cards.
+### 2. Hook `useCloserDetailData.ts`
 
-### Arquivos a editar
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-| Arquivo | Ação |
-|---|---|
-| SQL data fix | UPDATE deal `b65a15ba`: `origin_id = 'e3c04f21'`, `stage_id = '155f9eab'` |
-| `src/pages/crm/Negocios.tsx` | Remover a seção expandida de cross-pipeline (linhas ~742-776). Manter apenas o texto informativo inline no contador de oportunidades (linha ~642-646), e ao clicar, abrir o drawer do primeiro deal cross-pipeline ou mostrar um popover simples com a lista |
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
