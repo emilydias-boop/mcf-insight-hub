@@ -322,6 +322,42 @@ serve(async (req) => {
       }
     }
 
+    // 8c. Check if contact is a known partner (parceiro) — block deal creation
+    if (contactEmail) {
+      const partnerCheck = await checkIfPartner(supabase, contactEmail);
+      if (partnerCheck.isPartner) {
+        console.log(`[WEBHOOK-RECEIVER] 🚫 PARCEIRO DETECTADO: ${contactEmail} - Produto: ${partnerCheck.product}. Bloqueando criação.`);
+        
+        // Register in partner_returns
+        await supabase.from('partner_returns').insert({
+          contact_id: contactId,
+          contact_email: contactEmail,
+          contact_name: payload.name || payload.nome_completo,
+          partner_product: partnerCheck.product,
+          return_source: `webhook_${slug}`,
+          return_product: endpoint.name,
+          return_value: 0,
+          blocked: true,
+        });
+
+        // Update lead_profile with partner flag
+        await upsertLeadProfile(supabase, contactId, null, payload, cpfClean, normalizedPhone);
+        await supabase.from('lead_profiles').update({ is_partner: true }).eq('contact_id', contactId);
+        await updateEndpointMetrics(supabase, endpoint.id);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            action: 'blocked',
+            reason: 'partner_detected',
+            product: partnerCheck.product,
+            contact_id: contactId,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     // 9. Map custom fields
     const customFields: Record<string, unknown> = {
       source: payload.source || slug,
