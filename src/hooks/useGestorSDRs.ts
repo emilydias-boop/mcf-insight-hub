@@ -6,6 +6,7 @@ import { useActiveBU } from '@/hooks/useActiveBU';
 interface SDRInfo {
   id: string;
   name: string;
+  email: string | null;
   profile_id: string | null;
 }
 
@@ -19,7 +20,7 @@ export const useGestorSDRs = () => {
       if (role === 'admin' || role === 'manager') {
         let query = supabase
           .from('employees')
-          .select('id, nome_completo, profile_id')
+          .select('id, nome_completo, profile_id, email_pessoal')
           .eq('cargo', 'SDR')
           .eq('status', 'ativo');
 
@@ -28,6 +29,7 @@ export const useGestorSDRs = () => {
         return (data || []).map(e => ({
           id: e.id,
           name: e.nome_completo || '',
+          email: e.email_pessoal || null,
           profile_id: e.profile_id,
         }));
       }
@@ -35,7 +37,7 @@ export const useGestorSDRs = () => {
       if (role === 'coordenador') {
         const { data: managedEmployees } = await supabase
           .from('employees')
-          .select('id, nome_completo, profile_id')
+          .select('id, nome_completo, profile_id, email_pessoal')
           .eq('gestor_id', user?.id)
           .eq('cargo', 'SDR')
           .eq('status', 'ativo')
@@ -44,6 +46,7 @@ export const useGestorSDRs = () => {
         return (managedEmployees || []).map(e => ({
           id: e.id,
           name: e.nome_completo || '',
+          email: e.email_pessoal || null,
           profile_id: e.profile_id,
         }));
       }

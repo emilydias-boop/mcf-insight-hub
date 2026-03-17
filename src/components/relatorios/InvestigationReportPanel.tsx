@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -249,16 +251,60 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
     };
   }, [teamTargets]);
 
-  // Calculate individual daily targets by dividing by member count
-  const memberCount = selectedType === 'closer' ? closers.length : sdrs.length;
+  // Fetch individual meta_diaria from sdr table when a specific person is selected
+  const { data: sdrRecord } = useQuery({
+    queryKey: ['sdr-meta-diaria', selectedId, selectedType, isAll],
+    queryFn: async () => {
+      if (!selectedId || isAll) return null;
+
+      let email: string | null = null;
+
+      if (selectedType === 'closer') {
+        // Closer email from closers table
+        const closer = closers.find(c => c.id === selectedId);
+        email = closer?.email || null;
+      } else {
+        // SDR: get sdr_id from employees table, then meta_diaria from sdr table
+        const { data: emp } = await supabase
+          .from('employees')
+          .select('sdr_id')
+          .eq('id', selectedId)
+          .single();
+        if (emp?.sdr_id) {
+          const { data: sdr } = await supabase
+            .from('sdr')
+            .select('meta_diaria')
+            .eq('id', emp.sdr_id)
+            .eq('active', true)
+            .maybeSingle();
+          return sdr;
+        }
+      }
+
+      if (email) {
+        const { data } = await supabase
+          .from('sdr')
+          .select('meta_diaria')
+          .eq('email', email)
+          .eq('active', true)
+          .maybeSingle();
+        return data;
+      }
+      return null;
+    },
+    enabled: !!selectedId && !isAll,
+  });
+
   const dailyTargets = useMemo((): DailyTargets => {
-    if (isAll || memberCount === 0) return teamDailyTargets;
-    return {
-      agendadas: teamDailyTargets.agendadas ? Number((teamDailyTargets.agendadas / memberCount).toFixed(2)) : undefined,
-      realizadas: teamDailyTargets.realizadas ? Number((teamDailyTargets.realizadas / memberCount).toFixed(2)) : undefined,
-      contratosPagos: teamDailyTargets.contratosPagos ? Number((teamDailyTargets.contratosPagos / memberCount).toFixed(2)) : undefined,
-    };
-  }, [teamDailyTargets, isAll, memberCount]);
+    if (isAll) return teamDailyTargets;
+    if (sdrRecord?.meta_diaria) {
+      return {
+        agendadas: sdrRecord.meta_diaria,
+        realizadas: Math.round(sdrRecord.meta_diaria * 0.7),
+      };
+    }
+    return teamDailyTargets;
+  }, [teamDailyTargets, isAll, sdrRecord]);
 
   // Calculate days in period for target scaling
   const daysInPeriod = useMemo(() => {
