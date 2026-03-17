@@ -317,8 +317,8 @@ export function useR2PendingLeads() {
               )
             `)
             .in('deal_id', batch)
-            .eq('meeting_slots.meeting_type', 'r1')
-            .order('meeting_slots(scheduled_at)', { ascending: false }) as any
+            .eq('meeting_slot.meeting_type', 'r1')
+            .order('meeting_slot(scheduled_at)', { ascending: false }) as any
         );
 
         // Sort attendees by scheduled_at DESC (client-side) since Supabase nested ordering is unreliable

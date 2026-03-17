@@ -120,7 +120,7 @@ export function useR2SemSucessoLeads() {
           )
         `)
         .eq('status', 'sem_sucesso')
-        .eq('meeting_slots.meeting_type', 'r1')
+        .eq('meeting_slot.meeting_type', 'r1')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
