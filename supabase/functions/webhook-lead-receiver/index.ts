@@ -72,7 +72,16 @@ serve(async (req) => {
     const payload = await req.json();
     console.log('[WEBHOOK-RECEIVER] Payload recebido:', JSON.stringify(payload, null, 2));
 
-    // 4. Validate required fields
+    // 4. Apply reverse field mapping before validation
+    if (endpoint.field_mapping) {
+      for (const [sourceField, targetField] of Object.entries(endpoint.field_mapping)) {
+        if (payload[sourceField] !== undefined && payload[targetField as string] === undefined) {
+          payload[targetField as string] = payload[sourceField];
+        }
+      }
+    }
+
+    // 5. Validate required fields
     const requiredFields = endpoint.required_fields || ['name', 'email'];
     const missingFields = requiredFields.filter((field: string) => !payload[field]);
     
