@@ -1,39 +1,25 @@
 
 
-## Objetivo
+## Fix: Attendees com no_show em slots rescheduled
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
 
-## Mudanças
+A migration anterior corrigiu apenas attendees com status `invited`/`scheduled` em slots reagendados. Porem, existem **15 attendees** que ja tinham sido marcados como `no_show` ANTES do reagendamento e nao foram atualizados para `rescheduled`.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+Exemplo real dos dados: attendee `9b4aacba` tem `status: no_show` mas notas com "--- Reagendado em 17/03/2026 14:14 ---" e o slot tem `status: rescheduled`.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+### Correcao
 
-### 2. Hook `useCloserDetailData.ts`
+**Nova migration SQL** que atualiza os 15 registros restantes:
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+```sql
+UPDATE meeting_slot_attendees msa
+SET status = 'rescheduled'
+FROM meeting_slots ms
+WHERE msa.meeting_slot_id = ms.id
+  AND ms.status = 'rescheduled'
+  AND msa.status = 'no_show';
+```
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
-
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+Isso e tudo. O codigo do `useRescheduleMeeting` ja esta correto (linha 1352-1355 atualiza TODOS os attendees para `rescheduled`), entao novos reagendamentos vao funcionar. So precisa corrigir os dados historicos.
 
