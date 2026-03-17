@@ -439,7 +439,7 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Target className="h-4 w-4" />
-                    Atingimento de Meta ({daysInPeriod === 1 ? 'Diária' : `${daysInPeriod} dias`})
+                    Atingimento de Meta {isAll ? '(Time)' : '(Individual)'} — {daysInPeriod === 1 ? 'Diária' : `${daysInPeriod} dias`}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
