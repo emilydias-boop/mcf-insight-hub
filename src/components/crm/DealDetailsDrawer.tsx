@@ -167,7 +167,10 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               {/* ===== 5. RESUMO (contato + negócio unificado) ===== */}
               <SdrSummaryBlock deal={deal} contact={contact} />
               
-              {/* ===== 5. ABAS (com scroll) ===== */}
+              {/* ===== 5b. PERFIL DO LEAD (dados do webhook) ===== */}
+              <LeadProfileSection contactId={deal?.contact_id} />
+              
+              {/* ===== 6. ABAS (com scroll) ===== */}
               <Tabs defaultValue="timeline" className="mt-2">
                 <TabsList className="w-full bg-secondary">
                   <TabsTrigger value="timeline" className="text-xs">
