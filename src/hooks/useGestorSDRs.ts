@@ -6,6 +6,7 @@ import { useActiveBU } from '@/hooks/useActiveBU';
 interface SDRInfo {
   id: string;
   name: string;
+  email: string | null;
   profile_id: string | null;
 }
 
