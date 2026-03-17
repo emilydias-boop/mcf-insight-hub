@@ -169,7 +169,7 @@ export function useR2PendingLeads() {
           .from('meeting_slot_attendees')
           .select(`deal_id, meeting_slot:meeting_slots!inner(meeting_type)`)
           .in('deal_id', batch)
-          .eq('meeting_slots.meeting_type', 'r2') as any
+          .eq('meeting_slot.meeting_type', 'r2') as any
       );
 
       // Create a set of deal_ids that have R2
