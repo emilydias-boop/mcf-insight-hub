@@ -1,39 +1,41 @@
 
 
-## Objetivo
+## Exibir dados de `lead_profiles` no Drawer de Negócios
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### O que falta
 
-## Mudanças
+A tabela `lead_profiles` é populada pelo webhook com ~40 campos estruturados (dados pessoais, financeiros, patrimoniais), mas nenhum componente do `DealDetailsDrawer` consulta ou exibe esses dados.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Implementação
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+| Arquivo | O que fazer |
+|---|---|
+| `src/hooks/useLeadProfile.ts` | **Novo** — hook `useLeadProfile(contactId)` que busca `lead_profiles` pelo `contact_id` |
+| `src/components/crm/LeadProfileSection.tsx` | **Novo** — componente colapsável que exibe os campos do `lead_profiles` organizados por categoria (Pessoais, Financeiros, Patrimoniais) |
+| `src/components/crm/DealDetailsDrawer.tsx` | Adicionar `<LeadProfileSection>` no drawer, logo abaixo do `SdrSummaryBlock` (seção 5), visível quando existem dados |
 
-### 2. Hook `useCloserDetailData.ts`
+### Hook `useLeadProfile`
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+```
+useQuery(['lead-profile', contactId], () =>
+  supabase.from('lead_profiles').select('*').eq('contact_id', contactId).maybeSingle()
+)
+```
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+### Componente `LeadProfileSection`
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+- Usa `Collapsible` (começa fechado para não poluir)
+- Título: "📋 Perfil do Lead" com badge indicando quantidade de campos preenchidos
+- Categorias com grid 2 colunas:
+  - **Pessoais**: nome_completo, data_nascimento, cpf, estado_civil, profissao, estado, cidade
+  - **Financeiros**: renda_mensal, renda_familiar, patrimonio_estimado, faturamento_mensal
+  - **Patrimoniais**: possui_imovel, ja_constroi, possui_terreno, valor_terreno
+  - **Interesse**: objetivo, como_conheceu, tempo_conhece
+- Campos vazios/null não são exibidos
+- Valores monetários formatados (R$ X.XXX)
+- Datas formatadas (dd/MM/yyyy)
 
-### 4. Dados exportados no Excel
+### Posição no Drawer
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+Entre o `SdrSummaryBlock` e as `Tabs` — acessível mas colapsado por padrão para não sobrecarregar a view.
 
