@@ -20,7 +20,7 @@ export const useGestorSDRs = () => {
       if (role === 'admin' || role === 'manager') {
         let query = supabase
           .from('employees')
-          .select('id, nome_completo, profile_id')
+          .select('id, nome_completo, profile_id, email_pessoal')
           .eq('cargo', 'SDR')
           .eq('status', 'ativo');
 
