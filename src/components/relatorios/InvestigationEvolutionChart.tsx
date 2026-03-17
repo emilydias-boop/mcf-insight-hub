@@ -25,7 +25,7 @@ function movingAvg(arr: number[], window: number): (number | null)[] {
   });
 }
 
-export function InvestigationEvolutionChart({ data, dailyTargets }: Props) {
+export function InvestigationEvolutionChart({ data, dailyTargets, isIndividual }: Props) {
   if (data.length === 0) return null;
 
   const totals = data.map(d => d.agendadas);
