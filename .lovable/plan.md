@@ -1,39 +1,43 @@
 
 
-## Objetivo
+## Parceiros em stages erradas — Diagnostico e Correcao
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
 
-## Mudanças
+Existem duas causas para parceiros aparecerem em stages que nao sao "Venda Realizada":
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+**1. `webhook-lead-receiver` nao verifica parceiros**
+O endpoint que recebe leads dos webhooks customizados (ClientData Inside, Instagram Bio, etc.) cria deals diretamente sem verificar se o email ja e de um parceiro. So o `clint-webhook-handler` faz essa verificacao.
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+**2. O botao "Mover Parceiros" e manual**
+A unica forma de corrigir parceiros em stages erradas e clicar manualmente no botao. Nao ha nenhuma automacao periodica.
 
-### 2. Hook `useCloserDetailData.ts`
+### Correcoes
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**1. Adicionar verificacao de parceiro no `webhook-lead-receiver`**
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+No `supabase/functions/webhook-lead-receiver/index.ts`, antes de criar o deal (linha ~370), adicionar a mesma logica de `checkIfPartner` usada no clint-webhook-handler:
+- Verificar email contra `hubla_transactions` com patterns A001-A009, INCORPORADOR, ANTICRISE
+- Se parceiro: registrar em `partner_returns`, atualizar lead_profile, e retornar sem criar deal
+- Manter o mesmo comportamento do clint-webhook-handler (bloquear criacao)
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+**2. Correcao retroativa dos dados existentes**
 
-### 4. Dados exportados no Excel
+Executar o "Mover Parceiros" (que ja existe e funciona) para limpar os dados atuais. Alternativamente, criar uma migration SQL que faca o mesmo de forma automatica:
+- Cruzar emails de `crm_contacts` com `hubla_transactions` (patterns de parceiro)
+- Mover deals encontrados para stage "Venda Realizada" da respectiva origin
+- Adicionar tag "Parceiro"
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+**3. (Opcional) Automacao com pg_cron**
 
-Formato de data: `dd/MM/yyyy HH:mm`
+Agendar execucao periodica da Edge Function `move-partners-to-venda-realizada` para capturar parceiros que escapem (ex: a cada 6 horas).
 
-## Resultado
+### Resumo tecnico
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+| Ponto de entrada | Verifica parceiro? | Correcao |
+|---|---|---|
+| clint-webhook-handler | Sim (bloqueia) | Nenhuma |
+| webhook-lead-receiver | **Nao** | Adicionar checkIfPartner |
+| Backfill functions | Parcial | Ja tem cleanup separado |
+| Dados historicos | N/A | Rodar "Mover Parceiros" |
 
