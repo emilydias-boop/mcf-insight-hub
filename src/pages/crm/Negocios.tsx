@@ -41,6 +41,7 @@ import { useOutsideDetectionForDeals } from '@/hooks/useOutsideDetectionForDeals
 import { OutsideDistributionButton } from '@/components/crm/OutsideDistributionButton';
 import { MovePartnersButton } from '@/components/crm/MovePartnersButton';
 import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDialog';
+import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 
 const Negocios = () => {
   // Ativar notificações em tempo real para novos leads
