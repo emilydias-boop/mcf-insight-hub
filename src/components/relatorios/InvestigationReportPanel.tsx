@@ -470,7 +470,7 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
             {/* Charts Grid: Evolution + Distribution */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
-                <InvestigationEvolutionChart data={periodData.daily} dailyTargets={dailyTargets} />
+                <InvestigationEvolutionChart data={periodData.daily} dailyTargets={dailyTargets} isIndividual={!isAll} />
               </div>
               <div>
                 <InvestigationDistributionChart summary={periodData.summary} />

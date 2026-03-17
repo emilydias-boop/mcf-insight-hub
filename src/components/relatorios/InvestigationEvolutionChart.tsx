@@ -66,7 +66,7 @@ export function InvestigationEvolutionChart({ data, dailyTargets, isIndividual }
                 stroke="hsl(var(--primary))"
                 strokeDasharray="8 4"
                 strokeWidth={1.5}
-                label={{ value: `Meta Agend. ${dailyTargets.agendadas}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(var(--primary))' }}
+                label={{ value: `${isIndividual ? 'Meta Ind.' : 'Meta'} Agend. ${dailyTargets.agendadas}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(var(--primary))' }}
               />
             )}
             {dailyTargets?.realizadas && (
@@ -75,7 +75,7 @@ export function InvestigationEvolutionChart({ data, dailyTargets, isIndividual }
                 stroke="hsl(142 71% 45%)"
                 strokeDasharray="8 4"
                 strokeWidth={1.5}
-                label={{ value: `Meta Realiz. ${dailyTargets.realizadas}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(142 71% 45%)' }}
+                label={{ value: `${isIndividual ? 'Meta Ind.' : 'Meta'} Realiz. ${dailyTargets.realizadas}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(142 71% 45%)' }}
               />
             )}
             {dailyTargets?.contratosPagos && (
@@ -84,7 +84,7 @@ export function InvestigationEvolutionChart({ data, dailyTargets, isIndividual }
                 stroke="hsl(45 93% 47%)"
                 strokeDasharray="8 4"
                 strokeWidth={1.5}
-                label={{ value: `Meta Contr. ${dailyTargets.contratosPagos}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(45 93% 47%)' }}
+                label={{ value: `${isIndividual ? 'Meta Ind.' : 'Meta'} Contr. ${dailyTargets.contratosPagos}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(45 93% 47%)' }}
               />
             )}
             <Bar dataKey="agendadas" fill="hsl(var(--primary))" name="Agendadas" radius={[2, 2, 0, 0]} />
