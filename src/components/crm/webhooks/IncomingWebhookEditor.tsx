@@ -96,6 +96,7 @@ export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) 
   const handleFormClose = () => {
     setIsFormOpen(false);
     setEditingEndpoint(null);
+    setDuplicateData(null);
   };
 
   if (isLoading) {

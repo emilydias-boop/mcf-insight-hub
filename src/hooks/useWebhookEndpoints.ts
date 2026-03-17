@@ -36,6 +36,8 @@ export interface CreateWebhookEndpoint {
   is_active?: boolean;
 }
 
+export type WebhookEndpointDuplicateData = Omit<WebhookEndpoint, 'id' | 'leads_received' | 'last_lead_at' | 'created_at' | 'updated_at' | 'created_by'>;
+
 const SUPABASE_URL = 'https://rehcfgqvigfcekiipqkc.supabase.co';
 
 export const getWebhookUrl = (slug: string) => {
