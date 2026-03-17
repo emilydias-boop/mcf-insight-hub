@@ -131,9 +131,22 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
         <DrawerContent className="max-h-[90vh]">
           <DrawerHeader className="border-b pb-4">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1 min-w-0">
                 <DrawerTitle className="text-lg">{subscription.customer_name}</DrawerTitle>
-                <DrawerDescription>{subscription.customer_email} · {subscription.product_name}</DrawerDescription>
+                <DrawerDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span>{subscription.customer_email}</span>
+                  <span>·</span>
+                  <span>{subscription.product_name}</span>
+                  {subscription.customer_phone && (
+                    <>
+                      <span>·</span>
+                      <a href={`tel:${subscription.customer_phone}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+                        <Phone className="h-3 w-3" />
+                        {subscription.customer_phone}
+                      </a>
+                    </>
+                  )}
+                </DrawerDescription>
               </div>
               <Badge className={`text-sm px-3 py-1 ${statusColors[subscription.status] || ''}`} variant="outline">
                 {SUBSCRIPTION_STATUS_LABELS[subscription.status]}
