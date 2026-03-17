@@ -252,32 +252,51 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
   }, [teamTargets]);
 
   // Fetch individual meta_diaria from sdr table when a specific person is selected
-  const individualEmail = useMemo(() => {
-    if (isAll || !selectedId) return null;
-    if (selectedType === 'closer') {
-      return closers.find(c => c.id === selectedId)?.email || null;
-    }
-    return sdrs.find(s => s.id === selectedId)?.email || null;
-  }, [selectedId, selectedType, isAll, closers, sdrs]);
-
   const { data: sdrRecord } = useQuery({
-    queryKey: ['sdr-meta-diaria', individualEmail],
+    queryKey: ['sdr-meta-diaria', selectedId, selectedType, isAll],
     queryFn: async () => {
-      if (!individualEmail) return null;
-      const { data } = await supabase
-        .from('sdr')
-        .select('meta_diaria')
-        .eq('email', individualEmail)
-        .eq('active', true)
-        .maybeSingle();
-      return data;
+      if (!selectedId || isAll) return null;
+
+      let email: string | null = null;
+
+      if (selectedType === 'closer') {
+        // Closer email from closers table
+        const closer = closers.find(c => c.id === selectedId);
+        email = closer?.email || null;
+      } else {
+        // SDR: get sdr_id from employees table, then meta_diaria from sdr table
+        const { data: emp } = await supabase
+          .from('employees')
+          .select('sdr_id')
+          .eq('id', selectedId)
+          .single();
+        if (emp?.sdr_id) {
+          const { data: sdr } = await supabase
+            .from('sdr')
+            .select('meta_diaria')
+            .eq('id', emp.sdr_id)
+            .eq('active', true)
+            .maybeSingle();
+          return sdr;
+        }
+      }
+
+      if (email) {
+        const { data } = await supabase
+          .from('sdr')
+          .select('meta_diaria')
+          .eq('email', email)
+          .eq('active', true)
+          .maybeSingle();
+        return data;
+      }
+      return null;
     },
-    enabled: !!individualEmail,
+    enabled: !!selectedId && !isAll,
   });
 
   const dailyTargets = useMemo((): DailyTargets => {
     if (isAll) return teamDailyTargets;
-    // Use individual meta_diaria from sdr table
     if (sdrRecord?.meta_diaria) {
       return {
         agendadas: sdrRecord.meta_diaria,
