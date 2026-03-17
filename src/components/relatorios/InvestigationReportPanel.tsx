@@ -251,16 +251,41 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
     };
   }, [teamTargets]);
 
-  // Calculate individual daily targets by dividing by member count
-  const memberCount = selectedType === 'closer' ? closers.length : sdrs.length;
+  // Fetch individual meta_diaria from sdr table when a specific person is selected
+  const individualEmail = useMemo(() => {
+    if (isAll || !selectedId) return null;
+    if (selectedType === 'closer') {
+      return closers.find(c => c.id === selectedId)?.email || null;
+    }
+    return sdrs.find(s => s.id === selectedId)?.email || null;
+  }, [selectedId, selectedType, isAll, closers, sdrs]);
+
+  const { data: sdrRecord } = useQuery({
+    queryKey: ['sdr-meta-diaria', individualEmail],
+    queryFn: async () => {
+      if (!individualEmail) return null;
+      const { data } = await supabase
+        .from('sdr')
+        .select('meta_diaria')
+        .eq('email', individualEmail)
+        .eq('active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!individualEmail,
+  });
+
   const dailyTargets = useMemo((): DailyTargets => {
-    if (isAll || memberCount === 0) return teamDailyTargets;
-    return {
-      agendadas: teamDailyTargets.agendadas ? Number((teamDailyTargets.agendadas / memberCount).toFixed(2)) : undefined,
-      realizadas: teamDailyTargets.realizadas ? Number((teamDailyTargets.realizadas / memberCount).toFixed(2)) : undefined,
-      contratosPagos: teamDailyTargets.contratosPagos ? Number((teamDailyTargets.contratosPagos / memberCount).toFixed(2)) : undefined,
-    };
-  }, [teamDailyTargets, isAll, memberCount]);
+    if (isAll) return teamDailyTargets;
+    // Use individual meta_diaria from sdr table
+    if (sdrRecord?.meta_diaria) {
+      return {
+        agendadas: sdrRecord.meta_diaria,
+        realizadas: Math.round(sdrRecord.meta_diaria * 0.7),
+      };
+    }
+    return teamDailyTargets;
+  }, [teamDailyTargets, isAll, sdrRecord]);
 
   // Calculate days in period for target scaling
   const daysInPeriod = useMemo(() => {
