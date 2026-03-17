@@ -63,6 +63,7 @@ interface IncomingWebhookFormDialogProps {
   onOpenChange: (open: boolean) => void;
   originId: string;
   endpointId?: string | null;
+  duplicateData?: WebhookEndpoint | null;
 }
 
 export const IncomingWebhookFormDialog = ({
