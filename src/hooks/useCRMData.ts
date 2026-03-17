@@ -388,10 +388,14 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
     queryFn: async () => {
       const limit = filters.limit || 5000;
       
+      // CROSS-PIPELINE SEARCH: quando há searchTerm, ignorar filtro de origin_id
+      // para encontrar deals em TODAS as pipelines
+      const isSearchMode = !!filters.searchTerm && filters.searchTerm.trim().length >= 2;
+      
       let originIds: string[] = [];
       
-      // Verificar se originId é um grupo (não uma origem)
-      if (filters.originId) {
+      // Só aplicar filtro de origin se NÃO estiver em modo busca
+      if (filters.originId && !isSearchMode) {
         // Primeiro, verificar se é um group_id
         const { data: groupCheck } = await supabase
           .from('crm_groups')
@@ -424,7 +428,7 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
         .order('stage_moved_at', { ascending: false, nullsFirst: false })
         .limit(limit);
       
-      // Aplicar filtro de origens
+      // Aplicar filtro de origens (apenas se não estiver em busca cross-pipeline)
       if (originIds.length > 0) {
         query = query.in('origin_id', originIds);
       }
@@ -435,7 +439,6 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
       if (filters.ownerId) query = query.eq('owner_profile_id', filters.ownerId);
       
       // NOVO: Filtro de owner no backend para SDRs/Closers
-      // Isso garante que só vejam seus próprios deals, sem race condition
       if (filters.ownerProfileId) {
         query = query.eq('owner_profile_id', filters.ownerProfileId);
       }

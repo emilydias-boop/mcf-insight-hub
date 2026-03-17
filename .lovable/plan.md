@@ -1,39 +1,39 @@
 
 
-## Corrigir deals órfãos do Ulysses e prevenir futuros problemas
+## Objetivo
 
-### Problema identificado
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Existem 3 deals "Ulysses Inácio da Luz" no banco:
+## Mudanças
 
-| Deal ID | Origin | Stage | contact_id | origin_id |
-|---|---|---|---|---|
-| `378d55f3` | INSIDE SALES - VIVER DE ALUGUEL | R1 AGENDADA | NULL | `4e2b810a` |
-| `b65a15ba` | (NULL) | Reunião 02 Realizada | NULL | NULL |
-| Contact `643aee5c` existe com email `ulyssesdaluz@outlook.com` |
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**Por que não aparece na busca**: O Kanban filtra deals por `origin_id IN (origens da pipeline selecionada)`. Deals com `origin_id = NULL` não aparecem em nenhuma pipeline. Além disso, a busca por nome/email/telefone usa o JOIN com `crm_contacts`, mas como `contact_id = NULL`, o JOIN retorna vazio.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### Solução em 3 partes
+### 2. Hook `useCloserDetailData.ts`
 
-#### 1. Corrigir dados do Ulysses (via SQL direto)
-- Vincular contact `643aee5c` aos deals `378d55f3` e `b65a15ba`
-- Vincular deal `b65a15ba` à pipeline PIPELINE INSIDE SALES (`e3c04f21`) para que apareça no Kanban
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-#### 2. Melhorar busca no Kanban para encontrar deals cross-pipeline
-No `useCRMDeals` (arquivo `src/hooks/useCRMData.ts`), quando há `searchTerm`:
-- Fazer uma busca adicional SEM filtro de `origin_id` quando o texto buscado não retorna resultados na pipeline atual
-- Ou sempre buscar em todas as pipelines quando o usuário digita um termo de busca, mostrando um badge indicando de qual pipeline o deal vem
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-#### 3. Prevenir deals órfãos sem contact_id
-Adicionar lógica no sync de deals (`sync-deals` edge function) para tentar vincular automaticamente o `contact_id` quando estiver NULL, buscando pelo nome do deal na tabela `crm_contacts`.
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### Arquivos a editar
+### 4. Dados exportados no Excel
 
-| Arquivo | Ação |
-|---|---|
-| (SQL data fix) | UPDATE dos 2 deals do Ulysses: setar contact_id e origin_id |
-| `src/hooks/useCRMData.ts` | No `useCRMDeals`, quando `searchTerm` presente, buscar em TODAS as origens (ignorar filtro de origin_id) para encontrar deals cross-pipeline |
-| `src/pages/crm/Negocios.tsx` | Exibir badge/indicador quando um deal encontrado na busca pertence a outra pipeline |
-| `supabase/functions/sync-deals/index.ts` | Adicionar lógica de auto-link: quando deal.contact_id é NULL, buscar contato por nome/email e vincular |
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
