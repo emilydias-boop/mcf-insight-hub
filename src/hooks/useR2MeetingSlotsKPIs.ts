@@ -32,8 +32,8 @@ export function useR2MeetingSlotsKPIs(startDate: Date, endDate: Date) {
         throw error;
       }
 
-      // Filter out partners from metrics
-      const attendees = (data || []).filter((a) => !a.is_partner);
+      // Filter out partners and rescheduled attendees from metrics
+      const attendees = (data || []).filter((a) => !a.is_partner && a.status !== 'rescheduled');
 
       // R2 Agendadas: ALL attendees scheduled for the period (excludes only cancelled)
       const r2Agendadas = attendees.filter(

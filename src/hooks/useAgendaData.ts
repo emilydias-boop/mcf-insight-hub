@@ -1348,7 +1348,13 @@ export function useRescheduleMeeting() {
 
       if (error) throw error;
 
-      // 3. Para cada attendee, atualizar a nota preservando histórico
+      // 3. Marcar todos os attendees como rescheduled
+      await supabase
+        .from('meeting_slot_attendees')
+        .update({ status: 'rescheduled' })
+        .eq('meeting_slot_id', meetingId);
+
+      // 4. Para cada attendee, atualizar a nota preservando histórico
       if (meeting?.attendees && rescheduleNote) {
         const oldDate = format(new Date(meeting.scheduled_at), "dd/MM 'às' HH:mm", { locale: ptBR });
         const newDateFormatted = format(newDate, "dd/MM 'às' HH:mm", { locale: ptBR });
