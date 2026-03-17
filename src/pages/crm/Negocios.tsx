@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, AlertCircle, RefreshCw, Settings, FileSpreadsheet } from 'lucide-react';
+import { Plus, AlertCircle, RefreshCw, Settings, FileSpreadsheet, ExternalLink } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useCRMDeals, useSyncClintData } from '@/hooks/useCRMData';
+import { Badge } from '@/components/ui/badge';
+import { useCRMDeals, useCRMStages, useSyncClintData } from '@/hooks/useCRMData';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
@@ -41,6 +42,7 @@ import { useOutsideDetectionForDeals } from '@/hooks/useOutsideDetectionForDeals
 import { OutsideDistributionButton } from '@/components/crm/OutsideDistributionButton';
 import { MovePartnersButton } from '@/components/crm/MovePartnersButton';
 import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDialog';
+import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 
 const Negocios = () => {
   // Ativar notificações em tempo real para novos leads
@@ -234,6 +236,16 @@ const Negocios = () => {
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();
   const visibleStages = getVisibleStages();
+  
+  // Buscar stages da pipeline atual para detectar deals cross-pipeline
+  const { data: currentPipelineStages } = useCRMStages(effectiveOriginId);
+  const currentStageIds = useMemo(() => {
+    return new Set((currentPipelineStages || []).map((s: any) => s.id));
+  }, [currentPipelineStages]);
+  
+  // State para abrir drawer de deal cross-pipeline
+  const [crossPipelineDealId, setCrossPipelineDealId] = useState<string | null>(null);
+  const [crossPipelineDrawerOpen, setCrossPipelineDrawerOpen] = useState(false);
   
   // Derivar opções de owners a partir dos deals carregados
   const { ownerOptions } = useDealOwnerOptions(dealsData, activeBU);
@@ -533,6 +545,25 @@ const Negocios = () => {
     });
   }, [dealsData, isRestrictedRole, userProfile?.email, filters, activitySummaries, a010StatusMap, outsideMap]);
   
+  // Separar deals da pipeline atual vs cross-pipeline
+  const isSearchActive = !!filters.search && filters.search.trim().length >= 2;
+  
+  const { currentPipelineDeals, crossPipelineDeals } = useMemo(() => {
+    if (!isSearchActive || currentStageIds.size === 0) {
+      return { currentPipelineDeals: filteredDeals, crossPipelineDeals: [] };
+    }
+    const current: any[] = [];
+    const cross: any[] = [];
+    filteredDeals.forEach((deal: any) => {
+      if (deal.stage_id && currentStageIds.has(deal.stage_id)) {
+        current.push(deal);
+      } else {
+        cross.push(deal);
+      }
+    });
+    return { currentPipelineDeals: current, crossPipelineDeals: cross };
+  }, [filteredDeals, currentStageIds, isSearchActive]);
+
   const clearFilters = () => {
     setFilters({
       search: '',
@@ -608,6 +639,11 @@ const Negocios = () => {
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''}
+                {crossPipelineDeals.length > 0 && (
+                  <span className="ml-1 text-primary font-medium">
+                    ({crossPipelineDeals.length} em outras pipelines)
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -701,21 +737,62 @@ const Negocios = () => {
               </div>
             </div>
           ) : (
-            <DealKanbanBoard 
-              deals={filteredDeals.map((deal: any) => ({
-                ...deal,
-                stage: deal.crm_stages?.stage_name || 'Sem estágio',
-              }))}
-              originId={effectiveOriginId}
-              showLostDeals={filters.dealStatus === 'lost'}
-              selectedDealIds={selectedDealIds}
-              onSelectionChange={handleSelectionChange}
-              onSelectByCountInStage={handleSelectByCountInStage}
-              onSelectAllInStage={handleSelectAllInStage}
-              onClearStageSelection={handleClearStageSelection}
-              channelMap={channelMap}
-              outsideMap={outsideMap}
-            />
+            <div className="flex flex-col h-full overflow-hidden">
+              {/* Seção de deals encontrados em outras pipelines */}
+              {crossPipelineDeals.length > 0 && isSearchActive && (
+                <div className="flex-shrink-0 mx-2 mb-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                  <h3 className="text-sm font-semibold text-primary mb-2 flex items-center gap-2">
+                    <ExternalLink className="h-4 w-4" />
+                    Encontrados em outras pipelines ({crossPipelineDeals.length})
+                  </h3>
+                  <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                    {crossPipelineDeals.map((deal: any) => (
+                      <div
+                        key={deal.id}
+                        className="flex items-center justify-between gap-2 p-2 rounded-md bg-background hover:bg-accent cursor-pointer transition-colors"
+                        onClick={() => {
+                          setCrossPipelineDealId(deal.id);
+                          setCrossPipelineDrawerOpen(true);
+                        }}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-sm font-medium truncate">
+                            {deal.crm_contacts?.name || deal.name}
+                          </span>
+                          <Badge variant="outline" className="text-[10px] shrink-0">
+                            {deal.crm_stages?.stage_name || 'Sem estágio'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant="secondary" className="text-[10px]">
+                            {deal.crm_origins?.name || 'Pipeline desconhecida'}
+                          </Badge>
+                          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex-1 overflow-hidden">
+                <DealKanbanBoard 
+                  deals={currentPipelineDeals.map((deal: any) => ({
+                    ...deal,
+                    stage: deal.crm_stages?.stage_name || 'Sem estágio',
+                  }))}
+                  originId={effectiveOriginId}
+                  showLostDeals={filters.dealStatus === 'lost'}
+                  selectedDealIds={selectedDealIds}
+                  onSelectionChange={handleSelectionChange}
+                  onSelectByCountInStage={handleSelectByCountInStage}
+                  onSelectAllInStage={handleSelectAllInStage}
+                  onClearStageSelection={handleClearStageSelection}
+                  channelMap={channelMap}
+                  outsideMap={outsideMap}
+                />
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -752,6 +829,13 @@ const Negocios = () => {
         onOpenChange={setSpreadsheetDialogOpen}
         deals={dealsData || []}
         originId={effectiveOriginId}
+      />
+      
+      {/* Drawer para deals cross-pipeline */}
+      <DealDetailsDrawer
+        dealId={crossPipelineDealId}
+        open={crossPipelineDrawerOpen}
+        onOpenChange={setCrossPipelineDrawerOpen}
       />
     </div>
   );
