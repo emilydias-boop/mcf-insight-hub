@@ -14,6 +14,7 @@ export interface DailyTargets {
 interface Props {
   data: DailyMetric[];
   dailyTargets?: DailyTargets;
+  isIndividual?: boolean;
 }
 
 function movingAvg(arr: number[], window: number): (number | null)[] {
