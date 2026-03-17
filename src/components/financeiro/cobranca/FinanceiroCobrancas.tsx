@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { BillingSubscription, BillingFilters } from '@/types/billing';
+import { BillingSubscription, BillingFilters, SUBSCRIPTION_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/billing';
 import { useBillingSubscriptions, useBillingKPIs } from '@/hooks/useBillingSubscriptions';
 import { useBillingMonthKPIs } from '@/hooks/useBillingMonthKPIs';
 import { useSyncBillingFromHubla } from '@/hooks/useSyncBillingFromHubla';
@@ -12,9 +12,11 @@ import { CobrancaFilters } from './CobrancaFilters';
 import { CobrancaTable } from './CobrancaTable';
 import { CobrancaDetailDrawer } from './CobrancaDetailDrawer';
 import { CreateSubscriptionModal } from './CreateSubscriptionModal';
-import { Plus, RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
 export const FinanceiroCobrancas = () => {
   const [filters, setFilters] = useState<BillingFilters>({});
@@ -35,6 +37,33 @@ export const FinanceiroCobrancas = () => {
     setDrawerOpen(true);
   };
 
+  const handleExportExcel = () => {
+    if (subscriptions.length === 0) {
+      toast.error('Nenhum dado para exportar');
+      return;
+    }
+
+    const rows = subscriptions.map(sub => ({
+      'Cliente': sub.customer_name,
+      'Email': sub.customer_email || '',
+      'Telefone': sub.customer_phone || '',
+      'Produto': sub.product_name,
+      'Categoria': sub.product_category || '',
+      'Status': SUBSCRIPTION_STATUS_LABELS[sub.status],
+      'Forma Pagamento': sub.forma_pagamento ? PAYMENT_METHOD_LABELS[sub.forma_pagamento] : '',
+      'Valor Total': sub.valor_total_contrato,
+      'Parcelas': sub.total_parcelas,
+      'Responsável': sub.responsavel_financeiro || '',
+      'Início': sub.data_inicio ? format(new Date(sub.data_inicio), 'dd/MM/yyyy') : '',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Cobranças');
+    XLSX.writeFile(wb, `cobrancas_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    toast.success(`${rows.length} registros exportados`);
+  };
+
   return (
     <div className="space-y-4">
       <CobrancaKPIs kpis={kpis} isLoading={loadingKpis} />
@@ -42,6 +71,15 @@ export const FinanceiroCobrancas = () => {
       <div className="flex items-center justify-between">
         <CobrancaMonthSelector currentMonth={currentMonth} onMonthChange={setCurrentMonth} />
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handleExportExcel}
+            disabled={subscriptions.length === 0}
+            className="shrink-0"
+          >
+            <Download className="h-4 w-4 mr-1" />
+            Exportar Excel
+          </Button>
           <Button
             variant="outline"
             onClick={() => syncMutation.mutate()}

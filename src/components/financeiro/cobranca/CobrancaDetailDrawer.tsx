@@ -17,7 +17,7 @@ import { CreateAgreementModal } from './CreateAgreementModal';
 import { EditSubscriptionModal } from './EditSubscriptionModal';
 import { RegisterPaymentModal } from './RegisterPaymentModal';
 import { toast } from 'sonner';
-import { Handshake, Ban, CheckCircle2, Pencil, DollarSign, MessageSquarePlus, Send } from 'lucide-react';
+import { Handshake, Ban, CheckCircle2, Pencil, MessageSquarePlus, Send, Phone, MessageCircle } from 'lucide-react';
 import { useUpdateSubscription } from '@/hooks/useBillingSubscriptions';
 
 interface CobrancaDetailDrawerProps {
@@ -131,9 +131,22 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
         <DrawerContent className="max-h-[90vh]">
           <DrawerHeader className="border-b pb-4">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1 min-w-0">
                 <DrawerTitle className="text-lg">{subscription.customer_name}</DrawerTitle>
-                <DrawerDescription>{subscription.customer_email} · {subscription.product_name}</DrawerDescription>
+                <DrawerDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span>{subscription.customer_email}</span>
+                  <span>·</span>
+                  <span>{subscription.product_name}</span>
+                  {subscription.customer_phone && (
+                    <>
+                      <span>·</span>
+                      <a href={`tel:${subscription.customer_phone}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+                        <Phone className="h-3 w-3" />
+                        {subscription.customer_phone}
+                      </a>
+                    </>
+                  )}
+                </DrawerDescription>
               </div>
               <Badge className={`text-sm px-3 py-1 ${statusColors[subscription.status] || ''}`} variant="outline">
                 {SUBSCRIPTION_STATUS_LABELS[subscription.status]}
@@ -160,6 +173,27 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
             </div>
 
             <div className="flex gap-2 mt-4 flex-wrap">
+              {subscription.customer_phone && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-green-700 border-green-300 hover:bg-green-50"
+                  onClick={() => {
+                    const phone = subscription.customer_phone!.replace(/\D/g, '');
+                    const phoneFormatted = phone.startsWith('55') ? phone : `55${phone}`;
+                    const msg = encodeURIComponent(
+                      `Olá ${subscription.customer_name.split(' ')[0]}! 🙂\n\n` +
+                      `Estamos entrando em contato referente ao seu contrato *${subscription.product_name}*.\n` +
+                      `Valor total: ${formatCurrency(subscription.valor_total_contrato)}\n` +
+                      `Saldo devedor: ${formatCurrency(saldoDevedor)}\n\n` +
+                      `Podemos conversar sobre sua situação financeira?`
+                    );
+                    window.open(`https://wa.me/${phoneFormatted}?text=${msg}`, '_blank');
+                  }}
+                >
+                  <MessageCircle className="h-3.5 w-3.5 mr-1" /> Cobrar WhatsApp
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={() => setShowEditModal(true)}>
                 <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
               </Button>
