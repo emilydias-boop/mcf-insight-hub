@@ -226,10 +226,25 @@ Deno.serve(async (req) => {
         const batch = deals.slice(i, i + BATCH_SIZE);
 
         for (const deal of batch) {
-          const contactId = deal.contact_id ? contactMap.get(deal.contact_id) || null : null;
+          let contactId = deal.contact_id ? contactMap.get(deal.contact_id) || null : null;
           const stageData = deal.stage_id ? stageMap.get(deal.stage_id) || null : null;
           let stageId = stageData?.id || null;
           const originId = stageData?.origin_id || null;
+
+          // AUTO-LINK: se contact_id é NULL, tentar vincular por nome ou email
+          if (!contactId && deal.name) {
+            const { data: matchedContact } = await supabase
+              .from('crm_contacts')
+              .select('id')
+              .or(`name.ilike.${deal.name},email.eq.${deal.contact?.email || '__none__'}`)
+              .limit(1)
+              .maybeSingle();
+            
+            if (matchedContact) {
+              contactId = matchedContact.id;
+              console.log(`🔗 Auto-link: deal "${deal.name}" → contact ${contactId}`);
+            }
+          }
 
           // Fallback: se não encontrou stage pelo mapeamento, usar primeiro estágio ativo da origem
           if (!stageId && originId) {
