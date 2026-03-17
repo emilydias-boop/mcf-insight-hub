@@ -236,6 +236,16 @@ const Negocios = () => {
   const syncMutation = useSyncClintData();
   const visibleStages = getVisibleStages();
   
+  // Buscar stages da pipeline atual para detectar deals cross-pipeline
+  const { data: currentPipelineStages } = useCRMStages(effectiveOriginId);
+  const currentStageIds = useMemo(() => {
+    return new Set((currentPipelineStages || []).map((s: any) => s.id));
+  }, [currentPipelineStages]);
+  
+  // State para abrir drawer de deal cross-pipeline
+  const [crossPipelineDealId, setCrossPipelineDealId] = useState<string | null>(null);
+  const [crossPipelineDrawerOpen, setCrossPipelineDrawerOpen] = useState(false);
+  
   // Derivar opções de owners a partir dos deals carregados
   const { ownerOptions } = useDealOwnerOptions(dealsData, activeBU);
   
