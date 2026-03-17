@@ -90,7 +90,7 @@ export function useR2PendingLeads() {
           )
         `)
         .in('status', ['contract_paid'])
-        .eq('meeting_slots.meeting_type', 'r1')
+        .eq('meeting_slot.meeting_type', 'r1')
         .order('contract_paid_at', { ascending: false, nullsFirst: false });
 
       if (paidError) throw paidError;
