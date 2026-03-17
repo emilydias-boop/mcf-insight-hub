@@ -720,3 +720,36 @@ function mapMonthlyIncome(income: string | null | undefined): string | null {
   
   return mapping[income] || income;
 }
+
+// ============= HELPER: Verificar se é parceiro existente =============
+async function checkIfPartner(supabase: any, email: string | null): Promise<{isPartner: boolean, product: string | null}> {
+  if (!email) return { isPartner: false, product: null };
+  
+  const PARTNER_PRODUCTS = ['A001', 'A002', 'A003', 'A004', 'A009'];
+  
+  const { data: transactions } = await supabase
+    .from('hubla_transactions')
+    .select('product_name')
+    .ilike('customer_email', email)
+    .eq('sale_status', 'completed')
+    .limit(50);
+  
+  if (!transactions?.length) return { isPartner: false, product: null };
+  
+  for (const tx of transactions) {
+    const name = (tx.product_name || '').toUpperCase();
+    for (const code of PARTNER_PRODUCTS) {
+      if (name.includes(code)) {
+        return { isPartner: true, product: code };
+      }
+    }
+    if (name.includes('INCORPORADOR') && !name.includes('CONTRATO') && !name.includes('A010')) {
+      return { isPartner: true, product: 'MCF Incorporador' };
+    }
+    if (name.includes('ANTICRISE') && !name.includes('CONTRATO')) {
+      return { isPartner: true, product: 'Anticrise' };
+    }
+  }
+  
+  return { isPartner: false, product: null };
+}
