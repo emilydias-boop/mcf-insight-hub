@@ -6314,6 +6314,159 @@ export type Database = {
           },
         ]
       }
+      lead_profiles: {
+        Row: {
+          bancos: Json | null
+          contact_id: string | null
+          corretora: string | null
+          cpf: string | null
+          created_at: string
+          data_cadastro: string | null
+          data_nascimento: string | null
+          deal_id: string | null
+          esporte_hobby: string | null
+          estado_cidade: string | null
+          estado_civil: string | null
+          faixa_aporte: number | null
+          faixa_aporte_descricao: string | null
+          fonte_renda: string | null
+          gosta_futebol: boolean | null
+          icp_level: string | null
+          id: string
+          imovel_financiado: boolean | null
+          interesse_holding: boolean | null
+          investe: boolean | null
+          is_empresario: boolean | null
+          lead_score: number | null
+          nome_completo: string | null
+          num_filhos: number | null
+          objetivos_principais: Json | null
+          origem: string | null
+          perfil_indicacao: string | null
+          porte_empresa: number | null
+          possui_carro: boolean | null
+          possui_consorcio: boolean | null
+          possui_divida: boolean | null
+          possui_seguros: boolean | null
+          precisa_capital_giro: boolean | null
+          profissao: string | null
+          renda_bruta: number | null
+          renda_passiva_meta: number | null
+          saldo_fgts: number | null
+          tempo_independencia: string | null
+          time_futebol: string | null
+          updated_at: string
+          valor_capital_giro: number | null
+          valor_investido: number | null
+          whatsapp: string | null
+        }
+        Insert: {
+          bancos?: Json | null
+          contact_id?: string | null
+          corretora?: string | null
+          cpf?: string | null
+          created_at?: string
+          data_cadastro?: string | null
+          data_nascimento?: string | null
+          deal_id?: string | null
+          esporte_hobby?: string | null
+          estado_cidade?: string | null
+          estado_civil?: string | null
+          faixa_aporte?: number | null
+          faixa_aporte_descricao?: string | null
+          fonte_renda?: string | null
+          gosta_futebol?: boolean | null
+          icp_level?: string | null
+          id?: string
+          imovel_financiado?: boolean | null
+          interesse_holding?: boolean | null
+          investe?: boolean | null
+          is_empresario?: boolean | null
+          lead_score?: number | null
+          nome_completo?: string | null
+          num_filhos?: number | null
+          objetivos_principais?: Json | null
+          origem?: string | null
+          perfil_indicacao?: string | null
+          porte_empresa?: number | null
+          possui_carro?: boolean | null
+          possui_consorcio?: boolean | null
+          possui_divida?: boolean | null
+          possui_seguros?: boolean | null
+          precisa_capital_giro?: boolean | null
+          profissao?: string | null
+          renda_bruta?: number | null
+          renda_passiva_meta?: number | null
+          saldo_fgts?: number | null
+          tempo_independencia?: string | null
+          time_futebol?: string | null
+          updated_at?: string
+          valor_capital_giro?: number | null
+          valor_investido?: number | null
+          whatsapp?: string | null
+        }
+        Update: {
+          bancos?: Json | null
+          contact_id?: string | null
+          corretora?: string | null
+          cpf?: string | null
+          created_at?: string
+          data_cadastro?: string | null
+          data_nascimento?: string | null
+          deal_id?: string | null
+          esporte_hobby?: string | null
+          estado_cidade?: string | null
+          estado_civil?: string | null
+          faixa_aporte?: number | null
+          faixa_aporte_descricao?: string | null
+          fonte_renda?: string | null
+          gosta_futebol?: boolean | null
+          icp_level?: string | null
+          id?: string
+          imovel_financiado?: boolean | null
+          interesse_holding?: boolean | null
+          investe?: boolean | null
+          is_empresario?: boolean | null
+          lead_score?: number | null
+          nome_completo?: string | null
+          num_filhos?: number | null
+          objetivos_principais?: Json | null
+          origem?: string | null
+          perfil_indicacao?: string | null
+          porte_empresa?: number | null
+          possui_carro?: boolean | null
+          possui_consorcio?: boolean | null
+          possui_divida?: boolean | null
+          possui_seguros?: boolean | null
+          precisa_capital_giro?: boolean | null
+          profissao?: string | null
+          renda_bruta?: number | null
+          renda_passiva_meta?: number | null
+          saldo_fgts?: number | null
+          tempo_independencia?: string | null
+          time_futebol?: string | null
+          updated_at?: string
+          valor_capital_giro?: number | null
+          valor_investido?: number | null
+          whatsapp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_profiles_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_profiles_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_tracking: {
         Row: {
           closer: string | null
