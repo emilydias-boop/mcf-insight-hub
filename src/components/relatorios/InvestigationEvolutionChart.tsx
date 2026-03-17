@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { DailyMetric } from '@/hooks/useInvestigationByPeriod';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -9,12 +9,24 @@ interface Props {
   data: DailyMetric[];
 }
 
+function movingAvg(arr: number[], window: number): (number | null)[] {
+  return arr.map((_, i) => {
+    if (i < window - 1) return null;
+    const slice = arr.slice(i - window + 1, i + 1);
+    return slice.reduce((a, b) => a + b, 0) / window;
+  });
+}
+
 export function InvestigationEvolutionChart({ data }: Props) {
   if (data.length === 0) return null;
 
-  const chartData = data.map(d => ({
+  const totals = data.map(d => d.agendadas);
+  const avg3 = movingAvg(totals, 3);
+
+  const chartData = data.map((d, i) => ({
     ...d,
     label: format(parseISO(d.date), 'dd/MM', { locale: ptBR }),
+    mediaMovel: avg3[i] !== null ? Number(avg3[i]!.toFixed(1)) : undefined,
   }));
 
   return (
@@ -26,8 +38,8 @@ export function InvestigationEvolutionChart({ data }: Props) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData}>
+        <ResponsiveContainer width="100%" height={320}>
+          <ComposedChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} />
             <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} allowDecimals={false} />
@@ -44,7 +56,19 @@ export function InvestigationEvolutionChart({ data }: Props) {
             <Bar dataKey="realizadas" fill="hsl(142 71% 45%)" name="Realizadas" radius={[2, 2, 0, 0]} />
             <Bar dataKey="noShows" fill="hsl(var(--destructive))" name="No-Shows" radius={[2, 2, 0, 0]} />
             <Bar dataKey="contratosPagos" fill="hsl(45 93% 47%)" name="Contratos Pagos" radius={[2, 2, 0, 0]} />
-          </BarChart>
+            {data.length >= 3 && (
+              <Line
+                type="monotone"
+                dataKey="mediaMovel"
+                stroke="hsl(var(--primary))"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                dot={false}
+                name="Média Móvel (3d)"
+                connectNulls={false}
+              />
+            )}
+          </ComposedChart>
         </ResponsiveContainer>
       </CardContent>
     </Card>
