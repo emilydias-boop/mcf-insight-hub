@@ -793,8 +793,47 @@ export default function LeadsLimbo() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button size="sm" onClick={handleBulkAssign} disabled={assignMutation.isPending || createNotFoundMutation.isPending}>
+              <Button size="sm" onClick={handleBulkAssign} disabled={assignMutation.isPending || createNotFoundMutation.isPending || duplicateMutation.isPending}>
                 {(assignMutation.isPending || createNotFoundMutation.isPending) ? 'Atribuindo...' : `Atribuir ${selectedIds.size} leads`}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (!assignSdrEmail) { toast.error('Selecione um SDR'); return; }
+                  const profile = profiles?.find(p => p.email === assignSdrEmail);
+                  if (!profile) { toast.error('Perfil do SDR não encontrado'); return; }
+                  const selectedRows = Array.from(selectedIds).map(i => filtered[i]).filter(Boolean);
+                  const toDuplicate = selectedRows.filter(r => r.status === 'nao_encontrado' || r.status === 'sem_dono');
+                  if (!toDuplicate.length) { toast.error('Nenhum lead para duplicar'); return; }
+                  duplicateMutation.mutate({
+                    leads: toDuplicate.map(r => ({
+                      name: r.excelName,
+                      email: r.excelEmail,
+                      phone: r.excelPhone || '',
+                      value: r.excelValue,
+                      sourceContactId: r.localContactEmail ? undefined : undefined,
+                      sourceDealId: r.localDealId,
+                    })),
+                    ownerEmail: assignSdrEmail,
+                    ownerProfileId: profile.id,
+                  }, {
+                    onSuccess: () => {
+                      const dupNames = new Set(toDuplicate.map(r => `${r.excelName}|${r.excelEmail}`));
+                      setResults(prev => prev.map(r =>
+                        dupNames.has(`${r.excelName}|${r.excelEmail}`) ? { ...r, status: 'com_dono' as const, localOwner: assignSdrEmail } : r
+                      ));
+                      setSelectedIds(new Set());
+                      if (latestUpload?.id) {
+                        setResults(prev => { updateLimboResults.mutate({ uploadId: latestUpload.id, results: prev }); return prev; });
+                      }
+                    },
+                  });
+                }}
+                disabled={duplicateMutation.isPending}
+              >
+                <Copy className="h-4 w-4 mr-1" />
+                {duplicateMutation.isPending ? 'Duplicando...' : `Duplicar p/ Inside`}
               </Button>
               <Button size="sm" variant="ghost" onClick={() => { setSelectedIds(new Set()); setSelectCount(''); }}>Limpar</Button>
             </>
