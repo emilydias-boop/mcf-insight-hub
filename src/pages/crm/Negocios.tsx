@@ -544,6 +544,25 @@ const Negocios = () => {
     });
   }, [dealsData, isRestrictedRole, userProfile?.email, filters, activitySummaries, a010StatusMap, outsideMap]);
   
+  // Separar deals da pipeline atual vs cross-pipeline
+  const isSearchActive = !!filters.search && filters.search.trim().length >= 2;
+  
+  const { currentPipelineDeals, crossPipelineDeals } = useMemo(() => {
+    if (!isSearchActive || currentStageIds.size === 0) {
+      return { currentPipelineDeals: filteredDeals, crossPipelineDeals: [] };
+    }
+    const current: any[] = [];
+    const cross: any[] = [];
+    filteredDeals.forEach((deal: any) => {
+      if (deal.stage_id && currentStageIds.has(deal.stage_id)) {
+        current.push(deal);
+      } else {
+        cross.push(deal);
+      }
+    });
+    return { currentPipelineDeals: current, crossPipelineDeals: cross };
+  }, [filteredDeals, currentStageIds, isSearchActive]);
+
   const clearFilters = () => {
     setFilters({
       search: '',
