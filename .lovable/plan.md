@@ -1,39 +1,33 @@
 
 
-## Objetivo
+## Corrigir Metas Individuais no Gráfico "Evolução Dia a Dia"
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
 
-## Mudanças
+As metas individuais no gráfico estão sendo calculadas dividindo a meta do time pelo número de membros (ex: 72 / 21 = 3.43). Mas cada pessoa tem sua própria `meta_diaria` na tabela `sdr` (ex: Carol Correa = 10/dia). O valor mostrado no gráfico precisa vir dessa meta individual.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Lógica da `meta_diaria`
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+- `meta_diaria` = meta de **agendamento** por dia (tabela `sdr`)
+- Meta de **realizadas** = 70% da meta de agendadas (padrão do sistema)
+- Quando "Todos" está selecionado, manter o comportamento atual (meta do time vinda de `team_targets`)
 
-### 2. Hook `useCloserDetailData.ts`
+### Alterações
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+| Arquivo | O que muda |
+|---|---|
+| `src/components/relatorios/InvestigationReportPanel.tsx` | Buscar `meta_diaria` da tabela `sdr` pelo email da pessoa selecionada. Quando individual, usar `meta_diaria` como `agendadas` e `meta_diaria * 0.7` como `realizadas`, em vez de dividir team target por member count. |
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+### Detalhes
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+1. **Novo query**: Quando `selectedId` muda e não é `__all__`, buscar o email da pessoa (via `closers` ou `employees`) e depois buscar `sdr.meta_diaria` pela correspondência de email.
 
-### 4. Dados exportados no Excel
+2. **Simplificação**: Usar `useQuery` direto no painel para buscar o `sdr` record da pessoa selecionada. Para SDRs, buscar `employees.email` → `sdr.meta_diaria`. Para closers, usar `closers.email` → `sdr.meta_diaria`.
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+3. **Cálculo dos dailyTargets individuais**:
+   - `agendadas = sdr.meta_diaria` (ex: 10 para Carol Correa)
+   - `realizadas = Math.round(sdr.meta_diaria * 0.7)` (ex: 7)
+   - `contratosPagos` mantém a lógica de team target dividido (ou remove a reference line)
 
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+4. **Quando "Todos"**: mantém o comportamento atual com `teamDailyTargets` do `team_targets`.
 
