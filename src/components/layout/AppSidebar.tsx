@@ -31,6 +31,7 @@ import {
   Briefcase,
   Megaphone,
   Monitor,
+  Laptop,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
