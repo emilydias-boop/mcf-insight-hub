@@ -71,6 +71,7 @@ export const IncomingWebhookFormDialog = ({
   onOpenChange,
   originId,
   endpointId,
+  duplicateData,
 }: IncomingWebhookFormDialogProps) => {
   const [tagInput, setTagInput] = useState('');
   const [copied, setCopied] = useState(false);
