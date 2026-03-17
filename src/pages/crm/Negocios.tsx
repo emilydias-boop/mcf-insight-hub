@@ -830,6 +830,13 @@ const Negocios = () => {
         deals={dealsData || []}
         originId={effectiveOriginId}
       />
+      
+      {/* Drawer para deals cross-pipeline */}
+      <DealDetailsDrawer
+        dealId={crossPipelineDealId}
+        open={crossPipelineDrawerOpen}
+        onOpenChange={setCrossPipelineDrawerOpen}
+      />
     </div>
   );
 };
