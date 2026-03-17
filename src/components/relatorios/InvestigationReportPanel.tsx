@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,23 +7,24 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
-import { Search, Download, Users, CheckCircle, XCircle, FileCheck, Calendar, User, ShoppingCart, Tag, Percent, TrendingUp } from 'lucide-react';
+import { Search, Download, Users, CheckCircle, XCircle, FileCheck, Calendar, User, ShoppingCart, Tag, Percent, TrendingUp, Target } from 'lucide-react';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { useGestorSDRs } from '@/hooks/useGestorSDRs';
 import { useInvestigationByCloser, useInvestigationByLead, InvestigationAttendee, LeadProfile, LeadFinancials } from '@/hooks/useInvestigationReport';
 import { useInvestigationByPeriod } from '@/hooks/useInvestigationByPeriod';
 import { useCloserComparison } from '@/hooks/useCloserComparison';
-import { InvestigationEvolutionChart } from '@/components/relatorios/InvestigationEvolutionChart';
+import { useSdrTeamTargets, SdrTarget } from '@/hooks/useSdrTeamTargets';
+import { InvestigationEvolutionChart, DailyTargets } from '@/components/relatorios/InvestigationEvolutionChart';
 import { InvestigationRankingChart } from '@/components/relatorios/InvestigationRankingChart';
 import { InvestigationDistributionChart } from '@/components/relatorios/InvestigationDistributionChart';
 import { InvestigationComparisonTable } from '@/components/relatorios/InvestigationComparisonTable';
+import { MetricProgressCell } from '@/components/sdr/MetricProgressCell';
 import { formatMeetingStatus } from '@/utils/formatMeetingStatus';
 import { BusinessUnit } from '@/hooks/useMyBU';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, differenceInCalendarDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import * as XLSX from 'xlsx';
-
 interface InvestigationReportPanelProps {
   bu: BusinessUnit;
 }
