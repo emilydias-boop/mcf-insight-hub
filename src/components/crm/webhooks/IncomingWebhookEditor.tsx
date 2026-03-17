@@ -32,7 +32,8 @@ import {
   useWebhookEndpoints, 
   useDeleteWebhookEndpoint, 
   useToggleWebhookEndpoint,
-  getWebhookUrl 
+  getWebhookUrl,
+  type WebhookEndpoint,
 } from '@/hooks/useWebhookEndpoints';
 import { IncomingWebhookFormDialog } from './IncomingWebhookFormDialog';
 import { formatDistanceToNow } from 'date-fns';
