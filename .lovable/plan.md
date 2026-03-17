@@ -1,41 +1,39 @@
 
 
-## Por que Luis (Gestor/Manager) nao consegue excluir reunioes
+## Objetivo
 
-### Causa raiz
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-As politicas RLS (Row-Level Security) de DELETE nas tabelas `meeting_slots` e `meeting_slot_attendees` permitem apenas `admin`:
+## Mudanças
 
-- `meeting_slots`: `"Admins can delete meeting slots"` → `has_role(auth.uid(), 'admin')`
-- `meeting_slot_attendees`: `"Admins can delete attendees"` → `has_role(auth.uid(), 'admin')`
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-O frontend permite a acao (role `manager` esta em `DELETE_ALLOWED_ROLES`), mas o Supabase rejeita silenciosamente no banco.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### Correcao
+### 2. Hook `useCloserDetailData.ts`
 
-**Migracao SQL** -- Atualizar as RLS policies de DELETE para incluir `manager` e `coordenador`:
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-```sql
--- meeting_slots: permitir manager e coordenador deletar
-DROP POLICY IF EXISTS "Admins can delete meeting slots" ON meeting_slots;
-CREATE POLICY "Authorized roles can delete meeting slots" ON meeting_slots
-  FOR DELETE TO authenticated
-  USING (
-    has_role(auth.uid(), 'admin'::app_role) OR
-    has_role(auth.uid(), 'manager'::app_role) OR
-    has_role(auth.uid(), 'coordenador'::app_role)
-  );
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
--- meeting_slot_attendees: permitir manager e coordenador deletar
-DROP POLICY IF EXISTS "Admins can delete attendees" ON meeting_slot_attendees;
-CREATE POLICY "Authorized roles can delete attendees" ON meeting_slot_attendees
-  FOR DELETE TO authenticated
-  USING (
-    has_role(auth.uid(), 'admin'::app_role) OR
-    has_role(auth.uid(), 'manager'::app_role) OR
-    has_role(auth.uid(), 'coordenador'::app_role)
-  );
-```
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-Tambem incluir `sdr` se desejado (ja esta no `DELETE_ALLOWED_ROLES` do frontend). Nenhuma alteracao de codigo frontend necessaria -- o botao ja aparece para managers, so falta a permissao no banco.
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
