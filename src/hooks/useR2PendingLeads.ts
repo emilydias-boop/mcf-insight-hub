@@ -185,7 +185,7 @@ export function useR2PendingLeads() {
           attendee_phone,
           meeting_slot:meeting_slots!inner(meeting_type)
         `)
-        .eq('meeting_slots.meeting_type', 'r2');
+        .eq('meeting_slot.meeting_type', 'r2');
 
       // Create sets of normalized names/phones with R2
       const r2Names = new Set<string>();
