@@ -356,3 +356,117 @@ export function useLinkPaidContract() {
     },
   });
 }
+
+// Mutation para duplicar lead de outra pipeline para Inside Sales
+export function useDuplicateToInsideSales() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: {
+      leads: Array<{
+        name: string;
+        email: string;
+        phone: string;
+        value?: number | null;
+        sourceContactId?: string;
+        sourceDealId?: string;
+      }>;
+      ownerEmail: string;
+      ownerProfileId: string;
+      stageId?: string;
+    }) => {
+      const NOVO_LEAD_STAGE = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b';
+      const targetStage = params.stageId || NOVO_LEAD_STAGE;
+
+      let created = 0;
+
+      for (const lead of params.leads) {
+        // Step 1: Find or create contact
+        let contactId = lead.sourceContactId;
+
+        if (!contactId && lead.email) {
+          const { data: existing } = await supabase
+            .from('crm_contacts')
+            .select('id')
+            .eq('email', lead.email)
+            .limit(1)
+            .maybeSingle();
+          contactId = existing?.id;
+        }
+
+        if (!contactId && lead.phone) {
+          const { data: existing } = await supabase
+            .from('crm_contacts')
+            .select('id')
+            .eq('phone', lead.phone)
+            .limit(1)
+            .maybeSingle();
+          contactId = existing?.id;
+        }
+
+        if (!contactId) {
+          const { data: newContact, error: cErr } = await supabase
+            .from('crm_contacts')
+            .insert([{
+              name: lead.name,
+              email: lead.email || null,
+              phone: lead.phone || null,
+              clint_id: `limbo_contact_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            }])
+            .select('id')
+            .single();
+          if (cErr) throw cErr;
+          contactId = newContact.id;
+        }
+
+        // Step 2: Create deal in Inside Sales
+        const { data: newDeal, error: dErr } = await supabase
+          .from('crm_deals')
+          .insert({
+            name: lead.name,
+            contact_id: contactId,
+            origin_id: INSIDE_SALES_ORIGIN_ID,
+            stage_id: targetStage,
+            owner_id: params.ownerEmail,
+            owner_profile_id: params.ownerProfileId,
+            value: lead.value || 0,
+            replicated_from_deal_id: lead.sourceDealId || null,
+            tags: ['Duplicado-Limbo'],
+            clint_id: `limbo_dup_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          })
+          .select('id')
+          .single();
+        if (dErr) throw dErr;
+
+        // Step 3: Log activity on the new deal
+        await supabase.from('deal_activities').insert({
+          deal_id: newDeal.id,
+          activity_type: 'creation',
+          description: lead.sourceDealId
+            ? `Duplicado de outra pipeline (deal original: ${lead.sourceDealId}) via Limbo`
+            : 'Criado via Limbo — lead de outra pipeline',
+        });
+
+        // Step 4: Log activity on the source deal (if exists)
+        if (lead.sourceDealId) {
+          await supabase.from('deal_activities').insert({
+            deal_id: lead.sourceDealId,
+            activity_type: 'replication',
+            description: `Lead duplicado para Inside Sales (novo deal: ${newDeal.id})`,
+          });
+        }
+
+        created++;
+      }
+
+      return { created };
+    },
+    onSuccess: (data) => {
+      toast.success(`${data.created} lead(s) duplicado(s) para Inside Sales!`);
+      queryClient.invalidateQueries({ queryKey: ['inside-sales-deals-limbo'] });
+    },
+    onError: (error: any) => {
+      toast.error(`Erro ao duplicar: ${error.message}`);
+    },
+  });
+}

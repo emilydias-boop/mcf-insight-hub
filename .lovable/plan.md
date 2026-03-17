@@ -1,41 +1,39 @@
 
 
-## Duplicar Lead de Outra Pipeline para Inside Sales (via Limbo)
+## Objetivo
 
-### Contexto
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Hoje no Limbo, quando um lead já existe em outra pipeline (ex: Consórcio), as opções são transferir (removendo da pipeline original) ou ignorar. O pedido é poder **duplicar** o deal para Inside Sales, mantendo o original intacto na pipeline de origem.
+## Mudanças
 
-### Como funciona
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Adicionar um botão/ação "Duplicar para Inside Sales" nos leads do Limbo que têm status `nao_encontrado` ou que foram encontrados em outra pipeline. A duplicação:
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-1. **Cria um novo deal** na pipeline Inside Sales com os dados do lead (nome, email, telefone, valor)
-2. **Vincula ao mesmo contato** (`contact_id`) — sem duplicar o contato
-3. **Marca como réplica** usando `replicated_from_deal_id` (campo já existente nos deals)
-4. **Atribui ao SDR selecionado** com o estágio escolhido
-5. **Registra atividade** no deal original e no novo
+### 2. Hook `useCloserDetailData.ts`
 
-### Arquivos a editar
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-| Arquivo | Ação |
-|---|---|
-| `src/hooks/useLimboLeads.ts` | Criar hook `useDuplicateToInsideSales` — mutation que cria deal na origin Inside Sales, vincula ao contact_id existente, e registra atividades |
-| `src/pages/crm/LeadsLimbo.tsx` | Adicionar botão "Duplicar p/ Inside" nos leads que existem em outra pipeline. Ao clicar, permite selecionar SDR e estágio, e chama a mutation de duplicação |
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-### Lógica da mutation `useDuplicateToInsideSales`
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-```text
-Input: { dealId (original), contactId, name, email, phone, value, ownerEmail, ownerProfileId, stageId }
+### 4. Dados exportados no Excel
 
-1. INSERT crm_deals (name, contact_id, origin_id=INSIDE_SALES, stage_id, owner_id, owner_profile_id, replicated_from_deal_id=dealId)
-2. INSERT deal_activities no deal novo (activity_type='creation', description='Duplicado da pipeline X')
-3. INSERT deal_activities no deal original (activity_type='replication', description='Lead duplicado para Inside Sales')
-```
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-### UX no Limbo
+Formato de data: `dd/MM/yyyy HH:mm`
 
-- Leads encontrados em outra pipeline mostram badge "Em outra pipeline" + botão "Duplicar p/ Inside"
-- Ao clicar, usa o SDR já selecionado no filtro do Limbo e o estágio "Novo Lead" como padrão
-- Suporta seleção múltipla + duplicação em massa (mesmo padrão do assign existente)
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
