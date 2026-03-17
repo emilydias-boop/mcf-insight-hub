@@ -132,6 +132,18 @@ export const IncomingWebhookFormDialog = ({
           auth_header_value: endpoint.auth_header_value || '',
           is_active: endpoint.is_active,
         });
+      } else if (duplicateData) {
+        form.reset({
+          name: duplicateData.name + ' (Cópia)',
+          slug: duplicateData.slug + '-copia',
+          description: duplicateData.description || '',
+          stage_id: duplicateData.stage_id || '',
+          auto_tags: duplicateData.auto_tags || [],
+          required_fields: duplicateData.required_fields || ['name', 'email'],
+          auth_header_name: duplicateData.auth_header_name || '',
+          auth_header_value: duplicateData.auth_header_value || '',
+          is_active: true,
+        });
       } else {
         form.reset({
           name: '',
@@ -146,7 +158,7 @@ export const IncomingWebhookFormDialog = ({
         });
       }
     }
-  }, [open, endpoint, stages, form]);
+  }, [open, endpoint, duplicateData, stages, form]);
 
   // Auto-generate slug from name
   const nameValue = form.watch('name');
