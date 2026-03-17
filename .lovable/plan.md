@@ -1,42 +1,39 @@
 
-## Causa raiz confirmada
 
-O banco tem **duas versões conflitantes** da RPC, confirmado pela query:
+## Objetivo
 
-```
-args: start_date text, end_date text, sdr_email_filter text   ← versão antiga (funcionava)
-args: start_date date, end_date date, sdr_email_filter text   ← criada em 20260317222312 (quebrou)
-```
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-O `CREATE OR REPLACE FUNCTION` da migration de fix de no-show criou uma versão `date` sem dropar a versão `text` antiga. PostgREST recebe as duas como candidatas e retorna erro `PGRST203 (300 Multiple Functions Found)`.
+## Mudanças
 
-A versão `text` era a que funcionava. A nova `date` tem as correções de no-show que queremos manter.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
----
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-## Correção: 1 migration SQL
+### 2. Hook `useCloserDetailData.ts`
 
-**Dropar a versão antiga `text`** — a versão `date` (com as correções de no-show) fica ativa e resolve o conflito:
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-```sql
-DROP FUNCTION IF EXISTS public.get_sdr_metrics_from_agenda(text, text, text);
-```
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-O frontend (`useSdrMetricsFromAgenda.ts`) envia strings `'yyyy-MM-dd'` que o PostgreSQL converte automaticamente para `date`, então a nova versão `date` funciona exatamente igual com a mesma chamada do frontend.
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-Nenhuma mudança de código TypeScript necessária.
+### 4. Dados exportados no Excel
 
----
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-## Impacto ao corrigir
+Formato de data: `dd/MM/yyyy HH:mm`
 
-- Dashboard "Reuniões Equipe" → agendamentos voltam a aparecer
-- Página "Minhas Reuniões" → métricas individuais voltam
-- Cards de SDR (useSdrAgendaMetricsBySdrId) → voltam a funcionar
-- Relatório de Investigação (path SDR) → volta a funcionar
+## Resultado
 
----
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
-## Arquivo a criar
-
-Nova migration SQL: `DROP FUNCTION IF EXISTS public.get_sdr_metrics_from_agenda(text, text, text);`
