@@ -81,6 +81,7 @@ export const IncomingWebhookFormDialog = ({
   const updateMutation = useUpdateWebhookEndpoint();
 
   const isEditing = !!endpointId;
+  const isDuplicating = !!duplicateData && !isEditing;
   const endpoint = endpoints?.find((e) => e.id === endpointId);
 
   // Fetch stages for this origin from local_pipeline_stages (correct FK target)
