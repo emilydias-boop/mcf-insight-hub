@@ -31,6 +31,7 @@ import {
   Briefcase,
   Megaphone,
   Monitor,
+  Laptop,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -269,7 +270,7 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "Central de Patrimônio", url: "/patrimonio", requiredRoles: ["admin", "manager", "rh"] },
       { title: "Relatórios", url: "/patrimonio/relatorios", requiredRoles: ["admin", "manager", "rh"] },
-      { title: "Meus Equipamentos", url: "/patrimonio/meus-equipamentos" },
+      
     ],
   },
 
@@ -358,6 +359,7 @@ const personalMenuItems: PersonalMenuItem[] = [
   { title: "Meu RH", url: "/meu-rh", icon: UserCircle },
   { title: "Meu Playbook", url: "/playbook", icon: BookOpen },
   { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt, requiredRoles: ["sdr", "closer"] },
+  { title: "Meus Equipamentos", url: "/patrimonio/meus-equipamentos", icon: Laptop },
   { title: "Alertas", url: "/alertas", icon: Bell },
 ];
 

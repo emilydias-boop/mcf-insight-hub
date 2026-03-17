@@ -1,25 +1,39 @@
 
 
-## Problema: "Meus Equipamentos" não aparece para usuários comuns
+## Objetivo
 
-### Causa raiz
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-O grupo **Patrimônio** no sidebar tem `resource: "patrimonio"`, o que significa que o grupo inteiro (incluindo "Meus Equipamentos") é filtrado pela permissão do recurso `patrimonio`. Usuários como SDRs, Closers e outros que não têm permissão para o recurso `patrimonio` não veem nenhum item do grupo — nem mesmo "Meus Equipamentos", que deveria ser acessível a todos.
+## Mudanças
 
-Linha 472 do `AppSidebar.tsx`:
-```typescript
-if (item.resource && !canAccessResource(item.resource)) {
-  return false;  // Remove o grupo inteiro, incluindo "Meus Equipamentos"
-}
-```
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### Correção
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**`src/components/layout/AppSidebar.tsx`** — Mover "Meus Equipamentos" para fora do grupo Patrimônio, colocando-o na seção de itens pessoais (junto com "Meu RH", "Meu Playbook", etc.) para que fique visível a todos os usuários sem depender da permissão de `patrimonio`.
+### 2. Hook `useCloserDetailData.ts`
 
-Concretamente:
-1. Remover `{ title: "Meus Equipamentos", url: "/patrimonio/meus-equipamentos" }` do grupo Patrimônio (linha 272)
-2. Adicionar na lista `personalMenuItems` (itens pessoais do rodapé do sidebar) como: `{ title: "Meus Equipamentos", url: "/patrimonio/meus-equipamentos", icon: Laptop }`
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-Isso garante que qualquer usuário logado veja "Meus Equipamentos" no menu, enquanto a Central de Patrimônio e Relatórios continuam protegidos por permissão.
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
