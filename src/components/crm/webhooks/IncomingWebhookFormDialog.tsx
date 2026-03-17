@@ -37,6 +37,7 @@ import {
   useCreateWebhookEndpoint,
   useUpdateWebhookEndpoint,
   getWebhookUrl,
+  type WebhookEndpoint,
 } from '@/hooks/useWebhookEndpoints';
 import { useState } from 'react';
 import { toast } from 'sonner';
