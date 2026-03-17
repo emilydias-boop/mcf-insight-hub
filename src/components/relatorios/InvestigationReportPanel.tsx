@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,23 +7,24 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
-import { Search, Download, Users, CheckCircle, XCircle, FileCheck, Calendar, User, ShoppingCart, Tag, Percent, TrendingUp } from 'lucide-react';
+import { Search, Download, Users, CheckCircle, XCircle, FileCheck, Calendar, User, ShoppingCart, Tag, Percent, TrendingUp, Target } from 'lucide-react';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { useGestorSDRs } from '@/hooks/useGestorSDRs';
 import { useInvestigationByCloser, useInvestigationByLead, InvestigationAttendee, LeadProfile, LeadFinancials } from '@/hooks/useInvestigationReport';
 import { useInvestigationByPeriod } from '@/hooks/useInvestigationByPeriod';
 import { useCloserComparison } from '@/hooks/useCloserComparison';
-import { InvestigationEvolutionChart } from '@/components/relatorios/InvestigationEvolutionChart';
+import { useSdrTeamTargets, SdrTarget } from '@/hooks/useSdrTeamTargets';
+import { InvestigationEvolutionChart, DailyTargets } from '@/components/relatorios/InvestigationEvolutionChart';
 import { InvestigationRankingChart } from '@/components/relatorios/InvestigationRankingChart';
 import { InvestigationDistributionChart } from '@/components/relatorios/InvestigationDistributionChart';
 import { InvestigationComparisonTable } from '@/components/relatorios/InvestigationComparisonTable';
+import { MetricProgressCell } from '@/components/sdr/MetricProgressCell';
 import { formatMeetingStatus } from '@/utils/formatMeetingStatus';
 import { BusinessUnit } from '@/hooks/useMyBU';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, differenceInCalendarDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import * as XLSX from 'xlsx';
-
 interface InvestigationReportPanelProps {
   bu: BusinessUnit;
 }
@@ -216,8 +217,35 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
 
   const { data: closers = [] } = useGestorClosers();
   const { data: sdrs = [] } = useGestorSDRs();
+  const { data: teamTargets = [] } = useSdrTeamTargets('sdr_');
 
   const isAll = selectedId === '__all__';
+
+  // Extract daily targets from team_targets
+  const dailyTargets = useMemo((): DailyTargets => {
+    const findTarget = (type: string): number | undefined => {
+      const t = teamTargets.find((tt: SdrTarget) => tt.target_type === type);
+      return t && t.target_value > 0 ? t.target_value : undefined;
+    };
+    return {
+      agendadas: findTarget('sdr_agendamento_dia'),
+      realizadas: findTarget('sdr_r1_realizada_dia'),
+      contratosPagos: findTarget('sdr_contrato_dia'),
+    };
+  }, [teamTargets]);
+
+  // Calculate days in period for target scaling
+  const daysInPeriod = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) return 1;
+    return differenceInCalendarDays(dateRange.to, dateRange.from) + 1;
+  }, [dateRange]);
+
+  // Period target = daily target * days
+  const periodTargets = useMemo(() => ({
+    agendadas: dailyTargets.agendadas ? dailyTargets.agendadas * daysInPeriod : 0,
+    realizadas: dailyTargets.realizadas ? dailyTargets.realizadas * daysInPeriod : 0,
+    contratosPagos: dailyTargets.contratosPagos ? dailyTargets.contratosPagos * daysInPeriod : 0,
+  }), [dailyTargets, daysInPeriod]);
 
   // Original single-day query for table data (only for individual closers)
   const closerQuery = useInvestigationByCloser(
@@ -250,7 +278,6 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
 
   const periodData = periodQuery.data;
   const comparisonData = comparisonQuery.data || [];
-
   const handleLeadSearch = () => {
     setSearchTerm(searchInput.trim());
   };
@@ -395,10 +422,44 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
               <MetricCard icon={XCircle} label="Taxa No-Show" value={`${periodData.summary.taxaNoShow.toFixed(1)}%`} color="bg-destructive/10 text-destructive" />
             </div>
 
+            {/* Target Progress Cards */}
+            {(dailyTargets.agendadas || dailyTargets.realizadas || dailyTargets.contratosPagos) && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Target className="h-4 w-4" />
+                    Atingimento de Meta ({daysInPeriod === 1 ? 'Diária' : `${daysInPeriod} dias`})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {dailyTargets.agendadas && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium">Agendadas</p>
+                        <MetricProgressCell value={periodData.summary.total} target={periodTargets.agendadas} />
+                      </div>
+                    )}
+                    {dailyTargets.realizadas && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium">Realizadas</p>
+                        <MetricProgressCell value={periodData.summary.realizadas + periodData.summary.contratosPagos} target={periodTargets.realizadas} />
+                      </div>
+                    )}
+                    {dailyTargets.contratosPagos && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium">Contratos Pagos</p>
+                        <MetricProgressCell value={periodData.summary.contratosPagos} target={periodTargets.contratosPagos} />
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Charts Grid: Evolution + Distribution */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
-                <InvestigationEvolutionChart data={periodData.daily} />
+                <InvestigationEvolutionChart data={periodData.daily} dailyTargets={dailyTargets} />
               </div>
               <div>
                 <InvestigationDistributionChart summary={periodData.summary} />
@@ -411,6 +472,8 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
                 data={comparisonData}
                 highlightId={isAll ? null : selectedId}
                 title={`Comparativo - ${selectedType === 'closer' ? 'Closers' : 'SDRs'}`}
+                dailyTargets={dailyTargets}
+                daysInPeriod={daysInPeriod}
               />
             )}
 
