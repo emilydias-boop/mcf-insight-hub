@@ -763,42 +763,7 @@ const Negocios = () => {
             </div>
           ) : (
             <div className="flex flex-col h-full overflow-hidden">
-              {/* Seção de deals encontrados em outras pipelines */}
-              {crossPipelineDeals.length > 0 && isSearchActive && (
-                <div className="flex-shrink-0 mx-2 mb-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
-                  <h3 className="text-sm font-semibold text-primary mb-2 flex items-center gap-2">
-                    <ExternalLink className="h-4 w-4" />
-                    Encontrados em outras pipelines ({crossPipelineDeals.length})
-                  </h3>
-                  <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-                    {crossPipelineDeals.map((deal: any) => (
-                      <div
-                        key={deal.id}
-                        className="flex items-center justify-between gap-2 p-2 rounded-md bg-background hover:bg-accent cursor-pointer transition-colors"
-                        onClick={() => {
-                          setCrossPipelineDealId(deal.id);
-                          setCrossPipelineDrawerOpen(true);
-                        }}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-sm font-medium truncate">
-                            {deal.crm_contacts?.name || deal.name}
-                          </span>
-                          <Badge variant="outline" className="text-[10px] shrink-0">
-                            {deal.crm_stages?.stage_name || 'Sem estágio'}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant="secondary" className="text-[10px]">
-                            {deal.crm_origins?.name || 'Pipeline desconhecida'}
-                          </Badge>
-                          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              
               
               <div className="flex-1 overflow-hidden">
                 <DealKanbanBoard 
