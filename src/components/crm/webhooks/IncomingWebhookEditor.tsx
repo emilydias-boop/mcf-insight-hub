@@ -47,6 +47,7 @@ interface IncomingWebhookEditorProps {
 export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEndpoint, setEditingEndpoint] = useState<string | null>(null);
+  const [duplicateData, setDuplicateData] = useState<WebhookEndpoint | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [endpointToDelete, setEndpointToDelete] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
