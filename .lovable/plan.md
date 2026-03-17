@@ -1,39 +1,34 @@
 
 
-## Objetivo
+## Ajustes no Gráfico "Evolução Dia a Dia" + Exportação dia a dia
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problemas identificados
 
-## Mudanças
+1. **Dias faltando no gráfico**: O hook `useInvestigationByPeriod` só retorna dias que TEM dados (reuniões). Dias sem atividade não aparecem. Precisa preencher todos os dias do intervalo.
+2. **Sem exportação dia a dia**: O export atual (`exportToExcel`) exporta lista de attendees, não o resumo diário.
+3. **Gráfico com elementos desnecessários**: Contratos Pagos (barra), média móvel (linha pontilhada) e cor errada das Agendadas.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Alterações
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+| Arquivo | O que muda |
+|---|---|
+| `src/hooks/useInvestigationByPeriod.ts` | Preencher todos os dias do intervalo (inclusive dias sem dados = zeros) usando `eachDayOfInterval` |
+| `src/components/relatorios/InvestigationEvolutionChart.tsx` | Remover barra "Contratos Pagos", remover linha "Média Móvel", trocar cor de Agendadas de `hsl(var(--primary))` para azul (`hsl(210 100% 60%)`), remover ReferenceLine de contratosPagos |
+| `src/components/relatorios/InvestigationReportPanel.tsx` | Adicionar botão "Exportar Dia a Dia" que gera Excel com colunas: Data, Agendadas, Realizadas, No-Shows, Contratos Pagos — uma linha por dia do período |
 
-### 2. Hook `useCloserDetailData.ts`
+### Detalhes técnicos
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+**Hook - preencher dias vazios** (linhas 165-180 de `useInvestigationByPeriod.ts`):
+- Importar `eachDayOfInterval` de date-fns
+- Após agrupar attendees, iterar por todos os dias do range e garantir que cada dia tem entrada (com zeros se não houver dados)
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**Gráfico - simplificar** (`InvestigationEvolutionChart.tsx`):
+- Remover `movingAvg` function e `mediaMovel` do chartData
+- Remover `<Bar dataKey="contratosPagos">` e `<Line dataKey="mediaMovel">`
+- Remover `ReferenceLine` de contratosPagos
+- Mudar fill de `agendadas` para `hsl(210 100% 60%)` (azul)
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
-
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+**Export dia a dia** (`InvestigationReportPanel.tsx`):
+- Nova função `exportDailyToExcel(daily: DailyMetric[], filename: string)` que cria planilha com uma linha por dia
+- Botão ao lado do export existente, visível quando há dados de período
 
