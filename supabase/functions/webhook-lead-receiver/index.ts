@@ -94,12 +94,9 @@ serve(async (req) => {
     }
 
     // Get the initial stage if not configured
-    // IMPORTANT: crm_deals.stage_id has a FK to crm_stages, NOT local_pipeline_stages
-    // So we can only use stage_id if it exists in crm_stages
     let stageId: string | null = null;
     
     if (endpoint.stage_id) {
-      // Verify if the configured stage_id exists in crm_stages (FK constraint)
       const { data: validStage } = await supabase
         .from('crm_stages')
         .select('id')
@@ -114,9 +111,7 @@ serve(async (req) => {
       }
     }
     
-    // If no valid stage_id, try to find one in local_pipeline_stages first, then crm_stages
     if (!stageId) {
-      // 1. Tentar local_pipeline_stages primeiro (pipelines customizadas)
       const { data: localStage } = await supabase
         .from('local_pipeline_stages')
         .select('id')
@@ -130,7 +125,6 @@ serve(async (req) => {
         stageId = localStage.id;
         console.log('[WEBHOOK-RECEIVER] Usando primeira stage de local_pipeline_stages:', stageId);
       } else {
-        // 2. Fallback para crm_stages (pipelines legadas)
         const { data: legacyStage } = await supabase
           .from('crm_stages')
           .select('id')
@@ -152,13 +146,36 @@ serve(async (req) => {
     const normalizedPhone = normalizePhone(payload.whatsapp || payload.phone || payload.telefone);
     console.log('[WEBHOOK-RECEIVER] Telefone normalizado:', normalizedPhone);
 
-    // 7. Upsert contact — deduplicação por email + telefone
-    let contactId: string;
+    // ======= DEDUPLICAÇÃO POR CPF (antes de buscar contato) =======
+    const cpfClean = cleanCpf(payload.cpf);
     let existingContact = null;
+    let contactId: string;
 
-    // 7a. Buscar por email
+    // 7a. Buscar por CPF no lead_profiles
+    if (cpfClean) {
+      const { data: profileByCpf } = await supabase
+        .from('lead_profiles')
+        .select('contact_id')
+        .eq('cpf', cpfClean)
+        .maybeSingle();
+      
+      if (profileByCpf?.contact_id) {
+        const { data: contactByCpf } = await supabase
+          .from('crm_contacts')
+          .select('id, email')
+          .eq('id', profileByCpf.contact_id)
+          .maybeSingle();
+        
+        if (contactByCpf) {
+          existingContact = contactByCpf;
+          console.log('[WEBHOOK-RECEIVER] Contato encontrado por CPF:', contactByCpf.id);
+        }
+      }
+    }
+
+    // 7b. Buscar por email
     const emailTrimmed = (payload.email || '').trim();
-    if (emailTrimmed) {
+    if (!existingContact && emailTrimmed) {
       const { data: contactByEmail } = await supabase
         .from('crm_contacts')
         .select('id')
@@ -167,7 +184,7 @@ serve(async (req) => {
       existingContact = contactByEmail;
     }
 
-    // 7b. Fallback: buscar por telefone (últimos 9 dígitos)
+    // 7c. Fallback: buscar por telefone (últimos 9 dígitos)
     if (!existingContact && normalizedPhone) {
       const phoneSuffix = normalizedPhone.replace(/\D/g, '').slice(-9);
       if (phoneSuffix.length === 9) {
@@ -180,7 +197,6 @@ serve(async (req) => {
         if (contactByPhone) {
           existingContact = contactByPhone;
           console.log('[WEBHOOK-RECEIVER] Contato encontrado por telefone:', contactByPhone.id);
-          // Atualizar email se faltante
           if (!contactByPhone.email && emailTrimmed) {
             await supabase.from('crm_contacts').update({ email: emailTrimmed.toLowerCase(), updated_at: new Date().toISOString() }).eq('id', contactByPhone.id);
           }
@@ -198,23 +214,21 @@ serve(async (req) => {
       contactId = existingContact.id;
       console.log('[WEBHOOK-RECEIVER] Contato existente:', contactId);
       
-      // Update contact with new data
       await supabase
         .from('crm_contacts')
         .update({
-          name: payload.name,
+          name: payload.name || payload.nome_completo,
           phone: normalizedPhone,
           tags: autoTags.length > 0 ? autoTags : undefined,
           updated_at: new Date().toISOString()
         })
         .eq('id', contactId);
     } else {
-      // Create new contact
       const { data: newContact, error: contactError } = await supabase
         .from('crm_contacts')
         .insert({
           clint_id: `${slug}-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-          name: payload.name,
+          name: payload.name || payload.nome_completo,
           email: emailTrimmed ? emailTrimmed.toLowerCase() : null,
           phone: normalizedPhone,
           origin_id: endpoint.origin_id,
@@ -242,15 +256,16 @@ serve(async (req) => {
       .maybeSingle();
 
     if (existingDeal) {
-      console.log('[WEBHOOK-RECEIVER] Deal já existe, ignorando duplicata:', existingDeal.id);
+      console.log('[WEBHOOK-RECEIVER] Deal já existe, atualizando lead_profile:', existingDeal.id);
       
-      // Update metrics anyway
+      // Mesmo com deal duplicado, atualiza o lead_profile
+      await upsertLeadProfile(supabase, contactId, existingDeal.id, payload, cpfClean, normalizedPhone);
       await updateEndpointMetrics(supabase, endpoint.id);
       
       return new Response(
         JSON.stringify({ 
           success: true, 
-          action: 'skipped', 
+          action: 'updated_profile', 
           reason: 'deal_already_exists',
           deal_id: existingDeal.id,
           contact_id: contactId
@@ -260,7 +275,6 @@ serve(async (req) => {
     }
 
     // 8b. Check if email already has a deal with contract paid in the same pipeline
-    // This prevents creating new deals for leads who already purchased
     const contactEmail = (payload.email || '').trim().toLowerCase();
     if (contactEmail) {
       const { data: contractPaidDeal } = await supabase
@@ -270,9 +284,7 @@ serve(async (req) => {
         .in('stage_id', await getContractPaidStageIds(supabase, endpoint.origin_id))
         .limit(1);
 
-      // Only block if we found a deal with contract paid for the same email
       if (contractPaidDeal && contractPaidDeal.length > 0) {
-        // Verify the deal belongs to the same email by checking contact
         const { data: paidContacts } = await supabase
           .from('crm_deals')
           .select('id, crm_contacts!inner(email)')
@@ -284,13 +296,14 @@ serve(async (req) => {
         );
 
         if (hasPaidDealForEmail) {
-          console.log('[WEBHOOK-RECEIVER] ⛔ Email já possui deal com contrato pago na mesma pipeline, bloqueando criação');
+          console.log('[WEBHOOK-RECEIVER] ⛔ Email já possui deal com contrato pago, bloqueando');
+          await upsertLeadProfile(supabase, contactId, null, payload, cpfClean, normalizedPhone);
           await updateEndpointMetrics(supabase, endpoint.id);
           
           return new Response(
             JSON.stringify({ 
               success: true, 
-              action: 'skipped', 
+              action: 'updated_profile', 
               reason: 'contract_already_paid',
               contact_id: contactId
             }),
@@ -313,7 +326,6 @@ serve(async (req) => {
       webhook_endpoint: endpoint.name
     };
 
-    // Apply custom field mapping if configured
     if (endpoint.field_mapping && typeof endpoint.field_mapping === 'object') {
       for (const [sourceField, targetField] of Object.entries(endpoint.field_mapping)) {
         if (payload[sourceField] !== undefined && typeof targetField === 'string') {
@@ -332,9 +344,8 @@ serve(async (req) => {
       console.log('[WEBHOOK-RECEIVER] ⚠️ Erro ao buscar owner:', ownerError.message);
     } else if (nextOwner) {
       assignedOwner = nextOwner;
-      console.log('[WEBHOOK-RECEIVER] 👤 Owner atribuído automaticamente:', assignedOwner);
+      console.log('[WEBHOOK-RECEIVER] 👤 Owner atribuído:', assignedOwner);
       
-      // Buscar owner_profile_id correspondente
       const { data: ownerProfile } = await supabase
         .from('profiles')
         .select('id')
@@ -343,12 +354,7 @@ serve(async (req) => {
       
       if (ownerProfile) {
         assignedOwnerProfileId = ownerProfile.id;
-        console.log('[WEBHOOK-RECEIVER] 👤 Profile ID encontrado:', assignedOwnerProfileId);
-      } else {
-        console.log('[WEBHOOK-RECEIVER] ⚠️ Profile não encontrado para email:', assignedOwner);
       }
-    } else {
-      console.log('[WEBHOOK-RECEIVER] ⚠️ Nenhum owner configurado para distribuição');
     }
 
     // 11. Create deal
@@ -357,7 +363,7 @@ serve(async (req) => {
       .from('crm_deals')
       .insert({
         clint_id: `${slug}-deal-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-        name: payload.name,
+        name: payload.name || payload.nome_completo,
         value: 0,
         contact_id: contactId,
         origin_id: endpoint.origin_id,
@@ -379,9 +385,12 @@ serve(async (req) => {
       throw dealError;
     }
 
-    console.log('[WEBHOOK-RECEIVER] ✅ Deal criado com sucesso:', deal.id);
+    console.log('[WEBHOOK-RECEIVER] ✅ Deal criado:', deal.id);
 
-    // 12. Update endpoint metrics
+    // 12. Upsert lead_profile com dados completos do ClientData
+    await upsertLeadProfile(supabase, contactId, deal.id, payload, cpfClean, normalizedPhone);
+
+    // 13. Update endpoint metrics
     await updateEndpointMetrics(supabase, endpoint.id);
 
     return new Response(
@@ -392,7 +401,8 @@ serve(async (req) => {
         contact_id: contactId,
         assigned_owner: assignedOwner,
         endpoint: endpoint.name,
-        tags: autoTags
+        tags: autoTags,
+        lead_profile: true
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -407,11 +417,157 @@ serve(async (req) => {
   }
 });
 
-// Update endpoint metrics
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// ============ LEAD PROFILE HELPERS ============
+
+// Parse boolean from various formats: true/false, "sim"/"não", 1/0
+function parseBool(val: unknown): boolean {
+  if (val === null || val === undefined) return false;
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'number') return val !== 0;
+  if (typeof val === 'string') {
+    const lower = val.toLowerCase().trim();
+    return ['true', '1', 'sim', 'yes', 's'].includes(lower);
+  }
+  return false;
+}
+
+// Parse number from string (handles monetary values like "R$ 1.500,00")
+function parseNum(val: unknown): number | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') {
+    // Remove currency symbols, dots as thousands separator, convert comma to dot
+    const cleaned = val.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? null : num;
+  }
+  return null;
+}
+
+// Parse JSONB array from string or array
+function parseJsonArray(val: unknown): unknown[] {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') {
+    try { return JSON.parse(val); } catch { return val.split(',').map(s => s.trim()).filter(Boolean); }
+  }
+  return [];
+}
+
+// Clean CPF: remove non-digits
+function cleanCpf(val: unknown): string | null {
+  if (!val || typeof val !== 'string') return null;
+  const clean = val.replace(/\D/g, '');
+  return clean.length >= 11 ? clean : null;
+}
+
+// Get a field from payload supporting both snake_case and camelCase
+function getField(payload: any, ...keys: string[]): unknown {
+  for (const key of keys) {
+    if (payload[key] !== undefined && payload[key] !== null && payload[key] !== '') return payload[key];
+  }
+  return undefined;
+}
+
+// Upsert lead_profile with full ClientData
+async function upsertLeadProfile(
+  supabaseClient: any,
+  contactId: string,
+  dealId: string | null,
+  payload: any,
+  cpfClean: string | null,
+  normalizedPhone: string | null
+) {
+  try {
+    const profileData: Record<string, unknown> = {
+      contact_id: contactId,
+      deal_id: dealId,
+      
+      // Pessoal
+      nome_completo: getField(payload, 'nome_completo', 'name') as string || null,
+      cpf: cpfClean,
+      whatsapp: normalizedPhone || (getField(payload, 'whatsapp') as string) || null,
+      data_nascimento: getField(payload, 'data_nascimento') as string || null,
+      estado_cidade: getField(payload, 'estado_cidade') as string || null,
+      estado_civil: getField(payload, 'estado_civil') as string || null,
+      num_filhos: parseNum(getField(payload, 'num_filhos')) as number | null,
+
+      // Profissional
+      profissao: getField(payload, 'profissao') as string || null,
+      is_empresario: parseBool(getField(payload, 'e_empresario', 'isEmpresario', 'is_empresario')),
+      porte_empresa: parseNum(getField(payload, 'porte_empresa', 'portEmpresa')) as number | null,
+
+      // Financeiro
+      renda_bruta: parseNum(getField(payload, 'renda_bruta', 'rendaBruta')),
+      fonte_renda: getField(payload, 'fonte_renda', 'fonteRenda') as string || null,
+      faixa_aporte: parseNum(getField(payload, 'faixa_aporte', 'faixaAporte')),
+      faixa_aporte_descricao: getField(payload, 'faixa_aporte_descricao', 'faixaAporteDescricao') as string || null,
+
+      // Perfil / Interesses
+      esporte_hobby: getField(payload, 'esporte_hobby', 'esporteHobby') as string || null,
+      gosta_futebol: parseBool(getField(payload, 'gosta_futebol', 'gostaFutebol')),
+      time_futebol: getField(payload, 'time_futebol', 'timeFutebol') as string || null,
+
+      // Empresa / Capital
+      precisa_capital_giro: parseBool(getField(payload, 'precisa_capital_giro', 'precisaCapitalGiro')),
+      valor_capital_giro: parseNum(getField(payload, 'valor_capital_giro', 'valorCapitalGiro')),
+
+      // Objetivos
+      objetivos_principais: parseJsonArray(getField(payload, 'objetivos_principais', 'objetivosPrincipais')),
+      renda_passiva_meta: parseNum(getField(payload, 'renda_passiva_meta', 'rendaPassivaMeta')),
+      tempo_independencia: getField(payload, 'tempo_independencia', 'tempoIndependencia') as string || null,
+
+      // Patrimônio
+      imovel_financiado: parseBool(getField(payload, 'possui_imovel_financiado', 'imovelFinanciado')),
+      possui_consorcio: parseBool(getField(payload, 'possui_consorcio', 'possuiConsorcio')),
+      saldo_fgts: parseNum(getField(payload, 'saldo_fgts', 'saldoFGTS')),
+
+      // Investimentos
+      investe: parseBool(getField(payload, 'investe')),
+      valor_investido: parseNum(getField(payload, 'valor_investido', 'valorInvestido')),
+      corretora: getField(payload, 'corretora') as string || null,
+
+      // Situação financeira
+      possui_divida: parseBool(getField(payload, 'possui_divida', 'possuiDivida')),
+
+      // Outros
+      possui_seguros: parseBool(getField(payload, 'possui_seguros', 'possuiSeguros')),
+      possui_carro: parseBool(getField(payload, 'possui_carro', 'possuiCarro')),
+
+      // Bancário
+      bancos: parseJsonArray(getField(payload, 'bancos')),
+
+      // Perfil avançado
+      interesse_holding: parseBool(getField(payload, 'interesse_holding', 'interesseHolding')),
+      perfil_indicacao: getField(payload, 'perfil_indicacao', 'perfilIndicacao') as string || null,
+
+      // Calculados (placeholder)
+      lead_score: 0,
+      icp_level: null,
+
+      // Controle
+      origem: (getField(payload, 'origem') as string) || 'mcf_crm',
+      updated_at: new Date().toISOString(),
+    };
+
+    // Upsert by contact_id
+    const { error } = await supabaseClient
+      .from('lead_profiles')
+      .upsert(profileData, { onConflict: 'contact_id' });
+
+    if (error) {
+      console.error('[WEBHOOK-RECEIVER] Erro ao upsert lead_profile:', error);
+    } else {
+      console.log('[WEBHOOK-RECEIVER] ✅ Lead profile upserted para contact:', contactId);
+    }
+  } catch (err) {
+    console.error('[WEBHOOK-RECEIVER] Erro inesperado no lead_profile:', err);
+  }
+}
+
+// ============ EXISTING HELPERS ============
+
 async function updateEndpointMetrics(supabaseClient: any, endpointId: string) {
   try {
-    // Get current leads_received count
     const { data: endpoint } = await supabaseClient
       .from('webhook_endpoints')
       .select('leads_received')
@@ -432,11 +588,9 @@ async function updateEndpointMetrics(supabaseClient: any, endpointId: string) {
   }
 }
 
-// Get stage IDs that represent "contract paid" status
 async function getContractPaidStageIds(supabaseClient: any, originId: string): Promise<string[]> {
   const stageIds: string[] = [];
   
-  // Check local_pipeline_stages for contract-paid stages
   const { data: localStages } = await supabaseClient
     .from('local_pipeline_stages')
     .select('id')
@@ -447,7 +601,6 @@ async function getContractPaidStageIds(supabaseClient: any, originId: string): P
     stageIds.push(...localStages.map((s: any) => s.id));
   }
   
-  // Also check crm_stages
   const { data: crmStages } = await supabaseClient
     .from('crm_stages')
     .select('id')
@@ -461,7 +614,6 @@ async function getContractPaidStageIds(supabaseClient: any, originId: string): P
   return stageIds;
 }
 
-// Normalize phone to E.164 format (+55XXXXXXXXXXX)
 function normalizePhone(phone: string | null | undefined): string | null {
   if (!phone) return null;
   
@@ -478,7 +630,6 @@ function normalizePhone(phone: string | null | undefined): string | null {
   return '+' + clean;
 }
 
-// Map monthly income to standardized values
 function mapMonthlyIncome(income: string | null | undefined): string | null {
   if (!income) return null;
   
