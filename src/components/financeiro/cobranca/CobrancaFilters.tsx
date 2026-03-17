@@ -4,6 +4,8 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { BillingFilters, SUBSCRIPTION_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/billing';
 import { Search } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CobrancaFiltersProps {
   filters: BillingFilters;
@@ -11,6 +13,21 @@ interface CobrancaFiltersProps {
 }
 
 export const CobrancaFilters = ({ filters, onFiltersChange }: CobrancaFiltersProps) => {
+  const { data: products = [] } = useQuery({
+    queryKey: ['billing-products'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('billing_subscriptions')
+        .select('product_name, product_category')
+        .order('product_name');
+      if (error) throw error;
+      const uniqueProducts = [...new Map((data || []).map(p => [p.product_name, p])).values()];
+      return uniqueProducts as { product_name: string; product_category: string | null }[];
+    },
+  });
+
+  const categories = [...new Set(products.map(p => p.product_category).filter(Boolean))] as string[];
+
   return (
     <div className="flex flex-wrap gap-3 items-end">
       <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -53,12 +70,37 @@ export const CobrancaFilters = ({ filters, onFiltersChange }: CobrancaFiltersPro
         </SelectContent>
       </Select>
 
-      <Input
-        placeholder="Responsável"
-        className="w-[160px]"
-        value={filters.responsavel || ''}
-        onChange={(e) => onFiltersChange({ ...filters, responsavel: e.target.value })}
-      />
+      <Select
+        value={(filters as any).product || 'todos'}
+        onValueChange={(val) => onFiltersChange({ ...filters, product: val } as any)}
+      >
+        <SelectTrigger className="w-[200px]">
+          <SelectValue placeholder="Produto" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="todos">Todos os produtos</SelectItem>
+          {products.map(p => (
+            <SelectItem key={p.product_name} value={p.product_name}>{p.product_name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {categories.length > 0 && (
+        <Select
+          value={(filters as any).category || 'todos'}
+          onValueChange={(val) => onFiltersChange({ ...filters, category: val } as any)}
+        >
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Categoria" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas categorias</SelectItem>
+            {categories.map(c => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">

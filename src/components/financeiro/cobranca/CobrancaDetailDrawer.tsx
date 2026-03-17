@@ -173,6 +173,27 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
             </div>
 
             <div className="flex gap-2 mt-4 flex-wrap">
+              {subscription.customer_phone && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-green-700 border-green-300 hover:bg-green-50"
+                  onClick={() => {
+                    const phone = subscription.customer_phone!.replace(/\D/g, '');
+                    const phoneFormatted = phone.startsWith('55') ? phone : `55${phone}`;
+                    const msg = encodeURIComponent(
+                      `Olá ${subscription.customer_name.split(' ')[0]}! 🙂\n\n` +
+                      `Estamos entrando em contato referente ao seu contrato *${subscription.product_name}*.\n` +
+                      `Valor total: ${formatCurrency(subscription.valor_total_contrato)}\n` +
+                      `Saldo devedor: ${formatCurrency(saldoDevedor)}\n\n` +
+                      `Podemos conversar sobre sua situação financeira?`
+                    );
+                    window.open(`https://wa.me/${phoneFormatted}?text=${msg}`, '_blank');
+                  }}
+                >
+                  <MessageCircle className="h-3.5 w-3.5 mr-1" /> Cobrar WhatsApp
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={() => setShowEditModal(true)}>
                 <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
               </Button>

@@ -39,6 +39,42 @@ Deno.serve(async (req) => {
       );
     }
 
+    // 1b. Pre-fetch contacts for email matching
+    const allEmails = [...new Set(transactions.map(tx => tx.customer_email?.toLowerCase()).filter(Boolean))];
+    const contactMap = new Map<string, { id: string; deal_id: string | null }>();
+    
+    for (let i = 0; i < allEmails.length; i += 200) {
+      const chunk = allEmails.slice(i, i + 200);
+      const { data: contacts } = await supabase
+        .from("crm_contacts")
+        .select("id, email")
+        .in("email", chunk);
+      
+      for (const c of contacts || []) {
+        if (c.email) contactMap.set(c.email.toLowerCase(), { id: c.id, deal_id: null });
+      }
+    }
+
+    // Fetch deals for matched contacts
+    const contactIds = [...contactMap.values()].map(c => c.id);
+    for (let i = 0; i < contactIds.length; i += 200) {
+      const chunk = contactIds.slice(i, i + 200);
+      const { data: deals } = await supabase
+        .from("crm_deals")
+        .select("id, contact_id")
+        .in("contact_id", chunk)
+        .order("created_at", { ascending: false });
+      
+      for (const d of deals || []) {
+        // Find the email for this contact and set the deal_id (first/latest deal)
+        for (const [email, info] of contactMap) {
+          if (info.id === d.contact_id && !info.deal_id) {
+            info.deal_id = d.id;
+          }
+        }
+      }
+    }
+
     // 2. Group by customer_email + product_name
     const groups: Record<string, typeof transactions> = {};
     for (const tx of transactions) {
@@ -59,7 +95,6 @@ Deno.serve(async (req) => {
       
       // Collect emails+products for this batch to check existing subs
       const batchEmails = batchKeys.map(k => k.split("::")[0]);
-      const batchProducts = batchKeys.map(k => k.split("::")[1]);
 
       // Fetch existing subscriptions for this batch
       const { data: existingSubs } = await supabase
@@ -75,7 +110,6 @@ Deno.serve(async (req) => {
       const subsToInsert: any[] = [];
       const subsToUpdate: { id: string; data: any }[] = [];
       const allInstallmentsToInsert: any[] = [];
-      // Track which subscription IDs we need installments for
       const subIdsForInstallments: string[] = [];
 
       for (const key of batchKeys) {
@@ -101,16 +135,39 @@ Deno.serve(async (req) => {
           statusQuitacao = paidCount > 0 ? "parcialmente_pago" : "em_aberto";
         }
 
+        // Calculate data_fim_prevista based on interval and total installments
+        let dataFimPrevista: string | null = null;
+        let intervalDays = 30;
+        if (txList.length >= 2) {
+          const d1 = new Date(txList[0].sale_date).getTime();
+          const d2 = new Date(txList[1].sale_date).getTime();
+          const diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+          if (diff > 0 && diff < 90) intervalDays = diff;
+        }
+        const fimDate = new Date(first.sale_date);
+        fimDate.setDate(fimDate.getDate() + intervalDays * (totalInstallments - 1));
+        dataFimPrevista = fimDate.toISOString().split('T')[0];
+
+        // Resolve contact_id and deal_id
+        const contactInfo = contactMap.get(email);
+        const contactId = contactInfo?.id || null;
+        const dealId = contactInfo?.deal_id || null;
+
         const existingId = existingSubMap.get(key);
 
         if (existingId) {
           subsToUpdate.push({
             id: existingId,
-            data: { status, status_quitacao: statusQuitacao, total_parcelas: totalInstallments, valor_total_contrato: valorTotal, updated_at: new Date().toISOString() }
+            data: {
+              status, status_quitacao: statusQuitacao, total_parcelas: totalInstallments,
+              valor_total_contrato: valorTotal, updated_at: new Date().toISOString(),
+              data_fim_prevista: dataFimPrevista,
+              ...(contactId ? { contact_id: contactId } : {}),
+              ...(dealId ? { deal_id: dealId } : {}),
+            }
           });
           subIdsForInstallments.push(existingId);
         } else {
-          // We'll insert and get IDs back
           subsToInsert.push({
             customer_name: first.customer_name || email,
             customer_email: email,
@@ -124,6 +181,9 @@ Deno.serve(async (req) => {
             status,
             status_quitacao: statusQuitacao,
             data_inicio: first.sale_date,
+            data_fim_prevista: dataFimPrevista,
+            contact_id: contactId,
+            deal_id: dealId,
           });
         }
       }
@@ -148,7 +208,6 @@ Deno.serve(async (req) => {
 
       // Bulk update existing subscriptions
       for (const upd of subsToUpdate) {
-        // Supabase JS doesn't support bulk update, but we batch the promises
         await supabase.from("billing_subscriptions").update(upd.data).eq("id", upd.id);
         subsUpdated++;
       }
@@ -156,7 +215,6 @@ Deno.serve(async (req) => {
       // Fetch existing installments for all subscription IDs in this batch
       const existingInstNums = new Map<string, Set<number>>();
       if (subIdsForInstallments.length > 0) {
-        // Batch in chunks of 200 for .in()
         for (let i = 0; i < subIdsForInstallments.length; i += 200) {
           const chunk = subIdsForInstallments.slice(i, i + 200);
           const { data: existInst } = await supabase
@@ -192,12 +250,12 @@ Deno.serve(async (req) => {
         }
 
         // Estimate interval
-        let intervalDays = 30;
+        let batchIntervalDays = 30;
         if (txList.length >= 2) {
           const d1 = new Date(txList[0].sale_date).getTime();
           const d2 = new Date(txList[1].sale_date).getTime();
           const diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
-          if (diff > 0 && diff < 90) intervalDays = diff;
+          if (diff > 0 && diff < 90) batchIntervalDays = diff;
         }
 
         const firstDate = new Date(first.sale_date);
@@ -220,7 +278,7 @@ Deno.serve(async (req) => {
             });
           } else {
             const dueDate = new Date(firstDate);
-            dueDate.setDate(dueDate.getDate() + intervalDays * (i - 1));
+            dueDate.setDate(dueDate.getDate() + batchIntervalDays * (i - 1));
             allInstallmentsToInsert.push({
               subscription_id: subId,
               numero_parcela: i,
@@ -249,6 +307,9 @@ Deno.serve(async (req) => {
         }
       }
     }
+
+    // 4. Run overdue status update
+    await supabase.rpc('update_overdue_billing_status');
 
     const hasMore = transactions.length >= 5000;
     const result = {

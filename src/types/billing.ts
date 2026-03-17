@@ -101,6 +101,8 @@ export interface BillingFilters {
   inadimplentes?: boolean;
   quitados?: boolean;
   search?: string;
+  product?: string;
+  category?: string;
 }
 
 export interface BillingKPIs {

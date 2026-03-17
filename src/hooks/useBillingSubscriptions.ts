@@ -27,6 +27,12 @@ export const useBillingSubscriptions = (filters: BillingFilters) => {
       if (filters.inadimplentes) {
         query = query.eq('status', 'atrasada');
       }
+      if (filters.product && filters.product !== 'todos') {
+        query = query.eq('product_name', filters.product);
+      }
+      if (filters.category && filters.category !== 'todos') {
+        query = query.eq('product_category', filters.category);
+      }
       if (filters.search) {
         query = query.or(`customer_name.ilike.%${filters.search}%,customer_email.ilike.%${filters.search}%,product_name.ilike.%${filters.search}%`);
       }
