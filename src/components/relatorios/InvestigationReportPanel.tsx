@@ -221,8 +221,8 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
 
   const isAll = selectedId === '__all__';
 
-  // Extract daily targets from team_targets
-  const dailyTargets = useMemo((): DailyTargets => {
+  // Extract daily targets from team_targets (team-level)
+  const teamDailyTargets = useMemo((): DailyTargets => {
     const findTarget = (type: string): number | undefined => {
       const t = teamTargets.find((tt: SdrTarget) => tt.target_type === type);
       return t && t.target_value > 0 ? t.target_value : undefined;
@@ -233,6 +233,17 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
       contratosPagos: findTarget('sdr_contrato_dia'),
     };
   }, [teamTargets]);
+
+  // Calculate individual daily targets by dividing by member count
+  const memberCount = selectedType === 'closer' ? closers.length : sdrs.length;
+  const dailyTargets = useMemo((): DailyTargets => {
+    if (isAll || memberCount === 0) return teamDailyTargets;
+    return {
+      agendadas: teamDailyTargets.agendadas ? Number((teamDailyTargets.agendadas / memberCount).toFixed(2)) : undefined,
+      realizadas: teamDailyTargets.realizadas ? Number((teamDailyTargets.realizadas / memberCount).toFixed(2)) : undefined,
+      contratosPagos: teamDailyTargets.contratosPagos ? Number((teamDailyTargets.contratosPagos / memberCount).toFixed(2)) : undefined,
+    };
+  }, [teamDailyTargets, isAll, memberCount]);
 
   // Calculate days in period for target scaling
   const daysInPeriod = useMemo(() => {
@@ -428,7 +439,7 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Target className="h-4 w-4" />
-                    Atingimento de Meta ({daysInPeriod === 1 ? 'Diária' : `${daysInPeriod} dias`})
+                    Atingimento de Meta {isAll ? '(Time)' : '(Individual)'} — {daysInPeriod === 1 ? 'Diária' : `${daysInPeriod} dias`}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -459,7 +470,7 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
             {/* Charts Grid: Evolution + Distribution */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
-                <InvestigationEvolutionChart data={periodData.daily} dailyTargets={dailyTargets} />
+                <InvestigationEvolutionChart data={periodData.daily} dailyTargets={dailyTargets} isIndividual={!isAll} />
               </div>
               <div>
                 <InvestigationDistributionChart summary={periodData.summary} />

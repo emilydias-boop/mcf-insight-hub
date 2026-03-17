@@ -14,6 +14,7 @@ export interface DailyTargets {
 interface Props {
   data: DailyMetric[];
   dailyTargets?: DailyTargets;
+  isIndividual?: boolean;
 }
 
 function movingAvg(arr: number[], window: number): (number | null)[] {
@@ -24,7 +25,7 @@ function movingAvg(arr: number[], window: number): (number | null)[] {
   });
 }
 
-export function InvestigationEvolutionChart({ data, dailyTargets }: Props) {
+export function InvestigationEvolutionChart({ data, dailyTargets, isIndividual }: Props) {
   if (data.length === 0) return null;
 
   const totals = data.map(d => d.agendadas);
@@ -65,7 +66,7 @@ export function InvestigationEvolutionChart({ data, dailyTargets }: Props) {
                 stroke="hsl(var(--primary))"
                 strokeDasharray="8 4"
                 strokeWidth={1.5}
-                label={{ value: `Meta Agend. ${dailyTargets.agendadas}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(var(--primary))' }}
+                label={{ value: `${isIndividual ? 'Meta Ind.' : 'Meta'} Agend. ${dailyTargets.agendadas}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(var(--primary))' }}
               />
             )}
             {dailyTargets?.realizadas && (
@@ -74,7 +75,7 @@ export function InvestigationEvolutionChart({ data, dailyTargets }: Props) {
                 stroke="hsl(142 71% 45%)"
                 strokeDasharray="8 4"
                 strokeWidth={1.5}
-                label={{ value: `Meta Realiz. ${dailyTargets.realizadas}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(142 71% 45%)' }}
+                label={{ value: `${isIndividual ? 'Meta Ind.' : 'Meta'} Realiz. ${dailyTargets.realizadas}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(142 71% 45%)' }}
               />
             )}
             {dailyTargets?.contratosPagos && (
@@ -83,7 +84,7 @@ export function InvestigationEvolutionChart({ data, dailyTargets }: Props) {
                 stroke="hsl(45 93% 47%)"
                 strokeDasharray="8 4"
                 strokeWidth={1.5}
-                label={{ value: `Meta Contr. ${dailyTargets.contratosPagos}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(45 93% 47%)' }}
+                label={{ value: `${isIndividual ? 'Meta Ind.' : 'Meta'} Contr. ${dailyTargets.contratosPagos}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(45 93% 47%)' }}
               />
             )}
             <Bar dataKey="agendadas" fill="hsl(var(--primary))" name="Agendadas" radius={[2, 2, 0, 0]} />
