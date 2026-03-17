@@ -55,6 +55,7 @@ const Contatos = () => {
 
   const { data, isLoading } = useContactsEnriched(debouncedSearch, currentPage, pageSize);
   const syncMutation = useSyncClintData();
+  const duplicateMutation = useDuplicateToInsideSales();
 
   const contactsData = data?.contacts || [];
   const totalCount = data?.totalCount || 0;
