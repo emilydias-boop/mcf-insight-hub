@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Upload, FileSpreadsheet, Search, Users, UserCheck, UserX, Download, Inbox, Eye, Clock } from 'lucide-react';
+import { Upload, FileSpreadsheet, Search, Users, UserCheck, UserX, Download, Inbox, Eye, Clock, Copy } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
