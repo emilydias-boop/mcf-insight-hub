@@ -41,71 +41,122 @@ export function useInvestigationByPeriod(
 
       const rangeStart = startOfDay(startDate).toISOString();
       const rangeEnd = endOfDay(endDate).toISOString();
+      const isAll = personId === '__all__';
 
       let attendees: Array<{ status: string | null; scheduled_at: string; is_partner: boolean | null }> = [];
 
       if (type === 'closer') {
-        // Get slots for this closer in the range
-        const { data: slots, error } = await supabase
+        // Get slots for closer(s) in the range
+        let slotsQuery = supabase
           .from('meeting_slots')
           .select('id, scheduled_at')
-          .eq('closer_id', personId)
           .gte('scheduled_at', rangeStart)
           .lte('scheduled_at', rangeEnd);
 
+        if (!isAll) {
+          slotsQuery = slotsQuery.eq('closer_id', personId);
+        }
+
+        const { data: slots, error } = await slotsQuery;
         if (error) throw error;
         if (!slots || slots.length === 0) return { daily: [], summary: emptySummary() };
 
         const slotIds = slots.map(s => s.id);
         const slotMap = Object.fromEntries(slots.map(s => [s.id, s.scheduled_at]));
 
-        // Batch if needed
-        const { data: atts } = await supabase
-          .from('meeting_slot_attendees')
-          .select('status, is_partner, meeting_slot_id')
-          .in('meeting_slot_id', slotIds);
-
-        attendees = (atts || []).map(a => ({
-          status: a.status,
-          scheduled_at: slotMap[a.meeting_slot_id] || '',
-          is_partner: a.is_partner,
-        }));
+        // Batch in chunks of 200
+        const allAtts: typeof attendees = [];
+        for (let i = 0; i < slotIds.length; i += 200) {
+          const chunk = slotIds.slice(i, i + 200);
+          const { data: atts } = await supabase
+            .from('meeting_slot_attendees')
+            .select('status, is_partner, meeting_slot_id')
+            .in('meeting_slot_id', chunk);
+          if (atts) {
+            for (const a of atts) {
+              allAtts.push({
+                status: a.status,
+                scheduled_at: slotMap[a.meeting_slot_id] || '',
+                is_partner: a.is_partner,
+              });
+            }
+          }
+        }
+        attendees = allAtts;
       } else {
-        // SDR: personId is employee_id, need profile_id
-        const { data: emp } = await supabase
-          .from('employees')
-          .select('profile_id')
-          .eq('id', personId)
-          .single();
+        // SDR path
+        if (isAll) {
+          // Get ALL slots in range, then attendees with booked_by set
+          const { data: slots } = await supabase
+            .from('meeting_slots')
+            .select('id, scheduled_at')
+            .gte('scheduled_at', rangeStart)
+            .lte('scheduled_at', rangeEnd);
 
-        if (!emp?.profile_id) return { daily: [], summary: emptySummary() };
+          if (!slots || slots.length === 0) return { daily: [], summary: emptySummary() };
 
-        // Get attendees booked by this SDR
-        const { data: atts } = await supabase
-          .from('meeting_slot_attendees')
-          .select('status, is_partner, meeting_slot_id, booked_at')
-          .eq('booked_by', emp.profile_id);
+          const slotIds = slots.map(s => s.id);
+          const slotMap = Object.fromEntries(slots.map(s => [s.id, s.scheduled_at]));
 
-        if (!atts || atts.length === 0) return { daily: [], summary: emptySummary() };
+          const allAtts: typeof attendees = [];
+          for (let i = 0; i < slotIds.length; i += 200) {
+            const chunk = slotIds.slice(i, i + 200);
+            const { data: atts } = await supabase
+              .from('meeting_slot_attendees')
+              .select('status, is_partner, meeting_slot_id')
+              .in('meeting_slot_id', chunk)
+              .not('booked_by', 'is', null);
+            if (atts) {
+              for (const a of atts) {
+                allAtts.push({
+                  status: a.status,
+                  scheduled_at: slotMap[a.meeting_slot_id] || '',
+                  is_partner: a.is_partner,
+                });
+              }
+            }
+          }
+          attendees = allAtts;
+        } else {
+          // Individual SDR
+          const { data: emp } = await supabase
+            .from('employees')
+            .select('profile_id')
+            .eq('id', personId)
+            .single();
 
-        // Get slot scheduled_at for filtering by date range
-        const slotIds = [...new Set(atts.map(a => a.meeting_slot_id))];
-        const { data: slots } = await supabase
-          .from('meeting_slots')
-          .select('id, scheduled_at')
-          .in('id', slotIds)
-          .gte('scheduled_at', rangeStart)
-          .lte('scheduled_at', rangeEnd);
+          if (!emp?.profile_id) return { daily: [], summary: emptySummary() };
 
-        const slotMap = Object.fromEntries((slots || []).map(s => [s.id, s.scheduled_at]));
+          const { data: atts } = await supabase
+            .from('meeting_slot_attendees')
+            .select('status, is_partner, meeting_slot_id, booked_at')
+            .eq('booked_by', emp.profile_id);
 
-        attendees = atts
-          .filter(a => slotMap[a.meeting_slot_id])
-          .map(a => ({
-            status: a.status,
-            scheduled_at: slotMap[a.meeting_slot_id],
-            is_partner: a.is_partner,
-          }));
+          if (!atts || atts.length === 0) return { daily: [], summary: emptySummary() };
+
+          const slotIds = [...new Set(atts.map(a => a.meeting_slot_id))];
+          const allSlots: Array<{ id: string; scheduled_at: string }> = [];
+          for (let i = 0; i < slotIds.length; i += 200) {
+            const chunk = slotIds.slice(i, i + 200);
+            const { data: slots } = await supabase
+              .from('meeting_slots')
+              .select('id, scheduled_at')
+              .in('id', chunk)
+              .gte('scheduled_at', rangeStart)
+              .lte('scheduled_at', rangeEnd);
+            if (slots) allSlots.push(...slots);
+          }
+
+          const slotMap = Object.fromEntries(allSlots.map(s => [s.id, s.scheduled_at]));
+
+          attendees = atts
+            .filter(a => slotMap[a.meeting_slot_id])
+            .map(a => ({
+              status: a.status,
+              scheduled_at: slotMap[a.meeting_slot_id],
+              is_partner: a.is_partner,
+            }));
+        }
       }
 
       // Filter out partners
@@ -135,7 +186,7 @@ export function useInvestigationByPeriod(
       const agendadas = nonPartner.filter(a => ['scheduled', 'invited', 'rescheduled'].includes(a.status || '')).length;
 
       const atendidas = realizadas + contratosPagos;
-      const totalAgendadasReal = total - agendadas; // already happened
+      const totalAgendadasReal = total - agendadas;
 
       return {
         daily,
