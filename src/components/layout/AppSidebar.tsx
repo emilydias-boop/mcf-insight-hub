@@ -269,7 +269,7 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "Central de Patrimônio", url: "/patrimonio", requiredRoles: ["admin", "manager", "rh"] },
       { title: "Relatórios", url: "/patrimonio/relatorios", requiredRoles: ["admin", "manager", "rh"] },
-      { title: "Meus Equipamentos", url: "/patrimonio/meus-equipamentos" },
+      
     ],
   },
 
