@@ -228,6 +228,7 @@ export const IncomingWebhookFormDialog = ({
           auth_header_name: values.auth_header_name,
           auth_header_value: values.auth_header_value,
           is_active: values.is_active,
+          ...(duplicateData?.field_mapping ? { field_mapping: duplicateData.field_mapping } : {}),
         });
       }
       onOpenChange(false);
