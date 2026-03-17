@@ -203,6 +203,21 @@ function exportToExcel(attendees: InvestigationAttendee[], filename: string, enr
   XLSX.writeFile(wb, `${filename}.xlsx`);
 }
 
+function exportDailyToExcel(daily: import('@/hooks/useInvestigationByPeriod').DailyMetric[], filename: string) {
+  const rows = daily.map(d => ({
+    'Data': format(new Date(d.date + 'T12:00:00'), 'dd/MM/yyyy'),
+    'Agendadas': d.agendadas,
+    'Realizadas': d.realizadas,
+    'No-Shows': d.noShows,
+    'Contratos Pagos': d.contratosPagos,
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Dia a Dia');
+  XLSX.writeFile(wb, `${filename}-dia-a-dia.xlsx`);
+}
+
 export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) {
   const [tab, setTab] = useState('closer');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -467,7 +482,15 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
               </Card>
             )}
 
-            {/* Charts Grid: Evolution + Distribution */}
+            {/* Export daily + Charts Grid: Evolution + Distribution */}
+            {periodData.daily.length > 0 && (
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => exportDailyToExcel(periodData.daily, `dia-a-dia_${selectedType}_${format(dateRange?.from || new Date(), 'yyyy-MM-dd')}`)}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Exportar Dia a Dia
+                </Button>
+              </div>
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
                 <InvestigationEvolutionChart data={periodData.daily} dailyTargets={dailyTargets} isIndividual={!isAll} />

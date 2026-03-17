@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { startOfDay, endOfDay, format } from 'date-fns';
+import { startOfDay, endOfDay, format, eachDayOfInterval } from 'date-fns';
 
 export interface DailyMetric {
   date: string; // yyyy-MM-dd
@@ -177,7 +177,12 @@ export function useInvestigationByPeriod(
         if (att.status === 'contract_paid') m.contratosPagos++;
       }
 
-      const daily = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+      // Fill all days in the range, including days with zero activity
+      const allDays = eachDayOfInterval({ start: startDate, end: endDate });
+      const daily = allDays.map(day => {
+        const key = format(day, 'yyyy-MM-dd');
+        return dayMap.get(key) || { date: key, agendadas: 0, realizadas: 0, noShows: 0, contratosPagos: 0 };
+      });
 
       const total = nonPartner.length;
       const realizadas = nonPartner.filter(a => a.status === 'completed').length;
