@@ -12,6 +12,8 @@ import { ContactFormDialog } from '@/components/crm/ContactFormDialog';
 import { ContactFilters, emptyFilters, type ContactFilterValues } from '@/components/crm/ContactFilters';
 import { BulkActionsBar } from '@/components/crm/BulkActionsBar';
 import { SendToPipelineModal } from '@/components/crm/SendToPipelineModal';
+import { DuplicateToInsideDialog } from '@/components/crm/DuplicateToInsideDialog';
+import { useDuplicateToInsideSales } from '@/hooks/useLimboLeads';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from '@/components/ui/pagination';
 import { toast } from 'sonner';
@@ -34,6 +36,7 @@ const Contatos = () => {
   const [filters, setFilters] = useState<ContactFilterValues>(emptyFilters);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pipelineModalOpen, setPipelineModalOpen] = useState(false);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
@@ -52,6 +55,7 @@ const Contatos = () => {
 
   const { data, isLoading } = useContactsEnriched(debouncedSearch, currentPage, pageSize);
   const syncMutation = useSyncClintData();
+  const duplicateMutation = useDuplicateToInsideSales();
 
   const contactsData = data?.contacts || [];
   const totalCount = data?.totalCount || 0;
@@ -404,6 +408,8 @@ const Contatos = () => {
         onTransfer={() => setPipelineModalOpen(true)}
         onClearSelection={() => setSelectedIds(new Set())}
         isTransferring={false}
+        onDuplicate={() => setDuplicateDialogOpen(true)}
+        isDuplicating={duplicateMutation.isPending}
       />
 
       <SendToPipelineModal
@@ -411,6 +417,30 @@ const Contatos = () => {
         onOpenChange={setPipelineModalOpen}
         selectedContactIds={Array.from(selectedIds)}
         onSuccess={() => setSelectedIds(new Set())}
+      />
+
+      <DuplicateToInsideDialog
+        open={duplicateDialogOpen}
+        onOpenChange={setDuplicateDialogOpen}
+        selectedCount={selectedIds.size}
+        isLoading={duplicateMutation.isPending}
+        onConfirm={(ownerEmail, ownerProfileId, stageId) => {
+          const leads = filteredContacts
+            .filter(c => selectedIds.has(c.id))
+            .map(c => ({
+              name: c.name,
+              email: c.email || '',
+              phone: c.phone || '',
+              sourceContactId: c.id,
+              sourceDealId: c.latestDeal?.id,
+            }));
+          duplicateMutation.mutate({ leads, ownerEmail, ownerProfileId, stageId }, {
+            onSuccess: () => {
+              setSelectedIds(new Set());
+              setDuplicateDialogOpen(false);
+            },
+          });
+        }}
       />
 
       <ContactDetailsDrawer contactId={selectedContactId} open={drawerOpen} onOpenChange={setDrawerOpen} />

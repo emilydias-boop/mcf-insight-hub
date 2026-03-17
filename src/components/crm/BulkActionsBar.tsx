@@ -1,11 +1,13 @@
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, UserPlus, X, Loader2 } from 'lucide-react';
+import { CheckCircle2, UserPlus, X, Loader2, Copy } from 'lucide-react';
 
 interface BulkActionsBarProps {
   selectedCount: number;
   onTransfer: () => void;
   onClearSelection: () => void;
   isTransferring: boolean;
+  onDuplicate?: () => void;
+  isDuplicating?: boolean;
 }
 
 export const BulkActionsBar = ({
@@ -13,6 +15,8 @@ export const BulkActionsBar = ({
   onTransfer,
   onClearSelection,
   isTransferring,
+  onDuplicate,
+  isDuplicating = false,
 }: BulkActionsBarProps) => {
   if (selectedCount === 0) return null;
 
@@ -32,7 +36,7 @@ export const BulkActionsBar = ({
           variant="secondary"
           size="sm"
           onClick={onTransfer}
-          disabled={isTransferring}
+          disabled={isTransferring || isDuplicating}
           className="gap-2"
         >
           {isTransferring ? (
@@ -42,12 +46,29 @@ export const BulkActionsBar = ({
           )}
           Transferir para...
         </Button>
+
+        {onDuplicate && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onDuplicate}
+            disabled={isTransferring || isDuplicating}
+            className="gap-2"
+          >
+            {isDuplicating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+            Duplicar p/ Inside
+          </Button>
+        )}
         
         <Button
           variant="ghost"
           size="sm"
           onClick={onClearSelection}
-          disabled={isTransferring}
+          disabled={isTransferring || isDuplicating}
           className="text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10"
         >
           <X className="h-4 w-4" />
