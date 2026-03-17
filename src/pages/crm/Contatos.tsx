@@ -12,6 +12,8 @@ import { ContactFormDialog } from '@/components/crm/ContactFormDialog';
 import { ContactFilters, emptyFilters, type ContactFilterValues } from '@/components/crm/ContactFilters';
 import { BulkActionsBar } from '@/components/crm/BulkActionsBar';
 import { SendToPipelineModal } from '@/components/crm/SendToPipelineModal';
+import { DuplicateToInsideDialog } from '@/components/crm/DuplicateToInsideDialog';
+import { useDuplicateToInsideSales } from '@/hooks/useLimboLeads';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from '@/components/ui/pagination';
 import { toast } from 'sonner';
