@@ -411,6 +411,7 @@ export function useDuplicateToInsideSales() {
               name: lead.name,
               email: lead.email || null,
               phone: lead.phone || null,
+              clint_id: `limbo_contact_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             }])
             .select('id')
             .single();
