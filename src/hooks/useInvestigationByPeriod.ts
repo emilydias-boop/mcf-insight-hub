@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { startOfDay, endOfDay, format } from 'date-fns';
+import { startOfDay, endOfDay, format, eachDayOfInterval } from 'date-fns';
 
 export interface DailyMetric {
   date: string; // yyyy-MM-dd
