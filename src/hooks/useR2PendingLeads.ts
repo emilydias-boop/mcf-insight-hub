@@ -90,7 +90,7 @@ export function useR2PendingLeads() {
           )
         `)
         .in('status', ['contract_paid'])
-        .eq('meeting_slots.meeting_type', 'r1')
+        .eq('meeting_slot.meeting_type', 'r1')
         .order('contract_paid_at', { ascending: false, nullsFirst: false });
 
       if (paidError) throw paidError;
@@ -169,7 +169,7 @@ export function useR2PendingLeads() {
           .from('meeting_slot_attendees')
           .select(`deal_id, meeting_slot:meeting_slots!inner(meeting_type)`)
           .in('deal_id', batch)
-          .eq('meeting_slots.meeting_type', 'r2') as any
+          .eq('meeting_slot.meeting_type', 'r2') as any
       );
 
       // Create a set of deal_ids that have R2
@@ -185,7 +185,7 @@ export function useR2PendingLeads() {
           attendee_phone,
           meeting_slot:meeting_slots!inner(meeting_type)
         `)
-        .eq('meeting_slots.meeting_type', 'r2');
+        .eq('meeting_slot.meeting_type', 'r2');
 
       // Create sets of normalized names/phones with R2
       const r2Names = new Set<string>();
@@ -317,8 +317,8 @@ export function useR2PendingLeads() {
               )
             `)
             .in('deal_id', batch)
-            .eq('meeting_slots.meeting_type', 'r1')
-            .order('meeting_slots(scheduled_at)', { ascending: false }) as any
+            .eq('meeting_slot.meeting_type', 'r1')
+            .order('meeting_slot(scheduled_at)', { ascending: false }) as any
         );
 
         // Sort attendees by scheduled_at DESC (client-side) since Supabase nested ordering is unreliable
