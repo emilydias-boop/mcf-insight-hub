@@ -408,6 +408,8 @@ const Contatos = () => {
         onTransfer={() => setPipelineModalOpen(true)}
         onClearSelection={() => setSelectedIds(new Set())}
         isTransferring={false}
+        onDuplicate={() => setDuplicateDialogOpen(true)}
+        isDuplicating={duplicateMutation.isPending}
       />
 
       <SendToPipelineModal
@@ -415,6 +417,30 @@ const Contatos = () => {
         onOpenChange={setPipelineModalOpen}
         selectedContactIds={Array.from(selectedIds)}
         onSuccess={() => setSelectedIds(new Set())}
+      />
+
+      <DuplicateToInsideDialog
+        open={duplicateDialogOpen}
+        onOpenChange={setDuplicateDialogOpen}
+        selectedCount={selectedIds.size}
+        isLoading={duplicateMutation.isPending}
+        onConfirm={(ownerEmail, ownerProfileId, stageId) => {
+          const leads = filteredContacts
+            .filter(c => selectedIds.has(c.id))
+            .map(c => ({
+              name: c.name,
+              email: c.email || '',
+              phone: c.phone || '',
+              sourceContactId: c.id,
+              sourceDealId: c.latestDeal?.id,
+            }));
+          duplicateMutation.mutate({ leads, ownerEmail, ownerProfileId, stageId }, {
+            onSuccess: () => {
+              setSelectedIds(new Set());
+              setDuplicateDialogOpen(false);
+            },
+          });
+        }}
       />
 
       <ContactDetailsDrawer contactId={selectedContactId} open={drawerOpen} onOpenChange={setDrawerOpen} />
