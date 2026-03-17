@@ -6454,7 +6454,7 @@ export type Database = {
           {
             foreignKeyName: "lead_profiles_contact_id_fkey"
             columns: ["contact_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
