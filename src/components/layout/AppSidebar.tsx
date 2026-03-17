@@ -358,6 +358,7 @@ const personalMenuItems: PersonalMenuItem[] = [
   { title: "Meu RH", url: "/meu-rh", icon: UserCircle },
   { title: "Meu Playbook", url: "/playbook", icon: BookOpen },
   { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt, requiredRoles: ["sdr", "closer"] },
+  { title: "Meus Equipamentos", url: "/patrimonio/meus-equipamentos", icon: Laptop },
   { title: "Alertas", url: "/alertas", icon: Bell },
 ];
 
