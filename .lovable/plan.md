@@ -1,39 +1,49 @@
 
 
-## Objetivo
+## Metas individuais no painel de Investigacao
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Problema
 
-## Mudanças
+As metas em `team_targets` sao do TIME inteiro (ex: `sdr_contrato_dia = 18` para 12 closers). Quando seleciona "Carol Souza", o grafico mostra a meta de 18 contratos/dia como referencia -- mas a meta individual dela seria `18 / 12 = 1.5 contratos/dia`. Alem disso, na tabela comparativa a coluna "% Meta" tambem usa a meta total do time, nao a individual.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Solucao
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+#### 1. Calcular meta individual por pessoa (`InvestigationReportPanel.tsx`)
 
-### 2. Hook `useCloserDetailData.ts`
+- Contar o numero de membros ativos: closers ativos (do hook `useGestorClosers`) ou SDRs ativos (do hook `useGestorSDRs`)
+- Quando um individuo esta selecionado (`selectedId !== '__all__'`):
+  - `metaIndividual = metaTime / numMembros`
+  - Passar essa meta individual como `dailyTargets` para o grafico de evolucao e tabela
+- Quando "Todos" esta selecionado:
+  - Manter a meta do time inteiro como esta
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+Logica:
+```
+const memberCount = selectedType === 'closer' ? closers.length : sdrs.length;
+const individualDailyTargets = isAll ? dailyTargets : {
+  agendadas: dailyTargets.agendadas ? dailyTargets.agendadas / memberCount : undefined,
+  realizadas: dailyTargets.realizadas ? dailyTargets.realizadas / memberCount : undefined,
+  contratosPagos: dailyTargets.contratosPagos ? dailyTargets.contratosPagos / memberCount : undefined,
+};
+```
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+#### 2. Atualizar props passadas aos componentes
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+- `InvestigationEvolutionChart`: passar `individualDailyTargets` em vez de `dailyTargets` -- as `ReferenceLine` vao mostrar a meta individual (ex: 1.5/dia)
+- `InvestigationComparisonTable`: passar `individualDailyTargets` e `daysInPeriod` -- a coluna "% Meta" vai calcular `contratosPagos / (metaIndividual * dias) * 100`
+- Cards de "Atingimento de Meta": quando individual, mostrar progresso vs meta individual do periodo; quando "Todos", manter meta total
 
-### 4. Dados exportados no Excel
+#### 3. Melhorar label das reference lines no grafico
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+- Mostrar "Meta Ind." quando individual, "Meta Time" quando todos
+- Formatar com 1 casa decimal quando meta individual nao for inteira (ex: "Meta Ind. 1.5")
 
-Formato de data: `dd/MM/yyyy HH:mm`
+### Arquivos a editar
 
-## Resultado
+| Arquivo | Acao |
+|---|---|
+| `src/components/relatorios/InvestigationReportPanel.tsx` | Calcular meta individual dividindo pelo numero de membros, passar props corretas |
+| `src/components/relatorios/InvestigationEvolutionChart.tsx` | Ajustar labels das reference lines para distinguir meta individual vs time |
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+Nenhum arquivo novo. Alteracoes concentradas no painel principal e label do grafico.
 
