@@ -495,7 +495,7 @@ async function upsertLeadProfile(
       nome_completo: getField(payload, 'nome_completo', 'name') as string || null,
       cpf: cpfClean,
       whatsapp: normalizedPhone || (getField(payload, 'whatsapp') as string) || null,
-      data_nascimento: getField(payload, 'data_nascimento') as string || null,
+      data_nascimento: parseDateField(getField(payload, 'data_nascimento') as string) || null,
       estado_cidade: getField(payload, 'estado_cidade') as string || null,
       estado_civil: getField(payload, 'estado_civil') as string || null,
       num_filhos: parseNum(getField(payload, 'num_filhos')) as number | null,
