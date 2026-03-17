@@ -160,10 +160,10 @@ export const IncomingWebhookFormDialog = ({
     }
   }, [open, endpoint, duplicateData, stages, form]);
 
-  // Auto-generate slug from name
+  // Auto-generate slug from name (only for new, non-duplicate webhooks)
   const nameValue = form.watch('name');
   useEffect(() => {
-    if (!isEditing && nameValue) {
+    if (!isEditing && !isDuplicating && nameValue) {
       const slug = nameValue
         .toLowerCase()
         .normalize('NFD')
@@ -172,7 +172,7 @@ export const IncomingWebhookFormDialog = ({
         .replace(/^-|-$/g, '');
       form.setValue('slug', slug);
     }
-  }, [nameValue, isEditing, form]);
+  }, [nameValue, isEditing, isDuplicating, form]);
 
   const slugValue = form.watch('slug');
   const webhookUrl = slugValue ? getWebhookUrl(slugValue) : '';
