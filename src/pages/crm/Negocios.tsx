@@ -638,11 +638,35 @@ const Negocios = () => {
                 )}
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''}
-                {crossPipelineDeals.length > 0 && (
-                  <span className="ml-1 text-primary font-medium">
-                    ({crossPipelineDeals.length} em outras pipelines)
-                  </span>
+                {currentPipelineDeals.length} oportunidade{currentPipelineDeals.length !== 1 ? 's' : ''}
+                {crossPipelineDeals.length > 0 && isSearchActive && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className="ml-1 text-primary font-medium hover:underline cursor-pointer">
+                        (+ {crossPipelineDeals.length} em outras pipelines)
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-3" align="start">
+                      <p className="text-xs font-semibold text-muted-foreground mb-2">Encontrados em outras pipelines:</p>
+                      <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                        {crossPipelineDeals.map((deal: any) => (
+                          <div
+                            key={deal.id}
+                            className="flex items-center justify-between gap-2 p-1.5 rounded-md hover:bg-accent cursor-pointer transition-colors"
+                            onClick={() => {
+                              setCrossPipelineDealId(deal.id);
+                              setCrossPipelineDrawerOpen(true);
+                            }}
+                          >
+                            <span className="text-sm truncate">{deal.crm_contacts?.name || deal.name}</span>
+                            <Badge variant="outline" className="text-[10px] shrink-0">
+                              {deal.crm_origins?.name || 'Outra pipeline'}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 )}
               </p>
             </div>
