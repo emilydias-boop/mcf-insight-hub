@@ -32,7 +32,8 @@ import {
   useWebhookEndpoints, 
   useDeleteWebhookEndpoint, 
   useToggleWebhookEndpoint,
-  getWebhookUrl 
+  getWebhookUrl,
+  type WebhookEndpoint,
 } from '@/hooks/useWebhookEndpoints';
 import { IncomingWebhookFormDialog } from './IncomingWebhookFormDialog';
 import { formatDistanceToNow } from 'date-fns';
@@ -46,6 +47,7 @@ interface IncomingWebhookEditorProps {
 export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEndpoint, setEditingEndpoint] = useState<string | null>(null);
+  const [duplicateData, setDuplicateData] = useState<WebhookEndpoint | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [endpointToDelete, setEndpointToDelete] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -64,6 +66,13 @@ export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) 
 
   const handleEdit = (id: string) => {
     setEditingEndpoint(id);
+    setDuplicateData(null);
+    setIsFormOpen(true);
+  };
+
+  const handleDuplicate = (endpoint: WebhookEndpoint) => {
+    setEditingEndpoint(null);
+    setDuplicateData(endpoint);
     setIsFormOpen(true);
   };
 
@@ -87,6 +96,7 @@ export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) 
   const handleFormClose = () => {
     setIsFormOpen(false);
     setEditingEndpoint(null);
+    setDuplicateData(null);
   };
 
   if (isLoading) {
@@ -195,6 +205,10 @@ export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) 
                       <Copy className="h-4 w-4 mr-2" />
                       Copiar URL
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDuplicate(endpoint)}>
+                      <Copy className="h-4 w-4 mr-2" />
+                      Duplicar
+                    </DropdownMenuItem>
                     <DropdownMenuItem 
                       onClick={() => window.open(getWebhookUrl(endpoint.slug), '_blank')}
                     >
@@ -221,6 +235,7 @@ export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) 
         onOpenChange={handleFormClose}
         originId={originId}
         endpointId={editingEndpoint}
+        duplicateData={duplicateData}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

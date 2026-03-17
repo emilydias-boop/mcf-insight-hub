@@ -1,45 +1,39 @@
 
 
-## Duplicar Webhook com field_mapping completo
+## Objetivo
 
-### Contexto
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-O webhook "ClientData Inside" possui um `field_mapping` com 26 campos mapeados (nome_completo, cpf, renda_bruta, saldo_fgts, etc.) que fica armazenado no banco mas nao aparece no formulario visual. A duplicacao precisa copiar esse mapeamento integralmente.
+## Mudanças
 
-### Alteracoes
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-**1. `src/components/crm/webhooks/IncomingWebhookEditor.tsx`**
-- Adicionar state `duplicateData: WebhookEndpoint | null`
-- Adicionar item "Duplicar" (icone Copy) no DropdownMenu de cada webhook
-- Handler `handleDuplicate` que seta o endpoint completo e abre o dialog
-- Passar `duplicateData` como prop ao `IncomingWebhookFormDialog`
-- Limpar `duplicateData` ao fechar o dialog
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**2. `src/components/crm/webhooks/IncomingWebhookFormDialog.tsx`**
-- Nova prop opcional `duplicateData?: WebhookEndpoint | null`
-- No `useEffect` de reset: quando `duplicateData` presente (e nao `endpointId`), pre-preencher todos os campos:
-  - name: original + " (Copia)"
-  - slug: original + "-copia"
-  - description, stage_id, auto_tags, required_fields, auth headers: copiar identicos
-  - is_active: true
-- No `onSubmit` (modo criacao): incluir `field_mapping` do `duplicateData` no payload passado ao `createMutation`
-- Titulo do dialog: "Duplicar Webhook de Entrada" quando `duplicateData` presente
+### 2. Hook `useCloserDetailData.ts`
 
-**3. `src/hooks/useWebhookEndpoints.ts`**
-- Adicionar `field_mapping` como campo opcional no tipo `CreateWebhookEndpoint`
-- Passar `field_mapping` no insert quando fornecido
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-### O que sera copiado
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-| Campo | Copiado? |
-|---|---|
-| name, slug, description | Sim (com sufixo) |
-| stage_id, auto_tags, required_fields | Sim |
-| auth_header_name, auth_header_value | Sim |
-| **field_mapping** (26 campos) | **Sim** |
-| leads_received, last_lead_at | Nao (zerados) |
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-### Resultado
+### 4. Dados exportados no Excel
 
-O usuario clica "Duplicar" no ClientData Inside, o formulario abre pre-preenchido com todos os dados incluindo o mapeamento de 26+ campos. Altera o que quiser (nome, slug, tags) e salva. O novo webhook herda todo o field_mapping e funciona identicamente para processar os dados do lead_profiles.
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

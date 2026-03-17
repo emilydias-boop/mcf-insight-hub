@@ -37,6 +37,7 @@ import {
   useCreateWebhookEndpoint,
   useUpdateWebhookEndpoint,
   getWebhookUrl,
+  type WebhookEndpoint,
 } from '@/hooks/useWebhookEndpoints';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -62,6 +63,7 @@ interface IncomingWebhookFormDialogProps {
   onOpenChange: (open: boolean) => void;
   originId: string;
   endpointId?: string | null;
+  duplicateData?: WebhookEndpoint | null;
 }
 
 export const IncomingWebhookFormDialog = ({
@@ -69,6 +71,7 @@ export const IncomingWebhookFormDialog = ({
   onOpenChange,
   originId,
   endpointId,
+  duplicateData,
 }: IncomingWebhookFormDialogProps) => {
   const [tagInput, setTagInput] = useState('');
   const [copied, setCopied] = useState(false);
@@ -78,6 +81,7 @@ export const IncomingWebhookFormDialog = ({
   const updateMutation = useUpdateWebhookEndpoint();
 
   const isEditing = !!endpointId;
+  const isDuplicating = !!duplicateData && !isEditing;
   const endpoint = endpoints?.find((e) => e.id === endpointId);
 
   // Fetch stages for this origin from local_pipeline_stages (correct FK target)
@@ -128,6 +132,18 @@ export const IncomingWebhookFormDialog = ({
           auth_header_value: endpoint.auth_header_value || '',
           is_active: endpoint.is_active,
         });
+      } else if (duplicateData) {
+        form.reset({
+          name: duplicateData.name + ' (Cópia)',
+          slug: duplicateData.slug + '-copia',
+          description: duplicateData.description || '',
+          stage_id: duplicateData.stage_id || '',
+          auto_tags: duplicateData.auto_tags || [],
+          required_fields: duplicateData.required_fields || ['name', 'email'],
+          auth_header_name: duplicateData.auth_header_name || '',
+          auth_header_value: duplicateData.auth_header_value || '',
+          is_active: true,
+        });
       } else {
         form.reset({
           name: '',
@@ -142,12 +158,12 @@ export const IncomingWebhookFormDialog = ({
         });
       }
     }
-  }, [open, endpoint, stages, form]);
+  }, [open, endpoint, duplicateData, stages, form]);
 
-  // Auto-generate slug from name
+  // Auto-generate slug from name (only for new, non-duplicate webhooks)
   const nameValue = form.watch('name');
   useEffect(() => {
-    if (!isEditing && nameValue) {
+    if (!isEditing && !isDuplicating && nameValue) {
       const slug = nameValue
         .toLowerCase()
         .normalize('NFD')
@@ -156,7 +172,7 @@ export const IncomingWebhookFormDialog = ({
         .replace(/^-|-$/g, '');
       form.setValue('slug', slug);
     }
-  }, [nameValue, isEditing, form]);
+  }, [nameValue, isEditing, isDuplicating, form]);
 
   const slugValue = form.watch('slug');
   const webhookUrl = slugValue ? getWebhookUrl(slugValue) : '';
@@ -212,6 +228,7 @@ export const IncomingWebhookFormDialog = ({
           auth_header_name: values.auth_header_name,
           auth_header_value: values.auth_header_value,
           is_active: values.is_active,
+          ...(duplicateData?.field_mapping ? { field_mapping: duplicateData.field_mapping } : {}),
         });
       }
       onOpenChange(false);
@@ -225,7 +242,7 @@ export const IncomingWebhookFormDialog = ({
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? 'Editar Webhook de Entrada' : 'Novo Webhook de Entrada'}
+            {isEditing ? 'Editar Webhook de Entrada' : isDuplicating ? 'Duplicar Webhook de Entrada' : 'Novo Webhook de Entrada'}
           </DialogTitle>
         </DialogHeader>
 
