@@ -29,6 +29,7 @@ export const useGestorSDRs = () => {
         return (data || []).map(e => ({
           id: e.id,
           name: e.nome_completo || '',
+          email: e.email_pessoal || null,
           profile_id: e.profile_id,
         }));
       }
