@@ -36,6 +36,7 @@ const Contatos = () => {
   const [filters, setFilters] = useState<ContactFilterValues>(emptyFilters);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pipelineModalOpen, setPipelineModalOpen] = useState(false);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
