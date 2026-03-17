@@ -205,6 +205,10 @@ export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) 
                       <Copy className="h-4 w-4 mr-2" />
                       Copiar URL
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDuplicate(endpoint)}>
+                      <Copy className="h-4 w-4 mr-2" />
+                      Duplicar
+                    </DropdownMenuItem>
                     <DropdownMenuItem 
                       onClick={() => window.open(getWebhookUrl(endpoint.slug), '_blank')}
                     >
