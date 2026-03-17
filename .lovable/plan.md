@@ -1,39 +1,46 @@
 
 
-## Objetivo
+## Adicionar metas diarias/semanais ao painel de Investigacao
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### Contexto
 
-## Mudanças
+As metas da equipe ja existem na tabela `team_targets` com tipos como `sdr_agendamento_dia`, `sdr_r1_realizada_dia`, `sdr_contrato_dia`, etc. O hook `useSdrTeamTargets` ja busca esses dados. O que falta e integrar essas metas ao painel de Investigacao para mostrar se cada pessoa (ou o time) esta batendo a meta diaria/semanal.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+### Implementacao
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+#### 1. Buscar metas no painel (`InvestigationReportPanel.tsx`)
 
-### 2. Hook `useCloserDetailData.ts`
+- Importar e usar `useSdrTeamTargets` para buscar metas diarias da equipe
+- Extrair targets relevantes: `sdr_agendamento_dia` (ou `closer` equivalente), `sdr_r1_realizada_dia`, `sdr_contrato_dia`
+- Passar como props para os componentes de grafico e tabela
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+#### 2. Linha de meta no grafico de evolucao (`InvestigationEvolutionChart.tsx`)
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+- Receber props opcionais `dailyTargets?: { agendadas?: number; realizadas?: number; contratosPagos?: number }`
+- Adicionar `ReferenceLine` horizontal do recharts para cada meta configurada (ex: linha tracejada vermelha em y=5 para "meta agendamentos/dia")
+- Isso permite ver visualmente em cada dia se bateu ou nao a meta
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+#### 3. Coluna de atingimento na tabela comparativa (`InvestigationComparisonTable.tsx`)
 
-### 4. Dados exportados no Excel
+- Receber `dailyTargets` como prop
+- Calcular dias uteis no periodo selecionado
+- Adicionar coluna "% Meta" que compara: `(contratosPagos / (metaDiaria * diasUteis)) * 100`
+- Colorir: verde >= 100%, amarelo >= 70%, vermelho < 70%
+- Permitir ordenar por essa coluna
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+#### 4. Mini cards de atingimento de meta nos KPIs
 
-Formato de data: `dd/MM/yyyy HH:mm`
+- Abaixo dos KPI cards atuais, adicionar uma linha de cards mostrando "Meta Dia vs Real":
+  - "Realizadas Hoje: X / meta Y" com barra de progresso (reutilizar `MetricProgressCell`)
+  - Quando periodo = semana, mostrar acumulado vs meta semanal
+  - Quando periodo = mes, mostrar acumulado vs meta mensal
+- Usar a logica: se range <= 1 dia, comparar com meta dia; se <= 7 dias, com meta semana; senao meta mes
 
-## Resultado
+### Arquivos
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+| Arquivo | Acao |
+|---|---|
+| `src/components/relatorios/InvestigationReportPanel.tsx` | Importar `useSdrTeamTargets`, calcular metas por periodo, passar props, adicionar cards de atingimento |
+| `src/components/relatorios/InvestigationEvolutionChart.tsx` | Adicionar `ReferenceLine` para metas diarias |
+| `src/components/relatorios/InvestigationComparisonTable.tsx` | Adicionar coluna "% Meta" com atingimento colorido |
 
