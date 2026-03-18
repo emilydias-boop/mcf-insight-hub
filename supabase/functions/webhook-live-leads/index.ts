@@ -53,7 +53,8 @@ serve(async (req) => {
 
     // 1b. Fallback: buscar por telefone (últimos 9 dígitos)
     if (!existingContact && normalizedPhone) {
-      const phoneSuffix = normalizedPhone.replace(/\D/g, '').slice(-9);
+      const phoneClean = normalizedPhone.replace(/\D/g, '');
+      const phoneSuffix = phoneClean.slice(-9);
       if (phoneSuffix.length === 9) {
         const { data: contactByPhone } = await supabase
           .from('crm_contacts')
@@ -63,10 +64,27 @@ serve(async (req) => {
         
         if (contactByPhone) {
           existingContact = contactByPhone;
-          console.log('[LIVE-LEAD] Contato encontrado por telefone:', contactByPhone.id);
-          // Atualizar email se faltante
+          console.log('[LIVE-LEAD] Contato encontrado por telefone (9-digit):', contactByPhone.id);
           if (!contactByPhone.email && payload.email) {
             await supabase.from('crm_contacts').update({ email: payload.email.trim().toLowerCase(), updated_at: new Date().toISOString() }).eq('id', contactByPhone.id);
+          }
+        }
+      }
+
+      // Fallback: últimos 8 dígitos (ignora dígito 9 variável do celular BR)
+      if (!existingContact && phoneClean.length >= 8) {
+        const phoneSuffix8 = phoneClean.slice(-8);
+        const { data: contactByPhone8 } = await supabase
+          .from('crm_contacts')
+          .select('id, email')
+          .ilike('phone', `%${phoneSuffix8}`)
+          .maybeSingle();
+        
+        if (contactByPhone8) {
+          existingContact = contactByPhone8;
+          console.log('[LIVE-LEAD] Contato encontrado por telefone (8-digit fallback):', contactByPhone8.id);
+          if (!contactByPhone8.email && payload.email) {
+            await supabase.from('crm_contacts').update({ email: payload.email.trim().toLowerCase(), updated_at: new Date().toISOString() }).eq('id', contactByPhone8.id);
           }
         }
       }

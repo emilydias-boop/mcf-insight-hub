@@ -99,6 +99,17 @@ Deno.serve(async (req) => {
             if (data?.length) existingContact = data[0];
           }
 
+          // Fallback: últimos 8 dígitos (ignora dígito 9 variável do celular BR)
+          if (!existingContact && phoneClean.length >= 8) {
+            const phoneSuffix8 = phoneClean.slice(-8);
+            const { data } = await supabase
+              .from('crm_contacts')
+              .select('id')
+              .ilike('phone', `%${phoneSuffix8}`)
+              .limit(1);
+            if (data?.length) existingContact = data[0];
+          }
+
           if (existingContact) {
             contactId = existingContact.id;
           } else {

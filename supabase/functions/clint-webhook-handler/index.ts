@@ -629,7 +629,8 @@ async function handleDealCreated(supabase: any, data: any) {
 
   // 1b. Fallback: buscar por telefone normalizado (últimos 9 dígitos)
   if (!contactId && normalizedContactPhone) {
-    const phoneSuffix = normalizedContactPhone.replace(/\D/g, '').slice(-9);
+    const phoneClean = normalizedContactPhone.replace(/\D/g, '');
+    const phoneSuffix = phoneClean.slice(-9);
     if (phoneSuffix.length === 9) {
       const { data: contactByPhone } = await supabase
         .from('crm_contacts')
@@ -639,11 +640,28 @@ async function handleDealCreated(supabase: any, data: any) {
       
       if (contactByPhone) {
         contactId = contactByPhone.id;
-        console.log('[DEAL.CREATED] Contact found by phone:', contactId);
-        // Atualizar email se faltante
+        console.log('[DEAL.CREATED] Contact found by phone (9-digit):', contactId);
         if (contactData.email && !contactByPhone.email) {
           await supabase.from('crm_contacts').update({ email: contactData.email, updated_at: new Date().toISOString() }).eq('id', contactId);
           console.log('[DEAL.CREATED] Updated missing email on contact');
+        }
+      }
+    }
+
+    // Fallback: últimos 8 dígitos (ignora dígito 9 variável do celular BR)
+    if (!contactId && phoneClean.length >= 8) {
+      const phoneSuffix8 = phoneClean.slice(-8);
+      const { data: contactByPhone8 } = await supabase
+        .from('crm_contacts')
+        .select('id, email')
+        .ilike('phone', `%${phoneSuffix8}`)
+        .maybeSingle();
+      
+      if (contactByPhone8) {
+        contactId = contactByPhone8.id;
+        console.log('[DEAL.CREATED] Contact found by phone (8-digit fallback):', contactId);
+        if (contactData.email && !contactByPhone8.email) {
+          await supabase.from('crm_contacts').update({ email: contactData.email, updated_at: new Date().toISOString() }).eq('id', contactId);
         }
       }
     }
