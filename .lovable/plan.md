@@ -1,62 +1,39 @@
 
 
-## Problema
+## Objetivo
 
-Quando o webhook da anamnese (ClientData Inside) recebe um lead que já tem deal na pipeline, ele atualiza o `lead_profile` mas **não adiciona a tag ANAMNESE** ao deal existente. Isso afeta 2 deals identificados:
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-- **Aline Melo** (deal `ea384e5a...`)
-- **Júlio Gil Simões Freire** (deal `60c5c59f...`)
+## Mudanças
 
-Os outros 3 deals criados pelo webhook já têm a tag corretamente.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-## Solução (2 partes)
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-### 1. Correção de dados — Adicionar tag ANAMNESE aos 2 deals
+### 2. Hook `useCloserDetailData.ts`
 
-UPDATE nos deals existentes para incluir a tag:
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-```sql
-UPDATE crm_deals SET tags = array_append(COALESCE(tags, '{}'), 'ANAMNESE')
-WHERE id IN (
-  'ea384e5a-fd2e-42cc-9ca3-01ebe02be56a',
-  '60c5c59f-27d7-4412-bec5-860893598d59'
-) AND NOT ('ANAMNESE' = ANY(COALESCE(tags, '{}')));
-```
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-### 2. Correção no código — Webhook aplicar auto_tags em deals duplicados
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-**Arquivo:** `supabase/functions/webhook-lead-receiver/index.ts` (linhas 267-284)
+### 4. Dados exportados no Excel
 
-No bloco de deduplicação (`if (existingDeal)`), antes de retornar, adicionar lógica para mesclar as `autoTags` do endpoint nas tags do deal existente:
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-```typescript
-if (existingDeal) {
-  // Atualiza lead_profile (já existente)
-  await upsertLeadProfile(...);
-  
-  // NOVO: Adicionar auto_tags ao deal existente
-  if (autoTags.length > 0) {
-    const { data: currentDeal } = await supabase
-      .from('crm_deals')
-      .select('tags')
-      .eq('id', existingDeal.id)
-      .single();
-    
-    const currentTags = currentDeal?.tags || [];
-    const newTags = [...new Set([...currentTags, ...autoTags])];
-    
-    if (newTags.length !== currentTags.length) {
-      await supabase
-        .from('crm_deals')
-        .update({ tags: newTags })
-        .eq('id', existingDeal.id);
-    }
-  }
-  
-  await updateEndpointMetrics(...);
-  return new Response(...);
-}
-```
+Formato de data: `dd/MM/yyyy HH:mm`
 
-Assim, futuros leads deduplicados também receberão a tag automaticamente.
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
