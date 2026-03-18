@@ -823,6 +823,12 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Dialog de Vinculação SDR */}
+      <LinkSdrDialog
+        open={linkDialog.open}
+        onOpenChange={(open) => setLinkDialog(prev => ({ ...prev, open }))}
+        employee={linkDialog.employee}
+      />
     </>
   );
 };
