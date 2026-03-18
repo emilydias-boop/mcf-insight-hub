@@ -45,37 +45,37 @@ export function TeamGoalsPanel({ dayValues, weekValues, monthValues, buPrefix = 
   const dayTargets = useMemo(() => ({
     agendamento: getTargetValue('agendamento_dia'),
     r1Agendada: getTargetValue('r1_agendada_dia'),
-    r1Realizada: getTargetValue('r1_realizada_dia'),
-    noShow: getTargetValue('noshow_dia'),
-    contrato: getTargetValue('contrato_dia'),
+    r1Realizada: Math.round(dayValues.r1Agendada * 0.7),
+    noShow: Math.round(dayValues.r1Agendada * 0.3),
+    contrato: Math.round(dayValues.r1Agendada * 0.7 * 0.3),
     r2Agendada: getTargetValue('r2_agendada_dia'),
-    r2Realizada: getTargetValue('r2_realizada_dia'),
-    vendaRealizada: getTargetValue('venda_realizada_dia'),
-  }), [targets, buPrefix]);
+    r2Realizada: Math.round(dayValues.r2Agendada * 0.7),
+    vendaRealizada: Math.round(dayValues.r2Agendada * 0.3),
+  }), [targets, buPrefix, dayValues]);
 
   // Week targets
   const weekTargets = useMemo(() => ({
     agendamento: getTargetValue('agendamento_semana'),
     r1Agendada: getTargetValue('r1_agendada_semana'),
-    r1Realizada: getTargetValue('r1_realizada_semana'),
-    noShow: getTargetValue('noshow_semana'),
-    contrato: getTargetValue('contrato_semana'),
+    r1Realizada: Math.round(weekValues.r1Agendada * 0.7),
+    noShow: Math.round(weekValues.r1Agendada * 0.3),
+    contrato: Math.round(weekValues.r1Agendada * 0.7 * 0.3),
     r2Agendada: getTargetValue('r2_agendada_semana'),
-    r2Realizada: getTargetValue('r2_realizada_semana'),
-    vendaRealizada: getTargetValue('venda_realizada_semana'),
-  }), [targets, buPrefix]);
+    r2Realizada: Math.round(weekValues.r2Agendada * 0.7),
+    vendaRealizada: Math.round(weekValues.r2Agendada * 0.3),
+  }), [targets, buPrefix, weekValues]);
 
   // Month targets
   const monthTargets = useMemo(() => ({
     agendamento: getTargetValue('agendamento_mes'),
     r1Agendada: getTargetValue('r1_agendada_mes'),
-    r1Realizada: getTargetValue('r1_realizada_mes'),
-    noShow: getTargetValue('noshow_mes'),
-    contrato: getTargetValue('contrato_mes'),
+    r1Realizada: Math.round(monthValues.r1Agendada * 0.7),
+    noShow: Math.round(monthValues.r1Agendada * 0.3),
+    contrato: Math.round(monthValues.r1Agendada * 0.7 * 0.3),
     r2Agendada: getTargetValue('r2_agendada_mes'),
-    r2Realizada: getTargetValue('r2_realizada_mes'),
-    vendaRealizada: getTargetValue('venda_realizada_mes'),
-  }), [targets, buPrefix]);
+    r2Realizada: Math.round(monthValues.r2Agendada * 0.7),
+    vendaRealizada: Math.round(monthValues.r2Agendada * 0.3),
+  }), [targets, buPrefix, monthValues]);
 
   if (isLoading) {
     return (
