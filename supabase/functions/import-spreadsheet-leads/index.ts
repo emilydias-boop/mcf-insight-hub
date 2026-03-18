@@ -131,13 +131,29 @@ Deno.serve(async (req) => {
           .limit(1);
 
         if (existingDeal?.length) {
-          // UPDATE existing deal: stage, owner, tags
-          const updateData: any = {
-            stage_id: firstStageId,
-            tags: finalTags,
-          };
-          if (owner_email) updateData.owner_id = owner_email;
-          if (owner_profile_id) updateData.owner_profile_id = owner_profile_id;
+          // Check if deal has meetings (R1/R2) — if so, only update tags
+          const { data: meetings } = await supabase
+            .from('meeting_slots')
+            .select('id')
+            .eq('deal_id', existingDeal[0].id)
+            .limit(1);
+
+          const hasMeetings = meetings && meetings.length > 0;
+
+          let updateData: any;
+          if (hasMeetings) {
+            // Deal com reunião: só atualiza tags, preserva stage e owner
+            updateData = { tags: finalTags };
+            console.log(`Deal ${existingDeal[0].id} has meetings — only updating tags`);
+          } else {
+            // Deal sem reunião: atualiza stage, owner e tags normalmente
+            updateData = {
+              stage_id: firstStageId,
+              tags: finalTags,
+            };
+            if (owner_email) updateData.owner_id = owner_email;
+            if (owner_profile_id) updateData.owner_profile_id = owner_profile_id;
+          }
 
           const { error: updateError } = await supabase
             .from('crm_deals')
