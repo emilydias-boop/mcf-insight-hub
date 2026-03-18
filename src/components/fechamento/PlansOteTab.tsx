@@ -625,9 +625,15 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
                           )}
                         </div>
                         {!emp.sdr_id && (
-                          <span className="text-[10px] text-yellow-500 block">
-                            Sem vínculo SDR
-                          </span>
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0 text-[10px] text-yellow-500 hover:text-yellow-600"
+                            onClick={() => setLinkDialog({ open: true, employee: { id: emp.id, nome_completo: emp.nome_completo, departamento: emp.departamento } })}
+                          >
+                            <Link2 className="h-3 w-3 mr-0.5" />
+                            Vincular SDR
+                          </Button>
                         )}
                       </TableCell>
                       <TableCell>
