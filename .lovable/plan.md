@@ -1,70 +1,39 @@
 
 
-## Plano: Vincular SDR manualmente na tela de Planos OTE
+## Objetivo
 
-### Problema
-Colaboradores que aparecem com "Sem vínculo SDR" não podem ter seus planos editados. A trigger automática só roda quando `profile_id` é preenchido, mas em alguns casos o vínculo não acontece (employee sem profile, email divergente, etc). Não existe opção manual.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Solução
-Adicionar um botão "Vincular SDR" na linha de cada colaborador sem `sdr_id`, que abre um dialog para:
-1. Buscar um SDR existente na tabela `sdr` (por nome/email)
-2. Ou criar um novo registro SDR automaticamente (usando nome/email do employee)
+## Mudanças
 
-Após vincular, o `employees.sdr_id` é atualizado e o plano pode ser editado.
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### Mudanças
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**Arquivo:** `src/components/fechamento/PlansOteTab.tsx`
+### 2. Hook `useCloserDetailData.ts`
 
-1. Adicionar um estado `linkDialog` para controlar o dialog de vinculação
-2. Na célula onde aparece "Sem vínculo SDR", adicionar um botão clicável "Vincular"
-3. Criar um dialog com:
-   - Select pesquisável listando SDRs ativos sem vínculo a um employee
-   - Botão "Criar novo SDR" que auto-preenche com dados do employee
-4. Mutation para atualizar `employees.sdr_id` (e opcionalmente criar SDR)
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-**Lógica principal:**
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-```typescript
-// Query: SDRs disponíveis (sem employee vinculado)
-const { data: availableSdrs } = useQuery({
-  queryKey: ['available-sdrs'],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('sdr')
-      .select('id, name, email, squad')
-      .eq('active', true)
-      .order('name');
-    return data;
-  },
-});
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-// Vincular SDR existente
-const linkSdr = useMutation({
-  mutationFn: async ({ employeeId, sdrId }) => {
-    await supabase
-      .from('employees')
-      .update({ sdr_id: sdrId })
-      .eq('id', employeeId);
-  },
-});
+### 4. Dados exportados no Excel
 
-// Criar novo SDR + vincular
-const createAndLinkSdr = useMutation({
-  mutationFn: async ({ employee }) => {
-    const squad = mapDeptToSquad(employee.departamento);
-    const { data: newSdr } = await supabase
-      .from('sdr')
-      .insert({ name, email, squad, role_type, active: true, meta_diaria: 7 })
-      .select('id')
-      .single();
-    await supabase
-      .from('employees')
-      .update({ sdr_id: newSdr.id })
-      .eq('id', employee.id);
-  },
-});
-```
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-O botão "Vincular" substitui o texto "Sem vínculo SDR" e o dialog oferece as duas opções (selecionar existente ou criar novo).
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

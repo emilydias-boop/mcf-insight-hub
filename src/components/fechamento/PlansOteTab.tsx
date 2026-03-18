@@ -28,12 +28,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ChevronLeft, ChevronRight, Users, Target, RefreshCw, Edit, Star, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Users, Target, RefreshCw, Edit, Star, AlertTriangle, Link2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmployeesWithCargo } from '@/hooks/useEmployees';
 import { useFechamentoMetricas } from '@/hooks/useFechamentoMetricas';
 import { formatCurrency } from '@/lib/formatters';
 import { EditIndividualPlanDialog } from './EditIndividualPlanDialog';
+import { LinkSdrDialog } from './LinkSdrDialog';
 import { toast } from 'sonner';
 
 // Mapeamento de BU para departamento
@@ -103,6 +104,12 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
   
   // Estado do dialog de sincronização
   const [syncDialog, setSyncDialog] = useState(false);
+  
+  // Estado do dialog de vinculação SDR
+  const [linkDialog, setLinkDialog] = useState<{
+    open: boolean;
+    employee: { id: string; nome_completo: string; departamento: string | null; email_pessoal?: string | null } | null;
+  }>({ open: false, employee: null });
 
   const anoMes = format(selectedDate, 'yyyy-MM');
   const queryClient = useQueryClient();
@@ -618,9 +625,15 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
                           )}
                         </div>
                         {!emp.sdr_id && (
-                          <span className="text-[10px] text-yellow-500 block">
-                            Sem vínculo SDR
-                          </span>
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0 text-[10px] text-yellow-500 hover:text-yellow-600"
+                            onClick={() => setLinkDialog({ open: true, employee: { id: emp.id, nome_completo: emp.nome_completo, departamento: emp.departamento } })}
+                          >
+                            <Link2 className="h-3 w-3 mr-0.5" />
+                            Vincular SDR
+                          </Button>
                         )}
                       </TableCell>
                       <TableCell>
@@ -810,6 +823,12 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Dialog de Vinculação SDR */}
+      <LinkSdrDialog
+        open={linkDialog.open}
+        onOpenChange={(open) => setLinkDialog(prev => ({ ...prev, open }))}
+        employee={linkDialog.employee}
+      />
     </>
   );
 };
