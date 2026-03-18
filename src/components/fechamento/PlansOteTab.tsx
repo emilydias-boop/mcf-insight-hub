@@ -28,7 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ChevronLeft, ChevronRight, Users, Target, RefreshCw, Edit, Star, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Users, Target, RefreshCw, Edit, Star, AlertTriangle, Link2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmployeesWithCargo } from '@/hooks/useEmployees';
 import { useFechamentoMetricas } from '@/hooks/useFechamentoMetricas';
