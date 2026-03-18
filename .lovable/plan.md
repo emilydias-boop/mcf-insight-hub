@@ -1,43 +1,39 @@
 
 
-## Plano: Metas dinâmicas baseadas em R1 Agendada
+## Objetivo
 
-### Lógica atual
-Todas as 8 metas (dia/semana/mês) vêm de valores fixos no banco (`team_targets`).
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Nova lógica
-Apenas **Agendamento** e **R1 Agendada** mantêm meta fixa do banco. As demais são calculadas dinamicamente:
+## Mudanças
 
-| Métrica | Meta = |
-|---|---|
-| Agendamento | Fixa (banco) |
-| R1 Agendada | Fixa (banco) |
-| R1 Realizada | 70% do **valor atual** de R1 Agendada |
-| No-Show | 30% do **valor atual** de R1 Agendada |
-| Contrato Pago | 30% da **meta** de R1 Realizada |
-| R2 Agendada | Fixa (banco / agenda) |
-| R2 Realizada | 70% do **valor atual** de R2 Agendada |
-| Venda Realizada | 30% do **valor atual** de R2 Agendada |
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-### Mudança técnica
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**Arquivo:** `src/components/sdr/TeamGoalsPanel.tsx`
+### 2. Hook `useCloserDetailData.ts`
 
-Alterar os `useMemo` de `dayTargets`, `weekTargets` e `monthTargets` para calcular as metas derivadas a partir dos valores reais (`dayValues`, `weekValues`, `monthValues`):
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-```typescript
-const dayTargets = useMemo(() => ({
-  agendamento: getTargetValue('agendamento_dia'),
-  r1Agendada: getTargetValue('r1_agendada_dia'),
-  r1Realizada: Math.round(dayValues.r1Agendada * 0.7),
-  noShow: Math.round(dayValues.r1Agendada * 0.3),
-  contrato: Math.round(dayValues.r1Agendada * 0.7 * 0.3),
-  r2Agendada: getTargetValue('r2_agendada_dia'),
-  r2Realizada: Math.round(dayValues.r2Agendada * 0.7),
-  vendaRealizada: Math.round(dayValues.r2Agendada * 0.3),
-}), [targets, buPrefix, dayValues]);
-// Mesma lógica para weekTargets e monthTargets
-```
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Isso remove a necessidade de configurar manualmente as metas derivadas no banco, mantendo apenas Agendamento, R1 Agendada e R2 Agendada como editáveis.
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
