@@ -1,26 +1,39 @@
 
 
-## Problema
+## Objetivo
 
-No `LeadProfileSection.tsx`, linha 131, os valores dos campos usam a classe `truncate` que corta o texto com "..." quando é longo demais — especialmente problemático para campos como "Objetivos" que contêm listas.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-```tsx
-<p className="text-sm text-foreground truncate">...</p>
-```
+## Mudanças
 
-## Solução
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Trocar `truncate` por `break-words` para que o texto quebre em múltiplas linhas ao invés de ser cortado:
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-**Arquivo:** `src/components/crm/LeadProfileSection.tsx`, linha ~131
+### 2. Hook `useCloserDetailData.ts`
 
-```tsx
-// De:
-<p className="text-sm text-foreground truncate">
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-// Para:
-<p className="text-sm text-foreground break-words">
-```
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Mudança de uma única classe CSS. O texto longo agora será exibido por completo, quebrando linha quando necessário.
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 

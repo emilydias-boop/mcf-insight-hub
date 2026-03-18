@@ -128,7 +128,7 @@ export function LeadProfileSection({ contactId }: LeadProfileSectionProps) {
                 {filledFields.map(f => (
                   <div key={f.key} className="min-w-0">
                     <span className="text-[11px] text-muted-foreground">{f.label}</span>
-                    <p className="text-sm text-foreground truncate">{formatValue((profile as any)[f.key], f.format)}</p>
+                    <p className="text-sm text-foreground break-words">{formatValue((profile as any)[f.key], f.format)}</p>
                   </div>
                 ))}
               </div>
