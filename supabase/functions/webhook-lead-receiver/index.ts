@@ -417,6 +417,73 @@ serve(async (req) => {
 
     console.log('[WEBHOOK-RECEIVER] ✅ Deal criado:', deal.id);
 
+    // 11b. Partner detection — mover para Venda Realizada imediatamente
+    let partnerDetected = false;
+    if (contactEmail) {
+      const partnerCheck = await checkIfPartner(supabase, contactEmail);
+      if (partnerCheck.isPartner) {
+        partnerDetected = true;
+        console.log(`[WEBHOOK-RECEIVER] 🤝 Parceiro detectado: ${contactEmail} (${partnerCheck.product})`);
+
+        // Buscar stage "Venda Realizada" da mesma origin
+        const vendaRealizadaStageId = await getVendaRealizadaStageId(supabase, endpoint.origin_id);
+
+        if (vendaRealizadaStageId) {
+          // Mover deal para Venda Realizada
+          await supabase
+            .from('crm_deals')
+            .update({
+              stage_id: vendaRealizadaStageId,
+              tags: [...new Set([...autoTags, 'Parceiro'])],
+              updated_at: new Date().toISOString(),
+              stage_moved_at: new Date().toISOString(),
+            })
+            .eq('id', deal.id);
+
+          console.log(`[WEBHOOK-RECEIVER] ✅ Deal movido para Venda Realizada: ${vendaRealizadaStageId}`);
+        } else {
+          // Mesmo sem stage, adicionar tag Parceiro
+          await supabase
+            .from('crm_deals')
+            .update({ tags: [...new Set([...autoTags, 'Parceiro'])] })
+            .eq('id', deal.id);
+          console.log('[WEBHOOK-RECEIVER] ⚠️ Stage Venda Realizada não encontrada, tag Parceiro adicionada');
+        }
+
+        // Registrar em partner_returns para auditoria
+        try {
+          await supabase.from('partner_returns').insert({
+            contact_id: contactId,
+            contact_email: contactEmail,
+            contact_name: payload.name || payload.nome_completo || null,
+            partner_product: partnerCheck.product || 'parceria',
+            return_source: `webhook-${slug}`,
+            return_product: endpoint.name,
+            return_value: 0,
+            original_deal_id: deal.id,
+            blocked: false,
+            notes: `Parceiro detectado no webhook-lead-receiver (${slug}). Deal criado e movido para Venda Realizada.`,
+          } as any);
+        } catch (prErr) {
+          console.error('[WEBHOOK-RECEIVER] Erro ao registrar partner_returns:', prErr);
+        }
+
+        // Registrar deal_activity
+        try {
+          await supabase.from('deal_activities').insert({
+            deal_id: deal.id,
+            activity_type: 'stage_change',
+            description: `Parceiro detectado: movido automaticamente para Venda Realizada (produto: ${partnerCheck.product})`,
+            from_stage: stageId,
+            to_stage: vendaRealizadaStageId || stageId,
+            metadata: { source: 'webhook-lead-receiver', email: contactEmail, partner_product: partnerCheck.product },
+          });
+        } catch (actErr) {
+          console.error('[WEBHOOK-RECEIVER] Erro ao registrar deal_activity:', actErr);
+        }
+      }
+    }
+
     // 12. Upsert lead_profile com dados completos do ClientData
     await upsertLeadProfile(supabase, contactId, deal.id, payload, cpfClean, normalizedPhone);
 
@@ -426,13 +493,14 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        action: 'created',
+        action: partnerDetected ? 'created_partner_moved' : 'created',
         deal_id: deal.id,
         contact_id: contactId,
         assigned_owner: assignedOwner,
         endpoint: endpoint.name,
         tags: autoTags,
-        lead_profile: true
+        lead_profile: true,
+        partner_detected: partnerDetected
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -673,6 +741,65 @@ async function getContractPaidStageIds(supabaseClient: any, originId: string): P
   }
   
   return stageIds;
+}
+
+// ============ PARTNER DETECTION ============
+
+const PARTNER_PATTERNS = ['A001', 'A002', 'A003', 'A004', 'A009', 'INCORPORADOR', 'ANTICRISE'];
+
+async function checkIfPartner(
+  supabaseClient: any,
+  email: string
+): Promise<{ isPartner: boolean; product: string | null }> {
+  try {
+    const { data: txs } = await supabaseClient
+      .from('hubla_transactions')
+      .select('product_name')
+      .eq('customer_email', email.toLowerCase().trim())
+      .eq('sale_status', 'completed');
+
+    for (const tx of txs || []) {
+      if (!tx.product_name) continue;
+      const upper = tx.product_name.toUpperCase();
+      if (PARTNER_PATTERNS.some(p => upper.includes(p))) {
+        return { isPartner: true, product: tx.product_name };
+      }
+    }
+  } catch (err) {
+    console.error('[WEBHOOK-RECEIVER] Erro ao verificar parceiro:', err);
+  }
+  return { isPartner: false, product: null };
+}
+
+const FALLBACK_VENDA_REALIZADA_STAGE = '3a2776e2-a536-4a2a-bb7b-a2f53c8941df';
+
+async function getVendaRealizadaStageId(
+  supabaseClient: any,
+  originId: string
+): Promise<string | null> {
+  // Try crm_stages first
+  const { data: crmStage } = await supabaseClient
+    .from('crm_stages')
+    .select('id')
+    .eq('origin_id', originId)
+    .ilike('stage_name', '%venda realizada%')
+    .limit(1)
+    .maybeSingle();
+
+  if (crmStage) return crmStage.id;
+
+  // Try local_pipeline_stages
+  const { data: localStage } = await supabaseClient
+    .from('local_pipeline_stages')
+    .select('id')
+    .eq('origin_id', originId)
+    .ilike('name', '%venda realizada%')
+    .limit(1)
+    .maybeSingle();
+
+  if (localStage) return localStage.id;
+
+  return FALLBACK_VENDA_REALIZADA_STAGE;
 }
 
 function normalizePhone(phone: string | null | undefined): string | null {
