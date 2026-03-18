@@ -1,39 +1,45 @@
 
 
-## Objetivo
+## Problema
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+O `webhook-lead-receiver` (usado pelo ClientData/anamnese e outros webhooks customizados) **não tem detecção de parceiros**. Leads que são parceiros conhecidos entram normalmente como "Novo Lead" e só são movidos para "Venda Realizada" pelo cron job a cada 6 horas.
 
-## Mudanças
+Em contraste, o `hubla-webhook-handler` já possui essa lógica: verifica o email contra `hubla_transactions`, detecta padrões de parceria (A001-A009, INCORPORADOR, ANTICRISE), bloqueia a criação do deal e registra em `partner_returns`.
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+## Solução
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+Adicionar detecção de parceiros no `webhook-lead-receiver`, replicando a mesma lógica do `hubla-webhook-handler`. Quando um parceiro é detectado:
 
-### 2. Hook `useCloserDetailData.ts`
+1. **Não bloquear** a criação do deal (diferente do hubla — aqui o lead pode ter interesse genuíno em outro produto)
+2. **Mover diretamente** para o estágio "Venda Realizada" da pipeline
+3. **Adicionar tag "Parceiro"** ao deal
+4. **Registrar em `partner_returns`** para auditoria
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+### Arquivo: `supabase/functions/webhook-lead-receiver/index.ts`
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+**Adicionar função helper** (similar ao hubla):
+```typescript
+async function checkIfPartner(supabase, email) {
+  // Busca hubla_transactions com sale_status=completed
+  // Verifica padrões: A001-A009, INCORPORADOR, ANTICRISE
+  // Retorna { isPartner, product }
+}
+```
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+**Após criar o deal (passo 11)**, adicionar verificação:
+```typescript
+// 11b. Partner detection - mover para Venda Realizada se parceiro
+if (contactEmail) {
+  const partnerCheck = await checkIfPartner(supabase, contactEmail);
+  if (partnerCheck.isPartner) {
+    // Buscar stage "Venda Realizada" da mesma origin
+    // Mover deal para essa stage
+    // Adicionar tag "Parceiro"
+    // Registrar em partner_returns
+    // Registrar deal_activity
+  }
+}
+```
 
-### 4. Dados exportados no Excel
-
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
-
-Formato de data: `dd/MM/yyyy HH:mm`
-
-## Resultado
-
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+Dessa forma, parceiros que entram pelo webhook customizado são criados e imediatamente movidos para "Venda Realizada" com a tag "Parceiro", sem precisar esperar o cron de 6 horas.
 
