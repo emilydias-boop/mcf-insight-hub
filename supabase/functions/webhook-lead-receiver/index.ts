@@ -269,6 +269,27 @@ serve(async (req) => {
       
       // Mesmo com deal duplicado, atualiza o lead_profile
       await upsertLeadProfile(supabase, contactId, existingDeal.id, payload, cpfClean, normalizedPhone);
+
+      // Adicionar auto_tags ao deal existente (se houver)
+      if (autoTags.length > 0) {
+        const { data: currentDeal } = await supabase
+          .from('crm_deals')
+          .select('tags')
+          .eq('id', existingDeal.id)
+          .single();
+        
+        const currentTags: string[] = (currentDeal?.tags as string[]) || [];
+        const newTags = [...new Set([...currentTags, ...autoTags])];
+        
+        if (newTags.length !== currentTags.length) {
+          await supabase
+            .from('crm_deals')
+            .update({ tags: newTags })
+            .eq('id', existingDeal.id);
+          console.log('[WEBHOOK-RECEIVER] Tags adicionadas ao deal existente:', newTags);
+        }
+      }
+
       await updateEndpointMetrics(supabase, endpoint.id);
       
       return new Response(
