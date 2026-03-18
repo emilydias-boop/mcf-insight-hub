@@ -1,41 +1,39 @@
 
 
-## Plano: Adicionar exportação de leads filtrados no Limbo
+## Objetivo
 
-### Problema
-A página Limbo só permite exportar "Não Encontrados". O usuário precisa exportar os leads **filtrados** (qualquer combinação de filtros).
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Mudança
+## Mudanças
 
-**Arquivo:** `src/pages/crm/LeadsLimbo.tsx`
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Adicionar um botão "Exportar Filtrados" ao lado do "Exportar Não Encontrados" (linha ~635). O botão exporta o array `filtered` (que já aplica todos os filtros ativos: status, estágio, dono, busca) para Excel.
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-```typescript
-const exportFiltered = () => {
-  if (!filtered.length) return;
-  const wsData = filtered.map(r => ({
-    'Nome (Clint)': r.excelName,
-    Email: r.excelEmail,
-    Telefone: r.excelPhone || '',
-    Tags: r.excelStage || '',
-    'Criado em': r.createdAt || '',
-    'Últ. Mov.': r.lostAt || '',
-    Status: r.status === 'com_dono' ? 'Com Dono' : r.status === 'sem_dono' ? 'Sem Dono' : 'Não Encontrado',
-    'Dono Atual': r.localOwner || r.excelOwner || '',
-  }));
-  const ws = XLSX.utils.json_to_sheet(wsData);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Leads Filtrados');
-  XLSX.writeFile(wb, `leads-limbo-filtrados-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
-  toast.success(`${filtered.length} leads exportados`);
-};
-```
+### 2. Hook `useCloserDetailData.ts`
 
-Botão na barra de ações:
-```tsx
-<Button variant="outline" size="sm" onClick={exportFiltered} disabled={filtered.length === 0}>
-  <Download className="h-4 w-4 mr-1" /> Exportar Filtrados ({filtered.length})
-</Button>
-```
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
