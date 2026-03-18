@@ -1,42 +1,39 @@
 
 
-## Problema
+## Objetivo
 
-A view `user_performance_summary` (que alimenta a listagem de usuários) determina o status usando `COALESCE(ued.is_active, true)` da tabela `user_employment_data` -- que é um dado de RH legado. Ela **ignora completamente** o campo `profiles.access_status`, que é onde o sistema realmente grava "desativado" quando um admin desativa o usuário.
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Resultado: Yanca tem `profiles.access_status = 'desativado'`, mas a view retorna `is_active = true` porque o `user_employment_data` dela não foi atualizado (ou nem existe, e o `COALESCE` força `true`).
+## Mudanças
 
-## Solução
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Recriar a view `user_performance_summary` incluindo `profiles.access_status` e derivando `is_active` a partir dele:
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-```sql
-DROP VIEW IF EXISTS user_performance_summary;
+### 2. Hook `useCloserDetailData.ts`
 
-CREATE VIEW user_performance_summary AS
-SELECT 
-  p.id AS user_id,
-  p.email,
-  p.full_name,
-  ur.role,
-  ued."position",
-  ued.department,
-  ued.hire_date,
-  CASE 
-    WHEN p.access_status = 'desativado' THEN false
-    WHEN p.access_status = 'bloqueado' THEN false
-    ELSE COALESCE(ued.is_active, true)
-  END AS is_active,
-  COALESCE(ued.status, 'ativo'::user_status) AS status,
-  ued.fixed_salary,
-  ued.ote,
-  ued.commission_rate
-FROM profiles p
-LEFT JOIN user_roles ur ON ur.user_id = p.id
-LEFT JOIN user_employment_data ued ON ued.user_id = p.id;
-```
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-Mudança: `is_active` agora respeita `profiles.access_status`. Se o perfil está desativado ou bloqueado, `is_active = false` independente do dado de employment.
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-Uma única migration SQL. Nenhuma alteração no frontend necessária.
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
