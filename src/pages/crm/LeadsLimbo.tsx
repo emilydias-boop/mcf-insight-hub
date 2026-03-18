@@ -475,6 +475,26 @@ export default function LeadsLimbo() {
     toast.success(`${nf.length} leads exportados`);
   };
 
+  // Export leads filtrados
+  const exportFiltered = () => {
+    if (!filtered.length) return;
+    const wsData = filtered.map(r => ({
+      'Nome': r.excelName,
+      'Email': r.excelEmail,
+      'Telefone': r.excelPhone || '',
+      'Tags': r.excelStage || '',
+      'Criado em': r.createdAt || '',
+      'Últ. Mov.': r.lostAt || '',
+      'Status': r.status === 'com_dono' ? 'Com Dono' : r.status === 'sem_dono' ? 'Sem Dono' : 'Não Encontrado',
+      'Dono Atual': r.localOwner || r.excelOwner || '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Leads Filtrados');
+    XLSX.writeFile(wb, `leads-limbo-filtrados-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    toast.success(`${filtered.length} leads exportados`);
+  };
+
   // ─── RENDER ────────────────────────────────────────────
 
   // Loading persisted upload
