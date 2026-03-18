@@ -104,6 +104,12 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
   
   // Estado do dialog de sincronização
   const [syncDialog, setSyncDialog] = useState(false);
+  
+  // Estado do dialog de vinculação SDR
+  const [linkDialog, setLinkDialog] = useState<{
+    open: boolean;
+    employee: { id: string; nome_completo: string; departamento: string | null; email_pessoal?: string | null } | null;
+  }>({ open: false, employee: null });
 
   const anoMes = format(selectedDate, 'yyyy-MM');
   const queryClient = useQueryClient();
