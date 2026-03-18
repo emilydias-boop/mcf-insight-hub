@@ -483,8 +483,8 @@ export default function LeadsLimbo() {
       'Email': r.excelEmail,
       'Telefone': r.excelPhone || '',
       'Tags': r.excelStage || '',
-      'Criado em': r.createdAt || '',
-      'Últ. Mov.': r.lostAt || '',
+      'Criado em': r.excelCreatedAt || '',
+      'Últ. Mov.': r.excelLostAt || '',
       'Status': r.status === 'com_dono' ? 'Com Dono' : r.status === 'sem_dono' ? 'Sem Dono' : 'Não Encontrado',
       'Dono Atual': r.localOwner || r.excelOwner || '',
     }));
