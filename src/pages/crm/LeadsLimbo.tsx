@@ -652,6 +652,9 @@ export default function LeadsLimbo() {
           )}
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={exportFiltered} disabled={filtered.length === 0}>
+            <Download className="h-4 w-4 mr-1" /> Exportar Filtrados ({filtered.length})
+          </Button>
           <Button variant="outline" size="sm" onClick={exportNotFound} disabled={counts.nao_encontrado === 0}>
             <Download className="h-4 w-4 mr-1" /> Exportar Não Encontrados ({counts.nao_encontrado})
           </Button>
