@@ -1,56 +1,39 @@
 
 
-## Diagnóstico: Hellen, Marcio e Mayara não aparecem no dropdown de SDRs
+## Objetivo
 
-### Causa raiz
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-Os 3 SDRs estão cadastrados na tabela `sdr` com `squad = 'credito'`, mas a Agenda R1 usa `activeBU = 'incorporador'`. O hook `useSdrsByBU` filtra por `.eq('squad', bu)`, então eles ficam invisíveis.
+## Mudanças
 
-```text
-sdr table:
-  Hellen Costa   → squad: credito  ← deveria ser incorporador
-  Marcio Dantas  → squad: credito  ← deveria ser incorporador
-  Mayara Souza   → squad: credito  ← deveria ser incorporador
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-employees table:
-  Hellen Costa   → departamento: Inside
-  Marcio Dantas  → departamento: (vazio)
-  Mayara Souza   → departamento: Inside
-```
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-O trigger `trg_auto_link_employee_sdr` mapeia departamento → squad. "Inside" não está no mapeamento (que espera "BU - Incorporador 50K", "BU - Consorcio", etc.), então caiu no default "credito".
+### 2. Hook `useCloserDetailData.ts`
 
-### Solução
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
 
-Uma migration simples para corrigir o squad dos 3 SDRs:
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
 
-**Arquivo:** `supabase/migrations/[timestamp]_fix_sdr_squad_hellen_marcio_mayara.sql`
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
 
-```sql
-UPDATE sdr SET squad = 'incorporador'
-WHERE email IN (
-  'hellen.costa@minhacasafinanciada.com',
-  'marcio.dantas@minhacasafinanciada.com',
-  'mayara.souza@minhacasafinanciada.com'
-);
-```
+### 4. Dados exportados no Excel
 
-Opcionalmente, também corrigir o `departamento` dos employees para evitar reincidência se o trigger rodar novamente:
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
 
-```sql
-UPDATE employees SET departamento = 'BU - Incorporador 50K'
-WHERE id IN (
-  '87b21ce1-e9c7-4b7c-8b3c-8f29ba179ed7',
-  '47f20a2a-c4e9-41a5-bf91-23ce0149b079',
-  '40f66bf5-63c7-40d5-b4c7-3eca5fed1113'
-);
-```
+Formato de data: `dd/MM/yyyy HH:mm`
 
-### Impacto
+## Resultado
 
-Após a correção, Hellen, Marcio e Mayara aparecem imediatamente no dropdown "SDR Responsável" da Agenda R1 e em todos os dashboards que filtram por `squad = 'incorporador'`.
-
-### Prevenção futura (opcional)
-
-Adicionar "Inside" ao mapeamento do trigger `trg_auto_link_employee_sdr` para que novos colaboradores com departamento "Inside" sejam mapeados automaticamente para `squad = 'incorporador'`.
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
