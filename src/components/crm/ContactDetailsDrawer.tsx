@@ -4,7 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useCRMContacts, useCRMDeals } from '@/hooks/useCRMData';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { useContactDeals } from '@/hooks/useContactDeals';
 import { useA010Journey } from '@/hooks/useA010Journey';
 import { ContactNotesSection } from './ContactNotesSection';
@@ -30,8 +31,19 @@ interface ContactDetailsDrawerProps {
 }
 
 export const ContactDetailsDrawer = ({ contactId, open, onOpenChange }: ContactDetailsDrawerProps) => {
-  const { data: contacts, isLoading } = useCRMContacts();
-  const contactData = contacts?.find((c: any) => c.id === contactId);
+  const { data: contactData, isLoading } = useQuery({
+    queryKey: ['crm-contact-detail', contactId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_contacts')
+        .select('*')
+        .eq('id', contactId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!contactId && open,
+  });
 
   // Get ALL deals for this contact (no exclusion)
   const { data: allDeals } = useContactDeals(contactId || undefined, undefined);

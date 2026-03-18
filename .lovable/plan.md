@@ -1,37 +1,39 @@
 
 
-## Plano: Corrigir "Contato não encontrado" no Drawer
+## Objetivo
 
-### Problema
-O `ContactDetailsDrawer` usa `useCRMContacts()` que carrega **todos** os contatos da tabela, e depois faz `.find(id)`. Com uma base grande, o contato buscado pode não estar no resultado (limite de linhas do Supabase ou timeout), resultando em "Contato não encontrado".
+Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
 
-### Solução
-Substituir a busca em lista por uma query direta por ID.
+## Mudanças
 
-**Arquivo:** `src/components/crm/ContactDetailsDrawer.tsx`
+### 1. Página `MeuDesempenhoCloser.tsx`
 
-Trocar:
-```typescript
-const { data: contacts, isLoading } = useCRMContacts();
-const contactData = contacts?.find((c: any) => c.id === contactId);
-```
+- Renomear aba de "Leads Realizados" para "Meus Leads"
+- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
+- Passar todos os leads para o componente de tabela atualizado
+- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
 
-Por uma query dedicada que busca o contato diretamente:
-```typescript
-const { data: contactData, isLoading } = useQuery({
-  queryKey: ['crm-contact-detail', contactId],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from('crm_contacts')
-      .select('*')
-      .eq('id', contactId!)
-      .maybeSingle();
-    if (error) throw error;
-    return data;
-  },
-  enabled: !!contactId && open,
-});
-```
+### 2. Hook `useCloserDetailData.ts`
 
-Isso elimina a dependência de carregar toda a tabela e garante que qualquer contato existente seja encontrado.
+- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
+- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+
+### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+
+- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
+- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
+  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
+- Adicionar contadores por status no topo (badges)
+- Filtro client-side sobre a lista combinada
+
+### 4. Dados exportados no Excel
+
+| Data | Nome | Telefone | Email | Status | SDR | Origem |
+|------|------|----------|-------|--------|-----|--------|
+
+Formato de data: `dd/MM/yyyy HH:mm`
+
+## Resultado
+
+O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
 
