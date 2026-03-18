@@ -34,6 +34,7 @@ import { useEmployeesWithCargo } from '@/hooks/useEmployees';
 import { useFechamentoMetricas } from '@/hooks/useFechamentoMetricas';
 import { formatCurrency } from '@/lib/formatters';
 import { EditIndividualPlanDialog } from './EditIndividualPlanDialog';
+import { LinkSdrDialog } from './LinkSdrDialog';
 import { toast } from 'sonner';
 
 // Mapeamento de BU para departamento
