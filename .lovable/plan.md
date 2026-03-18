@@ -1,39 +1,56 @@
 
 
-## Objetivo
+## Diagnóstico: Lead duplicado "Figia"
 
-Transformar a aba "Leads Realizados" do "Meu Desempenho" em uma visão completa de **todos os leads** do closer (realizados, no-shows, contrato pago, agendados), com filtros por status e exportação Excel para facilitar follow-up.
+### O que aconteceu
 
-## Mudanças
+A mesma pessoa se cadastrou **duas vezes com dados diferentes**:
 
-### 1. Página `MeuDesempenhoCloser.tsx`
+| | Deal 1 (Clint) | Deal 2 (Importação) |
+|---|---|---|
+| Nome | Figia Griebler Giacomel | Figia Vetta |
+| Email | figiagrieblergiacomel@gmail.com | figiaengcvill@gmail.com |
+| Telefone | 47997050504 (11 dígitos) | 47 97050504 (10 dígitos) |
+| Owner | mayara.souza@ | juliana.rodrigues@ |
+| clint_id | 55f5af4c... (Clint) | local-177... (planilha) |
 
-- Renomear aba de "Leads Realizados" para "Meus Leads"
-- Combinar `leads` + `noShowLeads` + leads agendados (buscar do hook) em uma lista unificada
-- Passar todos os leads para o componente de tabela atualizado
-- O hook `useCloserDetailData` já retorna `leads`, `noShowLeads` e `r2Leads` — basta usá-los
+**Por que o sistema não detectou?**
+- Emails diferentes → match por email falhou
+- O telefone do Deal 2 tem **10 dígitos** (`4797050504`) em vez de 11 (`47997050504`) — falta o dígito `9` do celular
+- O sistema usa os **últimos 9 dígitos**: `997050504` vs `797050504` → **não batem**
 
-### 2. Hook `useCloserDetailData.ts`
+### Problema raiz
 
-- Adicionar query para buscar leads **agendados** (status `scheduled`, `rescheduled`) do closer no período — atualmente só busca `completed`/`contract_paid` e `no_show` separadamente
-- Criar uma propriedade `allLeads` que concatena leads realizados + no-shows + agendados
+A deduplicação por telefone usa `slice(-9)` assumindo formato `DDD + 9 dígitos`. Mas quando o telefone chega com formato incorreto (faltando o `9` do celular), os sufixos divergem e o match falha.
 
-### 3. Componente `CloserLeadsTable.tsx` → Refatorar para "Meus Leads"
+### Solução: Deduplicação por 8 dígitos (fallback)
 
-- Adicionar **filtro por status** (Select dropdown): Todos, Realizada, Contrato Pago, No-Show, Agendada
-- Adicionar **botão Exportar Excel** usando a lib `xlsx` já instalada
-  - Colunas: Data, Nome, Telefone, Email, Status, SDR, Origem
-- Adicionar contadores por status no topo (badges)
-- Filtro client-side sobre a lista combinada
+Usar os **últimos 8 dígitos** como fallback quando os últimos 9 não encontram match. Isso ignora o dígito `9` variável e compara apenas o número fixo do assinante.
 
-### 4. Dados exportados no Excel
+**Arquivos afetados:**
 
-| Data | Nome | Telefone | Email | Status | SDR | Origem |
-|------|------|----------|-------|--------|-----|--------|
+1. **`supabase/functions/import-spreadsheet-leads/index.ts`** (linhas 93-100)
+   - Após falha no match por 9 dígitos, tentar com últimos 8
 
-Formato de data: `dd/MM/yyyy HH:mm`
+2. **`supabase/functions/clint-webhook-handler/index.ts`** (linhas 630-649)
+   - Mesmo fallback de 8 dígitos no handler de criação de deal
 
-## Resultado
+3. **`supabase/functions/webhook-lead-receiver/index.ts`** e **`webhook-live-leads/index.ts`**
+   - Aplicar mesma lógica de fallback para consistência
 
-O closer verá todos os seus leads em uma única tabela filtrada, podendo identificar rapidamente no-shows para follow-up e exportar a lista completa para trabalho offline.
+**Lógica:**
+
+```typescript
+// Busca padrão: últimos 9 dígitos
+const phoneSuffix9 = phoneClean.slice(-9);
+let existingContact = await findByPhone(phoneSuffix9);
+
+// Fallback: últimos 8 dígitos (ignora dígito 9 variável)
+if (!existingContact) {
+  const phoneSuffix8 = phoneClean.slice(-8);
+  existingContact = await findByPhone(phoneSuffix8);
+}
+```
+
+4. **Correção de dados**: Unificar os 4 contatos duplicados de "Figia" e manter apenas 1 deal na pipeline.
 
