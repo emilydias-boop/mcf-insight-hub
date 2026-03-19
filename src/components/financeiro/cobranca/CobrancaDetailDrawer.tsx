@@ -291,6 +291,7 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
                   isLoading={loadingInst}
                   onMarkPaid={handleMarkPaid}
                   onRegisterPayment={handleRegisterPayment}
+                  receivablesMap={receivablesMap}
                 />
               </TabsContent>
               <TabsContent value="acordos" className="mt-4">
