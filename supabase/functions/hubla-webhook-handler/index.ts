@@ -1708,6 +1708,22 @@ serve(async (req) => {
 
         if (error) throw error;
 
+        // 💳 BILLING: Sincronização automática de cobranças
+        await syncBillingFromTransaction(supabase, {
+          customer_email: transactionData.customer_email,
+          customer_name: transactionData.customer_name,
+          customer_phone: transactionData.customer_phone,
+          product_name: productName,
+          product_category: productCategory,
+          product_price: productPrice,
+          net_value: netValue,
+          installment_number: installment,
+          total_installments: installments,
+          sale_date: saleDate,
+          transaction_id: transactionData.hubla_id,
+          payment_method: transactionData.payment_method,
+        });
+
         // Se for A010 e for primeira parcela, inserir na tabela a010_sales e criar contato/deal no CRM
         if (productCategory === 'a010' && installment === 1) {
           await supabase
