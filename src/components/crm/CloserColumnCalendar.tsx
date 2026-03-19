@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect } from "react";
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Settings, Plus, ArrowRightLeft, DollarSign, UserCircle, UserPlus } from "lucide-react";
+import { Settings, Plus, ArrowRightLeft, DollarSign, UserCircle, UserPlus, Lock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { MeetingSlot, CloserWithAvailability, BlockedDate } from "@/hooks/useAgendaData";
