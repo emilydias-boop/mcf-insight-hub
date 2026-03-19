@@ -1086,16 +1086,21 @@ export function QuickScheduleModal({
 
           {/* Slot availability indicator with already_builds breakdown */}
           {selectedCloser && selectedDate && slotAvailability && (
-            <div className="p-2 rounded-md text-sm bg-muted space-y-1">
+            <div className={cn(
+              "p-2 rounded-md text-sm space-y-1",
+              !slotAvailability.available 
+                ? "bg-destructive/10 border border-destructive/30" 
+                : "bg-muted"
+            )}>
               <div className="flex items-center justify-between">
                 <span>
                   Lead {detectedLeadType} às {selectedTime}
                 </span>
                 <span className="font-medium">
-                  {slotAvailability.currentCount === 0 
-                    ? 'Ainda não possui agendamento'
-                    : `Já possui ${slotAvailability.currentCount} agendamento${slotAvailability.currentCount !== 1 ? 's' : ''}`
-                  }
+                  {slotAvailability.currentCount}/{slotAvailability.maxLeads ?? 4} leads
+                  {!slotAvailability.available && (
+                    <Badge variant="destructive" className="ml-2 text-[10px]">Lotado</Badge>
+                  )}
                 </span>
               </div>
               {slotAvailability.currentCount > 0 && slotAvailability.attendees && (
