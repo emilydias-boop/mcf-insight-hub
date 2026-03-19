@@ -445,12 +445,13 @@ export function QuickScheduleModal({
     return [...new Set(closerSlots)].sort();
   }, [closerDaySlots, selectedCloser, dayOfWeek]);
 
-  // Get time slot status (count only, no limit)
+  // Get time slot status with capacity check
   const getTimeSlotStatus = useCallback((time: string) => {
-    if (!slotAvailability || time !== selectedTime) return { isFull: false };
+    if (!slotAvailability || time !== selectedTime) return { isFull: false, count: 0, maxLeads: 4 };
     return { 
-      isFull: false,
+      isFull: !slotAvailability.available,
       count: slotAvailability.currentCount,
+      maxLeads: slotAvailability.maxLeads ?? 4,
     };
   }, [slotAvailability, selectedTime]);
 
@@ -1085,16 +1086,21 @@ export function QuickScheduleModal({
 
           {/* Slot availability indicator with already_builds breakdown */}
           {selectedCloser && selectedDate && slotAvailability && (
-            <div className="p-2 rounded-md text-sm bg-muted space-y-1">
+            <div className={cn(
+              "p-2 rounded-md text-sm space-y-1",
+              !slotAvailability.available 
+                ? "bg-destructive/10 border border-destructive/30" 
+                : "bg-muted"
+            )}>
               <div className="flex items-center justify-between">
                 <span>
                   Lead {detectedLeadType} às {selectedTime}
                 </span>
                 <span className="font-medium">
-                  {slotAvailability.currentCount === 0 
-                    ? 'Ainda não possui agendamento'
-                    : `Já possui ${slotAvailability.currentCount} agendamento${slotAvailability.currentCount !== 1 ? 's' : ''}`
-                  }
+                  {slotAvailability.currentCount}/{slotAvailability.maxLeads ?? 4} leads
+                  {!slotAvailability.available && (
+                    <Badge variant="destructive" className="ml-2 text-[10px]">Lotado</Badge>
+                  )}
                 </span>
               </div>
               {slotAvailability.currentCount > 0 && slotAvailability.attendees && (
@@ -1195,10 +1201,20 @@ export function QuickScheduleModal({
           <Button 
             className="w-full" 
             onClick={handleSubmit}
-            disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending}
+            disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending || (!isCoordinatorOrAbove && slotAvailability?.available === false)}
           >
-            {createMeeting.isPending ? 'Agendando...' : 'Agendar Reunião'}
+            {createMeeting.isPending 
+              ? 'Agendando...' 
+              : (!isCoordinatorOrAbove && slotAvailability?.available === false)
+                ? 'Horário lotado'
+                : 'Agendar Reunião'
+            }
           </Button>
+          {isCoordinatorOrAbove && slotAvailability?.available === false && (
+            <p className="text-xs text-amber-600 text-center mt-1">
+              ⚠️ Slot lotado — agendando como coordenador
+            </p>
+          )}
         </div>
       </DialogContent>
     </Dialog>
