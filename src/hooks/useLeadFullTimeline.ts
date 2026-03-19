@@ -91,6 +91,41 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           : Promise.resolve({ data: [], error: null }),
       ]);
 
+      // Resolve stage UUIDs to names
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const stageUuids = new Set<string>();
+      if (activitiesRes.data) {
+        for (const act of activitiesRes.data) {
+          const aType = act.activity_type || '';
+          if (aType === 'stage_change' || aType === 'stage_changed') {
+            const meta = (act.metadata as Record<string, any>) || {};
+            const from = act.from_stage || meta.from_stage || '';
+            const to = act.to_stage || meta.to_stage || '';
+            if (UUID_RE.test(from)) stageUuids.add(from.toLowerCase());
+            if (UUID_RE.test(to)) stageUuids.add(to.toLowerCase());
+          }
+        }
+      }
+
+      let stageNameMap: Record<string, string> = {};
+      if (stageUuids.size > 0) {
+        const { data: stages } = await supabase
+          .from('crm_stages')
+          .select('id, stage_name')
+          .in('id', [...stageUuids]);
+        if (stages) {
+          for (const s of stages) {
+            stageNameMap[s.id.toLowerCase()] = s.stage_name;
+          }
+        }
+      }
+
+      const resolveStageName = (val: string | null | undefined): string => {
+        if (!val) return '?';
+        if (UUID_RE.test(val)) return stageNameMap[val.toLowerCase()] || val;
+        return val;
+      };
+
       // Process deal_activities
       if (activitiesRes.data) {
         for (const act of activitiesRes.data) {
@@ -98,14 +133,16 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           const meta = (act.metadata as Record<string, any>) || {};
 
           if (actType === 'stage_change' || actType === 'stage_changed') {
+            const fromName = resolveStageName(act.from_stage || meta.from_stage);
+            const toName = resolveStageName(act.to_stage || meta.to_stage);
             events.push({
               id: act.id,
               type: 'stage_change',
-              title: `${act.from_stage || meta.from_stage || '?'} → ${act.to_stage || meta.to_stage || '?'}`,
+              title: `${fromName} → ${toName}`,
               description: act.description,
               date: act.created_at,
               author: meta.owner_email || meta.deal_user || meta.changed_by || null,
-              metadata: { from_stage: act.from_stage, to_stage: act.to_stage, ...meta },
+              metadata: { from_stage: fromName, to_stage: toName, ...meta },
             });
           } else if (actType === 'note' || actType === 'manual_note') {
             events.push({
