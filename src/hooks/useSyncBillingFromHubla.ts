@@ -34,7 +34,7 @@ export const useSyncBillingFromHubla = () => {
       queryClient.invalidateQueries({ queryKey: ['billing-subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['billing-kpis'] });
       toast.success(
-        `Sincronização concluída: ${data.subsCreated} criadas, ${data.subsUpdated} atualizadas, ${data.installmentsCreated} parcelas`
+        `Sincronização concluída: ${data.subsCreated} criadas, ${data.subsUpdated} atualizadas, ${data.installmentsCreated} parcelas criadas, ${data.installmentsUpdated} parcelas atualizadas`
       );
     },
     onError: (error: any) => {
