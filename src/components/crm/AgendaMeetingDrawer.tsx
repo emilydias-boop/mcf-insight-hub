@@ -487,6 +487,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         id: att.id,
         name,
         phone,
+        contactId: att.contact_id || parentAttendee?.contact_id || attendeeMeeting.contact_id,
         dealId: att.deal_id || parentAttendee?.deal_id || attendeeMeeting.deal_id,
         isPartner: att.is_partner || false,
         notifiedAt: att.notified_at,
