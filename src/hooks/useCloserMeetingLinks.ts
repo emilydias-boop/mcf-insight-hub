@@ -21,7 +21,8 @@ interface CreateLinkParams {
 
 interface UpdateLinkParams {
   id: string;
-  google_meet_link: string;
+  google_meet_link?: string;
+  max_leads?: number | null;
 }
 
 export function useCloserMeetingLinksList(closerId?: string, dayOfWeek?: number) {
