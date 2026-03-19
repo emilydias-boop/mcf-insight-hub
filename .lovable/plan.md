@@ -1,23 +1,42 @@
 
 
-## Plano: Corrigir valor_pago = 0 nas parcelas do backfill
+## Plano: Corrigir regra de valor_pago (bruto na 1a, líquido nas demais)
 
-### Causa Raiz
+### Problema
 
-A migration de backfill usou `COALESCE(tx_net_value, tx_product_price, valor_original)`. Porém, 1.067 transações Hubla têm `net_value = 0` (zero, não NULL). O COALESCE retorna 0 porque 0 não é NULL — ignorando o `product_price` que tem o valor real.
+A lógica anterior tratou todas as parcelas igualmente com `COALESCE(NULLIF(net_value, 0), product_price, ...)`. Na Hubla, a primeira parcela sempre reporta o valor bruto (`product_price`) e as demais o líquido (`net_value`). Resultado: 1.645 primeiras parcelas estão com valor errado.
 
-Exemplo do Guilherme: parcela #2 linkada à transação `e8160659` que tem `net_value=0, product_price=?`. Resultado: `valor_pago = 0`.
+### Correção (2 partes)
 
-### Correção
+**Parte 1: Migration SQL** — Corrigir dados existentes
 
-**Migration SQL** para corrigir as 1.067 parcelas afetadas:
+```sql
+UPDATE billing_installments bi
+SET valor_pago = CASE 
+    WHEN bi.numero_parcela = 1 THEN COALESCE(NULLIF(ht.product_price, 0), bi.valor_original)
+    ELSE COALESCE(NULLIF(ht.net_value, 0), ht.product_price, bi.valor_original)
+  END
+FROM hubla_transactions ht
+WHERE bi.hubla_transaction_id = ht.id AND bi.status = 'pago';
+```
 
-1. Para cada `billing_installment` com `status = 'pago'` e `valor_pago = 0` que tenha `hubla_transaction_id`:
-   - Buscar o `product_price` da `hubla_transaction` vinculada
-   - Atualizar `valor_pago = COALESCE(NULLIF(ht.net_value, 0), ht.product_price, bi.valor_original)`
-2. Recalcular `status_quitacao` e totais das subscriptions afetadas
+Seguido de recalcular `status_quitacao` das subscriptions afetadas.
+
+**Parte 2: Sync function** — Aplicar mesma regra no `sync-billing-from-hubla`
+
+Alterar todas as linhas que calculam `valor_pago` para usar:
+- `product_price` quando `installment_number = 1`
+- `net_value` quando `installment_number > 1`
+
+### Arquivos
+
+| Arquivo | Ação |
+|---------|------|
+| Migration SQL (via ferramenta) | Corrigir 1.645 parcelas + recalcular subscriptions |
+| `supabase/functions/sync-billing-from-hubla/index.ts` | Alterar lógica de valor_pago para respeitar a regra bruto/líquido |
 
 ### Resultado
-- 1.067 parcelas terão o valor correto (ex: Guilherme parcela #2 mostrará o valor real em vez de "-")
-- KPIs de "Total Pago" e "Saldo Devedor" serão recalculados corretamente
+- Parcela 1 mostrará o valor bruto correto
+- Parcelas 2+ mostrarão o valor líquido correto
+- KPIs recalculados com valores reais
 
