@@ -1217,7 +1217,6 @@ export function AgendaCalendar({
                                   index={groupIndex}
                                 >
                                   {(dragProvided, dragSnapshot) => (
-                                    <>
                                     <TooltipProvider>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
