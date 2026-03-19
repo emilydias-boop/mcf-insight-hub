@@ -1,52 +1,33 @@
 
 
-## Plano: Agrupar assinaturas por cliente na tabela de Cobranças
+## Plano: Backfill do billing_history para parcelas já pagas
 
-### Situação atual
-- 1686 assinaturas para 1093 clientes distintos — muitos clientes aparecem 3-9 vezes (um row por produto)
-- O sync está correto: agrupa por `email + produto`, sem duplicatas reais
-- Os nomes repetidos são clientes que possuem múltiplos produtos (A010, Acesso Vitalício, Construir Para Alugar, etc.)
+### Problema
+A tabela `billing_history` tem 0 registros. O código de inserção no sync foi adicionado **depois** que todas as parcelas já estavam sincronizadas como `pago`. O sync só gera histórico para parcelas recém-detectadas como pagas, não para as que já existiam.
 
-### Solução: Visão agrupada por cliente
-
-Criar um modo de visualização agrupado onde cada cliente aparece uma única vez com uma linha expansível mostrando seus produtos.
+### Solução
+Criar uma migration SQL que faz backfill: para cada `billing_installment` com `status = 'pago'`, inserir um registro em `billing_history` se ainda não existir.
 
 ### Mudanças
 
-**1. `src/components/financeiro/cobranca/CobrancaTable.tsx`**
-- Adicionar toggle "Agrupar por cliente" no header da tabela
-- Quando ativo, agrupar `subscriptions` por `customer_email`
-- Linha principal do grupo mostra: nome, email, quantidade de produtos, soma total contratado, soma total pago, contagem de parcelas agregada, pior status do grupo
-- Ao clicar na linha do grupo, expandir para mostrar sub-linhas com cada produto individual (mantendo o click para abrir drawer)
-- Badge com contagem de produtos (ex: "4 produtos")
+**1. Migration SQL (backfill)**
 
-**2. `src/hooks/useBillingSubscriptions.ts`**
-- Sem mudanças — os dados já vêm corretos, a agrupação é puramente visual
+Inserir em `billing_history` a partir de `billing_installments` com `status = 'pago'`:
+- `subscription_id` da parcela
+- `tipo`: `'parcela_paga'`
+- `valor`: `valor_pago`
+- `responsavel`: `'Sistema (Hubla Sync)'`
+- `descricao`: `'Parcela X/Y paga via Hubla (backfill)'` — usando `numero_parcela` e `total_parcelas` da subscription
+- `created_at`: `data_pagamento` da parcela
+- `metadata`: `{ hubla_transaction_id, numero_parcela, backfill: true }`
+- Condição: apenas onde não existe registro duplicado em `billing_history` para mesma `subscription_id` + `numero_parcela`
 
-### Comportamento
+### Resultado
+Após a migration, o Histórico de qualquer assinatura mostrará todas as parcelas já pagas com data e valor corretos. Novos pagamentos continuarão sendo registrados automaticamente pelo sync.
 
-```text
-┌─────────────────────┬──────────┬─────────┬─────────┬──────────┐
-│ Cliente              │ Produtos │ Status  │ V.Total │ V.Pago   │
-├─────────────────────┼──────────┼─────────┼─────────┼──────────┤
-│ ▶ Juliana Caldas     │ 9 prod.  │ Atrasada│ R$8.200 │ R$820    │
-│   ├ A010 Consultoria │          │ Atrasada│ R$470   │ R$37     │
-│   ├ Acesso Vitalício │          │ Atrasada│ R$570   │ R$160    │
-│   └ Construir p/ ... │          │ Atrasada│ R$970   │ R$77     │
-├─────────────────────┼──────────┼─────────┼─────────┼──────────┤
-│ ▶ Lucas Terrini      │ 6 prod.  │ Atrasada│ R$4.100 │ R$350    │
-└─────────────────────┴──────────┴─────────┴─────────┴──────────┘
-```
-
-- Toggle desligado = visão atual (flat, uma linha por assinatura)
-- Toggle ligado = visão agrupada por cliente
-- Filtros e busca continuam funcionando normalmente
-- Click no sub-item abre o drawer de detalhes da assinatura individual
-- Paginação opera sobre os grupos (não sobre assinaturas individuais)
-
-### Arquivos afetados
+### Arquivo
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/financeiro/cobranca/CobrancaTable.tsx` | Adicionar toggle de agrupamento e lógica de expand/collapse por cliente |
+| `supabase/migrations/backfill_billing_history.sql` | INSERT INTO billing_history FROM billing_installments WHERE status='pago' |
 
