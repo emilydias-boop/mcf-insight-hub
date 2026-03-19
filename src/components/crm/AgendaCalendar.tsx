@@ -1354,6 +1354,23 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                           {!isOccupied && groupedSlots.length === 0 && onSelectSlot && (() => {
                             const { allDayClosers, totalClosers, isCompact } = getSlotGridInfo(day);
                             const availableClosers = getAvailableClosersForSlot(day, hour, minute);
+                            const capacityStatus = getSlotCapacityStatus(day, hour, minute);
+                            
+                            // Show "Lotado" when configured but ALL closers full
+                            if (availableClosers.length === 0 && capacityStatus.configured > 0 && capacityStatus.allFull) {
+                              return (
+                                <div className="absolute inset-0.5 rounded flex items-center justify-center gap-1 bg-red-500/10 border border-red-500/30">
+                                  <Lock className="h-3 w-3 text-red-400" />
+                                  <span className="text-[10px] font-semibold text-red-400">Lotado</span>
+                                </div>
+                              );
+                            }
+                            
+                            // Show partial indicator when SOME closers full
+                            if (availableClosers.length === 0 && capacityStatus.configured > 0) {
+                              return null;
+                            }
+                            
                             if (availableClosers.length === 0) return null;
                             
                             return (
@@ -1364,6 +1381,27 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                 {allDayClosers.map(closerId => {
                                   const isAvailable = availableClosers.includes(closerId);
                                   if (!isAvailable) {
+                                    // Check if this specific closer is full (configured but at capacity)
+                                    const closer = closers.find(c => c.id === closerId);
+                                    const maxLeads = closer?.max_leads_per_slot ?? 4;
+                                    const attendeeCount = filteredMeetings
+                                      .filter(m => {
+                                        if (m.closer_id !== closerId) return false;
+                                        const meetingStart = parseISO(m.scheduled_at);
+                                        return isSameDay(meetingStart, day) &&
+                                          meetingStart.getHours() === hour &&
+                                          meetingStart.getMinutes() >= minute &&
+                                          meetingStart.getMinutes() < minute + 30;
+                                      })
+                                      .reduce((sum, m) => sum + (m.attendees?.length || 0), 0);
+                                    
+                                    if (attendeeCount >= maxLeads && attendeeCount > 0) {
+                                      return (
+                                        <div key={closerId} className="rounded flex items-center justify-center bg-red-500/10 border border-red-500/20">
+                                          <Lock className="h-2.5 w-2.5 text-red-400" />
+                                        </div>
+                                      );
+                                    }
                                     // Empty placeholder to maintain grid column
                                     return <div key={closerId} />;
                                   }
