@@ -306,7 +306,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
             title: `Compra: ${tx.product_name || 'Produto'}${parcela}`,
             description: `${price} via ${tx.source || 'desconhecido'} - ${tx.sale_status || ''}`,
             date: tx.sale_date || '',
-            author: resolveAuthor(note.created_by),
+            author: null,
             metadata: {
               product_name: tx.product_name,
               product_price: tx.product_price,
