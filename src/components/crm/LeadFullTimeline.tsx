@@ -48,6 +48,7 @@ const FILTER_OPTIONS: { type: TimelineEventType | 'all'; label: string }[] = [
   { type: 'purchase', label: 'Compras' },
   { type: 'task', label: 'Tarefas' },
   { type: 'qualification', label: 'Qualif.' },
+  { type: 'entry', label: 'Entrada' },
 ];
 
 function TimelineEventItem({ event }: { event: TimelineEvent }) {

@@ -260,6 +260,30 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
         }
       }
 
+      // Synthesize "Entrada na Pipeline" for each deal if no event exists near created_at
+      if (dealsRes.data) {
+        for (const deal of dealsRes.data) {
+          if (!deal.created_at) continue;
+          const dealCreatedMs = new Date(deal.created_at).getTime();
+          const TOLERANCE_MS = 60_000; // 1 minute
+          const hasEntryEvent = events.some(
+            e => (e.type === 'entry' || e.type === 'stage_change') &&
+              Math.abs(new Date(e.date).getTime() - dealCreatedMs) < TOLERANCE_MS
+          );
+          if (!hasEntryEvent) {
+            events.push({
+              id: `entry-${deal.id}`,
+              type: 'entry',
+              title: 'Entrada na Pipeline',
+              description: 'Lead entrou na pipeline',
+              date: deal.created_at,
+              author: deal.owner_id || null,
+              metadata: { deal_id: deal.id, origin_id: deal.origin_id, synthetic: true },
+            });
+          }
+        }
+      }
+
       // Sort all events by date descending
       events.sort((a, b) => {
         const da = new Date(a.date).getTime() || 0;

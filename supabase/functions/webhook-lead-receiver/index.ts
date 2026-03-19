@@ -436,6 +436,28 @@ serve(async (req) => {
 
     console.log('[WEBHOOK-RECEIVER] ✅ Deal criado:', deal.id);
 
+    // Record lead_entered activity
+    try {
+      await supabase.from('deal_activities').insert({
+        deal_id: deal.id,
+        activity_type: 'lead_entered',
+        description: `Lead entrou na pipeline via ${endpoint.name}`,
+        from_stage: null,
+        to_stage: null,
+        metadata: {
+          source: 'webhook',
+          endpoint_slug: slug,
+          endpoint_name: endpoint.name,
+          origin_id: endpoint.origin_id,
+          owner_email: assignedOwner,
+        },
+        created_at: dealCreatedAt,
+      });
+      console.log('[WEBHOOK-RECEIVER] ✅ Atividade lead_entered registrada');
+    } catch (actErr) {
+      console.error('[WEBHOOK-RECEIVER] ⚠️ Erro ao registrar atividade lead_entered:', actErr);
+    }
+
     // 11b. Partner detection — mover para Venda Realizada imediatamente
     let partnerDetected = false;
     if (contactEmail) {
