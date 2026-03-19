@@ -1994,6 +1994,24 @@ serve(async (req) => {
             throw error;
           }
 
+          // 💳 BILLING: Sincronização automática de cobranças (invoice com items)
+          if (!isOffer) {
+            await syncBillingFromTransaction(supabase, {
+              customer_email: transactionData.customer_email,
+              customer_name: transactionData.customer_name,
+              customer_phone: transactionData.customer_phone,
+              product_name: productName,
+              product_category: productCategory,
+              product_price: isOffer ? itemPrice : grossValue,
+              net_value: itemNetValue,
+              installment_number: installment,
+              total_installments: installments,
+              sale_date: saleDate,
+              transaction_id: hublaId,
+              payment_method: transactionData.payment_method,
+            });
+          }
+
           // Se for A010, não for offer, e for primeira parcela, inserir na tabela a010_sales e criar contato/deal
           if (productCategory === 'a010' && !isOffer && installment === 1) {
             await supabase
