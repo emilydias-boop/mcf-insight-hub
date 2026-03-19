@@ -81,6 +81,14 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           .in('meeting_slot_attendees.deal_id', uniqueIds)
           .order('created_at', { ascending: false })
           .limit(50),
+
+        // 6. Deal basic info for synthesizing entry events
+        uuidIds.length > 0
+          ? supabase
+              .from('crm_deals')
+              .select('id, created_at, origin_id, owner_id')
+              .in('id', uuidIds)
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
       // Process deal_activities
