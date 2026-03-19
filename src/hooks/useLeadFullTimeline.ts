@@ -91,11 +91,15 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           : Promise.resolve({ data: [], error: null }),
       ]);
 
-      // Resolve stage UUIDs to names
       const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      // Collect all author user_ids and stage UUIDs in one pass
+      const authorUuids = new Set<string>();
       const stageUuids = new Set<string>();
+
       if (activitiesRes.data) {
         for (const act of activitiesRes.data) {
+          if (act.user_id && UUID_RE.test(act.user_id)) authorUuids.add(act.user_id);
           const aType = act.activity_type || '';
           if (aType === 'stage_change' || aType === 'stage_changed') {
             const meta = (act.metadata as Record<string, any>) || {};
@@ -106,17 +110,43 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           }
         }
       }
+      if (callsRes.data) {
+        for (const call of callsRes.data) {
+          if (call.user_id && UUID_RE.test(call.user_id)) authorUuids.add(call.user_id);
+        }
+      }
+      if (attendeeNotesRes.data) {
+        for (const note of attendeeNotesRes.data) {
+          if (note.created_by && UUID_RE.test(note.created_by)) authorUuids.add(note.created_by);
+        }
+      }
+      if (dealsRes.data) {
+        for (const deal of dealsRes.data) {
+          if (deal.owner_id && UUID_RE.test(deal.owner_id)) authorUuids.add(deal.owner_id);
+        }
+      }
 
-      let stageNameMap: Record<string, string> = {};
-      if (stageUuids.size > 0) {
-        const { data: stages } = await supabase
-          .from('crm_stages')
-          .select('id, stage_name')
-          .in('id', [...stageUuids]);
-        if (stages) {
-          for (const s of stages) {
-            stageNameMap[s.id.toLowerCase()] = s.stage_name;
-          }
+      // Resolve stages and profiles in parallel
+      const [stagesResult, profilesResult] = await Promise.all([
+        stageUuids.size > 0
+          ? supabase.from('crm_stages').select('id, stage_name').in('id', [...stageUuids])
+          : Promise.resolve({ data: [] as { id: string; stage_name: string }[] }),
+        authorUuids.size > 0
+          ? supabase.from('profiles').select('id, full_name, email').in('id', [...authorUuids])
+          : Promise.resolve({ data: [] as { id: string; full_name: string | null; email: string | null }[] }),
+      ]);
+
+      const stageNameMap: Record<string, string> = {};
+      if (stagesResult.data) {
+        for (const s of stagesResult.data) {
+          stageNameMap[s.id.toLowerCase()] = s.stage_name;
+        }
+      }
+
+      const profileMap: Record<string, string> = {};
+      if (profilesResult.data) {
+        for (const p of profilesResult.data) {
+          profileMap[p.id] = p.full_name || p.email || 'Usuário';
         }
       }
 
@@ -124,6 +154,14 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
         if (!val) return '?';
         if (UUID_RE.test(val)) return stageNameMap[val.toLowerCase()] || val;
         return val;
+      };
+
+      const resolveAuthor = (userId: string | null | undefined, ...fallbacks: (string | null | undefined)[]): string | null => {
+        for (const fb of fallbacks) {
+          if (fb) return fb;
+        }
+        if (userId && profileMap[userId]) return profileMap[userId];
+        return null;
       };
 
       // Process deal_activities
@@ -141,7 +179,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               title: `${fromName} → ${toName}`,
               description: act.description,
               date: act.created_at,
-              author: meta.owner_email || meta.deal_user || meta.changed_by || null,
+              author: resolveAuthor(act.user_id, meta.owner_email, meta.deal_user, meta.changed_by),
               metadata: { from_stage: fromName, to_stage: toName, ...meta },
             });
           } else if (actType === 'note' || actType === 'manual_note') {
@@ -151,7 +189,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               title: 'Nota adicionada',
               description: act.description,
               date: act.created_at,
-              author: meta.author || meta.user_name || null,
+              author: resolveAuthor(act.user_id, meta.author, meta.user_name),
               metadata: meta,
             });
           } else if (actType === 'task_completed' || actType === 'task_complete') {
@@ -161,7 +199,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               title: `Tarefa concluída: ${act.description || 'Sem título'}`,
               description: null,
               date: act.created_at,
-              author: meta.completed_by || meta.user_name || null,
+              author: resolveAuthor(act.user_id, meta.completed_by, meta.user_name),
               metadata: meta,
             });
           } else if (actType === 'qualification_note' || actType === 'qualification') {
@@ -171,7 +209,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               title: 'Lead qualificado',
               description: act.description,
               date: act.created_at,
-              author: meta.sdr_name || meta.author || null,
+              author: resolveAuthor(act.user_id, meta.sdr_name, meta.author),
               metadata: meta,
             });
           } else if (actType) {
@@ -182,7 +220,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               title: actType.replace(/_/g, ' '),
               description: act.description,
               date: act.created_at,
-              author: meta.author || meta.user_name || null,
+              author: resolveAuthor(act.user_id, meta.author, meta.user_name),
               metadata: { original_type: actType, ...meta },
             });
           }
@@ -202,7 +240,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
             title: `Ligação: ${outcomeLabel}`,
             description: call.notes,
             date: call.started_at || call.created_at || '',
-            author: null,
+            author: resolveAuthor(call.user_id),
             metadata: {
               direction: call.direction,
               duration,
@@ -291,7 +329,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
             title: `Nota: ${note.note_type || 'Geral'}`,
             description: note.note,
             date: note.created_at || '',
-            author: null,
+            author: resolveAuthor(note.created_by),
             metadata: { note_type: note.note_type, attendee_id: note.attendee_id },
           });
         }
@@ -314,7 +352,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               title: 'Entrada na Pipeline',
               description: 'Lead entrou na pipeline',
               date: deal.created_at,
-              author: deal.owner_id || null,
+              author: resolveAuthor(deal.owner_id),
               metadata: { deal_id: deal.id, origin_id: deal.origin_id, synthetic: true },
             });
           }
