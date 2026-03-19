@@ -240,7 +240,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
             title: `Ligação: ${outcomeLabel}`,
             description: call.notes,
             date: call.started_at || call.created_at || '',
-            author: null,
+            author: resolveAuthor(call.user_id),
             metadata: {
               direction: call.direction,
               duration,
