@@ -26,6 +26,7 @@ import { R2EvaluationTab } from './r2-drawer/R2EvaluationTab';
 import { R2NotesTab } from './r2-drawer/R2NotesTab';
 import { R2AttendeeTransferModal } from './R2AttendeeTransferModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
 
 interface R2MeetingDetailDrawerProps {
   meeting: R2MeetingRow | null;
