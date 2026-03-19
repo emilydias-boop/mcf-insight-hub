@@ -13,7 +13,8 @@ import { cn } from '@/lib/utils';
 import { 
   useCloserMeetingLinksList, 
   useCreateCloserMeetingLink, 
-  useDeleteCloserMeetingLink 
+  useDeleteCloserMeetingLink,
+  useUpdateCloserMeetingLink
 } from '@/hooks/useCloserMeetingLinks';
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
