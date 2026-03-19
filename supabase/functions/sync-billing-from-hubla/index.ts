@@ -418,101 +418,121 @@ Deno.serve(async (req) => {
     }
 
     // 4b. Process single-installment transactions (total_installments=1)
-    // These are individual payments that match existing subscriptions
+    // Optimized: batch queries instead of per-group loops
     let singleTxMatched = 0;
     {
-      // Get all existing subscription emails+products
-      const allSubKeys = new Set(Object.keys(groups));
-      const existingSubEmails = [...new Set(
-        (await supabase
+      // Fetch all subscriptions
+      const allSubs: { id: string; customer_email: string; product_name: string }[] = [];
+      let subOffset = 0;
+      while (true) {
+        const { data: chunk } = await supabase
           .from("billing_subscriptions")
           .select("id, customer_email, product_name")
           .not("customer_email", "is", null)
-        ).data?.map(s => `${(s.customer_email || "").toLowerCase()}::${s.product_name}`) || []
-      )];
+          .range(subOffset, subOffset + 999);
+        if (!chunk || chunk.length === 0) break;
+        allSubs.push(...chunk);
+        if (chunk.length < 1000) break;
+        subOffset += 1000;
+      }
 
-      // Fetch single-installment transactions not yet linked
-      const { data: singleTx } = await supabase
-        .from("hubla_transactions")
-        .select("id, customer_email, product_name, net_value, sale_date, sale_status, event_type, product_price")
-        .eq("total_installments", 1)
-        .order("sale_date", { ascending: true })
-        .limit(5000);
+      const subMap = new Map<string, string>();
+      for (const s of allSubs) {
+        subMap.set(`${(s.customer_email || "").toLowerCase()}::${s.product_name}`, s.id);
+      }
 
-      if (singleTx && singleTx.length > 0) {
-        // Group by email::product
-        const singleGroups: Record<string, typeof singleTx> = {};
-        for (const tx of singleTx) {
+      const alreadyProcessedKeys = new Set(Object.keys(groups));
+
+      // Fetch single-installment transactions not yet linked (paginated)
+      const allSingleTx: any[] = [];
+      let singleOffset = 0;
+      while (true) {
+        const { data: chunk } = await supabase
+          .from("hubla_transactions")
+          .select("id, customer_email, product_name, net_value, sale_date, sale_status, event_type, product_price")
+          .eq("total_installments", 1)
+          .order("sale_date", { ascending: true })
+          .range(singleOffset, singleOffset + 999);
+        if (!chunk || chunk.length === 0) break;
+        allSingleTx.push(...chunk);
+        if (chunk.length < 1000) break;
+        singleOffset += 1000;
+      }
+
+      if (allSingleTx.length > 0) {
+        // Group by email::product, only if subscription exists and wasn't in installment group
+        const singleGroups: Record<string, typeof allSingleTx> = {};
+        const relevantSubIds = new Set<string>();
+        for (const tx of allSingleTx) {
           if (!tx.customer_email) continue;
           const key = `${tx.customer_email.toLowerCase()}::${tx.product_name}`;
-          // Only process if there's a matching subscription AND we didn't already process this group
-          if (!existingSubEmails.includes(key) || allSubKeys.has(key)) continue;
+          if (!subMap.has(key) || alreadyProcessedKeys.has(key)) continue;
           if (!singleGroups[key]) singleGroups[key] = [];
           singleGroups[key].push(tx);
+          relevantSubIds.add(subMap.get(key)!);
         }
 
-        // For each group, find unmatched installments and match sequentially
-        for (const [key, txList] of Object.entries(singleGroups)) {
-          const [email, productName] = key.split("::");
-          
-          // Find the subscription
-          const { data: subs } = await supabase
-            .from("billing_subscriptions")
-            .select("id")
-            .eq("customer_email", email)
-            .eq("product_name", productName)
-            .limit(1);
-          
-          if (!subs || subs.length === 0) continue;
-          const subId = subs[0].id;
+        const relevantSubIdArr = [...relevantSubIds];
+        if (relevantSubIdArr.length > 0) {
+          // Batch fetch all overdue installments and linked tx ids for relevant subs
+          const overdueBySubId = new Map<string, { id: string; numero_parcela: number; valor_original: number }[]>();
+          const linkedTxBySubId = new Map<string, Set<string>>();
 
-          // Get overdue installments without hubla_transaction_id
-          const { data: overdueInst } = await supabase
-            .from("billing_installments")
-            .select("id, numero_parcela, valor_original")
-            .eq("subscription_id", subId)
-            .eq("status", "atrasado")
-            .is("hubla_transaction_id", null)
-            .order("numero_parcela", { ascending: true });
+          for (let i = 0; i < relevantSubIdArr.length; i += 200) {
+            const chunk = relevantSubIdArr.slice(i, i + 200);
+            const [overdueRes, linkedRes] = await Promise.all([
+              supabase.from("billing_installments")
+                .select("id, subscription_id, numero_parcela, valor_original")
+                .in("subscription_id", chunk)
+                .eq("status", "atrasado")
+                .is("hubla_transaction_id", null)
+                .order("numero_parcela", { ascending: true }),
+              supabase.from("billing_installments")
+                .select("subscription_id, hubla_transaction_id")
+                .in("subscription_id", chunk)
+                .not("hubla_transaction_id", "is", null),
+            ]);
 
-          if (!overdueInst || overdueInst.length === 0) continue;
-
-          // Filter out transactions already linked
-          const linkedTxIds = new Set<string>();
-          const { data: linkedInst } = await supabase
-            .from("billing_installments")
-            .select("hubla_transaction_id")
-            .eq("subscription_id", subId)
-            .not("hubla_transaction_id", "is", null);
-          for (const li of linkedInst || []) {
-            if (li.hubla_transaction_id) linkedTxIds.add(li.hubla_transaction_id);
+            for (const inst of overdueRes.data || []) {
+              if (!overdueBySubId.has(inst.subscription_id)) overdueBySubId.set(inst.subscription_id, []);
+              overdueBySubId.get(inst.subscription_id)!.push(inst);
+            }
+            for (const li of linkedRes.data || []) {
+              if (!linkedTxBySubId.has(li.subscription_id)) linkedTxBySubId.set(li.subscription_id, new Set());
+              if (li.hubla_transaction_id) linkedTxBySubId.get(li.subscription_id)!.add(li.hubla_transaction_id);
+            }
           }
-          const unlinkedTx = txList.filter(tx => !linkedTxIds.has(tx.id));
 
-          // Sequential match
-          const matchCount = Math.min(overdueInst.length, unlinkedTx.length);
-          const singleHistoryEntries: any[] = [];
+          // Process matches
+          const allHistoryEntries: any[] = [];
+          const subsToRecalc: string[] = [];
 
-          for (let m = 0; m < matchCount; m++) {
-            const inst = overdueInst[m];
-            const tx = unlinkedTx[m];
+          for (const [key, txList] of Object.entries(singleGroups)) {
+            const subId = subMap.get(key)!;
+            const overdueInst = overdueBySubId.get(subId);
+            if (!overdueInst || overdueInst.length === 0) continue;
 
-            const { error: updErr } = await supabase
-              .from("billing_installments")
-              .update({
+            const linkedIds = linkedTxBySubId.get(subId) || new Set();
+            const unlinkedTx = txList.filter(tx => !linkedIds.has(tx.id));
+            if (unlinkedTx.length === 0) continue;
+
+            const matchCount = Math.min(overdueInst.length, unlinkedTx.length);
+            for (let m = 0; m < matchCount; m++) {
+              const inst = overdueInst[m];
+              const tx = unlinkedTx[m];
+
+              await supabase.from("billing_installments").update({
                 status: "pago",
                 valor_pago: tx.net_value || tx.product_price || inst.valor_original,
                 valor_liquido: tx.net_value || null,
                 data_pagamento: tx.sale_date,
                 hubla_transaction_id: tx.id,
                 updated_at: new Date().toISOString(),
-              })
-              .eq("id", inst.id);
+              }).eq("id", inst.id);
 
-            if (!updErr) {
               singleTxMatched++;
               installmentsUpdated++;
-              singleHistoryEntries.push({
+              allHistoryEntries.push({
                 subscription_id: subId,
                 tipo: "parcela_paga",
                 valor: tx.net_value || tx.product_price,
@@ -524,33 +544,44 @@ Deno.serve(async (req) => {
                 created_at: tx.sale_date,
               });
             }
+            if (matchCount > 0) subsToRecalc.push(subId);
           }
 
-          // Insert history
-          if (singleHistoryEntries.length > 0) {
-            await supabase.from("billing_history").insert(singleHistoryEntries);
+          // Bulk insert history
+          for (let i = 0; i < allHistoryEntries.length; i += 500) {
+            await supabase.from("billing_history").insert(allHistoryEntries.slice(i, i + 500));
           }
 
-          // Recalculate subscription status
-          if (matchCount > 0) {
-            const { data: allInst } = await supabase
-              .from("billing_installments")
-              .select("status")
-              .eq("subscription_id", subId);
-            
-            const totalPaid = (allInst || []).filter(i => i.status === "pago").length;
-            const totalOverdue = (allInst || []).filter(i => i.status === "atrasado").length;
-            const totalCount = (allInst || []).length;
+          // Batch recalculate subscription statuses
+          if (subsToRecalc.length > 0) {
+            for (let i = 0; i < subsToRecalc.length; i += 200) {
+              const chunk = subsToRecalc.slice(i, i + 200);
+              const { data: allInst } = await supabase
+                .from("billing_installments")
+                .select("subscription_id, status")
+                .in("subscription_id", chunk);
 
-            let newStatus = "em_dia";
-            let newQuitacao = "parcialmente_pago";
-            if (totalPaid >= totalCount) { newStatus = "quitada"; newQuitacao = "quitado"; }
-            else if (totalOverdue > 0) { newStatus = "atrasada"; }
-            if (totalPaid === 0) newQuitacao = "em_aberto";
+              const statsBySubId = new Map<string, { paid: number; overdue: number; total: number }>();
+              for (const inst of allInst || []) {
+                if (!statsBySubId.has(inst.subscription_id)) statsBySubId.set(inst.subscription_id, { paid: 0, overdue: 0, total: 0 });
+                const s = statsBySubId.get(inst.subscription_id)!;
+                s.total++;
+                if (inst.status === "pago") s.paid++;
+                if (inst.status === "atrasado") s.overdue++;
+              }
 
-            await supabase.from("billing_subscriptions").update({
-              status: newStatus, status_quitacao: newQuitacao, updated_at: new Date().toISOString(),
-            }).eq("id", subId);
+              for (const [subId, stats] of statsBySubId) {
+                let newStatus = "em_dia";
+                let newQuitacao = "parcialmente_pago";
+                if (stats.paid >= stats.total) { newStatus = "quitada"; newQuitacao = "quitado"; }
+                else if (stats.overdue > 0) { newStatus = "atrasada"; }
+                if (stats.paid === 0) newQuitacao = "em_aberto";
+
+                await supabase.from("billing_subscriptions").update({
+                  status: newStatus, status_quitacao: newQuitacao, updated_at: new Date().toISOString(),
+                }).eq("id", subId);
+              }
+            }
           }
         }
       }
