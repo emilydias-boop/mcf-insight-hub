@@ -1201,10 +1201,20 @@ export function QuickScheduleModal({
           <Button 
             className="w-full" 
             onClick={handleSubmit}
-            disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending}
+            disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending || (!isCoordinatorOrAbove && slotAvailability?.available === false)}
           >
-            {createMeeting.isPending ? 'Agendando...' : 'Agendar Reunião'}
+            {createMeeting.isPending 
+              ? 'Agendando...' 
+              : (!isCoordinatorOrAbove && slotAvailability?.available === false)
+                ? 'Horário lotado'
+                : 'Agendar Reunião'
+            }
           </Button>
+          {isCoordinatorOrAbove && slotAvailability?.available === false && (
+            <p className="text-xs text-amber-600 text-center mt-1">
+              ⚠️ Slot lotado — agendando como coordenador
+            </p>
+          )}
         </div>
       </DialogContent>
     </Dialog>
