@@ -125,7 +125,7 @@ export function useStatusChangeAudit({ days, closerId, suspiciousOnly }: UseStat
           changed_at: log.created_at || '',
           changed_by_name: profile?.full_name || profile?.email || null,
           changed_by_id: log.user_id,
-          attendee_name: attendee?.attendee_name || attendee?.name || null,
+          attendee_name: attendee?.attendee_name || null,
           closer_name: closer?.name || null,
           closer_bu: closer?.bu || null,
           meeting_type: slot?.meeting_type || null,
