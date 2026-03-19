@@ -7,9 +7,19 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, ArrowRight, Clock, Eye, ShieldAlert, RotateCcw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Clock, Eye, ShieldAlert, RotateCcw, UserX } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+function RoleBadge({ role }: { role: 'closer' | 'sdr' | 'outro' }) {
+  if (role === 'closer') {
+    return <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-300 hover:bg-emerald-500/15 text-xs">Closer</Badge>;
+  }
+  if (role === 'sdr') {
+    return <Badge className="bg-blue-500/15 text-blue-700 border-blue-300 hover:bg-blue-500/15 text-xs">SDR</Badge>;
+  }
+  return <Badge variant="secondary" className="text-xs">Outro</Badge>;
+}
 
 export function StatusChangesTab() {
   const [days, setDays] = useState(7);
@@ -21,7 +31,6 @@ export function StatusChangesTab() {
     filterMode,
   });
 
-  // Stats always from "all" query would require double fetch; compute from current + label accordingly
   const stats = useMemo(() => {
     const total = changes.length;
     const suspicious = changes.filter(c => c.is_suspicious).length;
@@ -30,7 +39,8 @@ export function StatusChangesTab() {
     const reversals = changes.filter(c =>
       (c.old_status === 'cancelled' || c.old_status === 'refunded') && c.new_status === 'completed'
     ).length;
-    return { total, suspicious, noShowToCompleted, completedToNoShow, reversals };
+    const externalChanges = changes.filter(c => c.is_external_change).length;
+    return { total, suspicious, noShowToCompleted, completedToNoShow, reversals, externalChanges };
   }, [changes]);
 
   return (
@@ -66,7 +76,7 @@ export function StatusChangesTab() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <Card>
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
@@ -85,6 +95,16 @@ export function StatusChangesTab() {
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <p className="text-2xl font-bold text-destructive">{stats.suspicious}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-blue-300/50">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-blue-600 flex items-center gap-1">
+              <UserX className="h-3 w-3" /> Não-closer
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <p className="text-2xl font-bold text-blue-600">{stats.externalChanges}</p>
           </CardContent>
         </Card>
         <Card className="border-orange-300/50">
@@ -136,6 +156,7 @@ export function StatusChangesTab() {
                 <TableHead>Closer</TableHead>
                 <TableHead>De → Para</TableHead>
                 <TableHead>Alterado por</TableHead>
+                <TableHead>Cargo</TableHead>
                 <TableHead>Data Reunião</TableHead>
                 <TableHead>Data Alteração</TableHead>
               </TableRow>
@@ -159,8 +180,12 @@ export function StatusChangesTab() {
 }
 
 function StatusChangeRow({ entry, onClick }: { entry: StatusChangeEntry; onClick: () => void }) {
+  const isExternalSuspicious = entry.is_external_change && entry.is_suspicious;
   return (
-    <TableRow className={`cursor-pointer hover:bg-muted/50 ${entry.is_suspicious ? 'bg-destructive/5' : ''}`} onClick={onClick}>
+    <TableRow
+      className={`cursor-pointer hover:bg-muted/50 ${isExternalSuspicious ? 'bg-destructive/10' : entry.is_suspicious ? 'bg-destructive/5' : entry.is_external_change ? 'bg-blue-500/5' : ''}`}
+      onClick={onClick}
+    >
       <TableCell className="font-medium">
         {entry.attendee_name || 'N/A'}
       </TableCell>
@@ -188,6 +213,9 @@ function StatusChangeRow({ entry, onClick }: { entry: StatusChangeEntry; onClick
         </div>
       </TableCell>
       <TableCell className="text-sm">{entry.changed_by_name || 'Sistema'}</TableCell>
+      <TableCell>
+        <RoleBadge role={entry.changed_by_role} />
+      </TableCell>
       <TableCell className="text-sm text-muted-foreground">
         {entry.scheduled_at
           ? format(new Date(entry.scheduled_at), "dd/MM/yyyy HH:mm", { locale: ptBR })

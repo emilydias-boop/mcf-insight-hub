@@ -106,6 +106,17 @@ export function StatusChangeDetailDrawer({ entry, open, onOpenChange }: Props) {
             {/* Metadados */}
             <Section icon={<Clock className="h-4 w-4" />} title="Metadados">
               <InfoRow label="Alterado por" value={entry.changed_by_name || 'Sistema'} />
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Cargo</span>
+                <span className={`font-medium ${entry.changed_by_role === 'closer' ? 'text-emerald-600' : entry.changed_by_role === 'sdr' ? 'text-blue-600' : 'text-muted-foreground'}`}>
+                  {entry.changed_by_role === 'closer' ? 'Closer (próprio)' : entry.changed_by_role === 'sdr' ? 'SDR' : 'Outro'}
+                </span>
+              </div>
+              {entry.is_external_change && (
+                <div className="rounded-md p-2 text-xs bg-blue-500/10 text-blue-700">
+                  ⚠️ Alteração feita por alguém que <strong>não é o closer</strong> da reunião
+                </div>
+              )}
               <InfoRow
                 label="Data alteração"
                 value={entry.changed_at ? format(new Date(entry.changed_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR }) : null}
