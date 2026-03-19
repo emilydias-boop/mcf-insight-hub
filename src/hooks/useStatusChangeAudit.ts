@@ -149,6 +149,9 @@ export function useStatusChangeAudit({ days, closerId, filterMode = 'manual' }: 
         const closer = slot ? closerMap.get(slot.closer_id) : null;
         const profile = log.user_id ? profileMap.get(log.user_id) : null;
 
+        const suspicious = isSuspicious(oldStatus, newStatus);
+        const normalFlow = isNormalFlow(oldStatus, newStatus);
+
         return {
           id: log.id,
           old_status: oldStatus,
@@ -157,12 +160,26 @@ export function useStatusChangeAudit({ days, closerId, filterMode = 'manual' }: 
           changed_by_name: profile?.full_name || profile?.email || null,
           changed_by_id: log.user_id,
           attendee_name: attendee?.attendee_name || null,
+          attendee_id: log.record_id || null,
+          attendee_phone: String(newData.attendee_phone || oldData.attendee_phone || '') || null,
           closer_name: closer?.name || null,
           closer_bu: closer?.bu || null,
           meeting_type: slot?.meeting_type || null,
           scheduled_at: slot?.scheduled_at || null,
-          is_suspicious: isSuspicious(oldStatus, newStatus),
-          is_normal_flow: isNormalFlow(oldStatus, newStatus),
+          is_suspicious: suspicious,
+          is_normal_flow: normalFlow,
+          deal_id: String(newData.deal_id || oldData.deal_id || '') || null,
+          contact_id: String(newData.contact_id || oldData.contact_id || '') || null,
+          notes: String(newData.notes || oldData.notes || '') || null,
+          r2_observations: String(newData.r2_observations || oldData.r2_observations || '') || null,
+          closer_notes: String(newData.closer_notes || oldData.closer_notes || '') || null,
+          meeting_link: String(newData.meeting_link || oldData.meeting_link || '') || null,
+          video_status: String(newData.video_status || oldData.video_status || '') || null,
+          lead_profile: String(newData.lead_profile || oldData.lead_profile || '') || null,
+          is_reschedule: Boolean(newData.is_reschedule || oldData.is_reschedule),
+          suspension_reason: getSuspensionReason(oldStatus, newStatus, suspicious, normalFlow),
+          old_data: oldData,
+          new_data: newData,
         };
       });
 
