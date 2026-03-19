@@ -1,50 +1,53 @@
 
 
-## Plano: Indicador visual de slot lotado nas Agendas R1
+## Plano: Corrigir indicador "Lotado" — exibir badge sobre slots COM reuniões
 
-### Objetivo
-Quando um horário atinge a capacidade máxima de leads (ex: 3/3), exibir um indicador visual claro de "LOTADO" nas duas views: **Calendário** (AgendaCalendar) e **Por Closer** (CloserColumnCalendar).
+### Problema raiz
+O indicador "Lotado" nunca aparece porque a lógica atual só renderiza o cadeado quando **não há reuniões** no slot. Porém, um slot lotado (ex: 3/3 leads) **sempre tem reuniões**, então o branch de "Lotado" nunca é alcançado — o código renderiza os cards de reunião e pula o indicador.
+
+### Solução
+Adicionar um badge "Lotado X/Y" sobreposto no canto do card de reunião quando o slot está na capacidade máxima. O badge aparece **junto** com as reuniões, não como alternativa a elas.
 
 ### Alterações
 
 | Arquivo | O que muda |
 |---------|------------|
-| `src/components/crm/CloserColumnCalendar.tsx` | Quando `!available && !isBlocked && isSlotConfigured`: exibir célula vermelha com ícone de cadeado e texto "Lotado" + contador (ex: "3/3"). Atualmente mostra `<div>` vazio. |
-| `src/components/crm/AgendaCalendar.tsx` | Adicionar lógica similar: função `isSlotFull(day, hour, minute, closerId)` que verifica se `totalAttendees >= maxLeads`. Exibir badge "Lotado" no slot com fundo vermelho/amarelo quando cheio. |
+| `src/components/crm/CloserColumnCalendar.tsx` | Dentro do branch `hasMeetings` (linha ~381), após o botão de `UserPlus`, adicionar badge "Lotado" quando `totalAttendees >= maxLeads`. Badge posicionado no canto inferior direito do card. |
+| `src/components/crm/AgendaCalendar.tsx` (day view) | No render de `closerMeetings` (linha ~1199), adicionar badge sobre o card quando o closer está na capacidade. |
+| `src/components/crm/AgendaCalendar.tsx` (week view) | No render de meetings (linha ~1487), adicionar badge no card quando `attendeeCount >= maxLeads`. |
 
-### Detalhes — CloserColumnCalendar (Por Closer)
+### Detalhes — CloserColumnCalendar
 
-A lógica de capacidade já existe (linhas 184-207): `isSlotAvailable` retorna `false` quando `totalAttendees >= maxLeads`. O trecho que renderiza o slot vazio (linha 525-526) será substituído:
+Dentro de `{hasMeetings && firstMeeting ? (` (linha 380), após o `</TooltipProvider>` e o botão `UserPlus` (linhas 515-527), adicionar:
 
+```tsx
+{/* Lotado badge overlay */}
+{(() => {
+  const { totalAttendees, maxLeads } = getSlotCapacityInfo(closer.id, slot);
+  if (totalAttendees >= maxLeads) {
+    return (
+      <div className="absolute bottom-0.5 right-0.5 flex items-center gap-0.5 bg-red-600 text-white rounded px-1 py-0 z-20">
+        <Lock className="h-2.5 w-2.5" />
+        <span className="text-[9px] font-bold">{totalAttendees}/{maxLeads}</span>
+      </div>
+    );
+  }
+  return null;
+})()}
 ```
-// Onde hoje mostra div vazio quando configured mas lotado:
-) : isConfigured && !available ? (
-  <div className="w-full h-full min-h-[36px] flex items-center justify-center rounded 
-    bg-red-500/10 border border-red-500/30">
-    <Lock className="h-3 w-3 text-red-400 mr-1" />
-    <span className="text-[10px] font-medium text-red-400">
-      Lotado ({totalAttendees}/{maxLeads})
-    </span>
-  </div>
-```
 
-Precisa adicionar helper `isSlotConfigured(closerId, slot)` separado de `isSlotAvailable`, e calcular `totalAttendees`/`maxLeads` para o slot.
+Remover o branch morto na linha 541-552 (o `isSlotConfigured ? Lotado...`) já que nunca é atingido.
 
-### Detalhes — AgendaCalendar (Calendário)
+### Detalhes — AgendaCalendar (day view)
 
-O `AgendaCalendar` não tem lógica de capacidade por closer/slot hoje. Adicionar:
+Na seção de render de meetings por closer (após o card de meeting, linha ~1199), adicionar badge similar verificando capacidade do closer naquele slot.
 
-1. Nova função `getSlotCapacityInfo(day, hour, minute)` que para cada closer configurado no slot, verifica se `attendees >= max_leads` (via `closer_meeting_links.max_leads` ou `closers.max_leads_per_slot`).
-2. Precisa acessar dados de `closer_meeting_links` (já disponível via `meetingLinkSlots`) e `closers` (já prop).
-3. Quando TODOS os closers de um slot estão lotados, exibir indicador vermelho no time label ou na célula.
-4. Quando ALGUNS closers estão lotados, exibir indicador amarelo/parcial.
+### Detalhes — AgendaCalendar (week view)
+
+No render de meetings no grid (linha ~1526), após o card do meeting, adicionar badge de capacidade quando `attendeeCount >= maxLeads` para aquele closer.
 
 ### Visual
-
-- **Lotado total**: Fundo `bg-red-500/10`, borda `border-red-500/30`, ícone `Lock` vermelho, texto "Lotado"
-- **Parcial (alguns closers cheios)**: Fundo `bg-amber-500/10`, texto "X/Y livres"
-- Badge no canto do slot com contagem `2/3` leads
-
-### Imports adicionais
-- `Lock` do `lucide-react` em ambos os arquivos
+- Badge vermelho sólido (`bg-red-600 text-white`) no canto inferior-direito do card de reunião
+- Ícone de cadeado pequeno + contador "3/3"
+- Altamente visível sobre o fundo verde dos cards de reunião
 
