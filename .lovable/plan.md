@@ -1,31 +1,49 @@
 
 
-## Plano: Mostrar quem fez cada ação na Timeline do Lead
+## Plano: Capacidade individual por horário (R1) — com bloqueio rígido
 
 ### Problema
 
-Atualmente, muitos eventos na timeline mostram `author: null` porque o hook não resolve os `user_id` das tabelas para nomes legíveis. As fontes de dados têm `user_id` (deal_activities, calls) e `created_by` (attendee_notes) mas nunca são resolvidos para nomes via `profiles`.
+Hoje `max_leads_per_slot` é global por closer. O usuário quer definir capacidades diferentes por horário (ex: 11:30 = 3, 17:00 = 1) e o sistema **deve bloquear** agendamento quando o limite for atingido.
 
-### Correção
+### Alterações
 
-**Arquivo: `src/hooks/useLeadFullTimeline.ts`**
+**1. Migration SQL**
+- Adicionar coluna `max_leads` (INTEGER, nullable) na tabela `closer_meeting_links`
+- Quando `null`, usa o padrão global do closer
 
-Após buscar todos os dados, coletar todos os `user_id`/`created_by` únicos e fazer uma query em `profiles` para resolver nomes:
+**2. UI — `CloserAvailabilityConfig.tsx`**
+Na lista de links por dia (linhas 343-363), adicionar um input numérico compacto ao lado de cada horário:
 
-1. Coletar UUIDs de autores de:
-   - `deal_activities.user_id`
-   - `calls.user_id`
-   - `attendee_notes.created_by`
-2. Query única: `profiles` → `id, full_name, email`
-3. Criar `profileMap: Record<string, string>` (id → full_name ou email)
-4. Usar o mapa ao construir cada evento:
-   - `stage_change`: `profileMap[act.user_id]` como fallback quando metadata não tem autor
-   - `call`: `profileMap[call.user_id]`
-   - `note` (deal_activities): `profileMap[act.user_id]`
-   - `attendee_notes`: `profileMap[note.created_by]`
-   - `task`, `qualification`, etc: `profileMap[act.user_id]`
+```text
+11:30  [https://meet.google.com/...]  [3 👥]  🗑️
+17:00  [https://meet.google.com/...]  [1 👥]  🗑️
+```
 
-A prioridade será: metadata (ex: `meta.author`) → `profileMap[user_id]` → null
+- Input tipo number, largura ~16, min=1, max=10
+- Placeholder mostra o padrão global do closer
+- Ao alterar (onBlur), salva via mutation direta no `closer_meeting_links`
 
-Nenhuma alteração no componente UI — o campo `author` já é renderizado pelo `LeadFullTimeline.tsx`.
+**3. Hook — `useCloserMeetingLinks.ts`**
+- Incluir `max_leads` no select e no tipo `CloserMeetingLink`
+- Adicionar mutation `useUpdateCloserMeetingLinkMaxLeads` para atualizar o campo
+
+**4. Lógica de bloqueio — `CloserColumnCalendar.tsx`**
+Na função `isSlotAvailable` (linha 184-203):
+- Buscar o link específico do slot no array de `closer_meeting_links` (pelo `closer_id` + `start_time` + `day_of_week`)
+- Usar `link.max_leads ?? closer.max_leads_per_slot ?? 4` como capacidade
+- Manter o bloqueio rígido: `totalAttendees < capacity` retorna `false` quando cheio (não permite agendar)
+
+**5. Hook — `useAgendaData.ts`**
+- Incluir `max_leads` ao buscar `closer_meeting_links` para disponibilizar nos dados do calendário
+
+### Prioridade de capacidade
+
+1. `closer_meeting_links.max_leads` (override por slot)
+2. `closers.max_leads_per_slot` (padrão global do closer)
+3. Fallback: 4
+
+### Comportamento
+
+Slot cheio = **bloqueado**, não permite agendar mais leads naquele horário. Isso já é o comportamento atual em `isSlotAvailable`, apenas passará a usar a capacidade do slot específico em vez do global.
 
