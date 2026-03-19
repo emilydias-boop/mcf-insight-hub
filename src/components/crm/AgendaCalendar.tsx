@@ -4,7 +4,7 @@ import { ptBR } from 'date-fns/locale';
 import { getWeekStartsOn } from '@/lib/businessDays';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Lock } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { MeetingSlot, CloserWithAvailability, useUpdateMeetingSchedule } from '@/hooks/useAgendaData';
