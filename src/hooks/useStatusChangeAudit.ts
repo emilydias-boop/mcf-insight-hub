@@ -114,7 +114,7 @@ export function useStatusChangeAudit({ days, closerId, suspiciousOnly }: UseStat
         const newStatus = String(newData.status || '');
 
         const attendee = attendeeMap.get(log.record_id || '');
-        const slot = attendee ? slotMap.get(attendee.slot_id) : null;
+        const slot = attendee ? slotMap.get(attendee.meeting_slot_id) : null;
         const closer = slot ? closerMap.get(slot.closer_id) : null;
         const profile = log.user_id ? profileMap.get(log.user_id) : null;
 
