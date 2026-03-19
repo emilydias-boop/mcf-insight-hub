@@ -1,42 +1,30 @@
 
 
-## Plano: Drawer de detalhes ao clicar na linha da auditoria
+## Plano: Adicionar "Perfil do Lead" nos drawers de agendamento
 
-### O que muda
+### Problema
+Leads com dados de anamnese preenchidos (via `lead_profiles`) não mostram essas informações nos drawers de reunião. O closer precisa sair do drawer para ver o perfil.
 
-Ao clicar em uma linha na tabela de auditoria, abre um **Sheet/Drawer** lateral com:
+### Solução
+Reutilizar o componente `LeadProfileSection` existente nos dois drawers de agendamento:
 
-1. **Motivo da classificação** — texto explicando por que a mudança é suspeita ou manual (ex: "No-show → Realizada: reversão de status final", "Agendado → No-show: mudança manual fora do fluxo automático")
-2. **Dados do Lead** — nome, telefone, deal_id, contact_id (extraídos do `old_data`/`new_data` do audit_log)
-3. **Dados da Reunião** — tipo (R1/R2), data agendada, closer, link da reunião
-4. **Observações/Notas** — campo `notes` do attendee, `r2_observations`, `closer_notes`
-5. **Histórico completo** — todas as mudanças do mesmo attendee (usando `useR2AuditHistory` existente), com diff legível via `getAuditDiff`
-6. **Todas as alterações do registro** — diff completo entre old_data e new_data da mudança selecionada
-
-### Alterações por arquivo
+### Alterações
 
 | Arquivo | Ação |
 |---------|------|
-| `src/hooks/useStatusChangeAudit.ts` | Expandir `StatusChangeEntry` com novos campos: `attendee_id`, `attendee_phone`, `deal_id`, `contact_id`, `notes`, `r2_observations`, `closer_notes`, `meeting_link`, `is_reschedule` (extraídos de `old_data`/`new_data`). Adicionar `suspension_reason` string calculada |
-| `src/components/audit/StatusChangeDetailDrawer.tsx` | **Novo arquivo**. Sheet lateral com seções: Motivo, Lead, Reunião, Observações, Histórico do attendee (reusa `useR2AuditHistory` + `getAuditDiff`) |
-| `src/components/audit/StatusChangesTab.tsx` | Adicionar state `selectedEntry`, tornar linhas clicáveis (`cursor-pointer`), renderizar o drawer |
+| `src/components/crm/AgendaMeetingDrawer.tsx` | Importar `LeadProfileSection` e renderizar abaixo das notas do SDR, usando `contact_id` do `MeetingSlot` ou do attendee selecionado |
+| `src/components/crm/R2MeetingDetailDrawer.tsx` | Importar `LeadProfileSection` e renderizar dentro da área do attendee selecionado (antes ou depois das tabs de Qualificação/Avaliação/Notas), usando o `contactId` já calculado na linha 93 |
 
-### Lógica do "Motivo"
+### Detalhes técnicos
 
-Mapeamento estático de cada transição suspeita para uma descrição em português:
-- `no_show → completed`: "Reversão: lead marcado como No-show foi alterado para Realizada"
-- `completed → no_show`: "Status final alterado: reunião realizada revertida para No-show"
-- `cancelled → completed`: "Reversão de cancelamento para Realizada"
-- etc.
+**AgendaMeetingDrawer (R1):** O `contact_id` já existe em `MeetingSlot` e `MeetingAttendee`. Renderizar `<LeadProfileSection contactId={meeting.contact_id || selectedParticipant?.contactId} />` na seção de detalhes do participante selecionado.
 
-Para mudanças não-suspeitas mas manuais: "Mudança manual fora do fluxo automático padrão"
+**R2MeetingDetailDrawer:** Já calcula `contactId` na linha 93. Renderizar `<LeadProfileSection contactId={contactId} />` logo acima das tabs (Qualificação/Avaliação/Notas), apenas quando há um attendee selecionado.
 
-### Dados do Lead no Drawer
+O `LeadProfileSection` já:
+- Faz fetch via `useLeadProfile(contactId)`
+- Retorna `null` se não há dados ou está carregando
+- Mostra collapsible com categorias (Pessoais, Financeiro, Patrimônio, Interesse)
 
-Os campos já existem no `old_data`/`new_data` do audit_log:
-- `attendee_name`, `attendee_phone`, `deal_id`, `contact_id`
-- `notes`, `r2_observations`, `closer_notes`, `meeting_link`
-- `is_reschedule`, `video_status`, `lead_profile`
-
-Não precisa de query extra — basta extrair do JSON que já é carregado.
+Nenhuma alteração no hook ou no componente de perfil é necessária.
 
