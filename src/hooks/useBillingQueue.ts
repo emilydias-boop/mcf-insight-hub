@@ -53,7 +53,7 @@ export const useBillingQueue = () => {
       }
 
       // 3. Get last manual action per subscription from billing_history
-      const manualTypes = ['tentativa_cobranca', 'observacao', 'acordo_realizado'];
+      const manualTypes = ['tentativa_cobranca', 'observacao', 'acordo_realizado'] as const;
       const lastActionMap = new Map<string, string>();
 
       for (let i = 0; i < subIds.length; i += 200) {
