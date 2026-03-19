@@ -351,6 +351,7 @@ Deno.serve(async (req) => {
       subsCreated,
       subsUpdated,
       installmentsCreated,
+      installmentsUpdated,
       hasMore,
       nextOffset: hasMore ? offset + 5000 : null,
     };
