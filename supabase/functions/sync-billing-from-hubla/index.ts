@@ -255,7 +255,8 @@ Deno.serve(async (req) => {
 
         const first = txList[0];
         const totalInstallments = first.total_installments || txList.length;
-        const valorParcela = first.product_price || 0;
+        const valorBruto = first.product_price || 0;
+        const valorLiquido = first.net_value || 0;
         const existingNums = existingInstNums.get(subId) || new Set();
         const statusMap = existingInstStatus.get(subId) || new Map();
         const now = new Date();
