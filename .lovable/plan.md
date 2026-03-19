@@ -1,35 +1,51 @@
 
 
-## Plano: Corrigir valor_pago e valor_total_contrato (fallback errado para bruto)
+## Plano: Auditoria de Mudanças de Status + Alertas para Gestores
 
-### Problema
+### O que será feito
 
-A migration anterior tem dois bugs:
+Toda mudança de status em reuniões (invited→completed, no_show→completed, completed→no_show, etc.) já está registrada em `audit_logs`. Vamos criar:
 
-1. **valor_pago das parcelas 2+ com net_value=0**: O fallback `COALESCE(NULLIF(net_value, 0), product_price)` usa o `product_price` (bruto) quando `net_value=0`. Afeta **1.034 parcelas**. O correto é usar `net_value` diretamente (mesmo que 0).
+1. **Aba "Mudanças de Status"** na página de Auditoria — mostrando TODAS as mudanças de status (não apenas reversões suspeitas), com destaque visual para as suspeitas
+2. **Alertas automáticos** para gestores da BU quando uma mudança suspeita ocorre (ex: no_show→completed)
 
-2. **valor_total_contrato calculado com parcela 2**: A migration usou `parcela 2.valor_original` para calcular o contrato. Mas parcela 2 tem valor_original=0 (porque sua transação vinculada tem net_value=0). Resultado: **907 subscriptions** com valor_total_contrato = apenas o valor da parcela 1. O correto é usar o `net_value` da transação da parcela 1 como referência.
+### Detalhes
 
-   Exemplo Almir: Total Contrato = R$ 600 (errado) → deveria ser 600 + 11×469.11 = **R$ 5.760,21**
+**Hook `useStatusChangeAudit.ts`:**
+- Query `audit_logs` com joins para `meeting_slot_attendees` → `meeting_slots` → `closers` (BU) e `profiles` (quem alterou)
+- Filtra por BU ativa via `useActiveBU`
+- Parâmetros: período (7/30/90 dias), closer_id, tipo de mudança
+- Classifica cada mudança como "suspeita" ou "normal":
+  - Suspeita: `no_show→completed`, `completed→no_show`, `completed→invited`, `no_show→invited`
+  - Normal: `invited→completed`, `invited→no_show`, etc.
 
-### Correção
+**Componente `StatusChangesTab.tsx`:**
+- Cards resumo: Total de mudanças, Suspeitas, No-show→Realizada, Realizada→No-show
+- Tabela com colunas: Lead | Tipo (R1/R2) | Closer | De → Para | Alterado por | Data/Hora da reunião | Data/Hora da alteração
+- Badge vermelho para mudanças suspeitas, cinza para normais
+- Filtros: período, closer, apenas suspeitas
 
-**SQL Migration** (dados existentes):
+**Página `AuditoriaAgendamentos.tsx`:**
+- Adicionar Tabs com "Duplicatas" e "Mudanças de Status"
+- Título atualizado para "Auditoria"
 
-1. Corrigir `valor_pago` das 1.034 parcelas 2+ com fallback errado:
-   - `valor_pago = ht.net_value` (sem fallback para product_price)
-
-2. Recalcular `valor_total_contrato` usando o net_value da transação da **parcela 1** como referência (não da parcela 2):
-   - `valor_total = p1.valor_original + (total_parcelas - 1) × net_value_da_transacao_p1`
-
-3. Recalcular `status_quitacao` e `status`
-
-**Sync function**: Corrigir o fallback de `valor_pago` no `sync-billing-from-hubla` para parcelas 2+ não cair em `product_price` quando `net_value=0`.
+**DB Trigger `notify_suspicious_status_change`:**
+- Trigger em `audit_logs` (AFTER INSERT) que detecta mudanças suspeitas de status
+- Insere alerta na tabela `alertas` para todos os profiles com role admin/manager/coordenador que tenham a BU do closer no seu squad
+- O alerta inclui: nome do lead, closer, status anterior/novo, data da reunião, quem alterou
 
 ### Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| SQL Migration | Fix 1.034 valor_pago + 907 valor_total_contrato + recalc status |
-| `supabase/functions/sync-billing-from-hubla/index.ts` | Remover fallback product_price no valor_pago de parcelas 2+ |
+| `src/hooks/useStatusChangeAudit.ts` | Criar — hook React Query |
+| `src/components/audit/StatusChangesTab.tsx` | Criar — tabela + cards |
+| `src/pages/crm/AuditoriaAgendamentos.tsx` | Editar — adicionar tabs |
+| SQL Migration | Trigger para alertas automáticos |
+
+### Acesso
+
+- A aba filtra automaticamente por BU do gestor
+- Roles admin/manager/coordenador recebem alertas
+- SDRs/closers veem apenas a aba se tiverem acesso à rota de auditoria
 
