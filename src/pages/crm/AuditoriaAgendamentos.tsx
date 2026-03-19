@@ -1,6 +1,4 @@
 import { Shield } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DuplicatesTab } from '@/components/audit/DuplicatesTab';
 import { StatusChangesTab } from '@/components/audit/StatusChangesTab';
 
 export default function AuditoriaAgendamentos() {
@@ -13,23 +11,12 @@ export default function AuditoriaAgendamentos() {
             Auditoria
           </h1>
           <p className="text-muted-foreground text-sm">
-            Detecte duplicatas e mudanças suspeitas de status
+            Detecte mudanças suspeitas de status
           </p>
         </div>
       </div>
 
-      <Tabs defaultValue="status-changes">
-        <TabsList>
-          <TabsTrigger value="status-changes">Mudanças de Status</TabsTrigger>
-          <TabsTrigger value="duplicatas">Duplicatas</TabsTrigger>
-        </TabsList>
-        <TabsContent value="status-changes">
-          <StatusChangesTab />
-        </TabsContent>
-        <TabsContent value="duplicatas">
-          <DuplicatesTab />
-        </TabsContent>
-      </Tabs>
+      <StatusChangesTab />
     </div>
   );
 }
