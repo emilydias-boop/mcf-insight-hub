@@ -10,12 +10,26 @@ export interface StatusChangeEntry {
   changed_by_name: string | null;
   changed_by_id: string | null;
   attendee_name: string | null;
+  attendee_id: string | null;
+  attendee_phone: string | null;
   closer_name: string | null;
   closer_bu: string | null;
   meeting_type: string | null;
   scheduled_at: string | null;
   is_suspicious: boolean;
   is_normal_flow: boolean;
+  deal_id: string | null;
+  contact_id: string | null;
+  notes: string | null;
+  r2_observations: string | null;
+  closer_notes: string | null;
+  meeting_link: string | null;
+  video_status: string | null;
+  lead_profile: string | null;
+  is_reschedule: boolean;
+  suspension_reason: string;
+  old_data: Record<string, unknown> | null;
+  new_data: Record<string, unknown> | null;
 }
 
 const SUSPICIOUS_TRANSITIONS: [string, string][] = [
