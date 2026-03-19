@@ -349,11 +349,15 @@ Deno.serve(async (req) => {
 
       // Bulk update existing installments that were paid
       for (const upd of installmentsToUpdateBatch) {
+        // Parcela 1 = product_price (bruto), demais = net_value (líquido)
+        const valorPagoUpd = upd.numero === 1
+          ? (upd.paid.product_price || upd.paid.net_value)
+          : (upd.paid.net_value || upd.paid.product_price);
         const { error: updErr } = await supabase
           .from("billing_installments")
           .update({
             status: "pago",
-            valor_pago: upd.paid.net_value || upd.paid.product_price,
+            valor_pago: valorPagoUpd,
             valor_liquido: upd.paid.net_value || null,
             data_pagamento: upd.paid.sale_date,
             hubla_transaction_id: upd.paid.id,
