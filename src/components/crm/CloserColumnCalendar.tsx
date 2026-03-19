@@ -538,6 +538,18 @@ export function CloserColumnCalendar({
                         <Plus className="h-5 w-5 text-green-700 dark:text-green-300 group-hover:text-green-800 dark:group-hover:text-green-200 transition-colors" />
                         <span className="text-[10px] font-medium text-green-700 dark:text-green-300 ml-0.5">Livre</span>
                       </button>
+                    ) : isSlotConfigured(closer.id, slot) ? (
+                      (() => {
+                        const { totalAttendees, maxLeads } = getSlotCapacityInfo(closer.id, slot);
+                        return (
+                          <div className="w-full h-full min-h-[36px] flex items-center justify-center rounded bg-red-500/10 border border-red-500/30">
+                            <Lock className="h-3 w-3 text-red-400 mr-1" />
+                            <span className="text-[10px] font-semibold text-red-400">
+                              Lotado {totalAttendees}/{maxLeads}
+                            </span>
+                          </div>
+                        );
+                      })()
                     ) : (
                       <div className="w-full min-h-[36px]" />
                     )}
