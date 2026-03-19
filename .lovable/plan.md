@@ -1,51 +1,51 @@
 
 
-## Plano: Correções e Melhorias nas Funções de Cobrança
+## Plano: Corrigir Parcelas Falsamente Atrasadas (1.636 pagamentos ocultos)
 
-### Problemas Identificados
+### Diagnóstico
 
-**1. KPI "Clientes em Risco" mostra 0 (deveria ser 39)**
-- A query em `useBillingKPIs` filtra parcelas atrasadas por `data_vencimento` do mês selecionado (linhas 203-204)
-- Isso conta apenas parcelas vencidas **naquele mês**, não o total acumulado de atraso do cliente
-- Para risco de cancelamento, o correto é contar TODAS as parcelas atrasadas do cliente, não apenas as do mês
+O problema é no filtro da função `sync-billing-from-hubla` na **linha 30**:
 
-**2. KPI "Nunca Contatados" mostra 179 (deveria ser ~1261)**
-- A query usa `atrasadaIds.slice(0, 200)` (linha 223) — trunca em 200 IDs
-- Com 1261 subs atrasadas, só verifica os primeiros 200
-- Precisa iterar em chunks como já é feito em outros lugares
+```
+.gt("total_installments", 1)
+```
 
-**3. Warning de "unique key" no CobrancaInstallments**
-- Console mostra warning de key prop duplicada no componente de parcelas
+Isso ignora completamente transações da Hubla onde `total_installments = 1`. Porém, a Hubla frequentemente reporta cada pagamento mensal como uma transação separada com `total_installments=1, installment_number=1` — em vez de reportar como "parcela X de Y".
 
-**4. Fila de Cobrança sem paginação/limite**
-- Carrega todos os 1261 itens de uma vez — pode ser lento
-- Deveria ter paginação ou limite (ex: top 50 por risco)
+Exemplo: Claudio Alberto tem 14 transações na Hubla para "Efeito Alavanca", mas 13 delas têm `total_installments=1`. Só a última (parcela 11/12) tem os dados corretos. O sync nunca enxergou as outras 12 transações.
 
-### Correções
+**Impacto medido:**
+- 1.636 pagamentos na Hubla ignorados pelo sync
+- 931 assinaturas afetadas (parcelas marcadas "atrasado" quando na verdade foram pagas)
+- ~1.042 installments poderiam ser corrigidos
 
-**Arquivo: `src/hooks/useBillingSubscriptions.ts`**
+### Solução (2 partes)
 
-1. **Clientes em Risco** — remover o filtro de mês da query de risco. Buscar TODAS as parcelas atrasadas globalmente para calcular o risco real:
-   - Remover `if (monthStart && monthEnd)` das linhas 203-204 da `riskInstQuery`
-   - Assim conta o total acumulado de parcelas atrasadas por sub, independente do mês
+**Parte 1: Backfill SQL imediato** — Corrigir dados existentes
 
-2. **Nunca Contatados** — iterar em chunks de 200 ao invés de `slice(0, 200)`:
-   - Loop: `for (let i = 0; i < atrasadaIds.length; i += 200)` com chunk query
-   - Acumular os `subscription_id` contatados num Set global
+Para cada `billing_installment` com `status = 'atrasado'` e sem `hubla_transaction_id`:
+1. Buscar `hubla_transactions` do mesmo `customer_email + product_name` com `total_installments = 1`
+2. Ordenar ambos cronologicamente (installments por `data_vencimento`, transactions por `sale_date`)
+3. Fazer match sequencial: parcela N ← N-ésima transação (não por data-proximity, que é impreciso)
+4. Atualizar installment: `status = 'pago'`, `valor_pago = net_value`, `data_pagamento = sale_date`, `hubla_transaction_id`
+5. Inserir registro em `billing_history` para cada correção
+6. Recalcular `status` e `status_quitacao` das subscriptions afetadas
 
-3. **Remover código morto** — o `overdueCountMap` (linhas 189-197) não é usado para nada, pode ser removido
+**Parte 2: Corrigir o sync** — Evitar que volte a acontecer
 
-**Arquivo: `src/hooks/useBillingQueue.ts`**
+Alterar `sync-billing-from-hubla/index.ts` para também processar transações com `total_installments = 1` quando já existe uma `billing_subscription` para o mesmo `customer_email + product_name`. A lógica:
+- Após processar as transações parceladas (total_installments > 1), buscar transações com `total_installments = 1` que correspondam a subscriptions existentes
+- Ordenar por `sale_date` e match sequencial às parcelas não pagas
 
-4. **Limitar fila a top 100** — adicionar `.slice(0, 100)` no resultado final para não renderizar 1261 linhas
+### Arquivos
 
-**Arquivo: `src/components/financeiro/cobranca/CobrancaInstallments.tsx`**
-
-5. **Fix unique key warning** — verificar e corrigir a key prop duplicada
+| Arquivo | Ação |
+|---------|------|
+| `supabase/migrations/backfill_hidden_payments.sql` | Novo — SQL backfill dos 1.636 pagamentos ocultos |
+| `supabase/functions/sync-billing-from-hubla/index.ts` | Alterar — incluir transações total_installments=1 no match |
 
 ### Resultado Esperado
-- "Clientes em Risco" mostrará ~39 (correto)
-- "Nunca Contatados" mostrará ~1261 (correto — todos atrasados sem contato manual)
-- Performance melhorada com limite na fila
-- Console limpo sem warnings
+- ~931 assinaturas corrigidas de "atrasada" para "em_dia" ou "quitada"
+- KPIs de inadimplência reduzidos significativamente (de 1.261 atrasadas para ~330)
+- Futuras transações individuais da Hubla serão capturadas automaticamente
 
