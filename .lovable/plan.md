@@ -1,49 +1,40 @@
 
 
-## Plano: Capacidade individual por horário (R1) — com bloqueio rígido
+## Plano: Filtrar auditoria para mostrar apenas mudanças relevantes
 
 ### Problema
 
-Hoje `max_leads_per_slot` é global por closer. O usuário quer definir capacidades diferentes por horário (ex: 11:30 = 3, 17:00 = 1) e o sistema **deve bloquear** agendamento quando o limite for atingido.
+A aba "Mudanças de Status" traz **todas** as alterações de status (307), incluindo transições normais do fluxo operacional como `pre_scheduled → invited`, `invited → scheduled`, etc. Isso polui a visão e dificulta identificar mudanças realmente relevantes para auditoria.
 
-### Alterações
+### Solução
 
-**1. Migration SQL**
-- Adicionar coluna `max_leads` (INTEGER, nullable) na tabela `closer_meeting_links`
-- Quando `null`, usa o padrão global do closer
+Melhorar os filtros e a lógica para focar nas mudanças que importam para auditoria:
 
-**2. UI — `CloserAvailabilityConfig.tsx`**
-Na lista de links por dia (linhas 343-363), adicionar um input numérico compacto ao lado de cada horário:
+**1. Arquivo: `src/hooks/useStatusChangeAudit.ts`**
 
-```text
-11:30  [https://meet.google.com/...]  [3 👥]  🗑️
-17:00  [https://meet.google.com/...]  [1 👥]  🗑️
-```
+- Adicionar uma lista de transições "normais" (que não são relevantes para auditoria) e filtrá-las por padrão:
+  - `pre_scheduled → invited` / `pre_scheduled → scheduled`
+  - `invited → scheduled` / `invited → confirmed`
+  - `scheduled → confirmed`
+  - Estas são progressões naturais do fluxo
+- Expandir a lista de `SUSPICIOUS_TRANSITIONS` para incluir mais transições realmente suspeitas:
+  - `no_show → completed`, `completed → no_show` (já existem)
+  - `no_show → invited`, `completed → invited` (já existem)
+  - `no_show → scheduled`, `completed → scheduled` (regressões)
+  - `cancelled → completed`, `refunded → completed` (reversões)
+- Remover o `limit(500)` que pode estar cortando dados ou aumentar para 2000
 
-- Input tipo number, largura ~16, min=1, max=10
-- Placeholder mostra o padrão global do closer
-- Ao alterar (onBlur), salva via mutation direta no `closer_meeting_links`
+**2. Arquivo: `src/components/audit/StatusChangesTab.tsx`**
 
-**3. Hook — `useCloserMeetingLinks.ts`**
-- Incluir `max_leads` no select e no tipo `CloserMeetingLink`
-- Adicionar mutation `useUpdateCloserMeetingLinkMaxLeads` para atualizar o campo
+- Adicionar filtro dropdown de "Tipo de mudança":
+  - **Todas** — mostra tudo (como está hoje)
+  - **Apenas suspeitas** — substitui o switch atual
+  - **Mudanças manuais** — exclui transições automáticas do fluxo normal
+- Mudar o padrão do filtro para "Mudanças manuais" em vez de mostrar tudo
+- Adicionar mais cards de stats para as novas categorias suspeitas
+- Os cards de resumo devem sempre mostrar stats de todas as mudanças (não do filtrado), para dar visão geral
 
-**4. Lógica de bloqueio — `CloserColumnCalendar.tsx`**
-Na função `isSlotAvailable` (linha 184-203):
-- Buscar o link específico do slot no array de `closer_meeting_links` (pelo `closer_id` + `start_time` + `day_of_week`)
-- Usar `link.max_leads ?? closer.max_leads_per_slot ?? 4` como capacidade
-- Manter o bloqueio rígido: `totalAttendees < capacity` retorna `false` quando cheio (não permite agendar)
+### Resultado esperado
 
-**5. Hook — `useAgendaData.ts`**
-- Incluir `max_leads` ao buscar `closer_meeting_links` para disponibilizar nos dados do calendário
-
-### Prioridade de capacidade
-
-1. `closer_meeting_links.max_leads` (override por slot)
-2. `closers.max_leads_per_slot` (padrão global do closer)
-3. Fallback: 4
-
-### Comportamento
-
-Slot cheio = **bloqueado**, não permite agendar mais leads naquele horário. Isso já é o comportamento atual em `isSlotAvailable`, apenas passará a usar a capacidade do slot específico em vez do global.
+Ao abrir a página, o usuário verá apenas as mudanças que merecem atenção (não as transições operacionais normais), com destaque visual nas suspeitas. Poderá trocar para "Todas" se quiser a visão completa.
 
