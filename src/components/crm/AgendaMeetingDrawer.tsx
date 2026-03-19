@@ -967,7 +967,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   {/* Status Flow Buttons - Bidirectional */}
                   <div className="grid grid-cols-2 gap-2">
                     {/* Agendada/Voltar */}
-                    {selectedParticipant.status !== 'scheduled' && selectedParticipant.status !== 'contract_paid' && (
+                    {!isSdr && selectedParticipant.status !== 'scheduled' && selectedParticipant.status !== 'contract_paid' && (
                       <Button
                         variant="outline"
                         size="sm"
