@@ -266,7 +266,10 @@ Deno.serve(async (req) => {
           if (diff > 0 && diff < 90) batchIntervalDays = diff;
         }
 
+        // Estimate the date of installment #1 by backtracking from the earliest known transaction
+        const earliestKnownNumber = first.installment_number || 1;
         const firstDate = new Date(first.sale_date);
+        firstDate.setDate(firstDate.getDate() - batchIntervalDays * (earliestKnownNumber - 1));
 
         for (let i = 1; i <= totalInstallments; i++) {
           if (existingNums.has(i)) {
