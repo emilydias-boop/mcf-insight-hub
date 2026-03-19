@@ -71,7 +71,7 @@ export function useStatusChangeAudit({ days, closerId, suspiciousOnly }: UseStat
       // Fetch attendees with slots and closers
       const { data: attendees } = await supabase
         .from('meeting_slot_attendees')
-        .select('id, attendee_name, slot_id')
+        .select('id, attendee_name, meeting_slot_id')
         .in('id', attendeeIds);
 
       const slotIds = [...new Set((attendees || []).map(a => a.slot_id).filter(Boolean))];
