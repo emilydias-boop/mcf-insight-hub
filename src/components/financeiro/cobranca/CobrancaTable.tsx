@@ -60,15 +60,16 @@ export const CobrancaTable = ({ subscriptions, isLoading, onSelect }: CobrancaTa
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Cliente</TableHead>
-            <TableHead>Produto</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Quitação</TableHead>
-            <TableHead className="text-right">Valor Total</TableHead>
-            <TableHead>Parcelas</TableHead>
-            <TableHead>Pagamento</TableHead>
-            <TableHead>Responsável</TableHead>
-            <TableHead>Início</TableHead>
+           <TableHead>Cliente</TableHead>
+69:             <TableHead>Produto</TableHead>
+70:             <TableHead>Status</TableHead>
+71:             <TableHead className="text-right">Valor Total</TableHead>
+72:             <TableHead className="text-right">Valor Pago</TableHead>
+73:             <TableHead>Parcelas</TableHead>
+74:             <TableHead>Pagamento</TableHead>
+75:             <TableHead>Responsável</TableHead>
+76:             <TableHead>Início</TableHead>
+77:             <TableHead>Previsão Final</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
