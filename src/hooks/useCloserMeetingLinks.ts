@@ -8,6 +8,7 @@ interface CloserMeetingLink {
   day_of_week: number;
   start_time: string;
   google_meet_link: string;
+  max_leads: number | null;
   created_at: string | null;
 }
 
@@ -20,7 +21,8 @@ interface CreateLinkParams {
 
 interface UpdateLinkParams {
   id: string;
-  google_meet_link: string;
+  google_meet_link?: string;
+  max_leads?: number | null;
 }
 
 export function useCloserMeetingLinksList(closerId?: string, dayOfWeek?: number) {
@@ -67,7 +69,7 @@ export function useCloserDaySlots(dayOfWeek: number, meetingType: 'r1' | 'r2' = 
 
       const { data, error } = await supabase
         .from('closer_meeting_links')
-        .select('closer_id, start_time')
+        .select('closer_id, start_time, max_leads')
         .eq('day_of_week', dayOfWeek)
         .in('closer_id', ids)
         .order('start_time');
@@ -178,10 +180,10 @@ export function useUpdateCloserMeetingLink() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, google_meet_link }: UpdateLinkParams) => {
+    mutationFn: async ({ id, ...updates }: UpdateLinkParams) => {
       const { data, error } = await supabase
         .from('closer_meeting_links')
-        .update({ google_meet_link })
+        .update(updates)
         .eq('id', id)
         .select()
         .single();

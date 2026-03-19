@@ -1,0 +1,1 @@
+ALTER TABLE public.closer_meeting_links ADD COLUMN max_leads INTEGER DEFAULT NULL;
