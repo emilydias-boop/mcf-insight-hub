@@ -7,9 +7,6 @@ import { BillingSubscription, SUBSCRIPTION_STATUS_LABELS, PAYMENT_METHOD_LABELS 
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { formatCurrency, formatDate } from '@/lib/formatters';
-import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface CobrancaTableProps {
   subscriptions: BillingSubscription[];
