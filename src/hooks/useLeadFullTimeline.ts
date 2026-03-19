@@ -179,7 +179,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               title: `${fromName} → ${toName}`,
               description: act.description,
               date: act.created_at,
-              author: meta.owner_email || meta.deal_user || meta.changed_by || null,
+              author: resolveAuthor(act.user_id, meta.owner_email, meta.deal_user, meta.changed_by),
               metadata: { from_stage: fromName, to_stage: toName, ...meta },
             });
           } else if (actType === 'note' || actType === 'manual_note') {
