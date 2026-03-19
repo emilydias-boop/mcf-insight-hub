@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useContactDealIds } from './useContactDealIds';
 
-export type TimelineEventType = 'stage_change' | 'call' | 'note' | 'meeting' | 'task' | 'purchase' | 'qualification' | 'closer_note';
+export type TimelineEventType = 'stage_change' | 'call' | 'note' | 'meeting' | 'task' | 'purchase' | 'qualification' | 'closer_note' | 'entry';
 
 export interface TimelineEvent {
   id: string;
@@ -35,8 +35,11 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
       // Build OR filter for deal_activities (supports both UUID and clint_id)
       const orFilter = uniqueIds.map(id => `deal_id.eq.${id}`).join(',');
 
+      // Build UUID-only filter for tables with proper UUID FK
+      const uuidIds = uniqueIds.filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
       // Run all queries in parallel
-      const [activitiesRes, callsRes, meetingsRes, transactionsRes, attendeeNotesRes] = await Promise.all([
+      const [activitiesRes, callsRes, meetingsRes, transactionsRes, attendeeNotesRes, dealsRes] = await Promise.all([
         // 1. Deal activities (stage changes, notes, tasks, qualification) - ALL deals
         supabase
           .from('deal_activities')
@@ -78,6 +81,14 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           .in('meeting_slot_attendees.deal_id', uniqueIds)
           .order('created_at', { ascending: false })
           .limit(50),
+
+        // 6. Deal basic info for synthesizing entry events
+        uuidIds.length > 0
+          ? supabase
+              .from('crm_deals')
+              .select('id, created_at, origin_id, owner_id')
+              .in('id', uuidIds)
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
       // Process deal_activities
@@ -246,6 +257,30 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
             author: null,
             metadata: { note_type: note.note_type, attendee_id: note.attendee_id },
           });
+        }
+      }
+
+      // Synthesize "Entrada na Pipeline" for each deal if no event exists near created_at
+      if (dealsRes.data) {
+        for (const deal of dealsRes.data) {
+          if (!deal.created_at) continue;
+          const dealCreatedMs = new Date(deal.created_at).getTime();
+          const TOLERANCE_MS = 60_000; // 1 minute
+          const hasEntryEvent = events.some(
+            e => (e.type === 'entry' || e.type === 'stage_change') &&
+              Math.abs(new Date(e.date).getTime() - dealCreatedMs) < TOLERANCE_MS
+          );
+          if (!hasEntryEvent) {
+            events.push({
+              id: `entry-${deal.id}`,
+              type: 'entry',
+              title: 'Entrada na Pipeline',
+              description: 'Lead entrou na pipeline',
+              date: deal.created_at,
+              author: deal.owner_id || null,
+              metadata: { deal_id: deal.id, origin_id: deal.origin_id, synthetic: true },
+            });
+          }
         }
       }
 
