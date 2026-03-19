@@ -215,19 +215,22 @@ Deno.serve(async (req) => {
 
       // Fetch existing installments for all subscription IDs in this batch
       const existingInstNums = new Map<string, Set<number>>();
+      const existingInstStatus = new Map<string, Map<number, string>>();
       if (subIdsForInstallments.length > 0) {
         for (let i = 0; i < subIdsForInstallments.length; i += 200) {
           const chunk = subIdsForInstallments.slice(i, i + 200);
           const { data: existInst } = await supabase
             .from("billing_installments")
-            .select("subscription_id, numero_parcela")
+            .select("subscription_id, numero_parcela, status")
             .in("subscription_id", chunk);
           
           for (const inst of existInst || []) {
             if (!existingInstNums.has(inst.subscription_id)) {
               existingInstNums.set(inst.subscription_id, new Set());
+              existingInstStatus.set(inst.subscription_id, new Map());
             }
             existingInstNums.get(inst.subscription_id)!.add(inst.numero_parcela);
+            existingInstStatus.get(inst.subscription_id)!.set(inst.numero_parcela, inst.status);
           }
         }
       }
