@@ -14,6 +14,7 @@ import { ptBR } from 'date-fns/locale';
 export function StatusChangesTab() {
   const [days, setDays] = useState(7);
   const [filterMode, setFilterMode] = useState<AuditFilterMode>('manual');
+  const [selectedEntry, setSelectedEntry] = useState<StatusChangeEntry | null>(null);
 
   const { data: changes = [], isLoading } = useStatusChangeAudit({
     days,
