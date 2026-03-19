@@ -335,10 +335,11 @@ Deno.serve(async (req) => {
           } else {
             const dueDate = new Date(firstDate);
             dueDate.setDate(dueDate.getDate() + batchIntervalDays * (i - 1));
+            const valorOriginalUnpaid = i === 1 ? valorBruto : valorLiquido;
             allInstallmentsToInsert.push({
               subscription_id: subId,
               numero_parcela: i,
-              valor_original: valorParcela,
+              valor_original: valorOriginalUnpaid,
               valor_pago: 0,
               valor_liquido: 0,
               data_vencimento: dueDate.toISOString(),
