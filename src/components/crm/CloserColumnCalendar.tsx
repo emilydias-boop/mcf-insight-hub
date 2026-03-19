@@ -513,18 +513,22 @@ export function CloserColumnCalendar({
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
-                        {onAddToMeeting && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onAddToMeeting(closer.id, slot);
-                            }}
-                            className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-white/90 rounded-full p-0.5 shadow hover:bg-green-100 transition-opacity z-10"
-                            title="Adicionar lead a esta reunião"
-                          >
-                            <UserPlus className="h-3.5 w-3.5 text-green-600" />
-                          </button>
-                        )}
+                        {onAddToMeeting && (() => {
+                          const { totalAttendees: ta, maxLeads: ml } = getSlotCapacityInfo(closer.id, slot);
+                          if (ta >= ml) return null;
+                          return (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onAddToMeeting(closer.id, slot);
+                              }}
+                              className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-white/90 rounded-full p-0.5 shadow hover:bg-green-100 transition-opacity z-10"
+                              title="Adicionar lead a esta reunião"
+                            >
+                              <UserPlus className="h-3.5 w-3.5 text-green-600" />
+                            </button>
+                          );
+                        })()}
                         {/* Lotado badge overlay */}
                         {(() => {
                           const { totalAttendees, maxLeads } = getSlotCapacityInfo(closer.id, slot);
