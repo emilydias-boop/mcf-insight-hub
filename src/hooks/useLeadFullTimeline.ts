@@ -91,11 +91,15 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           : Promise.resolve({ data: [], error: null }),
       ]);
 
-      // Resolve stage UUIDs to names
       const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      // Collect all author user_ids and stage UUIDs in one pass
+      const authorUuids = new Set<string>();
       const stageUuids = new Set<string>();
+
       if (activitiesRes.data) {
         for (const act of activitiesRes.data) {
+          if (act.user_id && UUID_RE.test(act.user_id)) authorUuids.add(act.user_id);
           const aType = act.activity_type || '';
           if (aType === 'stage_change' || aType === 'stage_changed') {
             const meta = (act.metadata as Record<string, any>) || {};
@@ -106,17 +110,43 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           }
         }
       }
+      if (callsRes.data) {
+        for (const call of callsRes.data) {
+          if (call.user_id && UUID_RE.test(call.user_id)) authorUuids.add(call.user_id);
+        }
+      }
+      if (attendeeNotesRes.data) {
+        for (const note of attendeeNotesRes.data) {
+          if (note.created_by && UUID_RE.test(note.created_by)) authorUuids.add(note.created_by);
+        }
+      }
+      if (dealsRes.data) {
+        for (const deal of dealsRes.data) {
+          if (deal.owner_id && UUID_RE.test(deal.owner_id)) authorUuids.add(deal.owner_id);
+        }
+      }
 
-      let stageNameMap: Record<string, string> = {};
-      if (stageUuids.size > 0) {
-        const { data: stages } = await supabase
-          .from('crm_stages')
-          .select('id, stage_name')
-          .in('id', [...stageUuids]);
-        if (stages) {
-          for (const s of stages) {
-            stageNameMap[s.id.toLowerCase()] = s.stage_name;
-          }
+      // Resolve stages and profiles in parallel
+      const [stagesResult, profilesResult] = await Promise.all([
+        stageUuids.size > 0
+          ? supabase.from('crm_stages').select('id, stage_name').in('id', [...stageUuids])
+          : Promise.resolve({ data: [] as { id: string; stage_name: string }[] }),
+        authorUuids.size > 0
+          ? supabase.from('profiles').select('id, full_name, email').in('id', [...authorUuids])
+          : Promise.resolve({ data: [] as { id: string; full_name: string | null; email: string | null }[] }),
+      ]);
+
+      const stageNameMap: Record<string, string> = {};
+      if (stagesResult.data) {
+        for (const s of stagesResult.data) {
+          stageNameMap[s.id.toLowerCase()] = s.stage_name;
+        }
+      }
+
+      const profileMap: Record<string, string> = {};
+      if (profilesResult.data) {
+        for (const p of profilesResult.data) {
+          profileMap[p.id] = p.full_name || p.email || 'Usuário';
         }
       }
 
@@ -124,6 +154,14 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
         if (!val) return '?';
         if (UUID_RE.test(val)) return stageNameMap[val.toLowerCase()] || val;
         return val;
+      };
+
+      const resolveAuthor = (userId: string | null | undefined, ...fallbacks: (string | null | undefined)[]): string | null => {
+        for (const fb of fallbacks) {
+          if (fb) return fb;
+        }
+        if (userId && profileMap[userId]) return profileMap[userId];
+        return null;
       };
 
       // Process deal_activities
