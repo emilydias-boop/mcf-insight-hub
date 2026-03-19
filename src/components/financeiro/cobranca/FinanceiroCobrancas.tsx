@@ -26,8 +26,8 @@ export const FinanceiroCobrancas = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const syncMutation = useSyncBillingFromHubla();
 
-  const { data: kpis, isLoading: loadingKpis } = useBillingKPIs();
-  const { data: subscriptions = [], isLoading: loadingSubs } = useBillingSubscriptions(filters);
+  const { data: kpis, isLoading: loadingKpis } = useBillingKPIs(currentMonth);
+  const { data: subscriptions = [], isLoading: loadingSubs } = useBillingSubscriptions({ ...filters, month: currentMonth });
   const { data: monthKpis, isLoading: loadingMonthKpis } = useBillingMonthKPIs(currentMonth);
 
   const monthLabel = format(currentMonth, 'MMM/yy', { locale: ptBR });
