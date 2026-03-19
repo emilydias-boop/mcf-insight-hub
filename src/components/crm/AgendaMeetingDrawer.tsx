@@ -900,6 +900,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     </div>
                   )}
                 </div>
+                {/* Perfil do Lead (Anamnese) */}
+                <LeadProfileSection contactId={selectedParticipant?.contactId} />
                 <Separator />
               </>
             )}
