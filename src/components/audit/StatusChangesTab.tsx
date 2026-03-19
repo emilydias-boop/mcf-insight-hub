@@ -1,31 +1,34 @@
 import { useState, useMemo } from 'react';
-import { useStatusChangeAudit, StatusChangeEntry } from '@/hooks/useStatusChangeAudit';
+import { useStatusChangeAudit, StatusChangeEntry, AuditFilterMode } from '@/hooks/useStatusChangeAudit';
 import { formatMeetingStatus } from '@/utils/formatMeetingStatus';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, ArrowRight, Clock, Eye, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Clock, Eye, ShieldAlert, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export function StatusChangesTab() {
   const [days, setDays] = useState(7);
-  const [suspiciousOnly, setSuspiciousOnly] = useState(false);
+  const [filterMode, setFilterMode] = useState<AuditFilterMode>('manual');
 
   const { data: changes = [], isLoading } = useStatusChangeAudit({
     days,
-    suspiciousOnly,
+    filterMode,
   });
 
+  // Stats always from "all" query would require double fetch; compute from current + label accordingly
   const stats = useMemo(() => {
     const total = changes.length;
     const suspicious = changes.filter(c => c.is_suspicious).length;
     const noShowToCompleted = changes.filter(c => c.old_status === 'no_show' && c.new_status === 'completed').length;
     const completedToNoShow = changes.filter(c => c.old_status === 'completed' && c.new_status === 'no_show').length;
-    return { total, suspicious, noShowToCompleted, completedToNoShow };
+    const reversals = changes.filter(c =>
+      (c.old_status === 'cancelled' || c.old_status === 'refunded') && c.new_status === 'completed'
+    ).length;
+    return { total, suspicious, noShowToCompleted, completedToNoShow, reversals };
   }, [changes]);
 
   return (
@@ -46,13 +49,22 @@ export function StatusChangesTab() {
           </Select>
         </div>
         <div className="flex items-center gap-2">
-          <Switch checked={suspiciousOnly} onCheckedChange={setSuspiciousOnly} id="suspicious-only" />
-          <Label htmlFor="suspicious-only" className="text-sm">Apenas suspeitas</Label>
+          <Label className="text-sm whitespace-nowrap">Tipo:</Label>
+          <Select value={filterMode} onValueChange={(v) => setFilterMode(v as AuditFilterMode)}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="manual">Mudanças manuais</SelectItem>
+              <SelectItem value="suspicious">Apenas suspeitas</SelectItem>
+              <SelectItem value="all">Todas</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card>
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
@@ -91,6 +103,16 @@ export function StatusChangesTab() {
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <p className="text-2xl font-bold">{stats.completedToNoShow}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-orange-300/50">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-orange-600 flex items-center gap-1">
+              <RotateCcw className="h-3 w-3" /> Reversões
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <p className="text-2xl font-bold text-orange-600">{stats.reversals}</p>
           </CardContent>
         </Card>
       </div>
