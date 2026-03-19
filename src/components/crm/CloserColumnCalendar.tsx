@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect } from "react";
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Settings, Plus, ArrowRightLeft, DollarSign, UserCircle, UserPlus } from "lucide-react";
+import { Settings, Plus, ArrowRightLeft, DollarSign, UserCircle, UserPlus, Lock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { MeetingSlot, CloserWithAvailability, BlockedDate } from "@/hooks/useAgendaData";
@@ -204,6 +204,22 @@ export function CloserColumnCalendar({
     );
 
     return totalAttendees < maxLeads;
+  };
+
+  // Get capacity info for a configured slot (for "Lotado" display)
+  const getSlotCapacityInfo = (closerId: string, slotTime: Date) => {
+    const closer = closers.find(c => c.id === closerId);
+    const timeStr = format(slotTime, "HH:mm");
+    const slotLink = daySlots.find(
+      (s) => s.closer_id === closerId && s.start_time.slice(0, 5) === timeStr
+    );
+    const maxLeads = slotLink?.max_leads ?? closer?.max_leads_per_slot ?? 4;
+    const slotMeetings = getMeetingsForSlot(closerId, slotTime);
+    const totalAttendees = slotMeetings.reduce(
+      (sum, m) => sum + (m.attendees?.length || 0),
+      0
+    );
+    return { totalAttendees, maxLeads };
   };
 
   const getMeetingsForSlot = (closerId: string, slotTime: Date) => {
@@ -522,6 +538,18 @@ export function CloserColumnCalendar({
                         <Plus className="h-5 w-5 text-green-700 dark:text-green-300 group-hover:text-green-800 dark:group-hover:text-green-200 transition-colors" />
                         <span className="text-[10px] font-medium text-green-700 dark:text-green-300 ml-0.5">Livre</span>
                       </button>
+                    ) : isSlotConfigured(closer.id, slot) ? (
+                      (() => {
+                        const { totalAttendees, maxLeads } = getSlotCapacityInfo(closer.id, slot);
+                        return (
+                          <div className="w-full h-full min-h-[36px] flex items-center justify-center rounded bg-red-500/10 border border-red-500/30">
+                            <Lock className="h-3 w-3 text-red-400 mr-1" />
+                            <span className="text-[10px] font-semibold text-red-400">
+                              Lotado {totalAttendees}/{maxLeads}
+                            </span>
+                          </div>
+                        );
+                      })()
                     ) : (
                       <div className="w-full min-h-[36px]" />
                     )}

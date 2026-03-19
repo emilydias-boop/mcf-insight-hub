@@ -4,7 +4,7 @@ import { ptBR } from 'date-fns/locale';
 import { getWeekStartsOn } from '@/lib/businessDays';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Lock } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { MeetingSlot, CloserWithAvailability, useUpdateMeetingSchedule } from '@/hooks/useAgendaData';
@@ -528,6 +528,53 @@ export function AgendaCalendar({
       return true;
     });
   }, [meetingLinkSlots, r2DailySlotsMap, meetingType, filteredMeetings, crossBuConflictsData, selectedDate]);
+
+  // Get capacity status for a slot: how many closers are configured, how many are full
+  const getSlotCapacityStatus = useCallback((day: Date, hour: number, minute: number) => {
+    const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    let configuredCloserIds: string[] = [];
+    
+    if (meetingType === 'r2' && r2DailySlotsMap) {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const dateSlots = r2DailySlotsMap[dateStr];
+      configuredCloserIds = dateSlots?.[timeStr]?.closerIds || [];
+    } else {
+      const dayOfWeek = day.getDay();
+      const slots = meetingLinkSlots?.[dayOfWeek] || [];
+      const configuredSlot = slots.find(s => s.time === timeStr);
+      configuredCloserIds = configuredSlot?.closerIds || [];
+    }
+    
+    if (configuredCloserIds.length === 0) return { configured: 0, full: 0, allFull: false };
+    
+    let fullCount = 0;
+    for (const closerId of configuredCloserIds) {
+      const closer = closers.find(c => c.id === closerId);
+      const maxLeads = closer?.max_leads_per_slot ?? 4;
+      
+      // Count attendees for this closer at this time
+      const slotTime = setMinutes(setHours(new Date(day), hour), minute);
+      const attendeeCount = filteredMeetings
+        .filter(m => {
+          if (m.closer_id !== closerId) return false;
+          const meetingStart = parseISO(m.scheduled_at);
+          return isSameDay(meetingStart, day) &&
+            meetingStart.getHours() === hour &&
+            meetingStart.getMinutes() >= minute &&
+            meetingStart.getMinutes() < minute + 30;
+        })
+        .reduce((sum, m) => sum + (m.attendees?.length || 0), 0);
+      
+      if (attendeeCount >= maxLeads) fullCount++;
+    }
+    
+    return {
+      configured: configuredCloserIds.length,
+      full: fullCount,
+      allFull: fullCount > 0 && fullCount >= configuredCloserIds.length,
+      freeCount: configuredCloserIds.length - fullCount,
+    };
+  }, [meetingLinkSlots, r2DailySlotsMap, meetingType, closers, filteredMeetings]);
 
   const getMeetingsForDay = (day: Date) => {
     return filteredMeetings.filter(meeting => {
@@ -1123,6 +1170,30 @@ export function AgendaCalendar({
                                 Agendar
                               </button>
                             )}
+                            {/* Full/Lotado indicator for this closer */}
+                            {hasNoMeetings && !isCloserAvailable && isSlotConfigured(day, hour, minute) && (() => {
+                              const maxLeads = closer?.max_leads_per_slot ?? 4;
+                              const attendeeCount = filteredMeetings
+                                .filter(m => {
+                                  if (m.closer_id !== closerId) return false;
+                                  const meetingStart = parseISO(m.scheduled_at);
+                                  return isSameDay(meetingStart, day) &&
+                                    meetingStart.getHours() === hour &&
+                                    meetingStart.getMinutes() >= minute &&
+                                    meetingStart.getMinutes() < minute + 30;
+                                })
+                                .reduce((sum, m) => sum + (m.attendees?.length || 0), 0);
+                              
+                              if (attendeeCount >= maxLeads && attendeeCount > 0) {
+                                return (
+                                  <div className="absolute inset-0.5 rounded flex items-center justify-center gap-1 bg-red-500/10 border border-red-500/30">
+                                    <Lock className="h-3 w-3 text-red-400" />
+                                    <span className="text-[10px] font-semibold text-red-400">Lotado {attendeeCount}/{maxLeads}</span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                             
                             {/* Meetings for this closer */}
                             {closerMeetings.map((group, groupIndex) => {
@@ -1307,6 +1378,23 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                           {!isOccupied && groupedSlots.length === 0 && onSelectSlot && (() => {
                             const { allDayClosers, totalClosers, isCompact } = getSlotGridInfo(day);
                             const availableClosers = getAvailableClosersForSlot(day, hour, minute);
+                            const capacityStatus = getSlotCapacityStatus(day, hour, minute);
+                            
+                            // Show "Lotado" when configured but ALL closers full
+                            if (availableClosers.length === 0 && capacityStatus.configured > 0 && capacityStatus.allFull) {
+                              return (
+                                <div className="absolute inset-0.5 rounded flex items-center justify-center gap-1 bg-red-500/10 border border-red-500/30">
+                                  <Lock className="h-3 w-3 text-red-400" />
+                                  <span className="text-[10px] font-semibold text-red-400">Lotado</span>
+                                </div>
+                              );
+                            }
+                            
+                            // Show partial indicator when SOME closers full
+                            if (availableClosers.length === 0 && capacityStatus.configured > 0) {
+                              return null;
+                            }
+                            
                             if (availableClosers.length === 0) return null;
                             
                             return (
@@ -1317,6 +1405,27 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                 {allDayClosers.map(closerId => {
                                   const isAvailable = availableClosers.includes(closerId);
                                   if (!isAvailable) {
+                                    // Check if this specific closer is full (configured but at capacity)
+                                    const closer = closers.find(c => c.id === closerId);
+                                    const maxLeads = closer?.max_leads_per_slot ?? 4;
+                                    const attendeeCount = filteredMeetings
+                                      .filter(m => {
+                                        if (m.closer_id !== closerId) return false;
+                                        const meetingStart = parseISO(m.scheduled_at);
+                                        return isSameDay(meetingStart, day) &&
+                                          meetingStart.getHours() === hour &&
+                                          meetingStart.getMinutes() >= minute &&
+                                          meetingStart.getMinutes() < minute + 30;
+                                      })
+                                      .reduce((sum, m) => sum + (m.attendees?.length || 0), 0);
+                                    
+                                    if (attendeeCount >= maxLeads && attendeeCount > 0) {
+                                      return (
+                                        <div key={closerId} className="rounded flex items-center justify-center bg-red-500/10 border border-red-500/20">
+                                          <Lock className="h-2.5 w-2.5 text-red-400" />
+                                        </div>
+                                      );
+                                    }
                                     // Empty placeholder to maintain grid column
                                     return <div key={closerId} />;
                                   }
