@@ -1295,10 +1295,33 @@ export function useCheckSlotAvailability(
         attendees = data || [];
       }
 
-      // Always available - no limit on attendees
+      // Fetch capacity: closer_meeting_links override > closer global > fallback 4
+      const dayOfWeek = scheduledAt.getDay();
+      const timeStr = `${String(scheduledAt.getHours()).padStart(2, '0')}:${String(scheduledAt.getMinutes()).padStart(2, '0')}:00`;
+
+      const [linkResult, closerResult] = await Promise.all([
+        supabase
+          .from('closer_meeting_links')
+          .select('max_leads')
+          .eq('closer_id', closerId)
+          .eq('day_of_week', dayOfWeek)
+          .eq('start_time', timeStr)
+          .maybeSingle(),
+        supabase
+          .from('closers')
+          .select('max_leads_per_slot')
+          .eq('id', closerId)
+          .single(),
+      ]);
+
+      const slotMaxLeads = linkResult.data?.max_leads;
+      const closerMaxLeads = closerResult.data?.max_leads_per_slot;
+      const maxLeads = slotMaxLeads ?? closerMaxLeads ?? 4;
+
       return {
-        available: true,
+        available: attendees.length < maxLeads,
         currentCount: attendees.length,
+        maxLeads,
         attendees,
       };
     },

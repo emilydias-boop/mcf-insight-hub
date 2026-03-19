@@ -445,12 +445,13 @@ export function QuickScheduleModal({
     return [...new Set(closerSlots)].sort();
   }, [closerDaySlots, selectedCloser, dayOfWeek]);
 
-  // Get time slot status (count only, no limit)
+  // Get time slot status with capacity check
   const getTimeSlotStatus = useCallback((time: string) => {
-    if (!slotAvailability || time !== selectedTime) return { isFull: false };
+    if (!slotAvailability || time !== selectedTime) return { isFull: false, count: 0, maxLeads: 4 };
     return { 
-      isFull: false,
+      isFull: !slotAvailability.available,
       count: slotAvailability.currentCount,
+      maxLeads: slotAvailability.maxLeads ?? 4,
     };
   }, [slotAvailability, selectedTime]);
 
