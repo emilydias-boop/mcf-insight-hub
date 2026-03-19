@@ -69,6 +69,8 @@ export const FinanceiroCobrancas = () => {
     <div className="space-y-4">
       <CobrancaKPIs kpis={kpis} isLoading={loadingKpis} />
 
+      <CobrancaQueue onSelect={handleSelect} />
+
       <div className="flex items-center justify-between">
         <CobrancaMonthSelector currentMonth={currentMonth} onMonthChange={setCurrentMonth} />
         <div className="flex items-center gap-2">
