@@ -302,11 +302,15 @@ Deno.serve(async (req) => {
 
           const paid = paidMap[i];
           if (paid) {
+            // Parcela 1 = product_price (bruto), demais = net_value (líquido)
+            const valorPago = i === 1
+              ? (paid.product_price || valorParcela)
+              : (paid.net_value || paid.product_price || valorParcela);
             allInstallmentsToInsert.push({
               subscription_id: subId,
               numero_parcela: i,
               valor_original: valorParcela,
-              valor_pago: paid.net_value || valorParcela,
+              valor_pago: valorPago,
               valor_liquido: paid.net_value || null,
               data_vencimento: paid.sale_date,
               data_pagamento: paid.sale_date,
