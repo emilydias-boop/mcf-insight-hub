@@ -158,9 +158,9 @@ export function StatusChangesTab() {
   );
 }
 
-function StatusChangeRow({ entry }: { entry: StatusChangeEntry }) {
+function StatusChangeRow({ entry, onClick }: { entry: StatusChangeEntry; onClick: () => void }) {
   return (
-    <TableRow className={entry.is_suspicious ? 'bg-destructive/5' : ''}>
+    <TableRow className={`cursor-pointer hover:bg-muted/50 ${entry.is_suspicious ? 'bg-destructive/5' : ''}`} onClick={onClick}>
       <TableCell className="font-medium">
         {entry.attendee_name || 'N/A'}
       </TableCell>

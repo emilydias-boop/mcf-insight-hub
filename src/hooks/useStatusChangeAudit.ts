@@ -64,6 +64,29 @@ function isNormalFlow(oldStatus: string, newStatus: string): boolean {
   return NORMAL_FLOW_TRANSITIONS.some(([o, n]) => o === oldStatus && n === newStatus);
 }
 
+const SUSPICION_REASON_MAP: Record<string, string> = {
+  'no_show->completed': 'Reversão: lead marcado como No-show foi alterado para Realizada',
+  'completed->no_show': 'Status final alterado: reunião realizada revertida para No-show',
+  'no_show->invited': 'Reversão: No-show revertido para Convidado',
+  'completed->invited': 'Reversão: Realizada revertida para Convidado',
+  'no_show->scheduled': 'Reversão: No-show revertido para Agendado',
+  'completed->scheduled': 'Reversão: Realizada revertida para Agendado',
+  'cancelled->completed': 'Reversão de cancelamento para Realizada',
+  'refunded->completed': 'Reversão de reembolso para Realizada',
+  'cancelled->scheduled': 'Reversão de cancelamento para Agendado',
+  'cancelled->invited': 'Reversão de cancelamento para Convidado',
+};
+
+function getSuspensionReason(oldStatus: string, newStatus: string, suspicious: boolean, normalFlow: boolean): string {
+  if (suspicious) {
+    return SUSPICION_REASON_MAP[`${oldStatus}->${newStatus}`] || `Transição suspeita: ${oldStatus} → ${newStatus}`;
+  }
+  if (!normalFlow) {
+    return 'Mudança manual fora do fluxo automático padrão';
+  }
+  return 'Fluxo normal do sistema';
+}
+
 export type AuditFilterMode = 'all' | 'suspicious' | 'manual';
 
 interface UseStatusChangeAuditParams {
