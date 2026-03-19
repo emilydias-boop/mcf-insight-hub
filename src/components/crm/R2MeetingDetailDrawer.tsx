@@ -65,6 +65,7 @@ export function R2MeetingDetailDrawer({
   const [emailValue, setEmailValue] = useState('');
   
   const { role } = useAuth();
+  const isSdr = role === 'sdr';
   const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
   
   // Debug log - remove after testing
@@ -488,15 +489,17 @@ export function R2MeetingDetailDrawer({
 
         {/* Footer Actions */}
         <div className="border-t p-4 space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <Button 
-              variant="outline" 
-              className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950"
-              onClick={() => handleParticipantStatusChange('completed')}
-            >
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Realizada
-            </Button>
+          <div className={cn("grid gap-2", isSdr ? "grid-cols-1" : "grid-cols-2")}>
+            {!isSdr && (
+              <Button 
+                variant="outline" 
+                className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950"
+                onClick={() => handleParticipantStatusChange('completed')}
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Realizada
+              </Button>
+            )}
             <Button 
               variant="outline"
               className="text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-950"
@@ -507,36 +510,40 @@ export function R2MeetingDetailDrawer({
             </Button>
           </div>
           
-          <Button 
-            variant="outline"
-            className="w-full text-orange-600 border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950"
-            onClick={() => setRefundModalOpen(true)}
-          >
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Reembolso
-          </Button>
-
-          {meeting.status === 'canceled' ? (
+          {!isSdr && (
             <Button 
               variant="outline"
-              className="w-full text-primary border-primary/30 hover:bg-primary/10"
-              onClick={() => {
-                restoreMeeting.mutate(meeting.id);
-                onOpenChange(false);
-              }}
+              className="w-full text-orange-600 border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950"
+              onClick={() => setRefundModalOpen(true)}
             >
               <RotateCcw className="h-4 w-4 mr-2" />
-              Desfazer Cancelamento
+              Reembolso
             </Button>
-          ) : (
-            <Button 
-              variant="outline"
-              className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
-              onClick={handleCancelMeeting}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Cancelar Reunião
-            </Button>
+          )}
+
+          {!isSdr && (
+            meeting.status === 'canceled' ? (
+              <Button 
+                variant="outline"
+                className="w-full text-primary border-primary/30 hover:bg-primary/10"
+                onClick={() => {
+                  restoreMeeting.mutate(meeting.id);
+                  onOpenChange(false);
+                }}
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Desfazer Cancelamento
+              </Button>
+            ) : (
+              <Button 
+                variant="outline"
+                className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
+                onClick={handleCancelMeeting}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Cancelar Reunião
+              </Button>
+            )
           )}
         </div>
       </SheetContent>

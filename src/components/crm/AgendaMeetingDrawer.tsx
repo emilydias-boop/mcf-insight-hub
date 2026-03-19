@@ -123,6 +123,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { role, user } = useAuth();
+  const isSdr = role === 'sdr';
   const [closerNotes, setCloserNotes] = useState(meeting?.closer_notes || '');
   const [sdrNote, setSdrNote] = useState(meeting?.notes || '');
   const [isLoadingWhatsApp, setIsLoadingWhatsApp] = useState(false);
@@ -966,7 +967,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   {/* Status Flow Buttons - Bidirectional */}
                   <div className="grid grid-cols-2 gap-2">
                     {/* Agendada/Voltar */}
-                    {selectedParticipant.status !== 'scheduled' && selectedParticipant.status !== 'contract_paid' && (
+                    {!isSdr && selectedParticipant.status !== 'scheduled' && selectedParticipant.status !== 'contract_paid' && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1004,7 +1005,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     )}
                     
                     {/* Realizada */}
-                    {selectedParticipant.status !== 'contract_paid' && (
+                    {!isSdr && selectedParticipant.status !== 'contract_paid' && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1042,7 +1043,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     </Button>
                     
                     {/* Vincular Contrato - Show for completed status without contract_paid */}
-                    {selectedParticipant.status === 'completed' && (
+                    {!isSdr && selectedParticipant.status === 'completed' && (
                       <Button
                         variant="outline"
                         size="sm"
