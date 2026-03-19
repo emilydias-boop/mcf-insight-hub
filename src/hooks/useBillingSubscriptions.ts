@@ -185,44 +185,34 @@ export const useBillingKPIs = (month?: Date) => {
       const valorTotalContratado = subscriptions.reduce((s, sub) => s + (sub.valor_total_contrato || 0), 0);
       const valorTotalPago = instList.filter(i => i.status === 'pago').reduce((s, i) => s + (i.valor_pago || 0), 0);
 
-      // Count overdue installments per subscription for risk calculation
-      const overdueCountMap = new Map<string, number>();
-      for (const inst of instList) {
-        if (inst.status === 'atrasado') {
-          overdueCountMap.set(
-            (inst as any).subscription_id || '',
-            (overdueCountMap.get((inst as any).subscription_id || '') || 0) + 1
-          );
-        }
-      }
-
-      // Fetch installments with subscription_id for risk calc
-      let riskInstQuery = supabase
+      // Fetch ALL overdue installments globally for risk calc (not month-filtered)
+      const { data: riskInst } = await supabase
         .from('billing_installments')
-        .select('subscription_id, status');
-      if (monthStart && monthEnd) {
-        riskInstQuery = riskInstQuery.gte('data_vencimento', monthStart).lte('data_vencimento', monthEnd);
-      }
-      const { data: riskInst } = await riskInstQuery;
+        .select('subscription_id, status')
+        .eq('status', 'atrasado');
       const riskMap = new Map<string, number>();
       for (const ri of (riskInst || [])) {
-        if (ri.status === 'atrasado') {
-          riskMap.set(ri.subscription_id, (riskMap.get(ri.subscription_id) || 0) + 1);
-        }
+        riskMap.set(ri.subscription_id, (riskMap.get(ri.subscription_id) || 0) + 1);
       }
       const clientesEmRisco = Array.from(riskMap.values()).filter(c => c >= 3).length;
 
-      // Count never-contacted overdue subscriptions
+      // Count never-contacted overdue subscriptions (chunked)
       const atrasadaIds = subscriptions.filter(s => s.status === 'atrasada').map(s => s.id);
       let nuncaContatados = 0;
       if (atrasadaIds.length > 0) {
         const manualTypes = ['tentativa_cobranca', 'observacao', 'acordo_realizado'] as const;
-        const { data: contacted } = await supabase
-          .from('billing_history')
-          .select('subscription_id')
-          .in('subscription_id', atrasadaIds.slice(0, 200))
-          .in('tipo', manualTypes);
-        const contactedSet = new Set((contacted || []).map(c => c.subscription_id));
+        const contactedSet = new Set<string>();
+        for (let i = 0; i < atrasadaIds.length; i += 200) {
+          const chunk = atrasadaIds.slice(i, i + 200);
+          const { data: contacted } = await supabase
+            .from('billing_history')
+            .select('subscription_id')
+            .in('subscription_id', chunk)
+            .in('tipo', manualTypes);
+          for (const c of (contacted || [])) {
+            contactedSet.add(c.subscription_id);
+          }
+        }
         nuncaContatados = atrasadaIds.filter(id => !contactedSet.has(id)).length;
       }
 
