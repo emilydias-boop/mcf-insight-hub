@@ -529,9 +529,13 @@ Deno.serve(async (req) => {
               const inst = overdueInst[m];
               const tx = unlinkedTx[m];
 
+              // Parcela 1 = product_price (bruto), demais = net_value (líquido)
+              const singleValorPago = inst.numero_parcela === 1
+                ? (tx.product_price || tx.net_value || inst.valor_original)
+                : (tx.net_value || tx.product_price || inst.valor_original);
               await supabase.from("billing_installments").update({
                 status: "pago",
-                valor_pago: tx.net_value || tx.product_price || inst.valor_original,
+                valor_pago: singleValorPago,
                 valor_liquido: tx.net_value || null,
                 data_pagamento: tx.sale_date,
                 hubla_transaction_id: tx.id,
