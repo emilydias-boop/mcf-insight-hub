@@ -1,28 +1,31 @@
 
 
-## Plano: Mostrar nomes dos estágios ao invés de UUIDs na Timeline
+## Plano: Mostrar quem fez cada ação na Timeline do Lead
 
 ### Problema
 
-Algumas `deal_activities` armazenam UUIDs em `from_stage`/`to_stage` (vindas de syncs automáticos como `agenda_sync`), enquanto outras armazenam o nome legível. A timeline exibe esses UUIDs sem resolução.
+Atualmente, muitos eventos na timeline mostram `author: null` porque o hook não resolve os `user_id` das tabelas para nomes legíveis. As fontes de dados têm `user_id` (deal_activities, calls) e `created_by` (attendee_notes) mas nunca são resolvidos para nomes via `profiles`.
 
 ### Correção
 
 **Arquivo: `src/hooks/useLeadFullTimeline.ts`**
 
-1. Após buscar as activities, coletar todos os valores de `from_stage`/`to_stage` que parecem ser UUIDs (regex de UUID)
-2. Fazer uma query única em `crm_stages` para resolver UUID → `stage_name`
-3. Usar o mapa de resolução ao construir o `title` e `metadata` dos eventos `stage_change`
+Após buscar todos os dados, coletar todos os `user_id`/`created_by` únicos e fazer uma query em `profiles` para resolver nomes:
 
-Lógica:
-```
-const isUUID = /^[0-9a-f]{8}-/i;
-const uuidsToResolve = new Set<string>();
-// collect UUIDs from from_stage/to_stage
-// query crm_stages WHERE id IN (uuids)
-// build stageNameMap: Record<string, string>
-// use: stageNameMap[stage] || stage
-```
+1. Coletar UUIDs de autores de:
+   - `deal_activities.user_id`
+   - `calls.user_id`
+   - `attendee_notes.created_by`
+2. Query única: `profiles` → `id, full_name, email`
+3. Criar `profileMap: Record<string, string>` (id → full_name ou email)
+4. Usar o mapa ao construir cada evento:
+   - `stage_change`: `profileMap[act.user_id]` como fallback quando metadata não tem autor
+   - `call`: `profileMap[call.user_id]`
+   - `note` (deal_activities): `profileMap[act.user_id]`
+   - `attendee_notes`: `profileMap[note.created_by]`
+   - `task`, `qualification`, etc: `profileMap[act.user_id]`
 
-Isso resolve tanto o título (`from → to`) quanto os badges de metadata no `LeadFullTimeline.tsx`, sem alterar o componente de UI.
+A prioridade será: metadata (ex: `meta.author`) → `profileMap[user_id]` → null
+
+Nenhuma alteração no componente UI — o campo `author` já é renderizado pelo `LeadFullTimeline.tsx`.
 
