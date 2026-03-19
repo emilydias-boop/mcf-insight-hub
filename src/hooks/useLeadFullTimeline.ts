@@ -329,7 +329,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
             title: `Nota: ${note.note_type || 'Geral'}`,
             description: note.note,
             date: note.created_at || '',
-            author: null,
+            author: resolveAuthor(note.created_by),
             metadata: { note_type: note.note_type, attendee_id: note.attendee_id },
           });
         }
