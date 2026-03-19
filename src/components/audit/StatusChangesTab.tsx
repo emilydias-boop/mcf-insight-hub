@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useStatusChangeAudit, StatusChangeEntry, AuditFilterMode } from '@/hooks/useStatusChangeAudit';
 import { formatMeetingStatus } from '@/utils/formatMeetingStatus';
+import { StatusChangeDetailDrawer } from './StatusChangeDetailDrawer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
