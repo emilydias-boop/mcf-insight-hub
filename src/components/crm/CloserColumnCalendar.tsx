@@ -206,6 +206,22 @@ export function CloserColumnCalendar({
     return totalAttendees < maxLeads;
   };
 
+  // Get capacity info for a configured slot (for "Lotado" display)
+  const getSlotCapacityInfo = (closerId: string, slotTime: Date) => {
+    const closer = closers.find(c => c.id === closerId);
+    const timeStr = format(slotTime, "HH:mm");
+    const slotLink = daySlots.find(
+      (s) => s.closer_id === closerId && s.start_time.slice(0, 5) === timeStr
+    );
+    const maxLeads = slotLink?.max_leads ?? closer?.max_leads_per_slot ?? 4;
+    const slotMeetings = getMeetingsForSlot(closerId, slotTime);
+    const totalAttendees = slotMeetings.reduce(
+      (sum, m) => sum + (m.attendees?.length || 0),
+      0
+    );
+    return { totalAttendees, maxLeads };
+  };
+
   const getMeetingsForSlot = (closerId: string, slotTime: Date) => {
     return meetings.filter((m) => {
       if (m.closer_id !== closerId) return false;
