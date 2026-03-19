@@ -105,7 +105,8 @@ export const useBillingQueue = () => {
           };
         })
         .filter(item => item.parcelas_atrasadas > 0)
-        .sort((a, b) => b.parcelas_atrasadas - a.parcelas_atrasadas);
+        .sort((a, b) => b.parcelas_atrasadas - a.parcelas_atrasadas)
+        .slice(0, 100);
 
       return items;
     },

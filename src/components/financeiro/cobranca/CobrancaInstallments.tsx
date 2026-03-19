@@ -87,8 +87,8 @@ export const CobrancaInstallments = ({ installments, isLoading, onMarkPaid, onRe
           const isEditing = editingId === inst.id;
 
           return (
-            <>
-              <TableRow key={inst.id} className={inst.status === 'atrasado' ? 'bg-red-50/50' : ''}>
+            <React.Fragment key={inst.id}>
+              <TableRow className={inst.status === 'atrasado' ? 'bg-red-50/50' : ''}>
                 <TableCell className="w-8 px-1">
                   {hasReceivables && (
                     <Button
