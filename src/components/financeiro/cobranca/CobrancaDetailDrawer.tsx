@@ -307,7 +307,7 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
 
       <CreateAgreementModal subscriptionId={subscription.id} open={showAgreementModal} onOpenChange={setShowAgreementModal} />
       <EditSubscriptionModal subscription={subscription} open={showEditModal} onOpenChange={setShowEditModal} />
-      <RegisterPaymentModal installment={selectedInstallment} subscriptionId={subscription.id} open={showPaymentModal} onOpenChange={setShowPaymentModal} />
+      <RegisterPaymentModal installment={selectedInstallment} subscriptionId={subscription.id} open={showPaymentModal} onOpenChange={setShowPaymentModal} pendingInstallments={installments} />
     </>
   );
 };
