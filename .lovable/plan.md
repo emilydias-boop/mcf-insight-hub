@@ -1,30 +1,33 @@
 
 
-## Plano: Adicionar "Perfil do Lead" nos drawers de agendamento
+## Plano: Enforcar limite de "Leads por Reunião" na Agenda R1
 
 ### Problema
-Leads com dados de anamnese preenchidos (via `lead_profiles`) não mostram essas informações nos drawers de reunião. O closer precisa sair do drawer para ver o perfil.
 
-### Solução
-Reutilizar o componente `LeadProfileSection` existente nos dois drawers de agendamento:
+O `useCheckSlotAvailability` na linha 1298 de `useAgendaData.ts` retorna **sempre** `available: true` — nunca consulta `max_leads_per_slot` nem `closer_meeting_links.max_leads`. O modal de agendamento R1 (`QuickScheduleModal`) também hardcoda `isFull: false` na linha 452. Resultado: o limite configurado no slider "Leads por Reunião" é ignorado.
 
 ### Alterações
 
 | Arquivo | Ação |
 |---------|------|
-| `src/components/crm/AgendaMeetingDrawer.tsx` | Importar `LeadProfileSection` e renderizar abaixo das notas do SDR, usando `contact_id` do `MeetingSlot` ou do attendee selecionado |
-| `src/components/crm/R2MeetingDetailDrawer.tsx` | Importar `LeadProfileSection` e renderizar dentro da área do attendee selecionado (antes ou depois das tabs de Qualificação/Avaliação/Notas), usando o `contactId` já calculado na linha 93 |
+| `src/hooks/useAgendaData.ts` — `useCheckSlotAvailability` | Buscar `max_leads_per_slot` do closer e `max_leads` do `closer_meeting_links` para o slot específico. Calcular `available = currentCount < maxLeads`. Retornar `{ available, currentCount, maxLeads, attendees }` |
+| `src/components/crm/QuickScheduleModal.tsx` — `getTimeSlotStatus` | Usar `slotAvailability.available` e `slotAvailability.maxLeads` em vez de hardcodar `isFull: false` |
+| `src/components/crm/QuickScheduleModal.tsx` — UI do horário | Mostrar contagem `(X/Y)` em cada opção de horário. Desabilitar horários lotados (exceto coordenadores). Mostrar badge de alerta no indicador de disponibilidade |
+| `src/components/crm/QuickScheduleModal.tsx` — botão Agendar | Adicionar check: se `slotAvailability?.available === false` e usuário não é coordenador, desabilitar botão e mostrar aviso |
+
+### Lógica de prioridade do limite (já existente no `CloserColumnCalendar`)
+
+```
+maxLeads = closer_meeting_links.max_leads (override por slot)
+         ?? closers.max_leads_per_slot (global do closer)
+         ?? 4 (fallback)
+```
 
 ### Detalhes técnicos
 
-**AgendaMeetingDrawer (R1):** O `contact_id` já existe em `MeetingSlot` e `MeetingAttendee`. Renderizar `<LeadProfileSection contactId={meeting.contact_id || selectedParticipant?.contactId} />` na seção de detalhes do participante selecionado.
+**`useCheckSlotAvailability`**: Adicionar query ao `closer_meeting_links` para o `closer_id` + `day_of_week` + `start_time` do slot selecionado para buscar o `max_leads` override. Buscar `max_leads_per_slot` do closer. Aplicar hierarquia de prioridade. Comparar com `currentCount`.
 
-**R2MeetingDetailDrawer:** Já calcula `contactId` na linha 93. Renderizar `<LeadProfileSection contactId={contactId} />` logo acima das tabs (Qualificação/Avaliação/Notas), apenas quando há um attendee selecionado.
+**Coordenadores**: Podem agendar mesmo com slot lotado (bypass), mas verão um aviso visual amarelo indicando que estão excedendo a capacidade.
 
-O `LeadProfileSection` já:
-- Faz fetch via `useLeadProfile(contactId)`
-- Retorna `null` se não há dados ou está carregando
-- Mostra collapsible com categorias (Pessoais, Financeiro, Patrimônio, Interesse)
-
-Nenhuma alteração no hook ou no componente de perfil é necessária.
+**Cross-BU**: A contagem de attendees já é feita corretamente por `lead_type`, então não precisa de mudança no filtro — apenas adicionar a comparação com o limite.
 
