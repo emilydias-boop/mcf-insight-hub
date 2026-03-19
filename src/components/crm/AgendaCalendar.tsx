@@ -1802,6 +1802,21 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                         <UserPlus className="h-3.5 w-3.5 text-green-600" />
                                       </button>
                                     )}
+                                    {/* Lotado badge overlay for week view */}
+                                    {(() => {
+                                      const closer = closers?.find(c => c.id === group.closerId);
+                                      const maxLeads = closer?.max_leads_per_slot ?? 4;
+                                      const attendeeCount = allAttendees.length;
+                                      if (attendeeCount >= maxLeads && attendeeCount > 0) {
+                                        return (
+                                          <div className="absolute bottom-0.5 right-0.5 flex items-center gap-0.5 bg-red-600 text-white rounded px-1 py-0 z-20">
+                                            <Lock className="h-2.5 w-2.5" />
+                                            <span className="text-[9px] font-bold">{attendeeCount}/{maxLeads}</span>
+                                          </div>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 )}
                               </Draggable>
