@@ -146,7 +146,11 @@ Deno.serve(async (req) => {
           const diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
           if (diff > 0 && diff < 90) intervalDays = diff;
         }
-        const fimDate = new Date(first.sale_date);
+        // Backtrack to estimate installment #1 date, then calculate end date
+        const earliestNumber = first.installment_number || 1;
+        const estimatedStartDate = new Date(first.sale_date);
+        estimatedStartDate.setDate(estimatedStartDate.getDate() - intervalDays * (earliestNumber - 1));
+        const fimDate = new Date(estimatedStartDate);
         fimDate.setDate(fimDate.getDate() + intervalDays * (totalInstallments - 1));
         dataFimPrevista = fimDate.toISOString().split('T')[0];
 
