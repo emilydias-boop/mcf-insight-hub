@@ -1,33 +1,52 @@
 
 
-## Plano: Mostrar "Entrada na Pipeline" na Timeline do Lead
+## Plano: Agrupar assinaturas por cliente na tabela de Cobranças
 
-### Problema
-A Timeline está vazia porque o `webhook-lead-receiver` não cria um registro em `deal_activities` quando o lead entra na pipeline. A "Jornada do Lead" mostra a entrada porque lê diretamente o `created_at` do deal, mas a Timeline depende de registros em `deal_activities`.
+### Situação atual
+- 1686 assinaturas para 1093 clientes distintos — muitos clientes aparecem 3-9 vezes (um row por produto)
+- O sync está correto: agrupa por `email + produto`, sem duplicatas reais
+- Os nomes repetidos são clientes que possuem múltiplos produtos (A010, Acesso Vitalício, Construir Para Alugar, etc.)
 
-### Solução (duas frentes)
+### Solução: Visão agrupada por cliente
 
-**1. Frontend — Sintetizar evento de entrada (correção imediata)**
+Criar um modo de visualização agrupado onde cada cliente aparece uma única vez com uma linha expansível mostrando seus produtos.
 
-No `src/hooks/useLeadFullTimeline.ts`:
-- Adicionar uma query extra buscando os dados básicos dos deals (`crm_deals`) usando os `uniqueIds` — campos: `id`, `created_at`, `stage_id`, `origin_id`, `owner_id`
-- Após processar todos os eventos, para cada deal, verificar se já existe um evento com data igual ao `created_at` do deal (tolerância de 1 minuto). Se não existir, sintetizar um evento `stage_change` com título "Entrada na Pipeline" e a data do `created_at`
-- Adicionar o tipo `'entry'` ao `TimelineEventType` para distinguir visualmente
+### Mudanças
 
-No `src/components/crm/LeadFullTimeline.tsx`:
-- Adicionar config de ícone/cor para o tipo `entry` (ícone LogIn, cor verde)
-- Adicionar "Entrada" nas opções de filtro
+**1. `src/components/financeiro/cobranca/CobrancaTable.tsx`**
+- Adicionar toggle "Agrupar por cliente" no header da tabela
+- Quando ativo, agrupar `subscriptions` por `customer_email`
+- Linha principal do grupo mostra: nome, email, quantidade de produtos, soma total contratado, soma total pago, contagem de parcelas agregada, pior status do grupo
+- Ao clicar na linha do grupo, expandir para mostrar sub-linhas com cada produto individual (mantendo o click para abrir drawer)
+- Badge com contagem de produtos (ex: "4 produtos")
 
-**2. Backend — Gravar atividade na criação (correção para novos leads)**
+**2. `src/hooks/useBillingSubscriptions.ts`**
+- Sem mudanças — os dados já vêm corretos, a agrupação é puramente visual
 
-No `supabase/functions/webhook-lead-receiver/index.ts`:
-- Após criar o deal com sucesso, inserir um registro em `deal_activities` com `activity_type: 'lead_entered'`, descrição com nome do endpoint/origem, e metadata com `source: 'webhook'`
+### Comportamento
+
+```text
+┌─────────────────────┬──────────┬─────────┬─────────┬──────────┐
+│ Cliente              │ Produtos │ Status  │ V.Total │ V.Pago   │
+├─────────────────────┼──────────┼─────────┼─────────┼──────────┤
+│ ▶ Juliana Caldas     │ 9 prod.  │ Atrasada│ R$8.200 │ R$820    │
+│   ├ A010 Consultoria │          │ Atrasada│ R$470   │ R$37     │
+│   ├ Acesso Vitalício │          │ Atrasada│ R$570   │ R$160    │
+│   └ Construir p/ ... │          │ Atrasada│ R$970   │ R$77     │
+├─────────────────────┼──────────┼─────────┼─────────┼──────────┤
+│ ▶ Lucas Terrini      │ 6 prod.  │ Atrasada│ R$4.100 │ R$350    │
+└─────────────────────┴──────────┴─────────┴─────────┴──────────┘
+```
+
+- Toggle desligado = visão atual (flat, uma linha por assinatura)
+- Toggle ligado = visão agrupada por cliente
+- Filtros e busca continuam funcionando normalmente
+- Click no sub-item abre o drawer de detalhes da assinatura individual
+- Paginação opera sobre os grupos (não sobre assinaturas individuais)
 
 ### Arquivos afetados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/hooks/useLeadFullTimeline.ts` | Buscar `crm_deals` e sintetizar evento "Entrada na Pipeline" |
-| `src/components/crm/LeadFullTimeline.tsx` | Adicionar tipo `entry` com ícone e filtro |
-| `supabase/functions/webhook-lead-receiver/index.ts` | Inserir `deal_activities` com `activity_type: 'lead_entered'` ao criar deal |
+| `src/components/financeiro/cobranca/CobrancaTable.tsx` | Adicionar toggle de agrupamento e lógica de expand/collapse por cliente |
 
