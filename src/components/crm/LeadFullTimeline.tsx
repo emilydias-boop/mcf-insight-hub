@@ -16,6 +16,7 @@ import {
   MessageSquare,
   ChevronDown,
   Filter,
+  LogIn,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
