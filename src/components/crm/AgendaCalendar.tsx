@@ -529,6 +529,53 @@ export function AgendaCalendar({
     });
   }, [meetingLinkSlots, r2DailySlotsMap, meetingType, filteredMeetings, crossBuConflictsData, selectedDate]);
 
+  // Get capacity status for a slot: how many closers are configured, how many are full
+  const getSlotCapacityStatus = useCallback((day: Date, hour: number, minute: number) => {
+    const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    let configuredCloserIds: string[] = [];
+    
+    if (meetingType === 'r2' && r2DailySlotsMap) {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const dateSlots = r2DailySlotsMap[dateStr];
+      configuredCloserIds = dateSlots?.[timeStr]?.closerIds || [];
+    } else {
+      const dayOfWeek = day.getDay();
+      const slots = meetingLinkSlots?.[dayOfWeek] || [];
+      const configuredSlot = slots.find(s => s.time === timeStr);
+      configuredCloserIds = configuredSlot?.closerIds || [];
+    }
+    
+    if (configuredCloserIds.length === 0) return { configured: 0, full: 0, allFull: false };
+    
+    let fullCount = 0;
+    for (const closerId of configuredCloserIds) {
+      const closer = closers.find(c => c.id === closerId);
+      const maxLeads = closer?.max_leads_per_slot ?? 4;
+      
+      // Count attendees for this closer at this time
+      const slotTime = setMinutes(setHours(new Date(day), hour), minute);
+      const attendeeCount = filteredMeetings
+        .filter(m => {
+          if (m.closer_id !== closerId) return false;
+          const meetingStart = parseISO(m.scheduled_at);
+          return isSameDay(meetingStart, day) &&
+            meetingStart.getHours() === hour &&
+            meetingStart.getMinutes() >= minute &&
+            meetingStart.getMinutes() < minute + 30;
+        })
+        .reduce((sum, m) => sum + (m.attendees?.length || 0), 0);
+      
+      if (attendeeCount >= maxLeads) fullCount++;
+    }
+    
+    return {
+      configured: configuredCloserIds.length,
+      full: fullCount,
+      allFull: fullCount > 0 && fullCount >= configuredCloserIds.length,
+      freeCount: configuredCloserIds.length - fullCount,
+    };
+  }, [meetingLinkSlots, r2DailySlotsMap, meetingType, closers, filteredMeetings]);
+
   const getMeetingsForDay = (day: Date) => {
     return filteredMeetings.filter(meeting => {
       const meetingDate = parseISO(meeting.scheduled_at);
