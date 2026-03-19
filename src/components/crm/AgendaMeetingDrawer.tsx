@@ -1005,7 +1005,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     )}
                     
                     {/* Realizada */}
-                    {selectedParticipant.status !== 'contract_paid' && (
+                    {!isSdr && selectedParticipant.status !== 'contract_paid' && (
                       <Button
                         variant="outline"
                         size="sm"
