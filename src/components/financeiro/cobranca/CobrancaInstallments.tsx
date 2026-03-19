@@ -180,7 +180,7 @@ export const CobrancaInstallments = ({ installments, isLoading, onMarkPaid, onRe
                   </TableCell>
                 </TableRow>
               ))}
-            </>
+            </React.Fragment>
           );
         })}
       </TableBody>
