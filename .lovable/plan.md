@@ -1,33 +1,29 @@
 
 
-## Plano: Enforcar limite de "Leads por Reunião" na Agenda R1
+## Plano: Adicionar indicador "Closer vs SDR" na Auditoria
 
 ### Problema
-
-O `useCheckSlotAvailability` na linha 1298 de `useAgendaData.ts` retorna **sempre** `available: true` — nunca consulta `max_leads_per_slot` nem `closer_meeting_links.max_leads`. O modal de agendamento R1 (`QuickScheduleModal`) também hardcoda `isFull: false` na linha 452. Resultado: o limite configurado no slider "Leads por Reunião" é ignorado.
+A tabela de auditoria mostra quem alterou o status, mas não indica se essa pessoa é o closer da reunião ou outra pessoa (SDR/coordenador). Isso é essencial para detectar quando um SDR reverte um no_show que o closer marcou.
 
 ### Alterações
 
 | Arquivo | Ação |
 |---------|------|
-| `src/hooks/useAgendaData.ts` — `useCheckSlotAvailability` | Buscar `max_leads_per_slot` do closer e `max_leads` do `closer_meeting_links` para o slot específico. Calcular `available = currentCount < maxLeads`. Retornar `{ available, currentCount, maxLeads, attendees }` |
-| `src/components/crm/QuickScheduleModal.tsx` — `getTimeSlotStatus` | Usar `slotAvailability.available` e `slotAvailability.maxLeads` em vez de hardcodar `isFull: false` |
-| `src/components/crm/QuickScheduleModal.tsx` — UI do horário | Mostrar contagem `(X/Y)` em cada opção de horário. Desabilitar horários lotados (exceto coordenadores). Mostrar badge de alerta no indicador de disponibilidade |
-| `src/components/crm/QuickScheduleModal.tsx` — botão Agendar | Adicionar check: se `slotAvailability?.available === false` e usuário não é coordenador, desabilitar botão e mostrar aviso |
-
-### Lógica de prioridade do limite (já existente no `CloserColumnCalendar`)
-
-```
-maxLeads = closer_meeting_links.max_leads (override por slot)
-         ?? closers.max_leads_per_slot (global do closer)
-         ?? 4 (fallback)
-```
+| `src/hooks/useStatusChangeAudit.ts` | Buscar `employee_id` do closer, depois `profile_id` do employee, e comparar com `user_id` do log. Adicionar campo `changed_by_role: 'closer' \| 'sdr' \| 'outro'` e `is_external_change: boolean` ao `StatusChangeEntry` |
+| `src/components/audit/StatusChangesTab.tsx` | Adicionar coluna "Cargo" na tabela mostrando badge colorido (verde = Closer, azul = SDR, cinza = Outro). Adicionar KPI card "Alterações por não-closer" no resumo. Highlight visual em vermelho quando `is_external_change && is_suspicious` |
+| `src/components/audit/StatusChangeDetailDrawer.tsx` | Mostrar na seção "Metadados" se quem alterou é o closer ou não |
 
 ### Detalhes técnicos
 
-**`useCheckSlotAvailability`**: Adicionar query ao `closer_meeting_links` para o `closer_id` + `day_of_week` + `start_time` do slot selecionado para buscar o `max_leads` override. Buscar `max_leads_per_slot` do closer. Aplicar hierarquia de prioridade. Comparar com `currentCount`.
+**Resolução do cargo do alterador:**
+1. O hook já busca `closers` e `profiles`. Adicionar busca de `employees.profile_id` via `closers.employee_id`
+2. Para cada log: `closerProfileId = employeeMap[closer.employee_id]?.profile_id`
+3. Se `log.user_id === closerProfileId` → "Closer". Senão, verificar se `user_id` está em `employees` com cargo de SDR → "SDR". Caso contrário → "Outro"
 
-**Coordenadores**: Podem agendar mesmo com slot lotado (bypass), mas verão um aviso visual amarelo indicando que estão excedendo a capacidade.
+**Novo KPI card:** "Alterações não-closer" — conta entradas onde `is_external_change === true`, destacando quantas vezes alguém que não é o closer alterou o status.
 
-**Cross-BU**: A contagem de attendees já é feita corretamente por `lead_type`, então não precisa de mudança no filtro — apenas adicionar a comparação com o limite.
+**Coluna na tabela:** Entre "Alterado por" e "Data Reunião", adicionar coluna "Cargo" com badge:
+- `Closer` (verde) — alteração feita pelo próprio closer
+- `SDR` (azul) — alteração feita por SDR  
+- `Outro` (cinza) — sistema ou outro perfil
 
