@@ -1156,6 +1156,219 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
   }
 }
 
+// ============= BILLING: Sincronização automática de cobranças =============
+function mapPaymentMethodForBilling(value: string): string {
+  const lower = (value || '').toLowerCase();
+  if (lower.includes('pix')) return 'pix';
+  if (lower.includes('credit') || lower.includes('card') || lower.includes('cartao')) return 'credit_card';
+  if (lower.includes('boleto') || lower.includes('bank_slip') || lower.includes('slip')) return 'bank_slip';
+  return 'outro';
+}
+
+async function syncBillingFromTransaction(supabase: any, tx: {
+  customer_email: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  product_name: string;
+  product_category: string;
+  product_price: number;
+  net_value: number;
+  installment_number: number;
+  total_installments: number;
+  sale_date: string;
+  transaction_id: string;
+  payment_method: string | null;
+}): Promise<void> {
+  try {
+    // Só processar parcelados (total_installments > 1)
+    if (!tx.total_installments || tx.total_installments <= 1) return;
+    if (!tx.customer_email) return;
+
+    const emailLower = tx.customer_email.toLowerCase();
+    console.log(`💳 [BILLING] Sync automático: ${emailLower} - ${tx.product_name} (parcela ${tx.installment_number}/${tx.total_installments})`);
+
+    // Buscar subscription existente por email + produto
+    const { data: existingSub } = await supabase
+      .from('billing_subscriptions')
+      .select('id, total_parcelas, valor_total_contrato, status')
+      .ilike('customer_email', emailLower)
+      .eq('product_name', tx.product_name)
+      .maybeSingle();
+
+    if (existingSub) {
+      console.log(`💳 [BILLING] Subscription existente: ${existingSub.id}`);
+
+      // Marcar parcela correspondente como paga
+      const { data: installment } = await supabase
+        .from('billing_installments')
+        .select('id, status')
+        .eq('subscription_id', existingSub.id)
+        .eq('numero_parcela', tx.installment_number)
+        .maybeSingle();
+
+      if (installment) {
+        if (installment.status !== 'pago') {
+          await supabase
+            .from('billing_installments')
+            .update({
+              status: 'pago',
+              valor_pago: tx.net_value || tx.product_price,
+              valor_liquido: tx.net_value || null,
+              data_pagamento: tx.sale_date,
+              hubla_transaction_id: tx.transaction_id,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', installment.id);
+          console.log(`💳 [BILLING] Parcela ${tx.installment_number} marcada como paga`);
+        } else {
+          console.log(`💳 [BILLING] Parcela ${tx.installment_number} já estava paga`);
+        }
+      } else {
+        // Parcela não existe ainda — criar como paga
+        await supabase
+          .from('billing_installments')
+          .insert({
+            subscription_id: existingSub.id,
+            numero_parcela: tx.installment_number,
+            valor_original: tx.product_price,
+            valor_pago: tx.net_value || tx.product_price,
+            valor_liquido: tx.net_value || null,
+            data_vencimento: tx.sale_date,
+            data_pagamento: tx.sale_date,
+            status: 'pago',
+            hubla_transaction_id: tx.transaction_id,
+          });
+        console.log(`💳 [BILLING] Parcela ${tx.installment_number} criada como paga`);
+      }
+
+      // Recalcular status da subscription
+      const { data: allInstallments } = await supabase
+        .from('billing_installments')
+        .select('status')
+        .eq('subscription_id', existingSub.id);
+
+      const total = allInstallments?.length || 0;
+      const paidCount = allInstallments?.filter((i: any) => i.status === 'pago').length || 0;
+      const overdueCount = allInstallments?.filter((i: any) => i.status === 'atrasado').length || 0;
+
+      let newStatus: string;
+      let newQuitacao: string;
+      if (paidCount >= existingSub.total_parcelas) {
+        newStatus = 'quitada';
+        newQuitacao = 'quitado';
+      } else if (overdueCount > 0) {
+        newStatus = 'atrasada';
+        newQuitacao = 'parcialmente_pago';
+      } else {
+        newStatus = 'em_dia';
+        newQuitacao = paidCount > 0 ? 'parcialmente_pago' : 'em_aberto';
+      }
+
+      await supabase
+        .from('billing_subscriptions')
+        .update({ status: newStatus, status_quitacao: newQuitacao, updated_at: new Date().toISOString() })
+        .eq('id', existingSub.id);
+
+      console.log(`💳 [BILLING] Subscription atualizada: status=${newStatus}, quitacao=${newQuitacao} (${paidCount}/${existingSub.total_parcelas})`);
+
+    } else {
+      // Criar nova subscription + parcelas
+      console.log(`💳 [BILLING] Criando nova subscription para ${emailLower} - ${tx.product_name}`);
+
+      const valorParcela = tx.product_price;
+      const valorTotal = valorParcela * tx.total_installments;
+      const firstDate = new Date(tx.sale_date);
+
+      // data_fim_prevista
+      const fimDate = new Date(firstDate);
+      fimDate.setDate(fimDate.getDate() + 30 * (tx.total_installments - 1));
+
+      // Resolve contact_id
+      let contactId: string | null = null;
+      let dealId: string | null = null;
+      const { data: contact } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', emailLower)
+        .limit(1)
+        .maybeSingle();
+      if (contact) {
+        contactId = contact.id;
+        const { data: deal } = await supabase
+          .from('crm_deals')
+          .select('id')
+          .eq('contact_id', contact.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (deal) dealId = deal.id;
+      }
+
+      const { data: newSub, error: subErr } = await supabase
+        .from('billing_subscriptions')
+        .insert({
+          customer_name: tx.customer_name || emailLower,
+          customer_email: emailLower,
+          customer_phone: tx.customer_phone || null,
+          product_name: tx.product_name,
+          product_category: tx.product_category || null,
+          valor_entrada: 0,
+          valor_total_contrato: valorTotal,
+          total_parcelas: tx.total_installments,
+          forma_pagamento: mapPaymentMethodForBilling(tx.payment_method || ''),
+          status: 'em_dia',
+          status_quitacao: 'parcialmente_pago',
+          data_inicio: tx.sale_date,
+          data_fim_prevista: fimDate.toISOString().split('T')[0],
+          contact_id: contactId,
+          deal_id: dealId,
+        })
+        .select('id')
+        .single();
+
+      if (subErr) {
+        console.error(`💳 [BILLING] Erro ao criar subscription:`, subErr);
+        return;
+      }
+
+      console.log(`💳 [BILLING] Subscription criada: ${newSub.id}`);
+
+      // Criar todas as parcelas
+      const now = new Date();
+      const installments: any[] = [];
+      for (let i = 1; i <= tx.total_installments; i++) {
+        const isPaid = i === tx.installment_number;
+        const dueDate = new Date(firstDate);
+        dueDate.setDate(dueDate.getDate() + 30 * (i - 1));
+
+        installments.push({
+          subscription_id: newSub.id,
+          numero_parcela: i,
+          valor_original: valorParcela,
+          valor_pago: isPaid ? (tx.net_value || valorParcela) : 0,
+          valor_liquido: isPaid ? (tx.net_value || null) : null,
+          data_vencimento: isPaid ? tx.sale_date : dueDate.toISOString(),
+          data_pagamento: isPaid ? tx.sale_date : null,
+          status: isPaid ? 'pago' : (dueDate < now ? 'atrasado' : 'pendente'),
+          hubla_transaction_id: isPaid ? tx.transaction_id : null,
+        });
+      }
+
+      const { error: instErr } = await supabase
+        .from('billing_installments')
+        .insert(installments);
+
+      if (instErr) {
+        console.error(`💳 [BILLING] Erro ao criar parcelas:`, instErr);
+      } else {
+        console.log(`💳 [BILLING] ${installments.length} parcelas criadas (parcela ${tx.installment_number} como paga)`);
+      }
+    }
+  } catch (err: any) {
+    console.error(`💳 [BILLING] Erro no sync automático:`, err.message);
+  }
+}
+
 // ============= CONSÓRCIO: Configuração e Função de Criação de Deals =============
 const CONSORCIO_ORIGIN_ID = '7d7b1cb5-2a44-4552-9eff-c3b798646b78';
 const VIVER_ALUGUEL_ORIGIN_ID = '4e2b810a-6782-4ce9-9c0d-10d04c018636';
