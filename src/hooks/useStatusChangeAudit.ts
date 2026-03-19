@@ -15,6 +15,7 @@ export interface StatusChangeEntry {
   meeting_type: string | null;
   scheduled_at: string | null;
   is_suspicious: boolean;
+  is_normal_flow: boolean;
 }
 
 const SUSPICIOUS_TRANSITIONS: [string, string][] = [
@@ -22,39 +23,60 @@ const SUSPICIOUS_TRANSITIONS: [string, string][] = [
   ['completed', 'no_show'],
   ['no_show', 'invited'],
   ['completed', 'invited'],
+  ['no_show', 'scheduled'],
+  ['completed', 'scheduled'],
+  ['cancelled', 'completed'],
+  ['refunded', 'completed'],
+  ['cancelled', 'scheduled'],
+  ['cancelled', 'invited'],
+];
+
+const NORMAL_FLOW_TRANSITIONS: [string, string][] = [
+  ['pre_scheduled', 'invited'],
+  ['pre_scheduled', 'scheduled'],
+  ['invited', 'scheduled'],
+  ['invited', 'confirmed'],
+  ['scheduled', 'confirmed'],
+  ['confirmed', 'completed'],
+  ['scheduled', 'completed'],
+  ['invited', 'completed'],
 ];
 
 function isSuspicious(oldStatus: string, newStatus: string): boolean {
   return SUSPICIOUS_TRANSITIONS.some(([o, n]) => o === oldStatus && n === newStatus);
 }
 
+function isNormalFlow(oldStatus: string, newStatus: string): boolean {
+  return NORMAL_FLOW_TRANSITIONS.some(([o, n]) => o === oldStatus && n === newStatus);
+}
+
+export type AuditFilterMode = 'all' | 'suspicious' | 'manual';
+
 interface UseStatusChangeAuditParams {
   days: number;
   closerId?: string | null;
-  suspiciousOnly?: boolean;
+  filterMode?: AuditFilterMode;
 }
 
-export function useStatusChangeAudit({ days, closerId, suspiciousOnly }: UseStatusChangeAuditParams) {
+export function useStatusChangeAudit({ days, closerId, filterMode = 'manual' }: UseStatusChangeAuditParams) {
   const activeBU = useActiveBU();
 
   return useQuery({
-    queryKey: ['status-change-audit', days, closerId, suspiciousOnly, activeBU],
+    queryKey: ['status-change-audit', days, closerId, filterMode, activeBU],
     queryFn: async () => {
       const since = new Date();
       since.setDate(since.getDate() - days);
 
-      // Get audit logs for meeting_slot_attendees status changes
       const { data: logs, error } = await supabase
         .from('audit_logs')
         .select('id, user_id, action, record_id, old_data, new_data, created_at')
         .eq('table_name', 'meeting_slot_attendees')
         .gte('created_at', since.toISOString())
         .order('created_at', { ascending: false })
-        .limit(500);
+        .limit(2000);
 
       if (error) throw error;
 
-      // Filter only status changes
       const statusChanges = (logs || []).filter(log => {
         const oldData = log.old_data as Record<string, unknown> | null;
         const newData = log.new_data as Record<string, unknown> | null;
@@ -64,11 +86,9 @@ export function useStatusChangeAudit({ days, closerId, suspiciousOnly }: UseStat
 
       if (statusChanges.length === 0) return [];
 
-      // Get attendee IDs for enrichment
       const attendeeIds = [...new Set(statusChanges.map(l => l.record_id).filter(Boolean))];
       const userIds = [...new Set(statusChanges.map(l => l.user_id).filter(Boolean))];
 
-      // Fetch attendees with slots and closers
       const { data: attendees } = await supabase
         .from('meeting_slot_attendees')
         .select('id, attendee_name, meeting_slot_id')
@@ -92,7 +112,6 @@ export function useStatusChangeAudit({ days, closerId, suspiciousOnly }: UseStat
             .in('id', closerIds)
         : { data: [] };
 
-      // Fetch changer profiles
       const { data: profiles } = userIds.length > 0
         ? await supabase
             .from('profiles')
@@ -100,13 +119,11 @@ export function useStatusChangeAudit({ days, closerId, suspiciousOnly }: UseStat
             .in('id', userIds)
         : { data: [] };
 
-      // Build lookup maps
       const attendeeMap = new Map((attendees || []).map(a => [a.id, a]));
       const slotMap = new Map((slots || []).map(s => [s.id, s]));
       const closerMap = new Map((closers || []).map(c => [c.id, c]));
       const profileMap = new Map((profiles || []).map(p => [p.id, p]));
 
-      // Build entries
       const entries: StatusChangeEntry[] = statusChanges.map(log => {
         const oldData = log.old_data as Record<string, unknown>;
         const newData = log.new_data as Record<string, unknown>;
@@ -131,6 +148,7 @@ export function useStatusChangeAudit({ days, closerId, suspiciousOnly }: UseStat
           meeting_type: slot?.meeting_type || null,
           scheduled_at: slot?.scheduled_at || null,
           is_suspicious: isSuspicious(oldStatus, newStatus),
+          is_normal_flow: isNormalFlow(oldStatus, newStatus),
         };
       });
 
@@ -139,17 +157,11 @@ export function useStatusChangeAudit({ days, closerId, suspiciousOnly }: UseStat
         ? entries.filter(e => e.closer_bu === activeBU)
         : entries;
 
-      // Filter by closer
-      if (closerId) {
-        filtered = filtered.filter(e => {
-          // closerId is closer name match for simplicity
-          return true; // We'll filter in the component by closer_name
-        });
-      }
-
-      // Filter suspicious only
-      if (suspiciousOnly) {
+      // Apply filter mode
+      if (filterMode === 'suspicious') {
         filtered = filtered.filter(e => e.is_suspicious);
+      } else if (filterMode === 'manual') {
+        filtered = filtered.filter(e => !e.is_normal_flow);
       }
 
       return filtered;
