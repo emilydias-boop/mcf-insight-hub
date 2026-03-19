@@ -346,6 +346,19 @@ Deno.serve(async (req) => {
         if (!updErr) installmentsUpdated++;
       }
 
+      // Update due dates for existing unpaid installments
+      for (const upd of installmentsDueDateUpdates) {
+        await supabase
+          .from("billing_installments")
+          .update({
+            data_vencimento: upd.newDueDate,
+            status: upd.newStatus,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("subscription_id", upd.subId)
+          .eq("numero_parcela", upd.numero);
+      }
+
       // Bulk insert installments in chunks of 500
       for (let i = 0; i < allInstallmentsToInsert.length; i += 500) {
         const chunk = allInstallmentsToInsert.slice(i, i + 500);
