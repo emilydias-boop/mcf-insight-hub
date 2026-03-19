@@ -352,7 +352,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               title: 'Entrada na Pipeline',
               description: 'Lead entrou na pipeline',
               date: deal.created_at,
-              author: deal.owner_id || null,
+              author: resolveAuthor(deal.owner_id),
               metadata: { deal_id: deal.id, origin_id: deal.origin_id, synthetic: true },
             });
           }
