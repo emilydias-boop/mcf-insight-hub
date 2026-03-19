@@ -35,8 +35,11 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
       // Build OR filter for deal_activities (supports both UUID and clint_id)
       const orFilter = uniqueIds.map(id => `deal_id.eq.${id}`).join(',');
 
+      // Build UUID-only filter for tables with proper UUID FK
+      const uuidIds = uniqueIds.filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
       // Run all queries in parallel
-      const [activitiesRes, callsRes, meetingsRes, transactionsRes, attendeeNotesRes] = await Promise.all([
+      const [activitiesRes, callsRes, meetingsRes, transactionsRes, attendeeNotesRes, dealsRes] = await Promise.all([
         // 1. Deal activities (stage changes, notes, tasks, qualification) - ALL deals
         supabase
           .from('deal_activities')
