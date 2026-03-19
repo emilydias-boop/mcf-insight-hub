@@ -11,6 +11,7 @@ export const useSyncBillingFromHubla = () => {
       let totalSubsCreated = 0;
       let totalSubsUpdated = 0;
       let totalInstallments = 0;
+      let totalInstallmentsUpdated = 0;
       let hasMore = true;
 
       while (hasMore) {
@@ -22,11 +23,12 @@ export const useSyncBillingFromHubla = () => {
         totalSubsCreated += data.subsCreated || 0;
         totalSubsUpdated += data.subsUpdated || 0;
         totalInstallments += data.installmentsCreated || 0;
+        totalInstallmentsUpdated += data.installmentsUpdated || 0;
         hasMore = data.hasMore === true;
         offset = data.nextOffset || 0;
       }
 
-      return { subsCreated: totalSubsCreated, subsUpdated: totalSubsUpdated, installmentsCreated: totalInstallments };
+      return { subsCreated: totalSubsCreated, subsUpdated: totalSubsUpdated, installmentsCreated: totalInstallments, installmentsUpdated: totalInstallmentsUpdated };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['billing-subscriptions'] });
