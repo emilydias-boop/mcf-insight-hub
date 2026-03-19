@@ -90,8 +90,11 @@ Deno.serve(async (req) => {
     let installmentsCreated = 0;
     let installmentsUpdated = 0;
 
+    let historyInserted = 0;
+
     // 3. Process in batches
     for (let b = 0; b < groupKeys.length; b += batchSize) {
+      const historyEntries: any[] = [];
       const batchKeys = groupKeys.slice(b, b + batchSize);
       
       // Collect emails+products for this batch to check existing subs
@@ -310,6 +313,18 @@ Deno.serve(async (req) => {
               status: "pago",
               hubla_transaction_id: paid.id,
             });
+            // Register history entry for new paid installment
+            historyEntries.push({
+              subscription_id: subId,
+              tipo: "parcela_paga",
+              valor: paid.net_value || valorParcela,
+              forma_pagamento: mapPaymentMethod(paid.sale_status || paid.event_type || ""),
+              responsavel: "Sistema (Hubla Sync)",
+              descricao: `Parcela ${i}/${totalInstallments} paga via Hubla (sync automático)`,
+              status: "confirmado",
+              metadata: { hubla_transaction_id: paid.id, numero_parcela: i, total_parcelas: totalInstallments },
+              created_at: paid.sale_date,
+            });
           } else {
             const dueDate = new Date(firstDate);
             dueDate.setDate(dueDate.getDate() + batchIntervalDays * (i - 1));
@@ -343,7 +358,23 @@ Deno.serve(async (req) => {
           .eq("subscription_id", upd.subId)
           .eq("numero_parcela", upd.numero);
         
-        if (!updErr) installmentsUpdated++;
+        if (!updErr) {
+          installmentsUpdated++;
+          // Register history entry for updated installment
+          const txList = groups[Object.keys(groups).find(k => existingSubMap.get(k) === upd.subId) || ""] || [];
+          const totalInstallments = txList[0]?.total_installments || txList.length;
+          historyEntries.push({
+            subscription_id: upd.subId,
+            tipo: "parcela_paga",
+            valor: upd.paid.net_value || upd.paid.product_price,
+            forma_pagamento: mapPaymentMethod(upd.paid.sale_status || upd.paid.event_type || ""),
+            responsavel: "Sistema (Hubla Sync)",
+            descricao: `Parcela ${upd.numero}/${totalInstallments} paga via Hubla (sync automático)`,
+            status: "confirmado",
+            metadata: { hubla_transaction_id: upd.paid.id, numero_parcela: upd.numero, total_parcelas: totalInstallments },
+            created_at: upd.paid.sale_date,
+          });
+        }
       }
 
       // Update due dates for existing unpaid installments
@@ -371,6 +402,19 @@ Deno.serve(async (req) => {
           installmentsCreated += chunk.length;
         }
       }
+
+      // Bulk insert billing_history entries in chunks of 500
+      for (let i = 0; i < historyEntries.length; i += 500) {
+        const chunk = historyEntries.slice(i, i + 500);
+        const { error: histErr } = await supabase
+          .from("billing_history")
+          .insert(chunk);
+        if (histErr) {
+          console.error("Bulk insert billing_history error:", histErr);
+        } else {
+          historyInserted += chunk.length;
+        }
+      }
     }
 
     // 4. Run overdue status update
@@ -384,6 +428,7 @@ Deno.serve(async (req) => {
       subsUpdated,
       installmentsCreated,
       installmentsUpdated,
+      historyInserted,
       hasMore,
       nextOffset: hasMore ? offset + 5000 : null,
     };
