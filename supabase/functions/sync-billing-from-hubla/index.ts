@@ -302,11 +302,15 @@ Deno.serve(async (req) => {
 
           const paid = paidMap[i];
           if (paid) {
+            // Parcela 1 = product_price (bruto), demais = net_value (líquido)
+            const valorPago = i === 1
+              ? (paid.product_price || valorParcela)
+              : (paid.net_value || paid.product_price || valorParcela);
             allInstallmentsToInsert.push({
               subscription_id: subId,
               numero_parcela: i,
               valor_original: valorParcela,
-              valor_pago: paid.net_value || valorParcela,
+              valor_pago: valorPago,
               valor_liquido: paid.net_value || null,
               data_vencimento: paid.sale_date,
               data_pagamento: paid.sale_date,
@@ -345,11 +349,15 @@ Deno.serve(async (req) => {
 
       // Bulk update existing installments that were paid
       for (const upd of installmentsToUpdateBatch) {
+        // Parcela 1 = product_price (bruto), demais = net_value (líquido)
+        const valorPagoUpd = upd.numero === 1
+          ? (upd.paid.product_price || upd.paid.net_value)
+          : (upd.paid.net_value || upd.paid.product_price);
         const { error: updErr } = await supabase
           .from("billing_installments")
           .update({
             status: "pago",
-            valor_pago: upd.paid.net_value || upd.paid.product_price,
+            valor_pago: valorPagoUpd,
             valor_liquido: upd.paid.net_value || null,
             data_pagamento: upd.paid.sale_date,
             hubla_transaction_id: upd.paid.id,
@@ -521,9 +529,13 @@ Deno.serve(async (req) => {
               const inst = overdueInst[m];
               const tx = unlinkedTx[m];
 
+              // Parcela 1 = product_price (bruto), demais = net_value (líquido)
+              const singleValorPago = inst.numero_parcela === 1
+                ? (tx.product_price || tx.net_value || inst.valor_original)
+                : (tx.net_value || tx.product_price || inst.valor_original);
               await supabase.from("billing_installments").update({
                 status: "pago",
-                valor_pago: tx.net_value || tx.product_price || inst.valor_original,
+                valor_pago: singleValorPago,
                 valor_liquido: tx.net_value || null,
                 data_pagamento: tx.sale_date,
                 hubla_transaction_id: tx.id,
