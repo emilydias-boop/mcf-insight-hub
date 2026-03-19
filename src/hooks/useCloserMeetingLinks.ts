@@ -68,7 +68,7 @@ export function useCloserDaySlots(dayOfWeek: number, meetingType: 'r1' | 'r2' = 
 
       const { data, error } = await supabase
         .from('closer_meeting_links')
-        .select('closer_id, start_time')
+        .select('closer_id, start_time, max_leads')
         .eq('day_of_week', dayOfWeek)
         .in('closer_id', ids)
         .order('start_time');

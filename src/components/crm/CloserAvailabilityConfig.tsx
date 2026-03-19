@@ -343,23 +343,13 @@ function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) 
               ) : (
                 <div className="space-y-2">
                   {day.links.map(link => (
-                    <div key={link.id} className="flex items-center gap-2">
-                      <span className="font-mono text-sm w-14">{formatTime(link.start_time)}</span>
-                      <Input
-                        value={link.google_meet_link}
-                        readOnly
-                        className="flex-1 text-xs bg-muted"
-                      />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => deleteLink.mutate(link.id)}
-                        disabled={deleteLink.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <MaxLeadsSlotRow
+                      key={link.id}
+                      link={link}
+                      globalMax={closer?.max_leads_per_slot ?? 4}
+                      onDelete={() => deleteLink.mutate(link.id)}
+                      deleteDisabled={deleteLink.isPending}
+                    />
                   ))}
                 </div>
               )}

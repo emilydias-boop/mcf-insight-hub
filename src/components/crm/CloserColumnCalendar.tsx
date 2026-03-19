@@ -188,9 +188,13 @@ export function CloserColumnCalendar({
     // Verificar se o closer tem este horário configurado
     if (!isSlotConfigured(closerId, slotTime)) return false;
 
-    // Buscar max_leads_per_slot do closer
+    // Buscar capacidade: prioridade = slot override > global closer > fallback 4
     const closer = closers.find(c => c.id === closerId);
-    const maxLeads = closer?.max_leads_per_slot || 4;
+    const timeStr = format(slotTime, "HH:mm");
+    const slotLink = daySlots.find(
+      (s) => s.closer_id === closerId && s.start_time.slice(0, 5) === timeStr
+    );
+    const maxLeads = slotLink?.max_leads ?? closer?.max_leads_per_slot ?? 4;
 
     // Contar total de attendees no slot
     const slotMeetings = getMeetingsForSlot(closerId, slotTime);
