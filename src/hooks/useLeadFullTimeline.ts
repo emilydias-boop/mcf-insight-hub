@@ -189,7 +189,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               title: 'Nota adicionada',
               description: act.description,
               date: act.created_at,
-              author: meta.author || meta.user_name || null,
+              author: resolveAuthor(act.user_id, meta.author, meta.user_name),
               metadata: meta,
             });
           } else if (actType === 'task_completed' || actType === 'task_complete') {
