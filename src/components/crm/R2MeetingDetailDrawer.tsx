@@ -452,6 +452,9 @@ export function R2MeetingDetailDrawer({
               </div>
             </div>
 
+            {/* Perfil do Lead (Anamnese) */}
+            <LeadProfileSection contactId={contactId} />
+
             <Separator />
 
             {/* Tabbed Content */}
