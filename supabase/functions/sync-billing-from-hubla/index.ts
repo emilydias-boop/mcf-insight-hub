@@ -121,8 +121,9 @@ Deno.serve(async (req) => {
         const [email, productName] = key.split("::");
         const first = txList[0];
         const totalInstallments = first.total_installments || txList.length;
-        const valorParcela = first.product_price || 0;
-        const valorTotal = valorParcela * totalInstallments;
+        const valorBruto = first.product_price || 0;
+        const valorLiquido = first.net_value || 0;
+        const valorTotal = valorBruto + Math.max(totalInstallments - 1, 0) * valorLiquido;
         const distinctPaidNumbers = new Set(txList.map(tx => tx.installment_number || 1));
         const paidCount = distinctPaidNumbers.size;
         const now = new Date();
