@@ -88,6 +88,7 @@ Deno.serve(async (req) => {
     let subsCreated = 0;
     let subsUpdated = 0;
     let installmentsCreated = 0;
+    let installmentsUpdated = 0;
 
     // 3. Process in batches
     for (let b = 0; b < groupKeys.length; b += batchSize) {
@@ -214,24 +215,29 @@ Deno.serve(async (req) => {
 
       // Fetch existing installments for all subscription IDs in this batch
       const existingInstNums = new Map<string, Set<number>>();
+      const existingInstStatus = new Map<string, Map<number, string>>();
       if (subIdsForInstallments.length > 0) {
         for (let i = 0; i < subIdsForInstallments.length; i += 200) {
           const chunk = subIdsForInstallments.slice(i, i + 200);
           const { data: existInst } = await supabase
             .from("billing_installments")
-            .select("subscription_id, numero_parcela")
+            .select("subscription_id, numero_parcela, status")
             .in("subscription_id", chunk);
           
           for (const inst of existInst || []) {
             if (!existingInstNums.has(inst.subscription_id)) {
               existingInstNums.set(inst.subscription_id, new Set());
+              existingInstStatus.set(inst.subscription_id, new Map());
             }
             existingInstNums.get(inst.subscription_id)!.add(inst.numero_parcela);
+            existingInstStatus.get(inst.subscription_id)!.set(inst.numero_parcela, inst.status);
           }
         }
       }
 
       // Build installments for this batch
+      const installmentsToUpdateBatch: { subId: string; numero: number; paid: any }[] = [];
+      
       for (const key of batchKeys) {
         const txList = groups[key];
         const subId = existingSubMap.get(key);
@@ -241,6 +247,7 @@ Deno.serve(async (req) => {
         const totalInstallments = first.total_installments || txList.length;
         const valorParcela = first.product_price || 0;
         const existingNums = existingInstNums.get(subId) || new Set();
+        const statusMap = existingInstStatus.get(subId) || new Map();
         const now = new Date();
 
         // Build paid map
@@ -261,7 +268,15 @@ Deno.serve(async (req) => {
         const firstDate = new Date(first.sale_date);
 
         for (let i = 1; i <= totalInstallments; i++) {
-          if (existingNums.has(i)) continue;
+          if (existingNums.has(i)) {
+            // Check if installment exists but isn't paid, and Hubla shows payment
+            const currentStatus = statusMap.get(i);
+            const paid = paidMap[i];
+            if (paid && currentStatus !== 'pago') {
+              installmentsToUpdateBatch.push({ subId, numero: i, paid });
+            }
+            continue;
+          }
 
           const paid = paidMap[i];
           if (paid) {
@@ -294,6 +309,24 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Bulk update existing installments that were paid
+      for (const upd of installmentsToUpdateBatch) {
+        const { error: updErr } = await supabase
+          .from("billing_installments")
+          .update({
+            status: "pago",
+            valor_pago: upd.paid.net_value || upd.paid.product_price,
+            valor_liquido: upd.paid.net_value || null,
+            data_pagamento: upd.paid.sale_date,
+            hubla_transaction_id: upd.paid.id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("subscription_id", upd.subId)
+          .eq("numero_parcela", upd.numero);
+        
+        if (!updErr) installmentsUpdated++;
+      }
+
       // Bulk insert installments in chunks of 500
       for (let i = 0; i < allInstallmentsToInsert.length; i += 500) {
         const chunk = allInstallmentsToInsert.slice(i, i + 500);
@@ -318,6 +351,7 @@ Deno.serve(async (req) => {
       subsCreated,
       subsUpdated,
       installmentsCreated,
+      installmentsUpdated,
       hasMore,
       nextOffset: hasMore ? offset + 5000 : null,
     };
