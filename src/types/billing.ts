@@ -3,7 +3,23 @@ export type BillingQuitacaoStatus = 'em_aberto' | 'parcialmente_pago' | 'quitado
 export type BillingInstallmentStatus = 'pendente' | 'pago' | 'atrasado' | 'cancelado';
 export type BillingAgreementStatus = 'em_aberto' | 'em_andamento' | 'cumprido' | 'quebrado';
 export type BillingHistoryType = 'entrada_paga' | 'parcela_paga' | 'parcela_atrasada' | 'boleto_gerado' | 'tentativa_cobranca' | 'acordo_realizado' | 'cancelamento' | 'quitacao' | 'observacao';
-export type BillingPaymentMethod = 'pix' | 'credit_card' | 'bank_slip' | 'boleto' | 'outro';
+export type BillingPaymentMethod = 'pix' | 'credit_card' | 'bank_slip' | 'boleto' | 'outro' | 'boleto_parcelado' | 'cartao_parcelado' | 'pix_parcelado';
+
+export type BillingReceivableStatus = 'pendente' | 'recebido';
+
+export interface BillingPaymentReceivable {
+  id: string;
+  installment_id: string;
+  numero: number;
+  valor: number;
+  data_prevista: string;
+  data_recebimento: string | null;
+  status: BillingReceivableStatus;
+  forma_pagamento: BillingPaymentMethod | null;
+  observacoes: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface BillingSubscription {
   id: string;
