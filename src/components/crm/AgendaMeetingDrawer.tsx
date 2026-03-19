@@ -61,6 +61,7 @@ import {
 import { MoveAttendeeModal } from './MoveAttendeeModal';
 import { AttendeeNotesSection } from './AttendeeNotesSection';
 import { MovementHistorySection } from '@/components/sdr/MovementHistorySection';
+import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
 import { LinkContractDialog } from './LinkContractDialog';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -486,6 +487,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         id: att.id,
         name,
         phone,
+        contactId: att.contact_id || parentAttendee?.contact_id || attendeeMeeting.contact_id,
         dealId: att.deal_id || parentAttendee?.deal_id || attendeeMeeting.deal_id,
         isPartner: att.is_partner || false,
         notifiedAt: att.notified_at,
@@ -898,6 +900,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     </div>
                   )}
                 </div>
+                {/* Perfil do Lead (Anamnese) */}
+                <LeadProfileSection contactId={selectedParticipant?.contactId} />
                 <Separator />
               </>
             )}
