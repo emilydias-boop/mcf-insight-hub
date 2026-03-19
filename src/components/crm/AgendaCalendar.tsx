@@ -1170,6 +1170,30 @@ export function AgendaCalendar({
                                 Agendar
                               </button>
                             )}
+                            {/* Full/Lotado indicator for this closer */}
+                            {hasNoMeetings && !isCloserAvailable && isSlotConfigured(day, hour, minute) && (() => {
+                              const maxLeads = closer?.max_leads_per_slot ?? 4;
+                              const attendeeCount = filteredMeetings
+                                .filter(m => {
+                                  if (m.closer_id !== closerId) return false;
+                                  const meetingStart = parseISO(m.scheduled_at);
+                                  return isSameDay(meetingStart, day) &&
+                                    meetingStart.getHours() === hour &&
+                                    meetingStart.getMinutes() >= minute &&
+                                    meetingStart.getMinutes() < minute + 30;
+                                })
+                                .reduce((sum, m) => sum + (m.attendees?.length || 0), 0);
+                              
+                              if (attendeeCount >= maxLeads && attendeeCount > 0) {
+                                return (
+                                  <div className="absolute inset-0.5 rounded flex items-center justify-center gap-1 bg-red-500/10 border border-red-500/30">
+                                    <Lock className="h-3 w-3 text-red-400" />
+                                    <span className="text-[10px] font-semibold text-red-400">Lotado {attendeeCount}/{maxLeads}</span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                             
                             {/* Meetings for this closer */}
                             {closerMeetings.map((group, groupIndex) => {
