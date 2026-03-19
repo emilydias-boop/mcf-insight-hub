@@ -134,6 +134,8 @@ export interface BillingKPIs {
   assinaturasQuitadas: number;
   parcelasPagas: number;
   parcelasTotais: number;
+  clientesEmRisco?: number;
+  nuncaContatados?: number;
 }
 
 export const SUBSCRIPTION_STATUS_LABELS: Record<BillingSubscriptionStatus, string> = {

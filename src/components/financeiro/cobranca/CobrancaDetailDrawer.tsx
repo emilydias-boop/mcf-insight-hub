@@ -191,7 +191,16 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
                   size="sm"
                   variant="outline"
                   className="text-green-700 border-green-300 hover:bg-green-50"
-                  onClick={() => {
+                  onClick={async () => {
+                    // Register collection attempt
+                    try {
+                      await addHistory.mutateAsync({
+                        subscription_id: subscription.id,
+                        tipo: 'tentativa_cobranca',
+                        descricao: 'Cobrança via WhatsApp',
+                      });
+                    } catch { /* silent */ }
+
                     const phone = subscription.customer_phone!.replace(/\D/g, '');
                     const phoneFormatted = phone.startsWith('55') ? phone : `55${phone}`;
                     const msg = encodeURIComponent(

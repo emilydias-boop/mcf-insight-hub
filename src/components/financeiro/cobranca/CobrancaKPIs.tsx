@@ -1,5 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { DollarSign, AlertTriangle, CheckCircle, Clock, CreditCard } from 'lucide-react';
+import { DollarSign, AlertTriangle, CheckCircle, Clock, CreditCard, Flame, PhoneOff } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { BillingKPIs } from '@/types/billing';
 
@@ -47,10 +47,26 @@ export const CobrancaKPIs = ({ kpis, isLoading }: CobrancaKPIsProps) => {
       color: 'text-amber-600',
       bg: 'bg-amber-50',
     },
+    {
+      label: 'Clientes em Risco',
+      value: kpis?.clientesEmRisco != null ? `${kpis.clientesEmRisco}` : '-',
+      subtitle: '3+ parcelas atrasadas',
+      icon: Flame,
+      color: 'text-red-600',
+      bg: 'bg-red-50',
+    },
+    {
+      label: 'Nunca Contatados',
+      value: kpis?.nuncaContatados != null ? `${kpis.nuncaContatados}` : '-',
+      subtitle: 'atrasados sem contato',
+      icon: PhoneOff,
+      color: 'text-orange-600',
+      bg: 'bg-orange-50',
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
       {cards.map((card) => (
         <Card key={card.label} className="border-border/50">
           <CardContent className="p-4">
