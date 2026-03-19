@@ -1,18 +1,16 @@
 
 
-## Plano: Adicionar aba "Auditoria" na navegação do CRM principal
+## Plano: Corrigir 404 na rota `/crm/auditoria-agendamentos`
 
 ### Problema
 
-A aba "Auditoria" existe nas rotas BU-específicas (ex: `/bu-incorporador-mcf/auditoria-agendamentos`) mas **não aparece** na navegação do CRM principal (`/crm`). O array `allNavItems` em `CRM.tsx` não inclui a rota `/crm/auditoria-agendamentos`.
+A rota `auditoria-agendamentos` não foi adicionada ao grupo de rotas `/crm` em `App.tsx` (linhas 363-386). Ela existe nos layouts de BU (consórcio, incorporador, etc.) mas falta no CRM principal.
 
 ### Correção
 
-Adicionar a entrada de navegação no `CRM.tsx`:
-
 | Arquivo | Ação |
 |---------|------|
-| `src/pages/CRM.tsx` | Adicionar `{ to: '/crm/auditoria-agendamentos', label: 'Auditoria', icon: Shield }` no array `allNavItems`, visível apenas para roles admin/manager/coordenador (não para SDRs/closers agenda-only) |
+| `src/App.tsx` | Adicionar `<Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />` dentro do grupo `<Route path="crm">`, após a linha 382 (retornos-parceiros) |
 
-A rota já existe em `App.tsx` (linha 229), então só falta o link de navegação.
+Uma linha de código resolve o 404.
 
