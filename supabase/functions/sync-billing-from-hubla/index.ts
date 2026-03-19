@@ -358,7 +358,23 @@ Deno.serve(async (req) => {
           .eq("subscription_id", upd.subId)
           .eq("numero_parcela", upd.numero);
         
-        if (!updErr) installmentsUpdated++;
+        if (!updErr) {
+          installmentsUpdated++;
+          // Register history entry for updated installment
+          const txList = groups[Object.keys(groups).find(k => existingSubMap.get(k) === upd.subId) || ""] || [];
+          const totalInstallments = txList[0]?.total_installments || txList.length;
+          historyEntries.push({
+            subscription_id: upd.subId,
+            tipo: "parcela_paga",
+            valor: upd.paid.net_value || upd.paid.product_price,
+            forma_pagamento: mapPaymentMethod(upd.paid.sale_status || upd.paid.event_type || ""),
+            responsavel: "Sistema (Hubla Sync)",
+            descricao: `Parcela ${upd.numero}/${totalInstallments} paga via Hubla (sync automático)`,
+            status: "confirmado",
+            metadata: { hubla_transaction_id: upd.paid.id, numero_parcela: upd.numero, total_parcelas: totalInstallments },
+            created_at: upd.paid.sale_date,
+          });
+        }
       }
 
       // Update due dates for existing unpaid installments
