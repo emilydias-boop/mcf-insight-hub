@@ -42,6 +42,58 @@ const PRESET_COLORS = [
   '#EF4444', '#06B6D4', '#84CC16', '#F59E0B', '#6366F1',
 ];
 
+function MaxLeadsSlotRow({ link, globalMax, onDelete, deleteDisabled }: {
+  link: { id: string; start_time: string; google_meet_link: string; max_leads?: number | null };
+  globalMax: number;
+  onDelete: () => void;
+  deleteDisabled: boolean;
+}) {
+  const updateLink = useUpdateCloserMeetingLink();
+  const [localMax, setLocalMax] = useState<string>(link.max_leads != null ? String(link.max_leads) : '');
+
+  const handleBlur = () => {
+    const parsed = localMax === '' ? null : parseInt(localMax, 10);
+    if (parsed === link.max_leads) return;
+    if (parsed !== null && (isNaN(parsed) || parsed < 1)) return;
+    updateLink.mutate({ id: link.id, max_leads: parsed });
+  };
+
+  const formatTime = (time: string) => time.substring(0, 5);
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-mono text-sm w-14">{formatTime(link.start_time)}</span>
+      <Input
+        value={link.google_meet_link}
+        readOnly
+        className="flex-1 text-xs bg-muted"
+      />
+      <div className="flex items-center gap-1">
+        <Users className="h-3.5 w-3.5 text-muted-foreground" />
+        <Input
+          type="number"
+          min={1}
+          max={10}
+          value={localMax}
+          onChange={(e) => setLocalMax(e.target.value)}
+          onBlur={handleBlur}
+          placeholder={String(globalMax)}
+          className="w-14 h-8 text-xs text-center px-1"
+        />
+      </div>
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-8 w-8 text-destructive hover:text-destructive"
+        onClick={onDelete}
+        disabled={deleteDisabled}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
 function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) {
   const queryClient = useQueryClient();
   const updateColor = useUpdateCloserColor();
