@@ -22,12 +22,6 @@ const statusColors: Record<string, string> = {
   quitada: 'bg-emerald-100 text-emerald-800 border-emerald-200',
 };
 
-const quitacaoColors: Record<string, string> = {
-  em_aberto: 'bg-amber-100 text-amber-800 border-amber-200',
-  parcialmente_pago: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  quitado: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-};
-
 export const CobrancaTable = ({ subscriptions, isLoading, onSelect }: CobrancaTableProps) => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);

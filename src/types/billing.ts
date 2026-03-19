@@ -44,6 +44,9 @@ export interface BillingSubscription {
   updated_at: string;
   created_by: string | null;
   updated_by: string | null;
+  // Enriched fields (computed from installments)
+  valor_pago_total?: number;
+  parcelas_pagas?: number;
 }
 
 export interface BillingInstallment {
