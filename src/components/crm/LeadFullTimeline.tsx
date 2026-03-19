@@ -36,6 +36,7 @@ const EVENT_CONFIG: Record<TimelineEventType, { icon: React.ElementType; color: 
   purchase: { icon: ShoppingCart, color: 'text-pink-600 dark:text-pink-400', bgColor: 'bg-pink-100 dark:bg-pink-900/40', label: 'Compra' },
   qualification: { icon: Star, color: 'text-orange-600 dark:text-orange-400', bgColor: 'bg-orange-100 dark:bg-orange-900/40', label: 'Qualificação' },
   closer_note: { icon: MessageSquare, color: 'text-indigo-600 dark:text-indigo-400', bgColor: 'bg-indigo-100 dark:bg-indigo-900/40', label: 'Nota Closer' },
+  entry: { icon: LogIn, color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-100 dark:bg-emerald-900/40', label: 'Entrada' },
 };
 
 const FILTER_OPTIONS: { type: TimelineEventType | 'all'; label: string }[] = [
