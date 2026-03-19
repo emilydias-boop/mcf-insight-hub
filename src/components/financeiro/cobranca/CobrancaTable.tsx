@@ -94,16 +94,21 @@ export const CobrancaTable = ({ subscriptions, isLoading, onSelect }: CobrancaTa
                   {SUBSCRIPTION_STATUS_LABELS[sub.status]}
                 </Badge>
               </TableCell>
-              <TableCell>
-                <Badge className={`text-xs ${quitacaoColors[sub.status_quitacao] || ''}`} variant="outline">
-                  {QUITACAO_STATUS_LABELS[sub.status_quitacao]}
-                </Badge>
-              </TableCell>
               <TableCell className="text-right font-medium">{formatCurrency(sub.valor_total_contrato)}</TableCell>
-              <TableCell className="text-sm">{sub.total_parcelas}x</TableCell>
+              <TableCell className={`text-right font-medium ${
+                (sub.valor_pago_total ?? 0) < sub.valor_total_contrato * 0.3 && sub.status !== 'quitada' 
+                  ? 'text-red-600' : ''
+              }`}>
+                {formatCurrency(sub.valor_pago_total ?? 0)}
+              </TableCell>
+              <TableCell className="text-sm">
+                <span className="font-medium">{sub.parcelas_pagas ?? 0}</span>
+                <span className="text-muted-foreground">/{sub.total_parcelas} pagas</span>
+              </TableCell>
               <TableCell className="text-sm">{PAYMENT_METHOD_LABELS[sub.forma_pagamento]}</TableCell>
               <TableCell className="text-sm">{sub.responsavel_financeiro || '-'}</TableCell>
               <TableCell className="text-sm">{sub.data_inicio ? formatDate(sub.data_inicio) : '-'}</TableCell>
+              <TableCell className="text-sm">{sub.data_fim_prevista ? formatDate(sub.data_fim_prevista) : '-'}</TableCell>
             </TableRow>
           ))}
         </TableBody>
