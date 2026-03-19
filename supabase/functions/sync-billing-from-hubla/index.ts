@@ -417,7 +417,146 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. Run overdue status update
+    // 4b. Process single-installment transactions (total_installments=1)
+    // These are individual payments that match existing subscriptions
+    let singleTxMatched = 0;
+    {
+      // Get all existing subscription emails+products
+      const allSubKeys = new Set(Object.keys(groups));
+      const existingSubEmails = [...new Set(
+        (await supabase
+          .from("billing_subscriptions")
+          .select("id, customer_email, product_name")
+          .not("customer_email", "is", null)
+        ).data?.map(s => `${(s.customer_email || "").toLowerCase()}::${s.product_name}`) || []
+      )];
+
+      // Fetch single-installment transactions not yet linked
+      const { data: singleTx } = await supabase
+        .from("hubla_transactions")
+        .select("id, customer_email, product_name, net_value, sale_date, sale_status, event_type, product_price")
+        .eq("total_installments", 1)
+        .order("sale_date", { ascending: true })
+        .limit(5000);
+
+      if (singleTx && singleTx.length > 0) {
+        // Group by email::product
+        const singleGroups: Record<string, typeof singleTx> = {};
+        for (const tx of singleTx) {
+          if (!tx.customer_email) continue;
+          const key = `${tx.customer_email.toLowerCase()}::${tx.product_name}`;
+          // Only process if there's a matching subscription AND we didn't already process this group
+          if (!existingSubEmails.includes(key) || allSubKeys.has(key)) continue;
+          if (!singleGroups[key]) singleGroups[key] = [];
+          singleGroups[key].push(tx);
+        }
+
+        // For each group, find unmatched installments and match sequentially
+        for (const [key, txList] of Object.entries(singleGroups)) {
+          const [email, productName] = key.split("::");
+          
+          // Find the subscription
+          const { data: subs } = await supabase
+            .from("billing_subscriptions")
+            .select("id")
+            .eq("customer_email", email)
+            .eq("product_name", productName)
+            .limit(1);
+          
+          if (!subs || subs.length === 0) continue;
+          const subId = subs[0].id;
+
+          // Get overdue installments without hubla_transaction_id
+          const { data: overdueInst } = await supabase
+            .from("billing_installments")
+            .select("id, numero_parcela, valor_original")
+            .eq("subscription_id", subId)
+            .eq("status", "atrasado")
+            .is("hubla_transaction_id", null)
+            .order("numero_parcela", { ascending: true });
+
+          if (!overdueInst || overdueInst.length === 0) continue;
+
+          // Filter out transactions already linked
+          const linkedTxIds = new Set<string>();
+          const { data: linkedInst } = await supabase
+            .from("billing_installments")
+            .select("hubla_transaction_id")
+            .eq("subscription_id", subId)
+            .not("hubla_transaction_id", "is", null);
+          for (const li of linkedInst || []) {
+            if (li.hubla_transaction_id) linkedTxIds.add(li.hubla_transaction_id);
+          }
+          const unlinkedTx = txList.filter(tx => !linkedTxIds.has(tx.id));
+
+          // Sequential match
+          const matchCount = Math.min(overdueInst.length, unlinkedTx.length);
+          const singleHistoryEntries: any[] = [];
+
+          for (let m = 0; m < matchCount; m++) {
+            const inst = overdueInst[m];
+            const tx = unlinkedTx[m];
+
+            const { error: updErr } = await supabase
+              .from("billing_installments")
+              .update({
+                status: "pago",
+                valor_pago: tx.net_value || tx.product_price || inst.valor_original,
+                valor_liquido: tx.net_value || null,
+                data_pagamento: tx.sale_date,
+                hubla_transaction_id: tx.id,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", inst.id);
+
+            if (!updErr) {
+              singleTxMatched++;
+              installmentsUpdated++;
+              singleHistoryEntries.push({
+                subscription_id: subId,
+                tipo: "parcela_paga",
+                valor: tx.net_value || tx.product_price,
+                forma_pagamento: mapPaymentMethod(tx.sale_status || tx.event_type || ""),
+                responsavel: "Sistema (Hubla Sync - Single TX)",
+                descricao: `Parcela ${inst.numero_parcela} paga via Hubla (total_installments=1, sync)`,
+                status: "confirmado",
+                metadata: { hubla_transaction_id: tx.id, numero_parcela: inst.numero_parcela },
+                created_at: tx.sale_date,
+              });
+            }
+          }
+
+          // Insert history
+          if (singleHistoryEntries.length > 0) {
+            await supabase.from("billing_history").insert(singleHistoryEntries);
+          }
+
+          // Recalculate subscription status
+          if (matchCount > 0) {
+            const { data: allInst } = await supabase
+              .from("billing_installments")
+              .select("status")
+              .eq("subscription_id", subId);
+            
+            const totalPaid = (allInst || []).filter(i => i.status === "pago").length;
+            const totalOverdue = (allInst || []).filter(i => i.status === "atrasado").length;
+            const totalCount = (allInst || []).length;
+
+            let newStatus = "em_dia";
+            let newQuitacao = "parcialmente_pago";
+            if (totalPaid >= totalCount) { newStatus = "quitada"; newQuitacao = "quitado"; }
+            else if (totalOverdue > 0) { newStatus = "atrasada"; }
+            if (totalPaid === 0) newQuitacao = "em_aberto";
+
+            await supabase.from("billing_subscriptions").update({
+              status: newStatus, status_quitacao: newQuitacao, updated_at: new Date().toISOString(),
+            }).eq("id", subId);
+          }
+        }
+      }
+    }
+
+    // 5. Run overdue status update
     await supabase.rpc('update_overdue_billing_status');
 
     const hasMore = transactions.length >= 5000;
@@ -428,6 +567,7 @@ Deno.serve(async (req) => {
       subsUpdated,
       installmentsCreated,
       installmentsUpdated,
+      singleTxMatched,
       historyInserted,
       hasMore,
       nextOffset: hasMore ? offset + 5000 : null,
