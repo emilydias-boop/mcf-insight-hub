@@ -146,7 +146,11 @@ Deno.serve(async (req) => {
           const diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
           if (diff > 0 && diff < 90) intervalDays = diff;
         }
-        const fimDate = new Date(first.sale_date);
+        // Backtrack to estimate installment #1 date, then calculate end date
+        const earliestNumber = first.installment_number || 1;
+        const estimatedStartDate = new Date(first.sale_date);
+        estimatedStartDate.setDate(estimatedStartDate.getDate() - intervalDays * (earliestNumber - 1));
+        const fimDate = new Date(estimatedStartDate);
         fimDate.setDate(fimDate.getDate() + intervalDays * (totalInstallments - 1));
         dataFimPrevista = fimDate.toISOString().split('T')[0];
 
@@ -182,7 +186,7 @@ Deno.serve(async (req) => {
             forma_pagamento: mapPaymentMethod(first.sale_status || first.event_type || ""),
             status,
             status_quitacao: statusQuitacao,
-            data_inicio: first.sale_date,
+            data_inicio: estimatedStartDate.toISOString().split('T')[0],
             data_fim_prevista: dataFimPrevista,
             contact_id: contactId,
             deal_id: dealId,
@@ -238,6 +242,7 @@ Deno.serve(async (req) => {
 
       // Build installments for this batch
       const installmentsToUpdateBatch: { subId: string; numero: number; paid: any }[] = [];
+      const installmentsDueDateUpdates: { subId: string; numero: number; newDueDate: string; newStatus: string }[] = [];
       
       for (const key of batchKeys) {
         const txList = groups[key];
@@ -266,7 +271,10 @@ Deno.serve(async (req) => {
           if (diff > 0 && diff < 90) batchIntervalDays = diff;
         }
 
+        // Estimate the date of installment #1 by backtracking from the earliest known transaction
+        const earliestKnownNumber = first.installment_number || 1;
         const firstDate = new Date(first.sale_date);
+        firstDate.setDate(firstDate.getDate() - batchIntervalDays * (earliestKnownNumber - 1));
 
         for (let i = 1; i <= totalInstallments; i++) {
           if (existingNums.has(i)) {
@@ -275,6 +283,16 @@ Deno.serve(async (req) => {
             const paid = paidMap[i];
             if (paid && currentStatus !== 'pago') {
               installmentsToUpdateBatch.push({ subId, numero: i, paid });
+            } else if (!paid && currentStatus !== 'pago') {
+              // Recalculate due date for unpaid existing installments
+              const correctDueDate = new Date(firstDate);
+              correctDueDate.setDate(correctDueDate.getDate() + batchIntervalDays * (i - 1));
+              const newStatus = correctDueDate < now ? "atrasado" : "pendente";
+              installmentsDueDateUpdates.push({
+                subId, numero: i,
+                newDueDate: correctDueDate.toISOString(),
+                newStatus,
+              });
             }
             continue;
           }
@@ -326,6 +344,19 @@ Deno.serve(async (req) => {
           .eq("numero_parcela", upd.numero);
         
         if (!updErr) installmentsUpdated++;
+      }
+
+      // Update due dates for existing unpaid installments
+      for (const upd of installmentsDueDateUpdates) {
+        await supabase
+          .from("billing_installments")
+          .update({
+            data_vencimento: upd.newDueDate,
+            status: upd.newStatus,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("subscription_id", upd.subId)
+          .eq("numero_parcela", upd.numero);
       }
 
       // Bulk insert installments in chunks of 500
