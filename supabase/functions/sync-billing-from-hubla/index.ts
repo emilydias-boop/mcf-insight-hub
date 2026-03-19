@@ -402,6 +402,19 @@ Deno.serve(async (req) => {
           installmentsCreated += chunk.length;
         }
       }
+
+      // Bulk insert billing_history entries in chunks of 500
+      for (let i = 0; i < historyEntries.length; i += 500) {
+        const chunk = historyEntries.slice(i, i + 500);
+        const { error: histErr } = await supabase
+          .from("billing_history")
+          .insert(chunk);
+        if (histErr) {
+          console.error("Bulk insert billing_history error:", histErr);
+        } else {
+          historyInserted += chunk.length;
+        }
+      }
     }
 
     // 4. Run overdue status update
