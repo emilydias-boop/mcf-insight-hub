@@ -65,6 +65,7 @@ export function R2MeetingDetailDrawer({
   const [emailValue, setEmailValue] = useState('');
   
   const { role } = useAuth();
+  const isSdr = role === 'sdr';
   const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
   
   // Debug log - remove after testing
