@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
             forma_pagamento: mapPaymentMethod(first.sale_status || first.event_type || ""),
             status,
             status_quitacao: statusQuitacao,
-            data_inicio: first.sale_date,
+            data_inicio: estimatedStartDate.toISOString().split('T')[0],
             data_fim_prevista: dataFimPrevista,
             contact_id: contactId,
             deal_id: dealId,
