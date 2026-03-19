@@ -1,30 +1,33 @@
 
 
-## Plano: Registrar eventos automáticos no billing_history durante sync Hubla
+## Plano: Mostrar "Entrada na Pipeline" na Timeline do Lead
 
 ### Problema
-Quando o sync do Hubla roda e marca parcelas como pagas, nenhum registro é criado no `billing_history`. A aba Histórico fica vazia.
+A Timeline está vazia porque o `webhook-lead-receiver` não cria um registro em `deal_activities` quando o lead entra na pipeline. A "Jornada do Lead" mostra a entrada porque lê diretamente o `created_at` do deal, mas a Timeline depende de registros em `deal_activities`.
 
-### Solução
-No `sync-billing-from-hubla/index.ts`, após marcar parcelas como pagas (tanto updates quanto inserts), inserir registros em `billing_history` com tipo `parcela_paga`.
+### Solução (duas frentes)
 
-### Mudanças no `supabase/functions/sync-billing-from-hubla/index.ts`
+**1. Frontend — Sintetizar evento de entrada (correção imediata)**
 
-**1. Coletar eventos durante o processamento:**
-- Criar array `historyEntries` no início de cada batch
-- Quando uma parcela existente é atualizada para "pago" (linha ~332-347), adicionar entrada com tipo `parcela_paga`, valor, forma de pagamento e descrição "Parcela X/Y paga via Hubla (sync automático)"
-- Quando parcelas novas são inseridas já como "pago" (linha ~302-312), adicionar entrada similar
+No `src/hooks/useLeadFullTimeline.ts`:
+- Adicionar uma query extra buscando os dados básicos dos deals (`crm_deals`) usando os `uniqueIds` — campos: `id`, `created_at`, `stage_id`, `origin_id`, `owner_id`
+- Após processar todos os eventos, para cada deal, verificar se já existe um evento com data igual ao `created_at` do deal (tolerância de 1 minuto). Se não existir, sintetizar um evento `stage_change` com título "Entrada na Pipeline" e a data do `created_at`
+- Adicionar o tipo `'entry'` ao `TimelineEventType` para distinguir visualmente
 
-**2. Bulk insert no billing_history:**
-- Após processar installments de cada batch, inserir todos os `historyEntries` em chunks de 500
-- Campos: `subscription_id`, `tipo: 'parcela_paga'`, `valor`, `forma_pagamento`, `responsavel: 'Sistema (Hubla Sync)'`, `descricao`, `metadata` com `hubla_transaction_id` e `numero_parcela`
+No `src/components/crm/LeadFullTimeline.tsx`:
+- Adicionar config de ícone/cor para o tipo `entry` (ícone LogIn, cor verde)
+- Adicionar "Entrada" nas opções de filtro
 
-### Resultado
-Ao abrir a aba Histórico de qualquer assinatura, os pagamentos sincronizados via Hubla aparecerão automaticamente com data, valor e número da parcela.
+**2. Backend — Gravar atividade na criação (correção para novos leads)**
 
-### Arquivo afetado
+No `supabase/functions/webhook-lead-receiver/index.ts`:
+- Após criar o deal com sucesso, inserir um registro em `deal_activities` com `activity_type: 'lead_entered'`, descrição com nome do endpoint/origem, e metadata com `source: 'webhook'`
+
+### Arquivos afetados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/sync-billing-from-hubla/index.ts` | Adicionar inserts em billing_history para parcelas pagas |
+| `src/hooks/useLeadFullTimeline.ts` | Buscar `crm_deals` e sintetizar evento "Entrada na Pipeline" |
+| `src/components/crm/LeadFullTimeline.tsx` | Adicionar tipo `entry` com ícone e filtro |
+| `supabase/functions/webhook-lead-receiver/index.ts` | Inserir `deal_activities` com `activity_type: 'lead_entered'` ao criar deal |
 
