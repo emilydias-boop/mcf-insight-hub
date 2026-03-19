@@ -90,8 +90,11 @@ Deno.serve(async (req) => {
     let installmentsCreated = 0;
     let installmentsUpdated = 0;
 
+    let historyInserted = 0;
+
     // 3. Process in batches
     for (let b = 0; b < groupKeys.length; b += batchSize) {
+      const historyEntries: any[] = [];
       const batchKeys = groupKeys.slice(b, b + batchSize);
       
       // Collect emails+products for this batch to check existing subs
