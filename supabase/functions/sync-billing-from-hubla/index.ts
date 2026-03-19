@@ -306,12 +306,13 @@ Deno.serve(async (req) => {
           if (paid) {
             // Parcela 1 = product_price (bruto), demais = net_value (líquido)
             const valorPago = i === 1
-              ? (paid.product_price || valorParcela)
-              : (paid.net_value || paid.product_price || valorParcela);
+              ? (paid.product_price || valorBruto)
+              : (paid.net_value || paid.product_price || valorLiquido);
+            const valorOriginalInst = i === 1 ? valorBruto : valorLiquido;
             allInstallmentsToInsert.push({
               subscription_id: subId,
               numero_parcela: i,
-              valor_original: valorParcela,
+              valor_original: valorOriginalInst,
               valor_pago: valorPago,
               valor_liquido: paid.net_value || null,
               data_vencimento: paid.sale_date,
