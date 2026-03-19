@@ -209,7 +209,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               title: 'Lead qualificado',
               description: act.description,
               date: act.created_at,
-              author: meta.sdr_name || meta.author || null,
+              author: resolveAuthor(act.user_id, meta.sdr_name, meta.author),
               metadata: meta,
             });
           } else if (actType) {
