@@ -120,7 +120,8 @@ Deno.serve(async (req) => {
         const totalInstallments = first.total_installments || txList.length;
         const valorParcela = first.product_price || 0;
         const valorTotal = valorParcela * totalInstallments;
-        const paidCount = txList.length;
+        const distinctPaidNumbers = new Set(txList.map(tx => tx.installment_number || 1));
+        const paidCount = distinctPaidNumbers.size;
         const now = new Date();
 
         let status: string;
