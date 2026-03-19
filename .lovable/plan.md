@@ -1,29 +1,33 @@
 
 
-## Plano: Adicionar indicador "Closer vs SDR" na Auditoria
+## Plano: Restringir ações de SDR nos drawers de R1 e R2
 
-### Problema
-A tabela de auditoria mostra quem alterou o status, mas não indica se essa pessoa é o closer da reunião ou outra pessoa (SDR/coordenador). Isso é essencial para detectar quando um SDR reverte um no_show que o closer marcou.
+### Regra de negócio
+- **SDR**: pode apenas marcar **No-Show** e **Mover** (transferir lead). Todas as outras ações ficam ocultas.
+- **Closer/Coordenador/Manager/Admin**: acesso total a todas as ações.
 
 ### Alterações
 
 | Arquivo | Ação |
 |---------|------|
-| `src/hooks/useStatusChangeAudit.ts` | Buscar `employee_id` do closer, depois `profile_id` do employee, e comparar com `user_id` do log. Adicionar campo `changed_by_role: 'closer' \| 'sdr' \| 'outro'` e `is_external_change: boolean` ao `StatusChangeEntry` |
-| `src/components/audit/StatusChangesTab.tsx` | Adicionar coluna "Cargo" na tabela mostrando badge colorido (verde = Closer, azul = SDR, cinza = Outro). Adicionar KPI card "Alterações por não-closer" no resumo. Highlight visual em vermelho quando `is_external_change && is_suspicious` |
-| `src/components/audit/StatusChangeDetailDrawer.tsx` | Mostrar na seção "Metadados" se quem alterou é o closer ou não |
+| `src/components/crm/AgendaMeetingDrawer.tsx` | Criar `const isSdr = role === 'sdr'`. Ocultar botões "Voltar p/ Agendada", "Realizada" e "Vincular Contrato" com `{!isSdr && ...}`. Manter "No-Show" e "Mover" sem restrição. |
+| `src/components/crm/R2MeetingDetailDrawer.tsx` | Criar `const isSdr = role === 'sdr'`. Ocultar botões "Realizada", "Reembolso" e "Desfazer Cancelamento" com `{!isSdr && ...}`. Manter "No-show". Ajustar layout do grid quando SDR (1 coluna em vez de 2). |
 
-### Detalhes técnicos
+### Detalhes
 
-**Resolução do cargo do alterador:**
-1. O hook já busca `closers` e `profiles`. Adicionar busca de `employees.profile_id` via `closers.employee_id`
-2. Para cada log: `closerProfileId = employeeMap[closer.employee_id]?.profile_id`
-3. Se `log.user_id === closerProfileId` → "Closer". Senão, verificar se `user_id` está em `employees` com cargo de SDR → "SDR". Caso contrário → "Outro"
+**AgendaMeetingDrawer (R1)** — seção de botões (~linhas 966-1055):
+- Linha 969 "Voltar p/ Agendada": adicionar `&& !isSdr`
+- Linha 1007 "Realizada": adicionar `&& !isSdr`
+- Linha 1034 "Mover": **mantém** sem restrição (SDR pode mover)
+- Linha 1045 "Vincular Contrato": adicionar `&& !isSdr`
+- Linha 988 "No-Show": **mantém** sem restrição
 
-**Novo KPI card:** "Alterações não-closer" — conta entradas onde `is_external_change === true`, destacando quantas vezes alguém que não é o closer alterou o status.
+**R2MeetingDetailDrawer (R2)** — footer (~linhas 489-550):
+- Linha 492 "Realizada": envolver com `{!isSdr && ...}`
+- Linha 500 "No-show": **mantém**
+- Linha 510 "Reembolso": envolver com `{!isSdr && ...}`
+- Linha 519 "Desfazer Cancelamento": envolver com `{!isSdr && ...}`
+- Grid: mudar de `grid-cols-2` para dinâmico `isSdr ? 'grid-cols-1' : 'grid-cols-2'`
 
-**Coluna na tabela:** Entre "Alterado por" e "Data Reunião", adicionar coluna "Cargo" com badge:
-- `Closer` (verde) — alteração feita pelo próprio closer
-- `SDR` (azul) — alteração feita por SDR  
-- `Outro` (cinza) — sistema ou outro perfil
+Ambos os arquivos já importam `useAuth` e têm `role` disponível.
 
