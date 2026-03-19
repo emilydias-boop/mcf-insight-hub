@@ -74,7 +74,7 @@ export function useStatusChangeAudit({ days, closerId, suspiciousOnly }: UseStat
         .select('id, attendee_name, meeting_slot_id')
         .in('id', attendeeIds);
 
-      const slotIds = [...new Set((attendees || []).map(a => a.slot_id).filter(Boolean))];
+      const slotIds = [...new Set((attendees || []).map(a => a.meeting_slot_id).filter(Boolean))];
 
       const { data: slots } = slotIds.length > 0
         ? await supabase
