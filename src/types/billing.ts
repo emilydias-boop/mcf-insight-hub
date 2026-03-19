@@ -119,6 +119,7 @@ export interface BillingFilters {
   search?: string;
   product?: string;
   category?: string;
+  month?: Date;
 }
 
 export interface BillingKPIs {
