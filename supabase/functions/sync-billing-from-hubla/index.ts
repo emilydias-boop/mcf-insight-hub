@@ -313,6 +313,18 @@ Deno.serve(async (req) => {
               status: "pago",
               hubla_transaction_id: paid.id,
             });
+            // Register history entry for new paid installment
+            historyEntries.push({
+              subscription_id: subId,
+              tipo: "parcela_paga",
+              valor: paid.net_value || valorParcela,
+              forma_pagamento: mapPaymentMethod(paid.sale_status || paid.event_type || ""),
+              responsavel: "Sistema (Hubla Sync)",
+              descricao: `Parcela ${i}/${totalInstallments} paga via Hubla (sync automático)`,
+              status: "confirmado",
+              metadata: { hubla_transaction_id: paid.id, numero_parcela: i, total_parcelas: totalInstallments },
+              created_at: paid.sale_date,
+            });
           } else {
             const dueDate = new Date(firstDate);
             dueDate.setDate(dueDate.getDate() + batchIntervalDays * (i - 1));
