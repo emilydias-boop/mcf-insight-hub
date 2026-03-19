@@ -47,9 +47,17 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
   const { data: agreements = [], isLoading: loadingAg } = useBillingAgreements(subscription?.id || null);
   const { data: history = [], isLoading: loadingHist } = useBillingHistory(subscription?.id || null);
 
-  const markPaid = useMarkInstallmentPaid();
-  const addHistory = useAddBillingHistory();
-  const updateSub = useUpdateSubscription();
+  const installmentIds = useMemo(() => installments.map(i => i.id), [installments]);
+  const { data: allReceivables = [] } = useReceivablesBySubscription(installmentIds);
+
+  const receivablesMap = useMemo(() => {
+    const map: Record<string, typeof allReceivables> = {};
+    allReceivables.forEach(r => {
+      if (!map[r.installment_id]) map[r.installment_id] = [];
+      map[r.installment_id].push(r);
+    });
+    return map;
+  }, [allReceivables]);
 
   if (!subscription) return null;
 
