@@ -12,6 +12,7 @@ import { CobrancaFilters } from './CobrancaFilters';
 import { CobrancaTable } from './CobrancaTable';
 import { CobrancaDetailDrawer } from './CobrancaDetailDrawer';
 import { CreateSubscriptionModal } from './CreateSubscriptionModal';
+import { CobrancaQueue } from './CobrancaQueue';
 import { Plus, RefreshCw, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
