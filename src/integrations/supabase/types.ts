@@ -2202,6 +2202,7 @@ export type Database = {
           day_of_week: number
           google_meet_link: string | null
           id: string
+          max_leads: number | null
           start_time: string
         }
         Insert: {
@@ -2210,6 +2211,7 @@ export type Database = {
           day_of_week: number
           google_meet_link?: string | null
           id?: string
+          max_leads?: number | null
           start_time: string
         }
         Update: {
@@ -2218,6 +2220,7 @@ export type Database = {
           day_of_week?: number
           google_meet_link?: string | null
           id?: string
+          max_leads?: number | null
           start_time?: string
         }
         Relationships: [
