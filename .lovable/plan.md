@@ -1,33 +1,50 @@
 
 
-## Plano: Restringir ações de SDR nos drawers de R1 e R2
+## Plano: Indicador visual de slot lotado nas Agendas R1
 
-### Regra de negócio
-- **SDR**: pode apenas marcar **No-Show** e **Mover** (transferir lead). Todas as outras ações ficam ocultas.
-- **Closer/Coordenador/Manager/Admin**: acesso total a todas as ações.
+### Objetivo
+Quando um horário atinge a capacidade máxima de leads (ex: 3/3), exibir um indicador visual claro de "LOTADO" nas duas views: **Calendário** (AgendaCalendar) e **Por Closer** (CloserColumnCalendar).
 
 ### Alterações
 
-| Arquivo | Ação |
-|---------|------|
-| `src/components/crm/AgendaMeetingDrawer.tsx` | Criar `const isSdr = role === 'sdr'`. Ocultar botões "Voltar p/ Agendada", "Realizada" e "Vincular Contrato" com `{!isSdr && ...}`. Manter "No-Show" e "Mover" sem restrição. |
-| `src/components/crm/R2MeetingDetailDrawer.tsx` | Criar `const isSdr = role === 'sdr'`. Ocultar botões "Realizada", "Reembolso" e "Desfazer Cancelamento" com `{!isSdr && ...}`. Manter "No-show". Ajustar layout do grid quando SDR (1 coluna em vez de 2). |
+| Arquivo | O que muda |
+|---------|------------|
+| `src/components/crm/CloserColumnCalendar.tsx` | Quando `!available && !isBlocked && isSlotConfigured`: exibir célula vermelha com ícone de cadeado e texto "Lotado" + contador (ex: "3/3"). Atualmente mostra `<div>` vazio. |
+| `src/components/crm/AgendaCalendar.tsx` | Adicionar lógica similar: função `isSlotFull(day, hour, minute, closerId)` que verifica se `totalAttendees >= maxLeads`. Exibir badge "Lotado" no slot com fundo vermelho/amarelo quando cheio. |
 
-### Detalhes
+### Detalhes — CloserColumnCalendar (Por Closer)
 
-**AgendaMeetingDrawer (R1)** — seção de botões (~linhas 966-1055):
-- Linha 969 "Voltar p/ Agendada": adicionar `&& !isSdr`
-- Linha 1007 "Realizada": adicionar `&& !isSdr`
-- Linha 1034 "Mover": **mantém** sem restrição (SDR pode mover)
-- Linha 1045 "Vincular Contrato": adicionar `&& !isSdr`
-- Linha 988 "No-Show": **mantém** sem restrição
+A lógica de capacidade já existe (linhas 184-207): `isSlotAvailable` retorna `false` quando `totalAttendees >= maxLeads`. O trecho que renderiza o slot vazio (linha 525-526) será substituído:
 
-**R2MeetingDetailDrawer (R2)** — footer (~linhas 489-550):
-- Linha 492 "Realizada": envolver com `{!isSdr && ...}`
-- Linha 500 "No-show": **mantém**
-- Linha 510 "Reembolso": envolver com `{!isSdr && ...}`
-- Linha 519 "Desfazer Cancelamento": envolver com `{!isSdr && ...}`
-- Grid: mudar de `grid-cols-2` para dinâmico `isSdr ? 'grid-cols-1' : 'grid-cols-2'`
+```
+// Onde hoje mostra div vazio quando configured mas lotado:
+) : isConfigured && !available ? (
+  <div className="w-full h-full min-h-[36px] flex items-center justify-center rounded 
+    bg-red-500/10 border border-red-500/30">
+    <Lock className="h-3 w-3 text-red-400 mr-1" />
+    <span className="text-[10px] font-medium text-red-400">
+      Lotado ({totalAttendees}/{maxLeads})
+    </span>
+  </div>
+```
 
-Ambos os arquivos já importam `useAuth` e têm `role` disponível.
+Precisa adicionar helper `isSlotConfigured(closerId, slot)` separado de `isSlotAvailable`, e calcular `totalAttendees`/`maxLeads` para o slot.
+
+### Detalhes — AgendaCalendar (Calendário)
+
+O `AgendaCalendar` não tem lógica de capacidade por closer/slot hoje. Adicionar:
+
+1. Nova função `getSlotCapacityInfo(day, hour, minute)` que para cada closer configurado no slot, verifica se `attendees >= max_leads` (via `closer_meeting_links.max_leads` ou `closers.max_leads_per_slot`).
+2. Precisa acessar dados de `closer_meeting_links` (já disponível via `meetingLinkSlots`) e `closers` (já prop).
+3. Quando TODOS os closers de um slot estão lotados, exibir indicador vermelho no time label ou na célula.
+4. Quando ALGUNS closers estão lotados, exibir indicador amarelo/parcial.
+
+### Visual
+
+- **Lotado total**: Fundo `bg-red-500/10`, borda `border-red-500/30`, ícone `Lock` vermelho, texto "Lotado"
+- **Parcial (alguns closers cheios)**: Fundo `bg-amber-500/10`, texto "X/Y livres"
+- Badge no canto do slot com contagem `2/3` leads
+
+### Imports adicionais
+- `Lock` do `lucide-react` em ambos os arquivos
 
