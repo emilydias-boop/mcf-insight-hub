@@ -180,10 +180,10 @@ export function useUpdateCloserMeetingLink() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, google_meet_link }: UpdateLinkParams) => {
+    mutationFn: async ({ id, ...updates }: UpdateLinkParams) => {
       const { data, error } = await supabase
         .from('closer_meeting_links')
-        .update({ google_meet_link })
+        .update(updates)
         .eq('id', id)
         .select()
         .single();
