@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui/drawer';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from '@/lib/formatters';
 import { useBillingInstallments, useMarkInstallmentPaid } from '@/hooks/useBillingInstallments';
 import { useBillingAgreements } from '@/hooks/useBillingAgreements';
 import { useBillingHistory, useAddBillingHistory } from '@/hooks/useBillingHistory';
+import { useReceivablesBySubscription } from '@/hooks/useBillingReceivables';
 import { CobrancaInstallments } from './CobrancaInstallments';
 import { CobrancaAgreements } from './CobrancaAgreements';
 import { CobrancaHistory } from './CobrancaHistory';
@@ -45,6 +46,18 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
   const { data: installments = [], isLoading: loadingInst } = useBillingInstallments(subscription?.id || null);
   const { data: agreements = [], isLoading: loadingAg } = useBillingAgreements(subscription?.id || null);
   const { data: history = [], isLoading: loadingHist } = useBillingHistory(subscription?.id || null);
+
+  const installmentIds = useMemo(() => installments.map(i => i.id), [installments]);
+  const { data: allReceivables = [] } = useReceivablesBySubscription(installmentIds);
+
+  const receivablesMap = useMemo(() => {
+    const map: Record<string, typeof allReceivables> = {};
+    allReceivables.forEach(r => {
+      if (!map[r.installment_id]) map[r.installment_id] = [];
+      map[r.installment_id].push(r);
+    });
+    return map;
+  }, [allReceivables]);
 
   const markPaid = useMarkInstallmentPaid();
   const addHistory = useAddBillingHistory();
@@ -278,6 +291,7 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
                   isLoading={loadingInst}
                   onMarkPaid={handleMarkPaid}
                   onRegisterPayment={handleRegisterPayment}
+                  receivablesMap={receivablesMap}
                 />
               </TabsContent>
               <TabsContent value="acordos" className="mt-4">
@@ -293,7 +307,7 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
 
       <CreateAgreementModal subscriptionId={subscription.id} open={showAgreementModal} onOpenChange={setShowAgreementModal} />
       <EditSubscriptionModal subscription={subscription} open={showEditModal} onOpenChange={setShowEditModal} />
-      <RegisterPaymentModal installment={selectedInstallment} subscriptionId={subscription.id} open={showPaymentModal} onOpenChange={setShowPaymentModal} />
+      <RegisterPaymentModal installment={selectedInstallment} subscriptionId={subscription.id} open={showPaymentModal} onOpenChange={setShowPaymentModal} pendingInstallments={installments} />
     </>
   );
 };

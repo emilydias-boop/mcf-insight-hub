@@ -57,3 +57,22 @@ export const useCreateInstallments = () => {
     },
   });
 };
+
+export const useUpdateInstallmentValue = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, valor_original }: { id: string; valor_original: number }) => {
+      const { error } = await supabase
+        .from('billing_installments')
+        .update({ valor_original } as any)
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['billing-installments'] });
+      queryClient.invalidateQueries({ queryKey: ['billing-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['billing-kpis'] });
+    },
+  });
+};
