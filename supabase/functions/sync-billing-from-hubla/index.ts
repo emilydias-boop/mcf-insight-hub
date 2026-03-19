@@ -242,6 +242,7 @@ Deno.serve(async (req) => {
 
       // Build installments for this batch
       const installmentsToUpdateBatch: { subId: string; numero: number; paid: any }[] = [];
+      const installmentsDueDateUpdates: { subId: string; numero: number; newDueDate: string; newStatus: string }[] = [];
       
       for (const key of batchKeys) {
         const txList = groups[key];
