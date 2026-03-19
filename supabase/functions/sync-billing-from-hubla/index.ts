@@ -283,6 +283,16 @@ Deno.serve(async (req) => {
             const paid = paidMap[i];
             if (paid && currentStatus !== 'pago') {
               installmentsToUpdateBatch.push({ subId, numero: i, paid });
+            } else if (!paid && currentStatus !== 'pago') {
+              // Recalculate due date for unpaid existing installments
+              const correctDueDate = new Date(firstDate);
+              correctDueDate.setDate(correctDueDate.getDate() + batchIntervalDays * (i - 1));
+              const newStatus = correctDueDate < now ? "atrasado" : "pendente";
+              installmentsDueDateUpdates.push({
+                subId, numero: i,
+                newDueDate: correctDueDate.toISOString(),
+                newStatus,
+              });
             }
             continue;
           }
