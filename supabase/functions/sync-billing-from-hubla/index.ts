@@ -88,6 +88,7 @@ Deno.serve(async (req) => {
     let subsCreated = 0;
     let subsUpdated = 0;
     let installmentsCreated = 0;
+    let installmentsUpdated = 0;
 
     // 3. Process in batches
     for (let b = 0; b < groupKeys.length; b += batchSize) {
