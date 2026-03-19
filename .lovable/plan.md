@@ -1,36 +1,39 @@
 
 
-## Plano: Corrigir sincronização para atualizar parcelas existentes
+## Plano: Corrigir calculo de status de quitacao no sync
 
 ### Problema
-O `sync-billing-from-hubla` cria parcelas corretamente na primeira execução, mas ao rodar novamente **pula parcelas que já existem** — mesmo que tenham sido pagas na Hubla desde então. Resultado: 274 assinaturas com 280 parcelas pagas na Hubla que continuam como "atrasado" ou "pendente" no billing.
+O sync calcula `paidCount = txList.length` (total de transacoes na Hubla) e compara com `totalInstallments`. Quando existem transacoes duplicadas para o mesmo `installment_number` (ex: Marcio tem 2 transacoes ambas com `installment_number=1`), o sistema conta como 2 parcelas pagas e marca como "quitada" incorretamente. Isso afeta potencialmente muitas assinaturas.
 
 ### Causa raiz
-Linha 264 do sync: `if (existingNums.has(i)) continue;` — se a parcela já existe no billing, ignora. Nunca atualiza status de parcelas existentes com dados novos da Hubla.
+Linha 123-131 do `sync-billing-from-hubla/index.ts`:
+```
+const paidCount = txList.length;  // ERRADO: conta transacoes, nao parcelas distintas
+if (paidCount >= totalInstallments) {
+  status = "quitada";
+```
 
-### Solução
+### Solucao
 
 **Arquivo: `supabase/functions/sync-billing-from-hubla/index.ts`**
 
-1. Ao buscar parcelas existentes (linha 220), trazer também o `status` atual além de `subscription_id, numero_parcela`
-2. No loop de parcelas (linha 263), quando a parcela já existe E está como `pendente`/`atrasado`, mas na Hubla tem um pagamento (`paidMap[i]` existe): **atualizar** a parcela para `pago` com `valor_pago`, `data_pagamento` e `hubla_transaction_id`
-3. Acumular essas atualizações e executar em batch
+Trocar `paidCount = txList.length` por contar **parcelas distintas pagas** usando `installment_number`:
 
-Mudança mínima — apenas ~20 linhas adicionadas no bloco que hoje faz `continue`.
-
-```text
-Antes:
-  if (existingNums.has(i)) continue;  // pula sempre
-
-Depois:
-  if (existingNums.has(i)) {
-    // Se parcela existe mas não está paga, e Hubla mostra pagamento → atualizar
-    if (paid && existingStatus !== 'pago') {
-      installmentsToUpdate.push({ subId, numero: i, paid });
-    }
-    continue;
-  }
+```typescript
+// Contar parcelas DISTINTAS pagas (pelo installment_number)
+const distinctPaidNumbers = new Set(txList.map(tx => tx.installment_number || 1));
+const paidCount = distinctPaidNumbers.size;
 ```
 
-Isso corrige as 280 parcelas na próxima sincronização e garante que futuras execuções do sync sempre atualizem parcelas que foram pagas.
+Isso garante que 2 transacoes com `installment_number=1` contam como 1 parcela paga, nao 2.
+
+### Apos deploy
+
+Rodar "Sincronizar Hubla" para recalcular os status de todas as assinaturas que foram incorretamente marcadas como quitadas.
+
+### Arquivo afetado
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `supabase/functions/sync-billing-from-hubla/index.ts` | Trocar `txList.length` por contagem de `installment_number` distintos (1 linha) |
 
