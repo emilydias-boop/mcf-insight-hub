@@ -1,42 +1,38 @@
 
 
-## Plano: Corrigir regra de valor_pago (bruto na 1a, líquido nas demais)
+## Plano: Corrigir valor_original e valor_total_contrato (líquido nas parcelas 2+)
 
 ### Problema
 
-A lógica anterior tratou todas as parcelas igualmente com `COALESCE(NULLIF(net_value, 0), product_price, ...)`. Na Hubla, a primeira parcela sempre reporta o valor bruto (`product_price`) e as demais o líquido (`net_value`). Resultado: 1.645 primeiras parcelas estão com valor errado.
+O `valor_original` de todas as parcelas usa `product_price` (bruto), e `valor_total_contrato` = `product_price × total_parcelas`. Mas na Hubla, parcelas 2+ só geram o valor líquido (`net_value`), que é muito menor. Resultado: contratos e saldo devedor inflados (ex: Cléa mostra R$ 174k ao invés do valor real).
+
+Dados reais: 1.034 de 1.189 parcelas 2+ têm `net_value = 0`, e as 155 restantes têm valores bem menores que `product_price`.
 
 ### Correção (2 partes)
 
-**Parte 1: Migration SQL** — Corrigir dados existentes
+**Parte 1: SQL (dados existentes)** — Corrigir ~18K parcelas e ~1.644 subscriptions
 
-```sql
-UPDATE billing_installments bi
-SET valor_pago = CASE 
-    WHEN bi.numero_parcela = 1 THEN COALESCE(NULLIF(ht.product_price, 0), bi.valor_original)
-    ELSE COALESCE(NULLIF(ht.net_value, 0), ht.product_price, bi.valor_original)
-  END
-FROM hubla_transactions ht
-WHERE bi.hubla_transaction_id = ht.id AND bi.status = 'pago';
-```
+1. Atualizar `valor_original` das parcelas 2+ para usar o `net_value` da transação Hubla vinculada (ou 0 se não houver transação)
+2. Para parcelas pendentes/atrasadas sem transação, usar o `net_value` da parcela 1 do mesmo subscription como referência
+3. Recalcular `valor_total_contrato` = parcela1.valor_original + (total_parcelas - 1) × valor_liquido_referencia
+4. Recalcular `status_quitacao` e `status`
 
-Seguido de recalcular `status_quitacao` das subscriptions afetadas.
+**Parte 2: Sync function** — Mesma lógica para futuras sincronizações
 
-**Parte 2: Sync function** — Aplicar mesma regra no `sync-billing-from-hubla`
-
-Alterar todas as linhas que calculam `valor_pago` para usar:
-- `product_price` quando `installment_number = 1`
-- `net_value` quando `installment_number > 1`
+No `sync-billing-from-hubla/index.ts`:
+- Criar `valorLiquido = first.net_value || 0`
+- `valorTotal = valorBruto + (totalInstallments - 1) * valorLiquido`
+- `valor_original` usa `valorBruto` para parcela 1, `valorLiquido` para demais
 
 ### Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| Migration SQL (via ferramenta) | Corrigir 1.645 parcelas + recalcular subscriptions |
-| `supabase/functions/sync-billing-from-hubla/index.ts` | Alterar lógica de valor_pago para respeitar a regra bruto/líquido |
+| SQL via insert tool | Corrigir valor_original + valor_total_contrato + recalcular status |
+| `supabase/functions/sync-billing-from-hubla/index.ts` | Lógica bruto/líquido no valor_original e valor_total_contrato |
 
 ### Resultado
-- Parcela 1 mostrará o valor bruto correto
-- Parcelas 2+ mostrarão o valor líquido correto
-- KPIs recalculados com valores reais
+- valor_original das parcelas 2+ mostrará o líquido real
+- valor_total_contrato refletirá bruto + (N-1) × líquido
+- KPIs "Saldo Devedor" e "Total Contratado" serão precisos
 
