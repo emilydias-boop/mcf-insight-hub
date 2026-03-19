@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BillingSubscription, SUBSCRIPTION_STATUS_LABELS, QUITACAO_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/billing';
+import { BillingSubscription, SUBSCRIPTION_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/billing';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -20,12 +20,6 @@ const statusColors: Record<string, string> = {
   cancelada: 'bg-gray-100 text-gray-800 border-gray-200',
   finalizada: 'bg-blue-100 text-blue-800 border-blue-200',
   quitada: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-};
-
-const quitacaoColors: Record<string, string> = {
-  em_aberto: 'bg-amber-100 text-amber-800 border-amber-200',
-  parcialmente_pago: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  quitado: 'bg-emerald-100 text-emerald-800 border-emerald-200',
 };
 
 export const CobrancaTable = ({ subscriptions, isLoading, onSelect }: CobrancaTableProps) => {
@@ -69,12 +63,13 @@ export const CobrancaTable = ({ subscriptions, isLoading, onSelect }: CobrancaTa
             <TableHead>Cliente</TableHead>
             <TableHead>Produto</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Quitação</TableHead>
             <TableHead className="text-right">Valor Total</TableHead>
+            <TableHead className="text-right">Valor Pago</TableHead>
             <TableHead>Parcelas</TableHead>
             <TableHead>Pagamento</TableHead>
             <TableHead>Responsável</TableHead>
             <TableHead>Início</TableHead>
+            <TableHead>Previsão Final</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -96,16 +91,21 @@ export const CobrancaTable = ({ subscriptions, isLoading, onSelect }: CobrancaTa
                   {SUBSCRIPTION_STATUS_LABELS[sub.status]}
                 </Badge>
               </TableCell>
-              <TableCell>
-                <Badge className={`text-xs ${quitacaoColors[sub.status_quitacao] || ''}`} variant="outline">
-                  {QUITACAO_STATUS_LABELS[sub.status_quitacao]}
-                </Badge>
-              </TableCell>
               <TableCell className="text-right font-medium">{formatCurrency(sub.valor_total_contrato)}</TableCell>
-              <TableCell className="text-sm">{sub.total_parcelas}x</TableCell>
+              <TableCell className={`text-right font-medium ${
+                (sub.valor_pago_total ?? 0) < sub.valor_total_contrato * 0.3 && sub.status !== 'quitada' 
+                  ? 'text-red-600' : ''
+              }`}>
+                {formatCurrency(sub.valor_pago_total ?? 0)}
+              </TableCell>
+              <TableCell className="text-sm">
+                <span className="font-medium">{sub.parcelas_pagas ?? 0}</span>
+                <span className="text-muted-foreground">/{sub.total_parcelas} pagas</span>
+              </TableCell>
               <TableCell className="text-sm">{PAYMENT_METHOD_LABELS[sub.forma_pagamento]}</TableCell>
               <TableCell className="text-sm">{sub.responsavel_financeiro || '-'}</TableCell>
               <TableCell className="text-sm">{sub.data_inicio ? formatDate(sub.data_inicio) : '-'}</TableCell>
+              <TableCell className="text-sm">{sub.data_fim_prevista ? formatDate(sub.data_fim_prevista) : '-'}</TableCell>
             </TableRow>
           ))}
         </TableBody>

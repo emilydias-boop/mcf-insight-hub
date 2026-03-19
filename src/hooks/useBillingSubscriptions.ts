@@ -19,6 +19,31 @@ const fetchSubscriptionIdsForMonth = async (month: Date): Promise<string[]> => {
   return ids;
 };
 
+const fetchInstallmentAggregates = async (subscriptionIds: string[]): Promise<Map<string, { valor_pago_total: number; parcelas_pagas: number }>> => {
+  const map = new Map<string, { valor_pago_total: number; parcelas_pagas: number }>();
+  if (subscriptionIds.length === 0) return map;
+
+  // Batch in chunks of 200
+  for (let i = 0; i < subscriptionIds.length; i += 200) {
+    const chunk = subscriptionIds.slice(i, i + 200);
+    const { data, error } = await supabase
+      .from('billing_installments')
+      .select('subscription_id, valor_pago, status')
+      .in('subscription_id', chunk);
+    if (error) throw error;
+
+    for (const row of (data || [])) {
+      const existing = map.get(row.subscription_id) || { valor_pago_total: 0, parcelas_pagas: 0 };
+      if (row.status === 'pago') {
+        existing.valor_pago_total += (row.valor_pago || 0);
+        existing.parcelas_pagas += 1;
+      }
+      map.set(row.subscription_id, existing);
+    }
+  }
+  return map;
+};
+
 export const useBillingSubscriptions = (filters: BillingFilters) => {
   return useQuery({
     queryKey: ['billing-subscriptions', filters, filters.month?.toISOString()],
@@ -35,8 +60,9 @@ export const useBillingSubscriptions = (filters: BillingFilters) => {
         .select('*')
         .order('updated_at', { ascending: false });
 
+      let subscriptions: BillingSubscription[];
+
       if (subIds) {
-        // Batch in chunks of 200 to avoid URL length limits
         if (subIds.length <= 200) {
           query = query.in('id', subIds);
         } else {
@@ -48,22 +74,34 @@ export const useBillingSubscriptions = (filters: BillingFilters) => {
               .select('*')
               .in('id', chunk)
               .order('updated_at', { ascending: false });
-
-            // Apply same filters to each chunk
             chunkQuery = applyFilters(chunkQuery, filters);
             const { data, error } = await chunkQuery;
             if (error) throw error;
             results.push(...((data || []) as unknown as BillingSubscription[]));
           }
-          return results;
+          subscriptions = results;
+          // Enrich with installment aggregates
+          const aggregates = await fetchInstallmentAggregates(subscriptions.map(s => s.id));
+          return subscriptions.map(s => ({
+            ...s,
+            valor_pago_total: aggregates.get(s.id)?.valor_pago_total ?? 0,
+            parcelas_pagas: aggregates.get(s.id)?.parcelas_pagas ?? 0,
+          }));
         }
       }
 
       query = applyFilters(query, filters);
-
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as unknown as BillingSubscription[];
+      subscriptions = (data || []) as unknown as BillingSubscription[];
+
+      // Enrich with installment aggregates
+      const aggregates = await fetchInstallmentAggregates(subscriptions.map(s => s.id));
+      return subscriptions.map(s => ({
+        ...s,
+        valor_pago_total: aggregates.get(s.id)?.valor_pago_total ?? 0,
+        parcelas_pagas: aggregates.get(s.id)?.parcelas_pagas ?? 0,
+      }));
     },
   });
 };
