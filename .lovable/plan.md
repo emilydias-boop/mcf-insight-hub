@@ -1,54 +1,30 @@
 
 
-## Plano: Melhorar colunas da tabela de cobranças
+## Plano: Registrar eventos automáticos no billing_history durante sync Hubla
 
-### Resumo das mudanças na tabela
+### Problema
+Quando o sync do Hubla roda e marca parcelas como pagas, nenhum registro é criado no `billing_history`. A aba Histórico fica vazia.
 
-Colunas atuais → novas:
+### Solução
+No `sync-billing-from-hubla/index.ts`, após marcar parcelas como pagas (tanto updates quanto inserts), inserir registros em `billing_history` com tipo `parcela_paga`.
 
-| Remover | Manter/Alterar | Adicionar |
-|---------|----------------|-----------|
-| Quitação (redundante com Status) | Cliente (nome + email) | Valor Pago (novo) |
-| | Produto | Parcelas → formato "3/10 pagas" |
-| | Status | Dt Fim Prevista (novo) |
-| | Valor Total | |
-| | Pagamento (forma) | |
-| | Responsável | |
-| | Início | |
+### Mudanças no `supabase/functions/sync-billing-from-hubla/index.ts`
 
-### Ordem final das colunas
-1. **Cliente** — nome + email
-2. **Produto** — nome do produto
-3. **Status** — badge colorido
-4. **Valor Total** — valor do contrato
-5. **Valor Pago** — soma das parcelas pagas (novo, vem das installments)
-6. **Parcelas** — "3/10 pagas" em vez de "10x"
-7. **Pagamento** — forma de pagamento
-8. **Responsável** — responsável financeiro
-9. **Início** — data início
-10. **Previsão Final** — `data_fim_prevista` (já existe no modelo, só não é exibida)
+**1. Coletar eventos durante o processamento:**
+- Criar array `historyEntries` no início de cada batch
+- Quando uma parcela existente é atualizada para "pago" (linha ~332-347), adicionar entrada com tipo `parcela_paga`, valor, forma de pagamento e descrição "Parcela X/Y paga via Hubla (sync automático)"
+- Quando parcelas novas são inseridas já como "pago" (linha ~302-312), adicionar entrada similar
 
-### Implementação técnica
+**2. Bulk insert no billing_history:**
+- Após processar installments de cada batch, inserir todos os `historyEntries` em chunks de 500
+- Campos: `subscription_id`, `tipo: 'parcela_paga'`, `valor`, `forma_pagamento`, `responsavel: 'Sistema (Hubla Sync)'`, `descricao`, `metadata` com `hubla_transaction_id` e `numero_parcela`
 
-**1. `src/hooks/useBillingSubscriptions.ts`**
-- Na query de subscriptions, fazer um segundo fetch de `billing_installments` agrupado por `subscription_id` para obter: `valor_pago_total` (soma de `valor_pago` onde status='pago') e `parcelas_pagas` (count onde status='pago')
-- Retornar esses dados como um Map e enriquecer cada subscription antes de retornar
+### Resultado
+Ao abrir a aba Histórico de qualquer assinatura, os pagamentos sincronizados via Hubla aparecerão automaticamente com data, valor e número da parcela.
 
-**2. `src/types/billing.ts`**
-- Adicionar campos opcionais ao tipo `BillingSubscription` (ou criar um tipo estendido): `valor_pago_total?: number` e `parcelas_pagas?: number`
-
-**3. `src/components/financeiro/cobranca/CobrancaTable.tsx`**
-- Remover coluna "Quitação"
-- Adicionar coluna "Valor Pago" após "Valor Total"
-- Alterar "Parcelas" para mostrar `{parcelas_pagas}/{total_parcelas} pagas`
-- Adicionar coluna "Previsão Final" usando `data_fim_prevista`
-- Destacar visualmente quando valor pago é muito menor que valor total (ex: texto vermelho)
-
-### Arquivos afetados
+### Arquivo afetado
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/types/billing.ts` | Adicionar campos `valor_pago_total` e `parcelas_pagas` ao tipo |
-| `src/hooks/useBillingSubscriptions.ts` | Buscar dados de parcelas e enriquecer subscriptions |
-| `src/components/financeiro/cobranca/CobrancaTable.tsx` | Atualizar colunas conforme descrito |
+| `supabase/functions/sync-billing-from-hubla/index.ts` | Adicionar inserts em billing_history para parcelas pagas |
 
