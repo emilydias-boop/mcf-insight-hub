@@ -220,7 +220,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               title: actType.replace(/_/g, ' '),
               description: act.description,
               date: act.created_at,
-              author: meta.author || meta.user_name || null,
+              author: resolveAuthor(act.user_id, meta.author, meta.user_name),
               metadata: { original_type: actType, ...meta },
             });
           }
