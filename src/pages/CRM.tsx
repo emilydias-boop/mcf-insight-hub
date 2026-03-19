@@ -1,6 +1,6 @@
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
-import { LayoutDashboard, Users, Briefcase, MessageCircle, Settings, CalendarDays, UserX, Copy, Inbox, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, MessageCircle, Settings, CalendarDays, UserX, Copy, Inbox, ShieldAlert, Shield } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
 import { canUserAccessNegocios } from '@/components/auth/NegociosAccessGuard';
@@ -38,6 +38,7 @@ const CRM = () => {
     { to: '/crm/leads-limbo', label: 'Limbo', icon: Inbox },
     { to: '/crm/contatos-duplicados', label: 'Duplicados', icon: Copy },
     { to: '/crm/retornos-parceiros', label: 'Retornos', icon: ShieldAlert },
+    { to: '/crm/auditoria-agendamentos', label: 'Auditoria', icon: Shield },
     { to: '/crm/configuracoes', label: 'Configurações', icon: Settings },
   ];
   
