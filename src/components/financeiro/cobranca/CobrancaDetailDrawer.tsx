@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui/drawer';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from '@/lib/formatters';
 import { useBillingInstallments, useMarkInstallmentPaid } from '@/hooks/useBillingInstallments';
 import { useBillingAgreements } from '@/hooks/useBillingAgreements';
 import { useBillingHistory, useAddBillingHistory } from '@/hooks/useBillingHistory';
+import { useReceivablesBySubscription } from '@/hooks/useBillingReceivables';
 import { CobrancaInstallments } from './CobrancaInstallments';
 import { CobrancaAgreements } from './CobrancaAgreements';
 import { CobrancaHistory } from './CobrancaHistory';
