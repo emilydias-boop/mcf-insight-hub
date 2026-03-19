@@ -1515,6 +1515,62 @@ export type Database = {
           },
         ]
       }
+      billing_payment_receivables: {
+        Row: {
+          created_at: string
+          data_prevista: string
+          data_recebimento: string | null
+          forma_pagamento:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          id: string
+          installment_id: string
+          numero: number
+          observacoes: string | null
+          status: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          data_prevista: string
+          data_recebimento?: string | null
+          forma_pagamento?:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          id?: string
+          installment_id: string
+          numero: number
+          observacoes?: string | null
+          status?: string
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          created_at?: string
+          data_prevista?: string
+          data_recebimento?: string | null
+          forma_pagamento?:
+            | Database["public"]["Enums"]["billing_payment_method"]
+            | null
+          id?: string
+          installment_id?: string
+          numero?: number
+          observacoes?: string | null
+          status?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_payment_receivables_installment_id_fkey"
+            columns: ["installment_id"]
+            isOneToOne: false
+            referencedRelation: "billing_installments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_subscriptions: {
         Row: {
           contact_id: string | null
@@ -10715,6 +10771,9 @@ export type Database = {
         | "bank_slip"
         | "boleto"
         | "outro"
+        | "boleto_parcelado"
+        | "cartao_parcelado"
+        | "pix_parcelado"
       billing_quitacao_status: "em_aberto" | "parcialmente_pago" | "quitado"
       billing_subscription_status:
         | "em_dia"
@@ -11009,6 +11068,9 @@ export const Constants = {
         "bank_slip",
         "boleto",
         "outro",
+        "boleto_parcelado",
+        "cartao_parcelado",
+        "pix_parcelado",
       ],
       billing_quitacao_status: ["em_aberto", "parcialmente_pago", "quitado"],
       billing_subscription_status: [
