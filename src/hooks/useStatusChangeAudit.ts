@@ -10,12 +10,26 @@ export interface StatusChangeEntry {
   changed_by_name: string | null;
   changed_by_id: string | null;
   attendee_name: string | null;
+  attendee_id: string | null;
+  attendee_phone: string | null;
   closer_name: string | null;
   closer_bu: string | null;
   meeting_type: string | null;
   scheduled_at: string | null;
   is_suspicious: boolean;
   is_normal_flow: boolean;
+  deal_id: string | null;
+  contact_id: string | null;
+  notes: string | null;
+  r2_observations: string | null;
+  closer_notes: string | null;
+  meeting_link: string | null;
+  video_status: string | null;
+  lead_profile: string | null;
+  is_reschedule: boolean;
+  suspension_reason: string;
+  old_data: Record<string, unknown> | null;
+  new_data: Record<string, unknown> | null;
 }
 
 const SUSPICIOUS_TRANSITIONS: [string, string][] = [
@@ -48,6 +62,29 @@ function isSuspicious(oldStatus: string, newStatus: string): boolean {
 
 function isNormalFlow(oldStatus: string, newStatus: string): boolean {
   return NORMAL_FLOW_TRANSITIONS.some(([o, n]) => o === oldStatus && n === newStatus);
+}
+
+const SUSPICION_REASON_MAP: Record<string, string> = {
+  'no_show->completed': 'Reversão: lead marcado como No-show foi alterado para Realizada',
+  'completed->no_show': 'Status final alterado: reunião realizada revertida para No-show',
+  'no_show->invited': 'Reversão: No-show revertido para Convidado',
+  'completed->invited': 'Reversão: Realizada revertida para Convidado',
+  'no_show->scheduled': 'Reversão: No-show revertido para Agendado',
+  'completed->scheduled': 'Reversão: Realizada revertida para Agendado',
+  'cancelled->completed': 'Reversão de cancelamento para Realizada',
+  'refunded->completed': 'Reversão de reembolso para Realizada',
+  'cancelled->scheduled': 'Reversão de cancelamento para Agendado',
+  'cancelled->invited': 'Reversão de cancelamento para Convidado',
+};
+
+function getSuspensionReason(oldStatus: string, newStatus: string, suspicious: boolean, normalFlow: boolean): string {
+  if (suspicious) {
+    return SUSPICION_REASON_MAP[`${oldStatus}->${newStatus}`] || `Transição suspeita: ${oldStatus} → ${newStatus}`;
+  }
+  if (!normalFlow) {
+    return 'Mudança manual fora do fluxo automático padrão';
+  }
+  return 'Fluxo normal do sistema';
 }
 
 export type AuditFilterMode = 'all' | 'suspicious' | 'manual';
@@ -135,6 +172,9 @@ export function useStatusChangeAudit({ days, closerId, filterMode = 'manual' }: 
         const closer = slot ? closerMap.get(slot.closer_id) : null;
         const profile = log.user_id ? profileMap.get(log.user_id) : null;
 
+        const suspicious = isSuspicious(oldStatus, newStatus);
+        const normalFlow = isNormalFlow(oldStatus, newStatus);
+
         return {
           id: log.id,
           old_status: oldStatus,
@@ -143,12 +183,26 @@ export function useStatusChangeAudit({ days, closerId, filterMode = 'manual' }: 
           changed_by_name: profile?.full_name || profile?.email || null,
           changed_by_id: log.user_id,
           attendee_name: attendee?.attendee_name || null,
+          attendee_id: log.record_id || null,
+          attendee_phone: String(newData.attendee_phone || oldData.attendee_phone || '') || null,
           closer_name: closer?.name || null,
           closer_bu: closer?.bu || null,
           meeting_type: slot?.meeting_type || null,
           scheduled_at: slot?.scheduled_at || null,
-          is_suspicious: isSuspicious(oldStatus, newStatus),
-          is_normal_flow: isNormalFlow(oldStatus, newStatus),
+          is_suspicious: suspicious,
+          is_normal_flow: normalFlow,
+          deal_id: String(newData.deal_id || oldData.deal_id || '') || null,
+          contact_id: String(newData.contact_id || oldData.contact_id || '') || null,
+          notes: String(newData.notes || oldData.notes || '') || null,
+          r2_observations: String(newData.r2_observations || oldData.r2_observations || '') || null,
+          closer_notes: String(newData.closer_notes || oldData.closer_notes || '') || null,
+          meeting_link: String(newData.meeting_link || oldData.meeting_link || '') || null,
+          video_status: String(newData.video_status || oldData.video_status || '') || null,
+          lead_profile: String(newData.lead_profile || oldData.lead_profile || '') || null,
+          is_reschedule: Boolean(newData.is_reschedule || oldData.is_reschedule),
+          suspension_reason: getSuspensionReason(oldStatus, newStatus, suspicious, normalFlow),
+          old_data: oldData,
+          new_data: newData,
         };
       });
 

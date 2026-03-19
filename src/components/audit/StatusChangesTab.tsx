@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useStatusChangeAudit, StatusChangeEntry, AuditFilterMode } from '@/hooks/useStatusChangeAudit';
 import { formatMeetingStatus } from '@/utils/formatMeetingStatus';
+import { StatusChangeDetailDrawer } from './StatusChangeDetailDrawer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,6 +14,7 @@ import { ptBR } from 'date-fns/locale';
 export function StatusChangesTab() {
   const [days, setDays] = useState(7);
   const [filterMode, setFilterMode] = useState<AuditFilterMode>('manual');
+  const [selectedEntry, setSelectedEntry] = useState<StatusChangeEntry | null>(null);
 
   const { data: changes = [], isLoading } = useStatusChangeAudit({
     days,
@@ -140,19 +142,25 @@ export function StatusChangesTab() {
             </TableHeader>
             <TableBody>
               {changes.map((entry) => (
-                <StatusChangeRow key={entry.id} entry={entry} />
+                <StatusChangeRow key={entry.id} entry={entry} onClick={() => setSelectedEntry(entry)} />
               ))}
             </TableBody>
           </Table>
         </div>
       )}
+
+      <StatusChangeDetailDrawer
+        entry={selectedEntry}
+        open={!!selectedEntry}
+        onOpenChange={(open) => { if (!open) setSelectedEntry(null); }}
+      />
     </div>
   );
 }
 
-function StatusChangeRow({ entry }: { entry: StatusChangeEntry }) {
+function StatusChangeRow({ entry, onClick }: { entry: StatusChangeEntry; onClick: () => void }) {
   return (
-    <TableRow className={entry.is_suspicious ? 'bg-destructive/5' : ''}>
+    <TableRow className={`cursor-pointer hover:bg-muted/50 ${entry.is_suspicious ? 'bg-destructive/5' : ''}`} onClick={onClick}>
       <TableCell className="font-medium">
         {entry.attendee_name || 'N/A'}
       </TableCell>
