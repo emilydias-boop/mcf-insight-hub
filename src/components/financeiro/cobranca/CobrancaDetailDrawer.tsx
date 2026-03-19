@@ -59,6 +59,10 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
     return map;
   }, [allReceivables]);
 
+  const markPaid = useMarkInstallmentPaid();
+  const addHistory = useAddBillingHistory();
+  const updateSub = useUpdateSubscription();
+
   if (!subscription) return null;
 
   const totalPago = installments.filter(i => i.status === 'pago').reduce((s, i) => s + (i.valor_pago || 0), 0);
