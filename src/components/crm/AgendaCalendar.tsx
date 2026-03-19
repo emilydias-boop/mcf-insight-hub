@@ -1170,30 +1170,7 @@ export function AgendaCalendar({
                                 Agendar
                               </button>
                             )}
-                            {/* Full/Lotado indicator for this closer */}
-                            {hasNoMeetings && !isCloserAvailable && isSlotConfigured(day, hour, minute) && (() => {
-                              const maxLeads = closer?.max_leads_per_slot ?? 4;
-                              const attendeeCount = filteredMeetings
-                                .filter(m => {
-                                  if (m.closer_id !== closerId) return false;
-                                  const meetingStart = parseISO(m.scheduled_at);
-                                  return isSameDay(meetingStart, day) &&
-                                    meetingStart.getHours() === hour &&
-                                    meetingStart.getMinutes() >= minute &&
-                                    meetingStart.getMinutes() < minute + 30;
-                                })
-                                .reduce((sum, m) => sum + (m.attendees?.length || 0), 0);
-                              
-                              if (attendeeCount >= maxLeads && attendeeCount > 0) {
-                                return (
-                                  <div className="absolute inset-0.5 rounded flex items-center justify-center gap-1 bg-red-500/10 border border-red-500/30">
-                                    <Lock className="h-3 w-3 text-red-400" />
-                                    <span className="text-[10px] font-semibold text-red-400">Lotado {attendeeCount}/{maxLeads}</span>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            })()}
+                            {/* Full/Lotado indicator — removed hasNoMeetings guard so it shows as overlay */}
                             
                             {/* Meetings for this closer */}
                             {closerMeetings.map((group, groupIndex) => {
@@ -1297,6 +1274,20 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                 </span>
                                               )}
                                             </div>
+                                            {/* Lotado badge overlay for day view */}
+                                            {(() => {
+                                              const maxLeads = closer?.max_leads_per_slot ?? 4;
+                                              const attendeeCount = allAttendees.length;
+                                              if (attendeeCount >= maxLeads && attendeeCount > 0) {
+                                                return (
+                                                  <div className="absolute bottom-1 right-1 flex items-center gap-0.5 bg-red-600 text-white rounded px-1 py-0 z-20">
+                                                    <Lock className="h-2.5 w-2.5" />
+                                                    <span className="text-[9px] font-bold">{attendeeCount}/{maxLeads}</span>
+                                                  </div>
+                                                );
+                                              }
+                                              return null;
+                                            })()}
                                           </button>
                                         </TooltipTrigger>
                                         <TooltipContent side="right">
@@ -1811,6 +1802,21 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                         <UserPlus className="h-3.5 w-3.5 text-green-600" />
                                       </button>
                                     )}
+                                    {/* Lotado badge overlay for week view */}
+                                    {(() => {
+                                      const closer = closers?.find(c => c.id === group.closerId);
+                                      const maxLeads = closer?.max_leads_per_slot ?? 4;
+                                      const attendeeCount = allAttendees.length;
+                                      if (attendeeCount >= maxLeads && attendeeCount > 0) {
+                                        return (
+                                          <div className="absolute bottom-0.5 right-0.5 flex items-center gap-0.5 bg-red-600 text-white rounded px-1 py-0 z-20">
+                                            <Lock className="h-2.5 w-2.5" />
+                                            <span className="text-[9px] font-bold">{attendeeCount}/{maxLeads}</span>
+                                          </div>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 )}
                               </Draggable>

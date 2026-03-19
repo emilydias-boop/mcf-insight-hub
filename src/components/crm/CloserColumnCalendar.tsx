@@ -525,6 +525,19 @@ export function CloserColumnCalendar({
                             <UserPlus className="h-3.5 w-3.5 text-green-600" />
                           </button>
                         )}
+                        {/* Lotado badge overlay */}
+                        {(() => {
+                          const { totalAttendees, maxLeads } = getSlotCapacityInfo(closer.id, slot);
+                          if (totalAttendees >= maxLeads) {
+                            return (
+                              <div className="absolute bottom-0.5 right-0.5 flex items-center gap-0.5 bg-red-600 text-white rounded px-1 py-0 z-20">
+                                <Lock className="h-2.5 w-2.5" />
+                                <span className="text-[9px] font-bold">{totalAttendees}/{maxLeads}</span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                     ) : isBlocked ? (
                       <div className="w-full h-full bg-muted/50 rounded flex items-center justify-center">
