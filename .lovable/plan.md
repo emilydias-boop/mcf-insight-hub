@@ -1,36 +1,54 @@
 
 
-## Plano: Filtrar tabela e KPIs gerais pelo mês selecionado
+## Plano: Melhorar colunas da tabela de cobranças
 
-### Problema
-O seletor de mês só afeta os 4 KPI cards do mês (Recebido, Pendente, Atrasado, Taxa). A tabela de assinaturas e os KPIs gerais do topo (Total Contratado, Total Pago, Saldo Devedor, etc.) ignoram completamente o mês selecionado.
+### Resumo das mudanças na tabela
 
-### Solução
-Filtrar as assinaturas exibidas na tabela para mostrar apenas aquelas que possuem **parcelas com vencimento no mês selecionado**. Isso requer uma abordagem diferente: buscar os `subscription_id` distintos das parcelas do mês e depois filtrar a tabela.
+Colunas atuais → novas:
 
-### Mudanças
+| Remover | Manter/Alterar | Adicionar |
+|---------|----------------|-----------|
+| Quitação (redundante com Status) | Cliente (nome + email) | Valor Pago (novo) |
+| | Produto | Parcelas → formato "3/10 pagas" |
+| | Status | Dt Fim Prevista (novo) |
+| | Valor Total | |
+| | Pagamento (forma) | |
+| | Responsável | |
+| | Início | |
+
+### Ordem final das colunas
+1. **Cliente** — nome + email
+2. **Produto** — nome do produto
+3. **Status** — badge colorido
+4. **Valor Total** — valor do contrato
+5. **Valor Pago** — soma das parcelas pagas (novo, vem das installments)
+6. **Parcelas** — "3/10 pagas" em vez de "10x"
+7. **Pagamento** — forma de pagamento
+8. **Responsável** — responsável financeiro
+9. **Início** — data início
+10. **Previsão Final** — `data_fim_prevista` (já existe no modelo, só não é exibida)
+
+### Implementação técnica
 
 **1. `src/hooks/useBillingSubscriptions.ts`**
-- Adicionar `month` (Date opcional) ao `BillingFilters`
-- Quando `month` estiver definido, primeiro buscar `billing_installments` com `data_vencimento` no range do mês para obter os `subscription_id` distintos
-- Filtrar a query de subscriptions usando `.in('id', subscriptionIds)`
-- Fazer o mesmo para `useBillingKPIs`: receber `month` e filtrar parcelas/assinaturas pelo mês
+- Na query de subscriptions, fazer um segundo fetch de `billing_installments` agrupado por `subscription_id` para obter: `valor_pago_total` (soma de `valor_pago` onde status='pago') e `parcelas_pagas` (count onde status='pago')
+- Retornar esses dados como um Map e enriquecer cada subscription antes de retornar
 
 **2. `src/types/billing.ts`**
-- Adicionar `month?: Date` ao `BillingFilters`
+- Adicionar campos opcionais ao tipo `BillingSubscription` (ou criar um tipo estendido): `valor_pago_total?: number` e `parcelas_pagas?: number`
 
-**3. `src/components/financeiro/cobranca/FinanceiroCobrancas.tsx`**
-- Passar `currentMonth` nos filters: `useBillingSubscriptions({ ...filters, month: currentMonth })`
-- Passar `currentMonth` para `useBillingKPIs(currentMonth)`
-
-### Resultado
-Ao trocar o mês, a tabela mostrará apenas assinaturas com parcelas naquele mês, e os KPIs gerais refletirão os totais filtrados.
+**3. `src/components/financeiro/cobranca/CobrancaTable.tsx`**
+- Remover coluna "Quitação"
+- Adicionar coluna "Valor Pago" após "Valor Total"
+- Alterar "Parcelas" para mostrar `{parcelas_pagas}/{total_parcelas} pagas`
+- Adicionar coluna "Previsão Final" usando `data_fim_prevista`
+- Destacar visualmente quando valor pago é muito menor que valor total (ex: texto vermelho)
 
 ### Arquivos afetados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/types/billing.ts` | Adicionar `month?: Date` ao `BillingFilters` |
-| `src/hooks/useBillingSubscriptions.ts` | Filtrar subscriptions por parcelas do mês; KPIs filtrados por mês |
-| `src/components/financeiro/cobranca/FinanceiroCobrancas.tsx` | Passar `currentMonth` para hooks |
+| `src/types/billing.ts` | Adicionar campos `valor_pago_total` e `parcelas_pagas` ao tipo |
+| `src/hooks/useBillingSubscriptions.ts` | Buscar dados de parcelas e enriquecer subscriptions |
+| `src/components/financeiro/cobranca/CobrancaTable.tsx` | Atualizar colunas conforme descrito |
 
