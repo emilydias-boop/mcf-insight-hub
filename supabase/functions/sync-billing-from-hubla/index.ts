@@ -121,8 +121,9 @@ Deno.serve(async (req) => {
         const [email, productName] = key.split("::");
         const first = txList[0];
         const totalInstallments = first.total_installments || txList.length;
-        const valorParcela = first.product_price || 0;
-        const valorTotal = valorParcela * totalInstallments;
+        const valorBruto = first.product_price || 0;
+        const valorLiquido = first.net_value || 0;
+        const valorTotal = valorBruto + Math.max(totalInstallments - 1, 0) * valorLiquido;
         const distinctPaidNumbers = new Set(txList.map(tx => tx.installment_number || 1));
         const paidCount = distinctPaidNumbers.size;
         const now = new Date();
@@ -254,7 +255,8 @@ Deno.serve(async (req) => {
 
         const first = txList[0];
         const totalInstallments = first.total_installments || txList.length;
-        const valorParcela = first.product_price || 0;
+        const valorBruto = first.product_price || 0;
+        const valorLiquido = first.net_value || 0;
         const existingNums = existingInstNums.get(subId) || new Set();
         const statusMap = existingInstStatus.get(subId) || new Map();
         const now = new Date();
@@ -304,12 +306,13 @@ Deno.serve(async (req) => {
           if (paid) {
             // Parcela 1 = product_price (bruto), demais = net_value (líquido)
             const valorPago = i === 1
-              ? (paid.product_price || valorParcela)
-              : (paid.net_value || paid.product_price || valorParcela);
+              ? (paid.product_price || valorBruto)
+              : (paid.net_value || paid.product_price || valorLiquido);
+            const valorOriginalInst = i === 1 ? valorBruto : valorLiquido;
             allInstallmentsToInsert.push({
               subscription_id: subId,
               numero_parcela: i,
-              valor_original: valorParcela,
+              valor_original: valorOriginalInst,
               valor_pago: valorPago,
               valor_liquido: paid.net_value || null,
               data_vencimento: paid.sale_date,
@@ -332,10 +335,11 @@ Deno.serve(async (req) => {
           } else {
             const dueDate = new Date(firstDate);
             dueDate.setDate(dueDate.getDate() + batchIntervalDays * (i - 1));
+            const valorOriginalUnpaid = i === 1 ? valorBruto : valorLiquido;
             allInstallmentsToInsert.push({
               subscription_id: subId,
               numero_parcela: i,
-              valor_original: valorParcela,
+              valor_original: valorOriginalUnpaid,
               valor_pago: 0,
               valor_liquido: 0,
               data_vencimento: dueDate.toISOString(),
