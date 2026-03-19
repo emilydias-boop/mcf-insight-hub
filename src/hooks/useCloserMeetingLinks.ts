@@ -8,6 +8,7 @@ interface CloserMeetingLink {
   day_of_week: number;
   start_time: string;
   google_meet_link: string;
+  max_leads: number | null;
   created_at: string | null;
 }
 
