@@ -38,6 +38,7 @@ const CRM = () => {
     { to: '/crm/leads-limbo', label: 'Limbo', icon: Inbox },
     { to: '/crm/contatos-duplicados', label: 'Duplicados', icon: Copy },
     { to: '/crm/retornos-parceiros', label: 'Retornos', icon: ShieldAlert },
+    { to: '/crm/auditoria-agendamentos', label: 'Auditoria', icon: Shield },
     { to: '/crm/configuracoes', label: 'Configurações', icon: Settings },
   ];
   
