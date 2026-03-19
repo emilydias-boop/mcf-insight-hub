@@ -142,12 +142,18 @@ export function StatusChangesTab() {
             </TableHeader>
             <TableBody>
               {changes.map((entry) => (
-                <StatusChangeRow key={entry.id} entry={entry} />
+                <StatusChangeRow key={entry.id} entry={entry} onClick={() => setSelectedEntry(entry)} />
               ))}
             </TableBody>
           </Table>
         </div>
       )}
+
+      <StatusChangeDetailDrawer
+        entry={selectedEntry}
+        open={!!selectedEntry}
+        onOpenChange={(open) => { if (!open) setSelectedEntry(null); }}
+      />
     </div>
   );
 }
