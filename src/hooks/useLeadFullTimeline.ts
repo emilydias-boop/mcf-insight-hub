@@ -199,7 +199,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               title: `Tarefa concluída: ${act.description || 'Sem título'}`,
               description: null,
               date: act.created_at,
-              author: meta.completed_by || meta.user_name || null,
+              author: resolveAuthor(act.user_id, meta.completed_by, meta.user_name),
               metadata: meta,
             });
           } else if (actType === 'qualification_note' || actType === 'qualification') {
