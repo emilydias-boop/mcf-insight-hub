@@ -1784,24 +1784,30 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
-                                    {onAddToMeeting && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const meetingDate = parseISO(firstMeeting.scheduled_at);
-                                          onAddToMeeting(
-                                            day,
-                                            meetingDate.getHours(),
-                                            meetingDate.getMinutes(),
-                                            group.closerId
-                                          );
-                                        }}
-                                        className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-white/90 rounded-full p-0.5 shadow hover:bg-green-100 transition-opacity z-20"
-                                        title="Adicionar lead a esta reunião"
-                                      >
-                                        <UserPlus className="h-3.5 w-3.5 text-green-600" />
-                                      </button>
-                                    )}
+                                    {onAddToMeeting && (() => {
+                                      const closer = closers?.find(c => c.id === group.closerId);
+                                      const maxLeads = closer?.max_leads_per_slot ?? 4;
+                                      const attendeeCount = allAttendees.length;
+                                      if (attendeeCount >= maxLeads) return null;
+                                      return (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const meetingDate = parseISO(firstMeeting.scheduled_at);
+                                            onAddToMeeting(
+                                              day,
+                                              meetingDate.getHours(),
+                                              meetingDate.getMinutes(),
+                                              group.closerId
+                                            );
+                                          }}
+                                          className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-white/90 rounded-full p-0.5 shadow hover:bg-green-100 transition-opacity z-20"
+                                          title="Adicionar lead a esta reunião"
+                                        >
+                                          <UserPlus className="h-3.5 w-3.5 text-green-600" />
+                                        </button>
+                                      );
+                                    })()}
                                     {/* Lotado badge overlay for week view */}
                                     {(() => {
                                       const closer = closers?.find(c => c.id === group.closerId);
