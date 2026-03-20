@@ -365,6 +365,26 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
                           Quer Desistir
                         </Badge>
                       )}
+                      {(() => {
+                        const agr = att.deal_id ? agreementMap?.get(att.deal_id) : null;
+                        if (!agr) return null;
+                        const color = agr.status === 'cumprido' ? 'hsl(142.1 76.2% 36.3%)' 
+                          : agr.status === 'quebrado' ? 'hsl(0 84.2% 60.2%)'
+                          : 'hsl(221.2 83.2% 53.3%)';
+                        const label = agr.status === 'cumprido' ? 'Acordo Cumprido'
+                          : agr.status === 'quebrado' ? 'Acordo Quebrado'
+                          : 'Acordo Ativo';
+                        return (
+                          <Badge variant="outline" className="w-fit mt-1 text-xs" style={{
+                            backgroundColor: `${color}20`.replace(')', '/0.12)').replace('hsl', 'hsl'),
+                            borderColor: color,
+                            color: color,
+                          }}>
+                            <Handshake className="h-3 w-3 mr-1" />
+                            {label}
+                          </Badge>
+                        );
+                      })()}
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-sm">
