@@ -475,6 +475,58 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
                       </div>
                     </TableCell>
                     <TableCell>
+                      {(() => {
+                        const email = venda.customer_email?.toLowerCase();
+                        const data = email ? agreementsMap?.get(email) : undefined;
+                        
+                        if (!data) {
+                          return <span className="text-muted-foreground text-xs">-</span>;
+                        }
+                        
+                        if (!data.hasAgreement) {
+                          return (
+                            <div className="flex items-center gap-1">
+                              <Badge variant="outline" className="text-muted-foreground text-xs">
+                                Sem acordo
+                              </Badge>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => {
+                                  setAgreementSubId(data.subscriptionId);
+                                  setAgreementModalOpen(true);
+                                }}
+                                title="Criar acordo"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          );
+                        }
+
+                        const statusColors: Record<string, string> = {
+                          em_aberto: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+                          em_andamento: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+                          cumprido: 'bg-green-500/10 text-green-600 border-green-500/30',
+                          quebrado: 'bg-red-500/10 text-red-600 border-red-500/30',
+                        };
+
+                        return (
+                          <div className="flex items-center gap-1">
+                            <Badge 
+                              variant="outline" 
+                              className={`text-xs cursor-pointer ${statusColors[data.status || ''] || ''}`}
+                              onClick={() => navigate('/cobrancas')}
+                            >
+                              {AGREEMENT_STATUS_LABELS[data.status!] || data.status}
+                              {data.totalParcelas > 0 && ` ${data.parcelasPagas}/${data.totalParcelas}`}
+                            </Badge>
+                          </div>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
