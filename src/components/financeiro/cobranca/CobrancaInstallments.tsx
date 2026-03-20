@@ -72,8 +72,10 @@ export const CobrancaInstallments = ({ installments, isLoading, onMarkPaid, onRe
           <TableHead className="w-8"></TableHead>
           <TableHead>#</TableHead>
           <TableHead>Vencimento</TableHead>
-          <TableHead className="text-right">Valor</TableHead>
+          <TableHead className="text-right">Bruto</TableHead>
+          <TableHead className="text-right">Líquido</TableHead>
           <TableHead className="text-right">Pago</TableHead>
+          <TableHead>Forma Pgto</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Data Pgto</TableHead>
           <TableHead></TableHead>
