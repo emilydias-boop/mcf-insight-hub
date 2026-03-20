@@ -517,9 +517,16 @@ function convertToDBFormat(
   defaultStageId?: string | null
 ): CRMDeal | null {
   const clintId = csvDeal.id?.trim() || generateSyntheticId(csvDeal)
-  const name = csvDeal.name?.trim()
+  // Mapear "cliente" como fallback para nome do deal
+  const name = csvDeal.name?.trim() || csvDeal.cliente?.trim() || csvDeal.consorciado?.trim() || ''
   
   if (!name) {
+    return null
+  }
+
+  // Validação: rejeitar nomes que são apenas números/telefones
+  if (/^\(?[\d\s\-\(\)\+,.E]+$/.test(name)) {
+    console.warn(`⚠️ Nome inválido (parece telefone): "${name}" — pulando`)
     return null
   }
 
