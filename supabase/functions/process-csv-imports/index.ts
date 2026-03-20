@@ -223,7 +223,7 @@ Deno.serve(async (req) => {
           }
           
           // Resolver owner: prioridade para job, depois CSV (incluindo user_email do formato exportação)
-          const csvOwnerEmail = csvDeal.owner?.trim() || csvDeal.dono?.trim() || csvDeal.user_email?.trim()
+          const csvOwnerEmail = csvDeal.owner?.trim() || csvDeal.dono?.trim() || csvDeal.gerente?.trim() || csvDeal.user_email?.trim()
           const finalOwnerEmail = ownerEmail || csvOwnerEmail
           
           if (finalOwnerEmail) {
