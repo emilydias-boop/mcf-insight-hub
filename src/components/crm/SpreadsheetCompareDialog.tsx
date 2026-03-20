@@ -216,9 +216,9 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
           const data = new Uint8Array(evt.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: 'array' });
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+          const json = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as any[];
           if (!json.length) { toast.error('Planilha vazia'); return; }
-          const rawHdrs = Object.keys(json[0] as any);
+          const rawHdrs = Object.keys(json[0]);
           const seenXlsx = new Map<string, number>();
           const hdrs = rawHdrs.map(h => {
             const key = h.toLowerCase();
@@ -226,7 +226,13 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
             seenXlsx.set(key, count);
             return count > 1 ? `${h}_${count}` : h;
           });
-          processFileData(hdrs, json as any[]);
+          // Remap data keys if headers were renamed
+          const remappedJson = json.map(row => {
+            const newRow: any = {};
+            rawHdrs.forEach((orig, i) => { newRow[hdrs[i]] = row[orig] ?? ''; });
+            return newRow;
+          });
+          processFileData(hdrs, remappedJson);
         } catch { toast.error('Erro ao ler planilha'); }
       };
       reader.readAsArrayBuffer(file);
