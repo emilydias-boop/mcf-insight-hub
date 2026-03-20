@@ -87,7 +87,14 @@ function parseTextToRows(text: string): { headers: string[]; rawData: any[] } {
   let dataLines: string[];
 
   if (hasHeader) {
-    headers = firstLine.split(sep).map(h => h.trim());
+    const rawHeaders = firstLine.split(sep).map(h => h.trim());
+    const seen = new Map<string, number>();
+    headers = rawHeaders.map(h => {
+      const key = h.toLowerCase();
+      const count = (seen.get(key) || 0) + 1;
+      seen.set(key, count);
+      return count > 1 ? `${h}_${count}` : h;
+    });
     dataLines = lines.slice(1);
   } else {
     const colCount = firstLine.split(sep).length;
