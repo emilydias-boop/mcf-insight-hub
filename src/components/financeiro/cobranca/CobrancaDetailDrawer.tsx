@@ -172,10 +172,16 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
               </Badge>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-4">
               <div className="bg-muted/50 rounded-lg p-3">
-                <span className="text-xs text-muted-foreground">Total Contrato</span>
-                <p className="text-lg font-bold">{formatCurrency(subscription.valor_total_contrato)}</p>
+                <span className="text-xs text-muted-foreground">Valor Bruto</span>
+                <p className="text-lg font-bold">{formatCurrency(totalBruto || subscription.valor_total_contrato)}</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3">
+                <span className="text-xs text-muted-foreground">Valor Líquido</span>
+                <p className={`text-lg font-bold ${totalLiquido === 0 ? 'text-muted-foreground' : ''}`}>
+                  {totalLiquido > 0 ? formatCurrency(totalLiquido) : '-'}
+                </p>
               </div>
               <div className="bg-muted/50 rounded-lg p-3">
                 <span className="text-xs text-muted-foreground">Total Pago</span>
@@ -183,12 +189,32 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
               </div>
               <div className="bg-muted/50 rounded-lg p-3">
                 <span className="text-xs text-muted-foreground">Saldo Devedor</span>
-                <p className="text-lg font-bold text-red-600">{formatCurrency(saldoDevedor)}</p>
+                <p className={`text-lg font-bold ${saldoDevedor > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatCurrency(saldoDevedor)}
+                </p>
               </div>
               <div className="bg-muted/50 rounded-lg p-3">
                 <span className="text-xs text-muted-foreground">Parcelas</span>
                 <p className="text-lg font-bold">{parcelasPagas} / {subscription.total_parcelas}</p>
               </div>
+              <div className="bg-muted/50 rounded-lg p-3">
+                <span className="text-xs text-muted-foreground">Forma Pgto</span>
+                <p className="text-sm font-semibold mt-0.5">
+                  {formaPgtoLabel || <span className="text-muted-foreground">Não identificada</span>}
+                </p>
+              </div>
+            </div>
+
+            {/* Info contextual */}
+            <div className="flex flex-wrap items-center gap-3 mt-3 text-sm">
+              <span className="text-muted-foreground">Responsável:</span>
+              <span className="font-medium">{subscription.responsavel_financeiro || 'Não informado'}</span>
+              {formaPgtoDesconhecida && (
+                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Forma de pagamento não identificada — verificar se é cobrável
+                </Badge>
+              )}
             </div>
 
             <div className="flex gap-2 mt-4 flex-wrap">

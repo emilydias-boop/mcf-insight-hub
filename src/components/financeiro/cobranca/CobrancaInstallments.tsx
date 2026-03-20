@@ -136,7 +136,15 @@ export const CobrancaInstallments = ({ installments, isLoading, onMarkPaid, onRe
                     </span>
                   )}
                 </TableCell>
+                <TableCell className="text-right">
+                  {inst.valor_liquido ? formatCurrency(inst.valor_liquido) : <span className="text-muted-foreground">-</span>}
+                </TableCell>
                 <TableCell className="text-right">{inst.valor_pago ? formatCurrency(inst.valor_pago) : '-'}</TableCell>
+                <TableCell className="text-xs">
+                  {inst.forma_pagamento
+                    ? PAYMENT_METHOD_LABELS[inst.forma_pagamento as BillingPaymentMethod] || inst.forma_pagamento
+                    : <span className="text-muted-foreground">-</span>}
+                </TableCell>
                 <TableCell>
                   <Badge className={`text-xs ${statusColors[inst.status] || ''}`} variant="outline">
                     {INSTALLMENT_STATUS_LABELS[inst.status]}
