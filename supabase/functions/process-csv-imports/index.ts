@@ -223,7 +223,7 @@ Deno.serve(async (req) => {
           }
           
           // Resolver owner: prioridade para job, depois CSV (incluindo user_email do formato exportação)
-          const csvOwnerEmail = csvDeal.owner?.trim() || csvDeal.dono?.trim() || csvDeal.user_email?.trim()
+          const csvOwnerEmail = csvDeal.owner?.trim() || csvDeal.dono?.trim() || csvDeal.gerente?.trim() || csvDeal.user_email?.trim()
           const finalOwnerEmail = ownerEmail || csvOwnerEmail
           
           if (finalOwnerEmail) {
@@ -341,9 +341,23 @@ function parseCSV(csvText: string): CSVDeal[] {
   if (lines.length < 2) return []
 
   const headerLine = lines[0]
-  const delimiter = headerLine.includes(';') ? ';' : ','
+  // Detectar delimitador: TAB tem prioridade, depois ; depois ,
+  const delimiter = headerLine.includes('\t') ? '\t' 
+                  : headerLine.includes(';') ? ';' 
+                  : ','
   
-  const headers = parseLine(headerLine, delimiter).map(h => h.toLowerCase().trim())
+  console.log(`📋 Delimitador detectado: ${delimiter === '\t' ? 'TAB' : delimiter}`)
+  
+  // Parse headers com tratamento de duplicatas
+  const rawHeaders = parseLine(headerLine, delimiter).map(h => h.toLowerCase().trim())
+  const seen = new Map<string, number>()
+  const headers = rawHeaders.map(h => {
+    const count = (seen.get(h) || 0) + 1
+    seen.set(h, count)
+    return count > 1 ? `${h}_${count}` : h
+  })
+  
+  console.log(`📋 Headers detectados: ${headers.join(', ')}`)
   
   const deals: CSVDeal[] = []
   for (let i = 1; i < lines.length; i++) {
@@ -356,7 +370,8 @@ function parseCSV(csvText: string): CSVDeal[] {
       }
     })
     
-    if (deal.id || deal.name) {
+    // Aceitar deal se tem id, name, ou cliente (mapeamento alternativo)
+    if (deal.id || deal.name || deal.cliente) {
       deals.push(deal)
     }
   }
@@ -395,7 +410,8 @@ function parseLine(line: string, delimiter: string): string[] {
  * Extrai dados de contato do CSV (nome, email, telefone)
  */
 function extractContactData(csvDeal: CSVDeal): ContactData {
-  const name = csvDeal.contact?.trim() || csvDeal.name?.trim() || ''
+  // cliente_2 = segunda coluna "Cliente" (SDR/contato)
+  const name = csvDeal.contact?.trim() || csvDeal.cliente_2?.trim() || csvDeal.cliente?.trim() || csvDeal.name?.trim() || ''
   const email = csvDeal.email?.trim() || ''
   const phone = csvDeal.phone?.trim() || 
                 csvDeal.telefone?.trim() || 
@@ -501,9 +517,16 @@ function convertToDBFormat(
   defaultStageId?: string | null
 ): CRMDeal | null {
   const clintId = csvDeal.id?.trim() || generateSyntheticId(csvDeal)
-  const name = csvDeal.name?.trim()
+  // Mapear "cliente" como fallback para nome do deal
+  const name = csvDeal.name?.trim() || csvDeal.cliente?.trim() || csvDeal.consorciado?.trim() || ''
   
   if (!name) {
+    return null
+  }
+
+  // Validação: rejeitar nomes que são apenas números/telefones
+  if (/^\(?[\d\s\-\(\)\+,.E]+$/.test(name)) {
+    console.warn(`⚠️ Nome inválido (parece telefone): "${name}" — pulando`)
     return null
   }
 
@@ -548,7 +571,7 @@ function convertToDBFormat(
   }
 
   // Custom fields - incluir email/phone que não foram mapeados para contato
-  const excludedFields = ['id', 'name', 'value', 'stage', 'contact', 'origin', 'owner', 'dono', 'user_email', 'user_name', 'tags', 'expected_close_date', 'probability', 'email', 'phone', 'telefone', 'celular', 'whatsapp', 'created_at']
+  const excludedFields = ['id', 'name', 'value', 'stage', 'contact', 'origin', 'owner', 'dono', 'gerente', 'user_email', 'user_name', 'tags', 'expected_close_date', 'probability', 'email', 'phone', 'telefone', 'celular', 'whatsapp', 'created_at', 'cliente', 'cliente_2', 'consorciado']
   const customFields: Record<string, any> = {}
   
   for (const [key, value] of Object.entries(csvDeal)) {
