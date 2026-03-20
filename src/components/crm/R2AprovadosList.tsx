@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Copy, Check, ShoppingCart, X, Download, Search, Filter, XCircle, MessageSquare, AlertTriangle } from 'lucide-react';
+import { Copy, Check, ShoppingCart, X, Download, Search, Filter, XCircle, MessageSquare, AlertTriangle, Handshake } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -10,15 +10,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { R2CarrinhoAttendee, useUpdateCarrinhoStatus } from '@/hooks/useR2CarrinhoData';
 import { useR2CarrinhoVendas } from '@/hooks/useR2CarrinhoVendas';
+import { useAprovadoAgreementsBatch } from '@/hooks/useAprovadoAgreements';
 import { AprovadoDetailDrawer } from './AprovadoDetailDrawer';
 import { toast } from 'sonner';
-interface R2AprovadosListProps {
-  attendees: R2CarrinhoAttendee[];
-  isLoading?: boolean;
-  weekStart: Date;
-  weekEnd: Date;
-}
-
 export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2AprovadosListProps) {
   const [copied, setCopied] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
