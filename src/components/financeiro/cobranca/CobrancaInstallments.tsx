@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { BillingInstallment, BillingPaymentReceivable, INSTALLMENT_STATUS_LABELS } from '@/types/billing';
+import { BillingInstallment, BillingPaymentReceivable, INSTALLMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS, BillingPaymentMethod } from '@/types/billing';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { Check, DollarSign, ChevronDown, ChevronRight, Pencil, Save, X, Layers } from 'lucide-react';
 import { useUpdateInstallmentValue } from '@/hooks/useBillingInstallments';
