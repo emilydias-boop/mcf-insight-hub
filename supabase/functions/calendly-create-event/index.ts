@@ -501,12 +501,50 @@ serve(async (req) => {
       .in("status", ["scheduled", "rescheduled"])
       .maybeSingle();
 
+    // === CAPACITY VALIDATION (server-side) ===
+    // Get max_leads for this closer at this time
+    const slotDate = new Date(scheduledAt);
+    const slotDayOfWeek = slotDate.getDay();
+    const slotTimeStr = `${String(slotDate.getHours()).padStart(2, '0')}:${String(slotDate.getMinutes()).padStart(2, '0')}:00`;
+
+    const [linkCapacity, closerCapacity] = await Promise.all([
+      supabase
+        .from("closer_meeting_links")
+        .select("max_leads")
+        .eq("closer_id", closerId)
+        .eq("day_of_week", slotDayOfWeek)
+        .eq("start_time", slotTimeStr)
+        .maybeSingle(),
+      supabase
+        .from("closers")
+        .select("max_leads_per_slot")
+        .eq("id", closerId)
+        .single(),
+    ]);
+
+    const maxLeads = linkCapacity.data?.max_leads ?? closerCapacity.data?.max_leads_per_slot ?? 4;
+
+    if (existingSlot) {
+      // Count current attendees
+      const { count: currentAttendees } = await supabase
+        .from("meeting_slot_attendees")
+        .select("id", { count: "exact", head: true })
+        .eq("meeting_slot_id", existingSlot.id);
+
+      if ((currentAttendees ?? 0) >= maxLeads) {
+        console.warn(`🚫 Slot full: ${currentAttendees}/${maxLeads} for closer ${closerId} at ${scheduledAt}`);
+        return new Response(
+          JSON.stringify({ success: false, error: "slot_full", message: `Horário lotado (${currentAttendees}/${maxLeads} leads)` }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     let slotId: string;
 
     if (existingSlot) {
-      // No limit on attendees - just add to existing slot
       slotId = existingSlot.id;
-      console.log("📍 Adding to existing slot:", slotId);
+      console.log("📍 Adding to existing slot:", slotId, `(${maxLeads} max leads)`);
     } else {
       // Create new slot
       const { data: newSlot, error: slotError } = await supabase

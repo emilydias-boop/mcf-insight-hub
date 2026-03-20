@@ -1073,6 +1073,9 @@ export function useCreateMeeting() {
         if (data.error === 'Closer not found') {
           throw new Error('Closer não encontrado');
         }
+        if (data.error === 'slot_full') {
+          throw new Error(data.message || 'Horário lotado — não é possível adicionar mais leads');
+        }
         throw new Error(data.error || 'Erro ao agendar reunião');
       }
       
@@ -1142,6 +1145,7 @@ export function useAddMeetingAttendee() {
       attendeePhone,
       isPartner = false,
       parentAttendeeId,
+      bypassCapacity = false,
     }: {
       meetingSlotId: string;
       dealId?: string;
@@ -1150,7 +1154,52 @@ export function useAddMeetingAttendee() {
       attendeePhone?: string;
       isPartner?: boolean;
       parentAttendeeId?: string;
+      bypassCapacity?: boolean;
     }) => {
+      // === CAPACITY CHECK ===
+      if (!bypassCapacity) {
+        // 1. Get slot info
+        const { data: slot } = await supabase
+          .from('meeting_slots')
+          .select('closer_id, scheduled_at')
+          .eq('id', meetingSlotId)
+          .single();
+
+        if (slot) {
+          // 2. Count current attendees
+          const { count } = await supabase
+            .from('meeting_slot_attendees')
+            .select('id', { count: 'exact', head: true })
+            .eq('meeting_slot_id', meetingSlotId);
+
+          // 3. Get max_leads for this slot
+          const scheduledDate = new Date(slot.scheduled_at);
+          const dayOfWeek = scheduledDate.getDay();
+          const timeStr = `${String(scheduledDate.getHours()).padStart(2, '0')}:${String(scheduledDate.getMinutes()).padStart(2, '0')}:00`;
+
+          const [linkResult, closerResult] = await Promise.all([
+            supabase
+              .from('closer_meeting_links')
+              .select('max_leads')
+              .eq('closer_id', slot.closer_id)
+              .eq('day_of_week', dayOfWeek)
+              .eq('start_time', timeStr)
+              .maybeSingle(),
+            supabase
+              .from('closers')
+              .select('max_leads_per_slot')
+              .eq('id', slot.closer_id)
+              .single(),
+          ]);
+
+          const maxLeads = linkResult.data?.max_leads ?? closerResult.data?.max_leads_per_slot ?? 4;
+
+          if ((count ?? 0) >= maxLeads) {
+            throw new Error('Slot lotado — não é possível adicionar mais leads');
+          }
+        }
+      }
+
       // Se for sócio, herdar deal_id do parent mas usar o usuário logado como booked_by
       let inheritedDealId: string | null = null;
       if (parentAttendeeId) {
@@ -1185,8 +1234,8 @@ export function useAddMeetingAttendee() {
       queryClient.refetchQueries({ queryKey: ['agenda-meetings'] });
       toast.success('Participante adicionado');
     },
-    onError: () => {
-      toast.error('Erro ao adicionar participante');
+    onError: (error: any) => {
+      toast.error(error?.message || 'Erro ao adicionar participante');
     },
   });
 }
