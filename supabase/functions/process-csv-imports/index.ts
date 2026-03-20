@@ -410,7 +410,8 @@ function parseLine(line: string, delimiter: string): string[] {
  * Extrai dados de contato do CSV (nome, email, telefone)
  */
 function extractContactData(csvDeal: CSVDeal): ContactData {
-  const name = csvDeal.contact?.trim() || csvDeal.name?.trim() || ''
+  // cliente_2 = segunda coluna "Cliente" (SDR/contato)
+  const name = csvDeal.contact?.trim() || csvDeal.cliente_2?.trim() || csvDeal.cliente?.trim() || csvDeal.name?.trim() || ''
   const email = csvDeal.email?.trim() || ''
   const phone = csvDeal.phone?.trim() || 
                 csvDeal.telefone?.trim() || 
