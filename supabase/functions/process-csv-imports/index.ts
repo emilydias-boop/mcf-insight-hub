@@ -571,7 +571,7 @@ function convertToDBFormat(
   }
 
   // Custom fields - incluir email/phone que não foram mapeados para contato
-  const excludedFields = ['id', 'name', 'value', 'stage', 'contact', 'origin', 'owner', 'dono', 'user_email', 'user_name', 'tags', 'expected_close_date', 'probability', 'email', 'phone', 'telefone', 'celular', 'whatsapp', 'created_at']
+  const excludedFields = ['id', 'name', 'value', 'stage', 'contact', 'origin', 'owner', 'dono', 'gerente', 'user_email', 'user_name', 'tags', 'expected_close_date', 'probability', 'email', 'phone', 'telefone', 'celular', 'whatsapp', 'created_at', 'cliente', 'cliente_2', 'consorciado']
   const customFields: Record<string, any> = {}
   
   for (const [key, value] of Object.entries(csvDeal)) {
