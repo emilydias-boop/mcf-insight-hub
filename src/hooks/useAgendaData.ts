@@ -1073,6 +1073,9 @@ export function useCreateMeeting() {
         if (data.error === 'Closer not found') {
           throw new Error('Closer não encontrado');
         }
+        if (data.error === 'slot_full') {
+          throw new Error(data.message || 'Horário lotado — não é possível adicionar mais leads');
+        }
         throw new Error(data.error || 'Erro ao agendar reunião');
       }
       
