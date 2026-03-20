@@ -101,6 +101,9 @@ export const useMarkAgreementInstallmentPaid = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['billing-agreement-installments'] });
       queryClient.invalidateQueries({ queryKey: ['billing-agreements'] });
+      queryClient.invalidateQueries({ queryKey: ['agreements-by-emails'] });
+      queryClient.invalidateQueries({ queryKey: ['aprovado-agreements'] });
+      queryClient.invalidateQueries({ queryKey: ['aprovado-agreements-batch'] });
     },
   });
 };
