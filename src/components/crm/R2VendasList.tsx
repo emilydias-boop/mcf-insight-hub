@@ -274,7 +274,7 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -329,6 +329,19 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
                 <p className="text-sm text-muted-foreground">Líquido Total</p>
                 <p className="text-2xl font-bold">
                   {isLoading ? '...' : formatCurrency(totals.liquido)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-10 rounded-full bg-purple-500" />
+              <div>
+                <p className="text-sm text-muted-foreground">Com Acordo</p>
+                <p className="text-2xl font-bold">
+                  {isLoading ? '...' : totals.comAcordo}
                 </p>
               </div>
             </div>
