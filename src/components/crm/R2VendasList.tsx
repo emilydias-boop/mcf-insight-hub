@@ -1,8 +1,12 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, RefreshCw, Download, Eye, Pencil, Trash2, XCircle, Undo2, Link2, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, RefreshCw, Download, Eye, Pencil, Trash2, XCircle, Undo2, Link2, AlertCircle, ChevronDown, ChevronRight, Handshake, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAgreementsByEmails } from '@/hooks/useAprovadoAgreements';
+import { AGREEMENT_STATUS_LABELS } from '@/types/billing';
+import { CreateAgreementModal } from '@/components/financeiro/cobranca/CreateAgreementModal';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
