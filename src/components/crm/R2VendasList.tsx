@@ -105,6 +105,17 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
     const brutoTotal = vendasNormais.reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
     const brutoExtras = vendasExtras.reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
     const liquidoTotal = vendas.reduce((sum, v) => sum + (v.net_value || 0), 0);
+
+    // Count vendas with active agreement
+    let comAcordo = 0;
+    if (agreementsMap) {
+      vendas.forEach(v => {
+        if (v.customer_email) {
+          const data = agreementsMap.get(v.customer_email.toLowerCase());
+          if (data?.hasAgreement) comAcordo++;
+        }
+      });
+    }
     
     return {
       count: vendasNormais.length,
@@ -112,8 +123,9 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
       bruto: brutoTotal,
       brutoExtras: brutoExtras,
       liquido: liquidoTotal,
+      comAcordo,
     };
-  }, [vendas]);
+  }, [vendas, agreementsMap]);
 
   // Paginação
   const totalPages = Math.ceil(vendas.length / pageSize);
