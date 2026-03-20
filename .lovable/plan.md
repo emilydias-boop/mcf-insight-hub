@@ -1,57 +1,92 @@
 
 
-## Plano: Bloquear agendamento server-side em slots lotados
+## Plano: Vincular Acordos de Parceria ao Carrinho R2
 
-### Problema raiz
-A validação de capacidade é **apenas visual** (UI). Existem 3 caminhos para adicionar leads a um slot, e nenhum valida capacidade no servidor:
+### Contexto
+Os acordos (`billing_agreements`) estão vinculados a `billing_subscriptions` via `subscription_id`, e as subscriptions têm `deal_id`. Os leads aprovados no carrinho (`meeting_slot_attendees`) também têm `deal_id`. A ponte entre os dois sistemas já existe no banco — só falta expor na UI do carrinho.
 
-1. **QuickScheduleModal** — botão desabilitado para SDRs, mas coordenadores podem agendar sem limite. A edge function `calendly-create-event` não valida.
-2. **useAddMeetingAttendee** (botão UserPlus na agenda) — insere direto no Supabase sem nenhuma verificação de capacidade.
-3. **Drag-and-drop** — move leads entre slots sem checar se o destino está lotado.
+### O que será feito
 
-### Alterações
+**1. Novo hook `useAprovadoAgreements`**
+- Recebe `deal_id` do attendee aprovado
+- Busca `billing_subscriptions` pelo `deal_id`
+- Com o `subscription_id`, busca `billing_agreements` e suas `billing_agreement_installments`
+- Retorna dados do acordo (status, parcelas pagas/total, saldo, forma de pagamento)
 
-| Arquivo | O que muda |
-|---------|------------|
-| `src/hooks/useAgendaData.ts` — `useAddMeetingAttendee` | Antes de inserir, buscar contagem atual de attendees + max_leads do slot. Se `count >= max`, lançar erro "Slot lotado". |
-| `src/hooks/useAgendaData.ts` — `useCreateMeeting` | Antes de chamar a edge function, verificar capacidade. Se lotado e não for coordenador+, lançar erro. |
-| `supabase/functions/calendly-create-event/index.ts` | Adicionar validação server-side: contar attendees do slot (mesmo closer + horário), buscar max_leads, rejeitar se cheio. |
-| `src/components/crm/AgendaCalendar.tsx` | No handler de drop (drag-and-drop), verificar capacidade do slot destino antes de mover. |
+**2. Badge de Acordo na lista de Aprovados (`R2AprovadosList.tsx`)**
+- Para cada lead aprovado que tenha um acordo ativo, exibir um badge "Acordo" com status (em andamento, cumprido, quebrado)
+- Badge colorido: azul (em andamento), verde (cumprido), vermelho (quebrado)
 
-### Detalhes
+**3. Seção de Acordo no `AprovadoDetailDrawer.tsx`**
+- Adicionar seção "Acordo/Negociação" na jornada do lead, após a venda
+- Mostrar: status do acordo, valor negociado, parcelas pagas/total, próximo vencimento, saldo devedor
+- Botão "Ver Cobrança" que abre o drawer de cobrança ou redireciona para `/cobrancas`
 
-**useAddMeetingAttendee** — a mudança mais crítica. Antes do `insert`:
+**4. Botão "Criar Acordo" no `AprovadoDetailDrawer.tsx`**
+- Se o lead tem subscription mas NÃO tem acordo, mostrar botão "Novo Acordo"
+- Abre o `CreateAgreementModal` já existente, passando o `subscription_id` automaticamente
+- Se não tem subscription, o botão fica oculto
+
+### Arquivos
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useAprovadoAgreements.ts` | **Novo** — hook que busca subscription + agreements pelo deal_id |
+| `src/components/crm/AprovadoDetailDrawer.tsx` | Adicionar seção de acordos e botão "Criar Acordo" |
+| `src/components/crm/R2AprovadosList.tsx` | Adicionar badge de acordo na tabela (via batch query) |
+
+### Fluxo de dados
+
+```text
+meeting_slot_attendees.deal_id
+        ↓
+billing_subscriptions (WHERE deal_id = ?)
+        ↓ subscription_id
+billing_agreements
+        ↓ agreement_id
+billing_agreement_installments
+```
+
+### Detalhes — hook `useAprovadoAgreements`
+
 ```typescript
-// 1. Buscar meeting_slot para saber closer_id e scheduled_at
-const { data: slot } = await supabase
-  .from('meeting_slots')
-  .select('closer_id, scheduled_at')
-  .eq('id', meetingSlotId)
-  .single();
-
-// 2. Contar attendees atuais neste slot
-const { count } = await supabase
-  .from('meeting_slot_attendees')
-  .select('id', { count: 'exact', head: true })
-  .eq('meeting_slot_id', meetingSlotId);
-
-// 3. Buscar max_leads
-const maxLeads = await getMaxLeadsForSlot(slot.closer_id, slot.scheduled_at);
-
-if ((count ?? 0) >= maxLeads) {
-  throw new Error('Slot lotado — não é possível adicionar mais leads');
+export function useAprovadoAgreements(dealId: string | null) {
+  return useQuery({
+    queryKey: ['aprovado-agreements', dealId],
+    queryFn: async () => {
+      // 1. Find subscription by deal_id
+      const { data: sub } = await supabase
+        .from('billing_subscriptions')
+        .select('id, status, valor_total_contrato')
+        .eq('deal_id', dealId)
+        .maybeSingle();
+      if (!sub) return null;
+      
+      // 2. Find agreements
+      const { data: agreements } = await supabase
+        .from('billing_agreements')
+        .select('*')
+        .eq('subscription_id', sub.id)
+        .order('created_at', { ascending: false });
+      
+      return { subscription: sub, agreements: agreements || [] };
+    },
+    enabled: !!dealId,
+  });
 }
 ```
 
-**Edge function `calendly-create-event`** — mesma lógica no servidor:
-- Antes de criar o meeting_slot + attendee, contar meetings existentes para aquele closer no mesmo horário
-- Buscar `max_leads` de `closer_meeting_links` (override) ou `closers.max_leads_per_slot` (global)
-- Se cheio, retornar `{ error: 'slot_full', message: 'Horário lotado' }`
+### Detalhes — Badge na lista de aprovados
 
-**Drag-and-drop (AgendaCalendar)** — no handler `handleDrop`/`handleMoveAttendee`:
-- Calcular capacidade do slot destino usando `getSlotCapacityStatus`
-- Se lotado, exibir `toast.error('Horário destino está lotado')` e cancelar a operação
+Para evitar N+1 queries, fazer uma única query batch: buscar todas as subscriptions cujo `deal_id` está na lista de attendees, depois buscar agreements para essas subscriptions. Resultado mapeado por `deal_id` para lookup O(1) no render.
 
-### Bypass para coordenadores
-Manter o bypass existente: coordenadores/managers/admins podem agendar mesmo em slots lotados, com o aviso visual amarelo que já existe no QuickScheduleModal. No `useAddMeetingAttendee`, aceitar um parâmetro `bypassCapacity?: boolean` que só pode ser true se o caller verificar o role.
+### Detalhes — Seção no drawer
+
+Após a seção "Venda Realizada" no timeline, adicionar:
+- Ícone de handshake (`Handshake`)
+- Status do acordo mais recente
+- Resumo: "3/6 parcelas pagas — Saldo: R$ 1.200"
+- Próximo vencimento destacado se atrasado (vermelho)
+- Botão "Novo Acordo" se tem subscription sem acordo ativo
+- Botão "Ver Detalhes" que linka para `/cobrancas` com filtro do cliente
 
