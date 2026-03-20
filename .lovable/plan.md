@@ -1,37 +1,82 @@
 
+## Plano: corrigir o novo erro ao atualizar status da reunião
 
-## Plano: Corrigir erro "column msa.slot_id does not exist"
+### Diagnóstico
 
-### Causa raiz
+Verifiquei o fluxo real da tela e o problema agora é outro.
 
-O trigger `notify_suspicious_status_change` na tabela `audit_logs` faz um JOIN incorreto:
+- A tela da agenda R1 usa `useUpdateAttendeeAndSlotStatus()` em `src/hooks/useAgendaData.ts`.
+- Essa mutation atualiza `meeting_slot_attendees.status`.
+- Esse update dispara o trigger de auditoria `log_r2_attendee_changes`, que insere em `audit_logs`.
+- Depois disso, o trigger `trg_notify_suspicious_status_change` em `audit_logs` executa `notify_suspicious_status_change()`.
 
-```sql
-JOIN meeting_slots ms ON ms.id = msa.slot_id  -- ERRADO
-```
-
-A coluna correta é `meeting_slot_id`, não `slot_id`. Toda vez que o audit log registra uma mudança de status em `meeting_slot_attendees`, esse trigger dispara e falha, causando o erro "Erro ao atualizar status".
-
-### Correção — Migration SQL
+A função em produção já está com o `JOIN` corrigido para:
 
 ```sql
-CREATE OR REPLACE FUNCTION public.notify_suspicious_status_change()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $function$
--- (mesma função, trocando apenas msa.slot_id → msa.meeting_slot_id)
-  ...
-  FROM meeting_slot_attendees msa
-  JOIN meeting_slots ms ON ms.id = msa.meeting_slot_id   -- FIX
-  LEFT JOIN closers c ON c.id = ms.closer_id
-  ...
-$function$;
+JOIN meeting_slots ms ON ms.id = msa.meeting_slot_id
 ```
 
-### Resultado
+Mas os logs do banco mostram o erro atual:
 
-- Atualização de status volta a funcionar (R1 e R2)
-- Alertas de mudança suspeita passam a funcionar corretamente também
+```sql
+column msa.name does not exist
+```
 
+Ou seja, ainda existe outro trecho quebrado nesta função:
+
+```sql
+COALESCE(msa.attendee_name, msa.name, 'Lead desconhecido')
+```
+
+A coluna `msa.name` não existe na tabela `meeting_slot_attendees`. Por isso a atualização continua falhando quando a alteração de status entra no cenário de “mudança suspeita”.
+
+### Correção proposta
+
+Criar uma nova migration SQL para ajustar a função `public.notify_suspicious_status_change()` removendo a referência inválida a `msa.name`.
+
+Troca principal:
+
+```sql
+COALESCE(msa.attendee_name, 'Lead desconhecido')
+```
+
+em vez de:
+
+```sql
+COALESCE(msa.attendee_name, msa.name, 'Lead desconhecido')
+```
+
+### Escopo da implementação
+
+| Item | Ação |
+|---|---|
+| Banco | Atualizar `notify_suspicious_status_change()` |
+| Banco | Preservar toda a lógica de alerta existente |
+| Banco | Corrigir apenas a referência inválida `msa.name` |
+| Validação | Confirmar que reversões de status não quebram mais o update |
+
+### Resultado esperado
+
+- O botão de alterar status volta a funcionar.
+- O sistema continua gerando alertas de auditoria para mudanças suspeitas.
+- O erro deixa de aparecer no toast da agenda.
+
+### Detalhe técnico
+
+Hoje o erro só acontece em alterações que passam pela lógica de reversão suspeita, porque é nesse ponto que a função tenta carregar os dados do attendee para montar a descrição do alerta.
+
+Fluxo simplificado:
+
+```text
+AgendaMeetingDrawer
+  -> useUpdateAttendeeAndSlotStatus()
+    -> UPDATE meeting_slot_attendees
+      -> trigger log_r2_attendee_changes
+        -> INSERT audit_logs
+          -> trigger notify_suspicious_status_change
+            -> quebra em msa.name
+```
+
+### Observação importante
+
+Pelo código atual, o nome correto do lead nessa tabela já é `attendee_name`, então remover `msa.name` é seguro e alinhado com o schema real do banco.
