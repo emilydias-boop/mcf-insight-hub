@@ -379,7 +379,7 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
                 ))
               ) : paginatedVendas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     Nenhuma venda de parceria encontrada para os leads aprovados desta semana
                   </TableCell>
                 </TableRow>
