@@ -73,10 +73,15 @@ const formatCurrency = (value: number | null) => {
 
 export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasListProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { data: allVendas = [], isLoading, refetch } = useR2CarrinhoVendas(weekStart, weekEnd);
   const vendas = filteredVendas ?? allVendas;
   const { data: unlinkedTransactions = [], isLoading: isLoadingUnlinked } = useUnlinkedTransactions(weekStart);
   const deleteTransaction = useDeleteTransaction();
+
+  // Agreements by email
+  const vendaEmails = useMemo(() => vendas.map(v => v.customer_email).filter(Boolean) as string[], [vendas]);
+  const { data: agreementsMap } = useAgreementsByEmails(vendaEmails);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -89,6 +94,8 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [transactionToLink, setTransactionToLink] = useState<{ id: string; name: string; email?: string; phone?: string } | null>(null);
   const [unlinkedOpen, setUnlinkedOpen] = useState(false);
+  const [agreementModalOpen, setAgreementModalOpen] = useState(false);
+  const [agreementSubId, setAgreementSubId] = useState<string | null>(null);
 
   // Calcular totais - separando normais e extras
   const totals = useMemo(() => {
