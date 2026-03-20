@@ -140,3 +140,92 @@ export function useAprovadoAgreementsBatch(dealIds: string[]) {
     enabled: dealIds.length > 0,
   });
 }
+
+// Hook for vendas list - fetches agreement data by customer emails
+export function useAgreementsByEmails(emails: string[]) {
+  const uniqueEmails = [...new Set(emails.filter(Boolean).map(e => e.toLowerCase()))];
+  
+  return useQuery({
+    queryKey: ['agreements-by-emails', uniqueEmails.sort().join(',')],
+    queryFn: async () => {
+      if (uniqueEmails.length === 0) return new Map<string, AgreementByEmailData>();
+
+      // 1. Fetch subscriptions by customer_email
+      const { data: subs } = await supabase
+        .from('billing_subscriptions')
+        .select('id, customer_email, deal_id')
+        .in('customer_email', uniqueEmails);
+
+      if (!subs || subs.length === 0) return new Map<string, AgreementByEmailData>();
+
+      const subIds = subs.map(s => s.id);
+      const subByEmail = new Map<string, { subId: string; dealId: string | null }>();
+      subs.forEach(s => {
+        if (s.customer_email) {
+          subByEmail.set(s.customer_email.toLowerCase(), { subId: s.id, dealId: s.deal_id });
+        }
+      });
+
+      // 2. Fetch latest agreement per subscription
+      const { data: agreements } = await supabase
+        .from('billing_agreements')
+        .select('id, subscription_id, status')
+        .in('subscription_id', subIds)
+        .order('created_at', { ascending: false });
+
+      const latestAgreementBySubId = new Map<string, { agreementId: string; status: BillingAgreementStatus }>();
+      (agreements || []).forEach(a => {
+        if (!latestAgreementBySubId.has(a.subscription_id)) {
+          latestAgreementBySubId.set(a.subscription_id, { agreementId: a.id, status: a.status as BillingAgreementStatus });
+        }
+      });
+
+      // 3. Fetch installments for agreements that exist
+      const agreementIds = [...latestAgreementBySubId.values()].map(a => a.agreementId);
+      let installmentsByAgreement = new Map<string, { pagas: number; total: number }>();
+      
+      if (agreementIds.length > 0) {
+        const { data: installments } = await supabase
+          .from('billing_agreement_installments')
+          .select('agreement_id, status')
+          .in('agreement_id', agreementIds);
+
+        (installments || []).forEach(inst => {
+          const current = installmentsByAgreement.get(inst.agreement_id) || { pagas: 0, total: 0 };
+          current.total++;
+          if (inst.status === 'pago') current.pagas++;
+          installmentsByAgreement.set(inst.agreement_id, current);
+        });
+      }
+
+      // 4. Build result map: email -> data
+      const result = new Map<string, AgreementByEmailData>();
+      uniqueEmails.forEach(email => {
+        const sub = subByEmail.get(email);
+        if (!sub) return;
+
+        const agreement = latestAgreementBySubId.get(sub.subId);
+        const installments = agreement ? installmentsByAgreement.get(agreement.agreementId) : undefined;
+
+        result.set(email, {
+          subscriptionId: sub.subId,
+          hasAgreement: !!agreement,
+          status: agreement?.status || null,
+          parcelasPagas: installments?.pagas || 0,
+          totalParcelas: installments?.total || 0,
+        });
+      });
+
+      return result;
+    },
+    enabled: uniqueEmails.length > 0,
+  });
+}
+
+export interface AgreementByEmailData {
+  subscriptionId: string;
+  hasAgreement: boolean;
+  status: BillingAgreementStatus | null;
+  parcelasPagas: number;
+  totalParcelas: number;
+}
