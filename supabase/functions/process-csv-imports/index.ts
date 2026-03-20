@@ -341,9 +341,23 @@ function parseCSV(csvText: string): CSVDeal[] {
   if (lines.length < 2) return []
 
   const headerLine = lines[0]
-  const delimiter = headerLine.includes(';') ? ';' : ','
+  // Detectar delimitador: TAB tem prioridade, depois ; depois ,
+  const delimiter = headerLine.includes('\t') ? '\t' 
+                  : headerLine.includes(';') ? ';' 
+                  : ','
   
-  const headers = parseLine(headerLine, delimiter).map(h => h.toLowerCase().trim())
+  console.log(`📋 Delimitador detectado: ${delimiter === '\t' ? 'TAB' : delimiter}`)
+  
+  // Parse headers com tratamento de duplicatas
+  const rawHeaders = parseLine(headerLine, delimiter).map(h => h.toLowerCase().trim())
+  const seen = new Map<string, number>()
+  const headers = rawHeaders.map(h => {
+    const count = (seen.get(h) || 0) + 1
+    seen.set(h, count)
+    return count > 1 ? `${h}_${count}` : h
+  })
+  
+  console.log(`📋 Headers detectados: ${headers.join(', ')}`)
   
   const deals: CSVDeal[] = []
   for (let i = 1; i < lines.length; i++) {
@@ -356,7 +370,8 @@ function parseCSV(csvText: string): CSVDeal[] {
       }
     })
     
-    if (deal.id || deal.name) {
+    // Aceitar deal se tem id, name, ou cliente (mapeamento alternativo)
+    if (deal.id || deal.name || deal.cliente) {
       deals.push(deal)
     }
   }
