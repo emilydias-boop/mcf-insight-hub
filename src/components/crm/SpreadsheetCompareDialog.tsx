@@ -218,7 +218,14 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
           const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
           if (!json.length) { toast.error('Planilha vazia'); return; }
-          const hdrs = Object.keys(json[0] as any);
+          const rawHdrs = Object.keys(json[0] as any);
+          const seenXlsx = new Map<string, number>();
+          const hdrs = rawHdrs.map(h => {
+            const key = h.toLowerCase();
+            const count = (seenXlsx.get(key) || 0) + 1;
+            seenXlsx.set(key, count);
+            return count > 1 ? `${h}_${count}` : h;
+          });
           processFileData(hdrs, json as any[]);
         } catch { toast.error('Erro ao ler planilha'); }
       };
