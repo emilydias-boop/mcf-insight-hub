@@ -1,47 +1,43 @@
 
 
-## Plano: Adicionar coluna "Acordo" na aba Vendas do Carrinho R2
+## Plano: Testar e corrigir fluxo Acordo no Carrinho → Cobranças
 
-### Objetivo
-Mostrar na tabela de vendas o status do acordo de parceria de cada cliente, e permitir criar/visualizar acordos diretamente.
+### Problema identificado (sem precisar testar no browser)
 
-### Como funciona a ligação
-- Vendas têm `customer_email`
-- `billing_subscriptions` tem `customer_email` e `deal_id`
-- `billing_agreements` ligam via `subscription_id`
-- Reutilizar o padrão batch do `useAprovadoAgreementsBatch` mas indexado por email em vez de deal_id
+Ao criar um acordo pela aba Vendas, o `useCreateAgreement` invalida apenas:
+- `['billing-agreements']`
+- `['billing-agreement-installments']`
+- `['billing-history']`
 
-### Alterações
+**Faltam invalidações** para os caches usados no Carrinho:
+- `['agreements-by-emails']` — usado no R2VendasList (badge de acordo)
+- `['aprovado-agreements']` / `['aprovado-agreements-batch']` — usado nos Aprovados
+
+Resultado: após criar o acordo, o badge na tabela de Vendas **não atualiza** até dar F5. Em Cobranças, o acordo **aparece corretamente** porque os dados estão no banco e a query de agreements é feita ao abrir o drawer.
+
+### Correção
 
 | Arquivo | O que muda |
-|---------|------------|
-| `src/hooks/useAprovadoAgreements.ts` | Novo hook `useAgreementsByEmails(emails[])` — batch query: busca subscriptions por email, depois agreements, retorna Map<email, {status, parcelas, saldo}> |
-| `src/components/crm/R2VendasList.tsx` | (1) Importar novo hook + `CreateAgreementModal`. (2) Extrair emails das vendas e chamar `useAgreementsByEmails`. (3) Adicionar coluna "Acordo" na tabela com badge de status. (4) Botão "Novo Acordo" quando tem subscription mas sem acordo. (5) Botão "Ver" que redireciona para `/cobrancas`. |
+|---------|-----------|
+| `src/hooks/useBillingAgreements.ts` | No `onSuccess` de `useCreateAgreement`, adicionar invalidação de `['agreements-by-emails']`, `['aprovado-agreements']` e `['aprovado-agreements-batch']` |
+| `src/hooks/useBillingAgreements.ts` | No `onSuccess` de `useUpdateAgreement` e `useMarkAgreementInstallmentPaid`, adicionar as mesmas invalidações para manter consistência |
 
-### Nova coluna "Acordo" na tabela
-
-Após a coluna "Fonte", antes de "Ações":
-- **Sem subscription**: mostrar `-` (cinza)
-- **Com subscription, sem acordo**: Badge "Sem acordo" (cinza) + ícone de criar
-- **Acordo em aberto/andamento**: Badge azul "Em andamento 2/6" (parcelas pagas/total)
-- **Acordo cumprido**: Badge verde "Cumprido"
-- **Acordo quebrado**: Badge vermelho "Quebrado"
-
-### Hook `useAgreementsByEmails`
+### Detalhe da mudança
 
 ```typescript
-export function useAgreementsByEmails(emails: string[]) {
-  // 1. billing_subscriptions WHERE customer_email IN (emails)
-  // 2. billing_agreements WHERE subscription_id IN (sub_ids)  
-  // 3. billing_agreement_installments para contar pagas/total
-  // Return: Map<email, { subscriptionId, status, parcelasPagas, totalParcelas }>
-}
+// useCreateAgreement → onSuccess
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ['billing-agreements'] });
+  queryClient.invalidateQueries({ queryKey: ['billing-agreement-installments'] });
+  queryClient.invalidateQueries({ queryKey: ['billing-history'] });
+  // NEW: invalidar caches do Carrinho R2
+  queryClient.invalidateQueries({ queryKey: ['agreements-by-emails'] });
+  queryClient.invalidateQueries({ queryKey: ['aprovado-agreements'] });
+  queryClient.invalidateQueries({ queryKey: ['aprovado-agreements-batch'] });
+},
 ```
 
-### Ações na coluna
-- Clique no badge abre o drawer de cobrança (`/cobrancas`) com filtro do cliente
-- Botão "+" para criar acordo abre `CreateAgreementModal` com `subscriptionId` preenchido
+A mesma adição nos `onSuccess` de `useUpdateAgreement` e `useMarkAgreementInstallmentPaid`.
 
-### KPIs
-Adicionar um 5o KPI card: **"Com Acordo"** — contagem de vendas que possuem acordo ativo.
+Isso garante que ao criar/atualizar/pagar parcela de um acordo, os badges no Carrinho R2 (Vendas e Aprovados) atualizam automaticamente sem precisar recarregar a página.
 
