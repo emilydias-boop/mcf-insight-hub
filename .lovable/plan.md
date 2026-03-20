@@ -1,43 +1,46 @@
 
 
-## Plano: Testar e corrigir fluxo Acordo no Carrinho → Cobranças
+## Plano: Reverter importação incorreta do Consórcio
 
-### Problema identificado (sem precisar testar no browser)
+### O que aconteceu
+Foram criados **42 deals** com apenas números de telefone no campo "nome" (ex: "53 9951-6618", "11986907530"), todos:
+- Estágio: **LEAD SCORE** (`663f0eeb-...`)
+- Owner: `ygor.ferreira@minhacasafinanciada.com`
+- Criados entre `2026-03-20 14:28:48` e `14:28:51`
+- Cada deal criou um **contato** associado
 
-Ao criar um acordo pela aba Vendas, o `useCreateAgreement` invalida apenas:
-- `['billing-agreements']`
-- `['billing-agreement-installments']`
-- `['billing-history']`
+### Ação
+Executar via SQL (migration):
 
-**Faltam invalidações** para os caches usados no Carrinho:
-- `['agreements-by-emails']` — usado no R2VendasList (badge de acordo)
-- `['aprovado-agreements']` / `['aprovado-agreements-batch']` — usado nos Aprovados
+1. **Deletar os 42 deals** com filtro seguro:
+   - `stage_id = '663f0eeb-...'`
+   - `owner_id = 'ygor.ferreira@...'`
+   - `name` é apenas números/espaços/hífens
+   - `created_at` entre `14:28:48` e `14:28:52` do dia 20/03
 
-Resultado: após criar o acordo, o badge na tabela de Vendas **não atualiza** até dar F5. Em Cobranças, o acordo **aparece corretamente** porque os dados estão no banco e a query de agreements é feita ao abrir o drawer.
+2. **Deletar os contatos órfãos** criados junto (contatos que não estão vinculados a nenhum outro deal)
 
-### Correção
+### Detalhes técnicos
 
-| Arquivo | O que muda |
-|---------|-----------|
-| `src/hooks/useBillingAgreements.ts` | No `onSuccess` de `useCreateAgreement`, adicionar invalidação de `['agreements-by-emails']`, `['aprovado-agreements']` e `['aprovado-agreements-batch']` |
-| `src/hooks/useBillingAgreements.ts` | No `onSuccess` de `useUpdateAgreement` e `useMarkAgreementInstallmentPaid`, adicionar as mesmas invalidações para manter consistência |
+```sql
+-- 1. Delete deals (42 registros)
+DELETE FROM crm_deals 
+WHERE stage_id = '663f0eeb-6ad1-4880-851b-7ad4cee4089a'
+  AND owner_id = 'ygor.ferreira@minhacasafinanciada.com'
+  AND name ~ '^\(?[0-9 \-\(\)]+$'
+  AND created_at >= '2026-03-20 14:28:00+00'
+  AND created_at <= '2026-03-20 14:29:00+00';
 
-### Detalhe da mudança
-
-```typescript
-// useCreateAgreement → onSuccess
-onSuccess: () => {
-  queryClient.invalidateQueries({ queryKey: ['billing-agreements'] });
-  queryClient.invalidateQueries({ queryKey: ['billing-agreement-installments'] });
-  queryClient.invalidateQueries({ queryKey: ['billing-history'] });
-  // NEW: invalidar caches do Carrinho R2
-  queryClient.invalidateQueries({ queryKey: ['agreements-by-emails'] });
-  queryClient.invalidateQueries({ queryKey: ['aprovado-agreements'] });
-  queryClient.invalidateQueries({ queryKey: ['aprovado-agreements-batch'] });
-},
+-- 2. Delete orphaned contacts (que não têm mais deals)
+DELETE FROM crm_contacts 
+WHERE id IN (
+  SELECT c.id FROM crm_contacts c
+  LEFT JOIN crm_deals d ON d.contact_id = c.id
+  WHERE d.id IS NULL
+  AND c.created_at >= '2026-03-20 14:28:00+00'
+  AND c.created_at <= '2026-03-20 14:29:00+00'
+);
 ```
 
-A mesma adição nos `onSuccess` de `useUpdateAgreement` e `useMarkAgreementInstallmentPaid`.
-
-Isso garante que ao criar/atualizar/pagar parcela de um acordo, os badges no Carrinho R2 (Vendas e Aprovados) atualizam automaticamente sem precisar recarregar a página.
+Isso será feito via **migration SQL** no Supabase, sem alteração de código da aplicação.
 
