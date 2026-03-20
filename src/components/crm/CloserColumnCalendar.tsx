@@ -534,7 +534,7 @@ export function CloserColumnCalendar({
                           const { totalAttendees, maxLeads } = getSlotCapacityInfo(closer.id, slot);
                           if (totalAttendees >= maxLeads) {
                             return (
-                              <div className="absolute top-0.5 right-0.5 flex items-center gap-0.5 bg-red-600 text-white rounded px-1 py-0 z-20">
+                              <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5 bg-red-600 text-white rounded px-1 py-0 z-20">
                                 <Lock className="h-2.5 w-2.5" />
                                 <span className="text-[9px] font-bold">{totalAttendees}/{maxLeads}</span>
                               </div>
