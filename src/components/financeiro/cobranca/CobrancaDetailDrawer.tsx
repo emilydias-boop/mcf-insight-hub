@@ -18,7 +18,7 @@ import { CreateAgreementModal } from './CreateAgreementModal';
 import { EditSubscriptionModal } from './EditSubscriptionModal';
 import { RegisterPaymentModal } from './RegisterPaymentModal';
 import { toast } from 'sonner';
-import { Handshake, Ban, CheckCircle2, Pencil, MessageSquarePlus, Send, Phone, MessageCircle } from 'lucide-react';
+import { Handshake, Ban, CheckCircle2, Pencil, MessageSquarePlus, Send, Phone, MessageCircle, AlertTriangle } from 'lucide-react';
 import { useUpdateSubscription } from '@/hooks/useBillingSubscriptions';
 
 interface CobrancaDetailDrawerProps {
