@@ -1,8 +1,12 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, RefreshCw, Download, Eye, Pencil, Trash2, XCircle, Undo2, Link2, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, RefreshCw, Download, Eye, Pencil, Trash2, XCircle, Undo2, Link2, AlertCircle, ChevronDown, ChevronRight, Handshake, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAgreementsByEmails } from '@/hooks/useAprovadoAgreements';
+import { AGREEMENT_STATUS_LABELS } from '@/types/billing';
+import { CreateAgreementModal } from '@/components/financeiro/cobranca/CreateAgreementModal';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -69,10 +73,15 @@ const formatCurrency = (value: number | null) => {
 
 export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasListProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { data: allVendas = [], isLoading, refetch } = useR2CarrinhoVendas(weekStart, weekEnd);
   const vendas = filteredVendas ?? allVendas;
   const { data: unlinkedTransactions = [], isLoading: isLoadingUnlinked } = useUnlinkedTransactions(weekStart);
   const deleteTransaction = useDeleteTransaction();
+
+  // Agreements by email
+  const vendaEmails = useMemo(() => vendas.map(v => v.customer_email).filter(Boolean) as string[], [vendas]);
+  const { data: agreementsMap } = useAgreementsByEmails(vendaEmails);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -85,6 +94,8 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [transactionToLink, setTransactionToLink] = useState<{ id: string; name: string; email?: string; phone?: string } | null>(null);
   const [unlinkedOpen, setUnlinkedOpen] = useState(false);
+  const [agreementModalOpen, setAgreementModalOpen] = useState(false);
+  const [agreementSubId, setAgreementSubId] = useState<string | null>(null);
 
   // Calcular totais - separando normais e extras
   const totals = useMemo(() => {
@@ -94,6 +105,17 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
     const brutoTotal = vendasNormais.reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
     const brutoExtras = vendasExtras.reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
     const liquidoTotal = vendas.reduce((sum, v) => sum + (v.net_value || 0), 0);
+
+    // Count vendas with active agreement
+    let comAcordo = 0;
+    if (agreementsMap) {
+      vendas.forEach(v => {
+        if (v.customer_email) {
+          const data = agreementsMap.get(v.customer_email.toLowerCase());
+          if (data?.hasAgreement) comAcordo++;
+        }
+      });
+    }
     
     return {
       count: vendasNormais.length,
@@ -101,8 +123,9 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
       bruto: brutoTotal,
       brutoExtras: brutoExtras,
       liquido: liquidoTotal,
+      comAcordo,
     };
-  }, [vendas]);
+  }, [vendas, agreementsMap]);
 
   // Paginação
   const totalPages = Math.ceil(vendas.length / pageSize);
@@ -251,7 +274,7 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -311,6 +334,19 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-10 rounded-full bg-purple-500" />
+              <div>
+                <p className="text-sm text-muted-foreground">Com Acordo</p>
+                <p className="text-2xl font-bold">
+                  {isLoading ? '...' : totals.comAcordo}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabela */}
@@ -326,6 +362,7 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
                 <TableHead className="text-right">Bruto</TableHead>
                 <TableHead className="text-right">Líquido</TableHead>
                 <TableHead>Fonte</TableHead>
+                <TableHead>Acordo</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -333,7 +370,7 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
+                    {Array.from({ length: 9 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -342,7 +379,7 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
                 ))
               ) : paginatedVendas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     Nenhuma venda de parceria encontrada para os leads aprovados desta semana
                   </TableCell>
                 </TableRow>
@@ -436,6 +473,58 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
                           </Badge>
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const email = venda.customer_email?.toLowerCase();
+                        const data = email ? agreementsMap?.get(email) : undefined;
+                        
+                        if (!data) {
+                          return <span className="text-muted-foreground text-xs">-</span>;
+                        }
+                        
+                        if (!data.hasAgreement) {
+                          return (
+                            <div className="flex items-center gap-1">
+                              <Badge variant="outline" className="text-muted-foreground text-xs">
+                                Sem acordo
+                              </Badge>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => {
+                                  setAgreementSubId(data.subscriptionId);
+                                  setAgreementModalOpen(true);
+                                }}
+                                title="Criar acordo"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          );
+                        }
+
+                        const statusColors: Record<string, string> = {
+                          em_aberto: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+                          em_andamento: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+                          cumprido: 'bg-green-500/10 text-green-600 border-green-500/30',
+                          quebrado: 'bg-red-500/10 text-red-600 border-red-500/30',
+                        };
+
+                        return (
+                          <div className="flex items-center gap-1">
+                            <Badge 
+                              variant="outline" 
+                              className={`text-xs cursor-pointer ${statusColors[data.status || ''] || ''}`}
+                              onClick={() => navigate('/cobrancas')}
+                            >
+                              {AGREEMENT_STATUS_LABELS[data.status!] || data.status}
+                              {data.totalParcelas > 0 && ` ${data.parcelasPagas}/${data.totalParcelas}`}
+                            </Badge>
+                          </div>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
@@ -701,6 +790,17 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
           transactionPhone={transactionToLink.phone}
           weekStart={weekStart}
           weekEnd={weekEnd}
+        />
+      )}
+
+      {agreementSubId && (
+        <CreateAgreementModal
+          subscriptionId={agreementSubId}
+          open={agreementModalOpen}
+          onOpenChange={(open) => {
+            setAgreementModalOpen(open);
+            if (!open) setAgreementSubId(null);
+          }}
         />
       )}
     </div>
