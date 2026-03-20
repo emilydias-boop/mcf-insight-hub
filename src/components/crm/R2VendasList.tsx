@@ -792,6 +792,17 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
           weekEnd={weekEnd}
         />
       )}
+
+      {agreementSubId && (
+        <CreateAgreementModal
+          subscriptionId={agreementSubId}
+          open={agreementModalOpen}
+          onOpenChange={(open) => {
+            setAgreementModalOpen(open);
+            if (!open) setAgreementSubId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
