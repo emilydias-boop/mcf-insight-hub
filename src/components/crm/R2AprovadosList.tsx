@@ -32,6 +32,10 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
   
   // Fetch real sales data (same source as Vendas tab)
   const { data: vendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd);
+
+  // Batch fetch agreement status for all attendees
+  const dealIds = useMemo(() => attendees.map(a => a.deal_id).filter(Boolean) as string[], [attendees]);
+  const { data: agreementMap } = useAprovadoAgreementsBatch(dealIds);
   
   // Use real sales count from transactions (not manual status)
   const soldCount = vendasData.length;
