@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { X, Phone, Mail, User, MapPin, ShoppingCart, CheckCircle, ExternalLink, MessageCircle } from 'lucide-react';
+import { X, Phone, Mail, User, MapPin, ShoppingCart, CheckCircle, ExternalLink, MessageCircle, Handshake, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -14,7 +14,10 @@ import {
 import { R2CarrinhoAttendee } from '@/hooks/useR2CarrinhoData';
 import { useLeadJourney } from '@/hooks/useLeadJourney';
 import { useAprovadoSaleData } from '@/hooks/useAprovadoSaleData';
+import { useAprovadoAgreements } from '@/hooks/useAprovadoAgreements';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AGREEMENT_STATUS_LABELS } from '@/types/billing';
+import { formatCurrency } from '@/lib/formatters';
 
 interface AprovadoDetailDrawerProps {
   attendee: R2CarrinhoAttendee | null;
@@ -28,6 +31,7 @@ export function AprovadoDetailDrawer({ attendee, open, onOpenChange }: AprovadoD
     attendee?.contact_email || null,
     attendee?.attendee_phone || attendee?.contact_phone || null
   );
+  const { data: agreementData, isLoading: agreementLoading } = useAprovadoAgreements(attendee?.deal_id || null);
 
   if (!attendee) return null;
 
@@ -54,11 +58,10 @@ export function AprovadoDetailDrawer({ attendee, open, onOpenChange }: AprovadoD
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
+  const handleOpenCobranca = () => {
+    if (agreementData?.subscription?.id) {
+      window.open(`/cobrancas?sub=${agreementData.subscription.id}`, '_blank');
+    }
   };
 
   const getCarrinhoLabel = () => {
@@ -76,6 +79,15 @@ export function AprovadoDetailDrawer({ attendee, open, onOpenChange }: AprovadoD
       case 'comprou': return 'secondary';
       case 'nao_comprou': return 'destructive';
       default: return 'outline';
+    }
+  };
+
+  const getAgreementStatusColor = (status: string) => {
+    switch (status) {
+      case 'em_andamento': return 'hsl(var(--primary))';
+      case 'cumprido': return 'hsl(142.1 76.2% 36.3%)';
+      case 'quebrado': return 'hsl(var(--destructive))';
+      default: return 'hsl(var(--muted-foreground))';
     }
   };
 
@@ -244,6 +256,49 @@ export function AprovadoDetailDrawer({ attendee, open, onOpenChange }: AprovadoD
                     </div>
                   </div>
                 )}
+
+                {/* Agreement */}
+                {agreementLoading ? (
+                  <Skeleton className="h-16 w-full" />
+                ) : agreementData?.latestAgreement && (
+                  <div className="relative">
+                    <div 
+                      className="absolute -left-[17px] top-1 w-2 h-2 rounded-full" 
+                      style={{ backgroundColor: getAgreementStatusColor(agreementData.latestAgreement.status) }}
+                    />
+                    <div className="text-sm">
+                      <div className="font-medium flex items-center gap-2">
+                        <Handshake className="h-3 w-3" />
+                        Acordo de Parceria
+                      </div>
+                      <Badge
+                        className="mt-1"
+                        style={{
+                          backgroundColor: `${getAgreementStatusColor(agreementData.latestAgreement.status)}20`,
+                          borderColor: getAgreementStatusColor(agreementData.latestAgreement.status),
+                          color: getAgreementStatusColor(agreementData.latestAgreement.status),
+                        }}
+                      >
+                        {AGREEMENT_STATUS_LABELS[agreementData.latestAgreement.status] || agreementData.latestAgreement.status}
+                      </Badge>
+                      <div className="text-muted-foreground mt-1">
+                        {agreementData.parcelasPagas}/{agreementData.totalParcelas} parcelas pagas — Saldo: {formatCurrency(agreementData.saldoDevedor)}
+                      </div>
+                      {agreementData.proximoVencimento && (
+                        <div className={`text-xs mt-0.5 ${agreementData.isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                          {agreementData.isOverdue ? (
+                            <span className="flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              Vencida em {format(new Date(agreementData.proximoVencimento), 'dd/MM/yyyy')}
+                            </span>
+                          ) : (
+                            `Próx. vencimento: ${format(new Date(agreementData.proximoVencimento), 'dd/MM/yyyy')}`
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -282,6 +337,17 @@ export function AprovadoDetailDrawer({ attendee, open, onOpenChange }: AprovadoD
               <ExternalLink className="h-4 w-4 mr-2" />
               Ver no CRM
             </Button>
+            {agreementData?.subscription && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleOpenCobranca}
+                className="flex-1"
+              >
+                <Handshake className="h-4 w-4 mr-2" />
+                {agreementData.latestAgreement ? 'Ver Cobrança' : 'Criar Acordo'}
+              </Button>
+            )}
           </div>
         </div>
       </DrawerContent>

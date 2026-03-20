@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Copy, Check, ShoppingCart, X, Download, Search, Filter, XCircle, MessageSquare, AlertTriangle } from 'lucide-react';
+import { Copy, Check, ShoppingCart, X, Download, Search, Filter, XCircle, MessageSquare, AlertTriangle, Handshake } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { R2CarrinhoAttendee, useUpdateCarrinhoStatus } from '@/hooks/useR2CarrinhoData';
 import { useR2CarrinhoVendas } from '@/hooks/useR2CarrinhoVendas';
+import { useAprovadoAgreementsBatch } from '@/hooks/useAprovadoAgreements';
 import { AprovadoDetailDrawer } from './AprovadoDetailDrawer';
 import { toast } from 'sonner';
 interface R2AprovadosListProps {
@@ -31,6 +32,10 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
   
   // Fetch real sales data (same source as Vendas tab)
   const { data: vendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd);
+
+  // Batch fetch agreement status for all attendees
+  const dealIds = useMemo(() => attendees.map(a => a.deal_id).filter(Boolean) as string[], [attendees]);
+  const { data: agreementMap } = useAprovadoAgreementsBatch(dealIds);
   
   // Use real sales count from transactions (not manual status)
   const soldCount = vendasData.length;
@@ -360,6 +365,29 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
                           Quer Desistir
                         </Badge>
                       )}
+                      {(() => {
+                        const agr = att.deal_id ? agreementMap?.get(att.deal_id) : null;
+                        if (!agr) return null;
+                        const color = agr.status === 'cumprido' ? '#16a34a' 
+                          : agr.status === 'quebrado' ? '#dc2626'
+                          : '#2563eb';
+                        const bgColor = agr.status === 'cumprido' ? 'rgba(22,163,74,0.12)' 
+                          : agr.status === 'quebrado' ? 'rgba(220,38,38,0.12)'
+                          : 'rgba(37,99,235,0.12)';
+                        const label = agr.status === 'cumprido' ? 'Acordo Cumprido'
+                          : agr.status === 'quebrado' ? 'Acordo Quebrado'
+                          : 'Acordo Ativo';
+                        return (
+                          <Badge variant="outline" className="w-fit mt-1 text-xs" style={{
+                            backgroundColor: bgColor,
+                            borderColor: color,
+                            color: color,
+                          }}>
+                            <Handshake className="h-3 w-3 mr-1" />
+                            {label}
+                          </Badge>
+                        );
+                      })()}
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-sm">
