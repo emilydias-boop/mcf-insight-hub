@@ -60,6 +60,9 @@ export const useCreateAgreement = () => {
       queryClient.invalidateQueries({ queryKey: ['billing-agreements'] });
       queryClient.invalidateQueries({ queryKey: ['billing-agreement-installments'] });
       queryClient.invalidateQueries({ queryKey: ['billing-history'] });
+      queryClient.invalidateQueries({ queryKey: ['agreements-by-emails'] });
+      queryClient.invalidateQueries({ queryKey: ['aprovado-agreements'] });
+      queryClient.invalidateQueries({ queryKey: ['aprovado-agreements-batch'] });
     },
   });
 };
