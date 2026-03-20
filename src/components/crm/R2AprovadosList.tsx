@@ -368,15 +368,18 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
                       {(() => {
                         const agr = att.deal_id ? agreementMap?.get(att.deal_id) : null;
                         if (!agr) return null;
-                        const color = agr.status === 'cumprido' ? 'hsl(142.1 76.2% 36.3%)' 
-                          : agr.status === 'quebrado' ? 'hsl(0 84.2% 60.2%)'
-                          : 'hsl(221.2 83.2% 53.3%)';
+                        const color = agr.status === 'cumprido' ? '#16a34a' 
+                          : agr.status === 'quebrado' ? '#dc2626'
+                          : '#2563eb';
+                        const bgColor = agr.status === 'cumprido' ? 'rgba(22,163,74,0.12)' 
+                          : agr.status === 'quebrado' ? 'rgba(220,38,38,0.12)'
+                          : 'rgba(37,99,235,0.12)';
                         const label = agr.status === 'cumprido' ? 'Acordo Cumprido'
                           : agr.status === 'quebrado' ? 'Acordo Quebrado'
                           : 'Acordo Ativo';
                         return (
                           <Badge variant="outline" className="w-fit mt-1 text-xs" style={{
-                            backgroundColor: `${color}20`.replace(')', '/0.12)').replace('hsl', 'hsl'),
+                            backgroundColor: bgColor,
                             borderColor: color,
                             color: color,
                           }}>
