@@ -1,16 +1,16 @@
 
 
-## Plano: Mover badge de capacidade (cadeado) para o topo do slot
+## Plano: Reposicionar badge de capacidade (cadeado) para o topo-esquerdo
 
 ### Problema
 
-O badge com o ícone de cadeado e contador (ex: 🔒 3/3) está posicionado no canto inferior direito do card de reunião (`absolute bottom-0.5 right-0.5`), ficando oculto ou difícil de visualizar rapidamente.
+O badge 🔒 3/3 no canto superior direito está sobrepondo os badges de status dos atendees (NS, Agendado, etc.) que ficam alinhados à direita de cada linha.
 
 ### Alteração
 
 | Arquivo | O que muda |
 |---------|-----------|
-| `src/components/crm/CloserColumnCalendar.tsx` | Mover o badge de `bottom-0.5 right-0.5` para `top-0.5 right-0.5` na linha 537 |
+| `src/components/crm/CloserColumnCalendar.tsx` (linha 537) | Mover o badge de `top-0.5 right-0.5` para `top-0.5 left-0.5` |
 
-Isso coloca o indicador de capacidade no canto superior direito do slot, ao lado do botão de "Adicionar lead" (que aparece no hover), garantindo visibilidade imediata.
+Isso posiciona o indicador de capacidade no canto superior esquerdo, livre de conflito com os badges de status à direita.
 
