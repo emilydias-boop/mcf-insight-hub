@@ -13,6 +13,13 @@ import { useR2CarrinhoVendas } from '@/hooks/useR2CarrinhoVendas';
 import { useAprovadoAgreementsBatch } from '@/hooks/useAprovadoAgreements';
 import { AprovadoDetailDrawer } from './AprovadoDetailDrawer';
 import { toast } from 'sonner';
+interface R2AprovadosListProps {
+  attendees: R2CarrinhoAttendee[];
+  isLoading?: boolean;
+  weekStart: Date;
+  weekEnd: Date;
+}
+
 export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2AprovadosListProps) {
   const [copied, setCopied] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
