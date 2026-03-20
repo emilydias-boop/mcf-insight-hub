@@ -362,6 +362,7 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas }: R2VendasLis
                 <TableHead className="text-right">Bruto</TableHead>
                 <TableHead className="text-right">Líquido</TableHead>
                 <TableHead>Fonte</TableHead>
+                <TableHead>Acordo</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
