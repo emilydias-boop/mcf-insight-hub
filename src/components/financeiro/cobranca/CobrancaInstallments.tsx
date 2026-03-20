@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { BillingInstallment, BillingPaymentReceivable, INSTALLMENT_STATUS_LABELS } from '@/types/billing';
+import { BillingInstallment, BillingPaymentReceivable, INSTALLMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS, BillingPaymentMethod } from '@/types/billing';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { Check, DollarSign, ChevronDown, ChevronRight, Pencil, Save, X, Layers } from 'lucide-react';
 import { useUpdateInstallmentValue } from '@/hooks/useBillingInstallments';
@@ -72,8 +72,10 @@ export const CobrancaInstallments = ({ installments, isLoading, onMarkPaid, onRe
           <TableHead className="w-8"></TableHead>
           <TableHead>#</TableHead>
           <TableHead>Vencimento</TableHead>
-          <TableHead className="text-right">Valor</TableHead>
+          <TableHead className="text-right">Bruto</TableHead>
+          <TableHead className="text-right">Líquido</TableHead>
           <TableHead className="text-right">Pago</TableHead>
+          <TableHead>Forma Pgto</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Data Pgto</TableHead>
           <TableHead></TableHead>
@@ -134,7 +136,15 @@ export const CobrancaInstallments = ({ installments, isLoading, onMarkPaid, onRe
                     </span>
                   )}
                 </TableCell>
+                <TableCell className="text-right">
+                  {inst.valor_liquido ? formatCurrency(inst.valor_liquido) : <span className="text-muted-foreground">-</span>}
+                </TableCell>
                 <TableCell className="text-right">{inst.valor_pago ? formatCurrency(inst.valor_pago) : '-'}</TableCell>
+                <TableCell className="text-xs">
+                  {inst.forma_pagamento
+                    ? PAYMENT_METHOD_LABELS[inst.forma_pagamento as BillingPaymentMethod] || inst.forma_pagamento
+                    : <span className="text-muted-foreground">-</span>}
+                </TableCell>
                 <TableCell>
                   <Badge className={`text-xs ${statusColors[inst.status] || ''}`} variant="outline">
                     {INSTALLMENT_STATUS_LABELS[inst.status]}

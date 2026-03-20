@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { BillingSubscription, BillingInstallment, SUBSCRIPTION_STATUS_LABELS } from '@/types/billing';
+import { BillingSubscription, BillingInstallment, SUBSCRIPTION_STATUS_LABELS, PAYMENT_METHOD_LABELS, BillingPaymentMethod } from '@/types/billing';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { useBillingInstallments, useMarkInstallmentPaid } from '@/hooks/useBillingInstallments';
 import { useBillingAgreements } from '@/hooks/useBillingAgreements';
@@ -18,7 +18,7 @@ import { CreateAgreementModal } from './CreateAgreementModal';
 import { EditSubscriptionModal } from './EditSubscriptionModal';
 import { RegisterPaymentModal } from './RegisterPaymentModal';
 import { toast } from 'sonner';
-import { Handshake, Ban, CheckCircle2, Pencil, MessageSquarePlus, Send, Phone, MessageCircle } from 'lucide-react';
+import { Handshake, Ban, CheckCircle2, Pencil, MessageSquarePlus, Send, Phone, MessageCircle, AlertTriangle } from 'lucide-react';
 import { useUpdateSubscription } from '@/hooks/useBillingSubscriptions';
 
 interface CobrancaDetailDrawerProps {
@@ -65,9 +65,15 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
 
   if (!subscription) return null;
 
+  const totalBruto = installments.reduce((s, i) => s + (i.valor_original || 0), 0);
+  const totalLiquido = installments.reduce((s, i) => s + (i.valor_liquido || 0), 0);
   const totalPago = installments.filter(i => i.status === 'pago').reduce((s, i) => s + (i.valor_pago || 0), 0);
-  const saldoDevedor = subscription.valor_total_contrato - totalPago;
+  const saldoDevedor = (totalLiquido > 0 ? totalLiquido : totalBruto) - totalPago;
   const parcelasPagas = installments.filter(i => i.status === 'pago').length;
+  const formaPgtoLabel = subscription.forma_pagamento
+    ? PAYMENT_METHOD_LABELS[subscription.forma_pagamento as BillingPaymentMethod] || subscription.forma_pagamento
+    : null;
+  const formaPgtoDesconhecida = !subscription.forma_pagamento || subscription.forma_pagamento === 'outro';
 
   const handleMarkPaid = async (inst: BillingInstallment) => {
     try {
@@ -166,10 +172,16 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
               </Badge>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-4">
               <div className="bg-muted/50 rounded-lg p-3">
-                <span className="text-xs text-muted-foreground">Total Contrato</span>
-                <p className="text-lg font-bold">{formatCurrency(subscription.valor_total_contrato)}</p>
+                <span className="text-xs text-muted-foreground">Valor Bruto</span>
+                <p className="text-lg font-bold">{formatCurrency(totalBruto || subscription.valor_total_contrato)}</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3">
+                <span className="text-xs text-muted-foreground">Valor Líquido</span>
+                <p className={`text-lg font-bold ${totalLiquido === 0 ? 'text-muted-foreground' : ''}`}>
+                  {totalLiquido > 0 ? formatCurrency(totalLiquido) : '-'}
+                </p>
               </div>
               <div className="bg-muted/50 rounded-lg p-3">
                 <span className="text-xs text-muted-foreground">Total Pago</span>
@@ -177,12 +189,32 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
               </div>
               <div className="bg-muted/50 rounded-lg p-3">
                 <span className="text-xs text-muted-foreground">Saldo Devedor</span>
-                <p className="text-lg font-bold text-red-600">{formatCurrency(saldoDevedor)}</p>
+                <p className={`text-lg font-bold ${saldoDevedor > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatCurrency(saldoDevedor)}
+                </p>
               </div>
               <div className="bg-muted/50 rounded-lg p-3">
                 <span className="text-xs text-muted-foreground">Parcelas</span>
                 <p className="text-lg font-bold">{parcelasPagas} / {subscription.total_parcelas}</p>
               </div>
+              <div className="bg-muted/50 rounded-lg p-3">
+                <span className="text-xs text-muted-foreground">Forma Pgto</span>
+                <p className="text-sm font-semibold mt-0.5">
+                  {formaPgtoLabel || <span className="text-muted-foreground">Não identificada</span>}
+                </p>
+              </div>
+            </div>
+
+            {/* Info contextual */}
+            <div className="flex flex-wrap items-center gap-3 mt-3 text-sm">
+              <span className="text-muted-foreground">Responsável:</span>
+              <span className="font-medium">{subscription.responsavel_financeiro || 'Não informado'}</span>
+              {formaPgtoDesconhecida && (
+                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Forma de pagamento não identificada — verificar se é cobrável
+                </Badge>
+              )}
             </div>
 
             <div className="flex gap-2 mt-4 flex-wrap">
