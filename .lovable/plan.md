@@ -1,16 +1,37 @@
 
 
-## Plano: Reposicionar badge de capacidade (cadeado) para o topo-esquerdo
+## Plano: Corrigir erro "column msa.slot_id does not exist"
 
-### Problema
+### Causa raiz
 
-O badge 🔒 3/3 no canto superior direito está sobrepondo os badges de status dos atendees (NS, Agendado, etc.) que ficam alinhados à direita de cada linha.
+O trigger `notify_suspicious_status_change` na tabela `audit_logs` faz um JOIN incorreto:
 
-### Alteração
+```sql
+JOIN meeting_slots ms ON ms.id = msa.slot_id  -- ERRADO
+```
 
-| Arquivo | O que muda |
-|---------|-----------|
-| `src/components/crm/CloserColumnCalendar.tsx` (linha 537) | Mover o badge de `top-0.5 right-0.5` para `top-0.5 left-0.5` |
+A coluna correta é `meeting_slot_id`, não `slot_id`. Toda vez que o audit log registra uma mudança de status em `meeting_slot_attendees`, esse trigger dispara e falha, causando o erro "Erro ao atualizar status".
 
-Isso posiciona o indicador de capacidade no canto superior esquerdo, livre de conflito com os badges de status à direita.
+### Correção — Migration SQL
+
+```sql
+CREATE OR REPLACE FUNCTION public.notify_suspicious_status_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+-- (mesma função, trocando apenas msa.slot_id → msa.meeting_slot_id)
+  ...
+  FROM meeting_slot_attendees msa
+  JOIN meeting_slots ms ON ms.id = msa.meeting_slot_id   -- FIX
+  LEFT JOIN closers c ON c.id = ms.closer_id
+  ...
+$function$;
+```
+
+### Resultado
+
+- Atualização de status volta a funcionar (R1 e R2)
+- Alertas de mudança suspeita passam a funcionar corretamente também
 
