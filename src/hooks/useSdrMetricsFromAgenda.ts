@@ -26,7 +26,8 @@ export const useSdrMetricsFromAgenda = (
     queryKey: ['sdr-metrics-agenda', 
       startDate ? format(startDate, 'yyyy-MM-dd') : null, 
       endDate ? format(endDate, 'yyyy-MM-dd') : null, 
-      sdrEmailFilter
+      sdrEmailFilter,
+      buFilter
     ],
     queryFn: async (): Promise<MetricsResponse> => {
       if (!startDate || !endDate) {
