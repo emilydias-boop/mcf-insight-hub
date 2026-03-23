@@ -183,6 +183,68 @@ export const useSyncProductsFromTransactions = () => {
   });
 };
 
+export const useCreateProductConfiguration = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (product: {
+      product_name: string;
+      product_code?: string | null;
+      display_name?: string | null;
+      product_category: string;
+      target_bu?: string | null;
+      reference_price: number;
+      is_active?: boolean;
+      count_in_dashboard?: boolean;
+      notes?: string | null;
+    }) => {
+      const { data, error } = await supabase
+        .from("product_configurations")
+        .insert(product)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product-configurations"] });
+      toast.success("Produto criado com sucesso!");
+    },
+    onError: (error) => {
+      toast.error(`Erro ao criar produto: ${error.message}`);
+    },
+  });
+};
+
+export const useBulkUpdateProducts = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      ids,
+      updates,
+    }: {
+      ids: string[];
+      updates: ProductConfigurationUpdate;
+    }) => {
+      const { error } = await supabase
+        .from("product_configurations")
+        .update(updates)
+        .in("id", ids);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product-configurations"] });
+      toast.success("Produtos atualizados com sucesso!");
+    },
+    onError: (error) => {
+      toast.error(`Erro ao atualizar produtos: ${error.message}`);
+    },
+  });
+};
+
 // Opções de BU disponíveis
 export const TARGET_BU_OPTIONS = [
   { value: "incorporador", label: "Incorporador MCF" },
