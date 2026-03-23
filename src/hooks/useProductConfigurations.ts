@@ -263,4 +263,3 @@ export const PRODUCT_CATEGORY_OPTIONS = [
   { value: "credito", label: "Crédito" },
   { value: "outros", label: "Outros" },
 ];
-];
