@@ -204,15 +204,15 @@ const App = () => (
               <Route path="alertas" element={<ResourceGuard resource="alertas"><Alertas /></ResourceGuard>} />
               
               {/* BU Consórcio Routes - Unificado */}
-              <Route path="consorcio" element={<RoleGuard allowedRoles={['admin', 'manager', 'sdr', 'closer', 'coordenador']}><ConsorcioIndex /></RoleGuard>} />
-              <Route path="consorcio/importar" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioImportar /></RoleGuard>} />
+              <Route path="consorcio" element={<ResourceGuard resource="crm"><ConsorcioIndex /></ResourceGuard>} />
+              <Route path="consorcio/importar" element={<ResourceGuard resource="crm" requiredLevel="edit"><ConsorcioImportar /></ResourceGuard>} />
               <Route path="consorcio/fechamento" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamento /></RoleGuard>} />
               <Route path="consorcio/fechamento/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamentoConfig /></RoleGuard>} />
               <Route path="consorcio/fechamento/:payoutId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamentoDetail /></RoleGuard>} />
-              <Route path="consorcio/relatorio" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioRelatorio /></RoleGuard>} />
-              <Route path="consorcio/painel-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><ConsorcioPainelEquipe /></RoleGuard>} />
-              <Route path="consorcio/vendas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioVendas /></RoleGuard>} />
-              <Route path="consorcio/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="consorcio" /></RoleGuard>} />
+              <Route path="consorcio/relatorio" element={<ResourceGuard resource="relatorios"><ConsorcioRelatorio /></ResourceGuard>} />
+              <Route path="consorcio/painel-equipe" element={<ResourceGuard resource="crm"><ConsorcioPainelEquipe /></ResourceGuard>} />
+              <Route path="consorcio/vendas" element={<ResourceGuard resource="crm"><ConsorcioVendas /></ResourceGuard>} />
+              <Route path="consorcio/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="consorcio" /></ResourceGuard>} />
               
               {/* BU Consórcio CRM - Dedicado */}
               <Route path="consorcio/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><BUCRMLayout bu="consorcio" basePath="/consorcio/crm" /></RoleGuard>}>
