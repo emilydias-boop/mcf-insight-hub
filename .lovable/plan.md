@@ -1,55 +1,83 @@
 
-Diagnóstico
 
-Do I know what the issue is? Sim.
+## Plano: Corrigir acesso negado para roles criadas pelo admin
 
-- Sim, esse link de recovery vale só uma vez.
-- Os logs confirmam isso: houve um `GET /verify` com `303` e login implícito do usuário, e logo depois os novos acessos ao mesmo link retornaram `403 One-time token not found`.
-- Então o problema atual é duplo:
-  1. o token de recuperação é de uso único por natureza;
-  2. a tela `/reset-password` não trata bem o estado de “link já usado/expirado” e fica mostrando “Aguardando verificação...”.
-- Também há inconsistência de domínio no fluxo (`mcfgestao.com` aparecendo no navegador e `mcf-insight-hub.lovable.app` no código). Isso aumenta a chance de comportamento confuso no primeiro acesso.
+### Diagnóstico
 
-Plano de correção
+O sistema tem **dois mecanismos de controle de acesso paralelos e inconsistentes**:
 
-1. Padronizar um único domínio público para auth/reset
-- Escolher um domínio canônico para todo o fluxo de autenticação e usar sempre o mesmo nas funções e no front.
-- Atualizar `admin-send-reset`, `create-user` e `AuthContext` para não misturar URLs de reset.
+1. **`RoleGuard`** (hardcoded) — usado em ~40 rotas no `App.tsx` com listas fixas como `['admin', 'manager', 'coordenador']`. Qualquer role nova (ex: `assistente_administrativo`, `marketing`) é bloqueada automaticamente porque não está na lista.
 
-2. Parar de depender do link bruto `/auth/v1/verify`
-- Em `supabase/functions/admin-send-reset/index.ts`, gerar o link de recovery mas devolver ao app uma URL própria de reset com os dados necessários do token, em vez de expor diretamente o `action_link`.
-- Isso deixa o app controlar a verificação e o estado da tela.
+2. **`ResourceGuard`** (banco de dados) — usado em ~12 rotas, consulta a tabela `role_permissions`. Funciona corretamente MAS a role `assistente_administrativo` **não tem nenhuma permissão configurada** na tabela.
 
-3. Fortalecer a página `ResetPassword`
-- Em `src/pages/ResetPassword.tsx`, tratar explicitamente:
-  - sessão válida de recovery;
-  - `token_hash`/`type=recovery`;
-  - erros na URL como `error=access_denied` e `error_code=otp_expired`.
-- Quando o link já tiver sido usado, mostrar mensagem clara:
-  - “Este link já foi usado ou expirou. Gere um novo link.”
-- Não deixar a tela parada em “Aguardando verificação...” nesses casos.
+Resultado: o usuário `assistente_administrativo` bate em `RoleGuard` → bloqueado, ou bate em `ResourceGuard` → sem permissão no banco → bloqueado.
 
-4. Verificar o token uma única vez dentro da página
-- Fazer a página trocar/verificar o token ao carregar e, se der certo, liberar o formulário de nova senha.
-- Se falhar, entrar em estado de erro explícito, sem tentar reaproveitar o mesmo link.
+### Dados do banco
 
-5. Melhorar a experiência do admin
-- Em `src/components/user-management/UserDetailsDrawer.tsx`, deixar o feedback mais claro:
-  - “Cada link funciona apenas uma vez.”
-  - “Se o usuário já abriu ou o link expirou, gere outro.”
-- Manter o fluxo de copiar/compartilhar manualmente, sem abrir o link no navegador do admin.
+```text
+Roles com permissões configuradas (permission_level != 'none'):
+- admin: acesso total (bypass)
+- manager: vários recursos
+- coordenador: vários recursos
+- viewer: dashboard, alertas, custos, playbook, projetos, receita, relatorios, configuracoes
+- sdr: alertas, configuracoes, crm, fechamento_sdr, playbook, tv_sdr
+- closer: alertas, configuracoes, crm, playbook, tv_sdr
+- assistente_administrativo: NENHUMA PERMISSÃO
+- marketing: NENHUMA PERMISSÃO
+```
 
-Arquivos a ajustar
+### Solução em 2 partes
 
-- `supabase/functions/admin-send-reset/index.ts`
-- `supabase/functions/create-user/index.ts`
-- `src/contexts/AuthContext.tsx`
-- `src/pages/ResetPassword.tsx`
-- `src/components/user-management/UserDetailsDrawer.tsx`
+#### Parte 1: Migrar rotas de RoleGuard para ResourceGuard
 
-Resultado esperado
+Trocar `RoleGuard` por `ResourceGuard` nas rotas que já possuem recurso equivalente na tabela `role_permissions`. Isso garante que qualquer role com permissão configurada no banco terá acesso.
 
-- O primeiro acesso continua funcionando.
-- Se o usuário tentar reutilizar o mesmo link, o sistema mostra erro correto em vez de ficar “travado”.
-- O admin entende que precisa gerar um novo link para cada nova tentativa.
-- Todo o fluxo de reset passa a usar um único domínio e um comportamento previsível.
+| Rota | Antes | Depois |
+|------|-------|--------|
+| BU relatórios (4 rotas) | `RoleGuard ['admin','manager','coordenador']` | `ResourceGuard resource="relatorios"` |
+| BU documentos estratégicos (5 rotas) | `RoleGuard ['admin','manager','coordenador']` | `ResourceGuard resource="relatorios"` |
+| Consórcio index/importar/fechamento/vendas | `RoleGuard` hardcoded | `ResourceGuard resource="crm"` |
+| BU Marketing | `RoleGuard ['admin','manager','coordenador']` | `ResourceGuard resource="dashboard"` (ou novo recurso `marketing`) |
+| Tarefas | `RoleGuard ['admin','manager','coordenador']` | `ResourceGuard resource="configuracoes"` |
+
+**Manter RoleGuard** apenas em:
+- Admin pages (`/admin/*`) — apenas admin
+- Chairman — apenas admin/manager
+- Meu Fechamento — apenas sdr/closer (role-specific feature)
+- CRM routes internos — sdr/closer/coordenador (operacional)
+
+#### Parte 2: Configurar permissões para roles sem permissão
+
+Inserir permissões na tabela `role_permissions` para `assistente_administrativo` e `marketing` com os recursos que fazem sentido:
+
+```sql
+-- assistente_administrativo: acesso de visualização a recursos administrativos
+INSERT INTO role_permissions (role, resource, permission_level, bu) VALUES
+('assistente_administrativo', 'dashboard', 'view', null),
+('assistente_administrativo', 'configuracoes', 'view', null),
+('assistente_administrativo', 'relatorios', 'view', null),
+('assistente_administrativo', 'alertas', 'view', null),
+('assistente_administrativo', 'playbook', 'view', null);
+
+-- marketing: acesso a recursos de marketing
+INSERT INTO role_permissions (role, resource, permission_level, bu) VALUES
+('marketing', 'dashboard', 'view', null),
+('marketing', 'relatorios', 'view', null),
+('marketing', 'alertas', 'view', null),
+('marketing', 'playbook', 'view', null);
+```
+
+### Arquivos a alterar
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/App.tsx` | Trocar ~15 `RoleGuard` por `ResourceGuard` nas rotas listadas acima |
+| `src/pages/bu-*/Relatorios.tsx` (4 arquivos) | Remover `RoleGuard`, já tratado pelo `App.tsx` ou trocar por `ResourceGuard` |
+| Tabela `role_permissions` | Inserir permissões para `assistente_administrativo` e `marketing` |
+
+### Resultado
+- Qualquer role com permissão configurada no banco acessa as páginas corretas
+- O admin controla tudo pela tela de permissões (`/admin/permissoes`)
+- Novas roles adicionadas no futuro funcionam automaticamente (só configurar no banco)
+- Routes operacionais (CRM, fechamento) mantêm RoleGuard por serem features role-specific
+
