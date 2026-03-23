@@ -9,13 +9,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Search, Users, UserCheck, Clock, FileWarning } from 'lucide-react';
+import { Plus, Search, Users, UserCheck, Clock, FileWarning, Trash2 } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import EmployeeDrawer from '@/components/hr/EmployeeDrawer';
 import EmployeeFormDialog from '@/components/hr/EmployeeFormDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
+import { useEmployeeMutations } from '@/hooks/useEmployees';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function Colaboradores() {
   const { data: employees, isLoading } = useEmployees();
@@ -27,6 +38,8 @@ export default function Colaboradores() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
+  const { deleteEmployee } = useEmployeeMutations();
 
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
@@ -256,6 +269,7 @@ export default function Colaboradores() {
                 <TableHead>Gestor</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>NFSe Mês</TableHead>
+                <TableHead className="w-[60px]">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -269,11 +283,12 @@ export default function Colaboradores() {
                     <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-8" /></TableCell>
                   </TableRow>
                 ))
               ) : filteredEmployees.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     {search || statusFilter !== 'all' || cargoFilter !== 'all' || squadFilter !== 'all'
                       ? 'Nenhum colaborador encontrado com os filtros aplicados'
                       : 'Nenhum colaborador cadastrado'}
@@ -301,6 +316,19 @@ export default function Colaboradores() {
                       </Badge>
                     </TableCell>
                     <TableCell>{getNfseStatusBadge(employee) || '-'}</TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEmployeeToDelete(employee);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -321,6 +349,33 @@ export default function Colaboradores() {
         open={formOpen}
         onOpenChange={setFormOpen}
       />
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!employeeToDelete} onOpenChange={(open) => !open && setEmployeeToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir colaborador</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>{employeeToDelete?.nome_completo}</strong>? 
+              Todos os documentos, eventos, notas e NFSe associados serão removidos. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (employeeToDelete) {
+                  deleteEmployee.mutate(employeeToDelete.id);
+                  setEmployeeToDelete(null);
+                }
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
