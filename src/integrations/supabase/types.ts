@@ -4369,6 +4369,11 @@ export type Database = {
           font_size: string | null
           funnel_stages: string[] | null
           id: string
+          notify_critical: boolean | null
+          notify_daily_summary: boolean | null
+          notify_email: boolean | null
+          notify_push: boolean | null
+          notify_sms: boolean | null
           refresh_interval: number
           theme: string | null
           updated_at: string
@@ -4384,6 +4389,11 @@ export type Database = {
           font_size?: string | null
           funnel_stages?: string[] | null
           id?: string
+          notify_critical?: boolean | null
+          notify_daily_summary?: boolean | null
+          notify_email?: boolean | null
+          notify_push?: boolean | null
+          notify_sms?: boolean | null
           refresh_interval?: number
           theme?: string | null
           updated_at?: string
@@ -4399,6 +4409,11 @@ export type Database = {
           font_size?: string | null
           funnel_stages?: string[] | null
           id?: string
+          notify_critical?: boolean | null
+          notify_daily_summary?: boolean | null
+          notify_email?: boolean | null
+          notify_push?: boolean | null
+          notify_sms?: boolean | null
           refresh_interval?: number
           theme?: string | null
           updated_at?: string

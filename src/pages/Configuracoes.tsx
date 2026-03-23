@@ -7,12 +7,96 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { User, Bell, Shield, Settings, DollarSign, Mail, Palette, Loader2 } from "lucide-react";
+import { User, Bell, Shield, Settings, DollarSign, Palette, Loader2, Phone, MessageSquare, Calendar } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { OperationalCostsConfig } from "@/components/dashboard/OperationalCostsConfig";
 import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyProfile, useUpdateMyProfile, useUpdateMyEmail, useUpdateMyPassword } from "@/hooks/useMyProfile";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+// Hook for notification preferences
+function useNotificationPreferences() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['notification-preferences', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from('dashboard_preferences')
+        .select('notify_email, notify_push, notify_sms, notify_critical, notify_daily_summary')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data || {
+        notify_email: true,
+        notify_push: true,
+        notify_sms: false,
+        notify_critical: true,
+        notify_daily_summary: true,
+      };
+    },
+    enabled: !!user?.id,
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (prefs: Record<string, boolean>) => {
+      if (!user?.id) throw new Error('Not authenticated');
+      const { error } = await supabase
+        .from('dashboard_preferences')
+        .upsert({ user_id: user.id, ...prefs, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-preferences'] });
+      toast({ title: "Sucesso", description: "Preferências de notificação salvas!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    },
+  });
+
+  return { data, isLoading, save: mutation.mutate, isSaving: mutation.isPending };
+}
+
+// Hook for integration status checks
+function useIntegrationStatus() {
+  return useQuery({
+    queryKey: ['integration-status'],
+    queryFn: async () => {
+      // Check Clint CRM - verify if sync-deals function exists and has been called recently
+      const { data: clintSettings } = await supabase
+        .from('automation_settings')
+        .select('value')
+        .eq('key', 'clint_api_key')
+        .maybeSingle();
+
+      // Check Twilio - verify if twilio config exists
+      const { data: twilioSettings } = await supabase
+        .from('automation_settings')
+        .select('value')
+        .eq('key', 'twilio_account_sid')
+        .maybeSingle();
+
+      // Check Calendly - verify if any closer has calendly_link
+      const { data: calendlyClosers } = await supabase
+        .from('closers')
+        .select('id')
+        .not('calendly_link', 'is', null)
+        .limit(1);
+
+      return {
+        clint: !!clintSettings,
+        twilio: !!twilioSettings,
+        calendly: (calendlyClosers?.length || 0) > 0,
+      };
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
 
 export default function Configuracoes() {
   const { role } = useAuth();
@@ -23,6 +107,19 @@ export default function Configuracoes() {
   const updateProfile = useUpdateMyProfile();
   const updateEmail = useUpdateMyEmail();
   const updatePassword = useUpdateMyPassword();
+
+  // Notification preferences
+  const notifPrefs = useNotificationPreferences();
+  const [notifState, setNotifState] = useState({
+    notify_email: true,
+    notify_push: true,
+    notify_sms: false,
+    notify_critical: true,
+    notify_daily_summary: true,
+  });
+
+  // Integration status
+  const { data: integrations, isLoading: integrationsLoading } = useIntegrationStatus();
 
   // Profile form state
   const [fullName, setFullName] = useState('');
@@ -40,23 +137,32 @@ export default function Configuracoes() {
     }
   }, [profile]);
 
+  // Load notification preferences
+  useEffect(() => {
+    if (notifPrefs.data) {
+      setNotifState({
+        notify_email: notifPrefs.data.notify_email ?? true,
+        notify_push: notifPrefs.data.notify_push ?? true,
+        notify_sms: notifPrefs.data.notify_sms ?? false,
+        notify_critical: notifPrefs.data.notify_critical ?? true,
+        notify_daily_summary: notifPrefs.data.notify_daily_summary ?? true,
+      });
+    }
+  }, [notifPrefs.data]);
+
   const handleSaveProfile = async () => {
     try {
-      // Update name
       if (fullName !== profile?.full_name) {
         await updateProfile.mutateAsync({ full_name: fullName });
       }
-
-      // Update email if changed
       if (email !== profile?.email) {
         await updateEmail.mutateAsync({ email });
       }
-
       if (fullName === profile?.full_name && email === profile?.email) {
         toast({ title: "Info", description: "Nenhuma alteração detectada" });
       }
-    } catch (error) {
-      // Errors are handled in the mutation hooks
+    } catch {
+      // Errors handled in mutation hooks
     }
   };
 
@@ -65,12 +171,10 @@ export default function Configuracoes() {
       toast({ title: "Erro", description: "Preencha todos os campos de senha", variant: "destructive" });
       return;
     }
-
     if (newPassword !== confirmPassword) {
       toast({ title: "Erro", description: "As senhas não coincidem", variant: "destructive" });
       return;
     }
-
     if (newPassword.length < 6) {
       toast({ title: "Erro", description: "A senha deve ter pelo menos 6 caracteres", variant: "destructive" });
       return;
@@ -80,16 +184,41 @@ export default function Configuracoes() {
       await updatePassword.mutateAsync({ password: newPassword });
       setNewPassword('');
       setConfirmPassword('');
-    } catch (error) {
-      // Error handled in mutation
+    } catch (error: any) {
+      toast({ 
+        title: "Erro ao alterar senha", 
+        description: error?.message || "Tente novamente", 
+        variant: "destructive" 
+      });
     }
   };
 
   const handleSaveNotifications = () => {
-    toast({ title: "Sucesso", description: "Preferências de notificação salvas!" });
+    notifPrefs.save(notifState);
   };
 
   const isSavingProfile = updateProfile.isPending || updateEmail.isPending;
+
+  const integrationItems = [
+    {
+      name: "Clint CRM",
+      description: "Sincronização de leads e deals",
+      icon: <MessageSquare className="h-5 w-5 text-primary" />,
+      connected: integrations?.clint ?? false,
+    },
+    {
+      name: "Twilio",
+      description: "Ligações e SMS automatizados",
+      icon: <Phone className="h-5 w-5 text-primary" />,
+      connected: integrations?.twilio ?? false,
+    },
+    {
+      name: "Calendly",
+      description: "Agendamento de reuniões com closers",
+      icon: <Calendar className="h-5 w-5 text-primary" />,
+      connected: integrations?.calendly ?? false,
+    },
+  ];
 
   return (
     <div className="space-y-8">
@@ -201,43 +330,69 @@ export default function Configuracoes() {
               <CardTitle className="text-foreground">Preferências de Notificação</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-foreground">Email</p>
-                  <p className="text-sm text-muted-foreground">Receber notificações por email</p>
+              {notifPrefs.isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-foreground">Push</p>
-                  <p className="text-sm text-muted-foreground">Notificações no navegador</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-foreground">SMS</p>
-                  <p className="text-sm text-muted-foreground">Alertas por mensagem de texto</p>
-                </div>
-                <Switch />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-foreground">Alertas Críticos</p>
-                  <p className="text-sm text-muted-foreground">Notificações de alta prioridade</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-foreground">Resumo Diário</p>
-                  <p className="text-sm text-muted-foreground">Receber resumo das métricas</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <Button onClick={handleSaveNotifications}>Salvar Preferências</Button>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-foreground">Email</p>
+                      <p className="text-sm text-muted-foreground">Receber notificações por email</p>
+                    </div>
+                    <Switch 
+                      checked={notifState.notify_email} 
+                      onCheckedChange={(v) => setNotifState(s => ({ ...s, notify_email: v }))} 
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-foreground">Push</p>
+                      <p className="text-sm text-muted-foreground">Notificações no navegador</p>
+                    </div>
+                    <Switch 
+                      checked={notifState.notify_push} 
+                      onCheckedChange={(v) => setNotifState(s => ({ ...s, notify_push: v }))} 
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-foreground">SMS</p>
+                      <p className="text-sm text-muted-foreground">Alertas por mensagem de texto</p>
+                    </div>
+                    <Switch 
+                      checked={notifState.notify_sms} 
+                      onCheckedChange={(v) => setNotifState(s => ({ ...s, notify_sms: v }))} 
+                    />
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-foreground">Alertas Críticos</p>
+                      <p className="text-sm text-muted-foreground">Notificações de alta prioridade</p>
+                    </div>
+                    <Switch 
+                      checked={notifState.notify_critical} 
+                      onCheckedChange={(v) => setNotifState(s => ({ ...s, notify_critical: v }))} 
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-foreground">Resumo Diário</p>
+                      <p className="text-sm text-muted-foreground">Receber resumo das métricas</p>
+                    </div>
+                    <Switch 
+                      checked={notifState.notify_daily_summary} 
+                      onCheckedChange={(v) => setNotifState(s => ({ ...s, notify_daily_summary: v }))} 
+                    />
+                  </div>
+                  <Button onClick={handleSaveNotifications} disabled={notifPrefs.isSaving}>
+                    {notifPrefs.isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Salvar Preferências
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -346,47 +501,31 @@ export default function Configuracoes() {
           <TabsContent value="integracoes" className="space-y-4 mt-6">
             <Card className="bg-card border-border">
               <CardHeader>
-                <CardTitle className="text-foreground">Integrações Ativas</CardTitle>
+                <CardTitle className="text-foreground">Integrações do Sistema</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded bg-primary/20 flex items-center justify-center">
-                      <Settings className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">Manus</p>
-                      <p className="text-sm text-muted-foreground">CRM e gestão de leads</p>
-                    </div>
+                {integrationsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
-                  <Badge variant="default">Conectado</Badge>
-                </div>
-
-                <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded bg-primary/20 flex items-center justify-center">
-                      <DollarSign className="h-5 w-5 text-primary" />
+                ) : (
+                  integrationItems.map((item) => (
+                    <div key={item.name} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded bg-primary/20 flex items-center justify-center">
+                          {item.icon}
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">{item.name}</p>
+                          <p className="text-sm text-muted-foreground">{item.description}</p>
+                        </div>
+                      </div>
+                      <Badge variant={item.connected ? "default" : "outline"}>
+                        {item.connected ? "Conectado" : "Não configurado"}
+                      </Badge>
                     </div>
-                    <div>
-                      <p className="font-medium text-foreground">Stripe</p>
-                      <p className="text-sm text-muted-foreground">Processamento de pagamentos</p>
-                    </div>
-                  </div>
-                  <Badge variant="outline">Desconectado</Badge>
-                </div>
-
-                <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded bg-primary/20 flex items-center justify-center">
-                      <Mail className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">SendGrid</p>
-                      <p className="text-sm text-muted-foreground">Envio de emails</p>
-                    </div>
-                  </div>
-                  <Badge variant="default">Conectado</Badge>
-                </div>
+                  ))
+                )}
               </CardContent>
             </Card>
           </TabsContent>
