@@ -46,6 +46,26 @@ export interface CompletedMeeting {
   meeting_date: string;
   region: string;
   renda: string;
+  closer_notes?: string;
+}
+
+export interface AllMeetingDeal {
+  deal_id: string;
+  deal_name: string;
+  contact_name: string;
+  contact_phone: string;
+  contact_email: string;
+  closer_name: string;
+  origin_name: string;
+  origin_id: string;
+  stage_id: string;
+  stage_name: string;
+  updated_at: string;
+  meeting_date: string;
+  region: string;
+  renda: string;
+  closer_notes: string;
+  attendee_notes: string;
 }
 
 export interface Proposal {
