@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
     if (squad) {
       const { error: profileError } = await supabaseAdmin
         .from("profiles")
-        .update({ squad })
+        .update({ squad: [squad] })
         .eq("id", newUser.user.id);
 
       if (profileError) {
