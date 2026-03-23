@@ -471,3 +471,129 @@ export function useVincularCarta() {
 }
 
 export { CONSORCIO_STAGE_IDS, CONSORCIO_ORIGIN_IDS };
+
+// Fetch ALL consorcio deals (todas reuniões, qualquer stage)
+export function useTodasReunioes() {
+  return useQuery({
+    queryKey: ['consorcio-todas-reunioes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_deals')
+        .select(`
+          id,
+          name,
+          origin_id,
+          stage_id,
+          updated_at,
+          owner_id,
+          custom_fields,
+          crm_contacts (name, phone, email),
+          crm_stages (stage_name),
+          crm_origins (name)
+        `)
+        .in('origin_id', CONSORCIO_ORIGIN_IDS)
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Fetch consorcio closers
+      const { data: consorcioClosers } = await supabase
+        .from('closers')
+        .select('name, email')
+        .eq('bu', 'consorcio')
+        .eq('is_active', true);
+
+      const closerEmailSet = new Set(
+        (consorcioClosers || []).map(c => c.email?.toLowerCase()).filter(Boolean)
+      );
+      const closerNameByEmail: Record<string, string> = {};
+      (consorcioClosers || []).forEach(c => {
+        if (c.email) closerNameByEmail[c.email.toLowerCase()] = c.name;
+      });
+
+      // Filter to only consorcio closer deals
+      const consorcioDeals = (data || []).filter(d =>
+        d.owner_id && closerEmailSet.has(d.owner_id.toLowerCase())
+      );
+
+      const dealIds = consorcioDeals.map(d => d.id);
+
+      // Fetch meeting dates + closer_notes from attendees
+      let meetingByDeal: Record<string, { date: string; closer_notes: string; notes: string }> = {};
+      if (dealIds.length > 0) {
+        const { data: attendees } = await supabase
+          .from('meeting_slot_attendees')
+          .select('deal_id, closer_notes, notes, meeting_slot_id, meeting_slots (scheduled_at)')
+          .in('deal_id', dealIds);
+        (attendees || []).forEach((a: any) => {
+          if (a.deal_id) {
+            const scheduledAt = a.meeting_slots?.scheduled_at;
+            const existing = meetingByDeal[a.deal_id];
+            // Keep the latest one
+            if (!existing || (scheduledAt && scheduledAt > (existing.date || ''))) {
+              meetingByDeal[a.deal_id] = {
+                date: scheduledAt || existing?.date || '',
+                closer_notes: a.closer_notes || existing?.closer_notes || '',
+                notes: a.notes || existing?.notes || '',
+              };
+            }
+          }
+        });
+      }
+
+      // Also fetch notes from attendee_notes table
+      let attendeeNotesByDeal: Record<string, string[]> = {};
+      if (dealIds.length > 0) {
+        const { data: allAttendees } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id, deal_id')
+          .in('deal_id', dealIds);
+        
+        if (allAttendees && allAttendees.length > 0) {
+          const attendeeIds = allAttendees.map(a => a.id);
+          const { data: notes } = await supabase
+            .from('attendee_notes')
+            .select('attendee_id, note')
+            .in('attendee_id', attendeeIds)
+            .order('created_at', { ascending: false });
+          
+          if (notes) {
+            const attendeeIdToDeal: Record<string, string> = {};
+            allAttendees.forEach(a => { if (a.deal_id) attendeeIdToDeal[a.id] = a.deal_id; });
+            notes.forEach(n => {
+              const dId = attendeeIdToDeal[n.attendee_id];
+              if (dId) {
+                if (!attendeeNotesByDeal[dId]) attendeeNotesByDeal[dId] = [];
+                attendeeNotesByDeal[dId].push(n.note);
+              }
+            });
+          }
+        }
+      }
+
+      return consorcioDeals.map(d => {
+        const cf = (d.custom_fields as any) || {};
+        const meetingInfo = meetingByDeal[d.id];
+        const extraNotes = attendeeNotesByDeal[d.id] || [];
+        return {
+          deal_id: d.id,
+          deal_name: d.name || '',
+          contact_name: (d.crm_contacts as any)?.name || '',
+          contact_phone: (d.crm_contacts as any)?.phone || '',
+          contact_email: (d.crm_contacts as any)?.email || '',
+          closer_name: (d.owner_id && closerNameByEmail[d.owner_id.toLowerCase()]) || d.owner_id || '',
+          origin_name: (d.crm_origins as any)?.name || '',
+          origin_id: d.origin_id || '',
+          stage_id: d.stage_id || '',
+          stage_name: (d.crm_stages as any)?.stage_name || '',
+          updated_at: d.updated_at || '',
+          meeting_date: meetingInfo?.date || '',
+          region: cf.estado || '',
+          renda: cf.faixa_de_renda || '',
+          closer_notes: meetingInfo?.closer_notes || '',
+          attendee_notes: [meetingInfo?.notes, ...extraNotes].filter(Boolean).join(' | '),
+        };
+      }) as AllMeetingDeal[];
+    },
+  });
+}
