@@ -40,7 +40,8 @@ export const useSdrMetricsFromAgenda = (
       const { data, error } = await supabase.rpc('get_sdr_metrics_from_agenda', {
         start_date: start,
         end_date: end,
-        sdr_email_filter: sdrEmailFilter || null
+        sdr_email_filter: sdrEmailFilter || null,
+        bu_filter: buFilter || null
       });
 
       if (error) {
