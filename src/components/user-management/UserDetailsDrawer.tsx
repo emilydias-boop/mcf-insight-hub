@@ -201,8 +201,9 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     try {
       const result = await sendPasswordReset.mutateAsync({ email: userDetails.email });
       await navigator.clipboard.writeText(result.reset_link);
-      toast.success("Link de redefinição copiado", {
-        description: "Cole o link e envie manualmente para o usuário concluir o primeiro acesso.",
+      toast.success("Link de redefinição copiado!", {
+        description: "⚠️ Cada link funciona apenas UMA vez. Envie manualmente ao usuário (WhatsApp, email, etc). Se ele já usou ou expirou, gere outro.",
+        duration: 8000,
       });
       
     } catch {

@@ -272,7 +272,7 @@ Deno.serve(async (req) => {
 
     // Send password reset email so user can set their password
     const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-      redirectTo: `https://mcf-insight-hub.lovable.app/reset-password`,
+      redirectTo: "https://mcf-insight-hub.lovable.app/reset-password",
     });
 
     if (resetError) {
