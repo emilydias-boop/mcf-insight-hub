@@ -1,78 +1,43 @@
 
 
-## Plano: Corrigir exclusão de usuários
+## Plano: Adicionar exclusão de colaboradores na página de RH
 
 ### Problema
 
-A Edge Function `delete-user` falha porque existem tabelas com foreign keys para `auth.users` e `profiles` configuradas como **NO ACTION** (bloqueiam a exclusão). As principais tabelas que bloqueiam são:
-
-| Tabela | Coluna | Tipo de restrição |
-|--------|--------|-------------------|
-| `employees` | `profile_id`, `user_id` | NO ACTION (bloqueia) |
-| `calls` | `user_id` | NO ACTION (bloqueia) |
-| `playbook_docs` | `criado_por` | NO ACTION/SET NULL |
-
-A Edge Function só limpa 7 tabelas, mas existem 50+ referências a `auth.users`.
+Não existe funcionalidade de excluir colaboradores (employees) na página de Colaboradores. Não há `deleteEmployee` no hook `useEmployeeMutations` e nenhum botão de exclusão na tabela ou no drawer.
 
 ### Correção
 
-| Componente | O que muda |
-|-----------|-----------|
-| `supabase/functions/delete-user/index.ts` | Adicionar limpeza das tabelas que bloqueiam: `employees` (SET NULL no profile_id/user_id), `dashboard_preferences`, `sdr`, `playbook_reads`, `sdr_review_requests`, `calls` (SET NULL), `user_files` |
-| Migration SQL | Alterar foreign keys problemáticas de NO ACTION para SET NULL ou CASCADE, para que futuras exclusões não bloqueiem |
+| Arquivo | O que muda |
+|---------|-----------|
+| `src/hooks/useEmployees.ts` | Adicionar mutation `deleteEmployee` que deleta da tabela `employees` por ID |
+| `src/pages/rh/Colaboradores.tsx` | Adicionar coluna de ações com botão de excluir (ícone lixeira) e dialog de confirmação |
 
-### Detalhes da Edge Function
+### Detalhes
 
-Antes de deletar o profile, adicionar:
-
+1. **Hook** (`useEmployees.ts`): Adicionar no `useEmployeeMutations`:
 ```typescript
-// Desvincular employee (não deletar, apenas remover vínculo)
-await supabaseAdmin.from("employees").update({ profile_id: null, user_id: null }).eq("profile_id", user_id);
-
-// Limpar tabelas adicionais com user_id
-const additionalTables = [
-  "dashboard_preferences",
-  "sdr",
-  "playbook_reads", 
-  "sdr_review_requests",
-  "user_files",
-  "alertas",
-];
-for (const table of additionalTables) {
-  await supabaseAdmin.from(table).delete().eq("user_id", user_id);
-}
-
-// SET NULL em tabelas que referenciam por created_by/booked_by
-const nullifyTables = [
-  { table: "calls", column: "user_id" },
-  { table: "deal_activities", column: "user_id" },
-  { table: "meeting_slots", column: "booked_by" },
-];
-for (const { table, column } of nullifyTables) {
-  await supabaseAdmin.from(table).update({ [column]: null }).eq(column, user_id);
-}
+const deleteEmployee = useMutation({
+  mutationFn: async (id: string) => {
+    // Deletar dependências primeiro (documents, events, notes, nfse)
+    await supabase.from('employee_documents').delete().eq('employee_id', id);
+    await supabase.from('employee_events').delete().eq('employee_id', id);
+    await supabase.from('employee_notes').delete().eq('employee_id', id);
+    await supabase.from('rh_nfse').delete().eq('employee_id', id);
+    // Deletar employee
+    const { error } = await supabase.from('employees').delete().eq('id', id);
+    if (error) throw error;
+  },
+  onSuccess: () => { invalidate; toast.success('Colaborador excluído'); },
+});
 ```
 
-### Migration SQL
-
-Alterar as foreign keys de `employees` e `calls` para SET NULL:
-
-```sql
-ALTER TABLE employees DROP CONSTRAINT IF EXISTS employees_profile_id_fkey;
-ALTER TABLE employees ADD CONSTRAINT employees_profile_id_fkey 
-  FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE SET NULL;
-
-ALTER TABLE employees DROP CONSTRAINT IF EXISTS employees_user_id_fkey;
-ALTER TABLE employees ADD CONSTRAINT employees_user_id_fkey 
-  FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL;
-
-ALTER TABLE calls DROP CONSTRAINT IF EXISTS calls_user_id_fkey;
-ALTER TABLE calls ADD CONSTRAINT calls_user_id_fkey 
-  FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL;
-```
+2. **Página** (`Colaboradores.tsx`):
+   - Adicionar coluna "Ações" na tabela com botão de lixeira (ícone `Trash2`)
+   - `AlertDialog` de confirmação antes de excluir (mostra nome do colaborador)
+   - O clique no botão de excluir usa `e.stopPropagation()` para não abrir o drawer
 
 ### Resultado
-- Exclusão de usuários funcionará sem erros de foreign key
-- Registros históricos (calls, deals, meetings) são preservados com referência NULL
-- Ficha do colaborador (employee) é mantida mas desvinculada do perfil
+- Admin poderá excluir colaboradores duplicados diretamente da tabela
+- Confirmação obrigatória antes da exclusão para evitar acidentes
 
