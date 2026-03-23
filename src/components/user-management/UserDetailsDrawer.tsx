@@ -204,7 +204,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
       toast.success("Link de redefinição copiado", {
         description: "Cole o link e envie manualmente para o usuário concluir o primeiro acesso.",
       });
-      window.open(result.reset_link, "_blank", "noopener,noreferrer");
+      
     } catch {
       // Toast handled in mutation
     }
