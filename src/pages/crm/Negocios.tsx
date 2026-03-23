@@ -390,18 +390,26 @@ const Negocios = () => {
         }
       }
       
-      // Filtro por data de criação
+      // Filtro por data de criação (ou criação/atualização quando tags ativas)
       if (filters.dateRange?.from) {
-        const dealDate = new Date(deal.created_at);
         const fromDate = new Date(filters.dateRange.from);
         fromDate.setHours(0, 0, 0, 0);
-        
-        if (dealDate < fromDate) return false;
-        
-        if (filters.dateRange.to) {
-          const toDate = new Date(filters.dateRange.to);
-          toDate.setHours(23, 59, 59, 999);
-          if (dealDate > toDate) return false;
+        const toDate = filters.dateRange.to
+          ? new Date(filters.dateRange.to)
+          : new Date(filters.dateRange.from);
+        toDate.setHours(23, 59, 59, 999);
+
+        const inRange = (d: Date) => d >= fromDate && d <= toDate;
+
+        if (filters.selectedTags && filters.selectedTags.length > 0) {
+          // Com tags ativas: deal criado OU atualizado no período
+          const dealCreated = new Date(deal.created_at);
+          const dealUpdated = new Date(deal.updated_at);
+          if (!inRange(dealCreated) && !inRange(dealUpdated)) return false;
+        } else {
+          // Sem tags: filtro padrão por created_at
+          const dealDate = new Date(deal.created_at);
+          if (!inRange(dealDate)) return false;
         }
       }
       
