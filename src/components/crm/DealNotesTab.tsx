@@ -223,6 +223,16 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
     );
   }
   
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-destructive">
+        <StickyNote className="h-10 w-10 mb-2 opacity-50" />
+        <p className="text-sm font-medium">Erro ao carregar notas</p>
+        <p className="text-xs text-muted-foreground">Verifique o console para mais detalhes</p>
+      </div>
+    );
+  }
+  
   return (
     <div className="space-y-4">
       {/* Input para nova nota */}
