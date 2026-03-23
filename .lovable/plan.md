@@ -1,62 +1,41 @@
 
 
-## Plano: Corrigir abas de Configurações (Notificações, Segurança, Integrações)
+## Plano: Sincronizar status do SDR com perfil do usuário
 
-### Problemas identificados
+### Problema
 
-**1. Notificações** — Completamente não-funcional
-- Os switches usam `defaultChecked` (uncontrolled) sem nenhum estado React
-- O botão "Salvar Preferências" apenas mostra um toast genérico sem salvar nada no banco
-- Nenhuma preferência de notificação é persistida
+Os SDRs Yanca, Evellyn e Hellen aparecem na tabela de reuniões porque na tabela `sdr` estão com `active = true`, mesmo tendo o perfil bloqueado/desativado:
 
-**2. Segurança** — Troca de senha funciona no código, mas a aba tem 2FA desabilitado sem funcionalidade real
-- O código de `handleChangePassword` parece correto (usa `supabase.auth.updateUser`)
-- Se está falhando silenciosamente, é porque o `catch` vazio na linha 83 engole o erro
+| SDR | sdr.active | profiles.access_status | employees.status |
+|-----|-----------|----------------------|-----------------|
+| Evellyn | true | bloqueado | - |
+| Hellen | true | bloqueado | - |
+| Yanca | true | desativado | desligado |
 
-**3. Integrações** — Completamente estático
-- Lista hardcoded de "Manus", "Stripe", "SendGrid" com badges fixos
-- Não reflete o estado real de nenhuma integração do sistema
+O hook `useSdrsFromSquad` filtra apenas por `sdr.active = true`, ignorando o status real do perfil.
 
----
+### Solução
 
-### Correções propostas
+Duas ações complementares:
 
-| Aba | Arquivo | O que muda |
-|-----|---------|-----------|
-| Notificações | `src/pages/Configuracoes.tsx` | Conectar switches a estado controlado + persistir no Supabase via `dashboard_preferences` (campos `notify_email`, `notify_push`, `notify_sms`, `notify_critical`, `notify_daily_summary`) |
-| Notificações | Migration SQL | Adicionar colunas de notificação na tabela `dashboard_preferences` |
-| Segurança | `src/pages/Configuracoes.tsx` | Remover catch vazio para que erros de senha apareçam via toast do hook |
-| Integrações | `src/pages/Configuracoes.tsx` | Mostrar integrações reais do sistema (Clint CRM, Twilio, Calendly) com status dinâmico baseado em verificação de conectividade |
-
-### Detalhe: Notificações
-
-Adicionar 5 colunas booleanas à tabela `dashboard_preferences`:
+**1. Correção imediata (migration)**: Desativar os SDRs cujo perfil está bloqueado/desativado:
 ```sql
-ALTER TABLE dashboard_preferences 
-ADD COLUMN IF NOT EXISTS notify_email boolean DEFAULT true,
-ADD COLUMN IF NOT EXISTS notify_push boolean DEFAULT true,
-ADD COLUMN IF NOT EXISTS notify_sms boolean DEFAULT false,
-ADD COLUMN IF NOT EXISTS notify_critical boolean DEFAULT true,
-ADD COLUMN IF NOT EXISTS notify_daily_summary boolean DEFAULT true;
+UPDATE sdr SET active = false 
+WHERE email IN (
+  SELECT s.email FROM sdr s
+  JOIN profiles p ON lower(p.email) = lower(s.email)
+  WHERE p.access_status IN ('bloqueado', 'desativado')
+  AND s.active = true
+);
 ```
 
-Os switches passarão a ser controlados, lendo do banco e salvando via mutation.
+**2. Prevenção futura**: No hook `useSdrsFromSquad`, adicionar JOIN com `profiles` para filtrar SDRs cujo perfil está ativo, garantindo que mesmo se o `sdr.active` estiver dessincronizado, o SDR não apareça:
 
-### Detalhe: Segurança
+| Arquivo | O que muda |
+|---------|-----------|
+| `src/hooks/useSdrsFromSquad.ts` | Após buscar SDRs ativos, fazer segunda query em `profiles` para excluir os com `access_status != 'ativo'` |
 
-Remover o `catch {}` vazio para que o `onError` do hook `useUpdateMyPassword` (que já tem `toast.error`) funcione corretamente.
-
-### Detalhe: Integrações
-
-Substituir a lista estática por verificações reais:
-- **Clint CRM**: Verificar se existe `clint_api_key` nos secrets (ou se sync-deals está rodando)
-- **Twilio**: Verificar se existe configuração em `automation_settings` ou secret do Twilio
-- **Calendly**: Verificar se closers têm `calendly_link` preenchido
-
-Cada integração mostrará status dinâmico baseado em dados reais.
-
-### Resultado esperado
-- Notificações salvam e carregam preferências reais do banco
-- Erros de senha aparecem com toast visível
-- Integrações mostram status real das conexões do sistema
+### Resultado
+- SDRs desligados/bloqueados não aparecem mais na tabela de reuniões
+- Futuras desativações de perfil automaticamente excluem o SDR da listagem
 
