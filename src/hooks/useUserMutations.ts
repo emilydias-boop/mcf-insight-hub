@@ -104,7 +104,7 @@ export const useUpdateUserRole = () => {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["user-details", variables.userId] });
-      toast({ title: "Role atualizado com sucesso" });
+      toast({ title: "Role atualizado com sucesso", description: "O usuário precisa fazer logout e login novamente para a mudança ter efeito." });
     },
     onError: () => {
       toast({ title: "Erro ao atualizar role", variant: "destructive" });
