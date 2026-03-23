@@ -1,48 +1,44 @@
 
 
-## Plano: Nova aba "Todas Reuniões" + Corrigir notas do consórcio
+## Plano: Corrigir notas que não aparecem no drawer do lead (consórcio)
 
-### Problema 1: Falta aba com visão completa de todas as reuniões
-Hoje a Pós-Reunião só mostra abas por status (Realizadas aguardando ação, Propostas, Sem Sucesso). Não há como ver **todas** as reuniões independente do status atual, nem filtrar por status específico.
+### Diagnóstico
 
-### Problema 2: Notas das reuniões de consórcio não aparecem no lead
-As notas do closer são salvas na tabela `meeting_slot_attendees` (campo `closer_notes`), mas o `DealNotesTab` já busca essas notas. O problema provavelmente é que os deals de consórcio não possuem registros em `meeting_slot_attendees` vinculados — as reuniões consórcio usam `owner_id` no deal mas podem não ter um `meeting_slot` associado. Preciso verificar se o drawer de agenda do consórcio está de fato salvando as notas corretamente.
+Os dados existem no banco: o attendee `ced53bfe` do deal `753d6bce` tem `closer_notes` e `notes` preenchidos. O `DealNotesTab` deveria exibi-los, mas mostra "Nenhuma nota ainda".
 
----
+O problema provável é que a `queryFn` do `DealNotesTab` está falhando silenciosamente. Quando uma das queries internas (ex: `attendee_notes`, `profiles`) retorna erro, o React Query captura a exceção mas o componente renderiza o estado vazio em vez de um estado de erro visível, porque não há tratamento de `isError`.
 
-### Alterações
+Adicionalmente, o `DealNotesTab` usa `(a as any).closer_notes` em vários pontos, indicando que o TypeScript não reconhece o campo no tipo retornado. Embora isso não afete runtime, pode mascarar problemas de tipo.
+
+### Ação: Adicionar logging + tratamento de erro
 
 | Arquivo | O que muda |
 |---------|-----------|
-| `src/hooks/useConsorcioPostMeeting.ts` | Novo hook `useTodasReunioesConsorcio()` que busca todos os deals de consórcio com meeting data, closer, status/stage, e notas (closer_notes do attendee) |
-| `src/pages/crm/PosReuniao.tsx` | Nova aba "Todas Reuniões" com tabela completa, filtros de status, closer, pipeline, data, busca. Closers veem apenas suas reuniões. Export inclui notas |
-| `src/hooks/useConsorcioPostMeeting.ts` | Garantir que `CompletedMeeting` e o novo tipo incluam campo `closer_notes` vindo de `meeting_slot_attendees` |
+| `src/components/crm/DealNotesTab.tsx` | 1. Adicionar `console.log` dentro da `queryFn` para logar `uniqueIds`, resultados de cada query, e `combined.length` final. 2. Adicionar tratamento de `isError` no componente para exibir mensagem de erro visível. 3. Adicionar `console.error` nos catches de cada sub-query |
 
-### Nova aba "Todas Reuniões"
+### Código proposto
 
-**Dados**: Query busca deals de consórcio (todas as stages, não apenas R1 Realizada), faz JOIN com `meeting_slot_attendees` para pegar `closer_notes` e data da reunião.
+```typescript
+// No queryFn, adicionar logs:
+console.log('[DealNotesTab] querying with uniqueIds:', uniqueIds);
 
-**Filtros**:
-- Busca por nome/telefone
-- Pipeline (Viver de Aluguel / Efeito Alavanca)
-- Closer
-- Status/Stage (multi-select ou dropdown com todas as stages: R1 Realizada, Proposta Enviada, Contrato Pago, Sem Sucesso, etc.)
-- Data início/fim
+// Após cada query, logar resultados:
+console.log('[DealNotesTab] attendees found:', attendees?.length, attendees?.map(a => ({ id: a.id, closer_notes: (a as any).closer_notes })));
 
-**Permissão**: Se `role === 'closer'`, usa `useMyCloser()` para identificar o closer logado e filtra automaticamente `owner_id` pelo email do closer. Admins/managers veem tudo.
+// No final:
+console.log('[DealNotesTab] combined notes:', combined.length);
 
-**Export Excel**: Inclui coluna "Notas" com o `closer_notes` do attendee.
+// No componente, tratar erro:
+if (isError) {
+  return <p className="text-sm text-red-500 text-center py-4">Erro ao carregar notas</p>;
+}
+```
 
-### Correção de notas
+### Possível causa raiz alternativa
 
-O hook `useRealizadas()` já busca meeting dates via `meeting_slot_attendees`, mas não traz `closer_notes`. O novo hook `useTodasReunioesConsorcio()` incluirá `closer_notes` e `notes` do attendee na query. Isso garante que as notas salvas pelo closer na agenda apareçam tanto na aba "Todas Reuniões" quanto no export.
+Se os logs mostrarem que `attendees` retorna vazio (apesar dos dados existirem), o problema será no `uniqueIds` passado ao `.in('deal_id', ...)`. Pode ser que `useContactDealIds` não esteja resolvendo corretamente para deals de consórcio, ou que exista um `clint_id` não-UUID causando erro no PostgREST.
 
-Se as notas não estão sendo **salvas**, o problema é que o closer salva no `meeting_slot_attendees.closer_notes` mas o deal não tem `meeting_slot_attendee` associado. Verificarei se há attendees vinculados e, se necessário, o hook buscará notas também de `deal_activities` como fallback.
+### Resultado
 
-### Resultado esperado
-- Nova aba "Todas Reuniões" na Pós-Reunião do consórcio com visão 360 de todas as reuniões
-- Closers veem apenas suas reuniões automaticamente
-- Filtro por status permite ver reuniões em qualquer etapa
-- Export Excel inclui notas do closer
-- Notas salvas na agenda aparecem corretamente no lead
+Com os logs, no próximo clique no drawer, os console logs revelarão exatamente onde o fluxo quebra, permitindo uma correção cirúrgica.
 
