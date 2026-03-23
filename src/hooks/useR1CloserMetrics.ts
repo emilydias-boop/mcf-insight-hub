@@ -437,16 +437,10 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           metricsMap.set(closerId, metric);
         }
 
-        // Count attendees by status - only if booked by valid SDR
+        // Count attendees by status - all attendees regardless of SDR status
         meeting.meeting_slot_attendees?.forEach(att => {
           // Skip partners (sócios) from all metrics
           if ((att as any).is_partner) return;
-          
-          // Filter: only count if booked by a valid SDR from database
-          const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
-          if (!bookedByEmail || !validSdrEmails.has(bookedByEmail)) {
-            return; // Skip attendees not booked by valid SDR
-          }
 
           const status = att.status;
           
