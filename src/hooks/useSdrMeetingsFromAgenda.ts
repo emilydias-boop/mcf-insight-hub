@@ -54,6 +54,7 @@ export function useSdrMeetingsFromAgenda({
         start_date: startStr,
         end_date: endStr,
         sdr_email_filter: sdrEmailFilter || null,
+        bu_filter: buFilter || null,
       });
 
       if (error) {
