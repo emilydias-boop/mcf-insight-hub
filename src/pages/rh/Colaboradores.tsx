@@ -38,6 +38,8 @@ export default function Colaboradores() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
+  const { deleteEmployee } = useEmployeeMutations();
 
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
