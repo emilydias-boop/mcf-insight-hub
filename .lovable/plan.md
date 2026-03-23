@@ -1,41 +1,55 @@
 
 
-## Plano: Restringir "Visão Diretor" e "Relatórios" a roles de gestão
+## Plano: Corrigir qualidade de áudio e estabilidade das ligações Twilio
 
-### Problema
+### Diagnóstico
 
-Ao migrar de `RoleGuard` para `ResourceGuard`, páginas de gestão como "Visão Diretor" (`/dashboard`) e "Relatórios" (`/relatorios`) ficaram acessíveis a qualquer role que tenha `dashboard: view` ou `relatorios: view` — incluindo `assistente_administrativo`, `marketing`, `viewer`, etc. Essas páginas são de **nível diretoria/gestão** e não devem aparecer para cargos operacionais.
+O `Device` do Twilio Voice SDK está sendo criado com configuração mínima (apenas `logLevel: 1`). Faltam:
 
-### Solução
+1. **Codec preferencial**: Sem especificar `opus` como codec preferido, o SDK pode negociar codecs de menor qualidade que causam chiado
+2. **Edge/Region**: Sem definir o edge mais próximo (`south-america`), o áudio trafega por servidores distantes, causando latência e drops
+3. **DSCP**: Sem `enableDscp: true`, os pacotes de áudio não recebem prioridade na rede
+4. **Close protection**: Sem handler de `tokenWillExpire`, o token pode expirar mid-call causando queda
 
-Usar `RoleGuard` para páginas que são intrinsecamente de gestão, e manter `ResourceGuard` apenas para páginas que realmente devem ser controladas pelo banco.
+### Correção
 
-| Página | Antes (atual) | Depois |
-|--------|---------------|--------|
-| Visão Diretor (`/dashboard`) | `ResourceGuard resource="dashboard"` | `RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}` |
-| Relatórios global (`/relatorios`) | `ResourceGuard resource="relatorios"` | `RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}` |
-| Relatórios leads-sem-tag | `ResourceGuard resource="relatorios"` | `RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}` |
+| Arquivo | O que muda |
+|---------|-----------|
+| `src/contexts/TwilioContext.tsx` | Adicionar configuração de codec, edge, DSCP e token refresh no Device |
 
-### Sidebar
+### Detalhes da mudança
 
-Na sidebar (`AppSidebar.tsx`), o item "Visão Diretor" atualmente usa `resource: "dashboard"`. Trocar para `requiredRoles: ["admin", "manager", "coordenador"]` para que não apareça no menu de roles operacionais.
+Na criação do Device (linha 183), adicionar:
 
-O item "Relatórios" global também precisa do mesmo tratamento.
+```typescript
+const twilioDevice = new Device(data.token, {
+  logLevel: 1,
+  codecPreferences: ['opus', 'pcmu'],
+  edge: 'south-america',
+  enableDscp: true,
+  closeProtection: true,
+});
+```
 
-### Arquivos a alterar
+E adicionar handler de `tokenWillExpire` para renovar o token antes de expirar durante uma chamada ativa:
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/App.tsx` | Linhas 186, 202-203: trocar `ResourceGuard` por `RoleGuard` nas 3 rotas |
-| `src/components/layout/AppSidebar.tsx` | Item "Visão Diretor": trocar `resource: "dashboard"` por `requiredRoles: ["admin", "manager", "coordenador"]`. Idem para item "Relatórios" global |
+```typescript
+twilioDevice.on('tokenWillExpire', async () => {
+  console.log('Twilio token will expire soon, refreshing...');
+  const { data: refreshData } = await supabase.functions.invoke('twilio-token', {
+    body: { identity: user.email || user.id }
+  });
+  if (refreshData?.token) {
+    twilioDevice.updateToken(refreshData.token);
+    tokenCreatedAt.current = Date.now();
+  }
+});
+```
 
-### O que NÃO muda
-- BU-specific relatórios (consórcio, crédito, projetos, etc.) continuam com `ResourceGuard resource="relatorios"` — controlados pelo banco
-- Chairman continua com `RoleGuard ['admin', 'manager']`
-- Todas as outras rotas ResourceGuard permanecem iguais
-
-### Resultado
-- Roles operacionais (sdr, closer, assistente, marketing, viewer) não verão "Visão Diretor" nem "Relatórios" global
-- BU relatórios continuam acessíveis conforme permissões do banco
-- O admin continua controlando acesso a BU pages via `/admin/permissoes`
+### Resultado esperado
+- **Opus codec**: melhor qualidade de áudio, menos chiado
+- **Edge south-america**: menor latência para ligações no Brasil
+- **DSCP**: priorização de pacotes de voz na rede
+- **Token refresh automático**: evita queda por expiração de token durante chamada longa
+- **Close protection**: avisa o usuário antes de fechar a aba durante chamada
 
