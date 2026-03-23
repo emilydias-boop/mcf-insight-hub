@@ -115,7 +115,7 @@ const menuItems: MenuItem[] = [
     title: "Visão Diretor",
     url: "/dashboard",
     icon: LayoutDashboard,
-    resource: "dashboard",
+    requiredRoles: ["admin", "manager", "coordenador"],
   },
 
   // ===== BUSINESS UNITS =====
