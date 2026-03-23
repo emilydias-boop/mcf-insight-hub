@@ -263,19 +263,4 @@ export const PRODUCT_CATEGORY_OPTIONS = [
   { value: "credito", label: "Crédito" },
   { value: "outros", label: "Outros" },
 ];
-  { value: "incorporador", label: "Incorporador MCF" },
-  { value: "consorcio", label: "Consórcio" },
-  { value: "credito", label: "Crédito" },
-  { value: "projetos", label: "Projetos" },
-  { value: "outros", label: "Outros" },
-];
-
-// Categorias disponíveis (baseado nos dados existentes)
-export const PRODUCT_CATEGORY_OPTIONS = [
-  { value: "a010", label: "A010 - Consultoria" },
-  { value: "incorporador", label: "Incorporador" },
-  { value: "contrato", label: "Contrato" },
-  { value: "consorcio", label: "Consórcio" },
-  { value: "credito", label: "Crédito" },
-  { value: "outros", label: "Outros" },
 ];
