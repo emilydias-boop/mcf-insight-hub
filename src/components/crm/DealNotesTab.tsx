@@ -191,6 +191,7 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
             outcome: c.outcome || undefined
           }))
       ];
+      console.log('[DealNotesTab] combined notes total:', combined.length);
       
       // Ordenar por data (mais recente primeiro)
       return combined.sort((a, b) => 
