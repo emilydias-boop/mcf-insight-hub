@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/select";
 import {
   useUpdateProductConfiguration,
+  useCreateProductConfiguration,
   TARGET_BU_OPTIONS,
   PRODUCT_CATEGORY_OPTIONS,
   ProductConfiguration,
@@ -49,6 +50,7 @@ import { Loader2 } from "lucide-react";
 import { PriceHistorySection } from "./PriceHistorySection";
 
 const formSchema = z.object({
+  product_name: z.string().min(1, "Nome do produto é obrigatório"),
   product_code: z.string().nullable(),
   display_name: z.string().nullable(),
   product_category: z.string(),
@@ -65,14 +67,17 @@ interface ProductConfigDrawerProps {
   product: ProductConfiguration | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  isCreateMode?: boolean;
 }
 
 export function ProductConfigDrawer({
   product,
   open,
   onOpenChange,
+  isCreateMode = false,
 }: ProductConfigDrawerProps) {
   const updateMutation = useUpdateProductConfiguration();
+  const createMutation = useCreateProductConfiguration();
   const [priceChanged, setPriceChanged] = useState(false);
   const [effectiveFrom, setEffectiveFrom] = useState<Date>(() => {
     const today = new Date();
@@ -83,6 +88,7 @@ export function ProductConfigDrawer({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      product_name: "",
       product_code: "",
       display_name: "",
       product_category: "outros",
@@ -95,8 +101,22 @@ export function ProductConfigDrawer({
   });
 
   useEffect(() => {
-    if (product) {
+    if (isCreateMode) {
       form.reset({
+        product_name: "",
+        product_code: "",
+        display_name: "",
+        product_category: "outros",
+        target_bu: null,
+        reference_price: 0,
+        is_active: true,
+        count_in_dashboard: true,
+        notes: "",
+      });
+      setPriceChanged(false);
+    } else if (product) {
+      form.reset({
+        product_name: product.product_name,
         product_code: product.product_code || "",
         display_name: product.display_name || "",
         product_category: product.product_category,
@@ -111,17 +131,33 @@ export function ProductConfigDrawer({
       today.setHours(0, 0, 0, 0);
       setEffectiveFrom(today);
     }
-  }, [product, form]);
+  }, [product, form, isCreateMode, open]);
 
   // Watch price changes
   const currentPrice = form.watch("reference_price");
   useEffect(() => {
-    if (product) {
+    if (product && !isCreateMode) {
       setPriceChanged(Number(currentPrice) !== product.reference_price);
     }
-  }, [currentPrice, product]);
+  }, [currentPrice, product, isCreateMode]);
 
   const onSubmit = async (values: FormValues) => {
+    if (isCreateMode) {
+      await createMutation.mutateAsync({
+        product_name: values.product_name,
+        product_code: values.product_code || null,
+        display_name: values.display_name || null,
+        product_category: values.product_category,
+        target_bu: values.target_bu,
+        reference_price: values.reference_price,
+        is_active: values.is_active,
+        count_in_dashboard: values.count_in_dashboard,
+        notes: values.notes || null,
+      });
+      onOpenChange(false);
+      return;
+    }
+
     if (!product) return;
 
     await updateMutation.mutateAsync({
@@ -142,18 +178,40 @@ export function ProductConfigDrawer({
     onOpenChange(false);
   };
 
+  const isPending = isCreateMode ? createMutation.isPending : updateMutation.isPending;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Editar Produto</SheetTitle>
+          <SheetTitle>{isCreateMode ? "Novo Produto" : "Editar Produto"}</SheetTitle>
           <SheetDescription className="truncate">
-            {product?.product_name}
+            {isCreateMode ? "Criar um novo produto manualmente" : product?.product_name}
           </SheetDescription>
         </SheetHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 mt-6">
+            {/* Product Name - only editable in create mode */}
+            {isCreateMode && (
+              <FormField
+                control={form.control}
+                name="product_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome do Produto *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Nome exato do produto" {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      Nome que será usado para matching com transações Hubla
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             <FormField
               control={form.control}
               name="product_code"
@@ -274,7 +332,7 @@ export function ProductConfigDrawer({
               )}
             />
 
-            {priceChanged && (
+            {priceChanged && !isCreateMode && (
               <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 p-4 space-y-2">
                 <FormLabel className="text-sm font-medium">Vigência a partir de</FormLabel>
                 <Popover>
@@ -376,7 +434,7 @@ export function ProductConfigDrawer({
               )}
             />
 
-            <PriceHistorySection productConfigId={product?.id ?? null} />
+            {!isCreateMode && <PriceHistorySection productConfigId={product?.id ?? null} />}
 
             <div className="flex gap-3 pt-4">
               <Button
@@ -390,12 +448,12 @@ export function ProductConfigDrawer({
               <Button
                 type="submit"
                 className="flex-1"
-                disabled={updateMutation.isPending}
+                disabled={isPending}
               >
-                {updateMutation.isPending && (
+                {isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Salvar
+                {isCreateMode ? "Criar Produto" : "Salvar"}
               </Button>
             </div>
           </form>
