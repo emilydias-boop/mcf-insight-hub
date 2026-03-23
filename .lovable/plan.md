@@ -1,83 +1,53 @@
 
 
-## Plano: Corrigir acesso negado para roles criadas pelo admin
+## Plano: Corrigir role não atualizada para assistente_administrativo
 
 ### Diagnóstico
 
-O sistema tem **dois mecanismos de controle de acesso paralelos e inconsistentes**:
+O banco de dados **já está correto** — o Antony Nicolas tem `assistente_administrativo` na tabela `user_roles`. O problema tem duas causas:
 
-1. **`RoleGuard`** (hardcoded) — usado em ~40 rotas no `App.tsx` com listas fixas como `['admin', 'manager', 'coordenador']`. Qualquer role nova (ex: `assistente_administrativo`, `marketing`) é bloqueada automaticamente porque não está na lista.
+1. **AuthContext.tsx desatualizado**: O tipo `AppRole` (linha 8) e o mapa `ROLE_PRIORITY` (linhas 10-20) não incluem `assistente_administrativo`, `marketing`, `gr` e outros cargos novos. Quando o JWT retorna essas roles, elas recebem prioridade `99` e podem ser ignoradas ou mal interpretadas.
 
-2. **`ResourceGuard`** (banco de dados) — usado em ~12 rotas, consulta a tabela `role_permissions`. Funciona corretamente MAS a role `assistente_administrativo` **não tem nenhuma permissão configurada** na tabela.
+2. **JWT do usuário ainda contém a role antiga**: O token JWT só é atualizado no próximo login ou refresh automático (~1h). Como o admin mudou a role, o usuário precisa re-logar para o JWT refletir a nova role. O sistema não força refresh do token de outro usuário.
 
-Resultado: o usuário `assistente_administrativo` bate em `RoleGuard` → bloqueado, ou bate em `ResourceGuard` → sem permissão no banco → bloqueado.
+### Correção
 
-### Dados do banco
+| Arquivo | O que muda |
+|---------|-----------|
+| `src/contexts/AuthContext.tsx` | Adicionar `assistente_administrativo`, `marketing`, `gr` ao tipo `AppRole` e ao `ROLE_PRIORITY` |
+| `src/hooks/useUserMutations.ts` | No `useUpdateUserRole`, após sucesso, mostrar toast informando que o usuário precisa re-logar para a mudança ter efeito |
 
-```text
-Roles com permissões configuradas (permission_level != 'none'):
-- admin: acesso total (bypass)
-- manager: vários recursos
-- coordenador: vários recursos
-- viewer: dashboard, alertas, custos, playbook, projetos, receita, relatorios, configuracoes
-- sdr: alertas, configuracoes, crm, fechamento_sdr, playbook, tv_sdr
-- closer: alertas, configuracoes, crm, playbook, tv_sdr
-- assistente_administrativo: NENHUMA PERMISSÃO
-- marketing: NENHUMA PERMISSÃO
+### Detalhes
+
+1. **Atualizar `AppRole` type**:
+```typescript
+type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' 
+  | 'closer_sombra' | 'financeiro' | 'rh' | 'gr' | 'marketing' | 'assistente_administrativo';
 ```
 
-### Solução em 2 partes
-
-#### Parte 1: Migrar rotas de RoleGuard para ResourceGuard
-
-Trocar `RoleGuard` por `ResourceGuard` nas rotas que já possuem recurso equivalente na tabela `role_permissions`. Isso garante que qualquer role com permissão configurada no banco terá acesso.
-
-| Rota | Antes | Depois |
-|------|-------|--------|
-| BU relatórios (4 rotas) | `RoleGuard ['admin','manager','coordenador']` | `ResourceGuard resource="relatorios"` |
-| BU documentos estratégicos (5 rotas) | `RoleGuard ['admin','manager','coordenador']` | `ResourceGuard resource="relatorios"` |
-| Consórcio index/importar/fechamento/vendas | `RoleGuard` hardcoded | `ResourceGuard resource="crm"` |
-| BU Marketing | `RoleGuard ['admin','manager','coordenador']` | `ResourceGuard resource="dashboard"` (ou novo recurso `marketing`) |
-| Tarefas | `RoleGuard ['admin','manager','coordenador']` | `ResourceGuard resource="configuracoes"` |
-
-**Manter RoleGuard** apenas em:
-- Admin pages (`/admin/*`) — apenas admin
-- Chairman — apenas admin/manager
-- Meu Fechamento — apenas sdr/closer (role-specific feature)
-- CRM routes internos — sdr/closer/coordenador (operacional)
-
-#### Parte 2: Configurar permissões para roles sem permissão
-
-Inserir permissões na tabela `role_permissions` para `assistente_administrativo` e `marketing` com os recursos que fazem sentido:
-
-```sql
--- assistente_administrativo: acesso de visualização a recursos administrativos
-INSERT INTO role_permissions (role, resource, permission_level, bu) VALUES
-('assistente_administrativo', 'dashboard', 'view', null),
-('assistente_administrativo', 'configuracoes', 'view', null),
-('assistente_administrativo', 'relatorios', 'view', null),
-('assistente_administrativo', 'alertas', 'view', null),
-('assistente_administrativo', 'playbook', 'view', null);
-
--- marketing: acesso a recursos de marketing
-INSERT INTO role_permissions (role, resource, permission_level, bu) VALUES
-('marketing', 'dashboard', 'view', null),
-('marketing', 'relatorios', 'view', null),
-('marketing', 'alertas', 'view', null),
-('marketing', 'playbook', 'view', null);
+2. **Atualizar `ROLE_PRIORITY`**:
+```typescript
+const ROLE_PRIORITY: Record<string, number> = {
+  admin: 1,
+  manager: 2,
+  coordenador: 3,
+  closer: 4,
+  closer_sombra: 5,
+  financeiro: 6,
+  rh: 7,
+  gr: 8,
+  assistente_administrativo: 9,
+  marketing: 10,
+  sdr: 11,
+  viewer: 12,
+};
 ```
 
-### Arquivos a alterar
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/App.tsx` | Trocar ~15 `RoleGuard` por `ResourceGuard` nas rotas listadas acima |
-| `src/pages/bu-*/Relatorios.tsx` (4 arquivos) | Remover `RoleGuard`, já tratado pelo `App.tsx` ou trocar por `ResourceGuard` |
-| Tabela `role_permissions` | Inserir permissões para `assistente_administrativo` e `marketing` |
+3. **Melhorar feedback ao trocar role**:
+   - Toast de sucesso: "Role atualizado com sucesso. O usuário precisa fazer logout e login novamente para a mudança ter efeito."
 
 ### Resultado
-- Qualquer role com permissão configurada no banco acessa as páginas corretas
-- O admin controla tudo pela tela de permissões (`/admin/permissoes`)
-- Novas roles adicionadas no futuro funcionam automaticamente (só configurar no banco)
-- Routes operacionais (CRM, fechamento) mantêm RoleGuard por serem features role-specific
+- Roles novas (`assistente_administrativo`, `marketing`, `gr`) são reconhecidas pelo AuthContext
+- O admin recebe feedback claro de que o usuário precisa re-logar
+- O sistema funciona corretamente após o re-login do usuário
 
