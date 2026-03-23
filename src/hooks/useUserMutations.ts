@@ -176,21 +176,37 @@ export const useUpdateUserAccess = () => {
   });
 };
 
-// ===== NOVA MUTATION: Enviar link de reset de senha =====
+// ===== NOVA MUTATION: Enviar link de reset de senha via Edge Function (admin) =====
 export const useSendPasswordReset = () => {
   return useMutation({
     mutationFn: async ({ email }: { email: string }) => {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `https://mcfgestao.com/reset-password`,
+      const { data: result, error } = await supabase.functions.invoke("admin-send-reset", {
+        body: { email },
       });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(error.message || "Erro ao enviar link de reset");
+      }
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+
+      return result;
     },
     onSuccess: () => {
       toast({ title: "Link de reset enviado", description: "O usuário receberá um email para redefinir a senha." });
     },
     onError: (error: any) => {
-      toast({ title: "Erro ao enviar link", description: error.message, variant: "destructive" });
+      const msg = error.message || "";
+      const isRateLimit = msg.toLowerCase().includes("rate limit") || msg.includes("429");
+      toast({
+        title: isRateLimit ? "Limite de envios atingido" : "Erro ao enviar link",
+        description: isRateLimit
+          ? "Aguarde alguns minutos antes de tentar novamente."
+          : msg,
+        variant: "destructive",
+      });
     },
   });
 };
