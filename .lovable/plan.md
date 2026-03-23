@@ -1,60 +1,62 @@
 
 
-## Plano: Corrigir envio de email de reset + bugs no create-user
+## Plano: Corrigir abas de Configurações (Notificações, Segurança, Integrações)
 
-### Diagnóstico
+### Problemas identificados
 
-Analisei os logs da Edge Function `create-user` e encontrei **3 problemas**:
+**1. Notificações** — Completamente não-funcional
+- Os switches usam `defaultChecked` (uncontrolled) sem nenhum estado React
+- O botão "Salvar Preferências" apenas mostra um toast genérico sem salvar nada no banco
+- Nenhuma preferência de notificação é persistida
 
-#### 1. Email de reset: enviado mas possivelmente não entregue
-O `recovery_sent_at` está preenchido no banco, ou seja, o Supabase processou o `resetPasswordForEmail`. Porém, sem um domínio de email customizado configurado, os emails são enviados pelo SMTP padrão do Supabase que tem **rate limit de ~3-4 emails/hora** e frequentemente caem no spam. Este é provavelmente o motivo de o email não chegar.
+**2. Segurança** — Troca de senha funciona no código, mas a aba tem 2FA desabilitado sem funcionalidade real
+- O código de `handleChangePassword` parece correto (usa `supabase.auth.updateUser`)
+- Se está falhando silenciosamente, é porque o `catch` vazio na linha 83 engole o erro
 
-#### 2. Squad não está salvando (erro nos logs)
-```
-Error updating profile squad: malformed array literal: "a010"
-```
-O campo `squad` é `TEXT[]` (array), mas o código envia uma string simples `"a010"` em vez de `["a010"]`.
-
-#### 3. Employee não está sendo criado (erro nos logs)
-```
-Could not find the 'ativo' column of 'employees'
-```
-O código usa `ativo: true` mas a coluna na tabela `employees` se chama `status`, não `ativo`.
+**3. Integrações** — Completamente estático
+- Lista hardcoded de "Manus", "Stripe", "SendGrid" com badges fixos
+- Não reflete o estado real de nenhuma integração do sistema
 
 ---
 
-### Correções
+### Correções propostas
 
-| Arquivo | O que muda |
-|---------|-----------|
-| `supabase/functions/create-user/index.ts` | 1. Corrigir squad para enviar como array `[squad]` em vez de string. 2. Trocar `ativo: true` por campo correto ou remover. 3. Adicionar `nome_completo` no insert do employee (campo existente) |
+| Aba | Arquivo | O que muda |
+|-----|---------|-----------|
+| Notificações | `src/pages/Configuracoes.tsx` | Conectar switches a estado controlado + persistir no Supabase via `dashboard_preferences` (campos `notify_email`, `notify_push`, `notify_sms`, `notify_critical`, `notify_daily_summary`) |
+| Notificações | Migration SQL | Adicionar colunas de notificação na tabela `dashboard_preferences` |
+| Segurança | `src/pages/Configuracoes.tsx` | Remover catch vazio para que erros de senha apareçam via toast do hook |
+| Integrações | `src/pages/Configuracoes.tsx` | Mostrar integrações reais do sistema (Clint CRM, Twilio, Calendly) com status dinâmico baseado em verificação de conectividade |
 
-#### Correção do squad (linha 144):
-```typescript
-// De:
-.update({ squad })
-// Para:
-.update({ squad: [squad] })
+### Detalhe: Notificações
+
+Adicionar 5 colunas booleanas à tabela `dashboard_preferences`:
+```sql
+ALTER TABLE dashboard_preferences 
+ADD COLUMN IF NOT EXISTS notify_email boolean DEFAULT true,
+ADD COLUMN IF NOT EXISTS notify_push boolean DEFAULT true,
+ADD COLUMN IF NOT EXISTS notify_sms boolean DEFAULT false,
+ADD COLUMN IF NOT EXISTS notify_critical boolean DEFAULT true,
+ADD COLUMN IF NOT EXISTS notify_daily_summary boolean DEFAULT true;
 ```
 
-#### Correção do employee (linha 176):
-```typescript
-// De:
-.insert({ user_id, nome: full_name, email, cargo_catalogo_id, ativo: true })
-// Para:
-.insert({ user_id, nome_completo: full_name, email_pessoal: email, cargo_catalogo_id, status: 'ativo' })
-```
+Os switches passarão a ser controlados, lendo do banco e salvando via mutation.
 
-### Sobre o email de reset
+### Detalhe: Segurança
 
-O email está sendo disparado corretamente pelo Supabase. As possíveis causas de não recebimento:
-- **Rate limit do SMTP padrão do Supabase** (o mais provável)
-- Email caindo em spam/lixo eletrônico
+Remover o `catch {}` vazio para que o `onError` do hook `useUpdateMyPassword` (que já tem `toast.error`) funcione corretamente.
 
-A solução definitiva seria configurar um domínio de email customizado via Cloud → Emails, mas como correção imediata, posso verificar se o email está sendo bloqueado e garantir que o link de reset funcione quando recebido.
+### Detalhe: Integrações
+
+Substituir a lista estática por verificações reais:
+- **Clint CRM**: Verificar se existe `clint_api_key` nos secrets (ou se sync-deals está rodando)
+- **Twilio**: Verificar se existe configuração em `automation_settings` ou secret do Twilio
+- **Calendly**: Verificar se closers têm `calendly_link` preenchido
+
+Cada integração mostrará status dinâmico baseado em dados reais.
 
 ### Resultado esperado
-- Squad salva corretamente como array
-- Employee é criado corretamente no banco
-- Email de reset continua sendo enviado (o delivery depende do SMTP do Supabase)
+- Notificações salvam e carregam preferências reais do banco
+- Erros de senha aparecem com toast visível
+- Integrações mostram status real das conexões do sistema
 
