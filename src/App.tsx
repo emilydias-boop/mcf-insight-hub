@@ -305,15 +305,15 @@ const App = () => (
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
               
-              <Route path="leilao/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="leilao" /></RoleGuard>} />
+              <Route path="leilao/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="leilao" /></ResourceGuard>} />
               <Route path="leilao" element={<ResourceGuard resource="leilao"><Leilao /></ResourceGuard>} />
               
               {/* BU Marketing Routes */}
-              <Route path="bu-marketing" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><MarketingDashboard /></RoleGuard>} />
-              <Route path="bu-marketing/campanhas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CampanhasDashboard /></RoleGuard>} />
-              <Route path="bu-marketing/aquisicao-a010" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><A010AcquisitionDashboard /></RoleGuard>} />
-              <Route path="bu-marketing/a010-links-config" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><A010LinkMappingsConfig /></RoleGuard>} />
-              <Route path="bu-marketing/documentos-estrategicos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DocumentosEstrategicos bu="marketing" /></RoleGuard>} />
+              <Route path="bu-marketing" element={<ResourceGuard resource="dashboard"><MarketingDashboard /></ResourceGuard>} />
+              <Route path="bu-marketing/campanhas" element={<ResourceGuard resource="dashboard"><CampanhasDashboard /></ResourceGuard>} />
+              <Route path="bu-marketing/aquisicao-a010" element={<ResourceGuard resource="dashboard"><A010AcquisitionDashboard /></ResourceGuard>} />
+              <Route path="bu-marketing/a010-links-config" element={<ResourceGuard resource="dashboard" requiredLevel="edit"><A010LinkMappingsConfig /></ResourceGuard>} />
+              <Route path="bu-marketing/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="marketing" /></ResourceGuard>} />
               <Route path="configuracoes" element={<ResourceGuard resource="configuracoes"><Configuracoes /></ResourceGuard>} />
               <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />
               <Route path="admin/permissoes" element={<RoleGuard allowedRoles={['admin']}><AdminPermissoes /></RoleGuard>} />
