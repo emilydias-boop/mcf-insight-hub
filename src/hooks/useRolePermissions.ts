@@ -130,6 +130,35 @@ export const useRolePermissions = (buFilter?: string | null) => {
     return permissionsMap[role]?.[resource] || 'none';
   };
 
+  // Query to fetch ALL role_permissions (across all BUs) — used for override indicators
+  const { data: allPermissions = [] } = useQuery({
+    queryKey: ['role-permissions-all-bus'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('role_permissions')
+        .select('role, resource, bu');
+      if (error) throw error;
+      return (data || []) as { role: string; resource: string; bu: string | null }[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Set of "role:resource" combos that have BU-specific overrides
+  const buOverrides = new Set(
+    allPermissions
+      .filter(p => p.bu !== null)
+      .map(p => `${p.role}:${p.resource}`)
+  );
+
+  const hasOverride = (role: string, resource: string): boolean => {
+    return buOverrides.has(`${role}:${resource}`);
+  };
+
+  // Check if a specific resource has ANY BU override (any role)
+  const resourceHasOverride = (resource: string): boolean => {
+    return allPermissions.some(p => p.bu !== null && p.resource === resource);
+  };
+
   return {
     permissions,
     permissionsMap,
@@ -137,5 +166,7 @@ export const useRolePermissions = (buFilter?: string | null) => {
     updatePermission,
     updatePermissions,
     getPermission,
+    hasOverride,
+    resourceHasOverride,
   };
 };
