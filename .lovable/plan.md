@@ -1,53 +1,41 @@
 
 
-## Plano: Corrigir role não atualizada para assistente_administrativo
+## Plano: Restringir "Visão Diretor" e "Relatórios" a roles de gestão
 
-### Diagnóstico
+### Problema
 
-O banco de dados **já está correto** — o Antony Nicolas tem `assistente_administrativo` na tabela `user_roles`. O problema tem duas causas:
+Ao migrar de `RoleGuard` para `ResourceGuard`, páginas de gestão como "Visão Diretor" (`/dashboard`) e "Relatórios" (`/relatorios`) ficaram acessíveis a qualquer role que tenha `dashboard: view` ou `relatorios: view` — incluindo `assistente_administrativo`, `marketing`, `viewer`, etc. Essas páginas são de **nível diretoria/gestão** e não devem aparecer para cargos operacionais.
 
-1. **AuthContext.tsx desatualizado**: O tipo `AppRole` (linha 8) e o mapa `ROLE_PRIORITY` (linhas 10-20) não incluem `assistente_administrativo`, `marketing`, `gr` e outros cargos novos. Quando o JWT retorna essas roles, elas recebem prioridade `99` e podem ser ignoradas ou mal interpretadas.
+### Solução
 
-2. **JWT do usuário ainda contém a role antiga**: O token JWT só é atualizado no próximo login ou refresh automático (~1h). Como o admin mudou a role, o usuário precisa re-logar para o JWT refletir a nova role. O sistema não força refresh do token de outro usuário.
+Usar `RoleGuard` para páginas que são intrinsecamente de gestão, e manter `ResourceGuard` apenas para páginas que realmente devem ser controladas pelo banco.
 
-### Correção
+| Página | Antes (atual) | Depois |
+|--------|---------------|--------|
+| Visão Diretor (`/dashboard`) | `ResourceGuard resource="dashboard"` | `RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}` |
+| Relatórios global (`/relatorios`) | `ResourceGuard resource="relatorios"` | `RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}` |
+| Relatórios leads-sem-tag | `ResourceGuard resource="relatorios"` | `RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}` |
 
-| Arquivo | O que muda |
-|---------|-----------|
-| `src/contexts/AuthContext.tsx` | Adicionar `assistente_administrativo`, `marketing`, `gr` ao tipo `AppRole` e ao `ROLE_PRIORITY` |
-| `src/hooks/useUserMutations.ts` | No `useUpdateUserRole`, após sucesso, mostrar toast informando que o usuário precisa re-logar para a mudança ter efeito |
+### Sidebar
 
-### Detalhes
+Na sidebar (`AppSidebar.tsx`), o item "Visão Diretor" atualmente usa `resource: "dashboard"`. Trocar para `requiredRoles: ["admin", "manager", "coordenador"]` para que não apareça no menu de roles operacionais.
 
-1. **Atualizar `AppRole` type**:
-```typescript
-type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' 
-  | 'closer_sombra' | 'financeiro' | 'rh' | 'gr' | 'marketing' | 'assistente_administrativo';
-```
+O item "Relatórios" global também precisa do mesmo tratamento.
 
-2. **Atualizar `ROLE_PRIORITY`**:
-```typescript
-const ROLE_PRIORITY: Record<string, number> = {
-  admin: 1,
-  manager: 2,
-  coordenador: 3,
-  closer: 4,
-  closer_sombra: 5,
-  financeiro: 6,
-  rh: 7,
-  gr: 8,
-  assistente_administrativo: 9,
-  marketing: 10,
-  sdr: 11,
-  viewer: 12,
-};
-```
+### Arquivos a alterar
 
-3. **Melhorar feedback ao trocar role**:
-   - Toast de sucesso: "Role atualizado com sucesso. O usuário precisa fazer logout e login novamente para a mudança ter efeito."
+| Arquivo | Mudança |
+|---------|---------|
+| `src/App.tsx` | Linhas 186, 202-203: trocar `ResourceGuard` por `RoleGuard` nas 3 rotas |
+| `src/components/layout/AppSidebar.tsx` | Item "Visão Diretor": trocar `resource: "dashboard"` por `requiredRoles: ["admin", "manager", "coordenador"]`. Idem para item "Relatórios" global |
+
+### O que NÃO muda
+- BU-specific relatórios (consórcio, crédito, projetos, etc.) continuam com `ResourceGuard resource="relatorios"` — controlados pelo banco
+- Chairman continua com `RoleGuard ['admin', 'manager']`
+- Todas as outras rotas ResourceGuard permanecem iguais
 
 ### Resultado
-- Roles novas (`assistente_administrativo`, `marketing`, `gr`) são reconhecidas pelo AuthContext
-- O admin recebe feedback claro de que o usuário precisa re-logar
-- O sistema funciona corretamente após o re-login do usuário
+- Roles operacionais (sdr, closer, assistente, marketing, viewer) não verão "Visão Diretor" nem "Relatórios" global
+- BU relatórios continuam acessíveis conforme permissões do banco
+- O admin continua controlando acesso a BU pages via `/admin/permissoes`
 
