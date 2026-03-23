@@ -1,55 +1,30 @@
 
 
-## Plano: Corrigir qualidade de áudio e estabilidade das ligações Twilio
+## Plano: Corrigir erro de conexão do Twilio Device
 
 ### Diagnóstico
 
-O `Device` do Twilio Voice SDK está sendo criado com configuração mínima (apenas `logLevel: 1`). Faltam:
+O valor `edge: 'south-america'` configurado no Device **não é um edge válido** do Twilio Voice SDK. Os valores válidos são: `ashburn`, `dublin`, `frankfurt`, `singapore`, `sydney`, `tokyo`, `sao-paulo`, `roaming`.
 
-1. **Codec preferencial**: Sem especificar `opus` como codec preferido, o SDK pode negociar codecs de menor qualidade que causam chiado
-2. **Edge/Region**: Sem definir o edge mais próximo (`south-america`), o áudio trafega por servidores distantes, causando latência e drops
-3. **DSCP**: Sem `enableDscp: true`, os pacotes de áudio não recebem prioridade na rede
-4. **Close protection**: Sem handler de `tokenWillExpire`, o token pode expirar mid-call causando queda
+Com um edge inválido, o Device não consegue se registrar no servidor WebSocket do Twilio, resultando em erro de conexão.
 
 ### Correção
 
-| Arquivo | O que muda |
-|---------|-----------|
-| `src/contexts/TwilioContext.tsx` | Adicionar configuração de codec, edge, DSCP e token refresh no Device |
+| Arquivo | Mudança |
+|---------|---------|
+| `src/contexts/TwilioContext.tsx` | Trocar `edge: 'south-america'` por `edge: 'sao-paulo'` |
 
-### Detalhes da mudança
-
-Na criação do Device (linha 183), adicionar:
-
+Linha 186:
 ```typescript
-const twilioDevice = new Device(data.token, {
-  logLevel: 1,
-  codecPreferences: ['opus', 'pcmu'],
-  edge: 'south-america',
-  enableDscp: true,
-  closeProtection: true,
-});
+// Antes
+edge: 'south-america',
+
+// Depois
+edge: 'sao-paulo',
 ```
 
-E adicionar handler de `tokenWillExpire` para renovar o token antes de expirar durante uma chamada ativa:
-
-```typescript
-twilioDevice.on('tokenWillExpire', async () => {
-  console.log('Twilio token will expire soon, refreshing...');
-  const { data: refreshData } = await supabase.functions.invoke('twilio-token', {
-    body: { identity: user.email || user.id }
-  });
-  if (refreshData?.token) {
-    twilioDevice.updateToken(refreshData.token);
-    tokenCreatedAt.current = Date.now();
-  }
-});
-```
-
-### Resultado esperado
-- **Opus codec**: melhor qualidade de áudio, menos chiado
-- **Edge south-america**: menor latência para ligações no Brasil
-- **DSCP**: priorização de pacotes de voz na rede
-- **Token refresh automático**: evita queda por expiração de token durante chamada longa
-- **Close protection**: avisa o usuário antes de fechar a aba durante chamada
+### Resultado
+- O Device conecta ao edge correto do Twilio em São Paulo
+- Menor latência para chamadas no Brasil
+- Registro do dispositivo funciona normalmente
 
