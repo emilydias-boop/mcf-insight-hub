@@ -124,9 +124,6 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
 
   // Get meetings for a specific SDR (only if they're in the valid SDR list)
   const getMeetingsForSDR = (sdrEmail: string): MeetingV2[] => {
-    if (!validSdrEmails.has(sdrEmail.toLowerCase())) {
-      return [];
-    }
     const meetings = meetingsQuery.data || [];
     const sdrLower = sdrEmail.toLowerCase();
     const filtered = meetings.filter(
