@@ -1,53 +1,48 @@
 
 
-## Plano: Corrigir devolução silenciosa de equipamento
+## Plano: Nova aba "Todas Reuniões" + Corrigir notas do consórcio
 
-### Diagnóstico
+### Problema 1: Falta aba com visão completa de todas as reuniões
+Hoje a Pós-Reunião só mostra abas por status (Realizadas aguardando ação, Propostas, Sem Sucesso). Não há como ver **todas** as reuniões independente do status atual, nem filtrar por status específico.
 
-Identifiquei dois problemas nos network requests:
+### Problema 2: Notas das reuniões de consórcio não aparecem no lead
+As notas do closer são salvas na tabela `meeting_slot_attendees` (campo `closer_notes`), mas o `DealNotesTab` já busca essas notas. O problema provavelmente é que os deals de consórcio não possuem registros em `meeting_slot_attendees` vinculados — as reuniões consórcio usam `owner_id` no deal mas podem não ter um `meeting_slot` associado. Preciso verificar se o drawer de agenda do consórcio está de fato salvando as notas corretamente.
 
-**1. Query de assignments quebrada (HTTP 300)**
-A query `useAssetAssignments` usa `termo:asset_terms(*)` mas existem duas foreign keys entre `asset_assignments` e `asset_terms` (`asset_terms_assignment_id_fkey` e `asset_assignments_termo_id_fkey`). O PostgREST retorna erro 300 "ambiguous relationship" e a query falha silenciosamente.
-
-**2. Erro engolido no dialog de devolução**
-O `AssetReturnDialog.handleSubmit` tem um `catch {}` vazio. Como usa `mutateAsync`, quando o mutation falha a exceção vai para o caller, mas o catch vazio a engole -- nenhum toast de erro aparece e o dialog não fecha.
+---
 
 ### Alterações
 
 | Arquivo | O que muda |
 |---------|-----------|
-| `src/hooks/useAssetAssignments.ts` (linhas 24, 48) | Desambiguar o join: `termo:asset_terms!asset_assignments_termo_id_fkey(*)` |
-| `src/components/patrimonio/AssetReturnDialog.tsx` (linha 69) | Remover catch vazio para que o `onError` do mutation exiba o toast de erro |
+| `src/hooks/useConsorcioPostMeeting.ts` | Novo hook `useTodasReunioesConsorcio()` que busca todos os deals de consórcio com meeting data, closer, status/stage, e notas (closer_notes do attendee) |
+| `src/pages/crm/PosReuniao.tsx` | Nova aba "Todas Reuniões" com tabela completa, filtros de status, closer, pipeline, data, busca. Closers veem apenas suas reuniões. Export inclui notas |
+| `src/hooks/useConsorcioPostMeeting.ts` | Garantir que `CompletedMeeting` e o novo tipo incluam campo `closer_notes` vindo de `meeting_slot_attendees` |
 
-### Detalhe tecnico
+### Nova aba "Todas Reuniões"
 
-**useAssetAssignments.ts** linha 24:
-```typescript
-// De:
-termo:asset_terms(*)
-// Para:
-termo:asset_terms!asset_assignments_termo_id_fkey(*)
-```
+**Dados**: Query busca deals de consórcio (todas as stages, não apenas R1 Realizada), faz JOIN com `meeting_slot_attendees` para pegar `closer_notes` e data da reunião.
 
-**AssetReturnDialog.tsx** linhas 65-70:
-```typescript
-// De:
-try {
-  await returnAsset.mutateAsync({...});
-  onOpenChange(false);
-} catch {
-  // handled in hook
-}
+**Filtros**:
+- Busca por nome/telefone
+- Pipeline (Viver de Aluguel / Efeito Alavanca)
+- Closer
+- Status/Stage (multi-select ou dropdown com todas as stages: R1 Realizada, Proposta Enviada, Contrato Pago, Sem Sucesso, etc.)
+- Data início/fim
 
-// Para:
-await returnAsset.mutateAsync({...});
-onOpenChange(false);
-```
-Removendo o try/catch, o `onError` do hook será chamado corretamente e exibirá o toast de erro. O `finally` continua tratando o `isSubmitting`.
+**Permissão**: Se `role === 'closer'`, usa `useMyCloser()` para identificar o closer logado e filtra automaticamente `owner_id` pelo email do closer. Admins/managers veem tudo.
+
+**Export Excel**: Inclui coluna "Notas" com o `closer_notes` do attendee.
+
+### Correção de notas
+
+O hook `useRealizadas()` já busca meeting dates via `meeting_slot_attendees`, mas não traz `closer_notes`. O novo hook `useTodasReunioesConsorcio()` incluirá `closer_notes` e `notes` do attendee na query. Isso garante que as notas salvas pelo closer na agenda apareçam tanto na aba "Todas Reuniões" quanto no export.
+
+Se as notas não estão sendo **salvas**, o problema é que o closer salva no `meeting_slot_attendees.closer_notes` mas o deal não tem `meeting_slot_attendee` associado. Verificarei se há attendees vinculados e, se necessário, o hook buscará notas também de `deal_activities` como fallback.
 
 ### Resultado esperado
-
-- A query de assignments para de retornar 300 e carrega os dados corretamente
-- Se a devolução funcionar: toast de sucesso + dialog fecha
-- Se falhar: toast de erro visível ao usuario
+- Nova aba "Todas Reuniões" na Pós-Reunião do consórcio com visão 360 de todas as reuniões
+- Closers veem apenas suas reuniões automaticamente
+- Filtro por status permite ver reuniões em qualquer etapa
+- Export Excel inclui notas do closer
+- Notas salvas na agenda aparecem corretamente no lead
 
