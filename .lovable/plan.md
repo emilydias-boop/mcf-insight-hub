@@ -1,49 +1,50 @@
 
 
-## Plano: Filtrar "Pendentes Hoje" por BU
+## Diagnóstico: Números dos Closers no "Meu Desempenho"
+
+### Dados reais do banco (Março 2026)
+
+| Closer | Total Real (sem filtro SDR) | Mostrando (com filtro SDR ativo) | Diferença | Motivo |
+|--------|---------------------------|----------------------------------|-----------|--------|
+| Mateus Macedo | 227 | 199 | -28 | 28 reuniões da Evellyn (inativa) |
+| Julio | 210 | 194 | -16 | 16 reuniões da Evellyn (inativa) |
+| Thayna | 204 | 197 | -7 | 6 Evellyn + 1 Hellen (inativas) |
+| Cristiane | 199 | 181 | -18 | 16 Evellyn + 2 Hellen (inativas) |
 
 ### Problema
 
-O hook `useMeetingsPendentesHoje` consulta `meeting_slot_attendees` sem nenhum filtro de BU. Ele conta R1 pendentes de **todas as BUs** (incorporador + consórcio), resultando em 60. A agenda do incorporador mostra 46 porque filtra por closers da BU correta.
+O hook `useR1CloserMetrics` (linha 454-457) exclui attendees cujo `booked_by` não pertence a um SDR ativo. A Evellyn agendou 66 reuniões em março antes de ser desativada — todas essas reuniões estão sumindo dos KPIs dos closers.
 
-### Correção
+O Julio mostra R1 Agendada = 194, mas na realidade tem 210 reuniões válidas. O mesmo padrão afeta todos os closers.
+
+### Correção proposta
+
+Remover o filtro de `validSdrEmails` na contagem de métricas dos closers. As reuniões já aconteceram ou foram agendadas — o fato do SDR ter sido desativado depois não invalida as reuniões.
 
 | Arquivo | O que muda |
 |---------|-----------|
-| `src/hooks/useMeetingsPendentesHoje.ts` | Aceitar parâmetro `buFilter` opcional. Fazer JOIN com `meeting_slots.closer_id` → `closers.bu` para filtrar pela BU |
-| `src/pages/crm/ReunioesEquipe.tsx` | Passar o squad ativo (ex: `'incorporador'`) para o hook |
+| `src/hooks/useR1CloserMetrics.ts` | Remover filtro por `validSdrEmails` nas linhas 454-457 (contagem de R1 Agendada, R1 Realizada, No-Show). Manter o filtro apenas para `is_partner = false` |
 
-### Detalhes
+### Detalhes da mudança
 
-A query passará a fazer JOIN com `closers` via `meeting_slots.closer_id` e filtrar `closers.bu = buFilter`:
-
+No loop de processamento de meetings (linhas 448-483), remover:
 ```typescript
-// useMeetingsPendentesHoje.ts
-export function useMeetingsPendentesHoje(buFilter?: string) {
-  // ...
-  const { data, error } = await supabase
-    .from("meeting_slot_attendees")
-    .select(`
-      status,
-      is_partner,
-      meeting_slot:meeting_slots!inner(
-        scheduled_at, 
-        meeting_type, 
-        closer_id
-      )
-    `)
-    .gte("meeting_slot.scheduled_at", startISO)
-    .lte("meeting_slot.scheduled_at", endISO)
-    .eq("meeting_slot.meeting_type", "r1");
-
-  // After fetching, filter by BU if needed
-  // Fetch closer BUs and cross-reference
+const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
+if (!bookedByEmail || !validSdrEmails.has(bookedByEmail)) {
+  return; // REMOVER ESTE FILTRO
+}
 ```
 
-Como o Supabase client não suporta facilmente JOIN de 3 níveis, a abordagem será:
-1. Buscar os `closer_id`s dos closers da BU ativa (query rápida em `closers`)
-2. Filtrar os attendees cujo `meeting_slot.closer_id` está nessa lista
+Também remover o mesmo filtro na contagem de contratos pagos (linhas 279-285) e outsides (linhas 376-377).
 
-### Resultado
-- "Pendentes Hoje" mostrará ~46 (apenas incorporador), consistente com a agenda e as metas
+### Resultado esperado
+
+| Closer | Antes | Depois |
+|--------|-------|--------|
+| Mateus | 199 | 227 |
+| Julio | 194 | 210 |
+| Thayna | 197 | 204 |
+| Cristiane | 181 | 199 |
+
+Os números passarão a refletir TODAS as reuniões reais, independente do status atual do SDR que agendou.
 
