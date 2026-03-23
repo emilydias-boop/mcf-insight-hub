@@ -42,6 +42,7 @@ export function useSdrMeetingsFromAgenda({
       startDate?.toISOString(),
       endDate?.toISOString(),
       sdrEmailFilter,
+      buFilter,
     ],
     queryFn: async (): Promise<MeetingV2[]> => {
       if (!startDate || !endDate) return [];
