@@ -335,8 +335,9 @@ export function useEmployeeMutations() {
       await supabase.from('employee_events').delete().eq('employee_id', id);
       await supabase.from('employee_notes').delete().eq('employee_id', id);
       await supabase.from('rh_nfse').delete().eq('employee_id', id);
-      // Desvincular asset_assignments
-      await supabase.from('asset_assignments').update({ employee_id: id }).eq('employee_id', id);
+      // Desvincular asset_assignments e asset_terms
+      await supabase.from('asset_terms').delete().eq('employee_id', id);
+      await supabase.from('asset_assignments').delete().eq('employee_id', id);
       // Deletar employee
       const { error } = await supabase
         .from('employees')
