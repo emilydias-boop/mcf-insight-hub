@@ -270,7 +270,7 @@ const App = () => (
               <Route path="bu-projetos/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="projetos" /></ResourceGuard>} />
               
               {/* BU Projetos CRM - Dedicado */}
-              <Route path="bu-projetos/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><BUCRMLayout bu="projetos" basePath="/bu-projetos/crm" /></RoleGuard>}>
+              <Route path="bu-projetos/crm" element={<ResourceGuard resource="crm"><BUCRMLayout bu="projetos" basePath="/bu-projetos/crm" /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />
                 <Route path="negocios" element={<Negocios />} />
