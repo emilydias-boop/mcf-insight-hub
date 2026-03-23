@@ -276,12 +276,9 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           }
         }
         
-        if (closerId && att.booked_by && !countedAttendeeIds.has(att.id)) {
-          const bookedByEmail = profileEmailMap.get(att.booked_by) || allProfileEmailMap.get(att.booked_by);
-          if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
-            contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
-            countedAttendeeIds.add(att.id);
-          }
+        if (closerId && !countedAttendeeIds.has(att.id)) {
+          contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
+          countedAttendeeIds.add(att.id);
         }
       });
 
@@ -289,12 +286,9 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       // Nota: fallback usa scheduled_at como data, então nunca é Outside por definição
       contractsWithoutTimestamp?.forEach(att => {
         const closerId = (att.meeting_slot as any)?.closer_id;
-        if (closerId && att.booked_by && !countedAttendeeIds.has(att.id)) {
-          const bookedByEmail = profileEmailMap.get(att.booked_by) || allProfileEmailMap.get(att.booked_by);
-          if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
-            contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
-            countedAttendeeIds.add(att.id);
-          }
+        if (closerId && !countedAttendeeIds.has(att.id)) {
+          contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
+          countedAttendeeIds.add(att.id);
         }
       });
 
