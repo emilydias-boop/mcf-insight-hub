@@ -1,47 +1,49 @@
 
 
-## Plano: Filtrar R1 Agendada por BU na RPC
+## Plano: Filtrar "Pendentes Hoje" por BU
 
 ### Problema
 
-A RPC `get_sdr_metrics_from_agenda` retorna R1 de **todas as BUs** (incorporador + consorcio). Hoje existem:
-- **44 attendees** em closers da BU incorporador (Mateus=15, Thayna=11, Cristiane=10, Julio=8)
-- **16 attendees** em closers da BU consorcio (Joao Pedro=9, Victoria=6, Thobson=1)
-- **Total: 60** (não 63 — a diferença anterior pode ter sido de attendees cancelados/rescheduled)
+O hook `useMeetingsPendentesHoje` consulta `meeting_slot_attendees` sem nenhum filtro de BU. Ele conta R1 pendentes de **todas as BUs** (incorporador + consórcio), resultando em 60. A agenda do incorporador mostra 46 porque filtra por closers da BU correta.
 
-A "Metas da Equipe" mostra 63 porque soma tudo sem filtrar por BU. A agenda mostra 44 corretamente porque filtra por closers da BU incorporador.
+### Correção
 
-### Solução
+| Arquivo | O que muda |
+|---------|-----------|
+| `src/hooks/useMeetingsPendentesHoje.ts` | Aceitar parâmetro `buFilter` opcional. Fazer JOIN com `meeting_slots.closer_id` → `closers.bu` para filtrar pela BU |
+| `src/pages/crm/ReunioesEquipe.tsx` | Passar o squad ativo (ex: `'incorporador'`) para o hook |
 
-A RPC precisa filtrar pelo `closer.bu` para retornar apenas reuniões da BU correta.
+### Detalhes
 
-| Componente | O que muda |
-|-----------|-----------|
-| Migration SQL | Adicionar parâmetro `bu_filter TEXT DEFAULT NULL` à RPC. Quando informado, faz JOIN com `closers` e filtra `WHERE closers.bu = bu_filter` |
-| `src/hooks/useSdrMetricsFromAgenda.ts` | Passar o parâmetro `bu_filter` para a RPC (recebendo do squad) |
-| `src/hooks/useTeamMeetingsData.ts` | Passar `squad` para `useSdrMetricsFromAgenda` |
-| `src/hooks/useSdrMeetingsFromAgenda.ts` | Também filtrar por BU na RPC `get_sdr_meetings_from_agenda` (se aplicável) |
+A query passará a fazer JOIN com `closers` via `meeting_slots.closer_id` e filtrar `closers.bu = buFilter`:
 
-### SQL proposto
+```typescript
+// useMeetingsPendentesHoje.ts
+export function useMeetingsPendentesHoje(buFilter?: string) {
+  // ...
+  const { data, error } = await supabase
+    .from("meeting_slot_attendees")
+    .select(`
+      status,
+      is_partner,
+      meeting_slot:meeting_slots!inner(
+        scheduled_at, 
+        meeting_type, 
+        closer_id
+      )
+    `)
+    .gte("meeting_slot.scheduled_at", startISO)
+    .lte("meeting_slot.scheduled_at", endISO)
+    .eq("meeting_slot.meeting_type", "r1");
 
-```sql
-CREATE OR REPLACE FUNCTION public.get_sdr_metrics_from_agenda(
-  start_date TEXT,
-  end_date TEXT,
-  sdr_email_filter TEXT DEFAULT NULL,
-  bu_filter TEXT DEFAULT NULL
-)
-...
-WHERE msa.status != 'cancelled'
-  AND ms.meeting_type = 'r1'
-  AND msa.is_partner = false
-  AND (sdr_email_filter IS NULL OR p_booker.email = sdr_email_filter)
-  AND (bu_filter IS NULL OR c.bu = bu_filter)  -- NEW
-...
+  // After fetching, filter by BU if needed
+  // Fetch closer BUs and cross-reference
 ```
 
+Como o Supabase client não suporta facilmente JOIN de 3 níveis, a abordagem será:
+1. Buscar os `closer_id`s dos closers da BU ativa (query rápida em `closers`)
+2. Filtrar os attendees cujo `meeting_slot.closer_id` está nessa lista
+
 ### Resultado
-- Metas da Equipe (Incorporador) mostrará **44** R1 Agendada para hoje, consistente com a agenda
-- Metas da Equipe (Consorcio) mostrará **16** separadamente
-- Sem bu_filter, continua retornando tudo (backward compatible)
+- "Pendentes Hoje" mostrará ~46 (apenas incorporador), consistente com a agenda e as metas
 
