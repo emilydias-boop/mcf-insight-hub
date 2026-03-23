@@ -181,13 +181,34 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
 
       // Create and register device
       const twilioDevice = new Device(data.token, {
-        logLevel: 1
+        logLevel: 1,
+        codecPreferences: [Device.Codec.Opus, Device.Codec.PCMU],
+        edge: 'south-america',
+        enableDscp: true,
+        closeProtection: true,
+      });
+
+      // Auto-refresh token before expiry during active calls
+      twilioDevice.on('tokenWillExpire', async () => {
+        console.log('Twilio token will expire soon, refreshing...');
+        try {
+          const { data: refreshData } = await supabase.functions.invoke('twilio-token', {
+            body: { identity: user?.email || user?.id }
+          });
+          if (refreshData?.token) {
+            twilioDevice.updateToken(refreshData.token);
+            tokenCreatedAt.current = Date.now();
+            console.log('Twilio token refreshed successfully');
+          }
+        } catch (err) {
+          console.error('Failed to refresh Twilio token:', err);
+        }
       });
 
       // Return Promise that resolves when device is registered
       return new Promise<boolean>((resolve) => {
         twilioDevice.on('registered', () => {
-          console.log('Twilio device registered');
+          console.log('Twilio device registered (edge: south-america, codec: opus)');
           setDeviceStatus('ready');
           setDevice(twilioDevice as unknown as TwilioDevice);
           resolve(true);
