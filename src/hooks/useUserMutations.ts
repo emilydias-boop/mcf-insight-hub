@@ -176,7 +176,7 @@ export const useUpdateUserAccess = () => {
   });
 };
 
-// ===== NOVA MUTATION: Enviar link de reset de senha via Edge Function (admin) =====
+// ===== NOVA MUTATION: Gerar link de reset de senha via Edge Function (admin) =====
 export const useSendPasswordReset = () => {
   return useMutation({
     mutationFn: async ({ email }: { email: string }) => {
@@ -185,25 +185,26 @@ export const useSendPasswordReset = () => {
       });
 
       if (error) {
-        throw new Error(error.message || "Erro ao enviar link de reset");
+        throw new Error(error.message || "Erro ao gerar link de reset");
       }
 
       if (result?.error) {
         throw new Error(result.error);
       }
 
-      return result;
-    },
-    onSuccess: () => {
-      toast({ title: "Link de reset enviado", description: "O usuário receberá um email para redefinir a senha." });
+      if (!result?.reset_link) {
+        throw new Error("Link de reset não foi retornado");
+      }
+
+      return result as { success: boolean; reset_link: string; redirect_to?: string };
     },
     onError: (error: any) => {
       const msg = error.message || "";
       const isRateLimit = msg.toLowerCase().includes("rate limit") || msg.includes("429");
       toast({
-        title: isRateLimit ? "Limite de envios atingido" : "Erro ao enviar link",
+        title: isRateLimit ? "Limite de envios atingido" : "Erro ao gerar link",
         description: isRateLimit
-          ? "Aguarde alguns minutos antes de tentar novamente."
+          ? "O email automático está temporariamente limitado. Gere o link novamente em instantes ou use o link manual."
           : msg,
         variant: "destructive",
       });

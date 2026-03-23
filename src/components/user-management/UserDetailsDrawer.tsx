@@ -506,7 +506,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                   ) : (
                     <Mail className="h-4 w-4 mr-2" />
                   )}
-                  Enviar link de reset de senha
+                  Gerar link de reset de senha
                 </Button>
                 <Button 
                   variant="outline" 
