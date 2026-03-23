@@ -182,11 +182,10 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       // Create and register device
       const twilioDevice = new Device(data.token, {
         logLevel: 1,
-        codecPreferences: [Device.Codec.Opus, Device.Codec.PCMU],
+        codecPreferences: ['opus', 'pcmu'] as any,
         edge: 'south-america',
-        enableDscp: true,
         closeProtection: true,
-      });
+      } as any);
 
       // Auto-refresh token before expiry during active calls
       twilioDevice.on('tokenWillExpire', async () => {
