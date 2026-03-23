@@ -69,15 +69,18 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
         .select('id, description, created_at, metadata, activity_type')
         .in('deal_id', uniqueIds)
         .in('activity_type', ['note', 'qualification_note']);
+      console.log('[DealNotesTab] manualNotes:', manualNotes?.length, 'error:', manualError);
       
       // 2. Notas de agendamento + closer_notes (meeting_slot_attendees) - ALL deals
-      const { data: attendees } = await supabase
+      const { data: attendees, error: attendeesError } = await supabase
         .from('meeting_slot_attendees')
         .select(`
           id, notes, closer_notes, created_at, booked_by,
           meeting_slots(meeting_type, scheduled_at, closers(name))
       `)
         .in('deal_id', uniqueIds);
+      
+      console.log('[DealNotesTab] attendees:', attendees?.length, 'error:', attendeesError, 'closer_notes:', attendees?.map(a => ({ id: a.id, closer_notes: (a as any).closer_notes, notes: a.notes })));
       
       // 3. Buscar attendee_notes para cada attendee encontrado
       const attendeeIds = attendees?.map(a => a.id) || [];
