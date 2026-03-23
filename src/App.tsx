@@ -183,7 +183,7 @@ const App = () => (
               <Route path="chairman" element={<RoleGuard allowedRoles={['admin', 'manager']}><Chairman /></RoleGuard>} />
               
               <Route index element={<Navigate to="/home" replace />} />
-              <Route path="dashboard" element={<ResourceGuard resource="dashboard"><Dashboard /></ResourceGuard>} />
+              <Route path="dashboard" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Dashboard /></RoleGuard>} />
               
               <Route path="receita" element={<ResourceGuard resource="receita"><Receita /></ResourceGuard>}>
                 <Route index element={<ReceitaOverview />} />
