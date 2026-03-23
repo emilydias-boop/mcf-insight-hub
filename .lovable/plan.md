@@ -1,50 +1,43 @@
 
 
-## Diagnóstico: Números dos Closers no "Meu Desempenho"
-
-### Dados reais do banco (Março 2026)
-
-| Closer | Total Real (sem filtro SDR) | Mostrando (com filtro SDR ativo) | Diferença | Motivo |
-|--------|---------------------------|----------------------------------|-----------|--------|
-| Mateus Macedo | 227 | 199 | -28 | 28 reuniões da Evellyn (inativa) |
-| Julio | 210 | 194 | -16 | 16 reuniões da Evellyn (inativa) |
-| Thayna | 204 | 197 | -7 | 6 Evellyn + 1 Hellen (inativas) |
-| Cristiane | 199 | 181 | -18 | 16 Evellyn + 2 Hellen (inativas) |
+## Plano: Dar acesso ao Assistente Administrativo no Consórcio
 
 ### Problema
 
-O hook `useR1CloserMetrics` (linha 454-457) exclui attendees cujo `booked_by` não pertence a um SDR ativo. A Evellyn agendou 66 reuniões em março antes de ser desativada — todas essas reuniões estão sumindo dos KPIs dos closers.
+O cargo `assistente_administrativo` foi criado na interface, mas ele não aparece em nenhuma lista de `requiredRoles` no código. Isso significa que o Assistente Administrativo **não vê nada** na sidebar do Consórcio porque:
 
-O Julio mostra R1 Agendada = 194, mas na realidade tem 210 reuniões válidas. O mesmo padrão afeta todos os closers.
+1. O menu "BU - Consórcio" exige `requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer"]`
+2. Os sub-itens como Fechamento, Vendas, Controle, etc. exigem `requiredRoles: ["admin", "manager", "coordenador"]`
+3. O filtro de produtos (linha 461) só isenta admin/manager/coordenador
 
-### Correção proposta
-
-Remover o filtro de `validSdrEmails` na contagem de métricas dos closers. As reuniões já aconteceram ou foram agendadas — o fato do SDR ter sido desativado depois não invalida as reuniões.
+### Correção
 
 | Arquivo | O que muda |
 |---------|-----------|
-| `src/hooks/useR1CloserMetrics.ts` | Remover filtro por `validSdrEmails` nas linhas 454-457 (contagem de R1 Agendada, R1 Realizada, No-Show). Manter o filtro apenas para `is_partner = false` |
+| `src/components/layout/AppSidebar.tsx` | Adicionar `"assistente_administrativo"` nas `requiredRoles` do menu Consórcio e nos sub-itens permitidos |
 
-### Detalhes da mudança
+### Detalhes
 
-No loop de processamento de meetings (linhas 448-483), remover:
-```typescript
-const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
-if (!bookedByEmail || !validSdrEmails.has(bookedByEmail)) {
-  return; // REMOVER ESTE FILTRO
-}
+No menu "BU - Consórcio" (linha 143):
+```
+requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer", "assistente_administrativo"]
 ```
 
-Também remover o mesmo filtro na contagem de contratos pagos (linhas 279-285) e outsides (linhas 376-377).
+Sub-itens que o Assistente Administrativo **verá**:
+- CRM (`/consorcio/crm`) — sem restrição de role
+- Painel Equipe (`/consorcio/painel-equipe`) — sem restrição de role
+- Vendas (`/consorcio/vendas`) — adicionar `"assistente_administrativo"`
+- Controle Consorcio (`/consorcio`) — adicionar `"assistente_administrativo"`
+- Importar (`/consorcio/importar`) — adicionar `"assistente_administrativo"`
+- Relatórios (`/consorcio/relatorio`) — adicionar `"assistente_administrativo"`
+- Documentos Estratégicos (`/consorcio/documentos-estrategicos`) — adicionar `"assistente_administrativo"`
 
-### Resultado esperado
+Sub-itens que **NÃO verá** (conforme solicitado):
+- Fechamento (`/consorcio/fechamento`) — permanece restrito a admin/manager/coordenador
 
-| Closer | Antes | Depois |
-|--------|-------|--------|
-| Mateus | 199 | 227 |
-| Julio | 194 | 210 |
-| Thayna | 197 | 204 |
-| Cristiane | 181 | 199 |
+Também será necessário adicionar `"assistente_administrativo"` na isenção do filtro de produtos (linha 461) para que ele não precise ter o produto "consorcio" atribuído — ou garantir que o produto "consorcio" esteja no perfil dele.
 
-Os números passarão a refletir TODAS as reuniões reais, independente do status atual do SDR que agendou.
+### Resultado
+- Assistente Administrativo verá todas as páginas do Consórcio exceto Fechamento
+- Fechamento permanece exclusivo para gestores
 
