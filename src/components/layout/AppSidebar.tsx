@@ -140,7 +140,7 @@ const menuItems: MenuItem[] = [
   {
     title: "BU - Consórcio",
     icon: Handshake,
-    requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer"],
+    requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer", "assistente_administrativo"],
     requiredProducts: ["consorcio"],
     items: [
       { title: "Fechamento", url: "/consorcio/fechamento", requiredRoles: ["admin", "manager", "coordenador"] },
