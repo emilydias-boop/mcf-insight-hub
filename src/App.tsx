@@ -183,7 +183,7 @@ const App = () => (
               <Route path="chairman" element={<RoleGuard allowedRoles={['admin', 'manager']}><Chairman /></RoleGuard>} />
               
               <Route index element={<Navigate to="/home" replace />} />
-              <Route path="dashboard" element={<ResourceGuard resource="dashboard"><Dashboard /></ResourceGuard>} />
+              <Route path="dashboard" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Dashboard /></RoleGuard>} />
               
               <Route path="receita" element={<ResourceGuard resource="receita"><Receita /></ResourceGuard>}>
                 <Route index element={<ReceitaOverview />} />
@@ -199,8 +199,8 @@ const App = () => (
                 <Route path="despesas" element={<CustosDespesas />} />
                 <Route path="por-categoria" element={<CustosPorCategoria />} />
               </Route>
-              <Route path="relatorios" element={<ResourceGuard resource="relatorios"><Relatorios /></ResourceGuard>} />
-              <Route path="relatorios/leads-sem-tag" element={<ResourceGuard resource="relatorios"><LeadsSemTag /></ResourceGuard>} />
+              <Route path="relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Relatorios /></RoleGuard>} />
+              <Route path="relatorios/leads-sem-tag" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsSemTag /></RoleGuard>} />
               <Route path="alertas" element={<ResourceGuard resource="alertas"><Alertas /></ResourceGuard>} />
               
               {/* BU Consórcio Routes - Unificado */}

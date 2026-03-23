@@ -115,7 +115,7 @@ const menuItems: MenuItem[] = [
     title: "Visão Diretor",
     url: "/dashboard",
     icon: LayoutDashboard,
-    resource: "dashboard",
+    requiredRoles: ["admin", "manager", "coordenador"],
   },
 
   // ===== BUSINESS UNITS =====
@@ -234,7 +234,7 @@ const menuItems: MenuItem[] = [
   {
     title: "Relatórios",
     icon: FileText,
-    resource: "relatorios",
+    requiredRoles: ["admin", "manager", "coordenador"],
     items: [
       { title: "Visão Geral", url: "/relatorios" },
       { title: "Leads sem Tag", url: "/relatorios/leads-sem-tag" },
