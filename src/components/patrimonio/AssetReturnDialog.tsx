@@ -67,8 +67,6 @@ export const AssetReturnDialog = ({ open, onOpenChange, asset, assignment }: Ass
         observacoes: observacoes || undefined,
       });
       onOpenChange(false);
-    } catch {
-      // handled in hook
     } finally {
       setIsSubmitting(false);
     }

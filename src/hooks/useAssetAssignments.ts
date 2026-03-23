@@ -21,7 +21,7 @@ export const useAssetAssignments = (assetId: string | undefined) => {
           *,
           employee:employees(id, nome_completo, email_pessoal, departamento, cargo),
           items:asset_assignment_items(*),
-          termo:asset_terms(*)
+          termo:asset_terms!asset_assignments_termo_id_fkey(*)
         `)
         .eq('asset_id', assetId)
         .order('created_at', { ascending: false });
