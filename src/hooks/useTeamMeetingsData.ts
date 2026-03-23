@@ -135,11 +135,8 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
   // All meetings filtered to only the 13 SDRs
   const allMeetings = useMemo(() => {
     const meetings = meetingsQuery.data || [];
-    const filtered = meetings.filter(
-      m => validSdrEmails.has(m.current_owner?.toLowerCase() || '')
-    );
-    return deduplicateMeetings(filtered);
-  }, [meetingsQuery.data, validSdrEmails]);
+    return deduplicateMeetings(meetings);
+  }, [meetingsQuery.data]);
 
   return {
     teamKPIs,
