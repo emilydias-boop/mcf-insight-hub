@@ -195,9 +195,19 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     });
   };
 
-  const handleSendPasswordReset = () => {
+  const handleSendPasswordReset = async () => {
     if (!userDetails?.email) return;
-    sendPasswordReset.mutate({ email: userDetails.email });
+
+    try {
+      const result = await sendPasswordReset.mutateAsync({ email: userDetails.email });
+      await navigator.clipboard.writeText(result.reset_link);
+      toast.success("Link de redefinição copiado", {
+        description: "Cole o link e envie manualmente para o usuário concluir o primeiro acesso.",
+      });
+      window.open(result.reset_link, "_blank", "noopener,noreferrer");
+    } catch {
+      // Toast handled in mutation
+    }
   };
 
   const handlePermissionsUpdate = () => {
@@ -496,7 +506,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                   ) : (
                     <Mail className="h-4 w-4 mr-2" />
                   )}
-                  Enviar link de reset de senha
+                  Gerar link de reset de senha
                 </Button>
                 <Button 
                   variant="outline" 
