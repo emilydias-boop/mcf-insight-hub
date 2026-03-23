@@ -557,7 +557,7 @@ function TodasReunioesTab() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
-  const isCloser = userRole === 'closer';
+  const isCloser = role === 'closer';
 
   // Auto-filter for closers
   const baseData = useMemo(() => {
