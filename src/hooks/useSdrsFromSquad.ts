@@ -22,12 +22,27 @@ export function useSdrsFromSquad(squad: string) {
         .select('id, name, email, role_type, meta_diaria')
         .eq('active', true)
         .eq('squad', squad)
-        .eq('role_type', 'sdr')  // Only SDRs, not closers
+        .eq('role_type', 'sdr')
         .order('name');
       
       if (error) throw error;
-      return data || [];
+      if (!data || data.length === 0) return [];
+
+      // Cross-check with profiles to exclude blocked/deactivated users
+      const emails = data.map(s => s.email?.toLowerCase()).filter(Boolean) as string[];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('email, access_status')
+        .in('email', emails);
+
+      const blockedEmails = new Set(
+        (profiles || [])
+          .filter(p => p.access_status && p.access_status !== 'ativo')
+          .map(p => p.email?.toLowerCase())
+      );
+
+      return data.filter(s => !blockedEmails.has(s.email?.toLowerCase() || ''));
     },
-    staleTime: 60000, // Cache for 1 minute
+    staleTime: 60000,
   });
 }
