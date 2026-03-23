@@ -183,7 +183,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       const twilioDevice = new Device(data.token, {
         logLevel: 1,
         codecPreferences: ['opus', 'pcmu'] as any,
-        edge: 'south-america',
+        edge: 'sao-paulo',
         closeProtection: true,
       } as any);
 
