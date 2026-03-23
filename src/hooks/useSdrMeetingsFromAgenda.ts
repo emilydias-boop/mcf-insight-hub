@@ -34,6 +34,7 @@ export function useSdrMeetingsFromAgenda({
   startDate,
   endDate,
   sdrEmailFilter,
+  buFilter,
 }: UseSdrMeetingsFromAgendaParams) {
   return useQuery({
     queryKey: [
