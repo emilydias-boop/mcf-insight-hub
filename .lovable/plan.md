@@ -1,44 +1,60 @@
 
 
-## Plano: Corrigir notas que não aparecem no drawer do lead (consórcio)
+## Plano: Corrigir envio de email de reset + bugs no create-user
 
 ### Diagnóstico
 
-Os dados existem no banco: o attendee `ced53bfe` do deal `753d6bce` tem `closer_notes` e `notes` preenchidos. O `DealNotesTab` deveria exibi-los, mas mostra "Nenhuma nota ainda".
+Analisei os logs da Edge Function `create-user` e encontrei **3 problemas**:
 
-O problema provável é que a `queryFn` do `DealNotesTab` está falhando silenciosamente. Quando uma das queries internas (ex: `attendee_notes`, `profiles`) retorna erro, o React Query captura a exceção mas o componente renderiza o estado vazio em vez de um estado de erro visível, porque não há tratamento de `isError`.
+#### 1. Email de reset: enviado mas possivelmente não entregue
+O `recovery_sent_at` está preenchido no banco, ou seja, o Supabase processou o `resetPasswordForEmail`. Porém, sem um domínio de email customizado configurado, os emails são enviados pelo SMTP padrão do Supabase que tem **rate limit de ~3-4 emails/hora** e frequentemente caem no spam. Este é provavelmente o motivo de o email não chegar.
 
-Adicionalmente, o `DealNotesTab` usa `(a as any).closer_notes` em vários pontos, indicando que o TypeScript não reconhece o campo no tipo retornado. Embora isso não afete runtime, pode mascarar problemas de tipo.
+#### 2. Squad não está salvando (erro nos logs)
+```
+Error updating profile squad: malformed array literal: "a010"
+```
+O campo `squad` é `TEXT[]` (array), mas o código envia uma string simples `"a010"` em vez de `["a010"]`.
 
-### Ação: Adicionar logging + tratamento de erro
+#### 3. Employee não está sendo criado (erro nos logs)
+```
+Could not find the 'ativo' column of 'employees'
+```
+O código usa `ativo: true` mas a coluna na tabela `employees` se chama `status`, não `ativo`.
+
+---
+
+### Correções
 
 | Arquivo | O que muda |
 |---------|-----------|
-| `src/components/crm/DealNotesTab.tsx` | 1. Adicionar `console.log` dentro da `queryFn` para logar `uniqueIds`, resultados de cada query, e `combined.length` final. 2. Adicionar tratamento de `isError` no componente para exibir mensagem de erro visível. 3. Adicionar `console.error` nos catches de cada sub-query |
+| `supabase/functions/create-user/index.ts` | 1. Corrigir squad para enviar como array `[squad]` em vez de string. 2. Trocar `ativo: true` por campo correto ou remover. 3. Adicionar `nome_completo` no insert do employee (campo existente) |
 
-### Código proposto
-
+#### Correção do squad (linha 144):
 ```typescript
-// No queryFn, adicionar logs:
-console.log('[DealNotesTab] querying with uniqueIds:', uniqueIds);
-
-// Após cada query, logar resultados:
-console.log('[DealNotesTab] attendees found:', attendees?.length, attendees?.map(a => ({ id: a.id, closer_notes: (a as any).closer_notes })));
-
-// No final:
-console.log('[DealNotesTab] combined notes:', combined.length);
-
-// No componente, tratar erro:
-if (isError) {
-  return <p className="text-sm text-red-500 text-center py-4">Erro ao carregar notas</p>;
-}
+// De:
+.update({ squad })
+// Para:
+.update({ squad: [squad] })
 ```
 
-### Possível causa raiz alternativa
+#### Correção do employee (linha 176):
+```typescript
+// De:
+.insert({ user_id, nome: full_name, email, cargo_catalogo_id, ativo: true })
+// Para:
+.insert({ user_id, nome_completo: full_name, email_pessoal: email, cargo_catalogo_id, status: 'ativo' })
+```
 
-Se os logs mostrarem que `attendees` retorna vazio (apesar dos dados existirem), o problema será no `uniqueIds` passado ao `.in('deal_id', ...)`. Pode ser que `useContactDealIds` não esteja resolvendo corretamente para deals de consórcio, ou que exista um `clint_id` não-UUID causando erro no PostgREST.
+### Sobre o email de reset
 
-### Resultado
+O email está sendo disparado corretamente pelo Supabase. As possíveis causas de não recebimento:
+- **Rate limit do SMTP padrão do Supabase** (o mais provável)
+- Email caindo em spam/lixo eletrônico
 
-Com os logs, no próximo clique no drawer, os console logs revelarão exatamente onde o fluxo quebra, permitindo uma correção cirúrgica.
+A solução definitiva seria configurar um domínio de email customizado via Cloud → Emails, mas como correção imediata, posso verificar se o email está sendo bloqueado e garantir que o link de reset funcione quando recebido.
+
+### Resultado esperado
+- Squad salva corretamente como array
+- Employee é criado corretamente no banco
+- Email de reset continua sendo enviado (o delivery depende do SMTP do Supabase)
 
