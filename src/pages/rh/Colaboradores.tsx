@@ -268,8 +268,9 @@ export default function Colaboradores() {
                 <TableHead>Squad</TableHead>
                 <TableHead>Gestor</TableHead>
                 <TableHead>Status</TableHead>
-                 <TableHead>NFSe Mês</TableHead>
-                 <TableHead className="w-[60px]">Ações</TableHead>
+                <TableHead>NFSe Mês</TableHead>
+                <TableHead className="w-[60px]">Ações</TableHead>
+              </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
@@ -282,11 +283,12 @@ export default function Colaboradores() {
                     <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-8" /></TableCell>
                   </TableRow>
                 ))
               ) : filteredEmployees.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     {search || statusFilter !== 'all' || cargoFilter !== 'all' || squadFilter !== 'all'
                       ? 'Nenhum colaborador encontrado com os filtros aplicados'
                       : 'Nenhum colaborador cadastrado'}
@@ -314,6 +316,19 @@ export default function Colaboradores() {
                       </Badge>
                     </TableCell>
                     <TableCell>{getNfseStatusBadge(employee) || '-'}</TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEmployeeToDelete(employee);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -334,6 +349,33 @@ export default function Colaboradores() {
         open={formOpen}
         onOpenChange={setFormOpen}
       />
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!employeeToDelete} onOpenChange={(open) => !open && setEmployeeToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir colaborador</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>{employeeToDelete?.nome_completo}</strong>? 
+              Todos os documentos, eventos, notas e NFSe associados serão removidos. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (employeeToDelete) {
+                  deleteEmployee.mutate(employeeToDelete.id);
+                  setEmployeeToDelete(null);
+                }
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
