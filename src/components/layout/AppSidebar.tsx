@@ -67,7 +67,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { ResourceType } from "@/types/user-management";
 
-type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "closer_sombra" | "coordenador" | "rh" | "financeiro" | "gr";
+type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "closer_sombra" | "coordenador" | "rh" | "financeiro" | "gr" | "assistente_administrativo";
 
 // Sub-sub-item (3º nível)
 interface SubSubItem {
@@ -458,7 +458,7 @@ export function AppSidebar() {
     if (item.requiredProducts && item.requiredProducts.length > 0) {
       if (!myProducts || !item.requiredProducts.some(p => myProducts.includes(p))) {
         // Admin/Manager/Coordenador ignoram filtro de produto
-        if (!isAdmin && role !== 'manager' && role !== 'coordenador' && role !== 'assistente_administrativo') {
+        if (!isAdmin && role !== 'manager' && role !== 'coordenador' && (role as string) !== 'assistente_administrativo') {
           return false;
         }
       }
