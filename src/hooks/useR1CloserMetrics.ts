@@ -366,9 +366,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           if (!att.deal_id) return;
           if ((att as any).is_partner) return;
           
-          // Only count if booked by valid SDR
-          const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
-          if (!bookedByEmail || !validSdrEmails.has(bookedByEmail)) return;
+          // Count all attendees regardless of SDR status
           
           const email = dealEmailMap.get(att.deal_id);
           if (email && emailContractDate.has(email)) {
