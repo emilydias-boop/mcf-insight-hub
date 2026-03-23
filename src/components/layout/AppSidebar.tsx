@@ -67,7 +67,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { ResourceType } from "@/types/user-management";
 
-type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "closer_sombra" | "coordenador" | "rh" | "financeiro" | "gr" | "assistente_administrativo";
+type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "closer_sombra" | "coordenador" | "rh" | "financeiro" | "gr" | "assistente_administrativo" | "marketing";
 
 // Sub-sub-item (3º nível)
 interface SubSubItem {

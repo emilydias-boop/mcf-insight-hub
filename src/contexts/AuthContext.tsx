@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getRolesFromToken } from '@/utils/jwt';
 
-type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' | 'closer_sombra' | 'financeiro' | 'rh';
+type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' | 'closer_sombra' | 'financeiro' | 'rh' | 'gr' | 'marketing' | 'assistente_administrativo';
 
 const ROLE_PRIORITY: Record<string, number> = {
   admin: 1,
@@ -15,8 +15,11 @@ const ROLE_PRIORITY: Record<string, number> = {
   closer_sombra: 5,
   financeiro: 6,
   rh: 7,
-  sdr: 8,
-  viewer: 9,
+  gr: 8,
+  assistente_administrativo: 9,
+  marketing: 10,
+  sdr: 11,
+  viewer: 12,
 };
 
 // Timeout constants
