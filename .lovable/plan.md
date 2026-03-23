@@ -1,65 +1,53 @@
 
 
-## Plano: Filtrar por data de entrada da tag (não apenas data de criação do deal)
+## Plano: Corrigir devolução silenciosa de equipamento
 
-### Problema
+### Diagnóstico
 
-Hoje, ao combinar filtro de tags (ex: ANAMNESE) + data de criação, o sistema só mostra deals **criados** naquele período. Deals antigos que **receberam** a tag ANAMNESE naquele período não aparecem.
+Identifiquei dois problemas nos network requests:
 
-### Desafio técnico
+**1. Query de assignments quebrada (HTTP 300)**
+A query `useAssetAssignments` usa `termo:asset_terms(*)` mas existem duas foreign keys entre `asset_assignments` e `asset_terms` (`asset_terms_assignment_id_fkey` e `asset_assignments_termo_id_fkey`). O PostgREST retorna erro 300 "ambiguous relationship" e a query falha silenciosamente.
 
-Não existe uma tabela de histórico de tags (ex: `tag_added_at`) no sistema atual. A única pista de quando um deal foi modificado é o campo `updated_at`.
-
-### Solução proposta
-
-Quando **tags estão selecionadas** E **dateRange está ativo**, mudar o comportamento do filtro de data:
-
-- Em vez de filtrar apenas por `created_at`, filtrar por **`created_at` OU `updated_at`** dentro do período
-- Isso captura tanto deals novos quanto deals existentes que foram atualizados (tag adicionada) no período selecionado
-
-Adicionalmente, renomear o label do filtro de data para indicar essa mudança de comportamento quando tags estão ativas.
+**2. Erro engolido no dialog de devolução**
+O `AssetReturnDialog.handleSubmit` tem um `catch {}` vazio. Como usa `mutateAsync`, quando o mutation falha a exceção vai para o caller, mas o catch vazio a engole -- nenhum toast de erro aparece e o dialog não fecha.
 
 ### Alterações
 
 | Arquivo | O que muda |
 |---------|-----------|
-| `src/pages/crm/Negocios.tsx` (~linhas 393-405) | Quando `filters.selectedTags.length > 0`, o filtro de dateRange passa a verificar `created_at OU updated_at` dentro do range, em vez de apenas `created_at` |
-| `src/components/crm/DealFilters.tsx` | Adicionar indicação visual (tooltip ou label) de que a data filtra por "criação ou atualização" quando tags estão selecionadas |
+| `src/hooks/useAssetAssignments.ts` (linhas 24, 48) | Desambiguar o join: `termo:asset_terms!asset_assignments_termo_id_fkey(*)` |
+| `src/components/patrimonio/AssetReturnDialog.tsx` (linha 69) | Remover catch vazio para que o `onError` do mutation exiba o toast de erro |
 
-### Lógica do filtro (Negocios.tsx)
+### Detalhe tecnico
 
+**useAssetAssignments.ts** linha 24:
 ```typescript
-// Filtro por data
-if (filters.dateRange?.from) {
-  const fromDate = new Date(filters.dateRange.from);
-  fromDate.setHours(0, 0, 0, 0);
-  const toDate = filters.dateRange.to 
-    ? new Date(filters.dateRange.to) 
-    : new Date(filters.dateRange.from);
-  toDate.setHours(23, 59, 59, 999);
-
-  if (filters.selectedTags.length > 0) {
-    // Com tags ativas: deal criado OU atualizado no período
-    const dealCreated = new Date(deal.created_at);
-    const dealUpdated = new Date(deal.updated_at);
-    const inRange = (d: Date) => d >= fromDate && d <= toDate;
-    if (!inRange(dealCreated) && !inRange(dealUpdated)) return false;
-  } else {
-    // Sem tags: filtro padrão por created_at
-    const dealDate = new Date(deal.created_at);
-    if (dealDate < fromDate || dealDate > toDate) return false;
-  }
-}
+// De:
+termo:asset_terms(*)
+// Para:
+termo:asset_terms!asset_assignments_termo_id_fkey(*)
 ```
+
+**AssetReturnDialog.tsx** linhas 65-70:
+```typescript
+// De:
+try {
+  await returnAsset.mutateAsync({...});
+  onOpenChange(false);
+} catch {
+  // handled in hook
+}
+
+// Para:
+await returnAsset.mutateAsync({...});
+onOpenChange(false);
+```
+Removendo o try/catch, o `onError` do hook será chamado corretamente e exibirá o toast de erro. O `finally` continua tratando o `isSubmitting`.
 
 ### Resultado esperado
 
-- Filtrar ANAMNESE + 21-23/Mar mostra:
-  - Deals **criados** entre 21 e 23/Mar com tag ANAMNESE
-  - Deals **antigos** que foram **atualizados** (tag ANAMNESE adicionada) entre 21 e 23/Mar
-- Sem tags selecionadas, o filtro de data continua funcionando como antes (só `created_at`)
-
-### Limitação
-
-Como não há registro granular de quando cada tag foi adicionada, o sistema usa `updated_at` como proxy. Isso pode incluir deals atualizados por outros motivos (mudança de stage, edição de campos) no mesmo período. Para precisão total, seria necessário criar uma tabela `deal_tag_history` futuramente.
+- A query de assignments para de retornar 300 e carrega os dados corretamente
+- Se a devolução funcionar: toast de sucesso + dialog fecha
+- Se falhar: toast de erro visível ao usuario
 
