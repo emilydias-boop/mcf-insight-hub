@@ -276,12 +276,9 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           }
         }
         
-        if (closerId && att.booked_by && !countedAttendeeIds.has(att.id)) {
-          const bookedByEmail = profileEmailMap.get(att.booked_by) || allProfileEmailMap.get(att.booked_by);
-          if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
-            contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
-            countedAttendeeIds.add(att.id);
-          }
+        if (closerId && !countedAttendeeIds.has(att.id)) {
+          contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
+          countedAttendeeIds.add(att.id);
         }
       });
 
@@ -289,12 +286,9 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       // Nota: fallback usa scheduled_at como data, então nunca é Outside por definição
       contractsWithoutTimestamp?.forEach(att => {
         const closerId = (att.meeting_slot as any)?.closer_id;
-        if (closerId && att.booked_by && !countedAttendeeIds.has(att.id)) {
-          const bookedByEmail = profileEmailMap.get(att.booked_by) || allProfileEmailMap.get(att.booked_by);
-          if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
-            contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
-            countedAttendeeIds.add(att.id);
-          }
+        if (closerId && !countedAttendeeIds.has(att.id)) {
+          contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
+          countedAttendeeIds.add(att.id);
         }
       });
 
@@ -372,9 +366,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           if (!att.deal_id) return;
           if ((att as any).is_partner) return;
           
-          // Only count if booked by valid SDR
-          const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
-          if (!bookedByEmail || !validSdrEmails.has(bookedByEmail)) return;
+          // Count all attendees regardless of SDR status
           
           const email = dealEmailMap.get(att.deal_id);
           if (email && emailContractDate.has(email)) {
@@ -445,16 +437,10 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           metricsMap.set(closerId, metric);
         }
 
-        // Count attendees by status - only if booked by valid SDR
+        // Count attendees by status - all attendees regardless of SDR status
         meeting.meeting_slot_attendees?.forEach(att => {
           // Skip partners (sócios) from all metrics
           if ((att as any).is_partner) return;
-          
-          // Filter: only count if booked by a valid SDR from database
-          const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
-          if (!bookedByEmail || !validSdrEmails.has(bookedByEmail)) {
-            return; // Skip attendees not booked by valid SDR
-          }
 
           const status = att.status;
           
