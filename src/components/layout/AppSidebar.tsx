@@ -140,17 +140,17 @@ const menuItems: MenuItem[] = [
   {
     title: "BU - Consórcio",
     icon: Handshake,
-    requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer"],
+    requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer", "assistente_administrativo"],
     requiredProducts: ["consorcio"],
     items: [
       { title: "Fechamento", url: "/consorcio/fechamento", requiredRoles: ["admin", "manager", "coordenador"] },
       { title: "CRM", url: "/consorcio/crm" },
       { title: "Painel Equipe", url: "/consorcio/painel-equipe" },
-      { title: "Vendas", url: "/consorcio/vendas", requiredRoles: ["admin", "manager", "coordenador"] },
-      { title: "Controle Consorcio", url: "/consorcio", requiredRoles: ["admin", "manager", "coordenador"] },
-      { title: "Importar", url: "/consorcio/importar", requiredRoles: ["admin", "manager", "coordenador"] },
-      { title: "Relatórios", url: "/consorcio/relatorio", requiredRoles: ["admin", "manager", "coordenador"] },
-      { title: "Documentos Estratégicos", url: "/consorcio/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
+      { title: "Vendas", url: "/consorcio/vendas", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
+      { title: "Controle Consorcio", url: "/consorcio", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
+      { title: "Importar", url: "/consorcio/importar", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
+      { title: "Relatórios", url: "/consorcio/relatorio", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
+      { title: "Documentos Estratégicos", url: "/consorcio/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
     ],
   },
 
@@ -458,7 +458,7 @@ export function AppSidebar() {
     if (item.requiredProducts && item.requiredProducts.length > 0) {
       if (!myProducts || !item.requiredProducts.some(p => myProducts.includes(p))) {
         // Admin/Manager/Coordenador ignoram filtro de produto
-        if (!isAdmin && role !== 'manager' && role !== 'coordenador') {
+        if (!isAdmin && role !== 'manager' && role !== 'coordenador' && role !== 'assistente_administrativo') {
           return false;
         }
       }
