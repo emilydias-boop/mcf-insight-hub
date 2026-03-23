@@ -19,7 +19,8 @@ interface MetricsResponse {
 export const useSdrMetricsFromAgenda = (
   startDate: Date | null, 
   endDate: Date | null, 
-  sdrEmailFilter?: string
+  sdrEmailFilter?: string,
+  buFilter?: string
 ) => {
   return useQuery({
     queryKey: ['sdr-metrics-agenda', 
