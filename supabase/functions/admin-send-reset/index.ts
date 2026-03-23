@@ -62,11 +62,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    const redirectUrl = "https://mcf-insight-hub.lovable.app/reset-password";
+
     const { data, error } = await supabaseAdmin.auth.admin.generateLink({
       type: "recovery",
       email,
       options: {
-        redirectTo: "https://mcf-insight-hub.lovable.app/reset-password",
+        redirectTo: redirectUrl,
       },
     });
 
