@@ -458,7 +458,7 @@ export function AppSidebar() {
     if (item.requiredProducts && item.requiredProducts.length > 0) {
       if (!myProducts || !item.requiredProducts.some(p => myProducts.includes(p))) {
         // Admin/Manager/Coordenador ignoram filtro de produto
-        if (!isAdmin && role !== 'manager' && role !== 'coordenador') {
+        if (!isAdmin && role !== 'manager' && role !== 'coordenador' && role !== 'assistente_administrativo') {
           return false;
         }
       }
