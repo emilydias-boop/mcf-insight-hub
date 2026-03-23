@@ -1,43 +1,37 @@
 
 
-## Plano: Adicionar exclusão de colaboradores na página de RH
+## Plano: Corrigir envio de link de reset de senha
 
 ### Problema
 
-Não existe funcionalidade de excluir colaboradores (employees) na página de Colaboradores. Não há `deleteEmployee` no hook `useEmployeeMutations` e nenhum botão de exclusão na tabela ou no drawer.
+O botão "Enviar link de reset de senha" no drawer de usuários usa `supabase.auth.resetPasswordForEmail` pelo **client-side** (chave anon). O Supabase aplica rate limit agressivo (~3-4 emails/hora por destinatário) nessa rota. O Antony Nicolas já recebeu vários envios (criação de conta + tentativas manuais), resultando em `429: email rate limit exceeded`.
 
-### Correção
+### Correção (duas partes)
 
-| Arquivo | O que muda |
-|---------|-----------|
-| `src/hooks/useEmployees.ts` | Adicionar mutation `deleteEmployee` que deleta da tabela `employees` por ID |
-| `src/pages/rh/Colaboradores.tsx` | Adicionar coluna de ações com botão de excluir (ícone lixeira) e dialog de confirmação |
+| Componente | O que muda |
+|-----------|-----------|
+| `supabase/functions/admin-send-reset/index.ts` | Nova Edge Function que usa `supabaseAdmin.auth.admin.generateLink()` para gerar o link de reset via API admin (sem rate limit do SMTP padrão) |
+| `src/hooks/useUserMutations.ts` | `useSendPasswordReset` passa a chamar a Edge Function em vez de `supabase.auth.resetPasswordForEmail` diretamente |
+| `src/hooks/useUserMutations.ts` | Mensagem de erro amigável quando detectar "rate limit" |
 
 ### Detalhes
 
-1. **Hook** (`useEmployees.ts`): Adicionar no `useEmployeeMutations`:
-```typescript
-const deleteEmployee = useMutation({
-  mutationFn: async (id: string) => {
-    // Deletar dependências primeiro (documents, events, notes, nfse)
-    await supabase.from('employee_documents').delete().eq('employee_id', id);
-    await supabase.from('employee_events').delete().eq('employee_id', id);
-    await supabase.from('employee_notes').delete().eq('employee_id', id);
-    await supabase.from('rh_nfse').delete().eq('employee_id', id);
-    // Deletar employee
-    const { error } = await supabase.from('employees').delete().eq('id', id);
-    if (error) throw error;
-  },
-  onSuccess: () => { invalidate; toast.success('Colaborador excluído'); },
-});
-```
+1. **Edge Function `admin-send-reset`** (novo):
+   - Recebe `{ email }` no body
+   - Valida que o caller é admin (mesmo padrão do `create-user`)
+   - Usa `supabaseAdmin.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo } })` para gerar o link
+   - Envia o email via `supabaseAdmin.auth.resetPasswordForEmail(email, { redirectTo })` usando service role (limite mais alto)
+   - Retorna sucesso/erro
 
-2. **Página** (`Colaboradores.tsx`):
-   - Adicionar coluna "Ações" na tabela com botão de lixeira (ícone `Trash2`)
-   - `AlertDialog` de confirmação antes de excluir (mostra nome do colaborador)
-   - O clique no botão de excluir usa `e.stopPropagation()` para não abrir o drawer
+2. **Hook atualizado**:
+   - Chama `supabase.functions.invoke('admin-send-reset', { body: { email } })` em vez da chamada direta
+   - Se o erro contiver "rate limit", mostra: "Limite de envios atingido. Aguarde alguns minutos antes de tentar novamente."
+
+3. **Melhoria no aviso de erro**:
+   - Toast vermelho com mensagem clara sobre rate limit e orientação para aguardar
 
 ### Resultado
-- Admin poderá excluir colaboradores duplicados diretamente da tabela
-- Confirmação obrigatória antes da exclusão para evitar acidentes
+- Admin consegue enviar link de reset via API admin (limite muito maior)
+- Mensagem de erro clara quando o limite for atingido
+- Primeiro login de novos usuários funciona de forma mais confiável
 
