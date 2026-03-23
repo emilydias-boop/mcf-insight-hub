@@ -70,8 +70,47 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Clean up related data (cascade may handle some, but be explicit)
-    const tables = [
+    // === Step 1: Unlink employees (don't delete, just remove profile/user references) ===
+    const { error: empProfileErr } = await supabaseAdmin
+      .from("employees")
+      .update({ profile_id: null, user_id: null })
+      .eq("profile_id", user_id);
+    if (empProfileErr) {
+      console.warn("Warning: could not unlink employees by profile_id:", empProfileErr.message);
+    }
+    // Also try by user_id column in case profile_id differs
+    const { error: empUserErr } = await supabaseAdmin
+      .from("employees")
+      .update({ profile_id: null, user_id: null })
+      .eq("user_id", user_id);
+    if (empUserErr) {
+      console.warn("Warning: could not unlink employees by user_id:", empUserErr.message);
+    }
+
+    // === Step 2: SET NULL on historical tables (preserve records) ===
+    const nullifyTables = [
+      { table: "calls", column: "user_id" },
+      { table: "deal_activities", column: "user_id" },
+      { table: "meeting_slots", column: "booked_by" },
+      { table: "playbook_docs", column: "criado_por" },
+      { table: "audit_logs", column: "user_id" },
+      { table: "alerts", column: "resolved_by" },
+      { table: "bu_strategic_documents", column: "uploaded_by" },
+      { table: "attendee_movement_logs", column: "moved_by" },
+    ];
+
+    for (const { table, column } of nullifyTables) {
+      const { error } = await supabaseAdmin
+        .from(table)
+        .update({ [column]: null })
+        .eq(column, user_id);
+      if (error) {
+        console.warn(`Warning: could not nullify ${table}.${column}:`, error.message);
+      }
+    }
+
+    // === Step 3: Delete from tables with user_id (direct ownership) ===
+    const deleteTables = [
       "user_roles",
       "user_employment_data",
       "user_integrations",
@@ -79,22 +118,28 @@ Deno.serve(async (req) => {
       "user_targets",
       "user_flags",
       "user_observations",
+      "dashboard_preferences",
+      "sdr",
+      "playbook_reads",
+      "sdr_review_requests",
+      "user_files",
+      "alertas",
     ];
 
-    for (const table of tables) {
+    for (const table of deleteTables) {
       const { error } = await supabaseAdmin.from(table).delete().eq("user_id", user_id);
       if (error) {
         console.warn(`Warning: could not clean ${table}:`, error.message);
       }
     }
 
-    // Delete profile
+    // === Step 4: Delete profile ===
     const { error: profileError } = await supabaseAdmin.from("profiles").delete().eq("id", user_id);
     if (profileError) {
       console.warn("Warning: could not delete profile:", profileError.message);
     }
 
-    // Delete from auth
+    // === Step 5: Delete from auth ===
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user_id);
     if (deleteError) {
       console.error("Error deleting auth user:", deleteError);
