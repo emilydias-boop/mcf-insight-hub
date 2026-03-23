@@ -27,6 +27,7 @@ interface UseSdrMeetingsFromAgendaParams {
   startDate: Date | null;
   endDate: Date | null;
   sdrEmailFilter?: string;
+  buFilter?: string;
 }
 
 export function useSdrMeetingsFromAgenda({
