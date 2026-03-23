@@ -58,24 +58,29 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
   // Combine all IDs
   const uniqueIds = [...new Set([...allDealIds, dealUuid, ...(dealClintId ? [dealClintId] : [])].filter(Boolean))];
   
-  const { data: allNotes, isLoading } = useQuery({
+  const { data: allNotes, isLoading, isError } = useQuery({
     queryKey: ['all-deal-notes', uniqueIds],
     queryFn: async () => {
+      console.log('[DealNotesTab] querying with uniqueIds:', uniqueIds);
+      
       // 1. Notas manuais + qualificação (deal_activities) - ALL deals cross-pipeline
-      const { data: manualNotes } = await supabase
+      const { data: manualNotes, error: manualError } = await supabase
         .from('deal_activities')
         .select('id, description, created_at, metadata, activity_type')
         .in('deal_id', uniqueIds)
         .in('activity_type', ['note', 'qualification_note']);
+      console.log('[DealNotesTab] manualNotes:', manualNotes?.length, 'error:', manualError);
       
       // 2. Notas de agendamento + closer_notes (meeting_slot_attendees) - ALL deals
-      const { data: attendees } = await supabase
+      const { data: attendees, error: attendeesError } = await supabase
         .from('meeting_slot_attendees')
         .select(`
           id, notes, closer_notes, created_at, booked_by,
           meeting_slots(meeting_type, scheduled_at, closers(name))
       `)
         .in('deal_id', uniqueIds);
+      
+      console.log('[DealNotesTab] attendees:', attendees?.length, 'error:', attendeesError, 'closer_notes:', attendees?.map(a => ({ id: a.id, closer_notes: (a as any).closer_notes, notes: a.notes })));
       
       // 3. Buscar attendee_notes para cada attendee encontrado
       const attendeeIds = attendees?.map(a => a.id) || [];
@@ -186,6 +191,7 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
             outcome: c.outcome || undefined
           }))
       ];
+      console.log('[DealNotesTab] combined notes total:', combined.length);
       
       // Ordenar por data (mais recente primeiro)
       return combined.sort((a, b) => 
@@ -213,6 +219,16 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
         <Skeleton className="h-20 w-full" />
         <Skeleton className="h-16 w-full" />
         <Skeleton className="h-16 w-full" />
+      </div>
+    );
+  }
+  
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-destructive">
+        <StickyNote className="h-10 w-10 mb-2 opacity-50" />
+        <p className="text-sm font-medium">Erro ao carregar notas</p>
+        <p className="text-xs text-muted-foreground">Verifique o console para mais detalhes</p>
       </div>
     );
   }
