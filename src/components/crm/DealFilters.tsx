@@ -467,7 +467,9 @@ export const DealFilters = ({
                 format(filters.dateRange.from, "dd/MM/yy", { locale: ptBR })
               )
             ) : (
-              "Data de criação"
+              filters.selectedTags && filters.selectedTags.length > 0
+                ? "Data de criação/atualização"
+                : "Data de criação"
             )}
           </Button>
         </PopoverTrigger>
