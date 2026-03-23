@@ -542,7 +542,7 @@ function SemSucessoTab() {
 function TodasReunioesTab() {
   const { data: allMeetings = [], isLoading } = useTodasReunioes();
   const { data: myCloser } = useMyCloser();
-  const { userRole } = useAuth();
+  const { role } = useAuth();
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
 
   // Filters
