@@ -27,12 +27,14 @@ interface UseSdrMeetingsFromAgendaParams {
   startDate: Date | null;
   endDate: Date | null;
   sdrEmailFilter?: string;
+  buFilter?: string;
 }
 
 export function useSdrMeetingsFromAgenda({
   startDate,
   endDate,
   sdrEmailFilter,
+  buFilter,
 }: UseSdrMeetingsFromAgendaParams) {
   return useQuery({
     queryKey: [
@@ -40,6 +42,7 @@ export function useSdrMeetingsFromAgenda({
       startDate?.toISOString(),
       endDate?.toISOString(),
       sdrEmailFilter,
+      buFilter,
     ],
     queryFn: async (): Promise<MeetingV2[]> => {
       if (!startDate || !endDate) return [];
@@ -51,6 +54,7 @@ export function useSdrMeetingsFromAgenda({
         start_date: startStr,
         end_date: endStr,
         sdr_email_filter: sdrEmailFilter || null,
+        bu_filter: buFilter || null,
       });
 
       if (error) {

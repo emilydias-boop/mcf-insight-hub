@@ -39,9 +39,8 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
   const sdrsQuery = useSdrsFromSquad(squad);
   
   // Fetch metrics from agenda (meeting_slot_attendees) instead of deal_activities
-  const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmailFilter);
-  // Use meetings from agenda (same source as metrics) for consistency
-  const meetingsQuery = useSdrMeetingsFromAgenda({ startDate, endDate, sdrEmailFilter });
+  const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmailFilter, squad);
+  const meetingsQuery = useSdrMeetingsFromAgenda({ startDate, endDate, sdrEmailFilter, buFilter: squad });
 
   // Create Set of valid SDR emails from database (dynamic)
   const validSdrEmails = useMemo(() => {
