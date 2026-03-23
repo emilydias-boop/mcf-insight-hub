@@ -234,7 +234,7 @@ const menuItems: MenuItem[] = [
   {
     title: "Relatórios",
     icon: FileText,
-    resource: "relatorios",
+    requiredRoles: ["admin", "manager", "coordenador"],
     items: [
       { title: "Visão Geral", url: "/relatorios" },
       { title: "Leads sem Tag", url: "/relatorios/leads-sem-tag" },
