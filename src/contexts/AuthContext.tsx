@@ -377,7 +377,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const resetPassword = async (email: string) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `https://mcfgestao.com/reset-password`,
+        redirectTo: `https://mcf-insight-hub.lovable.app/reset-password`,
       });
       
       if (error) throw error;

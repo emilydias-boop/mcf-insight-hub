@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
       type: "recovery",
       email,
       options: {
-        redirectTo: "https://mcfgestao.com/reset-password",
+        redirectTo: "https://mcf-insight-hub.lovable.app/reset-password",
       },
     });
 
