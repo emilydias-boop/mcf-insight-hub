@@ -9,13 +9,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Search, Users, UserCheck, Clock, FileWarning } from 'lucide-react';
+import { Plus, Search, Users, UserCheck, Clock, FileWarning, Trash2 } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import EmployeeDrawer from '@/components/hr/EmployeeDrawer';
 import EmployeeFormDialog from '@/components/hr/EmployeeFormDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
+import { useEmployeeMutations } from '@/hooks/useEmployees';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function Colaboradores() {
   const { data: employees, isLoading } = useEmployees();
