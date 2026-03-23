@@ -64,9 +64,6 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
     const metrics = metricsQuery.data?.metrics || [];
 
     return metrics
-      .filter((m: SdrAgendaMetrics) => 
-        validSdrEmails.has(m.sdr_email?.toLowerCase() || '')
-      )
       .map((m: SdrAgendaMetrics) => {
         const sdrName = sdrNameMap.get(m.sdr_email?.toLowerCase() || '') 
           || m.sdr_email?.split('@')[0] 
@@ -78,13 +75,12 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
           agendamentos: m.agendamentos,
           r1Agendada: m.r1_agendada,
           r1Realizada: m.r1_realizada,
-          // No-Show vem corrigido da RPC (r1_agendada - r1_realizada)
           noShows: m.no_shows || 0,
           contratos: m.contratos,
         };
       })
       .sort((a, b) => b.agendamentos - a.agendamentos);
-  }, [metricsQuery.data, validSdrEmails, sdrNameMap]);
+  }, [metricsQuery.data, sdrNameMap]);
 
   // Calculate team KPIs from FILTERED SDRs only
   const teamKPIs = useMemo((): TeamKPIs => {
@@ -128,9 +124,6 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
 
   // Get meetings for a specific SDR (only if they're in the valid SDR list)
   const getMeetingsForSDR = (sdrEmail: string): MeetingV2[] => {
-    if (!validSdrEmails.has(sdrEmail.toLowerCase())) {
-      return [];
-    }
     const meetings = meetingsQuery.data || [];
     const sdrLower = sdrEmail.toLowerCase();
     const filtered = meetings.filter(
@@ -142,11 +135,8 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
   // All meetings filtered to only the 13 SDRs
   const allMeetings = useMemo(() => {
     const meetings = meetingsQuery.data || [];
-    const filtered = meetings.filter(
-      m => validSdrEmails.has(m.current_owner?.toLowerCase() || '')
-    );
-    return deduplicateMeetings(filtered);
-  }, [meetingsQuery.data, validSdrEmails]);
+    return deduplicateMeetings(meetings);
+  }, [meetingsQuery.data]);
 
   return {
     teamKPIs,
