@@ -1,41 +1,27 @@
 
 
-## Plano: Sincronizar status do SDR com perfil do usuário
+## Plano: Mostrar TODAS as reuniões R1 nas Metas da Equipe (63, não 45)
 
 ### Problema
 
-Os SDRs Yanca, Evellyn e Hellen aparecem na tabela de reuniões porque na tabela `sdr` estão com `active = true`, mesmo tendo o perfil bloqueado/desativado:
+O hook `useTeamMeetingsData` filtra os resultados da RPC `get_sdr_metrics_from_agenda` para incluir apenas SDRs ativos do squad (11 pessoas). Isso descarta 18 reuniões R1 de SDRs inativos/desligados, mostrando 45 em vez de 63.
 
-| SDR | sdr.active | profiles.access_status | employees.status |
-|-----|-----------|----------------------|-----------------|
-| Evellyn | true | bloqueado | - |
-| Hellen | true | bloqueado | - |
-| Yanca | true | desativado | desligado |
-
-O hook `useSdrsFromSquad` filtra apenas por `sdr.active = true`, ignorando o status real do perfil.
-
-### Solução
-
-Duas ações complementares:
-
-**1. Correção imediata (migration)**: Desativar os SDRs cujo perfil está bloqueado/desativado:
-```sql
-UPDATE sdr SET active = false 
-WHERE email IN (
-  SELECT s.email FROM sdr s
-  JOIN profiles p ON lower(p.email) = lower(s.email)
-  WHERE p.access_status IN ('bloqueado', 'desativado')
-  AND s.active = true
-);
-```
-
-**2. Prevenção futura**: No hook `useSdrsFromSquad`, adicionar JOIN com `profiles` para filtrar SDRs cujo perfil está ativo, garantindo que mesmo se o `sdr.active` estiver dessincronizado, o SDR não apareça:
+### Correção
 
 | Arquivo | O que muda |
 |---------|-----------|
-| `src/hooks/useSdrsFromSquad.ts` | Após buscar SDRs ativos, fazer segunda query em `profiles` para excluir os com `access_status != 'ativo'` |
+| `src/hooks/useTeamMeetingsData.ts` | Remover filtro por `validSdrEmails` nos cálculos de `bySDR`, `teamKPIs`, `allMeetings` e `getMeetingsForSDR`. Manter o lookup de nomes apenas para enriquecer (usar email como fallback para SDRs não cadastrados) |
+
+### Detalhes
+
+1. **`bySDR`**: Remover `.filter(m => validSdrEmails.has(...))` — incluir TODOS os SDRs retornados pela RPC
+2. **`teamKPIs`**: Já calcula a partir de `bySDR`, então automaticamente incluirá todos
+3. **`allMeetings`**: Remover filtro por `validSdrEmails` — mostrar todas as reuniões
+4. **`getMeetingsForSDR`**: Remover guard que bloqueia SDRs fora da lista
+5. **`sdrNameMap`**: Manter como está (fornece nomes bonitos), mas usar `m.sdr_email.split('@')[0]` como fallback para SDRs não encontrados
 
 ### Resultado
-- SDRs desligados/bloqueados não aparecem mais na tabela de reuniões
-- Futuras desativações de perfil automaticamente excluem o SDR da listagem
+- Metas da Equipe mostrará 63 R1 Agendadas (todas)
+- Pendentes Hoje continuará mostrando 59 (pendentes, excluindo completed/no_show/contract_paid)
+- Ambos os números serão corretos: 63 = total R1, 59 = ainda pendentes
 
