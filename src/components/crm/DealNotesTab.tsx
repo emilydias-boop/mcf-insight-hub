@@ -58,11 +58,13 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
   // Combine all IDs
   const uniqueIds = [...new Set([...allDealIds, dealUuid, ...(dealClintId ? [dealClintId] : [])].filter(Boolean))];
   
-  const { data: allNotes, isLoading } = useQuery({
+  const { data: allNotes, isLoading, isError } = useQuery({
     queryKey: ['all-deal-notes', uniqueIds],
     queryFn: async () => {
+      console.log('[DealNotesTab] querying with uniqueIds:', uniqueIds);
+      
       // 1. Notas manuais + qualificação (deal_activities) - ALL deals cross-pipeline
-      const { data: manualNotes } = await supabase
+      const { data: manualNotes, error: manualError } = await supabase
         .from('deal_activities')
         .select('id, description, created_at, metadata, activity_type')
         .in('deal_id', uniqueIds)
