@@ -268,8 +268,8 @@ export default function Colaboradores() {
                 <TableHead>Squad</TableHead>
                 <TableHead>Gestor</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>NFSe Mês</TableHead>
-              </TableRow>
+                 <TableHead>NFSe Mês</TableHead>
+                 <TableHead className="w-[60px]">Ações</TableHead>
             </TableHeader>
             <TableBody>
               {isLoading ? (
