@@ -65,7 +65,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ResourceType } from "@/types/user-management";
+import { ResourceType, ROLE_LABELS } from "@/types/user-management";
 
 type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "closer_sombra" | "coordenador" | "rh" | "financeiro" | "gr" | "assistente_administrativo" | "marketing";
 

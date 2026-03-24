@@ -1,8 +1,8 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ShieldAlert } from 'lucide-react';
-import { ResourceType, PermissionLevel } from '@/types/user-management';
-import { useResourcePermission } from '@/hooks/useResourcePermission';
+import { ResourceType } from '@/types/user-management';
+import { useMyPermissions } from '@/hooks/useMyPermissions';
 
 interface ResourceGuardProps {
   resource: ResourceType;
@@ -18,11 +18,9 @@ export const ResourceGuard = ({
   fallback 
 }: ResourceGuardProps) => {
   const { role, loading } = useAuth();
-  const { canView, canEdit, canFull } = useResourcePermission(resource);
+  const { getPermissionLevel, isAdmin, isLoading: permLoading } = useMyPermissions();
   
-  // Wait for auth to complete before checking permissions
-  // With JWT-based roles, roles are available instantly with the session
-  if (loading) {
+  if (loading || permLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -30,15 +28,16 @@ export const ResourceGuard = ({
     );
   }
   
-  // Admins always have access
-  if (role === 'admin') {
+  if (isAdmin) {
     return <>{children}</>;
   }
   
+  const level = getPermissionLevel(resource);
+  
   const hasAccess = 
-    requiredLevel === 'view' ? canView :
-    requiredLevel === 'edit' ? canEdit :
-    requiredLevel === 'full' ? canFull : false;
+    requiredLevel === 'view' ? level !== 'none' :
+    requiredLevel === 'edit' ? (level === 'edit' || level === 'full') :
+    requiredLevel === 'full' ? level === 'full' : false;
   
   if (!hasAccess) {
     if (fallback) {
