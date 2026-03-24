@@ -229,16 +229,9 @@ Deno.serve(async (req) => {
       const buyer = uniqueBuyers.get(email);
       const existingContactId = contactByEmail.get(email);
 
-      // Skip se já tem deal (by contact_id or by email cross-check)
+      // Skip se já tem deal (by contact_id or by email cross-check) - safety re-check
       if (existingContactId && existingDealContactIds.has(existingContactId)) {
         stats.already_has_deal++;
-        continue;
-      }
-
-      // Partner check
-      if (partnerEmails.has(email)) {
-        stats.skipped_partners++;
-        details.push({ email, name: buyer.customer_name, action: 'skipped_partner' });
         continue;
       }
 
