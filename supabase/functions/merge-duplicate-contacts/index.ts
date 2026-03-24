@@ -66,7 +66,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { dry_run = true, limit = 100, match_type = 'email', primary_id, duplicate_ids, consolidate_only = false } = body;
+    const { dry_run = true, limit = 100, match_type = 'email', primary_id, duplicate_ids, consolidate_only = false, full_cleanup = false } = body;
 
     const results = {
       match_type: match_type,
@@ -76,6 +76,8 @@ serve(async (req) => {
       deals_consolidated: 0,
       contacts_deleted: 0,
       phones_normalized: 0,
+      email_groups_merged: 0,
+      phone_groups_merged: 0,
       errors: [] as string[],
       groups_processed: [] as any[],
     };
