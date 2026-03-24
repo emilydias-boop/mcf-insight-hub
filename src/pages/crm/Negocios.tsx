@@ -698,6 +698,15 @@ const Negocios = () => {
                   <FileSpreadsheet className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Importar Planilha</span>
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setExportDialogOpen(true)}
+                  className="flex-1 sm:flex-none"
+                >
+                  <Download className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Exportar</span>
+                </Button>
               </>
             )}
             <Button 
