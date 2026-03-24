@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { useDuplicateContacts, useMergeDuplicates, useMergeAllDuplicates, DuplicateMatchType, DuplicateGroup } from '@/hooks/useDuplicateContacts';
+import { useDuplicateContacts, useMergeDuplicates, useMergeAllDuplicates, useConsolidateDeals, DuplicateMatchType, DuplicateGroup } from '@/hooks/useDuplicateContacts';
 import { Users, Merge, Check, Phone, AlertTriangle, Loader2, Mail, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
