@@ -1,24 +1,26 @@
 
 
-## Implementação: CRM deal creation no webhook-make-a010 + Backfill
+## Plano: Backfill correto dos 75 leads A010 faltantes
 
-### Resumo
-Já aprovado anteriormente. Duas mudanças:
+### Problema
+O backfill anterior usava filtros incorretos que excluíam leads com contrato, leads de outras pipelines e leads com contatos duplicados. O número real é **75** (não 53).
 
-1. **`supabase/functions/webhook-make-a010/index.ts`** - Após salvar a transação, adicionar bloco que:
-   - Busca origin "PIPELINE INSIDE SALES"
-   - Verifica se é parceiro (PARTNER_PATTERNS)
-   - Busca/cria crm_contact por email
-   - Verifica se já existe deal (se sim, pula)
-   - Se não existe: busca stage "Novo Lead", distribui via `get_next_lead_owner`, cria deal
-   - Upsert em a010_sales
-   - Erros no CRM não bloqueiam a resposta (transação já foi salva)
+### Solução
+Atualizar a lógica do `backfill-a010-missing-deals` para remover os filtros excessivos e executar com `days_back: 90`.
 
-2. **`supabase/functions/backfill-a010-missing-deals/index.ts`** (novo) - Script one-time para criar deals dos ~40 leads perdidos:
-   - Busca transações A010 dos últimos 7 dias
-   - Cruza com crm_contacts/crm_deals para achar os que não têm deal
-   - Aplica mesma lógica (partner check, criar contato, distribuir, criar deal)
-   - dry_run por padrão
+### Mudanças
 
-3. **Deploy** de ambas as edge functions
+| Arquivo | O que fazer |
+|---------|-------------|
+| `supabase/functions/backfill-a010-missing-deals/index.ts` | Remover qualquer lógica que pule leads com contrato A000 ou leads com deals em outras pipelines. O único filtro de exclusão deve ser: (1) já tem deal no PIS, (2) é parceiro. Para contatos duplicados, usar o primeiro contato encontrado. |
+
+### Execução
+1. Deploy da função atualizada
+2. Rodar com `dry_run: true, days_back: 90` para confirmar os 75
+3. Rodar com `dry_run: false, days_back: 90` para criar os deals
+
+### Detalhes técnicos
+- A função atual já tem a lógica correta (só filtra parceiros e deals existentes no PIS)
+- O problema era na análise manual anterior, não no código
+- Basta executar com `days_back: 90` em vez de `days_back: 7`
 
