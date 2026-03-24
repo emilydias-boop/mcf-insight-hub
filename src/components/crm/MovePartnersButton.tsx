@@ -21,6 +21,7 @@ interface MovePartnersResponse {
     deals_fora_vr: number;
     partner_emails: number;
     partner_deals_found: number;
+    skipped_with_meetings: number;
     moved: number;
     errors: number;
   };
