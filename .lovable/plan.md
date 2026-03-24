@@ -1,50 +1,49 @@
 
 
-## Diagnóstico: Felipe Laurentino dos Santos
+## Diagnóstico: 12 transações vs 9+1 no painel
 
-### Por que não vinculou
+### Como funciona hoje
 
-Existem **2 contatos diferentes** no banco:
+O KPI "Contratos" = `totalContratos - totalOutside` = `10 - 1 = 9`. O "Outside" mostra `1`. Total real contado pelo sistema = **10**.
 
-| Contato | Email | Phone | Deal | Reunião R1 |
-|---------|-------|-------|------|------------|
-| `e2e1a7cd` | laurentinofelipe**7**@gmail.com | 8199300481**7** | `5c213d3c` — Contrato Pago | Sim (Julio, contract_paid) |
-| `8ffe2b66` | laurentinofelipe@gmail.com | 8199300480**0** | `82c7c340` — Contrato Pago | Nenhuma |
+O sistema conta contratos a partir de `meeting_slot_attendees` onde `contract_paid_at IS NOT NULL` (hook `useR1CloserMetrics`). Se uma transação Hubla **não foi vinculada** a um attendee R1, ela simplesmente não é contada.
 
-Os emails são diferentes (`7` vs sem `7`) e os telefones também diferem no último dígito (`17` vs `00`). O sistema de merge não consegue detectar isso como duplicata porque:
-- Email: não são iguais
-- Phone suffix (9 dígitos): `993004817` vs `993004800` — diferentes
+### O que está faltando
 
-Este é um caso de **erro de digitação no cadastro**. A reunião R1 com pagamento está no deal antigo, mas o novo deal (criado em 23/03) não tem reunião vinculada.
+Dos 12 transações Hubla nesse dia:
+- 1 é recorrência (P2) → não deveria contar → restam **11**
+- 10 foram vinculadas a attendees R1 → aparecem no painel
+- **1 transação não foi vinculada** a nenhum attendee R1
 
-### Bug crítico encontrado: Página de Duplicados quebrada
+Essa transação perdida é provavelmente um caso similar ao do Felipe: o `hubla-webhook-handler` não conseguiu fazer match por email/telefone/nome com um `meeting_slot_attendee`, então o `contract_paid_at` nunca foi preenchido.
 
-Todas as queries da página de Contatos Duplicados estão retornando **erro 400** porque o código referencia `crm_stages(order)` mas a coluna real se chama `stage_order`. Isso significa que a página de duplicados **não está funcionando**.
+### Plano de investigação e correção
 
-### Plano de correção
+#### 1. Identificar a transação não vinculada
+Consultar o banco para encontrar qual transação de 23/03 com `installment_number = 1` não tem `linked_attendee_id` correspondente. Comparar com os attendees R1 do dia para identificar o match manual necessário.
 
-#### 1. Corrigir o nome da coluna em `useDuplicateContacts.ts`
-Trocar `crm_stages(order)` por `crm_stages(stage_order)` e `d.crm_stages?.order` por `d.crm_stages?.stage_order` em todos os locais do arquivo (linhas 47, 57, 97, 107, etc.).
+#### 2. Verificar logs do webhook
+Consultar os logs do `hubla-webhook-handler` para entender por que o auto-match falhou nesse caso específico.
 
-#### 2. Unificar manualmente o Felipe
-Executar SQL para mover o `meeting_slot_attendees` e reunião do deal antigo para o novo, ou mergear os contatos manualmente.
+#### 3. Ação imediata
+Vincular manualmente a transação ao attendee correto via a interface de "Vincular Contrato" na agenda do closer, ou via SQL migration.
 
 ### Detalhes técnicos
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/hooks/useDuplicateContacts.ts` | Substituir `crm_stages(order)` → `crm_stages(stage_order)` e `crm_stages?.order` → `crm_stages?.stage_order` em ~6 ocorrências |
+| Verificação | Query |
+|-------------|-------|
+| Transações do dia 23/03 sem vínculo | `hubla_transactions` where `sale_date` = 23/03, `installment_number = 1`, `product_category IN ('contrato','incorporador')`, `linked_attendee_id IS NULL` |
+| Attendees R1 do dia sem contract_paid_at | `meeting_slot_attendees` com R1 meetings de 23/03 onde `contract_paid_at IS NULL` e `status != 'contract_paid'` |
 
-Correção SQL para o Felipe (migration):
-```sql
--- Mover meeting_slot_attendees do deal antigo para o novo
-UPDATE meeting_slot_attendees 
-SET deal_id = '82c7c340-d806-4fb9-a826-df2205373294'
-WHERE deal_id = '5c213d3c-46fa-455a-b065-63cc339256e2';
+### Resumo
 
--- Mover meeting_slots
-UPDATE meeting_slots 
-SET deal_id = '82c7c340-d806-4fb9-a826-df2205373294'
-WHERE deal_id = '5c213d3c-46fa-455a-b065-63cc339256e2';
-```
+| Contagem | Valor |
+|----------|-------|
+| Transações Hubla dia 23/03 | 12 |
+| Menos recorrências (P2+) | -1 |
+| Total esperado | 11 |
+| Vinculadas (KPI mostra) | 10 (9 contratos + 1 outside) |
+| Faltando | 1 (não vinculada automaticamente) |
+
+A solução é identificar e vincular manualmente essa transação, ou executar a "Limpeza Completa" caso seja mais um caso de contato duplicado.
 
