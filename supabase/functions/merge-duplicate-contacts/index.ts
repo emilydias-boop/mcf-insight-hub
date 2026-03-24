@@ -262,6 +262,9 @@ async function mergeContacts(
       }
     }
 
+    // Consolidar deals duplicados na mesma origin
+    await consolidateDeals(supabase, primary.id, results);
+
     // Atualizar primary com dados enriquecidos
     const updateData: any = { updated_at: new Date().toISOString() };
     if (normalizedPhone && normalizedPhone !== primary.phone) {
