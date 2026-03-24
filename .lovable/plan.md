@@ -1,114 +1,53 @@
 
-## Diagnóstico
 
-O problema mais provável não é o Kanban em si: é que existem dois caminhos de merge com comportamentos diferentes.
+## Plano: Exportação avançada do CRM com seleção de stages e campos
 
-### O que encontrei no código
+### O que será construído
 
-1. A Edge Function `supabase/functions/merge-duplicate-contacts/index.ts` já tem a lógica nova de:
-   - priorizar deal mais avançado por `stage_order`
-   - consolidar deals duplicados na mesma `origin`
-   - transferir `meeting_slots`, `meeting_slot_attendees`, `deal_activities` e `calls`
-   - deletar o deal secundário
+Um dialog de exportação acessível via botão "Exportar" na toolbar da página Negócios, permitindo ao usuário escolher:
+1. **Quais stages** exportar (checkboxes com todos os stages da pipeline atual)
+2. **Quais campos** incluir na planilha (nome, contato, email, telefone, valor, tags, owner, origem, data de criação, etc.)
+3. Formato: **XLSX** (padrão já usado no projeto via biblioteca `xlsx`)
 
-2. Porém o botão de merge individual da tela de duplicados **não usa essa Edge Function**.
-   Em `src/hooks/useDuplicateContacts.ts`, o `useMergeDuplicates()` faz apenas:
-   - `UPDATE crm_deals SET contact_id = primaryId`
-   - `DELETE crm_contacts` duplicados
+### Componentes
 
-   Ou seja: ele junta os contatos, mas **não consolida os 2 deals da mesma pipeline**.
+| Arquivo | Ação |
+|---------|------|
+| `src/components/crm/ExportDealsDialog.tsx` | **Novo** — Dialog com checkboxes de stages e campos, botão "Exportar Excel" |
+| `src/pages/crm/Negocios.tsx` | Adicionar botão "Exportar" na toolbar (ao lado de "Importar Planilha") e abrir o dialog |
 
-3. Além disso, a listagem de duplicados no frontend ainda ordena o “principal” por:
-   - mais deals
-   - mais reuniões
-   - mais antigo
+### Detalhes técnicos
 
-   enquanto o backend novo escolhe por:
-   - maior `stage_order`
-   - depois deals/reuniões/antiguidade
+**ExportDealsDialog** receberá:
+- `deals` — array de deals já carregados no Kanban (evita re-fetch)
+- `stages` — lista de stages da pipeline atual (do hook `useCRMStages`)
+- `open` / `onOpenChange` — controle do dialog
 
-   Então a UI pode sugerir um “principal” diferente do que a regra correta deveria manter.
+**Campos selecionáveis** (com checkbox, todos marcados por padrão):
+- Nome do Negócio
+- Nome do Contato
+- Email
+- Telefone
+- Estágio atual
+- Valor
+- Tags
+- Responsável (owner)
+- Origem
+- Data de Criação
+- Data de Movimentação (stage_moved_at)
+- Produto (product_name)
+- SDR Original
+- Closer R1 / R2
 
-## Causa raiz provável do que você está vendo
+**Fluxo**:
+1. Usuário clica "Exportar" → abre dialog
+2. Seleciona stages desejados (ex: só "R1 Realizada" e "Contrato Pago")
+3. Marca/desmarca campos
+4. Clica "Exportar Excel"
+5. Sistema filtra deals pelas stages selecionadas, monta planilha com colunas escolhidas, e faz download via `XLSX.writeFile`
 
-O lead ficou com 2 deals porque ele foi unificado por um fluxo que só moveu `contact_id`, mas não executou a etapa de consolidação por pipeline.
+**Padrão de export**: Segue o mesmo padrão já usado em `CarrinhoReportPanel`, `CrossBUReportPanel`, etc. (`import * as XLSX from 'xlsx'`).
 
-Em outras palavras:
-- os contatos podem já estar unidos
-- mas os dois negócios na mesma `origin_id` permaneceram ativos
+### Acesso
+Visível apenas para `admin` e `manager` (mesmo controle do botão "Importar Planilha").
 
-## Plano de correção
-
-### 1. Unificar a lógica de merge no backend
-Alterar o fluxo para que o merge individual também passe pela mesma lógica server-side da Edge Function, em vez de fazer merge “local” no frontend.
-
-Implementação proposta:
-- estender `merge-duplicate-contacts` para aceitar merge direcionado de um grupo específico:
-  - `primary_id`
-  - `duplicate_ids`
-  - opcionalmente `dry_run`
-- reaproveitar a mesma função `mergeContacts(...)` já existente no backend
-
-Resultado:
-- “Unificar” e “Unificar Todos” passam a ter o mesmo comportamento seguro
-
-### 2. Corrigir o hook `useMergeDuplicates`
-Trocar a implementação atual de `useMergeDuplicates()` para chamar a Edge Function, e não mais fazer:
-- update de `crm_deals.contact_id`
-- delete de `crm_contacts`
-diretamente do browser
-
-Isso elimina o caminho incompleto que hoje deixa 2 deals do mesmo lead.
-
-### 3. Alinhar a ordenação da tela com a regra real
-Atualizar `useDuplicateContacts` para ordenar os contatos usando o mesmo critério do backend:
-- maior `stage_order`
-- mais deals
-- mais reuniões
-- mais antigo
-
-Isso evita que a UI marque como “Principal” um contato/deal menos avançado.
-
-### 4. Melhorar o retorno do merge para auditoria
-Fazer a Edge Function devolver no `groups_processed`:
-- `primary_deal_id`
-- `secondary_deal_ids`
-- `deals_consolidated`
-- `origin_ids_afetadas`
-
-Assim a tela consegue mostrar com clareza que, além do contato, os negócios da mesma pipeline também foram consolidados.
-
-### 5. Tratar os casos já existentes
-Depois da correção, executar novamente o merge do par afetado para forçar a consolidação dos deals já existentes.
-Se necessário, usar primeiro `dry_run` para validar:
-- qual deal ficará como principal
-- quais relacionamentos serão transferidos
-- quantos deals serão consolidados
-
-## Arquivos a alterar
-
-- `src/hooks/useDuplicateContacts.ts`
-  - substituir `useMergeDuplicates()` por chamada à Edge Function
-  - alinhar ordenação dos grupos com `stage_order`
-
-- `supabase/functions/merge-duplicate-contacts/index.ts`
-  - aceitar merge direcionado (`primary_id`, `duplicate_ids`)
-  - reaproveitar a consolidação já existente para merge individual
-  - enriquecer payload de retorno
-
-- opcionalmente `src/pages/crm/ContatosDuplicados.tsx`
-  - ajustar textos/feedback para deixar explícito que o merge também consolida deals da mesma pipeline
-
-## Resultado esperado
-
-Depois dessa correção:
-- não haverá mais diferença entre “Unificar” e “Unificar Todos”
-- um lead duplicado na mesma pipeline terminará com:
-  - 1 contato
-  - 1 deal por pipeline
-  - reuniões, attendees, atividades e calls preservados no deal mantido
-
-## Observação importante
-
-Pelo código atual, o cenário que você descreveu é totalmente consistente com um merge individual já executado pelo fluxo antigo.
-Ou seja: a correção principal agora não é no Kanban, e sim em eliminar esse caminho incompleto de merge no frontend.
