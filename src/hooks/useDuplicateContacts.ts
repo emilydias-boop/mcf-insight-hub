@@ -103,7 +103,7 @@ async function fetchPhoneDuplicates(): Promise<DuplicateGroup[]> {
       .from('crm_contacts')
       .select(`
         id, name, email, phone, created_at,
-        crm_deals(id, owner_id, stage_id, crm_stages(order), meeting_slots(id))
+        crm_deals(id, owner_id, stage_id, crm_stages(stage_order), meeting_slots(id))
       `)
       .ilike('phone', `%${phone_suffix}`)
       .order('created_at', { ascending: true });
