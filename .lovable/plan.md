@@ -1,28 +1,35 @@
 
 
-## Por que os deals do backfill ficaram sem dono
+## Diagnóstico: Role incorreto para Antony Nicolas
 
-### Causa raiz
+### Dados verificados
 
-Os **24 deals sem dono** foram todos criados em **24/03/2026** (hoje) por duas vias:
+| Item | Valor |
+|------|-------|
+| Usuário | Antony Nicolas Gomes Rosa |
+| user_id | d77b494c-7b81-4714-a941-8e8d051b72f2 |
+| Role no banco (user_roles) | `assistente_administrativo` |
+| Permissão global CRM | `view` |
+| Permissão BU consórcio CRM | `full` |
 
-1. **~20 deals** criados pela Edge Function `backfill-a010-missing-deals` — a função **tenta** distribuir chamando `get_next_lead_owner(p_origin_id)`, mas a RPC retornou `null`. Isso acontece quando **não há configuração de distribuição ativa** (`lead_distribution_config`) para a origin PIS, ou todos os SDRs configurados estavam inativos.
+### Causa raiz provável
 
-2. **4 deals** criados manualmente via REST API (Adrielson, Jovane, Marcel, Mateus) — esses **nem passaram** pela lógica de distribuição; foram inseridos diretamente sem owner.
+O role no banco está correto (`assistente_administrativo`), mas o **JWT do usuário pode estar desatualizado**. O sistema lê roles diretamente do token JWT via `custom_access_token_hook`. Se o role foi alterado recentemente e o usuário não fez logout/login, o JWT antigo pode ainda conter `viewer` (ou nenhum role), fazendo o `ResourceGuard` negar acesso.
 
-Os **16 deals com dono** foram criados pela função `backfill-a010-offer-leads` em uma execução anterior onde a distribuição estava funcionando.
+### Solução
 
-### Plano: Distribuir os 24 deals órfãos
+**Passo 1 — Confirmar**: Pedir ao usuário Antony Nicolas para **fazer logout e login novamente**. Isso força um novo JWT com o role `assistente_administrativo` injetado pelo hook.
 
-**Passo 1** — Verificar a configuração de distribuição atual da origin PIS para confirmar quais SDRs estão ativos.
+**Passo 2 — Se persistir**: Verificar via logs do Supabase se o `custom_access_token_hook` está retornando `assistente_administrativo` no array `user_roles` do token para esse user_id.
 
-**Passo 2** — Executar a Edge Function `distribute-leads-batch` ou atualizar diretamente via SQL/API, atribuindo os 24 deals aos SDRs ativos usando o rodízio equitativo (`get_next_lead_owner`).
+**Passo 3 — Fallback técnico (se necessário)**: Adicionar log temporário no `AuthContext` para exibir no console o conteúdo do JWT decodificado, confirmando quais roles estão no token. Isso pode ser feito adicionando um `console.log` no `extractRolesFromSession`:
 
-**Passo 3** — Verificar que todos os 40 deals do backfill têm `owner_id` e `owner_profile_id` preenchidos.
+```typescript
+// Em extractRolesFromSession, após decodificar:
+console.log('[Auth] JWT decoded roles for user:', newSession.user.email, tokenRoles);
+```
 
-### Detalhes técnicos
+### Resumo
 
-- A função `backfill-a010-missing-deals` (linhas 319-329) chama `supabase.rpc('get_next_lead_owner', { p_origin_id: originId })` — se retorna `null`, o deal é criado com `owner_id: null`
-- O trigger `trg_sync_owner_profile_id` só resolve `owner_profile_id` se `owner_id` for preenchido
-- A correção é rodar a distribuição manualmente para esses 24 deals
+O banco está correto. O problema é quase certamente um **JWT stale** (desatualizado). Logout + login resolve na maioria dos casos. Se não resolver, investigamos o hook do token.
 
