@@ -90,6 +90,7 @@ import ReunioesEquipe from "./pages/crm/ReunioesEquipe";
 import SdrMeetingsDetailPage from "./pages/crm/SdrMeetingsDetailPage";
 import CloserMeetingsDetailPage from "./pages/crm/CloserMeetingsDetailPage";
 import Webhooks from "./pages/crm/Webhooks";
+import WebhookAnalytics from "./pages/crm/WebhookAnalytics";
 import NotFound from "./pages/NotFound";
 
 import ConsorcioIndex from "./pages/bu-consorcio/Index";
@@ -383,6 +384,7 @@ const App = () => (
                 <Route path="auditoria-agendamentos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AuditoriaAgendamentos /></RoleGuard>} />
 
                 <Route path="webhooks" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Webhooks /></RoleGuard>} />
+                <Route path="webhook-analytics" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><WebhookAnalytics /></RoleGuard>} />
                 <Route path="configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConfiguracoesCRM /></RoleGuard>} />
               </Route>
             </Route>
