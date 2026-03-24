@@ -279,3 +279,31 @@ export function useMergeAllDuplicates() {
     },
   });
 }
+
+export function useConsolidateDeals() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ dryRun = true }: { dryRun?: boolean }) => {
+      const { data, error } = await supabase.functions.invoke('merge-duplicate-contacts', {
+        body: { consolidate_only: true, dry_run: dryRun },
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data.dry_run) {
+        toast.info(`Simulação: ${data.total_groups} pares de deals duplicados encontrados na mesma pipeline`);
+      } else {
+        toast.success(`${data.deals_consolidated} deal(s) consolidado(s) com sucesso!`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['duplicate-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
+    },
+    onError: (error: any) => {
+      toast.error(`Erro ao consolidar deals: ${error.message}`);
+    },
+  });
+}
