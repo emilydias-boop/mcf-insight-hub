@@ -1,39 +1,36 @@
 
 
-## Correção: move-partners deve respeitar proteção de funil (reuniões)
+## Simulação detalhada da Limpeza Completa
 
 ### Problema
-
-A função `move-partners-to-venda-realizada` (cron a cada 6h) move TODO deal de parceiro para "Venda Realizada" sem verificar se o lead tem reunião R1/R2 agendada. A importação tem essa proteção, mas o cron não.
-
-Resultado: Maiquel tinha um deal ativo com reunião no funil e foi movido automaticamente, quebrando a regra de proteção de funil.
-
-### Regra correta
-
-Se o deal/contato tem uma reunião (R1 ou R2) registrada em `meeting_slot_attendees`, o cron **não deve** alterar o estágio. O lead deve permanecer no estágio atual para ser trabalhado pelo closer/SDR.
+O modo `dry_run` atual só retorna contagens (ex: "150 grupos por email"). Você precisa ver **exatamente** quais contatos seriam mantidos, quais deletados, e quais deals consolidados — antes de executar.
 
 ### Solução
+Criar um botão "Simulação Detalhada" que executa o `dry_run` existente (que já retorna `groups_processed` com detalhes de cada grupo) e exibe os resultados em uma tabela expansível mostrando:
 
-Adicionar verificação no `move-partners-to-venda-realizada` para excluir deals cujos contatos tenham reuniões ativas.
+- **Principal** (será mantido): nome, email, phone, deals, stage
+- **Duplicados** (serão deletados): nome, email, phone, deals, stage
+- Indicação visual de riscos (ex: duplicado com mais deals que o principal)
 
 ### Detalhes técnicos
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/move-partners-to-venda-realizada/index.ts` | Após identificar `partnerDeals` (passo 6), buscar `meeting_slot_attendees` por `contact_email` ou `deal_id` para esses deals. Excluir da movimentação qualquer deal que tenha reunião registrada (qualquer status exceto `cancelled`). |
+| `supabase/functions/merge-duplicate-contacts/index.ts` | No `dry_run`, incluir mais dados em `groups_processed`: nome, email, phone de cada contato + deals com stage names. Atualmente já retorna `primary_name`, `primary_deals` e duplicates com `name`, `deals`, `max_stage_order` — adicionar `email`, `phone` e `stage_name` para visualização |
+| `src/components/crm/DuplicateContactsFullCleanup.tsx` (novo ou existente) | Criar painel de resultados da simulação com tabela colapsável por grupo. Cada grupo mostra: quem é o Principal (verde), quem será deletado (vermelho), e um alerta amarelo se o duplicado tem mais reuniões/deals que o principal |
 
-Lógica a adicionar entre os passos 6 e 7:
+### Fluxo do usuário
 
-```text
-partnerDeals (identificados)
-  ↓
-Buscar meeting_slot_attendees onde deal_id IN (partnerDeal IDs)
-  ou contact_email IN (partnerEmails) com status != 'cancelled'
-  ↓
-Excluir esses deals da lista de movimentação
-  ↓
-Prosseguir com dry_run / execução apenas dos deals SEM reunião
-```
+1. Clica "Simular Limpeza Completa" (já existe)
+2. Em vez de só um toast com números, abre um painel/modal com a lista completa
+3. Cada grupo é expansível mostrando Principal vs Duplicados
+4. Se algo parecer errado, o usuário pode identificar antes de executar
+5. Só depois de revisar, clica "Executar Limpeza Completa"
 
-Stats atualizadas incluirão `skipped_with_meetings` para visibilidade.
+### Flags de risco automáticos
+
+Para cada grupo, o sistema marcará:
+- **⚠️ Risco**: duplicado tem mais deals ou reuniões que o principal
+- **⚠️ Risco telefone**: match por últimos 9 dígitos com emails diferentes (possível falso positivo)
+- **✅ Seguro**: principal claramente tem mais dados
 
