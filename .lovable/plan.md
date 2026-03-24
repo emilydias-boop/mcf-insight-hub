@@ -1,60 +1,24 @@
 
 ## Contexto
 
-O webhook atual `clientdata-inside` tem:
-- **slug**: `clientdata-inside`
-- **auto_tags**: `["ANAMNESE"]`
-- **origin_id**: `e3c04f21-ba2c-4c66-84f8-b4341c826b1c` (PIPELINE INSIDE SALES)
-- **stage_id**: `d346320a-00b0-4e9f-89b6-149ad1c34061`
-- **field_mapping**: mapeamento completo de anamnese (nome, telefone, faixa aporte, etc.)
+Os dois webhooks foram criados com sucesso no banco:
+- `anamnese-mcf` → tag `ANAMNESE`
+- `anamnese-insta-mcf` → tag `ANAMNESE-INSTA`
 
-O usuário quer **dois novos webhooks independentes** — não replicas do mesmo, mas fontes distintas com tags distintas:
+A tag `ANAMNESE-INSTA` **não precisa ser criada antecipadamente**. O sistema funciona assim:
+- A tag é salva diretamente no campo `tags[]` de `crm_contacts` e `crm_deals` quando o lead chega
+- A listagem de tags na tela `/crm/tags` exibe apenas tags que **já existem em contatos reais** (via Clint API)
+- Portanto, `ANAMNESE-INSTA` aparecerá automaticamente após o **primeiro lead** chegar pelo webhook `anamnese-insta-mcf`
 
----
-
-## O que criar
-
-### Webhook 1 — Anamnese MCF (fonte principal, réplica do clientdata-inside)
-- **slug**: `anamnese-mcf`
-- **name**: `Anamnese MCF`
-- **auto_tags**: `["ANAMNESE"]`
-- **origin_id**: `e3c04f21-ba2c-4c66-84f8-b4341c826b1c`
-- **stage_id**: `d346320a-00b0-4e9f-89b6-149ad1c34061`
-- **field_mapping**: idêntico ao `clientdata-inside`
-- **description**: `Webhook de anamnese MCF (fonte principal)`
-
-**URL**: `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/webhook-lead-receiver/anamnese-mcf`
-
-### Webhook 2 — Anamnese Instagram MCF (fonte Instagram)
-- **slug**: `anamnese-insta-mcf`
-- **name**: `Anamnese Instagram MCF`
-- **auto_tags**: `["ANAMNESE-INSTA"]`
-- **origin_id**: `e3c04f21-ba2c-4c66-84f8-b4341c826b1c`
-- **stage_id**: `d346320a-00b0-4e9f-89b6-149ad1c34061`
-- **field_mapping**: idêntico ao `clientdata-inside`
-- **description**: `Webhook de anamnese via Instagram MCF`
-
-**URL**: `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/webhook-lead-receiver/anamnese-insta-mcf`
+**Não há nada quebrado.** A configuração está correta.
 
 ---
 
-## Como será feito
+## URLs prontas para usar
 
-Inserção direta nas duas linhas na tabela `webhook_endpoints` via ferramenta de dados. Nenhum código de aplicação precisa ser alterado — a Edge Function `webhook-lead-receiver` já lê o `slug` da URL e aplica as `auto_tags` configuradas na linha.
+| Webhook | URL | Tag aplicada |
+|---------|-----|-------------|
+| Anamnese MCF | `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/webhook-lead-receiver/anamnese-mcf` | `ANAMNESE` |
+| Anamnese Instagram MCF | `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/webhook-lead-receiver/anamnese-insta-mcf` | `ANAMNESE-INSTA` |
 
----
-
-## O que NÃO muda
-- O webhook `clientdata-inside` original continua intacto com sua tag `ANAMNESE`
-- A Edge Function não precisa de alteração
-- Nenhum arquivo de código do app precisa ser alterado
-
----
-
-## Resultado
-
-| Webhook | Slug | Tag | URL |
-|---------|------|-----|-----|
-| Existente | `clientdata-inside` | `ANAMNESE` | `.../clientdata-inside` |
-| Novo 1 | `anamnese-mcf` | `ANAMNESE` | `.../anamnese-mcf` |
-| Novo 2 | `anamnese-insta-mcf` | `ANAMNESE-INSTA` | `.../anamnese-insta-mcf` |
+Basta conectar a fonte do Instagram MCF à URL do `anamnese-insta-mcf`. Quando o primeiro lead chegar, a tag `ANAMNESE-INSTA` passará a aparecer no CRM.
