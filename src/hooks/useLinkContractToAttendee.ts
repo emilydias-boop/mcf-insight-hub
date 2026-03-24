@@ -8,9 +8,6 @@ interface LinkContractParams {
   dealId?: string | null;
 }
 
-// Contract Paid stage ID
-const CONTRACT_PAID_STAGE_ID = '0cf9a43b-de06-4c2a-8eab-e0f34c00e97a';
-
 /**
  * Hook to link a contract transaction to an R1 attendee
  * and mark them as contract_paid
@@ -75,16 +72,34 @@ export function useLinkContractToAttendee() {
 
       if (attendeeError) throw attendeeError;
 
-      // 3. Move deal to "Contrato Pago" stage if dealId exists
+      // 4. Move deal to "Contrato Pago" stage if dealId exists
+      // Dynamically find the correct stage based on the deal's origin
       if (dealId) {
-        const { error: dealError } = await supabase
+        const { data: dealData } = await supabase
           .from('crm_deals')
-          .update({ stage_id: CONTRACT_PAID_STAGE_ID })
-          .eq('id', dealId);
+          .select('origin_id')
+          .eq('id', dealId)
+          .maybeSingle();
 
-        if (dealError) {
-          console.error('Error updating deal stage:', dealError);
-          // Don't throw - contract linking succeeded, deal update is secondary
+        if (dealData?.origin_id) {
+          const { data: stageData } = await supabase
+            .from('crm_stages')
+            .select('id')
+            .eq('origin_id', dealData.origin_id)
+            .ilike('stage_name', '%contrato%pago%')
+            .limit(1)
+            .maybeSingle();
+
+          if (stageData) {
+            const { error: dealError } = await supabase
+              .from('crm_deals')
+              .update({ stage_id: stageData.id })
+              .eq('id', dealId);
+
+            if (dealError) {
+              console.error('Error updating deal stage:', dealError);
+            }
+          }
         }
       }
 
