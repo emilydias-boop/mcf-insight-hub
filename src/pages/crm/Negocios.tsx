@@ -44,6 +44,8 @@ import { OutsideDistributionButton } from '@/components/crm/OutsideDistributionB
 import { MovePartnersButton } from '@/components/crm/MovePartnersButton';
 import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDialog';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
+import { ExportDealsDialog } from '@/components/crm/ExportDealsDialog';
+import { Download } from 'lucide-react';
 
 const Negocios = () => {
   // Ativar notificações em tempo real para novos leads
@@ -72,6 +74,7 @@ const Negocios = () => {
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [spreadsheetDialogOpen, setSpreadsheetDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const bulkTransfer = useBulkTransfer();
   
   // Usar BU ativa (do contexto da rota ou do perfil do usuário)
@@ -695,6 +698,15 @@ const Negocios = () => {
                   <FileSpreadsheet className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Importar Planilha</span>
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setExportDialogOpen(true)}
+                  className="flex-1 sm:flex-none"
+                >
+                  <Download className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Exportar</span>
+                </Button>
               </>
             )}
             <Button 
@@ -827,6 +839,19 @@ const Negocios = () => {
         onOpenChange={setSpreadsheetDialogOpen}
         deals={dealsData || []}
         originId={effectiveOriginId}
+      />
+      
+      
+      {/* Dialog de exportação */}
+      <ExportDealsDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        deals={filteredDeals}
+        stages={(currentPipelineStages || []).map((s: any) => ({
+          id: s.id,
+          stage_name: s.stage_name,
+          stage_order: s.stage_order,
+        }))}
       />
       
       {/* Drawer para deals cross-pipeline */}
