@@ -225,35 +225,17 @@ export function useMergeDuplicates() {
 
   return useMutation({
     mutationFn: async ({ primaryId, duplicateIds }: { primaryId: string; duplicateIds: string[] }) => {
-      // 1. Atualizar deals dos duplicados
-      for (const dupId of duplicateIds) {
-        const { error } = await supabase
-          .from('crm_deals')
-          .update({ 
-            contact_id: primaryId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('contact_id', dupId);
+      const { data, error } = await supabase.functions.invoke('merge-duplicate-contacts', {
+        body: { primary_id: primaryId, duplicate_ids: duplicateIds, dry_run: false },
+      });
 
-        if (error) throw error;
-      }
-
-      // 2. Deletar contatos duplicados
-      for (const dupId of duplicateIds) {
-        const { error } = await supabase
-          .from('crm_contacts')
-          .delete()
-          .eq('id', dupId);
-
-        if (error) {
-          console.error(`Erro ao deletar contato ${dupId}:`, error);
-        }
-      }
-
-      return { merged: duplicateIds.length };
+      if (error) throw error;
+      return data;
     },
     onSuccess: (data) => {
-      toast.success(`${data.merged} contato(s) unificado(s) com sucesso`);
+      const consolidated = data.deals_consolidated || 0;
+      const deleted = data.contacts_deleted || 0;
+      toast.success(`Unificado! ${deleted} contato(s) removido(s), ${consolidated} deal(s) consolidado(s)`);
       queryClient.invalidateQueries({ queryKey: ['duplicate-contacts'] });
       queryClient.invalidateQueries({ queryKey: ['crm-contacts'] });
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
