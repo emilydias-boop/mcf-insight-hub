@@ -35,8 +35,8 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { dry_run = true, days_back = 7 } = await req.json().catch(() => ({ dry_run: true, days_back: 7 }));
-    console.log(`🚀 Backfill A010 Missing Deals - dry_run: ${dry_run}, days_back: ${days_back}`);
+    const { dry_run = true, days_back = 7, limit = 100, offset = 0 } = await req.json().catch(() => ({ dry_run: true, days_back: 7, limit: 100, offset: 0 }));
+    console.log(`🚀 Backfill A010 Missing Deals - dry_run: ${dry_run}, days_back: ${days_back}, limit: ${limit}, offset: ${offset}`);
 
     // 1. Buscar origin
     const { data: originData } = await supabase
@@ -206,31 +206,32 @@ Deno.serve(async (req) => {
     }
     console.log(`🤝 ${partnerEmails.size} parceiros identificados`);
 
-    // 7. Processar
+    // 7. Aplicar limit/offset e processar
+    const paginatedEmails = emailsNeedingDeal.filter(e => !partnerEmails.has(e));
+    const sliced = paginatedEmails.slice(offset, offset + limit);
+    console.log(`📋 Processando ${sliced.length} de ${paginatedEmails.length} (offset: ${offset}, limit: ${limit})`);
+
     const stats = {
       total: emails.length,
+      total_needing_deal: paginatedEmails.length,
+      processing: sliced.length,
       already_has_deal: 0,
-      skipped_partners: 0,
+      skipped_partners: partnerEmails.size,
       skipped_phone_match: 0,
       contacts_created: 0,
       deals_created: 0,
       errors: 0,
+      next_offset: offset + limit < paginatedEmails.length ? offset + limit : null,
     };
     const details: any[] = [];
 
-    for (const [email, buyer] of uniqueBuyers) {
+    for (const email of sliced) {
+      const buyer = uniqueBuyers.get(email);
       const existingContactId = contactByEmail.get(email);
 
-      // Skip se já tem deal (by contact_id or by email cross-check)
+      // Skip se já tem deal (by contact_id or by email cross-check) - safety re-check
       if (existingContactId && existingDealContactIds.has(existingContactId)) {
         stats.already_has_deal++;
-        continue;
-      }
-
-      // Partner check
-      if (partnerEmails.has(email)) {
-        stats.skipped_partners++;
-        details.push({ email, name: buyer.customer_name, action: 'skipped_partner' });
         continue;
       }
 
@@ -368,9 +369,15 @@ Deno.serve(async (req) => {
 
         details.push({ email, name: buyer.customer_name, action: 'created', owner: ownerEmail });
       } catch (err: any) {
-        stats.errors++;
-        details.push({ email, name: buyer.customer_name, action: 'error', error: err.message });
-        console.error(`❌ ${email}:`, err.message);
+        if (err.message?.includes('contact_origin_unique')) {
+          stats.already_has_deal++;
+          details.push({ email, name: buyer.customer_name, action: 'skipped_constraint' });
+          console.log(`⚠️ ${email}: constraint catch - já tem deal`);
+        } else {
+          stats.errors++;
+          details.push({ email, name: buyer.customer_name, action: 'error', error: err.message });
+          console.error(`❌ ${email}:`, err.message);
+        }
       }
     }
 
