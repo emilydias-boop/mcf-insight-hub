@@ -21,6 +21,7 @@ interface MovePartnersResponse {
     deals_fora_vr: number;
     partner_emails: number;
     partner_deals_found: number;
+    skipped_with_meetings: number;
     moved: number;
     errors: number;
   };
@@ -152,6 +153,12 @@ export const MovePartnersButton = () => {
                     <span className="text-muted-foreground">Deals de parceiros fora de VR:</span>
                     <span className="font-medium">{response.stats.partner_deals_found}</span>
                   </div>
+                  {(response.stats.skipped_with_meetings ?? 0) > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Protegidos (com reunião):</span>
+                      <span className="font-medium text-warning">{response.stats.skipped_with_meetings}</span>
+                    </div>
+                  )}
                   {!response.dry_run && (
                     <>
                       <div className="flex justify-between text-sm">

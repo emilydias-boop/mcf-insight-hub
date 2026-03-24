@@ -115,17 +115,39 @@ Deno.serve(async (req) => {
     console.log(`🤝 ${partnerEmails.size} emails de parceiros encontrados`);
 
     // 6. Filtrar deals de parceiros fora de VR
-    const partnerDeals = dealsNotInVR.filter(d => {
+    const partnerDealsRaw = dealsNotInVR.filter(d => {
       const email = contactEmails.get(d.contact_id);
       return email && partnerEmails.has(email);
     });
-    console.log(`🎯 ${partnerDeals.length} deals de parceiros para mover`);
+    console.log(`🎯 ${partnerDealsRaw.length} deals de parceiros candidatos`);
+
+    // 6b. Excluir deals com reuniões ativas (proteção de funil)
+    const partnerDealIds = partnerDealsRaw.map(d => d.id);
+    const dealsWithMeetings = new Set<string>();
+
+    for (let i = 0; i < partnerDealIds.length; i += 200) {
+      const batch = partnerDealIds.slice(i, i + 200);
+      const { data: attendees } = await supabase
+        .from('meeting_slot_attendees')
+        .select('deal_id')
+        .in('deal_id', batch)
+        .neq('status', 'cancelled');
+
+      for (const a of attendees || []) {
+        if (a.deal_id) dealsWithMeetings.add(a.deal_id);
+      }
+    }
+
+    const partnerDeals = partnerDealsRaw.filter(d => !dealsWithMeetings.has(d.id));
+    const skippedWithMeetings = partnerDealsRaw.length - partnerDeals.length;
+    console.log(`🛡️ ${skippedWithMeetings} deals com reunião protegidos, ${partnerDeals.length} para mover`);
 
     const stats = {
       total_deals: allDeals.length,
       deals_fora_vr: dealsNotInVR.length,
       partner_emails: partnerEmails.size,
-      partner_deals_found: partnerDeals.length,
+      partner_deals_found: partnerDealsRaw.length,
+      skipped_with_meetings: skippedWithMeetings,
       moved: 0,
       errors: 0,
     };
