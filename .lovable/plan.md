@@ -1,55 +1,38 @@
 
 
-## Investigação: 12 transações vs 10 no painel (9 contratos + 1 outside)
+## O que está acontecendo com o horário
 
-### Como o KPI "Contratos" é calculado
+### Resumo
 
-```text
-closerMetrics (useR1CloserMetrics)
-  ↓
-contrato_pago = meeting_slot_attendees WHERE contract_paid_at IS NOT NULL
-               AND contract_paid_at >= dia AND contract_paid_at <= dia
-               AND meeting_type = 'r1' AND is_partner = false
-               AND contract_paid_at >= scheduled_at (senão é Outside)
+Os horários na tela de Vendas (Transações) já estão em **horário de Brasília (BRT)**. O Samuel aparece como `00:15` — isso é meia-noite e quinze em Brasília. No banco de dados, esse valor é armazenado como `03:15 UTC` (3 horas a mais).
 
-outside = hubla_transactions com sale_date < scheduled_at da R1
+O sistema de métricas (`useR1CloserMetrics`) já faz a conversão correta adicionando 3 horas ao filtro de data:
+- Dia 23/03 BRT = `23/03 03:00 UTC` até `24/03 02:59 UTC`
 
-KPI "Contratos" = contrato_pago (exclui Outside)
-KPI "Outside" = outside
-Total visível = contrato_pago + outside = 10
-```
+### Por que Samuel e Carlos são Outside
 
-### O que está faltando
+| Lead | Horário pagamento (BRT) | Horário reunião (BRT) | Outside? |
+|------|------------------------|----------------------|----------|
+| Samuel | 00:15 | 14:00 | Sim (14h antes) |
+| Carlos | 13:07 | 16:20 | Sim (3h antes) |
 
-| Contagem | Valor |
-|----------|-------|
-| Transações Hubla dia 23/03 | 12 |
-| Recorrências (P2+) | -1 |
-| Primeiras parcelas esperadas | **11** |
-| Com `meeting_slot_attendee` vinculado (`contract_paid_at` preenchido) | **10** |
-| **Faltando** | **1** |
+Ambos pagaram **antes** do horário da reunião no mesmo dia. Pela regra que você confirmou ("antes da reunião = Outside"), isso está correto.
 
-### Causa provável
+### Contagem esperada após a migration
 
-Existe 1 transação de contrato do dia 23/03 cujo `linked_attendee_id` é NULL — ou seja, o webhook de auto-match não conseguiu vincular a um attendee R1. Sem vínculo, o `contract_paid_at` nunca é preenchido no attendee, e o contrato não aparece no KPI.
+A migration que vinculou Samuel e Carlos já foi executada. Ao recarregar a página:
 
-### Ação necessária
+| KPI | Antes | Depois |
+|-----|-------|--------|
+| Contratos | 9 | 9 (sem mudança) |
+| Outside | 1 | 3 (+Samuel +Carlos) |
+| Total visível | 10 | 12 |
 
-Para identificar e corrigir, preciso:
+A Claudia Pinheiro (2/12, recorrente) não conta como contrato novo — correto.
 
-1. **Consultar o banco** para encontrar a transação específica sem vínculo:
-   ```sql
-   SELECT id, customer_name, customer_email, customer_phone, product_name
-   FROM hubla_transactions
-   WHERE sale_date >= '2026-03-23T03:00:00' AND sale_date < '2026-03-24T03:00:00'
-     AND product_category IN ('contrato', 'incorporador')
-     AND (installment_number = 1 OR installment_number IS NULL)
-     AND linked_attendee_id IS NULL;
-   ```
+### Nenhuma mudança de código necessária
 
-2. **Vincular manualmente** essa transação ao attendee correto via a interface "Vincular Contrato" na agenda do closer, ou via SQL migration.
+O UTC está sendo tratado corretamente no código. A conversão BRT (+3h) já existe no `useR1CloserMetrics` (linha 46-48). Os horários mostrados na tela de transações já são BRT (convertidos pelo navegador automaticamente).
 
-### Preciso de aprovação
-
-Para executar essa query no banco e identificar qual transação está faltando. Posso então fazer a vinculação via migration SQL ou indicar para vincular pela interface.
+Se quiser, posso verificar na página de reuniões se os números já atualizaram após a migration.
 
