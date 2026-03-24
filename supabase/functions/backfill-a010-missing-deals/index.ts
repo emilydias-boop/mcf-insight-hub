@@ -369,9 +369,15 @@ Deno.serve(async (req) => {
 
         details.push({ email, name: buyer.customer_name, action: 'created', owner: ownerEmail });
       } catch (err: any) {
-        stats.errors++;
-        details.push({ email, name: buyer.customer_name, action: 'error', error: err.message });
-        console.error(`❌ ${email}:`, err.message);
+        if (err.message?.includes('contact_origin_unique')) {
+          stats.already_has_deal++;
+          details.push({ email, name: buyer.customer_name, action: 'skipped_constraint' });
+          console.log(`⚠️ ${email}: constraint catch - já tem deal`);
+        } else {
+          stats.errors++;
+          details.push({ email, name: buyer.customer_name, action: 'error', error: err.message });
+          console.error(`❌ ${email}:`, err.message);
+        }
       }
     }
 
