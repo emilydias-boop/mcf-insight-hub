@@ -1,52 +1,42 @@
 
 
-## Diagnóstico: Por que a Anna aparece 2x no Consórcio
+## Plano: Merge seguro priorizando deals avançados (stage_order)
 
-### Causa raiz
+### Problema atual
 
-O fluxo de deduplicação do `webhook-lead-receiver` funciona assim:
+O merge seleciona o contato "primary" por **mais deals > mais reuniões > mais antigo**. Isso ignora completamente o estágio do funil. Um contato com 2 deals em "LEAD SCORE" seria mantido sobre um com 1 deal em "R1 Realizada".
 
-1. Busca contato existente por: **CPF → email → telefone (9 dígitos) → telefone (8 dígitos)**
-2. Se encontrar, usa o `contact_id` existente
-3. Verifica se já existe um deal para `contact_id + origin_id` — se sim, apenas atualiza tags/profile
-4. Se não encontrar contato, **cria um novo contato E um novo deal**
+### Mudança
 
-**O problema**: Se a mesma pessoa entra em dias diferentes com dados ligeiramente diferentes (ex: sem email na 1ª vez, com email na 2ª; ou telefone com/sem DDD), o sistema **não consegue fazer match** e cria dois contatos separados → dois deals.
+Alterar a função `mergeContacts` em `supabase/functions/merge-duplicate-contacts/index.ts` para:
 
-Além disso, a busca por telefone usa `ilike('%suffix')` com `.maybeSingle()` — se houver **múltiplos matches** de telefone, a query **falha silenciosamente** e cai no fluxo de "novo contato".
+1. **Buscar stage_order dos deals** — fazer join com `crm_stages` para obter o `order` de cada deal
+2. **Novo critério de seleção do primary**: `max(stage_order)` > mais deals > mais reuniões > mais antigo
+   - O contato cujo deal está mais avançado no funil vira o primary
+3. **Enriquecer o primary** — preencher email/phone/tags faltantes com dados do duplicado
+4. **Transferir todos os deals** — nenhum deal é deletado, apenas o `contact_id` dos deals do duplicado é atualizado para apontar pro primary
 
-### Problemas identificados
+### Exemplo concreto (Anna)
 
-1. **`maybeSingle()` na busca por telefone** — se 2+ contatos compartilham o mesmo sufixo de telefone, retorna `null` em vez de pegar o primeiro match
-2. **Sem busca por nome** — se email e telefone são diferentes mas o nome é idêntico + mesma origin, não há fallback
-3. **Tags sobrescritas** no update de contato (linha 250): `tags: autoTags` substitui as tags existentes em vez de fazer merge
+| Contato | Deal Stage | stage_order |
+|---------|-----------|-------------|
+| Anna (id: A) | R1 Realizada | 12 |
+| Anna (id: B) | LEAD SCORE | 3 |
 
-### Plano de correção
+**Resultado**: Anna A (R1 Realizada) é mantida como primary. O deal de LEAD SCORE é transferido para ela. Contato B é deletado.
 
-#### 1. Corrigir `maybeSingle()` → usar `.limit(1).maybeSingle()` ou `.order().limit(1)`
-Na busca por telefone (linhas 201-205 e 219-223), trocar para busca que retorna o match mais recente em vez de falhar quando há múltiplos.
-
-#### 2. Adicionar fallback de dedup por nome + origin
-Após falhar CPF/email/telefone, buscar contato existente por `name` (ilike exato) na mesma `origin_id`. Isso captura o caso da "Anna" que entra 2x com dados parciais diferentes.
-
-#### 3. Corrigir merge de tags no update de contato
-Linha 250: em vez de `tags: autoTags`, fazer merge com as tags existentes do contato (buscar tags atuais e unir).
-
-#### 4. Adicionar log de warning quando dedup falha
-Registrar em `bu_webhook_logs` quando um contato é criado mas já existe um com nome similar na mesma pipeline, para facilitar auditoria.
-
-### Arquivos a alterar
+### Arquivo a alterar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/webhook-lead-receiver/index.ts` | Corrigir `maybeSingle` na busca telefone; adicionar fallback por nome+origin; corrigir merge de tags; adicionar warning log |
+| `supabase/functions/merge-duplicate-contacts/index.ts` | Na query de contatos, incluir join com `crm_stages` via `crm_deals.stage_id`; reordenar critério de seleção para priorizar `max(stage.order)`; adicionar merge de tags e enriquecimento de email/phone |
 
 ### O que NÃO muda
-- Fluxo de dedup por CPF e email (já funciona)
-- Lógica de dedup de deal (contact_id + origin_id)
-- Dedup manual na página Contatos Duplicados
-- Nenhum arquivo de frontend
+- Nenhum deal é deletado — todos são transferidos
+- `meeting_slots` e `deal_activities` continuam vinculados ao `deal_id` (não ao contact_id)
+- `owner_id` dos deals permanece inalterado
+- O webhook `clientdata-inside` não é afetado
 
-### Resultado esperado
-Leads como "Anna" que entram 2x na mesma pipeline serão reconhecidos como o mesmo contato (via telefone tolerante ou nome exato), evitando duplicatas no Kanban.
+### Execução sugerida
+Após implementar, rodar primeiro com `dry_run: true` para validar quem será o primary de cada par antes de executar de fato.
 
