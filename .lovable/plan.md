@@ -1,23 +1,23 @@
 
 
-## Plano: Remover 235 deals duplicados do backfill
+## Plano: Remover 58 deals duplicados restantes (match por telefone)
 
-### Problema confirmado
-235 dos 329 deals criados hoje pelo backfill são duplicados — os leads já existiam no PIS com deals em estágios como Reunião Realizada (71), Sem Interesse (66), Contrato Pago (9), etc. A causa foi contatos duplicados com mesmo email mas `contact_id` diferente.
+### Problema
+A limpeza anterior removeu 235 duplicatas por email exato, mas **58 deals** ainda estão duplicados — mesma pessoa com **emails diferentes** mas **mesmo telefone** (últimos 9 dígitos). Exemplos: Jhonatas (Contrato Pago), Fabio Gomes (Contrato Pago), Victor Romão (Contrato Pago).
 
 ### Ação
 
 | Passo | O que fazer |
 |-------|-------------|
-| 1 | **Deletar os 235 deals duplicados** — deals criados em 24/03 com tag `Backfill` no PIS cujo email já tinha deal anterior |
-| 2 | **Deletar contatos órfãos** — contatos com tag `Backfill` que ficaram sem nenhum deal |
-| 3 | **Verificar** que restam exatamente 94 deals legítimos do backfill |
+| 1 | **Deletar os 58 deals do backfill** que têm match por telefone com deal anterior no PIS |
+| 2 | **Deletar contatos órfãos** do backfill que ficarem sem deal |
+| 3 | **Verificar** que restam ~36 deals legítimos (94 - 58) |
 
-### SQL (via insert tool para DELETE)
+### SQL
 
 ```sql
--- 1. Deletar deals duplicados
-DELETE FROM crm_deals 
+-- 1. Deletar deals backfill duplicados por telefone
+DELETE FROM crm_deals
 WHERE id IN (
   SELECT d1.id
   FROM crm_deals d1
@@ -25,13 +25,16 @@ WHERE id IN (
   WHERE d1.created_at >= '2026-03-24'
     AND d1.tags @> ARRAY['Backfill']
     AND d1.origin_id = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c'
-    AND LOWER(TRIM(c1.email)) IN (
-      SELECT LOWER(TRIM(c2.email))
-      FROM crm_deals d2
+    AND c1.phone IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM crm_deals d2
       JOIN crm_contacts c2 ON d2.contact_id = c2.id
       WHERE d2.origin_id = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c'
+        AND d2.id != d1.id
         AND d2.created_at < '2026-03-24'
-        AND c2.email IS NOT NULL
+        AND c2.phone IS NOT NULL
+        AND RIGHT(REGEXP_REPLACE(c2.phone, '\D', '', 'g'), 9) 
+          = RIGHT(REGEXP_REPLACE(c1.phone, '\D', '', 'g'), 9)
     )
 );
 
@@ -42,5 +45,5 @@ WHERE tags @> ARRAY['Backfill']
 ```
 
 ### Próximo passo
-Corrigir a função `backfill-a010-missing-deals` para deduplicar por **email cross-contact** (buscar deals via JOIN com todos os contatos que compartilham o mesmo email) em vez de verificar apenas o `contact_id` específico.
+Após limpeza, corrigir a Edge Function `backfill-a010-missing-deals` para incluir dedup por telefone cross-contact (além de email) antes de qualquer execução futura.
 
