@@ -1,54 +1,41 @@
 
 
-## Problema: Consolidação não funciona quando contatos ainda estão separados
+## Diagnóstico: Por que o Felipe não vinculou na Jornada + Discrepância 13 vs 10
 
-### Causa raiz
+### Problema 1: Jornada mostra "Reunião 01 - Não agendada"
 
-Os dois deals do Lucas Ângelo pertencem a **contatos diferentes** no banco:
-- `ef4eb45f` — "Lucas Ângelo" (phone: "62 9220-6062")
-- `c8d83183` — "Lucas Ângelo Magalhães Botelho Vitorino" (phone: "62992206062")
+O `useIncorporadorLeadJourney` (usado no drawer de Vendas) busca o contato por email, depois procura **deals desse contato** e escolhe o primeiro deal que tem `meeting_slot_attendees`. 
 
-A consolidação de deals agrupa por `(contact_id, origin_id)`. Como os `contact_id` são diferentes, ela nunca os encontra como par duplicado.
+O problema: se o Felipe tem **2 deals** (duplicata ainda não consolidada), o hook pode estar encontrando um deal sem reunião vinculada. O meeting_slot_attendee do Felipe está ligado a um `deal_id` diferente do que o hook está usando.
 
-A solução é: **primeiro unificar os contatos duplicados por telefone**, depois a consolidação de deals funciona automaticamente.
+Isso é exatamente o cenário de duplicatas que discutimos antes. A limpeza completa (full_cleanup) deveria resolver consolidando os deals, mas provavelmente esse caso ainda não foi processado.
 
-### O que precisa acontecer
+### Problema 2: 13 transações vs 10 contratos no painel
 
-O fluxo correto é: **Merge de contatos → Consolidação de deals**. Ambos os passos já existem no código, mas precisam ser executados na ordem certa.
+Isso é comportamento esperado. O painel de Closers conta `meeting_slot_attendees` com `contract_paid_at IS NOT NULL` (leads vinculados a uma R1). As 3 transações que faltam são leads que:
+- Não tinham attendee R1 correspondente (Outside sem reunião)
+- O match automático do `hubla-webhook-handler` não encontrou correspondência por email/telefone/nome
 
-### Correção: Criar um fluxo combinado "Limpar Duplicados"
+O 1 Outside contabilizado é um lead que comprou antes da reunião.
 
-Adicionar um modo `full_cleanup` na Edge Function que executa os dois passos em sequência:
-1. Merge de contatos duplicados (por email + por telefone)
-2. Consolidação de deals na mesma origin
+### Correção proposta
 
-### Arquivos a alterar
+**Nenhuma mudança de código necessária** para o problema principal — a causa raiz é a mesma das duplicatas. A solução é:
 
-| Arquivo | Mudança |
-|---------|---------|
-| `supabase/functions/merge-duplicate-contacts/index.ts` | Adicionar modo `full_cleanup` que executa merge por email, merge por telefone e consolidação de deals em sequência |
-| `src/pages/crm/ContatosDuplicados.tsx` | Adicionar botão "Limpeza Completa" que executa o fluxo combinado |
-| `src/hooks/useDuplicateContacts.ts` | Adicionar hook `useFullCleanup` |
+1. **Executar a "Limpeza Completa"** na página de Contatos Duplicados para consolidar os deals duplicados do Felipe (e outros casos similares)
+2. Após a consolidação, o `deal_id` correto terá o `meeting_slot_attendees` vinculado e a jornada aparecerá corretamente
 
-### Detalhes técnicos
+### Para os 3 contratos não vinculados automaticamente
 
-No modo `full_cleanup`:
-```text
-1. Executar processEmailGroup() para todos os emails duplicados
-2. Executar processPhoneGroup() para todos os telefones duplicados
-3. Executar consolidateDeals() para todos os pares (contact, origin) com 2+ deals
-4. Retornar totais combinados
-```
+Esses são leads que o auto-pago não conseguiu fazer match. Opções:
+- Verificar nos logs do `hubla-webhook-handler` o motivo do não-match
+- Vincular manualmente via o botão de "Vincular Contrato" na agenda do closer
 
-O botão na UI terá opção de dry_run (simular) e execução real, mostrando:
-- X contatos unificados por email
-- X contatos unificados por telefone  
-- X deals consolidados na mesma pipeline
+### Resumo
 
-### Resultado esperado
-
-Ao executar "Limpeza Completa":
-- Os contatos "Lucas Ângelo" e "Lucas Ângelo Magalhães Botelho Vitorino" serão unificados (match por telefone sufixo `992206062`)
-- Os 2 deals na mesma origin serão consolidados em 1 (mantendo "Reunião 02 Realizada" por ter stage_order=11 > 9)
-- Histórico transferido para o deal mantido
+| Situação | Causa | Solução |
+|----------|-------|---------|
+| Jornada "Não agendada" do Felipe | Deal duplicado — meeting está em outro deal_id | Executar Limpeza Completa |
+| 13 transações vs 10 contratos | 3 transações sem match automático com R1 attendee | Vincular manualmente ou verificar logs |
+| 1 Outside | Lead comprou contrato antes da reunião R1 | Comportamento correto |
 
