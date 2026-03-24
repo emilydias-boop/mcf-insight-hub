@@ -33,6 +33,25 @@ function getPhoneSuffix(phone: string | null): string {
   return phone.replace(/\D/g, '').slice(-9);
 }
 
+/**
+ * Calcula o max stage_order dos deals de um contato
+ */
+function getMaxStageOrder(contact: any): number {
+  const deals = (contact.crm_deals as any[]) || [];
+  if (deals.length === 0) return -1;
+  return Math.max(...deals.map((d: any) => d.crm_stages?.order ?? -1));
+}
+
+/**
+ * Merge de arrays de tags únicos
+ */
+function mergeTags(tagsA: string[] | null, tagsB: string[] | null): string[] {
+  const set = new Set<string>();
+  for (const t of tagsA || []) set.add(t);
+  for (const t of tagsB || []) set.add(t);
+  return Array.from(set);
+}
+
 type MatchType = 'email' | 'phone';
 
 serve(async (req) => {
@@ -63,7 +82,6 @@ serve(async (req) => {
     };
 
     if (matchType === 'email') {
-      // Processar duplicados por EMAIL
       const { data: duplicateEmails, error: rpcError } = await supabase
         .rpc('get_duplicate_contact_emails', { limit_count: limit });
 
@@ -79,7 +97,6 @@ serve(async (req) => {
         await processEmailGroup(supabase, email, dry_run, results);
       }
     } else {
-      // Processar duplicados por TELEFONE
       const { data: duplicatePhones, error: rpcError } = await supabase
         .rpc('get_duplicate_contact_phones', { limit_count: limit });
 
@@ -123,8 +140,8 @@ async function processEmailGroup(supabase: any, email: string, dryRun: boolean, 
     const { data: contacts, error: contactsError } = await supabase
       .from('crm_contacts')
       .select(`
-        id, email, phone, name, created_at,
-        crm_deals(id, owner_id, meeting_slots(id))
+        id, email, phone, name, tags, created_at,
+        crm_deals(id, owner_id, stage_id, crm_stages(order), meeting_slots(id))
       `)
       .ilike('email', email)
       .order('created_at', { ascending: true });
@@ -149,8 +166,8 @@ async function processPhoneGroup(supabase: any, phoneSuffix: string, dryRun: boo
     const { data: contacts, error: contactsError } = await supabase
       .from('crm_contacts')
       .select(`
-        id, email, phone, name, created_at,
-        crm_deals(id, owner_id, meeting_slots(id))
+        id, email, phone, name, tags, created_at,
+        crm_deals(id, owner_id, stage_id, crm_stages(order), meeting_slots(id))
       `)
       .ilike('phone', `%${phoneSuffix}`)
       .order('created_at', { ascending: true });
@@ -160,7 +177,6 @@ async function processPhoneGroup(supabase: any, phoneSuffix: string, dryRun: boo
       return;
     }
 
-    // Filtrar para garantir match exato do sufixo
     const filtered = contacts?.filter((c: any) => getPhoneSuffix(c.phone) === phoneSuffix) || [];
     if (filtered.length < 2) return;
 
@@ -178,8 +194,12 @@ async function mergeContacts(
   dryRun: boolean, 
   results: any
 ) {
-  // Ordenar: mais deals > mais reuniões > mais antigo
+  // Ordenar: max stage_order > mais deals > mais reuniões > mais antigo
   const sortedContacts = contacts.sort((a: any, b: any) => {
+    const aMaxStage = getMaxStageOrder(a);
+    const bMaxStage = getMaxStageOrder(b);
+    if (bMaxStage !== aMaxStage) return bMaxStage - aMaxStage;
+
     const aDeals = (a.crm_deals as any[])?.length || 0;
     const bDeals = (b.crm_deals as any[])?.length || 0;
     if (bDeals !== aDeals) return bDeals - aDeals;
@@ -194,12 +214,14 @@ async function mergeContacts(
   const primary = sortedContacts[0];
   const duplicates = sortedContacts.slice(1);
 
-  // Normalizar telefone do primary
+  // Enriquecer: preencher email/phone/tags faltantes
   let bestPhone = primary.phone;
   let bestEmail = primary.email;
+  let mergedTagsList = primary.tags || [];
   for (const dup of duplicates) {
     if (!bestPhone && dup.phone) bestPhone = dup.phone;
     if (!bestEmail && dup.email) bestEmail = dup.email;
+    mergedTagsList = mergeTags(mergedTagsList, dup.tags);
   }
   const normalizedPhone = normalizePhone(bestPhone);
 
@@ -208,18 +230,21 @@ async function mergeContacts(
     matchType,
     primary_id: primary.id,
     primary_name: primary.name,
+    primary_max_stage_order: getMaxStageOrder(primary),
     primary_deals: (primary.crm_deals as any[])?.length || 0,
     duplicates: duplicates.map((d: any) => ({ 
       id: d.id, 
       name: d.name,
-      deals: (d.crm_deals as any[])?.length || 0
+      deals: (d.crm_deals as any[])?.length || 0,
+      max_stage_order: getMaxStageOrder(d),
     })),
     phone_before: primary.phone,
     phone_after: normalizedPhone,
+    tags_merged: mergedTagsList,
   };
 
   if (!dryRun) {
-    // Atualizar deals dos duplicados para apontar para o primary
+    // Transferir deals dos duplicados para o primary
     for (const dup of duplicates) {
       const { error: updateDealsError, count } = await supabase
         .from('crm_deals')
@@ -236,7 +261,7 @@ async function mergeContacts(
       }
     }
 
-    // Atualizar telefone e email normalizado no primary
+    // Atualizar primary com dados enriquecidos
     const updateData: any = { updated_at: new Date().toISOString() };
     if (normalizedPhone && normalizedPhone !== primary.phone) {
       updateData.phone = normalizedPhone;
@@ -244,14 +269,17 @@ async function mergeContacts(
     if (bestEmail && !primary.email) {
       updateData.email = bestEmail;
     }
+    if (mergedTagsList.length > 0) {
+      updateData.tags = mergedTagsList;
+    }
 
     if (Object.keys(updateData).length > 1) {
-      const { error: phoneError } = await supabase
+      const { error: updateError } = await supabase
         .from('crm_contacts')
         .update(updateData)
         .eq('id', primary.id);
 
-      if (!phoneError && updateData.phone) {
+      if (!updateError && updateData.phone) {
         results.phones_normalized++;
       }
     }
