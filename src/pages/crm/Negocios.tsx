@@ -841,6 +841,19 @@ const Negocios = () => {
         originId={effectiveOriginId}
       />
       
+      
+      {/* Dialog de exportação */}
+      <ExportDealsDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        deals={filteredDeals}
+        stages={(currentPipelineStages || []).map((s: any) => ({
+          id: s.id,
+          stage_name: s.stage_name,
+          stage_order: s.stage_order,
+        }))}
+      />
+      
       {/* Drawer para deals cross-pipeline */}
       <DealDetailsDrawer
         dealId={crossPipelineDealId}
