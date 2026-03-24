@@ -271,12 +271,24 @@ serve(async (req) => {
       contactId = existingContact.id;
       console.log('[WEBHOOK-RECEIVER] Contato existente:', contactId);
       
+      // Merge tags em vez de sobrescrever
+      let mergedTags = autoTags;
+      if (autoTags.length > 0) {
+        const { data: currentContact } = await supabase
+          .from('crm_contacts')
+          .select('tags')
+          .eq('id', contactId)
+          .single();
+        const currentTags: string[] = (currentContact?.tags as string[]) || [];
+        mergedTags = [...new Set([...currentTags, ...autoTags])];
+      }
+
       await supabase
         .from('crm_contacts')
         .update({
           name: payload.name || payload.nome_completo,
           phone: normalizedPhone,
-          tags: autoTags.length > 0 ? autoTags : undefined,
+          tags: mergedTags.length > 0 ? mergedTags : undefined,
           updated_at: new Date().toISOString()
         })
         .eq('id', contactId);
