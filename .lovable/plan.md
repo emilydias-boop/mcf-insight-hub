@@ -1,40 +1,60 @@
 
+## Contexto
 
-## Plano: Melhorar página de Permissões por Cargo
+O webhook atual `clientdata-inside` tem:
+- **slug**: `clientdata-inside`
+- **auto_tags**: `["ANAMNESE"]`
+- **origin_id**: `e3c04f21-ba2c-4c66-84f8-b4341c826b1c` (PIPELINE INSIDE SALES)
+- **stage_id**: `d346320a-00b0-4e9f-89b6-149ad1c34061`
+- **field_mapping**: mapeamento completo de anamnese (nome, telefone, faixa aporte, etc.)
 
-### Mudanças
+O usuário quer **dois novos webhooks independentes** — não replicas do mesmo, mas fontes distintas com tags distintas:
 
-#### 1. Filtro de cargos
-- Multiselect no topo para escolher quais cargos exibir na tabela
-- Por padrão mostra todos, mas permite focar em 1-3 cargos
-- Admin removido da tabela por padrão (toggle "Mostrar Admin")
+---
 
-#### 2. Resumo por cargo (cards)
-- Linha de cards acima da tabela: cada cargo mostra "X de Y recursos com acesso"
-- Clicável para filtrar só aquele cargo
-- Cor do card reflete cobertura (vermelho = poucos, verde = muitos)
+## O que criar
 
-#### 3. Busca de recurso
-- Input acima da tabela para filtrar linhas por nome do recurso
-- Facilita encontrar "CRM" ou "Financeiro" rapidamente
+### Webhook 1 — Anamnese MCF (fonte principal, réplica do clientdata-inside)
+- **slug**: `anamnese-mcf`
+- **name**: `Anamnese MCF`
+- **auto_tags**: `["ANAMNESE"]`
+- **origin_id**: `e3c04f21-ba2c-4c66-84f8-b4341c826b1c`
+- **stage_id**: `d346320a-00b0-4e9f-89b6-149ad1c34061`
+- **field_mapping**: idêntico ao `clientdata-inside`
+- **description**: `Webhook de anamnese MCF (fonte principal)`
 
-#### 4. Copiar permissões de outro cargo
-- Botão "Copiar de..." abre modal com select de cargo fonte
-- Copia todas as permissões da aba ativa para o cargo destino como changes locais (ainda precisa salvar)
+**URL**: `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/webhook-lead-receiver/anamnese-mcf`
 
-#### 5. Indicador de override por BU
-- Na aba Global, ao lado de cada recurso que também existe em alguma BU, mostrar ícone discreto indicando que há permissões específicas por BU configuradas
+### Webhook 2 — Anamnese Instagram MCF (fonte Instagram)
+- **slug**: `anamnese-insta-mcf`
+- **name**: `Anamnese Instagram MCF`
+- **auto_tags**: `["ANAMNESE-INSTA"]`
+- **origin_id**: `e3c04f21-ba2c-4c66-84f8-b4341c826b1c`
+- **stage_id**: `d346320a-00b0-4e9f-89b6-149ad1c34061`
+- **field_mapping**: idêntico ao `clientdata-inside`
+- **description**: `Webhook de anamnese via Instagram MCF`
 
-### Arquivos a alterar
+**URL**: `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/webhook-lead-receiver/anamnese-insta-mcf`
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/pages/admin/Permissoes.tsx` | Adicionar filtro de cargos, busca de recurso, cards de resumo, botão copiar, indicador de override |
-| `src/hooks/useRolePermissions.ts` | Adicionar query opcional para buscar todas as BUs (para indicador de override) |
+---
 
-### O que NÃO muda
-- Tabela `role_permissions` no banco permanece igual
-- Lógica de save/upsert permanece igual
-- Hooks consumidores (`useMyPermissions`, `ResourceGuard`) continuam funcionando
-- Tabs de BU continuam existindo
+## Como será feito
 
+Inserção direta nas duas linhas na tabela `webhook_endpoints` via ferramenta de dados. Nenhum código de aplicação precisa ser alterado — a Edge Function `webhook-lead-receiver` já lê o `slug` da URL e aplica as `auto_tags` configuradas na linha.
+
+---
+
+## O que NÃO muda
+- O webhook `clientdata-inside` original continua intacto com sua tag `ANAMNESE`
+- A Edge Function não precisa de alteração
+- Nenhum arquivo de código do app precisa ser alterado
+
+---
+
+## Resultado
+
+| Webhook | Slug | Tag | URL |
+|---------|------|-----|-----|
+| Existente | `clientdata-inside` | `ANAMNESE` | `.../clientdata-inside` |
+| Novo 1 | `anamnese-mcf` | `ANAMNESE` | `.../anamnese-mcf` |
+| Novo 2 | `anamnese-insta-mcf` | `ANAMNESE-INSTA` | `.../anamnese-insta-mcf` |
