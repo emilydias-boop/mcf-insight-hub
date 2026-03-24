@@ -6,8 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { useDuplicateContacts, useMergeDuplicates, useMergeAllDuplicates, useConsolidateDeals, DuplicateMatchType, DuplicateGroup } from '@/hooks/useDuplicateContacts';
-import { Users, Merge, Check, Phone, AlertTriangle, Loader2, Mail, Calendar } from 'lucide-react';
+import { useDuplicateContacts, useMergeDuplicates, useMergeAllDuplicates, useConsolidateDeals, useFullCleanup, DuplicateMatchType, DuplicateGroup } from '@/hooks/useDuplicateContacts';
+import { Users, Merge, Check, Phone, AlertTriangle, Loader2, Mail, Calendar, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -251,6 +251,7 @@ function DuplicatesList({ matchType }: { matchType: DuplicateMatchType }) {
 export default function ContatosDuplicados() {
   const [activeTab, setActiveTab] = useState<DuplicateMatchType>('email');
   const consolidateDeals = useConsolidateDeals();
+  const fullCleanup = useFullCleanup();
 
   return (
     <div className="space-y-6">
@@ -262,7 +263,47 @@ export default function ContatosDuplicados() {
             Identifique e unifique contatos duplicados por email ou telefone
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {/* Limpeza Completa */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fullCleanup.mutate({ dryRun: true })}
+            disabled={fullCleanup.isPending}
+          >
+            {fullCleanup.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+            Simular Limpeza Completa
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="default" disabled={fullCleanup.isPending}>
+                <Sparkles className="h-4 w-4 mr-2" />
+                Limpeza Completa
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Limpeza completa de duplicados</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação executa 3 passos em sequência:
+                  <br /><br />
+                  <strong>1.</strong> Unifica contatos duplicados por <strong>email</strong><br />
+                  <strong>2.</strong> Unifica contatos duplicados por <strong>telefone</strong><br />
+                  <strong>3.</strong> Consolida deals duplicados na <strong>mesma pipeline</strong>
+                  <br /><br />
+                  Use "Simular" primeiro para ver os totais antes de executar.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={() => fullCleanup.mutate({ dryRun: false })}>
+                  Executar Limpeza Completa
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Consolidar Deals */}
           <Button
             variant="outline"
             size="sm"
@@ -274,7 +315,7 @@ export default function ContatosDuplicados() {
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button size="sm" variant="default" disabled={consolidateDeals.isPending}>
+              <Button size="sm" variant="outline" disabled={consolidateDeals.isPending}>
                 <Merge className="h-4 w-4 mr-2" />
                 Consolidar Deals
               </Button>
@@ -285,7 +326,7 @@ export default function ContatosDuplicados() {
                 <AlertDialogDescription>
                   Esta ação irá buscar todos os contatos que possuem <strong>2 ou mais deals na mesma pipeline</strong> e consolidar em apenas 1 deal (o mais avançado).
                   <br /><br />
-                  Reuniões, atividades e ligações serão transferidas para o deal mantido. Use "Simular" primeiro para verificar quantos casos existem.
+                  Reuniões, atividades e ligações serão transferidas para o deal mantido.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
