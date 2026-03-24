@@ -1,101 +1,71 @@
 
-## Plano atualizado: corrigir o falso “Viewer” e o bloqueio no CRM Consórcio
 
-### Diagnóstico confirmado
+## Plano: Central de Análise de Webhooks + Exportação PDF
 
-O problema não é mais o banco nem o JWT stale.
+### Contexto
 
-Há **dois bugs diferentes ao mesmo tempo**:
+O usuário quer uma tela para drill-down nos leads recebidos por cada webhook endpoint (ex: os 57 leads de "ClientData Inside"), com KPIs, tabela detalhada, e exportação PDF no mesmo estilo do relatório de backfill A010.
 
-1. **O badge do usuário está enganando**
-   - Em `src/components/layout/AppSidebar.tsx`, a função `getRoleLabel()` só trata `admin`, `manager`, `coordenador`, `sdr`, `closer`, `rh` e `financeiro`.
-   - Qualquer role fora dessa lista cai no fallback `"Viewer"`.
-   - Então `assistente_administrativo` está sendo **exibido como Viewer**, mesmo quando a role real já foi carregada corretamente.
+### Arquitetura
 
-2. **O guard de permissão do CRM está resolvendo errado**
-   - `ResourceGuard` usa `useResourcePermission`.
-   - `useResourcePermission` faz:
-     - filtro por `role + resource`
-     - `maybeSingle()`
-     - **não considera BU**
-   - Para `assistente_administrativo` no recurso `crm` existem **duas permissões válidas**:
-     - global: `view`
-     - BU consórcio: `full`
-   - Como há mais de uma linha, essa estratégia com `maybeSingle()` é frágil e pode derrubar a resolução da permissão, resultando em **Acesso Negado**.
+```text
+/crm/webhook-analytics (nova aba no CRM)
+┌──────────────────────────────────────────────────┐
+│ [Seletor Endpoint ▼]  [Período]  [Exportar PDF]  │
+├──────────────────────────────────────────────────┤
+│ KPIs: Recebidos | Com Dono | Avançaram | R1 Ag.  │
+├──────────────────────────────────────────────────┤
+│ Breakdown por Estágio (badges com contadores)     │
+├──────────────────────────────────────────────────┤
+│ Tabela: Nome|Telefone|Email|Estágio|Dono|Data    │
+│ [Busca] [Filtro estágio] [Filtro dono]           │
+└──────────────────────────────────────────────────┘
+```
 
-### Evidência que confirma isso
+### Implementação
 
-- No banco, Antony está com role `assistente_administrativo`.
-- Os logs de auth mostram logout/login recentes e hook executando com sucesso.
-- No menu lateral da screenshot aparecem itens como:
-  - `Vendas`
-  - `Controle Consorcio`
-  - `Importar`
-  - `Relatórios`
-  - `Documentos Estratégicos`
-- Esses itens já exigem `assistente_administrativo` no sidebar.
-- Ou seja: **a role funcionalmente já está chegando**, mas:
-  - o badge mostra “Viewer” por erro de label;
-  - a tela do CRM nega acesso por erro de resolução de permissão.
+#### 1. Hook `src/hooks/useWebhookIntakeAnalytics.ts`
+- Query `crm_deals` onde `data_source='webhook'` e `custom_fields->>'lead_channel'` = slug selecionado
+- Join com `crm_contacts`, `crm_stages`/`local_pipeline_stages`, `profiles` (owner)
+- Filtro por período (created_at)
+- Calcula KPIs: total, com dono, taxa de avanço por estágio, contagem por estágio
 
-### O que vou implementar
+#### 2. Componente `src/components/crm/webhooks/WebhookIntakeAnalytics.tsx`
+- Seletor de endpoint (usa `useWebhookEndpoints` existente)
+- DateRangePicker para período
+- Cards KPI no topo
+- Breakdown visual por estágio (badges coloridos)
+- Tabela com busca, filtros por estágio/dono
+- Botão "Exportar PDF"
 
-#### Passo 1 — Corrigir a exibição da role no sidebar
-Atualizar `AppSidebar.tsx` para parar de usar labels hardcoded incompletos.
+#### 3. Geração de PDF (client-side com jsPDF + jspdf-autotable)
+- Mesmo estilo visual do relatório backfill: seções numeradas, tabelas formatadas
+- Seções:
+  1. Resumo Executivo — endpoint, período, totais
+  2. KPIs consolidados — tabela com métricas
+  3. Breakdown por estágio — tabela com contagem e %
+  4. Lista completa de leads — nome, telefone, email, estágio, dono, data entrada
+- Gera e baixa PDF direto no navegador
 
-Preferência:
-- usar o mapa central `ROLE_LABELS` de `src/types/user-management.ts`
+#### 4. Página `src/pages/crm/WebhookAnalytics.tsx`
+- Wrapper simples que renderiza o componente principal
 
-Resultado:
-- `assistente_administrativo` aparecerá como **Assistente Administrativo**
-- elimina o falso diagnóstico de “continua Viewer”
+#### 5. Rota e navegação
+- Adicionar rota `/crm/webhook-analytics` no `App.tsx`
+- Adicionar aba "Webhooks" no nav do `CRM.tsx` (com icon `Inbox` ou `Webhook`)
 
-#### Passo 2 — Corrigir o motor de permissão do `ResourceGuard`
-Substituir a lógica atual baseada em `useResourcePermission` por uma abordagem compatível com BU.
+### Dependência
+- Instalar `jspdf` e `jspdf-autotable` para geração PDF client-side
 
-Melhor caminho:
-- fazer `ResourceGuard` usar `useMyPermissions`, que já:
-  - lê todas as permissões da role
-  - aplica override por BU ativa
-  - faz fallback para permissão global
+### Arquivos criados/modificados
+| Arquivo | Ação |
+|---------|------|
+| `src/hooks/useWebhookIntakeAnalytics.ts` | Criar |
+| `src/components/crm/webhooks/WebhookIntakeAnalytics.tsx` | Criar |
+| `src/pages/crm/WebhookAnalytics.tsx` | Criar |
+| `src/App.tsx` | Adicionar rota |
+| `src/pages/CRM.tsx` | Adicionar aba nav |
 
-Alternativa equivalente:
-- refatorar `useResourcePermission` para buscar múltiplas linhas e resolver:
-  1. permissão da BU ativa
-  2. fallback global
-  3. default `none`
+### Resultado
+O usuário poderá selecionar qualquer webhook endpoint, ver KPIs + tabela de todos os leads que entraram, filtrar por período/estágio/dono, e gerar PDF formatado igual ao relatório de backfill para compartilhar.
 
-### Resultado esperado após a correção
-
-Para Antony em `/consorcio/crm`:
-
-- badge deixa de mostrar “Viewer”
-- passa a mostrar **Assistente Administrativo**
-- `ResourceGuard` deixa de cair em falso negativo
-- acesso ao CRM Consórcio passa a funcionar com a permissão correta
-
-### Arquivos a ajustar
-
-- `src/components/layout/AppSidebar.tsx`
-- `src/components/auth/ResourceGuard.tsx`
-- `src/hooks/useResourcePermission.ts` ou remoção do uso dele nesse fluxo
-- possivelmente reaproveitar `src/hooks/useMyPermissions.ts`
-
-### Validação final
-
-Vou validar este fluxo:
-
-1. login com usuário de role `assistente_administrativo`
-2. conferir badge no rodapé/sidebar
-3. abrir `/consorcio/crm`
-4. confirmar que o alerta “Acesso Negado” não aparece
-5. conferir que o comportamento continua correto para:
-   - admin
-   - manager
-   - coordenador
-   - viewer
-
-### Observação técnica importante
-
-Não vejo necessidade de migration nem ajuste no Supabase para esta correção.  
-O banco já está coerente; o erro está na **camada frontend de leitura/exibição de permissões**.
