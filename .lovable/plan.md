@@ -1,41 +1,50 @@
 
 
-## Diagnóstico: Por que o Felipe não vinculou na Jornada + Discrepância 13 vs 10
+## Diagnóstico: Felipe Laurentino dos Santos
 
-### Problema 1: Jornada mostra "Reunião 01 - Não agendada"
+### Por que não vinculou
 
-O `useIncorporadorLeadJourney` (usado no drawer de Vendas) busca o contato por email, depois procura **deals desse contato** e escolhe o primeiro deal que tem `meeting_slot_attendees`. 
+Existem **2 contatos diferentes** no banco:
 
-O problema: se o Felipe tem **2 deals** (duplicata ainda não consolidada), o hook pode estar encontrando um deal sem reunião vinculada. O meeting_slot_attendee do Felipe está ligado a um `deal_id` diferente do que o hook está usando.
+| Contato | Email | Phone | Deal | Reunião R1 |
+|---------|-------|-------|------|------------|
+| `e2e1a7cd` | laurentinofelipe**7**@gmail.com | 8199300481**7** | `5c213d3c` — Contrato Pago | Sim (Julio, contract_paid) |
+| `8ffe2b66` | laurentinofelipe@gmail.com | 8199300480**0** | `82c7c340` — Contrato Pago | Nenhuma |
 
-Isso é exatamente o cenário de duplicatas que discutimos antes. A limpeza completa (full_cleanup) deveria resolver consolidando os deals, mas provavelmente esse caso ainda não foi processado.
+Os emails são diferentes (`7` vs sem `7`) e os telefones também diferem no último dígito (`17` vs `00`). O sistema de merge não consegue detectar isso como duplicata porque:
+- Email: não são iguais
+- Phone suffix (9 dígitos): `993004817` vs `993004800` — diferentes
 
-### Problema 2: 13 transações vs 10 contratos no painel
+Este é um caso de **erro de digitação no cadastro**. A reunião R1 com pagamento está no deal antigo, mas o novo deal (criado em 23/03) não tem reunião vinculada.
 
-Isso é comportamento esperado. O painel de Closers conta `meeting_slot_attendees` com `contract_paid_at IS NOT NULL` (leads vinculados a uma R1). As 3 transações que faltam são leads que:
-- Não tinham attendee R1 correspondente (Outside sem reunião)
-- O match automático do `hubla-webhook-handler` não encontrou correspondência por email/telefone/nome
+### Bug crítico encontrado: Página de Duplicados quebrada
 
-O 1 Outside contabilizado é um lead que comprou antes da reunião.
+Todas as queries da página de Contatos Duplicados estão retornando **erro 400** porque o código referencia `crm_stages(order)` mas a coluna real se chama `stage_order`. Isso significa que a página de duplicados **não está funcionando**.
 
-### Correção proposta
+### Plano de correção
 
-**Nenhuma mudança de código necessária** para o problema principal — a causa raiz é a mesma das duplicatas. A solução é:
+#### 1. Corrigir o nome da coluna em `useDuplicateContacts.ts`
+Trocar `crm_stages(order)` por `crm_stages(stage_order)` e `d.crm_stages?.order` por `d.crm_stages?.stage_order` em todos os locais do arquivo (linhas 47, 57, 97, 107, etc.).
 
-1. **Executar a "Limpeza Completa"** na página de Contatos Duplicados para consolidar os deals duplicados do Felipe (e outros casos similares)
-2. Após a consolidação, o `deal_id` correto terá o `meeting_slot_attendees` vinculado e a jornada aparecerá corretamente
+#### 2. Unificar manualmente o Felipe
+Executar SQL para mover o `meeting_slot_attendees` e reunião do deal antigo para o novo, ou mergear os contatos manualmente.
 
-### Para os 3 contratos não vinculados automaticamente
+### Detalhes técnicos
 
-Esses são leads que o auto-pago não conseguiu fazer match. Opções:
-- Verificar nos logs do `hubla-webhook-handler` o motivo do não-match
-- Vincular manualmente via o botão de "Vincular Contrato" na agenda do closer
+| Arquivo | Mudança |
+|---------|---------|
+| `src/hooks/useDuplicateContacts.ts` | Substituir `crm_stages(order)` → `crm_stages(stage_order)` e `crm_stages?.order` → `crm_stages?.stage_order` em ~6 ocorrências |
 
-### Resumo
+Correção SQL para o Felipe (migration):
+```sql
+-- Mover meeting_slot_attendees do deal antigo para o novo
+UPDATE meeting_slot_attendees 
+SET deal_id = '82c7c340-d806-4fb9-a826-df2205373294'
+WHERE deal_id = '5c213d3c-46fa-455a-b065-63cc339256e2';
 
-| Situação | Causa | Solução |
-|----------|-------|---------|
-| Jornada "Não agendada" do Felipe | Deal duplicado — meeting está em outro deal_id | Executar Limpeza Completa |
-| 13 transações vs 10 contratos | 3 transações sem match automático com R1 attendee | Vincular manualmente ou verificar logs |
-| 1 Outside | Lead comprou contrato antes da reunião R1 | Comportamento correto |
+-- Mover meeting_slots
+UPDATE meeting_slots 
+SET deal_id = '82c7c340-d806-4fb9-a826-df2205373294'
+WHERE deal_id = '5c213d3c-46fa-455a-b065-63cc339256e2';
+```
 
