@@ -1,53 +1,32 @@
 
 
-## Plano: Exportação avançada do CRM com seleção de stages e campos
+## Problema: Webhook anamnese-insta-mcf rejeitando leads
 
-### O que será construído
+### Causa raiz
 
-Um dialog de exportação acessível via botão "Exportar" na toolbar da página Negócios, permitindo ao usuário escolher:
-1. **Quais stages** exportar (checkboxes com todos os stages da pipeline atual)
-2. **Quais campos** incluir na planilha (nome, contato, email, telefone, valor, tags, owner, origem, data de criação, etc.)
-3. Formato: **XLSX** (padrão já usado no projeto via biblioteca `xlsx`)
+Duas questões:
 
-### Componentes
+1. **Field mapping incorreto**: O payload do formulário envia `nomeCompleto` (camelCase), mas o `field_mapping` do endpoint espera `nome_completo` (snake_case) como chave de mapeamento para `name`. Como não bate, o campo `name` nunca é preenchido e a validação falha.
 
-| Arquivo | Ação |
-|---------|------|
-| `src/components/crm/ExportDealsDialog.tsx` | **Novo** — Dialog com checkboxes de stages e campos, botão "Exportar Excel" |
-| `src/pages/crm/Negocios.tsx` | Adicionar botão "Exportar" na toolbar (ao lado de "Importar Planilha") e abrir o dialog |
+2. **Formulário disparando para 2 endpoints**: O form está enviando simultaneamente para `anamnese-insta-mcf` (camelCase) e `clientdata-inside` (snake_case). O segundo funciona porque recebe o formato correto.
 
-### Detalhes técnicos
+### Correção
 
-**ExportDealsDialog** receberá:
-- `deals` — array de deals já carregados no Kanban (evita re-fetch)
-- `stages` — lista de stages da pipeline atual (do hook `useCRMStages`)
-- `open` / `onOpenChange` — controle do dialog
+**Atualizar o `field_mapping` no banco** para o endpoint `anamnese-insta-mcf`, adicionando a chave `nomeCompleto → name` (camelCase):
 
-**Campos selecionáveis** (com checkbox, todos marcados por padrão):
-- Nome do Negócio
-- Nome do Contato
-- Email
-- Telefone
-- Estágio atual
-- Valor
-- Tags
-- Responsável (owner)
-- Origem
-- Data de Criação
-- Data de Movimentação (stage_moved_at)
-- Produto (product_name)
-- SDR Original
-- Closer R1 / R2
+```sql
+UPDATE webhook_endpoints
+SET field_mapping = field_mapping || '{"nomeCompleto": "name"}'::jsonb
+WHERE slug = 'anamnese-insta-mcf';
+```
 
-**Fluxo**:
-1. Usuário clica "Exportar" → abre dialog
-2. Seleciona stages desejados (ex: só "R1 Realizada" e "Contrato Pago")
-3. Marca/desmarca campos
-4. Clica "Exportar Excel"
-5. Sistema filtra deals pelas stages selecionadas, monta planilha com colunas escolhidas, e faz download via `XLSX.writeFile`
+Isso faz o mapping funcionar com o payload camelCase que o formulário envia.
 
-**Padrão de export**: Segue o mesmo padrão já usado em `CarrinhoReportPanel`, `CrossBUReportPanel`, etc. (`import * as XLSX from 'xlsx'`).
+### Investigação adicional necessária
 
-### Acesso
-Visível apenas para `admin` e `manager` (mesmo controle do botão "Importar Planilha").
+Verificar no formulário (externo) por que ele está disparando para **dois** endpoints ao mesmo tempo (`anamnese-insta-mcf` e `clientdata-inside`). Idealmente deveria enviar apenas para `anamnese-insta-mcf`.
+
+### Arquivo a alterar
+
+Nenhum arquivo de código — apenas uma atualização no registro do banco de dados via migration SQL.
 
