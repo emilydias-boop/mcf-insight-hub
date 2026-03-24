@@ -75,6 +75,7 @@ serve(async (req) => {
       total_groups: 0,
       merged: 0,
       deals_updated: 0,
+      deals_consolidated: 0,
       contacts_deleted: 0,
       phones_normalized: 0,
       errors: [] as string[],
@@ -261,6 +262,9 @@ async function mergeContacts(
       }
     }
 
+    // Consolidar deals duplicados na mesma origin
+    await consolidateDeals(supabase, primary.id, results);
+
     // Atualizar primary com dados enriquecidos
     const updateData: any = { updated_at: new Date().toISOString() };
     if (normalizedPhone && normalizedPhone !== primary.phone) {
@@ -303,4 +307,98 @@ async function mergeContacts(
   }
 
   results.groups_processed.push(groupResult);
+}
+
+/**
+ * Consolida deals duplicados na mesma origin para um contato.
+ * Mantém o deal com maior stage_order, transfere meetings/activities dos secundários.
+ */
+async function consolidateDeals(supabase: any, contactId: string, results: any) {
+  // Buscar todos os deals do contato com stage info
+  const { data: deals, error } = await supabase
+    .from('crm_deals')
+    .select('id, origin_id, stage_id, tags, crm_stages(order)')
+    .eq('contact_id', contactId);
+
+  if (error || !deals?.length) return;
+
+  // Agrupar por origin_id
+  const byOrigin: Record<string, any[]> = {};
+  for (const deal of deals) {
+    const oid = deal.origin_id || '_none_';
+    if (!byOrigin[oid]) byOrigin[oid] = [];
+    byOrigin[oid].push(deal);
+  }
+
+  for (const [originId, originDeals] of Object.entries(byOrigin)) {
+    if (originDeals.length < 2) continue;
+
+    // Ordenar por stage_order DESC — manter o mais avançado
+    originDeals.sort((a: any, b: any) => {
+      const aOrder = a.crm_stages?.order ?? -1;
+      const bOrder = b.crm_stages?.order ?? -1;
+      return bOrder - aOrder;
+    });
+
+    const primaryDeal = originDeals[0];
+    const secondaryDeals = originDeals.slice(1);
+
+    console.log(`🔀 Consolidando ${originDeals.length} deals na origin ${originId}. Primary: ${primaryDeal.id}`);
+
+    for (const secDeal of secondaryDeals) {
+      // Transferir meeting_slots
+      const { error: msErr } = await supabase
+        .from('meeting_slots')
+        .update({ deal_id: primaryDeal.id })
+        .eq('deal_id', secDeal.id);
+
+      if (msErr) {
+        console.error(`Erro ao transferir meeting_slots de ${secDeal.id}:`, msErr);
+      }
+
+      // Transferir deal_activities
+      const { error: daErr } = await supabase
+        .from('deal_activities')
+        .update({ deal_id: primaryDeal.id })
+        .eq('deal_id', secDeal.id);
+
+      if (daErr) {
+        console.error(`Erro ao transferir deal_activities de ${secDeal.id}:`, daErr);
+      }
+
+      // Transferir calls
+      const { error: callsErr } = await supabase
+        .from('calls')
+        .update({ deal_id: primaryDeal.id })
+        .eq('deal_id', secDeal.id);
+
+      if (callsErr) {
+        console.error(`Erro ao transferir calls de ${secDeal.id}:`, callsErr);
+      }
+
+      // Merge tags do deal secundário no primary
+      const mergedDealTags = mergeTags(primaryDeal.tags, secDeal.tags);
+      if (mergedDealTags.length > 0) {
+        await supabase
+          .from('crm_deals')
+          .update({ tags: mergedDealTags, updated_at: new Date().toISOString() })
+          .eq('id', primaryDeal.id);
+        primaryDeal.tags = mergedDealTags;
+      }
+
+      // Deletar deal secundário
+      const { error: delErr } = await supabase
+        .from('crm_deals')
+        .delete()
+        .eq('id', secDeal.id);
+
+      if (delErr) {
+        console.error(`Erro ao deletar deal secundário ${secDeal.id}:`, delErr);
+        results.errors.push(`Não foi possível deletar deal ${secDeal.id}: ${delErr.message}`);
+      } else {
+        results.deals_consolidated++;
+        console.log(`✅ Deal ${secDeal.id} consolidado em ${primaryDeal.id}`);
+      }
+    }
+  }
 }
