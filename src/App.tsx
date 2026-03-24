@@ -90,6 +90,7 @@ import ReunioesEquipe from "./pages/crm/ReunioesEquipe";
 import SdrMeetingsDetailPage from "./pages/crm/SdrMeetingsDetailPage";
 import CloserMeetingsDetailPage from "./pages/crm/CloserMeetingsDetailPage";
 import Webhooks from "./pages/crm/Webhooks";
+import WebhookAnalytics from "./pages/crm/WebhookAnalytics";
 import NotFound from "./pages/NotFound";
 
 import ConsorcioIndex from "./pages/bu-consorcio/Index";
