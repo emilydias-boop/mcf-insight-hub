@@ -10,6 +10,7 @@ import { useDuplicateContacts, useMergeDuplicates, useMergeAllDuplicates, useCon
 import { Users, Merge, Check, Phone, AlertTriangle, Loader2, Mail, Calendar, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { SimulationResultsModal } from '@/components/crm/SimulationResultsModal';
 
 function DuplicateGroupCard({ 
   group, 
