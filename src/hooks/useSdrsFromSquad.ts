@@ -32,7 +32,7 @@ export function useSdrsFromSquad(squad: string) {
       const emails = data.map(s => s.email?.toLowerCase()).filter(Boolean) as string[];
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('email, access_status')
+        .select('id, email, access_status')
         .in('email', emails);
 
       const blockedEmails = new Set(
@@ -41,7 +41,28 @@ export function useSdrsFromSquad(squad: string) {
           .map(p => p.email?.toLowerCase())
       );
 
-      return data.filter(s => !blockedEmails.has(s.email?.toLowerCase() || ''));
+      // Cross-check with user_roles to exclude admin/manager/coordenador
+      const profileIds = (profiles || []).map(p => p.id).filter(Boolean);
+      const adminEmails = new Set<string>();
+      if (profileIds.length > 0) {
+        const { data: adminRoles } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .in('user_id', profileIds)
+          .in('role', ['admin', 'manager', 'coordenador']);
+
+        const adminProfileIds = new Set((adminRoles || []).map(r => r.user_id));
+        (profiles || []).forEach(p => {
+          if (adminProfileIds.has(p.id)) {
+            adminEmails.add(p.email?.toLowerCase() || '');
+          }
+        });
+      }
+
+      return data.filter(s => {
+        const email = s.email?.toLowerCase() || '';
+        return !blockedEmails.has(email) && !adminEmails.has(email);
+      });
     },
     staleTime: 60000,
   });
