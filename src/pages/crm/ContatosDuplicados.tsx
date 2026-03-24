@@ -251,6 +251,7 @@ function DuplicatesList({ matchType }: { matchType: DuplicateMatchType }) {
 export default function ContatosDuplicados() {
   const [activeTab, setActiveTab] = useState<DuplicateMatchType>('email');
   const consolidateDeals = useConsolidateDeals();
+  const fullCleanup = useFullCleanup();
 
   return (
     <div className="space-y-6">

@@ -307,3 +307,39 @@ export function useConsolidateDeals() {
     },
   });
 }
+
+export function useFullCleanup() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ dryRun = true }: { dryRun?: boolean }) => {
+      const { data, error } = await supabase.functions.invoke('merge-duplicate-contacts', {
+        body: { full_cleanup: true, dry_run: dryRun, limit: 500 },
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data.dry_run) {
+        const parts = [];
+        if (data.email_groups > 0) parts.push(`${data.email_groups} grupos por email`);
+        if (data.phone_groups > 0) parts.push(`${data.phone_groups} grupos por telefone`);
+        if (data.deal_consolidation_pairs > 0) parts.push(`${data.deal_consolidation_pairs} pares de deals`);
+        toast.info(`Simulação: ${parts.join(', ')}`);
+      } else {
+        const parts = [];
+        if (data.email_groups_merged > 0) parts.push(`${data.email_groups_merged} por email`);
+        if (data.phone_groups_merged > 0) parts.push(`${data.phone_groups_merged} por telefone`);
+        if (data.deals_consolidated > 0) parts.push(`${data.deals_consolidated} deals consolidados`);
+        toast.success(`Limpeza completa! ${parts.join(', ')}`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['duplicate-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
+    },
+    onError: (error: any) => {
+      toast.error(`Erro na limpeza completa: ${error.message}`);
+    },
+  });
+}
