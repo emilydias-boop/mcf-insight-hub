@@ -52,7 +52,7 @@ export const useWebhookIntakeAnalytics = (
           profiles:owner_profile_id (full_name)
         `)
         .eq('data_source', 'webhook')
-        .filter('custom_fields->>lead_channel', 'eq', slug);
+        .filter('custom_fields->>lead_channel', 'eq', slug.toUpperCase());
 
       if (startDate) {
         query = query.gte('created_at', startDate.toISOString());
