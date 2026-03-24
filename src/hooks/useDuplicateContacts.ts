@@ -44,7 +44,7 @@ async function fetchEmailDuplicates(): Promise<DuplicateGroup[]> {
       .from('crm_contacts')
       .select(`
         id, name, email, phone, created_at,
-        crm_deals(id, owner_id, stage_id, crm_stages(order), meeting_slots(id))
+        crm_deals(id, owner_id, stage_id, crm_stages(stage_order), meeting_slots(id))
       `)
       .ilike('email', email)
       .order('created_at', { ascending: true });
@@ -54,7 +54,7 @@ async function fetchEmailDuplicates(): Promise<DuplicateGroup[]> {
     const mappedContacts: DuplicateContact[] = contacts.map(c => {
       const deals = (c.crm_deals as any[]) || [];
       const meetingsCount = deals.reduce((acc, d) => acc + ((d.meeting_slots as any[])?.length || 0), 0);
-      const maxStageOrder = deals.length > 0 ? Math.max(...deals.map((d: any) => d.crm_stages?.order ?? -1)) : -1;
+      const maxStageOrder = deals.length > 0 ? Math.max(...deals.map((d: any) => d.crm_stages?.stage_order ?? -1)) : -1;
       return {
         id: c.id,
         name: c.name,
@@ -103,7 +103,7 @@ async function fetchPhoneDuplicates(): Promise<DuplicateGroup[]> {
       .from('crm_contacts')
       .select(`
         id, name, email, phone, created_at,
-        crm_deals(id, owner_id, stage_id, crm_stages(order), meeting_slots(id))
+        crm_deals(id, owner_id, stage_id, crm_stages(stage_order), meeting_slots(id))
       `)
       .ilike('phone', `%${phone_suffix}`)
       .order('created_at', { ascending: true });
@@ -116,7 +116,7 @@ async function fetchPhoneDuplicates(): Promise<DuplicateGroup[]> {
     const mappedContacts: DuplicateContact[] = filtered.map(c => {
       const deals = (c.crm_deals as any[]) || [];
       const meetingsCount = deals.reduce((acc, d) => acc + ((d.meeting_slots as any[])?.length || 0), 0);
-      const maxStageOrder = deals.length > 0 ? Math.max(...deals.map((d: any) => d.crm_stages?.order ?? -1)) : -1;
+      const maxStageOrder = deals.length > 0 ? Math.max(...deals.map((d: any) => d.crm_stages?.stage_order ?? -1)) : -1;
       return {
         id: c.id,
         name: c.name,
