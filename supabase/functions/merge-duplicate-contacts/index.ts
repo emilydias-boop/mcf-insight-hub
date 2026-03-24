@@ -82,6 +82,80 @@ serve(async (req) => {
       groups_processed: [] as any[],
     };
 
+    // === Modo full_cleanup: merge contatos + consolidar deals ===
+    if (full_cleanup) {
+      console.log(`🧹 Modo full_cleanup: merge email → merge phone → consolidar deals (dry_run=${dry_run}, limit=${limit})`);
+
+      // Step 1: Merge por email
+      const { data: duplicateEmails } = await supabase
+        .rpc('get_duplicate_contact_emails', { limit_count: limit });
+
+      const emailGroupsBefore = results.merged;
+      for (const { email } of duplicateEmails || []) {
+        await processEmailGroup(supabase, email, dry_run, results);
+      }
+      results.email_groups_merged = results.merged - emailGroupsBefore;
+      console.log(`📧 Email merge: ${results.email_groups_merged} grupos`);
+
+      // Step 2: Merge por telefone
+      const { data: duplicatePhones } = await supabase
+        .rpc('get_duplicate_contact_phones', { limit_count: limit });
+
+      const phoneGroupsBefore = results.merged;
+      for (const { phone_suffix } of duplicatePhones || []) {
+        await processPhoneGroup(supabase, phone_suffix, dry_run, results);
+      }
+      results.phone_groups_merged = results.merged - phoneGroupsBefore;
+      console.log(`📱 Phone merge: ${results.phone_groups_merged} grupos`);
+
+      // Step 3: Consolidar deals duplicados na mesma origin
+      const dealsBefore = results.deals_consolidated;
+      const { data: allDeals } = await supabase
+        .from('crm_deals')
+        .select('contact_id, origin_id')
+        .not('contact_id', 'is', null)
+        .not('origin_id', 'is', null);
+
+      const dealsGroups: Record<string, number> = {};
+      for (const d of allDeals || []) {
+        const key = `${d.contact_id}__${d.origin_id}`;
+        dealsGroups[key] = (dealsGroups[key] || 0) + 1;
+      }
+
+      let consolidationPairs = 0;
+      for (const [key, count] of Object.entries(dealsGroups)) {
+        if (count >= 2) {
+          consolidationPairs++;
+          if (!dry_run) {
+            const [contact_id] = key.split('__');
+            try {
+              await consolidateDeals(supabase, contact_id, results);
+            } catch (err: any) {
+              results.errors.push(`Erro consolidando contact=${contact_id}: ${err.message}`);
+            }
+          }
+        }
+      }
+
+      results.total_groups = (duplicateEmails?.length || 0) + (duplicatePhones?.length || 0) + consolidationPairs;
+      const dealsConsolidatedStep3 = results.deals_consolidated - dealsBefore;
+      console.log(`🔀 Deal consolidation: ${dealsConsolidatedStep3} deals consolidados (${consolidationPairs} pares)`);
+      console.log(`✅ Full cleanup concluído`);
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          dry_run, 
+          full_cleanup: true,
+          email_groups: duplicateEmails?.length || 0,
+          phone_groups: duplicatePhones?.length || 0,
+          deal_consolidation_pairs: consolidationPairs,
+          ...results 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // === Modo consolidate_only: limpar deals duplicados na mesma origin ===
     if (consolidate_only) {
       console.log(`🧹 Modo consolidate_only: buscando deals duplicados na mesma origin (dry_run=${dry_run})`);
