@@ -1,38 +1,36 @@
 
 
-## Plano: Gerar relatório PDF do backfill A010
+## Plano atualizado: Criar 4 deals faltantes
 
-### Dados já levantados
+### Situação atual verificada
 
-| Métrica | Valor |
-|---------|-------|
-| Compradores A010 offer (120d) | 1.105 |
-| Já no PIS por email | 1.060 (96%) |
-| Já no PIS por telefone | 17 |
-| Parceiros filtrados | 95 |
-| Deals criados pelo backfill | 329 |
-| Removidos por email (cross-contact) | 235 |
-| Removidos por telefone (cross-contact) | 58 |
-| **Deals legítimos restantes** | **36** |
-| Leads perdidos por webhook | 0 |
+- **36 deals** de backfill existem (confirmado)
+- **0 duplicatas internas** restantes (as 3 de Carlos Wesley, Higor Coura e Robert Douglas já foram removidas pela migração anterior de telefone)
+- **4 leads confirmados** sem deal no PIS e sem match por telefone
 
-### Causa raiz confirmada
+### Leads a criar
 
-A função `backfill-a010-offer-leads` verificava duplicatas usando **apenas o `contact_id` específico** encontrado na busca. Porém, muitos leads tinham **contatos duplicados** no CRM (mesmo email, `contact_id` diferente). A função encontrava o contato A (sem deal), mas o deal real estava no contato B. Resultado: 293 falsos positivos de 329 deals criados.
+| Nome | Email | Telefone | Contact ID | Valor |
+|------|-------|----------|------------|-------|
+| Adrielson Pereira Da Silva | adrielprodigital@gmail.com | +5561994229051 | 1d94bf06 | R$ 43,23 |
+| Jovane Monteiro | jovane-monteiro10@hotmail.com | +5591985273443 | 374d3606 | R$ 43,00 |
+| Marcel Klaczko Neto | warcelando@gmail.com | +5511930846492 | ac073054 | R$ 43,00 |
+| Mateus Santos Araújo | mateus.28.msa@gmail.com | 11946872005 | ee6a7322 | R$ 44,26 |
 
-### O que será gerado
+### SQL (via insert tool)
 
-Um **PDF** em `/mnt/documents/relatorio-backfill-a010.pdf` com:
+```sql
+INSERT INTO crm_deals (clint_id, name, contact_id, origin_id, stage_id, value, tags, custom_fields, data_source)
+VALUES
+  ('hubla-bf-final-adrielson', 'Adrielson Pereira Da Silva - A010', '1d94bf06-8836-4183-8e3c-3dbe3db52ef7', 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b', 43.23, ARRAY['A010','Backfill'], '{"source":"hubla","product":"A010","sale_date":"2025-12-18"}', 'webhook'),
+  ('hubla-bf-final-jovane', 'Jovane Monteiro - A010', '374d3606-ed45-4558-94c3-893cde707a81', 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b', 43.00, ARRAY['A010','Backfill'], '{"source":"hubla","product":"A010","sale_date":"2025-12-09"}', 'webhook'),
+  ('hubla-bf-final-marcel', 'Marcel Klaczko Neto - A010', 'ac073054-5992-4dc8-bb12-44198b674ffd', 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b', 43.00, ARRAY['A010','Backfill'], '{"source":"hubla","product":"A010","sale_date":"2025-12-22"}', 'webhook'),
+  ('hubla-bf-final-mateus', 'Mateus Santos Araújo - A010', 'ee6a7322-b330-4483-819f-93a5054d707c', 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b', 44.26, ARRAY['A010','Backfill'], '{"source":"hubla","product":"A010","sale_date":"2025-11-25"}', 'webhook');
+```
 
-1. **Resumo executivo** — o que aconteceu e por quê
-2. **Números consolidados** — tabela com os 1.105 compradores e como cada grupo foi categorizado
-3. **Causa raiz técnica** — explicação do bug de dedup por `contact_id` vs cross-contact
-4. **Timeline** — cada etapa desde a criação até a limpeza final
-5. **Breakdown numérico** — 329 → -235 → -58 → 36
-6. **Auditoria de webhooks** — 541 + 22 + 56 eventos verificados, zero perdas
-7. **Pendências** — 4 deals faltantes + 3 duplicatas internas + correção da função
+### Resultado esperado
 
-### Implementação
-
-Script Python com `reportlab` gerando PDF formatado com tabelas e seções.
+- **+4 deals** criados
+- **40 deals** de backfill no total (36 + 4)
+- Limpeza de duplicatas internas ja concluida (0 pendentes)
 
