@@ -1,54 +1,38 @@
 
 
-## Plano: Criar 4 deals faltantes + limpar 3 duplicatas internas
+## Plano: Gerar relatório PDF do backfill A010
 
-### Passo 1 — Criar os 4 deals faltantes (período 90-120 dias)
+### Dados já levantados
 
-Executar a Edge Function `backfill-a010-missing-deals` com `days_back: 130` e `dry_run: false`. A função já tem dedup por email cross-contact e por telefone, então só vai criar deals para os 4 que realmente faltam (Mateus Santos, Jovane Monteiro, Adrielson Pereira, Marcel Klaczko Neto). Todos os outros ~1.000+ serão filtrados.
+| Métrica | Valor |
+|---------|-------|
+| Compradores A010 offer (120d) | 1.105 |
+| Já no PIS por email | 1.060 (96%) |
+| Já no PIS por telefone | 17 |
+| Parceiros filtrados | 95 |
+| Deals criados pelo backfill | 329 |
+| Removidos por email (cross-contact) | 235 |
+| Removidos por telefone (cross-contact) | 58 |
+| **Deals legítimos restantes** | **36** |
+| Leads perdidos por webhook | 0 |
 
-Chamada: `supabase.functions.invoke('backfill-a010-missing-deals', { body: { dry_run: false, days_back: 130, limit: 500 } })`
+### Causa raiz confirmada
 
-### Passo 2 — Deletar 3 duplicatas internas do backfill
+A função `backfill-a010-offer-leads` verificava duplicatas usando **apenas o `contact_id` específico** encontrado na busca. Porém, muitos leads tinham **contatos duplicados** no CRM (mesmo email, `contact_id` diferente). A função encontrava o contato A (sem deal), mas o deal real estava no contato B. Resultado: 293 falsos positivos de 329 deals criados.
 
-SQL via insert tool para deletar os 3 deals mais novos de cada par duplicado interno (Carlos Wesley, Higor Coura, Robert Douglas — mesma pessoa com 2 deals do backfill, emails diferentes mas mesmo telefone):
+### O que será gerado
 
-```sql
--- Identificar e deletar o deal mais novo de cada par interno duplicado
-DELETE FROM crm_deals
-WHERE id IN (
-  SELECT d1.id
-  FROM crm_deals d1
-  JOIN crm_contacts c1 ON d1.contact_id = c1.id
-  WHERE d1.tags @> ARRAY['Backfill']
-    AND d1.origin_id = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c'
-    AND d1.created_at >= '2026-03-24'
-    AND c1.phone IS NOT NULL
-    AND EXISTS (
-      SELECT 1 FROM crm_deals d2
-      JOIN crm_contacts c2 ON d2.contact_id = c2.id
-      WHERE d2.tags @> ARRAY['Backfill']
-        AND d2.origin_id = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c'
-        AND d2.created_at >= '2026-03-24'
-        AND d2.id != d1.id
-        AND d1.created_at > d2.created_at
-        AND c2.phone IS NOT NULL
-        AND RIGHT(REGEXP_REPLACE(c2.phone, '\D', '', 'g'), 9) 
-          = RIGHT(REGEXP_REPLACE(c1.phone, '\D', '', 'g'), 9)
-    )
-);
-```
+Um **PDF** em `/mnt/documents/relatorio-backfill-a010.pdf` com:
 
-### Passo 3 — Limpar contatos órfãos
+1. **Resumo executivo** — o que aconteceu e por quê
+2. **Números consolidados** — tabela com os 1.105 compradores e como cada grupo foi categorizado
+3. **Causa raiz técnica** — explicação do bug de dedup por `contact_id` vs cross-contact
+4. **Timeline** — cada etapa desde a criação até a limpeza final
+5. **Breakdown numérico** — 329 → -235 → -58 → 36
+6. **Auditoria de webhooks** — 541 + 22 + 56 eventos verificados, zero perdas
+7. **Pendências** — 4 deals faltantes + 3 duplicatas internas + correção da função
 
-```sql
-DELETE FROM crm_contacts
-WHERE tags @> ARRAY['Backfill']
-  AND NOT EXISTS (SELECT 1 FROM crm_deals WHERE contact_id = crm_contacts.id);
-```
+### Implementação
 
-### Resultado esperado
-
-- **+4 deals** criados (Mateus, Jovane, Adrielson, Marcel)
-- **-3 deals** duplicatas internas removidas
-- **~37 deals** legítimos finais no backfill
+Script Python com `reportlab` gerando PDF formatado com tabelas e seções.
 
