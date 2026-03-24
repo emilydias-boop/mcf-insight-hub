@@ -49,7 +49,7 @@ export function useSdrsFromSquad(squad: string) {
           .from('user_roles')
           .select('user_id')
           .in('user_id', profileIds)
-          .in('role', ['admin', 'manager', 'coordenador']);
+          .in('role', ['admin', 'manager', 'coordenador', 'assistente_administrativo']);
 
         const adminProfileIds = new Set((adminRoles || []).map(r => r.user_id));
         (profiles || []).forEach(p => {
