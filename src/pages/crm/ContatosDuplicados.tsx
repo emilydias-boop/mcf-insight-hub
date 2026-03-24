@@ -250,15 +250,53 @@ function DuplicatesList({ matchType }: { matchType: DuplicateMatchType }) {
 
 export default function ContatosDuplicados() {
   const [activeTab, setActiveTab] = useState<DuplicateMatchType>('email');
+  const consolidateDeals = useConsolidateDeals();
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Contatos Duplicados</h1>
-        <p className="text-muted-foreground">
-          Identifique e unifique contatos duplicados por email ou telefone
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Contatos Duplicados</h1>
+          <p className="text-muted-foreground">
+            Identifique e unifique contatos duplicados por email ou telefone
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => consolidateDeals.mutate({ dryRun: true })}
+            disabled={consolidateDeals.isPending}
+          >
+            {consolidateDeals.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <AlertTriangle className="h-4 w-4 mr-2" />}
+            Simular Consolidação
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="default" disabled={consolidateDeals.isPending}>
+                <Merge className="h-4 w-4 mr-2" />
+                Consolidar Deals
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Consolidar deals duplicados</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação irá buscar todos os contatos que possuem <strong>2 ou mais deals na mesma pipeline</strong> e consolidar em apenas 1 deal (o mais avançado).
+                  <br /><br />
+                  Reuniões, atividades e ligações serão transferidas para o deal mantido. Use "Simular" primeiro para verificar quantos casos existem.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={() => consolidateDeals.mutate({ dryRun: false })}>
+                  Confirmar Consolidação
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
 
       {/* Tabs */}
