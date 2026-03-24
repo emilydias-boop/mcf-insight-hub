@@ -44,6 +44,8 @@ import { OutsideDistributionButton } from '@/components/crm/OutsideDistributionB
 import { MovePartnersButton } from '@/components/crm/MovePartnersButton';
 import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDialog';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
+import { ExportDealsDialog } from '@/components/crm/ExportDealsDialog';
+import { Download } from 'lucide-react';
 
 const Negocios = () => {
   // Ativar notificações em tempo real para novos leads
