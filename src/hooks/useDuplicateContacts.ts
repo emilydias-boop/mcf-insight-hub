@@ -205,6 +205,7 @@ export function useDuplicateContactsLegacy() {
           deals_count: deals.length,
           meetings_count: 0,
           has_owner: deals.some((d: any) => d.owner_id),
+          max_stage_order: -1,
         });
       }
 
