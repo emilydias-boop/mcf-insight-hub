@@ -110,6 +110,35 @@ Deno.serve(async (req) => {
 
     console.log(`✅ ${contactByEmail.size} contatos existentes, ${existingDealContactIds.size} já com deal`);
 
+    // 6.5 Filtrar emails que precisam de deal (excluir quem já tem)
+    const emailsNeedingDeal: string[] = [];
+    for (const [email] of uniqueBuyers) {
+      const existingContactId = contactByEmail.get(email);
+      if (existingContactId && existingDealContactIds.has(existingContactId)) continue;
+      emailsNeedingDeal.push(email);
+    }
+    console.log(`🔍 ${emailsNeedingDeal.length} emails precisam de deal (sem deal no PIS)`);
+
+    // 6.6 Batch partner check - buscar todas transações dos candidatos
+    const partnerEmails = new Set<string>();
+    for (let i = 0; i < emailsNeedingDeal.length; i += 200) {
+      const batch = emailsNeedingDeal.slice(i, i + 200);
+      const { data: txs } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, product_name')
+        .in('customer_email', batch)
+        .eq('sale_status', 'completed');
+
+      for (const tx of txs || []) {
+        if (!tx.product_name || !tx.customer_email) continue;
+        const upper = tx.product_name.toUpperCase();
+        if (PARTNER_PATTERNS.some(p => upper.includes(p))) {
+          partnerEmails.add(tx.customer_email.toLowerCase().trim());
+        }
+      }
+    }
+    console.log(`🤝 ${partnerEmails.size} parceiros identificados`);
+
     // 7. Processar
     const stats = {
       total: emails.length,
@@ -127,22 +156,11 @@ Deno.serve(async (req) => {
       // Skip se já tem deal
       if (existingContactId && existingDealContactIds.has(existingContactId)) {
         stats.already_has_deal++;
-        details.push({ email, name: buyer.customer_name, action: 'already_has_deal' });
         continue;
       }
 
-      // Partner check
-      const { data: partnerTxs } = await supabase
-        .from('hubla_transactions').select('product_name')
-        .ilike('customer_email', email).eq('sale_status', 'completed');
-
-      const isPartner = (partnerTxs || []).some((tx: any) => {
-        if (!tx.product_name) return false;
-        const upper = tx.product_name.toUpperCase();
-        return PARTNER_PATTERNS.some(p => upper.includes(p));
-      });
-
-      if (isPartner) {
+      // Partner check (já calculado em batch)
+      if (partnerEmails.has(email)) {
         stats.skipped_partners++;
         details.push({ email, name: buyer.customer_name, action: 'skipped_partner' });
         continue;
