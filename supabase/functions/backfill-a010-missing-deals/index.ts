@@ -206,19 +206,27 @@ Deno.serve(async (req) => {
     }
     console.log(`🤝 ${partnerEmails.size} parceiros identificados`);
 
-    // 7. Processar
+    // 7. Aplicar limit/offset e processar
+    const paginatedEmails = emailsNeedingDeal.filter(e => !partnerEmails.has(e));
+    const sliced = paginatedEmails.slice(offset, offset + limit);
+    console.log(`📋 Processando ${sliced.length} de ${paginatedEmails.length} (offset: ${offset}, limit: ${limit})`);
+
     const stats = {
       total: emails.length,
+      total_needing_deal: paginatedEmails.length,
+      processing: sliced.length,
       already_has_deal: 0,
-      skipped_partners: 0,
+      skipped_partners: partnerEmails.size,
       skipped_phone_match: 0,
       contacts_created: 0,
       deals_created: 0,
       errors: 0,
+      next_offset: offset + limit < paginatedEmails.length ? offset + limit : null,
     };
     const details: any[] = [];
 
-    for (const [email, buyer] of uniqueBuyers) {
+    for (const email of sliced) {
+      const buyer = uniqueBuyers.get(email);
       const existingContactId = contactByEmail.get(email);
 
       // Skip se já tem deal (by contact_id or by email cross-check)
