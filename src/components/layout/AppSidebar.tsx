@@ -430,14 +430,9 @@ export function AppSidebar() {
 
   const getRoleLabel = (userRole: AppRole | null, isLoading: boolean) => {
     if (isLoading) return "Carregando...";
-    if (userRole === "admin") return "Admin";
-    if (userRole === "manager") return "Manager";
-    if (userRole === "coordenador") return "Coordenador";
-    if (userRole === "sdr") return "SDR";
-    if (userRole === "closer") return "Closer";
-    if (userRole === "rh") return "RH";
-    if (userRole === "financeiro") return "Financeiro";
-    return "Viewer";
+    if (!userRole) return "Viewer";
+    const mapped = ROLE_LABELS[userRole];
+    return mapped ? mapped.label : userRole;
   };
 
   // Combinar menu items estáticos com itens dinâmicos de SDR/Closer
