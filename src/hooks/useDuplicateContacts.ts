@@ -54,7 +54,7 @@ async function fetchEmailDuplicates(): Promise<DuplicateGroup[]> {
     const mappedContacts: DuplicateContact[] = contacts.map(c => {
       const deals = (c.crm_deals as any[]) || [];
       const meetingsCount = deals.reduce((acc, d) => acc + ((d.meeting_slots as any[])?.length || 0), 0);
-      const maxStageOrder = deals.length > 0 ? Math.max(...deals.map((d: any) => d.crm_stages?.order ?? -1)) : -1;
+      const maxStageOrder = deals.length > 0 ? Math.max(...deals.map((d: any) => d.crm_stages?.stage_order ?? -1)) : -1;
       return {
         id: c.id,
         name: c.name,
