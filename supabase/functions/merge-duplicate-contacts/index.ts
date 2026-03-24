@@ -413,22 +413,59 @@ async function mergeContacts(
   }
   const normalizedPhone = normalizePhone(bestPhone);
 
+  // Helper to get meetings count
+  const getMeetingsCount = (c: any) => 
+    ((c.crm_deals as any[]) || []).reduce((acc: number, d: any) => acc + ((d.meeting_slots as any[])?.length || 0), 0);
+
+  // Helper to get stage name from first deal with highest order
+  const getStageName = (c: any) => {
+    const deals = (c.crm_deals as any[]) || [];
+    if (!deals.length) return null;
+    const sorted = [...deals].sort((a: any, b: any) => (b.crm_stages?.order ?? -1) - (a.crm_stages?.order ?? -1));
+    return sorted[0]?.crm_stages?.name || null;
+  };
+
+  const primaryMeetings = getMeetingsCount(primary);
+
+  const mappedDuplicates = duplicates.map((d: any) => {
+    const dupMeetings = getMeetingsCount(d);
+    const dupDeals = (d.crm_deals as any[])?.length || 0;
+    const dupMaxStage = getMaxStageOrder(d);
+    return { 
+      id: d.id, 
+      name: d.name,
+      email: d.email,
+      phone: d.phone,
+      deals: dupDeals,
+      meetings: dupMeetings,
+      max_stage_order: dupMaxStage,
+      stage_name: getStageName(d),
+      risk: dupDeals > ((primary.crm_deals as any[])?.length || 0) || dupMeetings > primaryMeetings,
+    };
+  });
+
+  // Detect phone risk: phone match with different emails
+  const phoneRisk = matchType === 'phone' && duplicates.some((d: any) => 
+    d.email && primary.email && d.email.toLowerCase() !== primary.email.toLowerCase()
+  );
+
   const groupResult = {
     key,
     matchType,
     primary_id: primary.id,
     primary_name: primary.name,
+    primary_email: primary.email,
+    primary_phone: primary.phone,
     primary_max_stage_order: getMaxStageOrder(primary),
     primary_deals: (primary.crm_deals as any[])?.length || 0,
-    duplicates: duplicates.map((d: any) => ({ 
-      id: d.id, 
-      name: d.name,
-      deals: (d.crm_deals as any[])?.length || 0,
-      max_stage_order: getMaxStageOrder(d),
-    })),
+    primary_meetings: primaryMeetings,
+    primary_stage_name: getStageName(primary),
+    duplicates: mappedDuplicates,
     phone_before: primary.phone,
     phone_after: normalizedPhone,
     tags_merged: mergedTagsList,
+    has_risk: mappedDuplicates.some((d: any) => d.risk) || phoneRisk,
+    phone_risk: phoneRisk,
   };
 
   if (!dryRun) {
