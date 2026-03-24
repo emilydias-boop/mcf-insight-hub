@@ -17,6 +17,13 @@ function normalizePhone(phone: string | null): string | null {
   return digits;
 }
 
+function getPhoneSuffix(phone: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 9) return null;
+  return digits.slice(-9);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -84,8 +91,8 @@ Deno.serve(async (req) => {
     const emails = Array.from(uniqueBuyers.keys());
     console.log(`👥 ${emails.length} compradores únicos`);
 
-    // 5. Buscar contatos existentes
-    const contactByEmail = new Map<string, string>();
+    // 5. Buscar contatos existentes POR EMAIL
+    const contactByEmail = new Map<string, string>(); // email -> contact_id
     for (let i = 0; i < emails.length; i += 200) {
       const batch = emails.slice(i, i + 200);
       const { data: contacts } = await supabase
@@ -95,8 +102,41 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 6. Buscar deals existentes
-    const contactIds = Array.from(contactByEmail.values());
+    // 5.5 Buscar contatos por TELEFONE (sufixo 9 dígitos) para quem não tem contato por email
+    const phoneSuffixToEmail = new Map<string, string>(); // phone_suffix -> email do buyer
+    const emailsWithoutContact = emails.filter(e => !contactByEmail.has(e));
+    for (const email of emailsWithoutContact) {
+      const buyer = uniqueBuyers.get(email);
+      const suffix = getPhoneSuffix(buyer?.customer_phone);
+      if (suffix) {
+        phoneSuffixToEmail.set(suffix, email);
+      }
+    }
+
+    // Batch phone lookup
+    if (phoneSuffixToEmail.size > 0) {
+      const phoneSuffixes = Array.from(phoneSuffixToEmail.keys());
+      for (let i = 0; i < phoneSuffixes.length; i += 50) {
+        const batch = phoneSuffixes.slice(i, i + 50);
+        for (const suffix of batch) {
+          const { data: phoneContacts } = await supabase
+            .from('crm_contacts')
+            .select('id, email, phone')
+            .ilike('phone', `%${suffix}`)
+            .limit(5);
+
+          if (phoneContacts && phoneContacts.length > 0) {
+            const buyerEmail = phoneSuffixToEmail.get(suffix)!;
+            // Use first contact found by phone
+            contactByEmail.set(buyerEmail, phoneContacts[0].id);
+            console.log(`📱 ${buyerEmail} encontrado por telefone (${suffix}) → contato ${phoneContacts[0].id}`);
+          }
+        }
+      }
+    }
+
+    // 6. Buscar deals existentes NO PIS - por contact_id
+    const contactIds = Array.from(new Set(contactByEmail.values()));
     const existingDealContactIds = new Set<string>();
     for (let i = 0; i < contactIds.length; i += 200) {
       const batch = contactIds.slice(i, i + 200);
@@ -108,9 +148,36 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 6.1 Buscar deals existentes NO PIS - por EMAIL do contato (cobre contatos duplicados)
+    const emailsNeedingCheck = emails.filter(e => {
+      const cid = contactByEmail.get(e);
+      return !cid || !existingDealContactIds.has(cid);
+    });
+
+    for (let i = 0; i < emailsNeedingCheck.length; i += 100) {
+      const batch = emailsNeedingCheck.slice(i, i + 100);
+      // Check if any contact with this email has a deal in PIS
+      const { data: dealsViaEmail } = await supabase
+        .from('crm_deals')
+        .select('id, contact_id, crm_contacts!inner(email)')
+        .eq('origin_id', originId)
+        .in('crm_contacts.email', batch);
+
+      for (const d of dealsViaEmail || []) {
+        const contactEmail = (d as any).crm_contacts?.email?.toLowerCase().trim();
+        if (contactEmail) {
+          // Mark this email as already having a deal
+          if (!contactByEmail.has(contactEmail)) {
+            contactByEmail.set(contactEmail, d.contact_id);
+          }
+          existingDealContactIds.add(d.contact_id);
+        }
+      }
+    }
+
     console.log(`✅ ${contactByEmail.size} contatos existentes, ${existingDealContactIds.size} já com deal`);
 
-    // 6.5 Filtrar emails que precisam de deal (excluir quem já tem)
+    // 6.5 Filtrar emails que precisam de deal
     const emailsNeedingDeal: string[] = [];
     for (const [email] of uniqueBuyers) {
       const existingContactId = contactByEmail.get(email);
@@ -119,7 +186,7 @@ Deno.serve(async (req) => {
     }
     console.log(`🔍 ${emailsNeedingDeal.length} emails precisam de deal (sem deal no PIS)`);
 
-    // 6.6 Batch partner check - buscar todas transações dos candidatos
+    // 6.6 Batch partner check
     const partnerEmails = new Set<string>();
     for (let i = 0; i < emailsNeedingDeal.length; i += 200) {
       const batch = emailsNeedingDeal.slice(i, i + 200);
@@ -144,6 +211,7 @@ Deno.serve(async (req) => {
       total: emails.length,
       already_has_deal: 0,
       skipped_partners: 0,
+      skipped_phone_match: 0,
       contacts_created: 0,
       deals_created: 0,
       errors: 0,
@@ -153,13 +221,13 @@ Deno.serve(async (req) => {
     for (const [email, buyer] of uniqueBuyers) {
       const existingContactId = contactByEmail.get(email);
 
-      // Skip se já tem deal
+      // Skip se já tem deal (by contact_id or by email cross-check)
       if (existingContactId && existingDealContactIds.has(existingContactId)) {
         stats.already_has_deal++;
         continue;
       }
 
-      // Partner check (já calculado em batch)
+      // Partner check
       if (partnerEmails.has(email)) {
         stats.skipped_partners++;
         details.push({ email, name: buyer.customer_name, action: 'skipped_partner' });
@@ -177,27 +245,74 @@ Deno.serve(async (req) => {
         let contactId = existingContactId;
 
         if (!contactId) {
+          // Double-check: buscar por email (case insensitive)
           const { data: doubleCheck } = await supabase
             .from('crm_contacts').select('id').ilike('email', email).limit(1).maybeSingle();
 
           if (doubleCheck) {
             contactId = doubleCheck.id;
+
+            // Verify this contact doesn't already have a PIS deal
+            const { data: existingDeal } = await supabase
+              .from('crm_deals').select('id')
+              .eq('origin_id', originId).eq('contact_id', doubleCheck.id).limit(1).maybeSingle();
+
+            if (existingDeal) {
+              stats.already_has_deal++;
+              details.push({ email, name: buyer.customer_name, action: 'already_has_deal_doublecheck' });
+              continue;
+            }
           } else {
-            const { data: nc, error: ce } = await supabase
-              .from('crm_contacts')
-              .insert({
-                clint_id: `bf-a010-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                name: buyer.customer_name || 'Cliente A010',
-                email,
-                phone: normalizePhone(buyer.customer_phone),
-                origin_id: originId,
-                tags: ['A010', 'Backfill'],
-                custom_fields: { source: buyer.source || 'backfill', product: 'A010 - MCF Fundamentos' },
-              })
-              .select('id').single();
-            if (ce) throw ce;
-            contactId = nc.id;
-            stats.contacts_created++;
+            // Also check by phone before creating
+            const phoneSuffix = getPhoneSuffix(buyer.customer_phone);
+            if (phoneSuffix) {
+              const { data: phoneMatch } = await supabase
+                .from('crm_contacts').select('id')
+                .ilike('phone', `%${phoneSuffix}`).limit(1).maybeSingle();
+
+              if (phoneMatch) {
+                // Check if this phone-matched contact has PIS deal
+                const { data: phoneDeal } = await supabase
+                  .from('crm_deals').select('id')
+                  .eq('origin_id', originId).eq('contact_id', phoneMatch.id).limit(1).maybeSingle();
+
+                if (phoneDeal) {
+                  stats.skipped_phone_match++;
+                  details.push({ email, name: buyer.customer_name, action: 'skipped_phone_match', matched_contact: phoneMatch.id });
+                  continue;
+                }
+                contactId = phoneMatch.id;
+              }
+            }
+
+            if (!contactId) {
+              const { data: nc, error: ce } = await supabase
+                .from('crm_contacts')
+                .insert({
+                  clint_id: `bf-a010-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                  name: buyer.customer_name || 'Cliente A010',
+                  email,
+                  phone: normalizePhone(buyer.customer_phone),
+                  origin_id: originId,
+                  tags: ['A010', 'Backfill'],
+                  custom_fields: { source: buyer.source || 'backfill', product: 'A010 - MCF Fundamentos' },
+                })
+                .select('id').single();
+              if (ce) throw ce;
+              contactId = nc.id;
+              stats.contacts_created++;
+            }
+          }
+        } else {
+          // Contact exists by email - final check: does it have a PIS deal?
+          const { data: finalCheck } = await supabase
+            .from('crm_deals').select('id')
+            .eq('origin_id', originId).eq('contact_id', contactId).limit(1).maybeSingle();
+
+          if (finalCheck) {
+            stats.already_has_deal++;
+            details.push({ email, name: buyer.customer_name, action: 'already_has_deal_final' });
+            continue;
           }
         }
 
