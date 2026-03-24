@@ -75,6 +75,7 @@ serve(async (req) => {
       total_groups: 0,
       merged: 0,
       deals_updated: 0,
+      deals_consolidated: 0,
       contacts_deleted: 0,
       phones_normalized: 0,
       errors: [] as string[],
