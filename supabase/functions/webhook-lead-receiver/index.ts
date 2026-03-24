@@ -193,17 +193,19 @@ serve(async (req) => {
       existingContact = contactByEmail;
     }
 
-    // 7c. Fallback: buscar por telefone (últimos 9 dígitos)
+    // 7c. Fallback: buscar por telefone (últimos 9 dígitos) — usa limit(1) para evitar erro com múltiplos matches
     if (!existingContact && normalizedPhone) {
       const phoneClean = normalizedPhone.replace(/\D/g, '');
       const phoneSuffix = phoneClean.slice(-9);
       if (phoneSuffix.length === 9) {
-        const { data: contactByPhone } = await supabase
+        const { data: contactsByPhone } = await supabase
           .from('crm_contacts')
           .select('id, email')
           .ilike('phone', `%${phoneSuffix}`)
-          .maybeSingle();
+          .order('created_at', { ascending: true })
+          .limit(1);
         
+        const contactByPhone = contactsByPhone?.[0] || null;
         if (contactByPhone) {
           existingContact = contactByPhone;
           console.log('[WEBHOOK-RECEIVER] Contato encontrado por telefone (9-digit):', contactByPhone.id);
@@ -216,18 +218,45 @@ serve(async (req) => {
       // Fallback: últimos 8 dígitos (ignora dígito 9 variável do celular BR)
       if (!existingContact && phoneClean.length >= 8) {
         const phoneSuffix8 = phoneClean.slice(-8);
-        const { data: contactByPhone8 } = await supabase
+        const { data: contactsByPhone8 } = await supabase
           .from('crm_contacts')
           .select('id, email')
           .ilike('phone', `%${phoneSuffix8}`)
-          .maybeSingle();
+          .order('created_at', { ascending: true })
+          .limit(1);
         
+        const contactByPhone8 = contactsByPhone8?.[0] || null;
         if (contactByPhone8) {
           existingContact = contactByPhone8;
           console.log('[WEBHOOK-RECEIVER] Contato encontrado por telefone (8-digit fallback):', contactByPhone8.id);
           if (!contactByPhone8.email && emailTrimmed) {
             await supabase.from('crm_contacts').update({ email: emailTrimmed.toLowerCase(), updated_at: new Date().toISOString() }).eq('id', contactByPhone8.id);
           }
+        }
+      }
+    }
+
+    // 7d. Fallback: buscar por nome exato na mesma origin (captura duplicatas como "Anna")
+    const leadName = (payload.name || payload.nome_completo || '').trim();
+    if (!existingContact && leadName && endpoint.origin_id) {
+      const { data: contactsByName } = await supabase
+        .from('crm_contacts')
+        .select('id, email')
+        .ilike('name', leadName)
+        .eq('origin_id', endpoint.origin_id)
+        .order('created_at', { ascending: true })
+        .limit(1);
+      
+      const contactByName = contactsByName?.[0] || null;
+      if (contactByName) {
+        existingContact = contactByName;
+        console.log('[WEBHOOK-RECEIVER] ⚠️ Contato encontrado por NOME na mesma origin:', contactByName.id, '- Nome:', leadName);
+        // Enriquecer contato com dados que faltam
+        const enrichData: Record<string, string> = { updated_at: new Date().toISOString() };
+        if (!contactByName.email && emailTrimmed) enrichData.email = emailTrimmed.toLowerCase();
+        if (normalizedPhone) enrichData.phone = normalizedPhone;
+        if (Object.keys(enrichData).length > 1) {
+          await supabase.from('crm_contacts').update(enrichData).eq('id', contactByName.id);
         }
       }
     }
@@ -242,12 +271,24 @@ serve(async (req) => {
       contactId = existingContact.id;
       console.log('[WEBHOOK-RECEIVER] Contato existente:', contactId);
       
+      // Merge tags em vez de sobrescrever
+      let mergedTags = autoTags;
+      if (autoTags.length > 0) {
+        const { data: currentContact } = await supabase
+          .from('crm_contacts')
+          .select('tags')
+          .eq('id', contactId)
+          .single();
+        const currentTags: string[] = (currentContact?.tags as string[]) || [];
+        mergedTags = [...new Set([...currentTags, ...autoTags])];
+      }
+
       await supabase
         .from('crm_contacts')
         .update({
           name: payload.name || payload.nome_completo,
           phone: normalizedPhone,
-          tags: autoTags.length > 0 ? autoTags : undefined,
+          tags: mergedTags.length > 0 ? mergedTags : undefined,
           updated_at: new Date().toISOString()
         })
         .eq('id', contactId);
