@@ -1,45 +1,30 @@
 
 
-## Correção: Backfill com dedup por telefone e proteção de estágio
+## Plano: Executar backfill A010 real (90 dias)
 
-### Problema
-O backfill cria deals duplicados porque:
-1. Só deduplica por email exato (não detecta `v.b.romaoo@gmail.com` vs `v.b.romao@gmail.com`)
-2. Não verifica telefone para encontrar contatos existentes
-3. Não protege leads em estágios avançados (ex: "Contrato Pago")
+### Análise da lógica atual
 
-### Solução
-Adicionar 3 camadas de proteção no `backfill-a010-missing-deals`:
+O código já implementa **5 camadas de deduplicação**:
 
-### Mudanças
+1. **Email exato** - busca contato por email (batch de 200)
+2. **Telefone (sufixo 9 dígitos)** - busca contato por phone suffix para quem não tem match por email
+3. **Deal por contact_id** - verifica se contato já tem deal no PIS
+4. **Deal por email cross-check** - busca deals via JOIN com crm_contacts pelo email (cobre contatos duplicados)
+5. **Double-check antes de criar** - no momento real da criação, faz verificação final por email (case insensitive) E por telefone
 
-| Arquivo | O que fazer |
-|---------|-------------|
-| `supabase/functions/backfill-a010-missing-deals/index.ts` | Ver abaixo |
+A lógica está robusta. Nenhuma alteração de código é necessária.
 
-#### Detalhes da lógica corrigida:
+### Execução
 
-1. **Dedup por telefone na busca de contatos** (passo 5): Além de buscar por email, buscar contatos por sufixo de telefone (últimos 9 dígitos). Se encontrar contato por telefone que já tem deal no PIS, marcar email como "já tem deal".
+| Passo | Ação |
+|-------|------|
+| 1 | Deploy da função (já deployada) |
+| 2 | Executar com `{ "dry_run": false, "days_back": 90 }` via `supabase--curl_edge_functions` |
+| 3 | Verificar stats retornados (deals criados, erros, skips) |
 
-2. **Verificação de deals por email (não só contact_id)**: Antes de criar deal, buscar `crm_deals` via JOIN com `crm_contacts` onde o email do contato bate, independente de qual `contact_id` está no deal. Isso cobre o caso de múltiplos contatos com mesmo email.
-
-3. **Proteção de estágio avançado**: Se o contato já tem deal no PIS em estágio posterior a "Novo Lead" (ex: Contrato Pago), pular. Adicionar stat `skipped_advanced_stage`.
-
-4. **Antes de rodar**: Limpar os 2 deals duplicados do Victor Romão criados pelo backfill anterior (IDs `fca41234` e `853c566b`) e os contatos órfãos.
-
-### Fluxo corrigido
-
-```text
-Para cada email A010:
-  1. Buscar contato por email OU por telefone (9 dígitos)
-  2. Se encontrou contato → verificar se tem deal no PIS
-  3. Se tem deal no PIS → SKIP (já existe)
-  4. Se é parceiro → SKIP
-  5. Se não tem deal → criar contato (se necessário) + deal
-```
-
-### Passo prévio: Limpeza
-- Deletar os 2 deals backfill duplicados do Victor Romão
-- Deletar os 2 contatos criados pelo backfill que são duplicatas (`36ba5171` e `f5c45d8e`)
-- Verificar se há outros casos similares nos 12 deals criados pelo backfill anterior
+### Riscos mitigados
+- Se email já tem deal no PIS → SKIP
+- Se telefone (9 dígitos) bate com contato que já tem deal → SKIP  
+- Se é parceiro (A001-A009, INCORPORADOR, ANTICRISE) → SKIP
+- Double-check individual antes de cada insert → evita race conditions
 
