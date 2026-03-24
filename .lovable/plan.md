@@ -1,45 +1,54 @@
 
 
-## Problema
+## Problema: Consolidação não funciona quando contatos ainda estão separados
 
-A Edge Function `merge-duplicate-contacts` tem a lógica de consolidação correta, mas:
+### Causa raiz
 
-1. **Não foi redeployada** após as últimas correções (sem logs recentes)
-2. **Casos existentes** de 2 deals do mesmo contato na mesma origin não foram re-processados — a consolidação só acontece durante um novo merge
+Os dois deals do Lucas Ângelo pertencem a **contatos diferentes** no banco:
+- `ef4eb45f` — "Lucas Ângelo" (phone: "62 9220-6062")
+- `c8d83183` — "Lucas Ângelo Magalhães Botelho Vitorino" (phone: "62992206062")
 
-## Plano
+A consolidação de deals agrupa por `(contact_id, origin_id)`. Como os `contact_id` são diferentes, ela nunca os encontra como par duplicado.
 
-### 1. Redeployar a Edge Function
-Forçar o redeploy de `merge-duplicate-contacts` para garantir que a versão com consolidação de deals (incluindo `meeting_slot_attendees`) esteja ativa.
+A solução é: **primeiro unificar os contatos duplicados por telefone**, depois a consolidação de deals funciona automaticamente.
 
-### 2. Adicionar funcionalidade de "Consolidar deals existentes"
-Criar um endpoint adicional na mesma Edge Function que consolida deals duplicados na mesma origin **sem precisar de contatos duplicados**. Isso resolve os casos já existentes.
+### O que precisa acontecer
 
-Novo parâmetro: `{ consolidate_only: true }` — busca todos os contatos que têm 2+ deals na mesma `origin_id` e executa a consolidação.
+O fluxo correto é: **Merge de contatos → Consolidação de deals**. Ambos os passos já existem no código, mas precisam ser executados na ordem certa.
 
-### Arquivo a alterar
+### Correção: Criar um fluxo combinado "Limpar Duplicados"
+
+Adicionar um modo `full_cleanup` na Edge Function que executa os dois passos em sequência:
+1. Merge de contatos duplicados (por email + por telefone)
+2. Consolidação de deals na mesma origin
+
+### Arquivos a alterar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/merge-duplicate-contacts/index.ts` | Adicionar modo `consolidate_only` que busca contatos com deals duplicados na mesma origin e consolida |
+| `supabase/functions/merge-duplicate-contacts/index.ts` | Adicionar modo `full_cleanup` que executa merge por email, merge por telefone e consolidação de deals em sequência |
+| `src/pages/crm/ContatosDuplicados.tsx` | Adicionar botão "Limpeza Completa" que executa o fluxo combinado |
+| `src/hooks/useDuplicateContacts.ts` | Adicionar hook `useFullCleanup` |
 
-### Lógica do modo `consolidate_only`
+### Detalhes técnicos
 
+No modo `full_cleanup`:
 ```text
-1. Query: SELECT contact_id, origin_id, COUNT(*) 
-   FROM crm_deals 
-   GROUP BY contact_id, origin_id 
-   HAVING COUNT(*) > 1
-2. Para cada par (contact_id, origin_id): 
-   executar consolidateDeals() já existente
-3. Retornar total de deals consolidados
+1. Executar processEmailGroup() para todos os emails duplicados
+2. Executar processPhoneGroup() para todos os telefones duplicados
+3. Executar consolidateDeals() para todos os pares (contact, origin) com 2+ deals
+4. Retornar totais combinados
 ```
 
-### Na interface (opcional)
-Adicionar um botão "Consolidar deals duplicados" na página de Contatos Duplicados que chame esse modo, permitindo limpar os casos existentes sem precisar re-mergear contatos.
+O botão na UI terá opção de dry_run (simular) e execução real, mostrando:
+- X contatos unificados por email
+- X contatos unificados por telefone  
+- X deals consolidados na mesma pipeline
 
 ### Resultado esperado
-- Edge Function atualizada e redeployada
-- Todos os leads com 2 deals na mesma pipeline são consolidados em 1
-- O deal mais avançado (maior stage_order) é mantido, com histórico transferido
+
+Ao executar "Limpeza Completa":
+- Os contatos "Lucas Ângelo" e "Lucas Ângelo Magalhães Botelho Vitorino" serão unificados (match por telefone sufixo `992206062`)
+- Os 2 deals na mesma origin serão consolidados em 1 (mantendo "Reunião 02 Realizada" por ter stage_order=11 > 9)
+- Histórico transferido para o deal mantido
 
