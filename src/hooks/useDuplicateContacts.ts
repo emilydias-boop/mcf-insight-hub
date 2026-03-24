@@ -43,7 +43,7 @@ async function fetchEmailDuplicates(): Promise<DuplicateGroup[]> {
       .from('crm_contacts')
       .select(`
         id, name, email, phone, created_at,
-        crm_deals(id, owner_id, meeting_slots(id))
+        crm_deals(id, owner_id, stage_id, crm_stages(order), meeting_slots(id))
       `)
       .ilike('email', email)
       .order('created_at', { ascending: true });
