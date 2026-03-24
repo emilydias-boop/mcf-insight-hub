@@ -53,6 +53,7 @@ async function fetchEmailDuplicates(): Promise<DuplicateGroup[]> {
     const mappedContacts: DuplicateContact[] = contacts.map(c => {
       const deals = (c.crm_deals as any[]) || [];
       const meetingsCount = deals.reduce((acc, d) => acc + ((d.meeting_slots as any[])?.length || 0), 0);
+      const maxStageOrder = deals.length > 0 ? Math.max(...deals.map((d: any) => d.crm_stages?.order ?? -1)) : -1;
       return {
         id: c.id,
         name: c.name,
@@ -62,11 +63,13 @@ async function fetchEmailDuplicates(): Promise<DuplicateGroup[]> {
         deals_count: deals.length,
         meetings_count: meetingsCount,
         has_owner: deals.some((d: any) => d.owner_id),
+        max_stage_order: maxStageOrder,
       };
     });
 
-    // Ordenar: mais deals > mais reuniões > mais antigo
+    // Ordenar: maior stage_order > mais deals > mais reuniões > mais antigo
     mappedContacts.sort((a, b) => {
+      if (b.max_stage_order !== a.max_stage_order) return b.max_stage_order - a.max_stage_order;
       if (b.deals_count !== a.deals_count) return b.deals_count - a.deals_count;
       if (b.meetings_count !== a.meetings_count) return b.meetings_count - a.meetings_count;
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
