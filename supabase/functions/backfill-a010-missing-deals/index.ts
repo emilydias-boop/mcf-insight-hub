@@ -35,8 +35,8 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { dry_run = true, days_back = 7 } = await req.json().catch(() => ({ dry_run: true, days_back: 7 }));
-    console.log(`🚀 Backfill A010 Missing Deals - dry_run: ${dry_run}, days_back: ${days_back}`);
+    const { dry_run = true, days_back = 7, limit = 100, offset = 0 } = await req.json().catch(() => ({ dry_run: true, days_back: 7, limit: 100, offset: 0 }));
+    console.log(`🚀 Backfill A010 Missing Deals - dry_run: ${dry_run}, days_back: ${days_back}, limit: ${limit}, offset: ${offset}`);
 
     // 1. Buscar origin
     const { data: originData } = await supabase
