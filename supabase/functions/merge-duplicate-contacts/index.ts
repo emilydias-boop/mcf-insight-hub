@@ -65,13 +65,11 @@ serve(async (req) => {
   );
 
   try {
-    const { dry_run = true, limit = 100, match_type = 'email' } = await req.json().catch(() => ({}));
-    const matchType: MatchType = match_type === 'phone' ? 'phone' : 'email';
-
-    console.log(`🔍 Buscando contatos duplicados por ${matchType} (dry_run: ${dry_run}, limit: ${limit})`);
+    const body = await req.json().catch(() => ({}));
+    const { dry_run = true, limit = 100, match_type = 'email', primary_id, duplicate_ids } = body;
 
     const results = {
-      match_type: matchType,
+      match_type: match_type,
       total_groups: 0,
       merged: 0,
       deals_updated: 0,
@@ -82,18 +80,47 @@ serve(async (req) => {
       groups_processed: [] as any[],
     };
 
+    // === Merge direcionado (um grupo específico) ===
+    if (primary_id && duplicate_ids?.length) {
+      console.log(`🎯 Merge direcionado: primary=${primary_id}, duplicates=${duplicate_ids.join(',')}, dry_run=${dry_run}`);
+
+      const allIds = [primary_id, ...duplicate_ids];
+      const { data: contacts, error: contactsError } = await supabase
+        .from('crm_contacts')
+        .select(`
+          id, email, phone, name, tags, created_at,
+          crm_deals(id, owner_id, stage_id, crm_stages(order), meeting_slots(id))
+        `)
+        .in('id', allIds);
+
+      if (contactsError) throw contactsError;
+      if (!contacts || contacts.length < 2) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Contatos não encontrados' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      results.total_groups = 1;
+      await mergeContacts(supabase, contacts, primary_id, 'targeted', dry_run, results);
+
+      return new Response(
+        JSON.stringify({ success: true, dry_run, ...results }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // === Merge em massa (comportamento original) ===
+    const matchType: MatchType = match_type === 'phone' ? 'phone' : 'email';
+    console.log(`🔍 Buscando contatos duplicados por ${matchType} (dry_run: ${dry_run}, limit: ${limit})`);
+
     if (matchType === 'email') {
       const { data: duplicateEmails, error: rpcError } = await supabase
         .rpc('get_duplicate_contact_emails', { limit_count: limit });
 
-      if (rpcError) {
-        console.error('Erro ao buscar duplicados por email:', rpcError);
-        throw rpcError;
-      }
+      if (rpcError) throw rpcError;
 
       results.total_groups = duplicateEmails?.length || 0;
-      console.log(`📊 Encontrados ${results.total_groups} emails duplicados`);
-
       for (const { email } of duplicateEmails || []) {
         await processEmailGroup(supabase, email, dry_run, results);
       }
@@ -101,27 +128,18 @@ serve(async (req) => {
       const { data: duplicatePhones, error: rpcError } = await supabase
         .rpc('get_duplicate_contact_phones', { limit_count: limit });
 
-      if (rpcError) {
-        console.error('Erro ao buscar duplicados por telefone:', rpcError);
-        throw rpcError;
-      }
+      if (rpcError) throw rpcError;
 
       results.total_groups = duplicatePhones?.length || 0;
-      console.log(`📊 Encontrados ${results.total_groups} telefones duplicados`);
-
       for (const { phone_suffix } of duplicatePhones || []) {
         await processPhoneGroup(supabase, phone_suffix, dry_run, results);
       }
     }
 
-    console.log(`✅ Processamento concluído:`, JSON.stringify(results, null, 2));
+    console.log(`✅ Processamento concluído`);
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        dry_run,
-        ...results
-      }),
+      JSON.stringify({ success: true, dry_run, ...results }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
