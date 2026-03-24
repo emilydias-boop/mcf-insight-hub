@@ -356,6 +356,16 @@ async function consolidateDeals(supabase: any, contactId: string, results: any) 
         console.error(`Erro ao transferir meeting_slots de ${secDeal.id}:`, msErr);
       }
 
+      // Transferir meeting_slot_attendees (tem deal_id próprio com CASCADE)
+      const { error: msaErr } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ deal_id: primaryDeal.id })
+        .eq('deal_id', secDeal.id);
+
+      if (msaErr) {
+        console.error(`Erro ao transferir meeting_slot_attendees de ${secDeal.id}:`, msaErr);
+      }
+
       // Transferir deal_activities
       const { error: daErr } = await supabase
         .from('deal_activities')
