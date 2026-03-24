@@ -10,6 +10,7 @@ import { useDuplicateContacts, useMergeDuplicates, useMergeAllDuplicates, useCon
 import { Users, Merge, Check, Phone, AlertTriangle, Loader2, Mail, Calendar, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { SimulationResultsModal } from '@/components/crm/SimulationResultsModal';
 
 function DuplicateGroupCard({ 
   group, 
@@ -252,9 +253,38 @@ export default function ContatosDuplicados() {
   const [activeTab, setActiveTab] = useState<DuplicateMatchType>('email');
   const consolidateDeals = useConsolidateDeals();
   const fullCleanup = useFullCleanup();
+  const [simulationData, setSimulationData] = useState<any>(null);
+  const [simulationOpen, setSimulationOpen] = useState(false);
+
+  const handleSimulate = () => {
+    fullCleanup.mutate({ dryRun: true }, {
+      onSuccess: (data) => {
+        setSimulationData(data);
+        setSimulationOpen(true);
+      },
+    });
+  };
+
+  const handleExecute = () => {
+    fullCleanup.mutate({ dryRun: false }, {
+      onSuccess: () => {
+        setSimulationOpen(false);
+        setSimulationData(null);
+      },
+    });
+  };
 
   return (
     <div className="space-y-6">
+      {/* Simulation Modal */}
+      <SimulationResultsModal
+        open={simulationOpen}
+        onOpenChange={setSimulationOpen}
+        data={simulationData}
+        onExecute={handleExecute}
+        isExecuting={fullCleanup.isPending}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -268,7 +298,7 @@ export default function ContatosDuplicados() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fullCleanup.mutate({ dryRun: true })}
+            onClick={handleSimulate}
             disabled={fullCleanup.isPending}
           >
             {fullCleanup.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
@@ -291,7 +321,7 @@ export default function ContatosDuplicados() {
                   <strong>2.</strong> Unifica contatos duplicados por <strong>telefone</strong><br />
                   <strong>3.</strong> Consolida deals duplicados na <strong>mesma pipeline</strong>
                   <br /><br />
-                  Use "Simular" primeiro para ver os totais antes de executar.
+                  Use "Simular" primeiro para ver os detalhes antes de executar.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

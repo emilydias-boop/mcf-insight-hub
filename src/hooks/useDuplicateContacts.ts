@@ -321,13 +321,7 @@ export function useFullCleanup() {
       return data;
     },
     onSuccess: (data) => {
-      if (data.dry_run) {
-        const parts = [];
-        if (data.email_groups > 0) parts.push(`${data.email_groups} grupos por email`);
-        if (data.phone_groups > 0) parts.push(`${data.phone_groups} grupos por telefone`);
-        if (data.deal_consolidation_pairs > 0) parts.push(`${data.deal_consolidation_pairs} pares de deals`);
-        toast.info(`Simulação: ${parts.join(', ')}`);
-      } else {
+      if (!data.dry_run) {
         const parts = [];
         if (data.email_groups_merged > 0) parts.push(`${data.email_groups_merged} por email`);
         if (data.phone_groups_merged > 0) parts.push(`${data.phone_groups_merged} por telefone`);
