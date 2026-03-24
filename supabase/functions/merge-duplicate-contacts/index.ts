@@ -66,7 +66,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { dry_run = true, limit = 100, match_type = 'email', primary_id, duplicate_ids } = body;
+    const { dry_run = true, limit = 100, match_type = 'email', primary_id, duplicate_ids, consolidate_only = false } = body;
 
     const results = {
       match_type: match_type,
@@ -79,6 +79,99 @@ serve(async (req) => {
       errors: [] as string[],
       groups_processed: [] as any[],
     };
+
+    // === Modo consolidate_only: limpar deals duplicados na mesma origin ===
+    if (consolidate_only) {
+      console.log(`🧹 Modo consolidate_only: buscando deals duplicados na mesma origin (dry_run=${dry_run})`);
+
+      const { data: dupes, error: dupErr } = await supabase.rpc('get_duplicate_deals_same_origin');
+
+      if (dupErr) {
+        // Se a RPC não existir, fazer query manual
+        console.log('RPC não disponível, usando query manual...');
+        const { data: allDeals, error: allErr } = await supabase
+          .from('crm_deals')
+          .select('contact_id, origin_id')
+          .not('contact_id', 'is', null)
+          .not('origin_id', 'is', null);
+
+        if (allErr) throw allErr;
+
+        // Agrupar e encontrar duplicados
+        const groups: Record<string, number> = {};
+        const contactOriginPairs: { contact_id: string; origin_id: string }[] = [];
+        
+        for (const d of allDeals || []) {
+          const key = `${d.contact_id}__${d.origin_id}`;
+          groups[key] = (groups[key] || 0) + 1;
+        }
+
+        for (const [key, count] of Object.entries(groups)) {
+          if (count >= 2) {
+            const [contact_id, origin_id] = key.split('__');
+            contactOriginPairs.push({ contact_id, origin_id });
+          }
+        }
+
+        results.total_groups = contactOriginPairs.length;
+        console.log(`📊 Encontrados ${contactOriginPairs.length} pares (contact, origin) com deals duplicados`);
+
+        if (!dry_run) {
+          for (const pair of contactOriginPairs) {
+            try {
+              await consolidateDeals(supabase, pair.contact_id, results);
+            } catch (err: any) {
+              results.errors.push(`Erro consolidando contact=${pair.contact_id}: ${err.message}`);
+            }
+          }
+        } else {
+          for (const pair of contactOriginPairs) {
+            results.groups_processed.push({
+              contact_id: pair.contact_id,
+              origin_id: pair.origin_id,
+              action: 'would_consolidate',
+            });
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, dry_run, consolidate_only: true, ...results }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Se a RPC existir, usar os resultados
+      results.total_groups = dupes?.length || 0;
+      console.log(`📊 Encontrados ${results.total_groups} pares com deals duplicados`);
+
+      if (!dry_run) {
+        const processedContacts = new Set<string>();
+        for (const pair of dupes || []) {
+          if (!processedContacts.has(pair.contact_id)) {
+            processedContacts.add(pair.contact_id);
+            try {
+              await consolidateDeals(supabase, pair.contact_id, results);
+            } catch (err: any) {
+              results.errors.push(`Erro consolidando contact=${pair.contact_id}: ${err.message}`);
+            }
+          }
+        }
+      } else {
+        for (const pair of dupes || []) {
+          results.groups_processed.push({
+            contact_id: pair.contact_id,
+            origin_id: pair.origin_id,
+            deal_count: pair.deal_count,
+            action: 'would_consolidate',
+          });
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, dry_run, consolidate_only: true, ...results }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // === Merge direcionado (um grupo específico) ===
     if (primary_id && duplicate_ids?.length) {
