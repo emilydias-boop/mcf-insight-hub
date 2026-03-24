@@ -13,6 +13,7 @@ interface DuplicateContact {
   deals_count: number;
   meetings_count: number;
   has_owner: boolean;
+  max_stage_order: number;
 }
 
 export interface DuplicateGroup {
