@@ -329,7 +329,7 @@ async function processEmailGroup(supabase: any, email: string, dryRun: boolean, 
       .from('crm_contacts')
       .select(`
         id, email, phone, name, tags, created_at,
-        crm_deals(id, owner_id, stage_id, crm_stages(order), meeting_slots(id))
+        crm_deals(id, owner_id, stage_id, crm_stages(order, name), meeting_slots(id))
       `)
       .ilike('email', email)
       .order('created_at', { ascending: true });
