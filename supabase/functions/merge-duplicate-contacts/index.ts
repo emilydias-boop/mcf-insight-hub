@@ -355,7 +355,7 @@ async function processPhoneGroup(supabase: any, phoneSuffix: string, dryRun: boo
       .from('crm_contacts')
       .select(`
         id, email, phone, name, tags, created_at,
-        crm_deals(id, owner_id, stage_id, crm_stages(order), meeting_slots(id))
+        crm_deals(id, owner_id, stage_id, crm_stages(order, name), meeting_slots(id))
       `)
       .ilike('phone', `%${phoneSuffix}`)
       .order('created_at', { ascending: true });
