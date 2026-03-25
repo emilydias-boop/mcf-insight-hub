@@ -1,23 +1,80 @@
 
+## Fluxo atual
 
-## Plano: Corrigir query do Webhook Analytics (0 resultados)
+O step de Preview mostra apenas os 10 primeiros registros e não faz nenhuma checagem de duplicidade no banco. O `handleImport` insere tudo de uma vez sem filtrar.
 
-### Causa raiz
+## O que o usuário quer
 
-Dois problemas na query do hook `useWebhookIntakeAnalytics.ts`:
+1. No step de Preview: checar TODOS os nomes do arquivo contra `consortium_payments.consorciado` no banco
+2. Mostrar claramente quais estão duplicados (destacados em vermelho com nome e contrato já existente)
+3. Exibir um painel de "aprovação": o usuário vê a lista dos duplicados encontrados e pode escolher:
+   - **Bloquear todos** (padrão) — duplicados não entram
+   - **Desbloquear individualmente** — marca certos duplicados como "permitir mesmo assim"
+4. Só após confirmar a revisão, libera o botão "Importar Dados"
+5. No `handleImport`: duplicados bloqueados são pulados, contagem separada no resultado final
 
-1. **Case mismatch no filtro**: O `lead_channel` no banco é armazenado em UPPERCASE (`CLIENTDATA-INSIDE`), mas o slug do endpoint é lowercase (`clientdata-inside`). O filtro usa `eq` (case-sensitive), resultando em 0 matches.
+## Mudanças no arquivo `src/pages/bu-consorcio/Importar.tsx`
 
-2. **Join com tabela errada** (menor): O hook faz join com `crm_stages` que funciona neste caso, mas o padrão do projeto usa `local_pipeline_stages` em muitos lugares. Ambas as tabelas têm dados, então isso não é o bloqueio principal, mas deve ser corrigido para consistência.
+### 1. Interface `ParsedRow`
+Adicionar dois campos:
+```ts
+isDuplicate?: boolean;
+allowDuplicate?: boolean; // usuário desativou o bloqueio manualmente
+```
 
-### Correção
+### 2. Estados novos
+```ts
+const [duplicatesReviewed, setDuplicatesReviewed] = useState(false);
+const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+const [importStats, setImportStats] = useState<{ imported: number; blocked: number } | null>(null);
+```
 
-**Arquivo**: `src/hooks/useWebhookIntakeAnalytics.ts`
+### 3. `handlePreview` — agora async
+- Parsear TODOS os `rawData` (não só 10) para `previewData`
+- Coletar todos os nomes únicos do arquivo
+- Query no Supabase: `.from('consortium_payments').select('consorciado').in('consorciado', allNames)` — com batches de 200 (padrão do projeto)
+- Marcar `isDuplicate: true` nas rows que tiverem match
+- Setar `duplicatesReviewed` como `false` quando há duplicados (forçar revisão)
 
-- Alterar o filtro de `lead_channel` para comparar em uppercase: trocar `.filter('custom_fields->>lead_channel', 'eq', slug)` por `.filter('custom_fields->>lead_channel', 'eq', slug.toUpperCase())`
-- Isso resolve o match porque o webhook-lead-receiver armazena o `lead_channel` como `slug.toUpperCase()`
+### 4. Painel de duplicados no step Preview (antes do botão Importar)
 
-### Resultado
+Se `previewData.some(r => r.isDuplicate)`:
 
-Ao selecionar "ClientData Inside", a query vai filtrar por `CLIENTDATA-INSIDE` e retornar os 57 leads corretamente, populando KPIs, breakdown por estágio e tabela.
+```
+┌─────────────────────────────────────────────────────┐
+│ ⚠️  X nomes duplicados encontrados                  │
+│ Esses registros já existem no banco.                │
+│ Revise abaixo e decida o que fazer com cada um.     │
+├─────────────────────────────────────────────────────┤
+│ Nome                  | Contrato | Status           │
+│ João Silva            | 123/456  | [Bloqueado ✓]    │  ← toggle
+│ Maria Souza           | 789/012  | [Bloqueado ✓]    │
+├─────────────────────────────────────────────────────┤
+│ [Bloquear Todos]  [Confirmar Revisão]               │
+└─────────────────────────────────────────────────────┘
+```
 
+- Toggle individual: muda `allowDuplicate` da row
+- "Confirmar Revisão" seta `duplicatesReviewed = true` e libera o botão Importar
+
+### 5. Tabela de Preview
+
+- Mostrar TODOS os registros (ou primeiros 50 com scroll)
+- Rows duplicadas: fundo vermelho claro, badge "Duplicado"
+- Rows novas: badge "Novo" verde
+
+### 6. `handleImport` — filtrar bloqueados
+```ts
+const toImport = previewData.filter(r => !r.isDuplicate || r.allowDuplicate);
+const blockedCount = previewData.filter(r => r.isDuplicate && !r.allowDuplicate).length;
+```
+Só insere `toImport`. No final registra `setImportStats({ imported, blocked: blockedCount })`.
+
+### 7. Step "Completo"
+Mostrar:
+- ✅ X registros importados
+- 🚫 Y registros bloqueados por duplicidade de nome
+
+## Resultado
+
+O usuário vê exatamente quais nomes já existem, pode decidir bloquear individualmente ou em massa, e só então confirmar a importação.
