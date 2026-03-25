@@ -161,6 +161,15 @@ export const useContractReport = (
       
       if (!data) return [];
       
+      // Filter by BU origin_ids if specified
+      let filteredData = data;
+      if (buOriginIds) {
+        filteredData = data.filter((row: any) => {
+          const originId = row.crm_deals?.origin_id;
+          return originId && buOriginIds.includes(originId);
+        });
+      }
+      
       // Collect linked attendee IDs to avoid duplicates
       const linkedAttendeeIds = new Set(
         data.map((row: any) => row.id).filter(Boolean)
