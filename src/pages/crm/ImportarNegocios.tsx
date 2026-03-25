@@ -39,6 +39,9 @@ interface JobStatus {
 }
 
 const ImportarNegocios = () => {
+  const activeBU = useActiveBU();
+  const buKey = activeBU?.slug || 'incorporador';
+
   const [file, setFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -50,15 +53,15 @@ const ImportarNegocios = () => {
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
 
-  // Buscar origens filtradas pela BU Incorporador via bu_origin_mapping
+  // Buscar origens filtradas pela BU ativa via bu_origin_mapping
   const { data: origins, isLoading: originsLoading } = useQuery({
-    queryKey: ['import-origins-incorporador'],
+    queryKey: ['import-origins', buKey],
     queryFn: async () => {
-      // 1. Buscar mapeamentos da BU incorporador
+      // 1. Buscar mapeamentos da BU ativa
       const { data: mappings, error: mappingError } = await supabase
         .from('bu_origin_mapping')
         .select('entity_type, entity_id, is_default')
-        .eq('bu', 'incorporador');
+        .eq('bu', buKey);
       if (mappingError) throw mappingError;
 
       const directOriginIds = (mappings || [])
