@@ -152,7 +152,7 @@ export default function ImportarConsorcioPage() {
   }, []);
 
   const handleMappingChange = (field: keyof ColumnMapping, value: string) => {
-    setMapping(prev => ({ ...prev, [field]: value }));
+    setMapping(prev => ({ ...prev, [field]: value === '__none__' ? '' : value }));
   };
 
   const handlePreview = async () => {
