@@ -9,6 +9,7 @@ import { useLeadProfile } from '@/hooks/useLeadProfile';
 
 interface LeadProfileSectionProps {
   contactId: string | null | undefined;
+  dealId?: string | null;
 }
 
 interface FieldDef {
@@ -92,9 +93,9 @@ function formatValue(value: unknown, fmt?: string): string {
   return String(value);
 }
 
-export function LeadProfileSection({ contactId }: LeadProfileSectionProps) {
+export function LeadProfileSection({ contactId, dealId }: LeadProfileSectionProps) {
   const [open, setOpen] = useState(false);
-  const { data: profile, isLoading } = useLeadProfile(contactId);
+  const { data: profile, isLoading } = useLeadProfile(contactId, dealId);
 
   if (isLoading || !profile) return null;
 
