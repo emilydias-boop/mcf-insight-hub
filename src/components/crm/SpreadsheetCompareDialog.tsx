@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Upload, FileSpreadsheet, Search, CheckCircle2, XCircle, Download, Tag, ClipboardPaste, UserPlus, Loader2, ArrowRightLeft, Users } from 'lucide-react';
+import { Upload, FileSpreadsheet, Search, CheckCircle2, XCircle, Download, Tag, ClipboardPaste, UserPlus, Loader2, ArrowRightLeft, Users, GitBranch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useSdrsFromSquad } from '@/hooks/useSdrsFromSquad';
+import { BusinessUnit } from '@/hooks/useMyBU';
 
 type Step = 'upload' | 'mapping' | 'results';
 type StatusFilter = 'all' | 'found_in_current' | 'found_elsewhere' | 'not_found';

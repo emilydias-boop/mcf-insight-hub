@@ -839,6 +839,7 @@ const Negocios = () => {
         onOpenChange={setSpreadsheetDialogOpen}
         deals={dealsData || []}
         originId={effectiveOriginId}
+        activeBU={activeBU}
       />
       
       
