@@ -3,7 +3,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { Badge } from '@/components/ui/badge';
-import { Video, Loader2, Search, CheckCircle2, Clock, MessageCircle, FileText, GripVertical } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Loader2, Search, CheckCircle2, Clock, MessageCircle, FileText } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -14,7 +15,6 @@ import { useContractReport, getDefaultContractReportFilters, ContractReportFilte
 import { useVideoControlBatch, useToggleVideoSent } from '@/hooks/useVideoControl';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { ControleDiegoDrawer } from './ControleDiegoDrawer';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 
@@ -28,7 +28,7 @@ function formatWhatsAppUrl(phone: string): string {
   return `https://wa.me/${number}`;
 }
 
-interface KanbanRow {
+export interface KanbanRow {
   id: string;
   closerName: string;
   leadName: string;
@@ -38,6 +38,7 @@ interface KanbanRow {
   originName: string;
   currentStage: string;
   date: string;
+  meetingDate: string;
   salesChannel: string;
   isRefunded: boolean;
   dealId: string | null;
@@ -82,6 +83,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
       originName: row.originName,
       currentStage: row.currentStage,
       date: row.contractPaidAt || row.meetingDate,
+      meetingDate: row.meetingDate,
       salesChannel: row.salesChannel.toUpperCase(),
       isRefunded: row.isRefunded,
       dealId: row.dealId || null,
@@ -116,9 +118,18 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
 
   const isLoading = loadingClosers || loadingAgenda;
 
-  const handleCardClick = (row: KanbanRow) => {
+  const handleOpenDrawer = (row: KanbanRow) => {
     setSelectedContract(row);
     setDrawerOpen(true);
+  };
+
+  const handleMarkSent = (row: KanbanRow, e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleMutation.mutate({
+      attendeeId: row.id,
+      videoSent: true,
+      dealId: row.dealId || undefined,
+    });
   };
 
   const onDragEnd = (result: DropResult) => {
@@ -245,7 +256,9 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
               headerText="text-orange-700 dark:text-orange-400"
               icon={<Clock className="h-4 w-4" />}
               videoMap={videoMap}
-              onCardClick={handleCardClick}
+              onOpenDrawer={handleOpenDrawer}
+              onMarkSent={handleMarkSent}
+              showMarkSent
             />
             <KanbanColumn
               id="enviados"
@@ -257,7 +270,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
               headerText="text-green-700 dark:text-green-400"
               icon={<CheckCircle2 className="h-4 w-4" />}
               videoMap={videoMap}
-              onCardClick={handleCardClick}
+              onOpenDrawer={handleOpenDrawer}
             />
           </div>
         </DragDropContext>
@@ -285,10 +298,12 @@ interface KanbanColumnProps {
   headerText: string;
   icon: React.ReactNode;
   videoMap: Record<string, any>;
-  onCardClick: (row: KanbanRow) => void;
+  onOpenDrawer: (row: KanbanRow) => void;
+  onMarkSent?: (row: KanbanRow, e: React.MouseEvent) => void;
+  showMarkSent?: boolean;
 }
 
-function KanbanColumn({ id, title, count, items, colorClass, headerBg, headerText, icon, videoMap, onCardClick }: KanbanColumnProps) {
+function KanbanColumn({ id, title, count, items, colorClass, headerBg, headerText, icon, videoMap, onOpenDrawer, onMarkSent, showMarkSent }: KanbanColumnProps) {
   return (
     <div className={cn('rounded-lg border-2 bg-muted/20', colorClass)}>
       <div className={cn('flex items-center gap-2 px-4 py-3 rounded-t-lg font-semibold text-sm', headerBg, headerText)}>
@@ -312,49 +327,86 @@ function KanbanColumn({ id, title, count, items, colorClass, headerBg, headerTex
                   <div
                     ref={provided.innerRef}
                     {...provided.draggableProps}
+                    {...provided.dragHandleProps}
                     className={cn(
-                      'rounded-md border bg-card p-3 shadow-sm cursor-pointer hover:shadow-md transition-shadow',
+                      'rounded-md border bg-card p-3 shadow-sm hover:shadow-md transition-shadow select-none',
                       snapshot.isDragging && 'shadow-lg ring-2 ring-primary/30'
                     )}
-                    onClick={() => onCardClick(row)}
                   >
-                    <div className="flex items-start gap-2">
-                      <div {...provided.dragHandleProps} className="mt-0.5 text-muted-foreground/50 hover:text-muted-foreground">
-                        <GripVertical className="h-4 w-4" />
+                    <div className="space-y-1.5">
+                      {/* Lead name — clickable to open drawer */}
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          className="font-medium text-sm truncate text-primary hover:underline cursor-pointer text-left"
+                          onClick={(e) => { e.stopPropagation(); onOpenDrawer(row); }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
+                          {row.leadName}
+                        </button>
+                        {row.isRefunded && (
+                          <Badge variant="destructive" className="bg-destructive/20 text-destructive border-destructive/30 text-[10px] px-1.5 shrink-0">
+                            Reembolsado
+                          </Badge>
+                        )}
                       </div>
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <p className="font-medium text-sm truncate">{row.leadName}</p>
-                          {row.isRefunded && (
-                            <Badge variant="destructive" className="bg-destructive/20 text-destructive border-destructive/30 text-[10px] px-1.5 shrink-0">
-                              Reembolsado
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">Closer: {row.closerName}</p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>{row.date ? format(parseISO(row.date), 'dd/MM', { locale: ptBR }) : '-'}</span>
-                          <span>·</span>
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{row.salesChannel}</Badge>
-                        </div>
-                        {row.leadPhone && (
+
+                      {/* Closer + SDR */}
+                      <p className="text-xs text-muted-foreground truncate">
+                        Closer: {row.closerName} · SDR: {row.sdrName}
+                      </p>
+
+                      {/* R1 date · Payment date · Channel */}
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+                        {row.meetingDate && (
+                          <span>R1: {format(parseISO(row.meetingDate), 'dd/MM', { locale: ptBR })}</span>
+                        )}
+                        {row.date && (
+                          <>
+                            <span>·</span>
+                            <span>Pgto: {format(parseISO(row.date), 'dd/MM', { locale: ptBR })}</span>
+                          </>
+                        )}
+                        <span>·</span>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{row.salesChannel}</Badge>
+                      </div>
+
+                      {/* Phone + action buttons */}
+                      <div className="flex items-center justify-between gap-2">
+                        {row.leadPhone ? (
                           <a
                             href={formatWhatsAppUrl(row.leadPhone)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 text-xs font-mono"
                             onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
                           >
                             <MessageCircle className="h-3 w-3" />
                             {row.leadPhone}
                           </a>
-                        )}
-                        {videoMap[row.id]?.sent_at && (
-                          <p className="text-[10px] text-green-600">
-                            ✅ Enviado {format(parseISO(videoMap[row.id].sent_at), 'dd/MM', { locale: ptBR })}
-                          </p>
+                        ) : <span />}
+
+                        {showMarkSent && onMarkSent && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-[10px] px-2 text-green-700 border-green-300 hover:bg-green-50"
+                            onClick={(e) => onMarkSent(row, e)}
+                            onMouseDown={(e) => e.stopPropagation()}
+                          >
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Enviado
+                          </Button>
                         )}
                       </div>
+
+                      {/* Sent timestamp for "enviados" column */}
+                      {videoMap[row.id]?.sent_at && (
+                        <p className="text-[10px] text-green-600">
+                          ✅ Enviado {format(parseISO(videoMap[row.id].sent_at), 'dd/MM HH:mm', { locale: ptBR })}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
