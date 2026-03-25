@@ -1,80 +1,34 @@
 
-## Fluxo atual
+## Causa do Erro
 
-O step de Preview mostra apenas os 10 primeiros registros e não faz nenhuma checagem de duplicidade no banco. O `handleImport` insere tudo de uma vez sem filtrar.
+Nas linhas 407, 422, 437, 452, 467 e 482 do `Importar.tsx`, os itens "Não mapear" usam `value=""`:
 
-## O que o usuário quer
-
-1. No step de Preview: checar TODOS os nomes do arquivo contra `consortium_payments.consorciado` no banco
-2. Mostrar claramente quais estão duplicados (destacados em vermelho com nome e contrato já existente)
-3. Exibir um painel de "aprovação": o usuário vê a lista dos duplicados encontrados e pode escolher:
-   - **Bloquear todos** (padrão) — duplicados não entram
-   - **Desbloquear individualmente** — marca certos duplicados como "permitir mesmo assim"
-4. Só após confirmar a revisão, libera o botão "Importar Dados"
-5. No `handleImport`: duplicados bloqueados são pulados, contagem separada no resultado final
-
-## Mudanças no arquivo `src/pages/bu-consorcio/Importar.tsx`
-
-### 1. Interface `ParsedRow`
-Adicionar dois campos:
-```ts
-isDuplicate?: boolean;
-allowDuplicate?: boolean; // usuário desativou o bloqueio manualmente
+```tsx
+<SelectItem value="">Não mapear</SelectItem>
 ```
 
-### 2. Estados novos
-```ts
-const [duplicatesReviewed, setDuplicatesReviewed] = useState(false);
-const [checkingDuplicates, setCheckingDuplicates] = useState(false);
-const [importStats, setImportStats] = useState<{ imported: number; blocked: number } | null>(null);
-```
+O Radix UI (biblioteca dos componentes Select) proíbe `value=""` em `SelectItem` — string vazia é reservada internamente para limpar a seleção/placeholder, causando o crash ao tentar avançar o step.
 
-### 3. `handlePreview` — agora async
-- Parsear TODOS os `rawData` (não só 10) para `previewData`
-- Coletar todos os nomes únicos do arquivo
-- Query no Supabase: `.from('consortium_payments').select('consorciado').in('consorciado', allNames)` — com batches de 200 (padrão do projeto)
-- Marcar `isDuplicate: true` nas rows que tiverem match
-- Setar `duplicatesReviewed` como `false` quando há duplicados (forçar revisão)
+---
 
-### 4. Painel de duplicados no step Preview (antes do botão Importar)
+## Correção
 
-Se `previewData.some(r => r.isDuplicate)`:
+**Arquivo:** `src/pages/bu-consorcio/Importar.tsx`
 
-```
-┌─────────────────────────────────────────────────────┐
-│ ⚠️  X nomes duplicados encontrados                  │
-│ Esses registros já existem no banco.                │
-│ Revise abaixo e decida o que fazer com cada um.     │
-├─────────────────────────────────────────────────────┤
-│ Nome                  | Contrato | Status           │
-│ João Silva            | 123/456  | [Bloqueado ✓]    │  ← toggle
-│ Maria Souza           | 789/012  | [Bloqueado ✓]    │
-├─────────────────────────────────────────────────────┤
-│ [Bloquear Todos]  [Confirmar Revisão]               │
-└─────────────────────────────────────────────────────┘
-```
+**Duas mudanças:**
 
-- Toggle individual: muda `allowDuplicate` da row
-- "Confirmar Revisão" seta `duplicatesReviewed = true` e libera o botão Importar
+1. **Handler `handleMappingChange` (linha 155):** converter o valor sentinela de volta para string vazia no estado interno:
+   ```ts
+   const handleMappingChange = (field: keyof ColumnMapping, value: string) => {
+     setMapping(prev => ({ ...prev, [field]: value === '__none__' ? '' : value }));
+   };
+   ```
 
-### 5. Tabela de Preview
+2. **Todas as 6 ocorrências** de `<SelectItem value="">Não mapear</SelectItem>` (linhas 407, 422, 437, 452, 467, 482):
+   ```tsx
+   <SelectItem value="__none__">Não mapear</SelectItem>
+   ```
 
-- Mostrar TODOS os registros (ou primeiros 50 com scroll)
-- Rows duplicadas: fundo vermelho claro, badge "Duplicado"
-- Rows novas: badge "Novo" verde
+Isso garante que o Radix UI nunca recebe `value=""`, mas o estado interno continua funcionando com `''` para "não mapeado".
 
-### 6. `handleImport` — filtrar bloqueados
-```ts
-const toImport = previewData.filter(r => !r.isDuplicate || r.allowDuplicate);
-const blockedCount = previewData.filter(r => r.isDuplicate && !r.allowDuplicate).length;
-```
-Só insere `toImport`. No final registra `setImportStats({ imported, blocked: blockedCount })`.
-
-### 7. Step "Completo"
-Mostrar:
-- ✅ X registros importados
-- 🚫 Y registros bloqueados por duplicidade de nome
-
-## Resultado
-
-O usuário vê exatamente quais nomes já existem, pode decidir bloquear individualmente ou em massa, e só então confirmar a importação.
+**Nenhuma outra mudança necessária.** O resto do código (parsing, duplicates, import) está correto.
