@@ -69,8 +69,10 @@ Deno.serve(async (req) => {
 
     for (let i = 0; i < leads.length; i++) {
       const lead = leads[i];
-      const emailNorm = (lead.email || '').toLowerCase().trim();
-      const phoneClean = (lead.phone || '').replace(/\D/g, '');
+      const cleanName = (lead.name || '').replace(/^["']|["']$/g, '').trim();
+      const cleanPhone = (lead.phone || '').replace(/^["']|["']$/g, '').trim();
+      const emailNorm = (lead.email || '').replace(/^["']|["']$/g, '').toLowerCase().trim();
+      const phoneClean = cleanPhone.replace(/\D/g, '');
       const phoneSuffix = phoneClean.length >= 9 ? phoneClean.slice(-9) : phoneClean;
 
       try {
@@ -116,16 +118,16 @@ Deno.serve(async (req) => {
             const { data: newContact, error: contactError } = await supabase
               .from('crm_contacts')
               .insert({
-                name: lead.name || 'Sem nome',
+                name: cleanName || 'Sem nome',
                 email: emailNorm || null,
-                phone: lead.phone || null,
+                phone: cleanPhone || null,
                 clint_id: `spreadsheet_import_${timestamp}_${i}`,
               })
               .select('id')
               .single();
 
             if (contactError) {
-              console.error(`Error creating contact for ${lead.name}:`, contactError);
+              console.error(`Error creating contact for ${cleanName}:`, contactError);
               skipped++;
               continue;
             }
@@ -183,7 +185,7 @@ Deno.serve(async (req) => {
 
         // Create deal
         const dealData: any = {
-          name: lead.name || 'Lead importado',
+          name: cleanName || 'Lead importado',
           contact_id: contactId,
           origin_id: origin_id,
           stage_id: firstStageId,
