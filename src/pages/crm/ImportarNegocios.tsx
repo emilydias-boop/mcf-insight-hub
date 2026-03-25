@@ -460,7 +460,7 @@ const ImportarNegocios = () => {
           <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
             <input
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx,.xls"
               onChange={handleFileChange}
               className="hidden"
               id="csv-upload"
