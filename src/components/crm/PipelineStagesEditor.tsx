@@ -302,7 +302,7 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
     }
   };
 
-  if (isLoading) {
+  if (isLoading || crmLoading) {
     return <p className="text-sm text-muted-foreground">Carregando etapas...</p>;
   }
 
