@@ -685,7 +685,7 @@ const Negocios = () => {
           </div>
           
           <div className="flex gap-2 w-full sm:w-auto">
-            {(role === 'admin' || role === 'manager') && (
+            {(role === 'admin' || role === 'manager' || role === 'coordenador') && (
               <>
                 <OutsideDistributionButton />
                 <MovePartnersButton />

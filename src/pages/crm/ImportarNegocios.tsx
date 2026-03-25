@@ -8,6 +8,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
+import * as XLSX from 'xlsx';
+import { useActiveBU } from '@/hooks/useActiveBU';
 import {
   Select,
   SelectContent,
@@ -37,6 +39,9 @@ interface JobStatus {
 }
 
 const ImportarNegocios = () => {
+  const activeBU = useActiveBU();
+  const buKey = activeBU || 'incorporador';
+
   const [file, setFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -48,15 +53,15 @@ const ImportarNegocios = () => {
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
 
-  // Buscar origens filtradas pela BU Incorporador via bu_origin_mapping
+  // Buscar origens filtradas pela BU ativa via bu_origin_mapping
   const { data: origins, isLoading: originsLoading } = useQuery({
-    queryKey: ['import-origins-incorporador'],
+    queryKey: ['import-origins', buKey],
     queryFn: async () => {
-      // 1. Buscar mapeamentos da BU incorporador
+      // 1. Buscar mapeamentos da BU ativa
       const { data: mappings, error: mappingError } = await supabase
         .from('bu_origin_mapping')
         .select('entity_type, entity_id, is_default')
-        .eq('bu', 'incorporador');
+        .eq('bu', buKey);
       if (mappingError) throw mappingError;
 
       const directOriginIds = (mappings || [])
@@ -133,18 +138,39 @@ const ImportarNegocios = () => {
     }
   });
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      if (!selectedFile.name.endsWith('.csv')) {
-        toast.error('Por favor, selecione um arquivo CSV');
+      const ext = selectedFile.name.split('.').pop()?.toLowerCase();
+      if (!['csv', 'xlsx', 'xls'].includes(ext || '')) {
+        toast.error('Formato inválido. Use CSV, XLSX ou XLS');
         return;
       }
       if (selectedFile.size > 50 * 1024 * 1024) {
         toast.error('Arquivo muito grande. Máximo: 50 MB');
         return;
       }
-      setFile(selectedFile);
+
+      if (ext === 'xlsx' || ext === 'xls') {
+        try {
+          const data = await selectedFile.arrayBuffer();
+          const workbook = XLSX.read(data);
+          const csvText = XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]);
+          const csvFile = new File(
+            [csvText],
+            selectedFile.name.replace(/\.[^.]+$/, '.csv'),
+            { type: 'text/csv' }
+          );
+          setFile(csvFile);
+          toast.success('Arquivo XLSX convertido para CSV automaticamente');
+        } catch {
+          toast.error('Erro ao converter XLSX. Verifique o arquivo.');
+          return;
+        }
+      } else {
+        setFile(selectedFile);
+      }
+
       setJobStatus(null);
       setJobId(null);
     }
@@ -434,7 +460,7 @@ const ImportarNegocios = () => {
           <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
             <input
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx,.xls"
               onChange={handleFileChange}
               className="hidden"
               id="csv-upload"
