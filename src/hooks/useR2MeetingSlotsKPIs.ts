@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { startOfDay, endOfDay } from "date-fns";
+import { startOfDay, endOfDay, addHours } from "date-fns";
 
 export interface R2MeetingSlotsKPIs {
   r2Agendadas: number;    // R2 meetings scheduled (not cancelled)
@@ -11,8 +11,10 @@ export function useR2MeetingSlotsKPIs(startDate: Date, endDate: Date) {
   return useQuery({
     queryKey: ["r2-meeting-slots-kpis", startDate.toISOString(), endDate.toISOString()],
     queryFn: async (): Promise<R2MeetingSlotsKPIs> => {
-      const startISO = startOfDay(startDate).toISOString();
-      const endISO = endOfDay(endDate).toISOString();
+      // Corrigir fuso horário BRT (UTC-3): somar 3h para alinhar com useR1CloserMetrics
+      const BRT_OFFSET_HOURS = 3;
+      const startISO = addHours(startOfDay(startDate), BRT_OFFSET_HOURS).toISOString();
+      const endISO = addHours(endOfDay(endDate), BRT_OFFSET_HOURS).toISOString();
 
       // Query meeting_slot_attendees for R2 meetings (meeting_type = 'r2')
       // This counts each attendee correctly (slots can have multiple attendees)
