@@ -267,7 +267,12 @@ export const IncomingWebhookFormDialog = ({
           auth_header_name: values.auth_header_name,
           auth_header_value: values.auth_header_value,
           is_active: values.is_active,
-          ...(duplicateData?.field_mapping ? { field_mapping: duplicateData.field_mapping } : {}),
+          ...(duplicateData?.field_mapping ? { 
+            field_mapping: Object.fromEntries(
+              Object.entries(duplicateData.field_mapping as Record<string, string>)
+                .filter(([key]) => selectedMappings.has(key))
+            )
+          } : {}),
         });
       }
       onOpenChange(false);
