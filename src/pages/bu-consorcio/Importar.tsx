@@ -541,7 +541,7 @@ export default function ImportarConsorcioPage() {
                             <TableCell className="text-muted-foreground">{row.contrato || '—'}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-3">
-                                <span className={`text-xs font-medium ${row.allowDuplicate ? 'text-yellow-600' : 'text-destructive'}`}>
+                                <span className={`text-xs font-medium ${row.allowDuplicate ? 'text-chart-4' : 'text-destructive'}`}>
                                   {row.allowDuplicate ? (
                                     <span className="flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> Permitido</span>
                                   ) : (
