@@ -109,8 +109,17 @@ function parseTextToRows(text: string): { headers: string[]; rawData: any[] } {
     dataLines = lines;
   }
 
+  const stripQuotes = (val: string): string => {
+    const trimmed = val.trim();
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+        (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+      return trimmed.slice(1, -1).trim();
+    }
+    return trimmed;
+  };
+
   const rawData = dataLines.map(line => {
-    const parts = line.split(sep).map(p => p.trim());
+    const parts = line.split(sep).map(p => stripQuotes(p));
     const row: any = {};
     headers.forEach((h, i) => {
       row[h] = parts[i] || '';
@@ -300,9 +309,9 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
         }
       }
       return {
-        name: String(row[columnMapping.name] || ''),
-        email: String(row[columnMapping.email] || ''),
-        phone: String(row[columnMapping.phone] || ''),
+        name: String(row[columnMapping.name] || '').replace(/^["']|["']$/g, '').trim(),
+        email: String(row[columnMapping.email] || '').replace(/^["']|["']$/g, '').trim(),
+        phone: String(row[columnMapping.phone] || '').replace(/^["']|["']$/g, '').trim(),
         extraColumns,
       };
     });

@@ -69,8 +69,10 @@ Deno.serve(async (req) => {
 
     for (let i = 0; i < leads.length; i++) {
       const lead = leads[i];
-      const emailNorm = (lead.email || '').toLowerCase().trim();
-      const phoneClean = (lead.phone || '').replace(/\D/g, '');
+      const cleanName = (lead.name || '').replace(/^["']|["']$/g, '').trim();
+      const cleanPhone = (lead.phone || '').replace(/^["']|["']$/g, '').trim();
+      const emailNorm = (lead.email || '').replace(/^["']|["']$/g, '').toLowerCase().trim();
+      const phoneClean = cleanPhone.replace(/\D/g, '');
       const phoneSuffix = phoneClean.length >= 9 ? phoneClean.slice(-9) : phoneClean;
 
       try {
