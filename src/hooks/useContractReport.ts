@@ -344,7 +344,11 @@ export const useContractReport = (
       }));
       
       // Merge and sort all rows by payment date (DESC)
-      return [...meetingRows, ...unlinkedRows].sort((a, b) => 
+      // When BU filter is active, exclude unlinked rows (no origin to verify BU)
+      const allRows = buOriginIds 
+        ? meetingRows 
+        : [...meetingRows, ...unlinkedRows];
+      return allRows.sort((a, b) => 
         (b.contractPaidAt || '').localeCompare(a.contractPaidAt || '')
       );
     },
