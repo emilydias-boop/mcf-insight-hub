@@ -291,7 +291,15 @@ export const useContractReport = (
         const contactEmail = contact?.email || null;
         const contactPhone = contact?.phone || row.attendee_phone || null;
         const contactTags: string[] = Array.isArray(contact?.tags)
-          ? contact.tags.map((t: any) => (typeof t === 'string' ? t : t?.name)).filter(Boolean)
+          ? contact.tags.map((t: any) => {
+              if (typeof t === 'string') {
+                if (t.startsWith('{')) {
+                  try { const p = JSON.parse(t); return p?.name || t; } catch { return t; }
+                }
+                return t;
+              }
+              return t?.name || String(t);
+            }).filter(Boolean)
           : [];
         const salesChannel = detectSalesChannel(contactEmail, contactTags);
         

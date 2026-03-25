@@ -52,7 +52,15 @@ export const useUniqueDealTags = (options: UseUniqueDealTagsOptions = {}) => {
 
       // Extrair e deduplicar todas as tags (com validação de tipo)
       const allTags = (data || []).flatMap((d) => 
-        (d.tags || []).filter((t): t is string => typeof t === 'string' && t.trim() !== '')
+        (d.tags || []).map((t: any) => {
+          if (typeof t === 'string') {
+            if (t.startsWith('{')) {
+              try { const p = JSON.parse(t); return p?.name || t; } catch { return t; }
+            }
+            return t.trim() || null;
+          }
+          return t?.name || null;
+        }).filter((t): t is string => t !== null && t !== '')
       );
       const uniqueTags = [...new Set(allTags)].sort((a, b) => 
         a.toLowerCase().localeCompare(b.toLowerCase())
