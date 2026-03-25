@@ -60,6 +60,7 @@ export const useContractReport = (
           deal_id,
           contract_paid_at,
           is_partner,
+          booked_by,
           meeting_slots!inner (
             id,
             scheduled_at,
@@ -128,7 +129,30 @@ export const useContractReport = (
         return dateB.localeCompare(dateA);
       });
       
-      // Fetch SDR names from profiles based on owner_id (email)
+      // Fetch SDR profiles from booked_by UUIDs (priority) and owner_id emails (fallback)
+      const bookedByIds = [...new Set(
+        sortedData
+          .map((row: any) => row.booked_by)
+          .filter(Boolean)
+      )];
+      
+      let bookedByMap: Record<string, { full_name: string; email: string }> = {};
+      
+      if (bookedByIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', bookedByIds);
+        
+        if (profiles) {
+          bookedByMap = profiles.reduce((acc: Record<string, { full_name: string; email: string }>, p: any) => {
+            if (p.id) acc[p.id] = { full_name: p.full_name || p.email, email: p.email };
+            return acc;
+          }, {});
+        }
+      }
+      
+      // Fallback: fetch SDR names from profiles based on owner_id (email)
       const sdrEmails = [...new Set(
         sortedData
           .map((row: any) => row.crm_deals?.owner_id)
@@ -196,7 +220,11 @@ export const useContractReport = (
         const stage = deal?.crm_stages;
         const contact = deal?.crm_contacts;
         const customFields = deal?.custom_fields || {};
-        const sdrEmail = deal?.owner_id || '';
+        
+        // SDR: priorizar booked_by (quem agendou), fallback para owner_id
+        const bookedByProfile = row.booked_by ? bookedByMap[row.booked_by] : null;
+        const sdrEmail = bookedByProfile?.email || deal?.owner_id || '';
+        const sdrName = bookedByProfile?.full_name || sdrNameMap[sdrEmail] || sdrEmail;
         
         const contactEmail = contact?.email || null;
         const contactPhone = contact?.phone || row.attendee_phone || null;
@@ -213,7 +241,7 @@ export const useContractReport = (
           leadName: row.attendee_name || 'N/A',
           leadPhone: row.attendee_phone || '',
           sdrEmail,
-          sdrName: sdrNameMap[sdrEmail] || sdrEmail,
+          sdrName,
           originName: origin?.display_name || origin?.name || 'N/A',
           currentStage: stage?.stage_name || 'N/A',
           contractPaidAt: row.contract_paid_at || slot?.scheduled_at || '',
