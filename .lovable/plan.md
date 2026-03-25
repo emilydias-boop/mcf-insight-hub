@@ -1,30 +1,32 @@
 
 
-## Corrigir contagem de contratos no Controle Diego — filtrar por BU
+## Liberar aba Contatos (somente leitura) para SDRs
 
 ### Problema
-O `useContractReport` busca TODOS os `meeting_slot_attendees` com `contract_paid_at` de qualquer BU (Incorporador, Consórcio, Crédito, Leilão, etc.), resultando em 69 contratos. A página de Vendas filtra corretamente por `product_category = 'incorporador'`, mostrando 39.
+SDRs não conseguem ver a aba "Contatos" no CRM porque estão no grupo `agendaOnlyRoles`, que restringe a navegação apenas a Agenda R1 e Negócios.
 
-### Causa raiz
-A query principal em `meeting_slot_attendees` não filtra por origem/BU. Todos os contratos pagos de todas as pipelines aparecem.
+### Alterações
 
-### Solução
-Filtrar os resultados do `useContractReport` para incluir apenas contratos da BU Incorporador:
+#### 1. `src/pages/CRM.tsx` — Adicionar `/crm/contatos` às abas permitidas para SDRs
+- Na lista `allowedTabs` dentro do bloco `isAgendaOnly`, adicionar `'/crm/contatos'`
 
-#### 1. `src/hooks/useContractReport.ts`
-- Na query de `meeting_slot_attendees`, adicionar um filtro por `crm_deals.crm_origins.bu` igual a `'incorporador'` (se o campo `bu` existir na tabela `crm_origins`)
-- **OU** filtrar pelos `origin_id` conhecidos da BU Incorporador
-- **OU** (abordagem mais simples e segura) fazer um filtro client-side após o fetch, removendo rows cuja `originName` não pertença à BU Incorporador
+#### 2. `src/pages/crm/Contatos.tsx` — Ocultar ações de escrita para SDRs
+- Importar `useAuth` e verificar se o role é SDR
+- **Ocultar** para SDRs:
+  - Botão "Sincronizar"
+  - Botão "Novo Contato"
+  - Checkboxes de seleção (coluna + "Selecionar todos")
+  - `BulkActionsBar` (transferir, duplicar)
+  - `SendToPipelineModal`
+  - `DuplicateToInsideDialog`
+  - `ContactFormDialog`
+- **Manter** para SDRs:
+  - Busca, filtros, tabela (somente visualização)
+  - Click na row para abrir `ContactDetailsDrawer` (somente leitura)
 
-#### 2. Abordagem recomendada
-Verificar a estrutura da tabela `crm_origins` para saber se tem um campo `bu`. Se sim, adicionar o filtro na query SQL. Se não, filtrar client-side.
-
-Preciso verificar a tabela `crm_origins` antes de definir a abordagem exata.
-
-### Alterações previstas
-- **`src/hooks/useContractReport.ts`**: Adicionar filtro por BU na query principal e na query de transações Hubla não vinculadas
-- **`src/components/relatorios/ControleDiegoPanel.tsx`**: Possivelmente passar o parâmetro `bu` para o hook
+#### 3. `src/components/crm/ContactDetailsDrawer.tsx` — Verificar se há ações de edição a ocultar
+- Revisar o drawer para ocultar botões de edição/exclusão para SDRs (se existirem)
 
 ### Resultado
-O total de contratos no Controle Diego vai bater com o total de Vendas quando o mesmo período for selecionado.
+SDRs poderão acessar a aba Contatos, buscar e visualizar leads com o drawer de detalhes, mas sem nenhuma ação de criação, edição, movimentação ou seleção em massa.
 
