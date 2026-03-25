@@ -830,6 +830,24 @@ const Negocios = () => {
         onTransfer={() => setTransferDialogOpen(true)}
         onClearSelection={handleClearSelection}
         isTransferring={bulkTransfer.isPending}
+        onDelete={canDelete ? () => setDeleteDialogOpen(true) : undefined}
+        isDeleting={bulkDelete.isPending}
+      />
+      
+      {/* Dialog de confirmação de exclusão em massa */}
+      <DeleteDealsConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        count={selectedDealIds.size}
+        isDeleting={bulkDelete.isPending}
+        onConfirm={() => {
+          bulkDelete.mutate(Array.from(selectedDealIds), {
+            onSuccess: () => {
+              setDeleteDialogOpen(false);
+              handleClearSelection();
+            },
+          });
+        }}
       />
       
       {/* Dialog de transferência em massa */}
