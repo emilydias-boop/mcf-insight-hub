@@ -207,36 +207,6 @@ const ConfiguracoesContent = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-            <div>
-              <p className="font-medium text-foreground">Notificações por Email</p>
-              <p className="text-sm text-muted-foreground">Receba alertas sobre novos contatos e negócios</p>
-            </div>
-            <Button variant="outline" className="border-border">
-              Configurar
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-            <div>
-              <p className="font-medium text-foreground">Integrações</p>
-              <p className="text-sm text-muted-foreground">Conecte o CRM com outras ferramentas</p>
-            </div>
-            <Button variant="outline" className="border-border">
-              Ver Integrações
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-            <div>
-              <p className="font-medium text-foreground">Backup de Dados</p>
-              <p className="text-sm text-muted-foreground">Configure backups automáticos</p>
-            </div>
-            <Button variant="outline" className="border-border">
-              Configurar Backup
-            </Button>
-          </div>
-
           <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-muted/30">
             <div>
               <p className="font-medium text-foreground flex items-center gap-2">
