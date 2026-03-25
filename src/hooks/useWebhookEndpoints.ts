@@ -86,6 +86,7 @@ export const useCreateWebhookEndpoint = () => {
           required_fields: endpoint.required_fields || ['name', 'email'],
           auth_header_name: endpoint.auth_header_name || null,
           auth_header_value: endpoint.auth_header_value || null,
+          fixed_owner_email: endpoint.fixed_owner_email || null,
           is_active: endpoint.is_active ?? true,
         })
         .select()
