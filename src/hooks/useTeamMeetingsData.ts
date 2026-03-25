@@ -63,6 +63,12 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
     const metrics = metricsQuery.data?.metrics || [];
 
     return metrics
+      .filter((m: SdrAgendaMetrics) => {
+        if (validSdrEmails.size > 0) {
+          return validSdrEmails.has(m.sdr_email?.toLowerCase() || '');
+        }
+        return true;
+      })
       .map((m: SdrAgendaMetrics) => {
         const sdrName = sdrNameMap.get(m.sdr_email?.toLowerCase() || '') 
           || m.sdr_email?.split('@')[0] 
@@ -79,7 +85,7 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
         };
       })
       .sort((a, b) => b.agendamentos - a.agendamentos);
-  }, [metricsQuery.data, sdrNameMap]);
+  }, [metricsQuery.data, sdrNameMap, validSdrEmails]);
 
   // Calculate team KPIs from FILTERED SDRs only
   const teamKPIs = useMemo((): TeamKPIs => {
