@@ -40,6 +40,7 @@ interface QuickActionsBlockProps {
 }
 
 export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onDeleted }: QuickActionsBlockProps) => {
+  const { role } = useAuth();
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice, callStatus, currentCallDealId } = useTwilio();
   const updateDeal = useUpdateCRMDeal();
   const { data: stages } = useCRMStages(deal?.origin_id);
