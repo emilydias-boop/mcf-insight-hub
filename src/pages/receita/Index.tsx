@@ -1,10 +1,8 @@
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
 import { ResourceGuard } from "@/components/auth/ResourceGuard";
 
 export default function Receita() {
-  const location = useLocation();
-  const isRootPath = location.pathname === '/receita';
 
   const tabs = [
     { name: "Cursos", path: "/receita/a010" },

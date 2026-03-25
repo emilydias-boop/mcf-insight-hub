@@ -24,7 +24,6 @@ import {
   Users2,
   ShoppingCart,
   Crown,
-  CheckSquare,
   Briefcase,
   Megaphone,
   Monitor,
