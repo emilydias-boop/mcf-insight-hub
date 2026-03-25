@@ -1,22 +1,33 @@
-import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { MessageCircle, User, Phone, Mail, Calendar, CheckCircle2, Clock, Users, ClipboardList, StickyNote } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { useToggleVideoSent } from '@/hooks/useVideoControl';
-import { useLeadJourney } from '@/hooks/useLeadJourney';
-import { useA010Journey } from '@/hooks/useA010Journey';
-import { useLeadPurchaseHistory } from '@/hooks/useLeadPurchaseHistory';
-import { useLeadProfile } from '@/hooks/useLeadProfile';
-import { useLeadNotes, NoteType } from '@/hooks/useLeadNotes';
-import { useState, useEffect } from 'react';
-import { Skeleton } from '@/components/ui/skeleton';
-import { formatCurrency } from '@/lib/formatters';
-import type { KanbanRow } from './ControleDiegoPanel';
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import {
+  MessageCircle,
+  User,
+  Phone,
+  Mail,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Users,
+  ClipboardList,
+  StickyNote,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { useToggleVideoSent } from "@/hooks/useVideoControl";
+import { useLeadJourney } from "@/hooks/useLeadJourney";
+import { useA010Journey } from "@/hooks/useA010Journey";
+import { useLeadPurchaseHistory } from "@/hooks/useLeadPurchaseHistory";
+import { useLeadProfile } from "@/hooks/useLeadProfile";
+import { useLeadNotes, NoteType } from "@/hooks/useLeadNotes";
+import { useState, useEffect } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrency } from "@/lib/formatters";
+import type { KanbanRow } from "./ControleDiegoPanel";
 
 interface ControleDiegoDrawerProps {
   open: boolean;
@@ -27,8 +38,8 @@ interface ControleDiegoDrawerProps {
 }
 
 function formatWhatsAppUrl(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  const number = digits.startsWith('55') ? digits : `55${digits}`;
+  const digits = phone.replace(/\D/g, "");
+  const number = digits.startsWith("55") ? digits : `55${digits}`;
   return `https://wa.me/${number}`;
 }
 
@@ -40,7 +51,7 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between items-start gap-2">
       <span className="text-xs text-muted-foreground shrink-0">{label}</span>
-      <span className="text-xs font-medium text-right">{value || '-'}</span>
+      <span className="text-xs font-medium text-right">{value || "-"}</span>
     </div>
   );
 }
@@ -49,112 +60,124 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 interface FieldDef {
   key: string;
   label: string;
-  format?: 'currency' | 'date' | 'boolean' | 'json';
+  format?: "currency" | "date" | "boolean" | "json";
 }
 
 const PROFILE_CATEGORIES: { title: string; fields: FieldDef[] }[] = [
   {
-    title: 'Dados Pessoais',
+    title: "Dados Pessoais",
     fields: [
-      { key: 'nome_completo', label: 'Nome Completo' },
-      { key: 'cpf', label: 'CPF' },
-      { key: 'data_nascimento', label: 'Nascimento', format: 'date' },
-      { key: 'estado_civil', label: 'Estado Civil' },
-      { key: 'num_filhos', label: 'Filhos' },
-      { key: 'estado_cidade', label: 'Estado/Cidade' },
-      { key: 'profissao', label: 'Profissão' },
-      { key: 'whatsapp', label: 'WhatsApp' },
+      { key: "nome_completo", label: "Nome Completo" },
+      { key: "cpf", label: "CPF" },
+      { key: "data_nascimento", label: "Nascimento", format: "date" },
+      { key: "estado_civil", label: "Estado Civil" },
+      { key: "num_filhos", label: "Filhos" },
+      { key: "estado_cidade", label: "Estado/Cidade" },
+      { key: "profissao", label: "Profissão" },
+      { key: "whatsapp", label: "WhatsApp" },
     ],
   },
   {
-    title: 'Financeiro',
+    title: "Financeiro",
     fields: [
-      { key: 'renda_bruta', label: 'Renda Bruta', format: 'currency' },
-      { key: 'fonte_renda', label: 'Fonte de Renda' },
-      { key: 'faixa_aporte', label: 'Faixa de Aporte', format: 'currency' },
-      { key: 'faixa_aporte_descricao', label: 'Aporte (descrição)' },
-      { key: 'investe', label: 'Investe?', format: 'boolean' },
-      { key: 'valor_investido', label: 'Valor Investido', format: 'currency' },
-      { key: 'corretora', label: 'Corretora' },
-      { key: 'possui_divida', label: 'Possui Dívida?', format: 'boolean' },
-      { key: 'saldo_fgts', label: 'Saldo FGTS', format: 'currency' },
+      { key: "renda_bruta", label: "Renda Bruta", format: "currency" },
+      { key: "fonte_renda", label: "Fonte de Renda" },
+      { key: "faixa_aporte", label: "Faixa de Aporte", format: "currency" },
+      { key: "faixa_aporte_descricao", label: "Aporte (descrição)" },
+      { key: "investe", label: "Investe?", format: "boolean" },
+      { key: "valor_investido", label: "Valor Investido", format: "currency" },
+      { key: "corretora", label: "Corretora" },
+      { key: "possui_divida", label: "Possui Dívida?", format: "boolean" },
+      { key: "saldo_fgts", label: "Saldo FGTS", format: "currency" },
     ],
   },
   {
-    title: 'Patrimônio',
+    title: "Patrimônio",
     fields: [
-      { key: 'is_empresario', label: 'Empresário?', format: 'boolean' },
-      { key: 'porte_empresa', label: 'Porte Empresa' },
-      { key: 'imovel_financiado', label: 'Imóvel Financiado?', format: 'boolean' },
-      { key: 'possui_consorcio', label: 'Consórcio?', format: 'boolean' },
-      { key: 'possui_carro', label: 'Possui Carro?', format: 'boolean' },
-      { key: 'possui_seguros', label: 'Possui Seguros?', format: 'boolean' },
-      { key: 'precisa_capital_giro', label: 'Precisa Capital de Giro?', format: 'boolean' },
-      { key: 'valor_capital_giro', label: 'Valor Capital de Giro', format: 'currency' },
+      { key: "is_empresario", label: "Empresário?", format: "boolean" },
+      { key: "porte_empresa", label: "Porte Empresa" },
+      { key: "imovel_financiado", label: "Imóvel Financiado?", format: "boolean" },
+      { key: "possui_consorcio", label: "Consórcio?", format: "boolean" },
+      { key: "possui_carro", label: "Possui Carro?", format: "boolean" },
+      { key: "possui_seguros", label: "Possui Seguros?", format: "boolean" },
+      { key: "precisa_capital_giro", label: "Precisa Capital de Giro?", format: "boolean" },
+      { key: "valor_capital_giro", label: "Valor Capital de Giro", format: "currency" },
     ],
   },
   {
-    title: 'Interesse & Objetivos',
+    title: "Interesse & Objetivos",
     fields: [
-      { key: 'objetivos_principais', label: 'Objetivos', format: 'json' },
-      { key: 'renda_passiva_meta', label: 'Meta Renda Passiva', format: 'currency' },
-      { key: 'tempo_independencia', label: 'Tempo p/ Independência' },
-      { key: 'interesse_holding', label: 'Interesse em Holding?', format: 'boolean' },
-      { key: 'perfil_indicacao', label: 'Perfil de Indicação' },
-      { key: 'esporte_hobby', label: 'Esporte/Hobby' },
-      { key: 'gosta_futebol', label: 'Gosta de Futebol?', format: 'boolean' },
-      { key: 'time_futebol', label: 'Time' },
-      { key: 'bancos', label: 'Bancos', format: 'json' },
+      { key: "objetivos_principais", label: "Objetivos", format: "json" },
+      { key: "renda_passiva_meta", label: "Meta Renda Passiva", format: "currency" },
+      { key: "tempo_independencia", label: "Tempo p/ Independência" },
+      { key: "interesse_holding", label: "Interesse em Holding?", format: "boolean" },
+      { key: "perfil_indicacao", label: "Perfil de Indicação" },
+      { key: "esporte_hobby", label: "Esporte/Hobby" },
+      { key: "gosta_futebol", label: "Gosta de Futebol?", format: "boolean" },
+      { key: "time_futebol", label: "Time" },
+      { key: "bancos", label: "Bancos", format: "json" },
     ],
   },
 ];
 
 function formatProfileValue(value: unknown, fmt?: string): string {
-  if (value === null || value === undefined || value === '') return '';
-  if (fmt === 'currency') return formatCurrency(Number(value));
-  if (fmt === 'date') {
+  if (value === null || value === undefined || value === "") return "";
+  if (fmt === "currency") return formatCurrency(Number(value));
+  if (fmt === "date") {
     try {
-      return format(new Date(String(value)), 'dd/MM/yyyy', { locale: ptBR });
+      return format(new Date(String(value)), "dd/MM/yyyy", { locale: ptBR });
     } catch {
       return String(value);
     }
   }
-  if (fmt === 'boolean') return value ? 'Sim' : 'Não';
-  if (fmt === 'json') {
-    if (Array.isArray(value)) return value.join(', ');
-    if (typeof value === 'object') return JSON.stringify(value);
+  if (fmt === "boolean") return value ? "Sim" : "Não";
+  if (fmt === "json") {
+    if (Array.isArray(value)) return value.join(", ");
+    if (typeof value === "object") return JSON.stringify(value);
   }
   return String(value);
 }
 
 const NOTE_TYPE_CONFIG: Record<NoteType, { label: string; color: string }> = {
-  manual: { label: 'Manual', color: 'bg-muted text-muted-foreground' },
-  scheduling: { label: 'Agendamento', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-  call: { label: 'Ligação', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
-  closer: { label: 'Closer', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
-  r2: { label: 'R2', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' },
-  qualification: { label: 'Qualificação', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+  manual: { label: "Manual", color: "bg-muted text-muted-foreground" },
+  scheduling: { label: "Agendamento", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  call: { label: "Ligação", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
+  closer: { label: "Closer", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
+  r2: { label: "R2", color: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400" },
+  qualification: {
+    label: "Qualificação",
+    color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  },
 };
 
 export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, videoNotes }: ControleDiegoDrawerProps) {
   const toggleMutation = useToggleVideoSent();
-  const [notes, setNotes] = useState(videoNotes || '');
+  const [notes, setNotes] = useState(videoNotes || "");
   const [sent, setSent] = useState(videoSent);
 
   // Lead journey data
   const { data: journey, isLoading: loadingJourney } = useLeadJourney(contract?.dealId || null);
   const { data: a010, isLoading: loadingA010 } = useA010Journey(contract?.leadEmail, contract?.leadPhone);
-  const { data: purchaseHistory, isLoading: loadingPurchases } = useLeadPurchaseHistory(contract?.leadEmail, contract?.leadPhone);
-  
+  const { data: purchaseHistory, isLoading: loadingPurchases } = useLeadPurchaseHistory(
+    contract?.leadEmail,
+    contract?.leadPhone,
+  );
+
   // Lead profile (anamnese)
-  const { data: profile, isLoading: loadingProfile } = useLeadProfile(contract?.contactId || null, contract?.dealId || null);
-  
+  const { data: profile, isLoading: loadingProfile } = useLeadProfile(
+    contract?.contactId || null,
+    contract?.dealId || null,
+  );
+
   // Lead notes
-  const { data: leadNotes = [], isLoading: loadingNotes } = useLeadNotes(contract?.dealId || null, contract?.id || null);
+  const { data: leadNotes = [], isLoading: loadingNotes } = useLeadNotes(
+    contract?.dealId || null,
+    contract?.id || null,
+  );
 
   useEffect(() => {
     setSent(videoSent);
-    setNotes(videoNotes || '');
+    setNotes(videoNotes || "");
   }, [videoSent, videoNotes, contract?.id]);
 
   if (!contract) return null;
@@ -179,20 +202,28 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
   };
 
   const formatDate = (d: string | null | undefined) => {
-    if (!d) return '-';
-    try { return format(parseISO(d), 'dd/MM/yyyy HH:mm', { locale: ptBR }); } catch { return d; }
+    if (!d) return "-";
+    try {
+      return format(parseISO(d), "dd/MM/yyyy HH:mm", { locale: ptBR });
+    } catch {
+      return d;
+    }
   };
 
   const formatDateShort = (d: string | null | undefined) => {
-    if (!d) return '-';
-    try { return format(parseISO(d), 'dd/MM/yyyy', { locale: ptBR }); } catch { return d; }
+    if (!d) return "-";
+    try {
+      return format(parseISO(d), "dd/MM/yyyy", { locale: ptBR });
+    } catch {
+      return d;
+    }
   };
 
   // Profile filled fields count
   const profileFilledCount = profile
-    ? PROFILE_CATEGORIES.flatMap(c => c.fields).filter(f => {
+    ? PROFILE_CATEGORIES.flatMap((c) => c.fields).filter((f) => {
         const v = (profile as any)[f.key];
-        return v !== null && v !== undefined && v !== '';
+        return v !== null && v !== undefined && v !== "";
       }).length
     : 0;
 
@@ -215,11 +246,32 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
               <InfoRow label="Closer" value={contract.closerName} />
               <InfoRow label="SDR" value={journey?.sdr?.name || contract.sdrName} />
               <InfoRow label="Data Pgto" value={formatDateShort(contract.date)} />
-              <InfoRow label="Pipeline" value={<Badge variant="outline" className="text-[10px]">{contract.originName}</Badge>} />
+              <InfoRow
+                label="Pipeline"
+                value={
+                  <Badge variant="outline" className="text-[10px]">
+                    {contract.originName}
+                  </Badge>
+                }
+              />
               <InfoRow label="Estágio" value={contract.currentStage} />
-              <InfoRow label="Canal" value={<Badge variant="secondary" className="text-[10px]">{contract.salesChannel}</Badge>} />
+              <InfoRow
+                label="Canal"
+                value={
+                  <Badge variant="secondary" className="text-[10px]">
+                    {contract.salesChannel}
+                  </Badge>
+                }
+              />
               {contract.isRefunded && (
-                <InfoRow label="Status" value={<Badge variant="destructive" className="text-[10px]">Reembolsado</Badge>} />
+                <InfoRow
+                  label="Status"
+                  value={
+                    <Badge variant="destructive" className="text-[10px]">
+                      Reembolsado
+                    </Badge>
+                  }
+                />
               )}
             </div>
           </div>
@@ -245,7 +297,7 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
                   <Button
                     size="sm"
                     className="w-full bg-green-600 hover:bg-green-700 text-white h-8 text-xs"
-                    onClick={() => window.open(formatWhatsAppUrl(contract.leadPhone), '_blank')}
+                    onClick={() => window.open(formatWhatsAppUrl(contract.leadPhone), "_blank")}
                   >
                     <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
                     Enviar vídeo via WhatsApp
@@ -270,9 +322,13 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
                 />
                 <label htmlFor="video-sent" className="flex items-center gap-2 text-sm font-medium cursor-pointer">
                   {sent ? (
-                    <><CheckCircle2 className="h-4 w-4 text-green-600" /> Vídeo enviado</>
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-green-600" /> Vídeo enviado
+                    </>
                   ) : (
-                    <><Clock className="h-4 w-4 text-muted-foreground" /> Pendente de envio</>
+                    <>
+                      <Clock className="h-4 w-4 text-muted-foreground" /> Pendente de envio
+                    </>
                   )}
                 </label>
               </div>
@@ -301,7 +357,9 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
               <ClipboardList className="h-4 w-4 text-primary" />
               <SectionTitle>Perfil do Lead</SectionTitle>
               {profileFilledCount > 0 && (
-                <Badge variant="secondary" className="text-[10px]">{profileFilledCount} campos</Badge>
+                <Badge variant="secondary" className="text-[10px]">
+                  {profileFilledCount} campos
+                </Badge>
               )}
             </div>
             {loadingProfile ? (
@@ -311,20 +369,24 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
               </div>
             ) : profile && profileFilledCount > 0 ? (
               <div className="space-y-3">
-                {PROFILE_CATEGORIES.map(cat => {
-                  const filledFields = cat.fields.filter(f => {
+                {PROFILE_CATEGORIES.map((cat) => {
+                  const filledFields = cat.fields.filter((f) => {
                     const v = (profile as any)[f.key];
-                    return v !== null && v !== undefined && v !== '';
+                    return v !== null && v !== undefined && v !== "";
                   });
                   if (filledFields.length === 0) return null;
                   return (
                     <div key={cat.title} className="rounded-lg border border-border bg-card p-3">
-                      <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">{cat.title}</h4>
+                      <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                        {cat.title}
+                      </h4>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                        {filledFields.map(f => (
+                        {filledFields.map((f) => (
                           <div key={f.key} className="min-w-0">
                             <span className="text-[10px] text-muted-foreground">{f.label}</span>
-                            <p className="text-xs text-foreground break-words">{formatProfileValue((profile as any)[f.key], f.format)}</p>
+                            <p className="text-xs text-foreground break-words">
+                              {formatProfileValue((profile as any)[f.key], f.format)}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -334,8 +396,14 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
                 {profile.lead_score != null && (
                   <div className="flex items-center gap-2 px-1">
                     <span className="text-[10px] text-muted-foreground">Lead Score:</span>
-                    <Badge variant="outline" className="text-[10px]">{profile.lead_score}</Badge>
-                    {profile.icp_level && <Badge variant="secondary" className="text-[10px]">{profile.icp_level}</Badge>}
+                    <Badge variant="outline" className="text-[10px]">
+                      {profile.lead_score}
+                    </Badge>
+                    {profile.icp_level && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {profile.icp_level}
+                      </Badge>
+                    )}
                   </div>
                 )}
               </div>
@@ -352,7 +420,9 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
               <StickyNote className="h-4 w-4 text-primary" />
               <SectionTitle>Notas do Lead</SectionTitle>
               {leadNotes.length > 0 && (
-                <Badge variant="secondary" className="text-[10px]">{leadNotes.length}</Badge>
+                <Badge variant="secondary" className="text-[10px]">
+                  {leadNotes.length}
+                </Badge>
               )}
             </div>
             {loadingNotes ? (
@@ -362,20 +432,16 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
               </div>
             ) : leadNotes.length > 0 ? (
               <div className="rounded-lg border border-border divide-y divide-border max-h-[300px] overflow-y-auto">
-                {leadNotes.map(note => {
+                {leadNotes.map((note) => {
                   const cfg = NOTE_TYPE_CONFIG[note.type] || NOTE_TYPE_CONFIG.manual;
                   return (
                     <div key={note.id} className="p-3 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Badge className={`text-[10px] px-1.5 py-0 ${cfg.color} border-0`}>
-                          {cfg.label}
-                        </Badge>
+                        <Badge className={`text-[10px] px-1.5 py-0 ${cfg.color} border-0`}>{cfg.label}</Badge>
                         {note.author && (
                           <span className="text-[10px] text-muted-foreground font-medium">{note.author}</span>
                         )}
-                        <span className="text-[10px] text-muted-foreground ml-auto">
-                          {formatDate(note.created_at)}
-                        </span>
+                        <span className="text-[10px] text-muted-foreground ml-auto">{formatDate(note.created_at)}</span>
                       </div>
                       <p className="text-xs text-foreground whitespace-pre-wrap break-words">{note.content}</p>
                     </div>
@@ -412,9 +478,13 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
                     <Calendar className="h-3.5 w-3.5 text-blue-500" />
                     <span className="text-xs font-medium">R1</span>
                     {journey?.r1Meeting ? (
-                      <Badge variant="outline" className="text-[10px]">{journey.r1Meeting.status}</Badge>
+                      <Badge variant="outline" className="text-[10px]">
+                        {journey.r1Meeting.status}
+                      </Badge>
                     ) : (
-                      <Badge variant="secondary" className="text-[10px]">Sem dados</Badge>
+                      <Badge variant="secondary" className="text-[10px]">
+                        Sem dados
+                      </Badge>
                     )}
                   </div>
                   {journey?.r1Meeting && (
@@ -422,9 +492,7 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
                       <p className="text-[11px] text-muted-foreground">
                         Data: {formatDate(journey.r1Meeting.scheduledAt)}
                       </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Closer: {journey.r1Meeting.closer.name}
-                      </p>
+                      <p className="text-[11px] text-muted-foreground">Closer: {journey.r1Meeting.closer.name}</p>
                       {journey.r1Meeting.bookedBy && (
                         <p className="text-[11px] text-muted-foreground">
                           Agendado por: {journey.r1Meeting.bookedBy.name}
@@ -440,15 +508,15 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
                     <div className="flex items-center gap-2">
                       <Calendar className="h-3.5 w-3.5 text-purple-500" />
                       <span className="text-xs font-medium">R2</span>
-                      <Badge variant="outline" className="text-[10px]">{journey.r2Meeting.status}</Badge>
+                      <Badge variant="outline" className="text-[10px]">
+                        {journey.r2Meeting.status}
+                      </Badge>
                     </div>
                     <div className="pl-5 space-y-0.5">
                       <p className="text-[11px] text-muted-foreground">
                         Data: {formatDate(journey.r2Meeting.scheduledAt)}
                       </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Closer: {journey.r2Meeting.closer.name}
-                      </p>
+                      <p className="text-[11px] text-muted-foreground">Closer: {journey.r2Meeting.closer.name}</p>
                     </div>
                   </div>
                 )}
@@ -470,13 +538,22 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
                 <InfoRow label="Ticket médio" value={`R$ ${a010.averageTicket.toFixed(2)}`} />
                 <InfoRow label="1ª compra" value={formatDateShort(a010.firstPurchaseDate)} />
                 <InfoRow label="Última" value={formatDateShort(a010.lastPurchaseDate)} />
-                <InfoRow label="Fonte" value={<Badge variant="secondary" className="text-[10px]">{a010.source}</Badge>} />
+                <InfoRow
+                  label="Fonte"
+                  value={
+                    <Badge variant="secondary" className="text-[10px]">
+                      {a010.source}
+                    </Badge>
+                  }
+                />
                 {a010.products.length > 0 && (
                   <div className="pt-1">
                     <p className="text-[10px] text-muted-foreground mb-1">Produtos:</p>
                     <div className="flex flex-wrap gap-1">
                       {a010.products.map((p, i) => (
-                        <Badge key={i} variant="outline" className="text-[10px]">{p}</Badge>
+                        <Badge key={i} variant="outline" className="text-[10px]">
+                          {p}
+                        </Badge>
                       ))}
                     </div>
                   </div>
@@ -502,17 +579,21 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
                       <p className="text-xs font-medium truncate">{tx.product_name}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="text-[10px] text-muted-foreground">{formatDateShort(tx.sale_date)}</span>
-                        {tx.source && <Badge variant="outline" className="text-[10px] px-1 py-0">{tx.source}</Badge>}
+                        {tx.source && (
+                          <Badge variant="outline" className="text-[10px] px-1 py-0">
+                            {tx.source}
+                          </Badge>
+                        )}
                         <Badge
-                          variant={tx.sale_status === 'completed' ? 'default' : 'secondary'}
+                          variant={tx.sale_status === "completed" ? "default" : "secondary"}
                           className="text-[10px] px-1 py-0"
                         >
-                          {tx.sale_status === 'completed' ? 'Pago' : tx.sale_status}
+                          {tx.sale_status === "completed" ? "Pago" : tx.sale_status}
                         </Badge>
                       </div>
                     </div>
                     <span className="text-xs font-semibold text-primary whitespace-nowrap">
-                      R$ {tx.product_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {tx.product_price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 ))}
