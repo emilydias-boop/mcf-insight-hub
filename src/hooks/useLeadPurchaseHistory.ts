@@ -41,7 +41,7 @@ export function useLeadPurchaseHistory(email: string | null | undefined, phone?:
         .limit(20);
 
       if (error) throw error;
-      return (data || []) as PurchaseHistoryItem[];
+      return deduplicatePurchases((data || []) as PurchaseHistoryItem[]);
     },
     enabled: hasEmail || hasPhone,
   });
