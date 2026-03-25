@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Upload, FileSpreadsheet, Search, CheckCircle2, XCircle, Download, Tag, ClipboardPaste, UserPlus, Loader2, ArrowRightLeft, Users } from 'lucide-react';
+import { Upload, FileSpreadsheet, Search, CheckCircle2, XCircle, Download, Tag, ClipboardPaste, UserPlus, Loader2, ArrowRightLeft, Users, GitBranch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useSdrsFromSquad } from '@/hooks/useSdrsFromSquad';
+import { BusinessUnit } from '@/hooks/useMyBU';
 
 type Step = 'upload' | 'mapping' | 'results';
 type StatusFilter = 'all' | 'found_in_current' | 'found_elsewhere' | 'not_found';
@@ -125,9 +126,10 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   deals: any[];
   originId?: string;
+  activeBU?: BusinessUnit | null;
 }
 
-export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }: Props) {
+export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, activeBU }: Props) {
   const [step, setStep] = useState<Step>('upload');
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawData, setRawData] = useState<any[]>([]);
@@ -143,12 +145,39 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
   const [customTag, setCustomTag] = useState('');
   const [selectedStageId, setSelectedStageId] = useState<string>('__default__');
   const [assignMode, setAssignMode] = useState<AssignMode>('single');
+  const [selectedDestinationOriginId, setSelectedDestinationOriginId] = useState<string>('');
 
   const createNotFoundMutation = useCreateNotFoundDeals();
   const bulkTransfer = useBulkTransfer();
 
   // SDRs do Consórcio for distribution
   const { data: consorcioSdrs } = useSdrsFromSquad('consorcio');
+
+  // Query BU-filtered pipeline origins (for destination selector)
+  const { data: buFilteredOrigins } = useQuery({
+    queryKey: ['bu-filtered-origins', activeBU],
+    queryFn: async () => {
+      if (!activeBU) return [];
+      // Get entity_ids from bu_origin_mapping for this BU (origin type)
+      const { data: mappings } = await supabase
+        .from('bu_origin_mapping')
+        .select('entity_id, entity_type')
+        .eq('bu', activeBU);
+      if (!mappings?.length) return [];
+      const originIds = mappings.filter(m => m.entity_type === 'origin').map(m => m.entity_id);
+      if (!originIds.length) return [];
+      const { data: origins } = await supabase
+        .from('crm_origins')
+        .select('id, name')
+        .in('id', originIds)
+        .order('name');
+      return origins || [];
+    },
+    enabled: !!activeBU && open,
+  });
+
+  // The effective destination origin: user-selected > prop > nothing
+  const activeOriginId = selectedDestinationOriginId || originId;
 
   // Query available SDRs/Closers
   const { data: availableUsers, isLoading: loadingUsers } = useQuery({
@@ -166,17 +195,17 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
 
   // Query stages for the current pipeline
   const { data: pipelineStages } = useQuery({
-    queryKey: ['pipeline-stages', originId],
+    queryKey: ['pipeline-stages', activeOriginId],
     queryFn: async () => {
-      if (!originId) return [];
+      if (!activeOriginId) return [];
       const { data } = await supabase
         .from('crm_stages')
         .select('id, stage_name, stage_order')
-        .eq('origin_id', originId)
+        .eq('origin_id', activeOriginId)
         .order('stage_order', { ascending: true });
       return data || [];
     },
-    enabled: !!originId && open && step === 'results',
+    enabled: !!activeOriginId && open && step === 'results',
   });
 
   // Detect extra columns (not mapped to name/email/phone)
@@ -255,8 +284,8 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
       return;
     }
 
-    if (!originId) {
-      toast.error('Pipeline não identificada');
+    if (!activeOriginId) {
+      toast.error('Selecione uma pipeline de destino');
       return;
     }
 
@@ -282,7 +311,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     try {
       const compared = await compareSpreadsheetGlobal(
         rows,
-        originId,
+        activeOriginId,
         (current, total) => setBatchProgress({ current, total })
       );
 
@@ -306,12 +335,12 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
       setIsComparing(false);
       setBatchProgress(null);
     }
-  }, [rawData, columnMapping, originId, headers]);
+  }, [rawData, columnMapping, activeOriginId, headers]);
 
   // Smart import: handle all 3 categories
   const handleSmartImport = useCallback(async () => {
-    if (!originId) {
-      toast.error('Pipeline não identificada');
+    if (!activeOriginId) {
+      toast.error('Selecione uma pipeline de destino');
       return;
     }
 
@@ -460,7 +489,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                   phone: r.localContactPhone || r.excelPhone,
                   contact_id: r.contactId!,
                 })),
-                origin_id: originId,
+                origin_id: activeOriginId,
                 owner_email: sdr.email,
                 owner_profile_id: sdr.id,
                 tags,
@@ -483,7 +512,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
           const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
             body: {
               leads: elseLeads,
-              origin_id: originId,
+              origin_id: activeOriginId,
               owner_email: sdr.email,
               owner_profile_id: sdr.id,
               tags,
@@ -513,7 +542,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
             const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
               body: {
                 leads: leads.map(r => ({ name: r.excelName, email: r.excelEmail, phone: r.excelPhone })),
-                origin_id: originId,
+                origin_id: activeOriginId,
                 owner_email: sdr.email,
                 owner_profile_id: sdr.id,
                 tags,
@@ -531,7 +560,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
           const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
             body: {
               leads: newLeads,
-              origin_id: originId,
+              origin_id: activeOriginId,
               owner_email: sdr.email,
               owner_profile_id: sdr.id,
               tags,
@@ -557,7 +586,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
       setIsImporting(false);
       setBatchProgress(null);
     }
-  }, [originId, selectedOwner, assignMode, consorcioSdrs, availableUsers, results, bulkTransfer, customTag, selectedStageId]);
+  }, [activeOriginId, selectedOwner, assignMode, consorcioSdrs, availableUsers, results, bulkTransfer, customTag, selectedStageId]);
 
   // Counts
   const counts = useMemo(() => {
@@ -635,6 +664,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
     setCustomTag('');
     setSelectedStageId('__default__');
     setAssignMode('single');
+    setSelectedDestinationOriginId('');
   };
 
   const getStatusIcon = (status: SpreadsheetRow['matchStatus']) => {
@@ -802,6 +832,29 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }
                 <XCircle className="h-3 w-3 mr-1" /> Novos: {counts.notFound}
               </Badge>
             </div>
+
+            {/* Destination pipeline selector (only when BU has multiple origins) */}
+            {activeBU && buFilteredOrigins && buFilteredOrigins.length > 1 && (
+              <div className="flex items-center gap-3 p-2 border rounded-lg bg-muted/30">
+                <GitBranch className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="flex flex-col flex-1 gap-1">
+                  <label className="text-xs font-medium">Pipeline de destino</label>
+                  <Select
+                    value={activeOriginId || ''}
+                    onValueChange={setSelectedDestinationOriginId}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Selecionar pipeline de destino" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {buFilteredOrigins.map((origin: any) => (
+                        <SelectItem key={origin.id} value={origin.id}>{origin.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
 
             {/* Tag + Stage */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
