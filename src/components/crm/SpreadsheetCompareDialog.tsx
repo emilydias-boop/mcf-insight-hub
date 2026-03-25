@@ -586,7 +586,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       setIsImporting(false);
       setBatchProgress(null);
     }
-  }, [originId, selectedOwner, assignMode, consorcioSdrs, availableUsers, results, bulkTransfer, customTag, selectedStageId]);
+  }, [activeOriginId, selectedOwner, assignMode, consorcioSdrs, availableUsers, results, bulkTransfer, customTag, selectedStageId]);
 
   // Counts
   const counts = useMemo(() => {
