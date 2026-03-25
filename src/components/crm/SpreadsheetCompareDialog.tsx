@@ -284,8 +284,8 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       return;
     }
 
-    if (!originId) {
-      toast.error('Pipeline não identificada');
+    if (!activeOriginId) {
+      toast.error('Selecione uma pipeline de destino');
       return;
     }
 
@@ -311,7 +311,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     try {
       const compared = await compareSpreadsheetGlobal(
         rows,
-        originId,
+        activeOriginId,
         (current, total) => setBatchProgress({ current, total })
       );
 
@@ -335,12 +335,12 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       setIsComparing(false);
       setBatchProgress(null);
     }
-  }, [rawData, columnMapping, originId, headers]);
+  }, [rawData, columnMapping, activeOriginId, headers]);
 
   // Smart import: handle all 3 categories
   const handleSmartImport = useCallback(async () => {
-    if (!originId) {
-      toast.error('Pipeline não identificada');
+    if (!activeOriginId) {
+      toast.error('Selecione uma pipeline de destino');
       return;
     }
 
