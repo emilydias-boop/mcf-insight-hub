@@ -159,9 +159,10 @@ Deno.serve(async (req) => {
           } else {
             // Deal sem reunião: atualiza stage, owner e tags normalmente
             updateData = {
-              stage_id: firstStageId,
               tags: finalTags,
             };
+            // Only update stage if explicitly requested via customStageId
+            if (customStageId) updateData.stage_id = firstStageId;
             if (owner_email) updateData.owner_id = owner_email;
             if (owner_profile_id) updateData.owner_profile_id = owner_profile_id;
           }
