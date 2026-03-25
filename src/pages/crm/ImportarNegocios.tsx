@@ -40,7 +40,7 @@ interface JobStatus {
 
 const ImportarNegocios = () => {
   const activeBU = useActiveBU();
-  const buKey = activeBU?.slug || 'incorporador';
+  const buKey = activeBU || 'incorporador';
 
   const [file, setFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
