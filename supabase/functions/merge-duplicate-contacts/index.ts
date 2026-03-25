@@ -90,23 +90,27 @@ serve(async (req) => {
       const { data: duplicateEmails } = await supabase
         .rpc('get_duplicate_contact_emails', { limit_count: limit });
 
+      // Em dry_run, processar apenas amostra para evitar timeout (50 grupos)
+      const emailsToProcess = dry_run ? (duplicateEmails || []).slice(0, 50) : (duplicateEmails || []);
       const emailGroupsBefore = results.merged;
-      for (const { email } of duplicateEmails || []) {
+      for (const { email } of emailsToProcess) {
         await processEmailGroup(supabase, email, dry_run, results);
       }
       results.email_groups_merged = results.merged - emailGroupsBefore;
-      console.log(`📧 Email merge: ${results.email_groups_merged} grupos`);
+      console.log(`📧 Email merge: ${results.email_groups_merged} grupos processados de ${duplicateEmails?.length || 0} total`);
 
       // Step 2: Merge por telefone
       const { data: duplicatePhones } = await supabase
         .rpc('get_duplicate_contact_phones', { limit_count: limit });
 
+      // Em dry_run, processar apenas amostra para evitar timeout (50 grupos)
+      const phonesToProcess = dry_run ? (duplicatePhones || []).slice(0, 50) : (duplicatePhones || []);
       const phoneGroupsBefore = results.merged;
-      for (const { phone_suffix } of duplicatePhones || []) {
+      for (const { phone_suffix } of phonesToProcess) {
         await processPhoneGroup(supabase, phone_suffix, dry_run, results);
       }
       results.phone_groups_merged = results.merged - phoneGroupsBefore;
-      console.log(`📱 Phone merge: ${results.phone_groups_merged} grupos`);
+      console.log(`📱 Phone merge: ${results.phone_groups_merged} grupos processados de ${duplicatePhones?.length || 0} total`);
 
       // Step 3: Consolidar deals duplicados na mesma origin
       const dealsBefore = results.deals_consolidated;
