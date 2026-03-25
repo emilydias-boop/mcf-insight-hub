@@ -1,33 +1,32 @@
 
 
-## Corrigir perfil do lead não aparecendo no drawer do Controle Diego
+## Corrigir Filtros do Controle Diego
 
 ### Problema
-O perfil do lead (anamnese) não está aparecendo no drawer, mesmo quando o lead veio por webhook de anamnese e tem perfil preenchido. O `useLeadProfile` busca apenas por `contact_id`, mas em alguns casos o `lead_profiles` pode estar vinculado pelo `deal_id` em vez do `contact_id`, ou o `contact_id` no deal está nulo.
+O filtro de **Pipeline** (originId) nunca é aplicado -- está definido no `ContractReportFilters` mas nunca é usado na query do Supabase. O `crm_deals` não usa `!inner` join, então filtrar via PostgREST nessa relação não exclui rows do pai.
 
 ### Solução
-Alterar `useLeadProfile` para aceitar ambos os identificadores (`contactId` e `dealId`) e fazer fallback:
-1. Buscar por `contact_id` primeiro
-2. Se não encontrar, buscar por `deal_id`
+Aplicar o filtro de `originId` **client-side** no `ControleDiegoPanel.tsx`, já que `crm_deals` não é inner join. Também adicionar `originId` ao `ContractReportRow` e `KanbanRow` para permitir a filtragem.
 
 ### Alterações
 
-#### 1. `src/hooks/useLeadProfile.ts`
-- Adicionar parâmetro `dealId` opcional
-- Buscar primeiro por `contact_id`, se não retornar resultado, buscar por `deal_id`
-- Query key inclui ambos os IDs
+#### 1. `src/hooks/useContractReport.ts`
+- Adicionar `originId: string | null` ao `ContractReportRow`
+- No mapeamento (linha ~235), incluir: `originId: origin?.id || null`
 
-#### 2. `src/components/relatorios/ControleDiegoDrawer.tsx`
-- Passar `dealId` para `useLeadProfile`:
+#### 2. `src/components/relatorios/ControleDiegoPanel.tsx`
+- Adicionar `originId: string | null` ao `KanbanRow`
+- Mapear `originId: row.originId` na transformação dos dados
+- Remover `originId` do objeto `filters` passado ao hook (não é usado server-side)
+- Adicionar filtro client-side no `rows` useMemo:
   ```typescript
-  const { data: profile, isLoading: loadingProfile } = useLeadProfile(contract?.contactId || null, contract?.dealId || null);
+  if (selectedOriginId !== 'all') {
+    filtered = filtered.filter(r => r.originId === selectedOriginId);
+  }
   ```
-
-#### 3. `src/components/crm/LeadProfileSection.tsx`
-- Atualizar para também aceitar `dealId` e passá-lo ao hook (manter compatibilidade)
+- Adicionar `selectedOriginId` ao array de dependências do `rows` useMemo
 
 ### Arquivos modificados
-- `src/hooks/useLeadProfile.ts` — aceitar `dealId`, fallback query
-- `src/components/relatorios/ControleDiegoDrawer.tsx` — passar `dealId`
-- `src/components/crm/LeadProfileSection.tsx` — passar `dealId` (se disponível)
+- `src/hooks/useContractReport.ts` -- adicionar `originId` ao row
+- `src/components/relatorios/ControleDiegoPanel.tsx` -- aplicar filtro de origin client-side e corrigir deps do useMemo
 
