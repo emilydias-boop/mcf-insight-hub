@@ -1,48 +1,61 @@
 
 
-## Remoção completa das BUs Crédito, Projetos e Leilão
+## Limpeza de rotas e módulos mortos
 
-### Arquivos a deletar (21 + 2 pastas edge functions)
+### Rotas a remover
 
-**Páginas BU Crédito (7):** `src/pages/bu-credito/` — Index, Overview, Deals, Socios, Clientes, Vendas, Relatorios
+| Rota | Arquivos | Motivo |
+|------|----------|--------|
+| `/custos/*` (3 sub-rotas) | 4 arquivos em `src/pages/custos/` | 100% mock data |
+| `/receita` index (Overview) | `src/pages/receita/Overview.tsx` | Mock KPIs hardcoded |
+| `/receita/por-canal` | `src/pages/receita/PorCanal.tsx` | Mock `MOCK_CANAIS_RECEITA` |
+| `/alertas` | `src/pages/Alertas.tsx` | Mock `MOCK_ALERTAS` |
+| `/tarefas` | `src/pages/Tarefas.tsx` + `src/components/tasks/*` + `src/hooks/useTaskSpaces.ts` | Stub placeholder |
 
-**Páginas BU Projetos (3):** `src/pages/bu-projetos/` — Index, Vendas, Relatorios
+### Rotas de receita que FICAM (dados reais)
+- `/receita/a010`, `/receita/transacoes`, `/receita/importar-hubla`, `/receita/auditoria`
+- O layout wrapper `src/pages/receita/Index.tsx` fica, mas o index redirect muda de `ReceitaOverview` para `A010`
 
-**Páginas BU Outros (2):** `src/pages/bu-outros/` — Index, Vendas
+### Arquivos a deletar (16 arquivos)
+1. `src/pages/custos/` — 4 arquivos (Index, Overview, Despesas, PorCategoria)
+2. `src/pages/receita/Overview.tsx` — mock KPIs
+3. `src/pages/receita/PorCanal.tsx` — mock canal data
+4. `src/pages/Alertas.tsx` — mock alertas
+5. `src/pages/Tarefas.tsx` — stub
+6. `src/components/tasks/` — ~3 arquivos (TaskSpacesSidebar, CreateTaskSpaceDialog, etc.)
+7. `src/hooks/useTaskSpaces.ts` — hook do módulo tarefas
+8. `src/pages/EfeitoAlavanca.tsx` — órfã (sem rota)
+9. `src/hooks/useEvolutionData.ts` — não importado por ninguém
+10. `src/data/evolutionMockData.ts` — não importado por ninguém
 
-**Páginas legado (3):** `src/pages/Credito.tsx`, `src/pages/Projetos.tsx`, `src/pages/Leilao.tsx`
+### Edge Functions mortas (5 pastas)
+- `cleanup-backfill-partners/`, `fix-null-stages/`, `fix-backfill-stages/`, `fix-r2-ownership/`, `reconcile-clint-ids/`
 
-**Hooks/tipos (2):** `src/hooks/useCreditoData.ts`, `src/types/credito.ts`
-
-**Edge Functions (2 pastas):** `supabase/functions/webhook-projetos/`, `supabase/functions/webhook-leilao/`
-
-### Arquivos a editar (4)
+### Arquivos a editar
 
 **`src/App.tsx`:**
-- Linhas 45-47: remover imports Projetos, Credito, Leilao
-- Linhas 104-119: remover imports BU Crédito, BU Projetos, BU Outros
-- Linhas 230-231: remover rotas `/projetos` e `/credito`
-- Linhas 233-305: remover todas as rotas bu-credito, bu-projetos, bu-outros, leilao
+- Remover imports: `Custos`, `CustosOverview`, `CustosDespesas`, `CustosPorCategoria`, `ReceitaOverview`, `ReceitaPorCanal`, `Alertas`, `Tarefas`
+- Remover rotas linhas 174-178 (custos), 181 (alertas), 243 (tarefas)
+- Remover sub-rotas `ReceitaOverview` (166) e `por-canal` (169)
+- Mudar index de receita: `<Route index element={<Navigate to="a010" replace />} />`
+
+**`src/pages/receita/Index.tsx`:**
+- Remover tabs "Visão Geral" e "Por Canal" do array de tabs
 
 **`src/components/layout/AppSidebar.tsx`:**
-- Linhas 8-10: remover imports `FolderKanban`, `CreditCard`, `Gavel`
-- Linhas 157-199: remover blocos sidebar BU Crédito, BU Projetos, Leilão
-- Linhas 360-362: remover `credito`, `projetos`, `leilao` do `BU_CRM_BASE_PATH`
-- Linha 368: remover `credito`, `projetos`, `leilao` do array `buPriority`
+- Remover itens sidebar: "Custos", "Despesas", "Alertas", "Tarefas"
 
-**`src/pages/Home.tsx`:**
-- Linha 6: remover imports `CreditCard`, `Gavel`
-- Linhas 23-34: remover entradas `credito` e `leilao` do `BU_CONFIG`
-- Linha 93: mudar grid de `lg:grid-cols-4` para `lg:grid-cols-2`
-- Linha 94: mudar array de `['incorporador', 'consorcio', 'credito', 'leilao']` para `['incorporador', 'consorcio']`
+**`src/components/dashboard/RealTimeAlerts.tsx`:**
+- Mudar `navigate('/alertas')` para não navegar (ou remover o link)
 
 **`supabase/config.toml`:**
-- Linhas 213-217: remover `[functions.webhook-projetos]` e `[functions.webhook-leilao]`
+- Remover entradas das 5 edge functions mortas
 
-### O que permanece intacto
-- Tipo `BusinessUnit` (com credito, projetos, leilao no enum)
-- `BUContext`, `useMyBU`, `useActiveBU`, `BUCRMLayout`
-- Admin configs (ConfiguracaoBU, UserDetailsDrawer)
-- Tabelas do banco (credit_products, etc.)
-- BU Consórcio, Incorporador, Marketing — zero impacto
+**`src/data/mockData.ts`:**
+- Limpar exports não referenciados após remoção dos consumidores
+
+### O que NÃO muda
+- Todas as rotas ativas (CRM, Consórcio, Incorporador, Marketing, RH, Patrimônio, Fechamento SDR, Playbook, Cobranças, Chairman, Admin)
+- Hook `useRealtimeAlerts` — continua funcionando para o dropdown de alertas no header
+- Dados reais de receita (A010, Transações, Importar, Auditoria)
 
