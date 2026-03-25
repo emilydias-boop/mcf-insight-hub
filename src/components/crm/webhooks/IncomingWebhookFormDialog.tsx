@@ -498,6 +498,40 @@ export const IncomingWebhookFormDialog = ({
             )}
 
             <div className="border-t pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Lock className="h-4 w-4 text-muted-foreground" />
+                <h4 className="text-sm font-medium">SDR Fixo (opcional)</h4>
+              </div>
+              <FormField
+                control={form.control}
+                name="fixed_owner_email"
+                render={({ field }) => (
+                  <FormItem>
+                    <Select onValueChange={field.onChange} value={field.value || ''}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Distribuição automática" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">Distribuição automática</SelectItem>
+                        {activeProfiles?.map((profile) => (
+                          <SelectItem key={profile.id} value={profile.email || ''}>
+                            {profile.full_name || profile.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Se selecionado, todos os leads deste webhook serão atribuídos a este SDR (sem rodízio)
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="border-t pt-4">
               <h4 className="text-sm font-medium mb-3">Autenticação (opcional)</h4>
               <div className="grid grid-cols-2 gap-3">
                 <FormField
