@@ -31,6 +31,18 @@ const deleteSingleDeal = async (id: string) => {
 
   await supabase.from('calls').delete().eq('deal_id', id);
 
+  // Limpar consórcio pending registrations e seus documentos
+  const { data: pendingRegs } = await supabase
+    .from('consorcio_pending_registrations')
+    .select('id')
+    .eq('deal_id', id);
+
+  if (pendingRegs && pendingRegs.length > 0) {
+    const regIds = pendingRegs.map(r => r.id);
+    await supabase.from('consortium_documents').delete().in('pending_registration_id', regIds);
+    await supabase.from('consorcio_pending_registrations').delete().in('id', regIds);
+  }
+
   const { error } = await supabase.from('crm_deals').delete().eq('id', id);
   if (error) throw error;
 };
