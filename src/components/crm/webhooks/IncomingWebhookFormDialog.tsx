@@ -184,6 +184,7 @@ export const IncomingWebhookFormDialog = ({
           required_fields: endpoint.required_fields || ['name', 'email'],
           auth_header_name: endpoint.auth_header_name || '',
           auth_header_value: endpoint.auth_header_value || '',
+          fixed_owner_email: endpoint.fixed_owner_email || '',
           is_active: endpoint.is_active,
         });
       } else if (duplicateData) {
@@ -196,6 +197,7 @@ export const IncomingWebhookFormDialog = ({
           required_fields: duplicateData.required_fields || ['name', 'email'],
           auth_header_name: duplicateData.auth_header_name || '',
           auth_header_value: duplicateData.auth_header_value || '',
+          fixed_owner_email: duplicateData.fixed_owner_email || '',
           is_active: true,
         });
       } else {
@@ -208,6 +210,7 @@ export const IncomingWebhookFormDialog = ({
           required_fields: ['name', 'email'],
           auth_header_name: '',
           auth_header_value: '',
+          fixed_owner_email: '',
           is_active: true,
         });
       }
