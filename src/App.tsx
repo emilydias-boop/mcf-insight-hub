@@ -363,7 +363,7 @@ const App = () => (
               <Route path="crm/configurar-closers" element={<ResourceGuard resource="configuracoes"><ConfigurarClosers /></ResourceGuard>} />
               <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
                 <Route index element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CRMOverview /></RoleGuard>} />
-                <Route path="contatos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Contatos /></RoleGuard>} />
+                <Route path="contatos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><Contatos /></RoleGuard>} />
                 <Route path="negocios" element={<NegociosAccessGuard><Negocios /></NegociosAccessGuard>} />
                 <Route path="atendimentos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Atendimentos /></RoleGuard>} />
                 <Route path="agenda" element={<Agenda />} />
