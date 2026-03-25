@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Trash2, Pencil, Check, X } from 'lucide-react';
+import { Plus, GripVertical, Trash2, Pencil, Check, X, Download, Cloud } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 
