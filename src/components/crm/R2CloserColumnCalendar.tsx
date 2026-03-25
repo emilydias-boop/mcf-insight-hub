@@ -160,7 +160,7 @@ export function R2CloserColumnCalendar({
       // Verificar se a reunião é no dia selecionado
       if (!isSameDay(parseISO(meeting.scheduled_at), selectedDate)) return;
       
-      const attendeesCount = meeting.attendees?.filter(a => !a.is_partner).length || 0;
+      const attendeesCount = meeting.attendees?.length || 0;
       counts[closerId] = (counts[closerId] || 0) + attendeesCount;
     });
     
