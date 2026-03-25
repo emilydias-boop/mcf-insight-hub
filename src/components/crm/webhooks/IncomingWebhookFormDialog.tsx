@@ -56,6 +56,7 @@ const formSchema = z.object({
   required_fields: z.array(z.string()).default(['name', 'email']),
   auth_header_name: z.string().optional(),
   auth_header_value: z.string().optional(),
+  fixed_owner_email: z.string().optional(),
   is_active: z.boolean().default(true),
 });
 
