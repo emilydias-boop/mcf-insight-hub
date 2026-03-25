@@ -77,7 +77,10 @@ const Negocios = () => {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [spreadsheetDialogOpen, setSpreadsheetDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const bulkTransfer = useBulkTransfer();
+  const bulkDelete = useBulkDeleteDeals();
+  const canDelete = ['admin', 'manager', 'coordenador'].includes(role || '');
   
   // Usar BU ativa (do contexto da rota ou do perfil do usuário)
   const activeBU = useActiveBU();
