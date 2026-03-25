@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, Search, CheckCircle2, Clock, MessageCircle, FileText } from 'lucide-react';
+import { Loader2, Search, CheckCircle2, Clock, MessageCircle, FileText, Download } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -17,6 +17,11 @@ import { BusinessUnit } from '@/hooks/useMyBU';
 import { ControleDiegoDrawer } from './ControleDiegoDrawer';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface ControleDiegoPanelProps {
   bu?: BusinessUnit;
@@ -54,16 +59,34 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
   });
   const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSource, setSelectedSource] = useState<string>('todos');
+  const [selectedOriginId, setSelectedOriginId] = useState<string>('all');
+  const [selectedChannel, setSelectedChannel] = useState<string>('todos');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedContract, setSelectedContract] = useState<KanbanRow | null>(null);
 
   const { data: closers = [], isLoading: loadingClosers } = useGestorClosers('r1');
 
+  // Fetch origins for pipeline filter
+  const { data: origins = [] } = useQuery({
+    queryKey: ['crm-origins-list'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_origins')
+        .select('id, name, display_name')
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   const filters: ContractReportFilters = useMemo(() => ({
     startDate: dateRange?.from || defaultFilters.startDate,
     endDate: dateRange?.to || defaultFilters.endDate,
     closerId: selectedCloserId !== 'all' ? selectedCloserId : undefined,
-  }), [dateRange, selectedCloserId, defaultFilters]);
+    originId: selectedOriginId !== 'all' ? selectedOriginId : undefined,
+  }), [dateRange, selectedCloserId, selectedOriginId, defaultFilters]);
 
   const allowedCloserIds = useMemo(() => {
     if (role === 'admin' || role === 'manager') return null;
@@ -89,6 +112,12 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
       dealId: row.dealId || null,
     }));
 
+    // Filter by channel
+    if (selectedChannel !== 'todos') {
+      filtered = filtered.filter(r => r.salesChannel === selectedChannel.toUpperCase());
+    }
+
+    // Filter by search
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
       const termDigits = searchTerm.replace(/\D/g, '');
@@ -100,7 +129,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
     }
 
     return filtered.sort((a, b) => b.date.localeCompare(a.date));
-  }, [agendaData, searchTerm]);
+  }, [agendaData, searchTerm, selectedChannel]);
 
   const attendeeIds = useMemo(() => rows.map(r => r.id), [rows]);
   const { data: videoMap = {} } = useVideoControlBatch(attendeeIds);
@@ -113,8 +142,13 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
       if (videoMap[r.id]?.video_sent) s.push(r);
       else p.push(r);
     }
+
+    // Filter by source
+    if (selectedSource === 'pendentes') return { pending: p, sent: [] };
+    if (selectedSource === 'enviados') return { pending: [], sent: s };
+
     return { pending: p, sent: s };
-  }, [rows, videoMap]);
+  }, [rows, videoMap, selectedSource]);
 
   const isLoading = loadingClosers || loadingAgenda;
 
@@ -144,6 +178,107 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
     });
   };
 
+  // Export to Excel
+  const handleExportExcel = () => {
+    const allRows = [...pending, ...sent];
+    const data = allRows.map(r => ({
+      'Nome do Lead': r.leadName,
+      'Closer': r.closerName,
+      'SDR': r.sdrName,
+      'Pipeline/Origem': r.originName,
+      'Canal': r.salesChannel,
+      'Data R1': r.meetingDate ? format(parseISO(r.meetingDate), 'dd/MM/yyyy') : '',
+      'Data Pagamento': r.date ? format(parseISO(r.date), 'dd/MM/yyyy') : '',
+      'Telefone': r.leadPhone,
+      'Email': r.leadEmail,
+      'Status Vídeo': videoMap[r.id]?.video_sent ? 'Enviado' : 'Pendente',
+      'Data Envio': videoMap[r.id]?.sent_at ? format(parseISO(videoMap[r.id].sent_at), 'dd/MM/yyyy HH:mm') : '',
+      'Reembolsado': r.isRefunded ? 'Sim' : 'Não',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Controle Diego');
+    
+    // Auto-width columns
+    const colWidths = Object.keys(data[0] || {}).map(key => ({
+      wch: Math.max(key.length, ...data.map(d => String((d as any)[key] || '').length)) + 2
+    }));
+    ws['!cols'] = colWidths;
+
+    const periodoStr = dateRange?.from && dateRange?.to 
+      ? `${format(dateRange.from, 'dd-MM-yyyy')}_${format(dateRange.to, 'dd-MM-yyyy')}`
+      : 'periodo';
+    XLSX.writeFile(wb, `controle-diego-${periodoStr}.xlsx`);
+  };
+
+  // Export to PDF
+  const handleExportPDF = () => {
+    const allRows = [...pending, ...sent];
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    // Header
+    doc.setFontSize(16);
+    doc.text('Controle Diego - Relatório de Vídeos', 14, 15);
+    doc.setFontSize(10);
+    const periodoLabel = dateRange?.from && dateRange?.to
+      ? `${format(dateRange.from, 'dd/MM/yyyy')} - ${format(dateRange.to, 'dd/MM/yyyy')}`
+      : 'Todos';
+    doc.text(`Período: ${periodoLabel}`, 14, 22);
+    doc.text(`Total: ${allRows.length} contratos | Enviados: ${sent.length} | Pendentes: ${pending.length}`, 14, 28);
+    
+    const activeFilters: string[] = [];
+    if (selectedCloserId !== 'all') activeFilters.push(`Closer: ${closers.find(c => c.id === selectedCloserId)?.name || selectedCloserId}`);
+    if (selectedChannel !== 'todos') activeFilters.push(`Canal: ${selectedChannel}`);
+    if (selectedOriginId !== 'all') activeFilters.push(`Pipeline: ${origins.find(o => o.id === selectedOriginId)?.display_name || origins.find(o => o.id === selectedOriginId)?.name || selectedOriginId}`);
+    if (activeFilters.length > 0) {
+      doc.text(`Filtros: ${activeFilters.join(' | ')}`, 14, 34);
+    }
+
+    const tableData = allRows.map(r => [
+      r.leadName,
+      r.closerName,
+      r.sdrName,
+      r.originName,
+      r.salesChannel,
+      r.meetingDate ? format(parseISO(r.meetingDate), 'dd/MM/yy') : '',
+      r.date ? format(parseISO(r.date), 'dd/MM/yy') : '',
+      r.leadPhone,
+      videoMap[r.id]?.video_sent ? 'Enviado' : 'Pendente',
+    ]);
+
+    autoTable(doc, {
+      startY: activeFilters.length > 0 ? 38 : 32,
+      head: [['Lead', 'Closer', 'SDR', 'Origem', 'Canal', 'R1', 'Pgto', 'Telefone', 'Vídeo']],
+      body: tableData,
+      styles: { fontSize: 7, cellPadding: 1.5 },
+      headStyles: { fillColor: [59, 130, 246], textColor: 255, fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 45 },
+        7: { cellWidth: 30 },
+      },
+      didParseCell: (data) => {
+        if (data.column.index === 8 && data.section === 'body') {
+          const val = data.cell.raw as string;
+          if (val === 'Enviado') {
+            data.cell.styles.textColor = [22, 163, 74];
+            data.cell.styles.fontStyle = 'bold';
+          } else {
+            data.cell.styles.textColor = [234, 88, 12];
+          }
+        }
+      },
+    });
+
+    doc.setFontSize(7);
+    doc.text(`Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 14, doc.internal.pageSize.height - 5);
+
+    const periodoStr = dateRange?.from && dateRange?.to
+      ? `${format(dateRange.from, 'dd-MM-yyyy')}_${format(dateRange.to, 'dd-MM-yyyy')}`
+      : 'periodo';
+    doc.save(`controle-diego-${periodoStr}.pdf`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Filters */}
@@ -159,7 +294,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
                 placeholder="Selecione o período"
               />
             </div>
-            <div className="w-[250px]">
+            <div className="w-[220px]">
               <label className="text-sm font-medium text-muted-foreground mb-2 block">Buscar</label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -171,7 +306,20 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
                 />
               </div>
             </div>
-            <div className="w-[200px]">
+            <div className="w-[160px]">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">Fonte</label>
+              <Select value={selectedSource} onValueChange={setSelectedSource}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="pendentes">Pendentes</SelectItem>
+                  <SelectItem value="enviados">Enviados</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-[180px]">
               <label className="text-sm font-medium text-muted-foreground mb-2 block">Closer</label>
               <Select value={selectedCloserId} onValueChange={setSelectedCloserId}>
                 <SelectTrigger>
@@ -184,6 +332,58 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="w-[200px]">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">Pipeline</label>
+              <Select value={selectedOriginId} onValueChange={setSelectedOriginId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as Origens</SelectItem>
+                  {origins.map(origin => (
+                    <SelectItem key={origin.id} value={origin.id}>
+                      {origin.display_name || origin.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-[140px]">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">Canal</label>
+              <Select value={selectedChannel} onValueChange={setSelectedChannel}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="A010">A010</SelectItem>
+                  <SelectItem value="BIO">BIO</SelectItem>
+                  <SelectItem value="LIVE">LIVE</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 ml-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportExcel}
+                disabled={rows.length === 0}
+                className="gap-1.5"
+              >
+                <Download className="h-4 w-4" />
+                Excel
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportPDF}
+                disabled={rows.length === 0}
+                className="gap-1.5"
+              >
+                <FileText className="h-4 w-4" />
+                PDF
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -334,7 +534,6 @@ function KanbanColumn({ id, title, count, items, colorClass, headerBg, headerTex
                     )}
                   >
                     <div className="space-y-1.5">
-                      {/* Lead name — clickable to open drawer */}
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
@@ -350,13 +549,9 @@ function KanbanColumn({ id, title, count, items, colorClass, headerBg, headerTex
                           </Badge>
                         )}
                       </div>
-
-                      {/* Closer + SDR */}
                       <p className="text-xs text-muted-foreground truncate">
                         Closer: {row.closerName} · SDR: {row.sdrName}
                       </p>
-
-                      {/* R1 date · Payment date · Channel */}
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
                         {row.meetingDate && (
                           <span>R1: {format(parseISO(row.meetingDate), 'dd/MM', { locale: ptBR })}</span>
@@ -370,8 +565,6 @@ function KanbanColumn({ id, title, count, items, colorClass, headerBg, headerTex
                         <span>·</span>
                         <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{row.salesChannel}</Badge>
                       </div>
-
-                      {/* Phone + action buttons */}
                       <div className="flex items-center justify-between gap-2">
                         {row.leadPhone ? (
                           <a
@@ -386,7 +579,6 @@ function KanbanColumn({ id, title, count, items, colorClass, headerBg, headerTex
                             {row.leadPhone}
                           </a>
                         ) : <span />}
-
                         {showMarkSent && onMarkSent && (
                           <Button
                             size="sm"
@@ -400,8 +592,6 @@ function KanbanColumn({ id, title, count, items, colorClass, headerBg, headerTex
                           </Button>
                         )}
                       </div>
-
-                      {/* Sent timestamp for "enviados" column */}
                       {videoMap[row.id]?.sent_at && (
                         <p className="text-[10px] text-green-600">
                           ✅ Enviado {format(parseISO(videoMap[row.id].sent_at), 'dd/MM HH:mm', { locale: ptBR })}
