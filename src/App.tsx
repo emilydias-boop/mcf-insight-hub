@@ -31,7 +31,7 @@ import ReceitaOverview from "./pages/receita/Overview";
 import A010 from "./pages/receita/A010";
 import ReceitaTransacoes from "./pages/receita/Transacoes";
 import ReceitaPorCanal from "./pages/receita/PorCanal";
-import ImportarA010 from "./pages/receita/ImportarA010";
+
 import ImportarHubla from "./pages/receita/ImportarHubla";
 import ReceitaAuditoria from "./pages/receita/Auditoria";
 import Custos from "./pages/custos/Index";
@@ -41,7 +41,7 @@ import CustosPorCategoria from "./pages/custos/PorCategoria";
 import Relatorios from "./pages/Relatorios";
 import LeadsSemTag from "./pages/relatorios/LeadsSemTag";
 import Alertas from "./pages/Alertas";
-import EfeitoAlavanca from "./pages/EfeitoAlavanca";
+
 import Projetos from "./pages/Projetos";
 import Credito from "./pages/Credito";
 import Leilao from "./pages/Leilao";
@@ -194,7 +194,7 @@ const App = () => (
                 <Route path="importar-hubla" element={<ImportarHubla />} />
                 <Route path="auditoria" element={<ReceitaAuditoria />} />
               </Route>
-              <Route path="importar-a010" element={<ImportarA010 />} />
+              
               <Route path="custos" element={<ResourceGuard resource="custos"><Custos /></ResourceGuard>}>
                 <Route index element={<CustosOverview />} />
                 <Route path="despesas" element={<CustosDespesas />} />

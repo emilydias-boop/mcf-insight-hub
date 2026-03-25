@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Users, Zap, Database, Shield, Upload, FileText, History, ClipboardList, Loader2, RefreshCw, CalendarSync, Tag } from 'lucide-react';
+import { Settings, Shield, Upload, FileText, History, ClipboardList, Loader2, RefreshCw, CalendarSync, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
@@ -131,27 +131,6 @@ const ConfiguracoesContent = () => {
       key: 'qualification',
     },
     {
-      icon: Database,
-      title: 'Campos Customizados',
-      description: 'Adicione campos personalizados aos seus contatos e negócios',
-      action: 'Gerenciar Campos',
-      key: 'custom-fields',
-    },
-    {
-      icon: Zap,
-      title: 'Automações',
-      description: 'Configure automações para otimizar seu fluxo de trabalho',
-      action: 'Configurar Automações',
-      key: 'automations',
-    },
-    {
-      icon: Users,
-      title: 'Estágios do Pipeline',
-      description: 'Personalize os estágios do seu funil de vendas',
-      action: 'Editar Estágios',
-      key: 'stages',
-    },
-    {
       icon: Shield,
       title: 'Permissões',
       description: 'Gerencie permissões de acesso ao CRM',
@@ -228,36 +207,6 @@ const ConfiguracoesContent = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-            <div>
-              <p className="font-medium text-foreground">Notificações por Email</p>
-              <p className="text-sm text-muted-foreground">Receba alertas sobre novos contatos e negócios</p>
-            </div>
-            <Button variant="outline" className="border-border">
-              Configurar
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-            <div>
-              <p className="font-medium text-foreground">Integrações</p>
-              <p className="text-sm text-muted-foreground">Conecte o CRM com outras ferramentas</p>
-            </div>
-            <Button variant="outline" className="border-border">
-              Ver Integrações
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-            <div>
-              <p className="font-medium text-foreground">Backup de Dados</p>
-              <p className="text-sm text-muted-foreground">Configure backups automáticos</p>
-            </div>
-            <Button variant="outline" className="border-border">
-              Configurar Backup
-            </Button>
-          </div>
-
           <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-muted/30">
             <div>
               <p className="font-medium text-foreground flex items-center gap-2">
