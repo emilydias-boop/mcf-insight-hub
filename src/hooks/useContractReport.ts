@@ -11,6 +11,7 @@ export interface ContractReportFilters {
 
 export interface ContractReportRow {
   id: string;
+  dealId: string | null;
   closerName: string;
   closerEmail: string;
   meetingDate: string;

@@ -40,7 +40,7 @@ export const useToggleVideoSent = () => {
   const { user } = useAuth();
   
   return useMutation({
-    mutationFn: async ({ attendeeId, videoSent, notes }: { attendeeId: string; videoSent: boolean; notes?: string }) => {
+    mutationFn: async ({ attendeeId, videoSent, notes, dealId }: { attendeeId: string; videoSent: boolean; notes?: string; dealId?: string }) => {
       const payload: any = {
         attendee_id: attendeeId,
         video_sent: videoSent,
@@ -54,9 +54,21 @@ export const useToggleVideoSent = () => {
         .upsert(payload, { onConflict: 'attendee_id' });
       
       if (error) throw error;
+
+      // Log to deal_activities when marking as sent
+      if (videoSent && dealId) {
+        await supabase
+          .from('deal_activities')
+          .insert({
+            deal_id: dealId,
+            activity_type: 'video_sent',
+            description: 'Vídeo do contrato enviado ao cliente',
+          });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['video-control-batch'] });
+      queryClient.invalidateQueries({ queryKey: ['deal-activities'] });
     },
   });
 };
