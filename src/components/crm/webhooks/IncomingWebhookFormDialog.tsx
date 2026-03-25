@@ -39,8 +39,11 @@ import {
   getWebhookUrl,
   type WebhookEndpoint,
 } from '@/hooks/useWebhookEndpoints';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const formSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
