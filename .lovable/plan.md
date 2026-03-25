@@ -1,32 +1,33 @@
 
 
-## Expandir Drawer do Controle Diego com Perfil do Lead e Notas
+## Corrigir perfil do lead não aparecendo no drawer do Controle Diego
 
 ### Problema
-O drawer atual mostra apenas dados do contrato, jornada e compras. Faltam: o **perfil do lead** (dados de anamnese como renda, profissão, estado civil, etc.) e as **notas** (do SDR, closer, qualificação).
+O perfil do lead (anamnese) não está aparecendo no drawer, mesmo quando o lead veio por webhook de anamnese e tem perfil preenchido. O `useLeadProfile` busca apenas por `contact_id`, mas em alguns casos o `lead_profiles` pode estar vinculado pelo `deal_id` em vez do `contact_id`, ou o `contact_id` no deal está nulo.
+
+### Solução
+Alterar `useLeadProfile` para aceitar ambos os identificadores (`contactId` e `dealId`) e fazer fallback:
+1. Buscar por `contact_id` primeiro
+2. Se não encontrar, buscar por `deal_id`
 
 ### Alterações
 
-#### 1. `src/hooks/useContractReport.ts`
-- Adicionar `contactId: string | null` ao `ContractReportRow`
-- No mapeamento, incluir `contactId: deal?.contact_id || null`
+#### 1. `src/hooks/useLeadProfile.ts`
+- Adicionar parâmetro `dealId` opcional
+- Buscar primeiro por `contact_id`, se não retornar resultado, buscar por `deal_id`
+- Query key inclui ambos os IDs
 
-#### 2. `src/components/relatorios/ControleDiegoPanel.tsx`
-- Adicionar `contactId` ao `KanbanRow`
-- Mapear `contactId: row.contactId` na transformação dos dados
-- Passar `contactId` ao drawer
+#### 2. `src/components/relatorios/ControleDiegoDrawer.tsx`
+- Passar `dealId` para `useLeadProfile`:
+  ```typescript
+  const { data: profile, isLoading: loadingProfile } = useLeadProfile(contract?.contactId || null, contract?.dealId || null);
+  ```
 
-#### 3. `src/components/relatorios/ControleDiegoDrawer.tsx`
-Expandir significativamente:
-
-- **Largura**: de `w-[480px]` para `w-[620px]`
-- **Adicionar `contactId` nas props** (vindo do `KanbanRow`)
-- **Nova seção: Perfil do Lead** — usar `useLeadProfile(contactId)` e reutilizar a mesma lógica do `LeadProfileSection` para exibir dados preenchidos organizados por categoria (Dados Pessoais, Financeiro, Patrimônio, Interesses)
-- **Nova seção: Notas do Lead** — usar `useLeadNotes(dealId, attendeeId)` para exibir todas as notas (SDR, closer, qualificação, agendamento, ligação) com tipo, autor e data
-- Reorganizar seções na ordem: Dados do Contrato → Contato/WhatsApp → Controle de Vídeo → Perfil do Lead → Notas → Jornada do Lead → Jornada A010 → Histórico de Compras
+#### 3. `src/components/crm/LeadProfileSection.tsx`
+- Atualizar para também aceitar `dealId` e passá-lo ao hook (manter compatibilidade)
 
 ### Arquivos modificados
-- `src/hooks/useContractReport.ts` — adicionar `contactId`
-- `src/components/relatorios/ControleDiegoPanel.tsx` — passar `contactId`
-- `src/components/relatorios/ControleDiegoDrawer.tsx` — expandir com perfil e notas
+- `src/hooks/useLeadProfile.ts` — aceitar `dealId`, fallback query
+- `src/components/relatorios/ControleDiegoDrawer.tsx` — passar `dealId`
+- `src/components/crm/LeadProfileSection.tsx` — passar `dealId` (se disponível)
 
