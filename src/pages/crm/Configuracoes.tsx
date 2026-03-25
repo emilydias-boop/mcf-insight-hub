@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Users, Zap, Database, Shield, Upload, FileText, History, ClipboardList, Loader2, RefreshCw, CalendarSync, Tag } from 'lucide-react';
+import { Settings, Shield, Upload, FileText, History, ClipboardList, Loader2, RefreshCw, CalendarSync, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
