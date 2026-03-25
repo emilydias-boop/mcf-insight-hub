@@ -1,25 +1,28 @@
 
 
-## Resultado da varredura — últimos itens encontrados
+## Limpeza final — 2 itens para remover
 
-Após verificar todos os 200+ hooks e 90+ edge functions, o sistema está **quase totalmente limpo**. Encontrei apenas **3 edge functions órfãs** restantes:
+### Decisões
+1. **`notify-new-lead/`** — MANTER (função oculta por hora, será usada futuramente)
+2. **`auto-close-weekly-metrics/`** — DELETAR (página associada já foi excluída)
+3. **`bulk-transfer-by-name/`** — DELETAR (redundante com `useBulkTransfer.ts` e `useTransferDealOwner` no frontend)
 
-### Edge Functions sem nenhum consumidor (nem frontend, nem outras functions)
-
-| Função | Linhas | Situação |
-|--------|--------|----------|
-| `supabase/functions/detect-duplicate-activities/` | ~190 | Script manual de detecção de atividades duplicadas. Zero referências no frontend ou em outras edge functions |
-| `supabase/functions/repair-activity-owners/` | ~170 | Script manual para corrigir owners de atividades. Zero referências no frontend ou em outras edge functions |
-| `supabase/functions/reprocess-missing-activities/` | ~150 | Script manual para reprocessar atividades faltantes. Zero referências no frontend ou em outras edge functions |
-
-Todos são scripts utilitários de manutenção pontual (tipo backfill), sem nenhuma chamada automatizada ou via UI.
+### Também corrigir
+4. **`detect-ghost-appointments`** no `config.toml` — entrada fantasma (pasta já não existe)
+5. **`useDuplicateContactsLegacy()`** em `useDuplicateContacts.ts` — export morto, nunca importado
+6. **`bulk-update-contacts/`** — edge function sem referência, DELETAR
 
 ### Ações
 
-1. Deletar as 3 pastas de edge functions
-2. Remover as 3 entradas correspondentes do `supabase/config.toml`
+| Ação | Arquivo |
+|------|---------|
+| Deletar pasta | `supabase/functions/auto-close-weekly-metrics/` |
+| Deletar pasta | `supabase/functions/bulk-transfer-by-name/` |
+| Deletar pasta | `supabase/functions/bulk-update-contacts/` |
+| Remover do config.toml | Entradas: `auto-close-weekly-metrics`, `bulk-transfer-by-name`, `bulk-update-contacts`, `detect-ghost-appointments` |
+| Editar `useDuplicateContacts.ts` | Remover export `useDuplicateContactsLegacy()` (~50 linhas mortas) |
 
-### Conclusão
-
-Fora esses 3 itens, **o sistema está 100% limpo**. Todos os hooks, componentes, páginas e demais edge functions têm consumidores ativos e estão conectados.
+### O que permanece
+- `notify-new-lead/` — mantido conforme solicitado
+- Todos os módulos ativos — zero impacto
 
