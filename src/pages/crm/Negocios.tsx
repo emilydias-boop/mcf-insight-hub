@@ -126,7 +126,12 @@ const Negocios = () => {
         if (selectedOriginId) return selectedOriginId;
       }
       
-      // Default ou BUs com pipeline fixa
+      // Prioridade 1: usar defaultOrigin do banco (configurado pelo admin)
+      if (buMapping?.defaultOrigin) {
+        return buMapping.defaultOrigin;
+      }
+      
+      // Prioridade 2: fallback hardcoded por BU
       if (activeBU && SDR_ORIGIN_BY_BU[activeBU]) {
         return SDR_ORIGIN_BY_BU[activeBU];
       }
@@ -160,7 +165,7 @@ const Negocios = () => {
     }
     
     return undefined;
-  }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdr]);
+  }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdr, buMapping, activeBU]);
   
   // Definir pipeline padrão APENAS na primeira montagem
   // Prioridade: defaultOrigin do banco > grupo único > SDR origin > BU_DEFAULT_ORIGIN_MAP > fallback
