@@ -287,7 +287,7 @@ async function createCrmDeal(supabase: any, data: {
       return { status: "skipped", reason: "partner" };
     }
 
-    // 3. Buscar/criar contato
+    // 3. Buscar/criar contato (email + fallback por telefone)
     const { data: existingContact } = await supabase
       .from('crm_contacts')
       .select('id')
@@ -295,9 +295,32 @@ async function createCrmDeal(supabase: any, data: {
       .limit(1)
       .maybeSingle();
 
-    let contactId: string;
-    if (existingContact) {
-      contactId = existingContact.id;
+    let contactId: string | null = existingContact?.id || null;
+
+    // Fallback: buscar por telefone (sufixo de 9 dígitos)
+    if (!contactId && data.phone) {
+      const normalizedPhone = normalizePhone(data.phone);
+      if (normalizedPhone) {
+        const phoneDigits = normalizedPhone.replace(/\D/g, '');
+        const phoneSuffix = phoneDigits.slice(-9);
+        if (phoneSuffix.length >= 8) {
+          const { data: byPhone } = await supabase
+            .from('crm_contacts')
+            .select('id')
+            .like('phone', `%${phoneSuffix}`)
+            .limit(1)
+            .maybeSingle();
+          if (byPhone) {
+            contactId = byPhone.id;
+            console.log(`📞 CRM: Contato encontrado por telefone (sufixo ${phoneSuffix}):`, contactId);
+            // Atualizar email do contato encontrado por telefone
+            await supabase.from('crm_contacts').update({ email: data.email }).eq('id', contactId);
+          }
+        }
+      }
+    }
+
+    if (contactId) {
       // Atualizar telefone se disponível
       if (data.phone) {
         const normalizedPhone = normalizePhone(data.phone);
@@ -328,23 +351,54 @@ async function createCrmDeal(supabase: any, data: {
       contactId = newContact.id;
     }
 
-    // 4. Verificar deal existente
+    // 4. Verificar deal existente (por contact_id + origin_id)
     const { data: existingDeal } = await supabase
       .from('crm_deals')
-      .select('id, stage_id, value')
+      .select('id, stage_id, value, tags')
       .eq('contact_id', contactId)
       .eq('origin_id', originId)
       .limit(1)
       .maybeSingle();
 
     if (existingDeal) {
-      console.log("✅ CRM: Deal já existe, atualizando valor:", existingDeal.id);
-      // Atualizar valor líquido e bruto se necessário
+      console.log("✅ CRM: Deal já existe, atualizando:", existingDeal.id);
+      const existingTags: string[] = existingDeal.tags || [];
+      const updatedTags = [...new Set([...existingTags, 'A010', 'Make'])];
       await supabase.from('crm_deals').update({
         value: data.netValue,
+        tags: updatedTags,
         custom_fields: { source: 'make', product: 'A010 - MCF Fundamentos', sale_date: data.saleDate, updated_by_make: true },
       }).eq('id', existingDeal.id);
       return { status: "updated", deal_id: existingDeal.id };
+    }
+
+    // 4b. Cross-check: buscar deal existente via telefone em outro contato
+    if (data.phone) {
+      const normalizedPhone = normalizePhone(data.phone);
+      if (normalizedPhone) {
+        const phoneDigits = normalizedPhone.replace(/\D/g, '');
+        const phoneSuffix = phoneDigits.slice(-9);
+        if (phoneSuffix.length >= 8) {
+          const { data: crossDeal } = await supabase
+            .from('crm_deals')
+            .select('id, contact_id, tags, crm_contacts!inner(phone)')
+            .eq('origin_id', originId)
+            .like('crm_contacts.phone', `%${phoneSuffix}`)
+            .limit(1)
+            .maybeSingle();
+          if (crossDeal) {
+            console.log("📞 CRM: Deal encontrado via cross-check telefone:", crossDeal.id);
+            const crossTags: string[] = crossDeal.tags || [];
+            const updatedTags = [...new Set([...crossTags, 'A010', 'Make'])];
+            await supabase.from('crm_deals').update({
+              value: data.netValue,
+              tags: updatedTags,
+              custom_fields: { source: 'make', product: 'A010 - MCF Fundamentos', sale_date: data.saleDate, updated_by_make: true },
+            }).eq('id', crossDeal.id);
+            return { status: "updated", deal_id: crossDeal.id, reason: "cross_check_phone" };
+          }
+        }
+      }
     }
 
     // 5. Buscar stage "Novo Lead"
