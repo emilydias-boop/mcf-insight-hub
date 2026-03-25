@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui/drawer';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { useToggleVideoSent } from '@/hooks/useVideoControl';
 import { useLeadJourney } from '@/hooks/useLeadJourney';
 import { useA010Journey } from '@/hooks/useA010Journey';
@@ -87,17 +87,17 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
   };
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[90vh]">
-        <DrawerHeader className="pb-2">
-          <DrawerTitle className="flex items-center gap-2">
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-[480px] max-w-full p-0 flex flex-col">
+        <SheetHeader className="px-4 py-4 border-b border-border">
+          <SheetTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
             {contract.leadName}
-          </DrawerTitle>
-          <DrawerDescription>Jornada completa do lead e controle de vídeo</DrawerDescription>
-        </DrawerHeader>
+          </SheetTitle>
+          <SheetDescription>Jornada completa do lead e controle de vídeo</SheetDescription>
+        </SheetHeader>
 
-        <div className="px-4 pb-6 space-y-4 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto px-4 pb-6 pt-4 space-y-4">
           {/* === Dados do Contrato === */}
           <div className="space-y-2">
             <SectionTitle>Dados do Contrato</SectionTitle>
@@ -283,7 +283,7 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
             </div>
           </div>
         </div>
-      </DrawerContent>
-    </Drawer>
+      </SheetContent>
+    </Sheet>
   );
 }
