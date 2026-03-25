@@ -60,6 +60,7 @@ export const useContractReport = (
           deal_id,
           contract_paid_at,
           is_partner,
+          booked_by,
           meeting_slots!inner (
             id,
             scheduled_at,
