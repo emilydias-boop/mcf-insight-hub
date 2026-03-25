@@ -180,6 +180,12 @@ const Negocios = () => {
         return;
       }
       
+      // 2b. Se não há grupos mas há apenas 1 origem mapeada, auto-selecionar
+      if (buAllowedGroups.length === 0 && buMapping?.origins?.length === 1) {
+        setSelectedPipelineId(buMapping.origins[0]);
+        return;
+      }
+      
       // 3. Se for SDR, pré-selecionar a origem da BU ativa
       if (isSdr) {
         if (activeBU && SDR_ORIGIN_BY_BU[activeBU]) {
@@ -600,7 +606,8 @@ const Negocios = () => {
   // Determinar se deve mostrar a sidebar
   // SDRs de BUs com multi-pipeline podem ver a sidebar e navegar
   const sdrCanSeeSidebar = isSdr && activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU);
-  const hasSinglePipeline = buAllowedGroups.length === 1;
+  const totalMappedPipelines = buAllowedGroups.length + (buMapping?.origins?.length || 0);
+  const hasSinglePipeline = totalMappedPipelines === 1;
   const showSidebar = (!isSdr || sdrCanSeeSidebar) && !hasSinglePipeline;
   
   // Auto-seleção de single pipeline agora está integrada no useEffect principal de default (linha 156+)
@@ -824,12 +831,12 @@ const Negocios = () => {
       />
       
       {/* Modal de configuração inline para single pipeline */}
-      {hasSinglePipeline && buAllowedGroups[0] && (
+      {hasSinglePipeline && (buAllowedGroups[0] || buMapping?.origins?.[0]) && (
         <PipelineConfigModal
           open={configModalOpen}
           onOpenChange={setConfigModalOpen}
-          targetType="group"
-          targetId={buAllowedGroups[0]}
+          targetType={buAllowedGroups.length === 1 ? "group" : "origin"}
+          targetId={buAllowedGroups[0] || buMapping?.origins?.[0] || ''}
           preferredOriginId={selectedPipelineId || undefined}
         />
       )}
