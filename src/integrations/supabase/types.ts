@@ -5872,263 +5872,6 @@ export type Database = {
         }
         Relationships: []
       }
-      gr_actions: {
-        Row: {
-          action_type: Database["public"]["Enums"]["gr_action_type"]
-          created_at: string
-          description: string | null
-          entry_id: string
-          id: string
-          metadata: Json | null
-          performed_by: string
-        }
-        Insert: {
-          action_type: Database["public"]["Enums"]["gr_action_type"]
-          created_at?: string
-          description?: string | null
-          entry_id: string
-          id?: string
-          metadata?: Json | null
-          performed_by: string
-        }
-        Update: {
-          action_type?: Database["public"]["Enums"]["gr_action_type"]
-          created_at?: string
-          description?: string | null
-          entry_id?: string
-          id?: string
-          metadata?: Json | null
-          performed_by?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gr_actions_entry_id_fkey"
-            columns: ["entry_id"]
-            isOneToOne: false
-            referencedRelation: "gr_wallet_entries"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      gr_distribution_rules: {
-        Row: {
-          balance_type: string
-          bu: string
-          created_at: string
-          id: string
-          is_active: boolean
-          manager_id: string | null
-          mode: Database["public"]["Enums"]["gr_distribution_mode"]
-          updated_at: string
-        }
-        Insert: {
-          balance_type?: string
-          bu: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          manager_id?: string | null
-          mode?: Database["public"]["Enums"]["gr_distribution_mode"]
-          updated_at?: string
-        }
-        Update: {
-          balance_type?: string
-          bu?: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          manager_id?: string | null
-          mode?: Database["public"]["Enums"]["gr_distribution_mode"]
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      gr_transfers_log: {
-        Row: {
-          created_at: string
-          entry_id: string
-          from_wallet_id: string | null
-          id: string
-          reason: string | null
-          to_wallet_id: string | null
-          transferred_by: string
-        }
-        Insert: {
-          created_at?: string
-          entry_id: string
-          from_wallet_id?: string | null
-          id?: string
-          reason?: string | null
-          to_wallet_id?: string | null
-          transferred_by: string
-        }
-        Update: {
-          created_at?: string
-          entry_id?: string
-          from_wallet_id?: string | null
-          id?: string
-          reason?: string | null
-          to_wallet_id?: string | null
-          transferred_by?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gr_transfers_log_entry_id_fkey"
-            columns: ["entry_id"]
-            isOneToOne: false
-            referencedRelation: "gr_wallet_entries"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gr_transfers_log_from_wallet_id_fkey"
-            columns: ["from_wallet_id"]
-            isOneToOne: false
-            referencedRelation: "gr_wallets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gr_transfers_log_to_wallet_id_fkey"
-            columns: ["to_wallet_id"]
-            isOneToOne: false
-            referencedRelation: "gr_wallets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      gr_wallet_entries: {
-        Row: {
-          assigned_by: string | null
-          contact_id: string | null
-          created_at: string
-          customer_email: string | null
-          customer_name: string
-          customer_phone: string | null
-          deal_id: string | null
-          entry_date: string
-          entry_source: string
-          financial_profile: Json | null
-          id: string
-          last_contact_at: string | null
-          next_action_date: string | null
-          notes: string | null
-          product_purchased: string | null
-          purchase_value: number | null
-          recommended_products: string[] | null
-          status: Database["public"]["Enums"]["gr_entry_status"]
-          transaction_id: string | null
-          updated_at: string
-          wallet_id: string
-        }
-        Insert: {
-          assigned_by?: string | null
-          contact_id?: string | null
-          created_at?: string
-          customer_email?: string | null
-          customer_name: string
-          customer_phone?: string | null
-          deal_id?: string | null
-          entry_date?: string
-          entry_source?: string
-          financial_profile?: Json | null
-          id?: string
-          last_contact_at?: string | null
-          next_action_date?: string | null
-          notes?: string | null
-          product_purchased?: string | null
-          purchase_value?: number | null
-          recommended_products?: string[] | null
-          status?: Database["public"]["Enums"]["gr_entry_status"]
-          transaction_id?: string | null
-          updated_at?: string
-          wallet_id: string
-        }
-        Update: {
-          assigned_by?: string | null
-          contact_id?: string | null
-          created_at?: string
-          customer_email?: string | null
-          customer_name?: string
-          customer_phone?: string | null
-          deal_id?: string | null
-          entry_date?: string
-          entry_source?: string
-          financial_profile?: Json | null
-          id?: string
-          last_contact_at?: string | null
-          next_action_date?: string | null
-          notes?: string | null
-          product_purchased?: string | null
-          purchase_value?: number | null
-          recommended_products?: string[] | null
-          status?: Database["public"]["Enums"]["gr_entry_status"]
-          transaction_id?: string | null
-          updated_at?: string
-          wallet_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gr_wallet_entries_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "crm_contacts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gr_wallet_entries_deal_id_fkey"
-            columns: ["deal_id"]
-            isOneToOne: true
-            referencedRelation: "crm_deals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gr_wallet_entries_transaction_id_fkey"
-            columns: ["transaction_id"]
-            isOneToOne: false
-            referencedRelation: "hubla_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gr_wallet_entries_wallet_id_fkey"
-            columns: ["wallet_id"]
-            isOneToOne: false
-            referencedRelation: "gr_wallets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      gr_wallets: {
-        Row: {
-          bu: string
-          created_at: string
-          current_count: number
-          gr_user_id: string
-          id: string
-          is_open: boolean
-          max_capacity: number | null
-          updated_at: string
-        }
-        Insert: {
-          bu?: string
-          created_at?: string
-          current_count?: number
-          gr_user_id: string
-          id?: string
-          is_open?: boolean
-          max_capacity?: number | null
-          updated_at?: string
-        }
-        Update: {
-          bu?: string
-          created_at?: string
-          current_count?: number
-          gr_user_id?: string
-          id?: string
-          is_open?: boolean
-          max_capacity?: number | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
       hubla_transactions: {
         Row: {
           count_in_dashboard: boolean | null
@@ -10782,6 +10525,10 @@ export type Database = {
       is_bu_manager: { Args: { _user_id: string }; Returns: boolean }
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
+      merge_duplicate_contacts: {
+        Args: { keep_id: string; remove_id: string }
+        Returns: undefined
+      }
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
       refresh_deal_current_stages: { Args: never; Returns: undefined }
       reset_distribution_counters: {
@@ -10790,7 +10537,6 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
-      sync_crm_deals_to_gr_wallets: { Args: never; Returns: number }
       update_overdue_billing_status: { Args: never; Returns: undefined }
       upsert_deals_smart: { Args: { deals_data: Json }; Returns: undefined }
       user_has_permission: {
@@ -10893,25 +10639,6 @@ export type Database = {
         | "compliance"
         | "outros"
       flag_type: "red" | "yellow" | "green"
-      gr_action_type:
-        | "reuniao_agendada"
-        | "reuniao_realizada"
-        | "diagnostico"
-        | "produto_sugerido"
-        | "produto_contratado"
-        | "nota"
-        | "encaminhamento_bu"
-        | "status_change"
-        | "contato_telefonico"
-        | "contato_whatsapp"
-      gr_distribution_mode: "automatico" | "manual"
-      gr_entry_status:
-        | "ativo"
-        | "em_negociacao"
-        | "em_pausa"
-        | "convertido"
-        | "inativo"
-        | "transferido"
       permission_level: "none" | "view" | "edit" | "full"
       playbook_categoria:
         | "onboarding"
@@ -11194,27 +10921,6 @@ export const Constants = {
         "outros",
       ],
       flag_type: ["red", "yellow", "green"],
-      gr_action_type: [
-        "reuniao_agendada",
-        "reuniao_realizada",
-        "diagnostico",
-        "produto_sugerido",
-        "produto_contratado",
-        "nota",
-        "encaminhamento_bu",
-        "status_change",
-        "contato_telefonico",
-        "contato_whatsapp",
-      ],
-      gr_distribution_mode: ["automatico", "manual"],
-      gr_entry_status: [
-        "ativo",
-        "em_negociacao",
-        "em_pausa",
-        "convertido",
-        "inativo",
-        "transferido",
-      ],
       permission_level: ["none", "view", "edit", "full"],
       playbook_categoria: [
         "onboarding",

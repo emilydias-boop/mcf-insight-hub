@@ -274,16 +274,6 @@ const menuItems: MenuItem[] = [
     ],
   },
 
-  // GERENTES DE RELACIONAMENTO
-  {
-    title: "Gerentes de Relacionamento",
-    icon: Briefcase,
-    requiredRoles: ["admin", "manager", "coordenador", "gr"],
-    items: [
-      { title: "Minha Carteira", url: "/gerentes-conta/minha-carteira", requiredRoles: ["gr"] },
-      { title: "Gestão Carteiras", url: "/gerentes-conta/gestao", requiredRoles: ["admin", "manager", "coordenador"] },
-    ],
-  },
 
   // ===== ITENS AVULSOS PARA SDR/CLOSER =====
   // NOTA: Os itens "Agenda" e "Negócios" para SDR/Closer são gerados dinamicamente
