@@ -308,7 +308,7 @@ const personalMenuItems: PersonalMenuItem[] = [
 ];
 
 // Mapa de base paths do CRM por BU
-const BU_CRM_BASE_PATH: Record<BusinessUnit, string> = {
+const BU_CRM_BASE_PATH: Partial<Record<BusinessUnit, string>> = {
   incorporador: '/crm',
   consorcio: '/consorcio/crm',
   marketing: '/bu-marketing',
