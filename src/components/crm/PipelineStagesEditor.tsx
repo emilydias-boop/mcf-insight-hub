@@ -73,6 +73,50 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
     },
   });
 
+  // Fallback: fetch crm_stages when local stages are empty
+  const { data: crmStages = [], isLoading: crmLoading } = useQuery({
+    queryKey: ['crm-stages-fallback', targetType, targetId],
+    queryFn: async () => {
+      if (targetType !== 'origin') return [];
+      const { data, error } = await supabase
+        .from('crm_stages')
+        .select('id, clint_id, stage_name, color, stage_order, is_active')
+        .eq('origin_id', targetId)
+        .eq('is_active', true)
+        .order('stage_order');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !isLoading && stages.length === 0,
+  });
+
+  // Import crm_stages to local_pipeline_stages
+  const importMutation = useMutation({
+    mutationFn: async () => {
+      if (crmStages.length === 0) throw new Error('Nenhuma etapa para importar');
+      const importData = crmStages.map(s => ({
+        id: s.id,
+        name: s.stage_name,
+        color: s.color || '#6b7280',
+        stage_order: s.stage_order ?? 0,
+        origin_id: targetId,
+        stage_type: 'normal' as const,
+      }));
+      const { error } = await supabase
+        .from('local_pipeline_stages')
+        .upsert(importData, { onConflict: 'id' });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Etapas importadas para edição local!');
+      queryClient.invalidateQueries({ queryKey: ['local-pipeline-stages'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-stages-fallback'] });
+    },
+    onError: (error) => {
+      toast.error('Erro ao importar: ' + (error as Error).message);
+    },
+  });
+
   // Create stage mutation
   const createMutation = useMutation({
     mutationFn: async (stage: Omit<LocalStage, 'id' | 'stage_order'>) => {
