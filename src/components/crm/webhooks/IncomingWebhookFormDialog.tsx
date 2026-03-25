@@ -507,16 +507,19 @@ export const IncomingWebhookFormDialog = ({
                 name="fixed_owner_email"
                 render={({ field }) => (
                   <FormItem>
-                    <Select onValueChange={field.onChange} value={field.value || ''}>
+                    <Select 
+                      onValueChange={(val) => field.onChange(val === '__none__' ? '' : val)} 
+                      value={field.value || '__none__'}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Distribuição automática" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">Distribuição automática</SelectItem>
-                        {activeProfiles?.map((profile) => (
-                          <SelectItem key={profile.id} value={profile.email || ''}>
+                        <SelectItem value="__none__">Distribuição automática</SelectItem>
+                        {activeProfiles?.filter(p => p.email).map((profile) => (
+                          <SelectItem key={profile.id} value={profile.email!}>
                             {profile.full_name || profile.email}
                           </SelectItem>
                         ))}
