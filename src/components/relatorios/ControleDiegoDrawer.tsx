@@ -49,6 +49,7 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
 
   // Lead journey data
   const { data: journey, isLoading: loadingJourney } = useLeadJourney(contract?.dealId || null);
+  const { data: a010, isLoading: loadingA010 } = useA010Journey(contract?.leadEmail, contract?.leadPhone);
   const { data: purchaseHistory, isLoading: loadingPurchases } = useLeadPurchaseHistory(contract?.leadEmail, contract?.leadPhone);
 
   useEffect(() => {
