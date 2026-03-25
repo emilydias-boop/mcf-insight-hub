@@ -320,7 +320,7 @@ const getCRMBasePath = (userBUs: BusinessUnit[]): string => {
   
   for (const bu of buPriority) {
     if (userBUs.includes(bu)) {
-      return BU_CRM_BASE_PATH[bu];
+      return BU_CRM_BASE_PATH[bu] || '/crm';
     }
   }
   
