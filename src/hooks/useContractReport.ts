@@ -140,12 +140,12 @@ export const useContractReport = (
       if (sdrEmails.length > 0) {
         const { data: profiles } = await supabase
           .from('profiles')
-          .select('id, name, email')
+          .select('id, full_name, email')
           .in('email', sdrEmails);
         
         if (profiles) {
           sdrNameMap = profiles.reduce((acc: Record<string, string>, p: any) => {
-            if (p.email) acc[p.email] = p.name || p.email;
+            if (p.email) acc[p.email] = p.full_name || p.email;
             return acc;
           }, {});
         }
