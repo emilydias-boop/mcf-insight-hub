@@ -1,40 +1,22 @@
 
 
-## Diferença de 39 vs 34 contratos: Fontes de dados diferentes
+## Substituir filtro Pipeline por filtro de Tags no Controle Diego
 
-### Diagnóstico
-- **Vendas (39)**: Busca de `hubla_transactions` filtrando por `product_name = "A000 - Contrato"` e `sale_status = "paid/completed"`. Inclui TODAS as vendas da Hubla.
-- **Controle Diego (34)**: Busca de `meeting_slot_attendees` com `contract_paid_at IS NOT NULL`. Só inclui contratos que têm um **attendee vinculado a uma reunião**.
-
-Os ~5 contratos que faltam são vendas na Hubla onde `linked_attendee_id = null` (visível nos dados de rede), ou seja, contratos pagos sem reunião agendada (compra direta, fora do funil de R1).
-
-### Solução
-Complementar o `useContractReport` buscando também as transações Hubla A000 do período que **não** possuem `linked_attendee_id`, e adicioná-las como linhas extras no relatório do Controle Diego. Isso garante que todos os contratos pagos apareçam, mesmo sem reunião.
+### Problema
+O filtro de Pipeline mostra todas as origens do sistema (incluindo de outras BUs), quando deveria mostrar apenas as da BU ativa. Além disso, o filtro mais útil seria por **Tags** dos contatos (ex: anamnese, seguimentos), não por pipeline.
 
 ### Alterações
 
-#### 1. `src/hooks/useContractReport.ts`
-Após a query principal de `meeting_slot_attendees`, fazer uma query secundária:
+#### `src/components/relatorios/ControleDiegoPanel.tsx`
 
-```typescript
-// Buscar transações Hubla A000 no período que não têm linked_attendee_id
-const { data: unlinkedHubla } = await supabase
-  .from('hubla_transactions')
-  .select('id, sale_date, customer_name, customer_email, customer_phone, product_name, net_value, source')
-  .or('product_name.ilike.%a000%,product_name.ilike.%contrato%')
-  .eq('sale_status', 'completed')
-  .is('linked_attendee_id', null)
-  .gte('sale_date', startISO)
-  .lte('sale_date', endISO);
-```
-
-- Mapear essas transações como `ContractReportRow` com campos default (closerName: "Sem Reunião", sdrName: "N/A", meetingType: "direct", etc.)
-- Concatenar ao resultado principal e retornar tudo ordenado por data
-
-#### 2. `src/components/relatorios/ControleDiegoPanel.tsx`
-- Sem alteração de lógica necessária (os novos rows terão a mesma interface `KanbanRow`)
-- Os cards sem reunião aparecerão normalmente no Kanban como "Pendentes" com indicação visual de "Compra Direta" (sem closer/SDR)
+1. **Remover** estado `selectedOriginId` e a query de `crm-origins-list`
+2. **Adicionar** estado `selectedTags: string[]` para filtro por tags
+3. **Adicionar** `contactTags: string[]` ao tipo `KanbanRow` e mapeá-lo dos dados
+4. **Extrair tags únicas** dos dados carregados para popular o filtro
+5. **Substituir** o `<Select>` de Pipeline pelo componente `TagFilterPopover` já existente
+6. **Aplicar filtro client-side**: se há tags selecionadas, mostrar apenas rows cujo `contactTags` contenha pelo menos uma das tags selecionadas
+7. **Atualizar** dependências do `useMemo` e lógica de export (PDF/Excel) para refletir tags em vez de pipeline
 
 ### Resultado
-O total de contratos no Controle Diego passará a bater com o total de Vendas, pois ambos usarão a mesma base de dados (Hubla) como fonte de verdade complementar.
+O filtro de Pipeline será substituído por um filtro multi-select de Tags que permite filtrar por anamnese, seguimentos e demais tags dos contatos, usando o componente `TagFilterPopover` já disponível no projeto.
 
