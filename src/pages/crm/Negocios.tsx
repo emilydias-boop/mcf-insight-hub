@@ -45,6 +45,8 @@ import { MovePartnersButton } from '@/components/crm/MovePartnersButton';
 import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDialog';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import { ExportDealsDialog } from '@/components/crm/ExportDealsDialog';
+import { DeleteDealsConfirmDialog } from '@/components/crm/DeleteDealsConfirmDialog';
+import { useBulkDeleteDeals } from '@/hooks/useDeleteDeals';
 import { Download } from 'lucide-react';
 
 const Negocios = () => {
@@ -75,7 +77,10 @@ const Negocios = () => {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [spreadsheetDialogOpen, setSpreadsheetDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const bulkTransfer = useBulkTransfer();
+  const bulkDelete = useBulkDeleteDeals();
+  const canDelete = ['admin', 'manager', 'coordenador'].includes(role || '');
   
   // Usar BU ativa (do contexto da rota ou do perfil do usuário)
   const activeBU = useActiveBU();
@@ -825,6 +830,24 @@ const Negocios = () => {
         onTransfer={() => setTransferDialogOpen(true)}
         onClearSelection={handleClearSelection}
         isTransferring={bulkTransfer.isPending}
+        onDelete={canDelete ? () => setDeleteDialogOpen(true) : undefined}
+        isDeleting={bulkDelete.isPending}
+      />
+      
+      {/* Dialog de confirmação de exclusão em massa */}
+      <DeleteDealsConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        count={selectedDealIds.size}
+        isDeleting={bulkDelete.isPending}
+        onConfirm={() => {
+          bulkDelete.mutate(Array.from(selectedDealIds), {
+            onSuccess: () => {
+              setDeleteDialogOpen(false);
+              handleClearSelection();
+            },
+          });
+        }}
       />
       
       {/* Dialog de transferência em massa */}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Phone, MessageCircle, ArrowRight, Loader2, XCircle, Calendar, CalendarClock, FolderInput, Trash2, ClipboardList, RotateCcw } from 'lucide-react';
 import { useTwilio } from '@/contexts/TwilioContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useUpdateCRMDeal, useCRMStages, useDeleteCRMDeal } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
 import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from '@/lib/phoneUtils';
@@ -39,6 +40,7 @@ interface QuickActionsBlockProps {
 }
 
 export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onDeleted }: QuickActionsBlockProps) => {
+  const { role } = useAuth();
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice, callStatus, currentCallDealId } = useTwilio();
   const updateDeal = useUpdateCRMDeal();
   const { data: stages } = useCRMStages(deal?.origin_id);
@@ -319,15 +321,17 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
               </Button>
             )}
             
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10"
-              onClick={() => setShowDeleteDialog(true)}
-            >
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              Excluir
-            </Button>
+            {['admin', 'manager', 'coordenador'].includes(role || '') && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                Excluir
+              </Button>
+            )}
           </>
         )}
       </div>
