@@ -271,6 +271,7 @@ export const IncomingWebhookFormDialog = ({
           required_fields: values.required_fields,
           auth_header_name: values.auth_header_name || null,
           auth_header_value: values.auth_header_value || null,
+          fixed_owner_email: values.fixed_owner_email || null,
           is_active: values.is_active,
         });
       } else {
@@ -284,6 +285,7 @@ export const IncomingWebhookFormDialog = ({
           required_fields: values.required_fields,
           auth_header_name: values.auth_header_name,
           auth_header_value: values.auth_header_value,
+          fixed_owner_email: values.fixed_owner_email || null,
           is_active: values.is_active,
           ...(duplicateData?.field_mapping ? { 
             field_mapping: Object.fromEntries(
