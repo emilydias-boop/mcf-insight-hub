@@ -145,9 +145,39 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
   const [customTag, setCustomTag] = useState('');
   const [selectedStageId, setSelectedStageId] = useState<string>('__default__');
   const [assignMode, setAssignMode] = useState<AssignMode>('single');
+  const [selectedDestinationOriginId, setSelectedDestinationOriginId] = useState<string>('');
 
   const createNotFoundMutation = useCreateNotFoundDeals();
   const bulkTransfer = useBulkTransfer();
+
+  // SDRs do Consórcio for distribution
+  const { data: consorcioSdrs } = useSdrsFromSquad('consorcio');
+
+  // Query BU-filtered pipeline origins (for destination selector)
+  const { data: buFilteredOrigins } = useQuery({
+    queryKey: ['bu-filtered-origins', activeBU],
+    queryFn: async () => {
+      if (!activeBU) return [];
+      // Get entity_ids from bu_origin_mapping for this BU (origin type)
+      const { data: mappings } = await supabase
+        .from('bu_origin_mapping')
+        .select('entity_id, entity_type')
+        .eq('bu', activeBU);
+      if (!mappings?.length) return [];
+      const originIds = mappings.filter(m => m.entity_type === 'origin').map(m => m.entity_id);
+      if (!originIds.length) return [];
+      const { data: origins } = await supabase
+        .from('crm_origins')
+        .select('id, name')
+        .in('id', originIds)
+        .order('name');
+      return origins || [];
+    },
+    enabled: !!activeBU && open,
+  });
+
+  // The effective destination origin: user-selected > prop > nothing
+  const activeOriginId = selectedDestinationOriginId || originId;
 
   // SDRs do Consórcio for distribution
   const { data: consorcioSdrs } = useSdrsFromSquad('consorcio');
