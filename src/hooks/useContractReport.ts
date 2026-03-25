@@ -25,6 +25,7 @@ export interface ContractReportRow {
   contractPaidAt: string;
   salesChannel: 'a010' | 'bio' | 'live';
   contactEmail: string | null;
+  contactId: string | null;
   contactTags: string[];
   isRefunded: boolean;
   customFields: {
@@ -247,6 +248,7 @@ export const useContractReport = (
           contractPaidAt: row.contract_paid_at || slot?.scheduled_at || '',
           salesChannel,
           contactEmail,
+          contactId: deal?.contact_id || null,
           contactTags,
           isRefunded: row.status === 'refunded',
           customFields,
