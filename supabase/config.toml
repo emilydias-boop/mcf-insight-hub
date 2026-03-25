@@ -27,9 +27,6 @@ verify_jwt = false
 [functions.import-deals-csv]
 verify_jwt = false
 
-[functions.process-csv-imports]
-verify_jwt = false
-
 [functions.sync-clint-data]
 verify_jwt = false
 
@@ -66,9 +63,6 @@ verify_jwt = false
 [functions.import-bubble-history]
 verify_jwt = false
 
-[functions.reprocess-hubla-events]
-verify_jwt = false
-
 [functions.webhook-ads-cost]
 verify_jwt = false
 
@@ -79,9 +73,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.import-hubla-history]
-verify_jwt = false
-
-[functions.reprocess-hubla-webhooks]
 verify_jwt = false
 
 [functions.recalculate-sdr-payout]
@@ -141,7 +132,6 @@ verify_jwt = false
 [functions.twilio-voice-twiml]
 verify_jwt = false
 
-
 [functions.sync-newsale-orphans]
 verify_jwt = false
 
@@ -166,7 +156,6 @@ verify_jwt = false
 [functions.apply-audit-corrections]
 verify_jwt = false
 
-
 [functions.send-meeting-notification]
 verify_jwt = false
 
@@ -176,7 +165,6 @@ verify_jwt = false
 [functions.reprocess-failed-webhooks-cron]
 verify_jwt = false
 
-
 [functions.backfill-orphan-owners]
 verify_jwt = false
 
@@ -185,8 +173,6 @@ verify_jwt = false
 
 [functions.webhook-consorcio]
 verify_jwt = false
-
-
 
 [functions.notify-new-lead]
 verify_jwt = false
@@ -233,13 +219,8 @@ verify_jwt = false
 [functions.create-user]
 verify_jwt = false
 
-[functions.reprocess-contract-payments]
-verify_jwt = false
-
-
 [functions.process-deal-replication]
 verify_jwt = false
-
 
 [functions.send-document-email]
 verify_jwt = false
@@ -253,11 +234,8 @@ verify_jwt = false
 [functions.manage-roles]
 verify_jwt = false
 
-
 [functions.import-spreadsheet-leads]
 verify_jwt = false
-
-
 
 [functions.move-partners-to-venda-realizada]
 verify_jwt = false
