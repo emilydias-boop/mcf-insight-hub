@@ -152,7 +152,7 @@ export default function ImportarConsorcioPage() {
   }, []);
 
   const handleMappingChange = (field: keyof ColumnMapping, value: string) => {
-    setMapping(prev => ({ ...prev, [field]: value }));
+    setMapping(prev => ({ ...prev, [field]: value === '__none__' ? '' : value }));
   };
 
   const handlePreview = async () => {
@@ -404,7 +404,7 @@ export default function ImportarConsorcioPage() {
                     <SelectValue placeholder="Selecione a coluna" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Não mapear</SelectItem>
+                    <SelectItem value="__none__">Não mapear</SelectItem>
                     {headers.map(h => (
                       <SelectItem key={h} value={h}>{h}</SelectItem>
                     ))}
@@ -419,7 +419,7 @@ export default function ImportarConsorcioPage() {
                     <SelectValue placeholder="Selecione a coluna" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Não mapear</SelectItem>
+                    <SelectItem value="__none__">Não mapear</SelectItem>
                     {headers.map(h => (
                       <SelectItem key={h} value={h}>{h}</SelectItem>
                     ))}
@@ -434,7 +434,7 @@ export default function ImportarConsorcioPage() {
                     <SelectValue placeholder="Selecione a coluna" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Não mapear</SelectItem>
+                    <SelectItem value="__none__">Não mapear</SelectItem>
                     {headers.map(h => (
                       <SelectItem key={h} value={h}>{h}</SelectItem>
                     ))}
@@ -449,7 +449,7 @@ export default function ImportarConsorcioPage() {
                     <SelectValue placeholder="Selecione a coluna" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Não mapear</SelectItem>
+                    <SelectItem value="__none__">Não mapear</SelectItem>
                     {headers.map(h => (
                       <SelectItem key={h} value={h}>{h}</SelectItem>
                     ))}
@@ -464,7 +464,7 @@ export default function ImportarConsorcioPage() {
                     <SelectValue placeholder="Selecione a coluna" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Não mapear</SelectItem>
+                    <SelectItem value="__none__">Não mapear</SelectItem>
                     {headers.map(h => (
                       <SelectItem key={h} value={h}>{h}</SelectItem>
                     ))}
@@ -479,7 +479,7 @@ export default function ImportarConsorcioPage() {
                     <SelectValue placeholder="Selecione a coluna" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Não mapear</SelectItem>
+                    <SelectItem value="__none__">Não mapear</SelectItem>
                     {headers.map(h => (
                       <SelectItem key={h} value={h}>{h}</SelectItem>
                     ))}
