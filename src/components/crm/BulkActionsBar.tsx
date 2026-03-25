@@ -67,6 +67,23 @@ export const BulkActionsBar = ({
             Duplicar p/ Inside
           </Button>
         )}
+
+        {onDelete && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onDelete}
+            disabled={isTransferring || isDuplicating || isDeleting}
+            className="gap-2 bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/30"
+          >
+            {isDeleting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+            Excluir
+          </Button>
+        )}
         
         <Button
           variant="ghost"

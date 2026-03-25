@@ -319,15 +319,17 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
               </Button>
             )}
             
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10"
-              onClick={() => setShowDeleteDialog(true)}
-            >
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              Excluir
-            </Button>
+            {['admin', 'manager', 'coordenador'].includes(role || '') && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                Excluir
+              </Button>
+            )}
           </>
         )}
       </div>
