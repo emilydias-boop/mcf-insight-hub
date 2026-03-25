@@ -1,28 +1,34 @@
 
 
-## Limpeza final — 2 itens para remover
+## Varredura final — 4 edge functions órfãs restantes
 
-### Decisões
-1. **`notify-new-lead/`** — MANTER (função oculta por hora, será usada futuramente)
-2. **`auto-close-weekly-metrics/`** — DELETAR (página associada já foi excluída)
-3. **`bulk-transfer-by-name/`** — DELETAR (redundante com `useBulkTransfer.ts` e `useTransferDealOwner` no frontend)
+Após verificar **todas as 87 edge functions** contra o frontend (src/) e contra chamadas cruzadas entre functions, o sistema está quase 100% limpo. Restam apenas **4 edge functions sem nenhum consumidor**:
 
-### Também corrigir
-4. **`detect-ghost-appointments`** no `config.toml` — entrada fantasma (pasta já não existe)
-5. **`useDuplicateContactsLegacy()`** em `useDuplicateContacts.ts` — export morto, nunca importado
-6. **`bulk-update-contacts/`** — edge function sem referência, DELETAR
+### Edge functions confirmadas como órfãs
+
+| Função | Linhas | Referências no frontend | Referências em outras functions | Veredicto |
+|--------|--------|------------------------|--------------------------------|-----------|
+| `reprocess-hubla-events/` | ~200 | 0 | 0 | DELETAR |
+| `reprocess-hubla-webhooks/` | ~180 | 0 | 0 | DELETAR |
+| `reprocess-contract-payments/` | ~150 | 0 | 0 | DELETAR |
+| `process-csv-imports/` | 721 | 0 | 0 | DELETAR — o frontend usa `import-contacts-csv` e `import-deals-csv` diretamente |
+
+### O que NÃO é órfão (confirmado ativo)
+
+- `reprocess-failed-webhooks/` — chamado por `sync-clint-data` e `reprocess-failed-webhooks-cron`
+- `sync-newsale-orphans/` — chamado por `sync-newsale-orphans-cron`
+- Todos os hooks verificados (`useLinkTransactionToAttendee`, `useLinkContractToAttendee`, `useNewLeadNotifications`, etc.) — todos importados por componentes ativos
 
 ### Ações
 
 | Ação | Arquivo |
 |------|---------|
-| Deletar pasta | `supabase/functions/auto-close-weekly-metrics/` |
-| Deletar pasta | `supabase/functions/bulk-transfer-by-name/` |
-| Deletar pasta | `supabase/functions/bulk-update-contacts/` |
-| Remover do config.toml | Entradas: `auto-close-weekly-metrics`, `bulk-transfer-by-name`, `bulk-update-contacts`, `detect-ghost-appointments` |
-| Editar `useDuplicateContacts.ts` | Remover export `useDuplicateContactsLegacy()` (~50 linhas mortas) |
+| Deletar pasta | `supabase/functions/reprocess-hubla-events/` |
+| Deletar pasta | `supabase/functions/reprocess-hubla-webhooks/` |
+| Deletar pasta | `supabase/functions/reprocess-contract-payments/` |
+| Deletar pasta | `supabase/functions/process-csv-imports/` |
+| Editar | `supabase/config.toml` — remover as 4 entradas correspondentes |
 
-### O que permanece
-- `notify-new-lead/` — mantido conforme solicitado
-- Todos os módulos ativos — zero impacto
+### Impacto
+Zero. Nenhum módulo ativo, nenhum cron job e nenhuma outra edge function referencia essas 4 funções.
 
