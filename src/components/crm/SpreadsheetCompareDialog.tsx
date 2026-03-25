@@ -179,9 +179,6 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
   // The effective destination origin: user-selected > prop > nothing
   const activeOriginId = selectedDestinationOriginId || originId;
 
-  // SDRs do Consórcio for distribution
-  const { data: consorcioSdrs } = useSdrsFromSquad('consorcio');
-
   // Query available SDRs/Closers
   const { data: availableUsers, isLoading: loadingUsers } = useQuery({
     queryKey: ['transfer-users-sdr-closer'],
