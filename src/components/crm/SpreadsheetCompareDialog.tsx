@@ -542,7 +542,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
             const { data, error } = await supabase.functions.invoke('import-spreadsheet-leads', {
               body: {
                 leads: leads.map(r => ({ name: r.excelName, email: r.excelEmail, phone: r.excelPhone })),
-                origin_id: originId,
+                origin_id: activeOriginId,
                 owner_email: sdr.email,
                 owner_profile_id: sdr.id,
                 tags,
