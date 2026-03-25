@@ -171,8 +171,6 @@ verify_jwt = false
 [functions.apply-audit-corrections]
 verify_jwt = false
 
-[functions.reconcile-clint-ids]
-verify_jwt = false
 
 [functions.reprocess-missing-activities]
 verify_jwt = false
@@ -283,8 +281,6 @@ verify_jwt = false
 [functions.manage-roles]
 verify_jwt = false
 
-[functions.fix-r2-ownership]
-verify_jwt = false
 
 [functions.import-spreadsheet-leads]
 verify_jwt = false
@@ -292,8 +288,6 @@ verify_jwt = false
 [functions.backfill-a010-offer-leads]
 verify_jwt = false
 
-[functions.cleanup-backfill-partners]
-verify_jwt = false
 
 [functions.move-partners-to-venda-realizada]
 verify_jwt = false

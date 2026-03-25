@@ -7,10 +7,8 @@ export default function Receita() {
   const isRootPath = location.pathname === '/receita';
 
   const tabs = [
-    { name: "Visão Geral", path: "/receita" },
     { name: "Cursos", path: "/receita/a010" },
     { name: "Transações", path: "/receita/transacoes" },
-    { name: "Por Canal", path: "/receita/por-canal" },
     { name: "Importar Hubla", path: "/receita/importar-hubla" },
     { name: "Auditoria", path: "/receita/auditoria" },
   ];
