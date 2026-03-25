@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Trash2, Pencil, Check, X } from 'lucide-react';
+import { Plus, GripVertical, Trash2, Pencil, Check, X, Download, Cloud } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 
@@ -70,6 +70,50 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
         .order('stage_order');
       if (error) throw error;
       return data as LocalStage[];
+    },
+  });
+
+  // Fallback: fetch crm_stages when local stages are empty
+  const { data: crmStages = [], isLoading: crmLoading } = useQuery({
+    queryKey: ['crm-stages-fallback', targetType, targetId],
+    queryFn: async () => {
+      if (targetType !== 'origin') return [];
+      const { data, error } = await supabase
+        .from('crm_stages')
+        .select('id, clint_id, stage_name, color, stage_order, is_active')
+        .eq('origin_id', targetId)
+        .eq('is_active', true)
+        .order('stage_order');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !isLoading && stages.length === 0,
+  });
+
+  // Import crm_stages to local_pipeline_stages
+  const importMutation = useMutation({
+    mutationFn: async () => {
+      if (crmStages.length === 0) throw new Error('Nenhuma etapa para importar');
+      const importData = crmStages.map(s => ({
+        id: s.id,
+        name: s.stage_name,
+        color: s.color || '#6b7280',
+        stage_order: s.stage_order ?? 0,
+        origin_id: targetId,
+        stage_type: 'normal' as const,
+      }));
+      const { error } = await supabase
+        .from('local_pipeline_stages')
+        .upsert(importData, { onConflict: 'id' });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Etapas importadas para edição local!');
+      queryClient.invalidateQueries({ queryKey: ['local-pipeline-stages'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-stages-fallback'] });
+    },
+    onError: (error) => {
+      toast.error('Erro ao importar: ' + (error as Error).message);
     },
   });
 
@@ -258,7 +302,7 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
     }
   };
 
-  if (isLoading) {
+  if (isLoading || crmLoading) {
     return <p className="text-sm text-muted-foreground">Carregando etapas...</p>;
   }
 
@@ -353,7 +397,40 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
       )}
 
       {/* Stages list */}
-      {stages.length === 0 ? (
+      {stages.length === 0 && crmStages.length > 0 ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-border">
+            <Cloud className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground flex-1">
+              {crmStages.length} etapas sincronizadas do Clint CRM (somente leitura)
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => importMutation.mutate()}
+              disabled={importMutation.isPending}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              {importMutation.isPending ? 'Importando...' : 'Importar para edição'}
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {crmStages.map((stage, index) => (
+              <div
+                key={stage.id}
+                className="flex items-center gap-3 p-3 border rounded-lg bg-background opacity-80"
+              >
+                <span className="text-xs text-muted-foreground w-5 text-center">{index + 1}</span>
+                <div
+                  className="w-4 h-4 rounded flex-shrink-0"
+                  style={{ backgroundColor: stage.color || '#6b7280' }}
+                />
+                <span className="flex-1 font-medium">{stage.stage_name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : stages.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground border rounded-lg">
           <p>Nenhuma etapa local configurada.</p>
           <p className="text-sm">As etapas padrão do sistema serão usadas.</p>
