@@ -664,6 +664,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     setCustomTag('');
     setSelectedStageId('__default__');
     setAssignMode('single');
+    setSelectedDestinationOriginId('');
   };
 
   const getStatusIcon = (status: SpreadsheetRow['matchStatus']) => {
