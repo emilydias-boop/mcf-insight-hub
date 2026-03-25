@@ -35,7 +35,7 @@ const CRM = () => {
   let navItems = allNavItems;
   
   if (isAgendaOnly) {
-    const allowedTabs: string[] = ['/crm/agenda', '/crm/negocios']; // Agenda R1 + Negócios sempre liberados
+    const allowedTabs: string[] = ['/crm/agenda', '/crm/negocios', '/crm/contatos']; // Agenda R1 + Negócios + Contatos sempre liberados
     
     if (canViewR2) {
       allowedTabs.push('/crm/agenda-r2');

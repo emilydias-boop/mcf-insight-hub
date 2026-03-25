@@ -7,6 +7,7 @@ import { useContactsEnriched, useContactFilterOptions, type EnrichedContact } fr
 import { useSyncClintData } from '@/hooks/useCRMData';
 import { usePartnerProductDetectionBatch, useAllPartnerProducts, PRODUCT_GROUPS } from '@/hooks/usePartnerProductDetection';
 import { Search, Plus, User, RefreshCw, Loader2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
 import { ContactFormDialog } from '@/components/crm/ContactFormDialog';
 import { ContactFilters, emptyFilters, type ContactFilterValues } from '@/components/crm/ContactFilters';

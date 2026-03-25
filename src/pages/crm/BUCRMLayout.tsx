@@ -103,7 +103,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
   
   // Depois aplicar filtro de roles (sdr/closer)
   if (isAgendaOnly) {
-    const allowedTabs: string[] = ['agenda'];
+    const allowedTabs: string[] = ['agenda', 'contatos'];
     
     if (canViewR2 && buVisibleTabs.includes('agenda-r2')) {
       allowedTabs.push('agenda-r2');
