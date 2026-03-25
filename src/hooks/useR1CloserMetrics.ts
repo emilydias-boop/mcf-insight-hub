@@ -142,8 +142,12 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
 
       if (r2Error) throw r2Error;
 
-      // NOVA QUERY: Buscar TODOS os R1 meetings (SEM filtro de data) para mapear deal → closer R1
-      // Isso é necessário porque uma R2 de janeiro pode estar vinculada a uma R1 de dezembro
+      // Buscar R1 meetings dos últimos 6 meses para mapear deal → closer R1
+      // Isso é necessário porque uma R2 pode estar vinculada a uma R1 de meses anteriores
+      const sixMonthsAgo = new Date(startDate);
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      const sixMonthsAgoISO = startOfDay(sixMonthsAgo).toISOString();
+
       const { data: allR1Meetings, error: allR1Error } = await supabase
         .from('meeting_slots')
         .select(`
@@ -155,6 +159,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           )
         `)
         .eq('meeting_type', 'r1')
+        .gte('scheduled_at', sixMonthsAgoISO)
         .neq('status', 'cancelled')
         .neq('status', 'canceled');
 

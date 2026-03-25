@@ -36,7 +36,6 @@ import { PipelineSelector } from "@/components/crm/PipelineSelector";
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
 
-import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
@@ -269,13 +268,10 @@ export default function ConsorcioPainelEquipe() {
 
   const diasUteisNoPeriodo = useMemo(() => contarDiasUteis(start, end), [start, end]);
 
-  const { data: dayAgendaKPIs } = useMeetingSlotsKPIs(dayStart, dayEnd);
-  const { data: weekAgendaKPIs } = useMeetingSlotsKPIs(weekStartDate, weekEndDate);
   const { data: dayR2AgendaKPIs } = useR2MeetingSlotsKPIs(dayStart, dayEnd);
   const { data: weekR2AgendaKPIs } = useR2MeetingSlotsKPIs(weekStartDate, weekEndDate);
   const { data: dayR2VendasKPIs } = useR2VendasKPIs(dayStart, dayEnd);
   const { data: weekR2VendasKPIs } = useR2VendasKPIs(weekStartDate, weekEndDate);
-  const { data: monthAgendaKPIs } = useMeetingSlotsKPIs(monthStartDate, monthEndDate);
   const { data: monthR2AgendaKPIs } = useR2MeetingSlotsKPIs(monthStartDate, monthEndDate);
   const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
 
