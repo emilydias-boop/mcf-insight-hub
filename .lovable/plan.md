@@ -1,45 +1,34 @@
 
 
-## Adicionar exclusão individual e em massa de leads (coordenadores+)
+## Fix: Erro FK ao excluir leads com registros de consórcio
 
-### Contexto
-Atualmente não existe funcionalidade de excluir deals/leads no CRM. A feature deve permitir excluir leads individualmente (dentro do card/drawer) e em massa (via seleção no Kanban), visível apenas para roles `admin`, `manager` e `coordenador`.
+### Problema
+Ao excluir um deal, o cascade tenta deletar `consorcio_pending_registrations`, mas `consortium_documents.pending_registration_id` não tem CASCADE, causando o erro FK.
 
-### Alterações
+### Esclarecimento do usuário
+A exclusão deve remover apenas o registro do CRM (deal), **sem apagar** a carta de consórcio (`consortium_cards`). Apenas os vínculos intermediários (`consorcio_pending_registrations` e seus `consortium_documents`) precisam ser limpos.
 
-#### 1. Hook `src/hooks/useDeleteDeals.ts` (novo)
-- Criar mutation `useDeleteDeal` (single) e `useDeleteDeals` (bulk)
-- Deleta de `crm_deals` por ID(s)
-- Invalida queries `['crm-deals']` após sucesso
-- Toast de confirmação/erro
+### Solução
+No `src/hooks/useDeleteDeals.ts`, adicionar antes do `delete crm_deals`:
 
-#### 2. `src/components/crm/BulkActionsBar.tsx` — Adicionar botão "Excluir"
-- Nova prop opcional `onDelete`, `isDeleting`
-- Renderizar botão vermelho "Excluir" com ícone `Trash2` quando `onDelete` existe
-- Pedir confirmação antes de executar (dialog inline ou window.confirm)
+1. Buscar `consorcio_pending_registrations` vinculados ao deal (`deal_id = id`)
+2. Para cada registration encontrado, deletar `consortium_documents` onde `pending_registration_id` = registration.id
+3. Deletar os `consorcio_pending_registrations` do deal
 
-#### 3. `src/pages/crm/Negocios.tsx` — Integrar exclusão em massa
-- Importar `useDeleteDeals`
-- Verificar role: só passa `onDelete` ao `BulkActionsBar` se role é `admin`, `manager` ou `coordenador`
-- Callback executa delete dos IDs selecionados e limpa seleção
-
-#### 4. `src/components/crm/DealKanbanCard.tsx` ou `DealDetailsDrawer.tsx` — Botão excluir individual
-- Verificar se já existe menu de contexto/ações no card
-- Adicionar opção "Excluir lead" visível apenas para coordenadores+
-- Confirmar via `AlertDialog` antes de executar
-
-#### 5. Confirmação de exclusão `src/components/crm/DeleteDealsConfirmDialog.tsx` (novo)
-- Dialog com aviso do número de leads a excluir
-- Input de confirmação ("digite EXCLUIR") para bulk > 5 leads
-- Botão destrutivo
-
-### Visibilidade por role
 ```typescript
-const canDelete = ['admin', 'manager', 'coordenador'].includes(role || '');
-```
-Apenas essas roles verão os botões de exclusão. SDRs, closers e demais não terão acesso.
+// Antes de deletar o deal, limpar consórcio pending registrations
+const { data: pendingRegs } = await supabase
+  .from('consorcio_pending_registrations')
+  .select('id')
+  .eq('deal_id', id);
 
-### Arquivos
-- **Novo**: `src/hooks/useDeleteDeals.ts`, `src/components/crm/DeleteDealsConfirmDialog.tsx`
-- **Editados**: `src/components/crm/BulkActionsBar.tsx`, `src/pages/crm/Negocios.tsx`, drawer/card de deal
+if (pendingRegs && pendingRegs.length > 0) {
+  const regIds = pendingRegs.map(r => r.id);
+  await supabase.from('consortium_documents').delete().in('pending_registration_id', regIds);
+  await supabase.from('consorcio_pending_registrations').delete().in('id', regIds);
+}
+```
+
+### Arquivo alterado
+- `src/hooks/useDeleteDeals.ts` — adicionar limpeza de pending registrations e seus documentos
 
