@@ -1,90 +1,112 @@
 
-## Context
+## Diagnóstico do Problema
 
-The user wants two things for the **BU-Consórcio CRM**:
+### O que está errado
 
-1. **XLSX support in ImportarNegocios** — the `handleFileChange` function only accepts `.csv` and rejects anything else. The upload `<input>` also has `accept=".csv"`. The XLSX library is already imported in the project.
+O `SpreadsheetCompareDialog` recebe `originId` via prop — que é o `effectiveOriginId` da página `Negocios.tsx`. Esse `originId` já é correto (é a pipeline selecionada dentro da BU ativa).
 
-2. **Lead validator (SpreadsheetCompareDialog) accessible in Consórcio** — the "Importar Planilha" button in `Negocios.tsx` (line 688) is gated to `admin || manager`. `coordenador` users in Consórcio never see it. The `SpreadsheetCompareDialog` is the full validator: scans all CRM contacts by name/email/phone across ALL pipelines, shows "Nesta pipeline / Em outra pipeline / Novo" per lead, and lets the user block or allow before importing.
+**O problema real:** na tela de resultados (Step 3), o dialog tem um **seletor de Estágio** que busca estágios usando `originId` (correto). Mas há outro ponto crítico: o dialog **não tem seletor de pipeline de destino** — a pipeline é sempre a que foi passada via `originId`. Então o usuário já está dentro do Consórcio e importa sempre para a pipeline da BU atual. Isso **já está correto conceitualmente**.
 
-3. **`ImportarNegocios.tsx` BU fix** — the `queryKey` and `bu` filter are hardcoded to `'incorporador'` so Consórcio pipelines never appear.
+**Mas o verdadeiro gap** é na `Configuracoes.tsx` / `ImportarNegocios.tsx`: lá existe um **Select de pipeline** que mostra as origens filtradas pela BU ativa via `bu_origin_mapping`. Com o fix aplicado anteriormente (`useActiveBU()`), isso deveria funcionar.
 
-## Files to Change
+### O que ainda está incompleto
 
-### 1. `src/pages/crm/Negocios.tsx` — line 688
-Add `coordenador` to the role guard so the "Importar Planilha" button (and the full `SpreadsheetCompareDialog` validator) appears for Consórcio users.
+Ao inspecionar o fluxo completo:
 
-```tsx
-// Before
-{(role === 'admin' || role === 'manager') && (
+1. `SpreadsheetCompareDialog` recebe `originId={effectiveOriginId}` de `Negocios.tsx` — esta é a pipeline **selecionada na OriginsSidebar/PipelineSelector** da página de Negócios. Se o usuário não selecionou nenhuma pipeline, `effectiveOriginId` pode ser `undefined`, e o dialog não funcionará.
 
-// After
-{(role === 'admin' || role === 'manager' || role === 'coordenador') && (
-```
+2. `ImportarNegocios.tsx` (via Configurações) agora usa `useActiveBU()` para filtrar as origens — OK, mas precisa verificar se o filtro está realmente funcionando, pois `buKey = activeBU || 'incorporador'` pode resultar em `'incorporador'` se `activeBU` for `null` (quando acessado fora do contexto BU).
 
-### 2. `src/pages/crm/ImportarNegocios.tsx` — three changes
+3. **O ponto que o usuário está reclamando**: quando clica em "Importar Planilha" no Consórcio, a pipeline de destino mostrada nos resultados é a pipeline que estava selecionada — o usuário quer garantia que **apenas pipelines do Consórcio** aparecem como destino, não pipelines de outras BUs.
 
-**a) XLSX support in file input (line 438)**
-```tsx
-// Before
-accept=".csv"
-// After
-accept=".csv,.xlsx,.xls"
-```
+### Análise da raiz
 
-**b) File validation in `handleFileChange` (line 136)**
-```tsx
-// Before: rejects anything not .csv
-if (!selectedFile.name.endsWith('.csv')) {
-  toast.error('Por favor, selecione um arquivo CSV');
-  return;
-}
-// After: accept csv, xlsx, xls
-const ext = selectedFile.name.split('.').pop()?.toLowerCase();
-if (!['csv', 'xlsx', 'xls'].includes(ext || '')) {
-  toast.error('Formato inválido. Use CSV, XLSX ou XLS');
-  return;
-}
-```
+O `SpreadsheetCompareDialog` **não tem um seletor de pipeline de destino** na interface — a pipeline é fixada pelo `originId` que chega como prop. O problema relatado deve ser que `effectiveOriginId` às vezes resolve para um origin ID de outra BU quando não há pipeline selecionada explicitamente, ou o `ImportarNegocios` ainda mostra pipelines de outras BUs.
 
-**c) BU-aware pipeline query (lines 52-94)**
-```tsx
-// Before: hardcoded 'incorporador'
-import { useActiveBU } from '@/hooks/useActiveBU';
+Preciso verificar se há algo na `Configuracoes.tsx` que passa o `ImportarNegocios`.
 
+## Arquivos Relevantes a Verificar
+
+Antes de apresentar o plano final, preciso ler `Configuracoes.tsx` para entender como o `ImportarNegocios` é montado dentro da BU-Consórcio.
+
+---
+
+## Plano
+
+### Problema confirmado
+
+O `ImportarNegocios.tsx` usa:
+```ts
 const activeBU = useActiveBU();
-// Update queryKey and .eq('bu', activeBU || 'incorporador')
+const buKey = activeBU || 'incorporador';
 ```
 
-Since `ImportarNegocios` sends the file to the `import-deals-csv` edge function via FormData, XLSX parsing happens server-side. But the edge function likely only handles CSV. We need to parse XLSX on the client side and convert to CSV before sending — OR add a step that uses the `XLSX` library (already a dependency) to convert XLSX to CSV text client-side, then send that as a blob.
+Quando o componente é renderizado dentro de `/consorcio/crm/configuracoes`, o `BUProvider` está ativo com `bu="consorcio"`, então `useActiveBU()` retorna `'consorcio'`. Isso está correto.
 
-**Approach**: On file select, if the file is XLSX/XLS, parse it with the `XLSX` library into a CSV string and store it as a synthetic File object. The rest of the upload flow is unchanged.
+**Porém o problema real:** o `buKey` só filtra a query `bu_origin_mapping`. Se a BU `'consorcio'` não tem entradas na tabela `bu_origin_mapping`, a query retorna vazio, e a lógica de fallback (`getFallbackMapping`) usa `BU_PIPELINE_MAP['consorcio']` — que pode estar mapeando origens incorretas ou vazias.
+
+**E no `SpreadsheetCompareDialog`:** ele recebe `originId` como prop, então a pipeline de destino é sempre a que estava selecionada na sidebar — não há seletor dentro do dialog. O usuário provavelmente está vendo que no passo de resultados **não aparece um seletor de pipeline** para confirmar/alterar o destino.
+
+### O que realmente fazer
+
+**A solução correta é:** adicionar ao `SpreadsheetCompareDialog` um **seletor de pipeline de destino** no passo de resultados, filtrado pela BU ativa, para que o usuário possa:
+1. Ver claramente para qual pipeline os leads vão entrar
+2. Confirmar que só aparece pipeline da BU atual
+
+Além disso, garantir que `ImportarNegocios` mostre apenas pipelines da BU correta.
+
+---
+
+## Mudanças
+
+### 1. `src/components/crm/SpreadsheetCompareDialog.tsx`
+
+Adicionar:
+- Prop `activeBU?: BusinessUnit | null` além de `originId`
+- No passo "results", adicionar um seletor "Pipeline de destino" filtrado pela BU ativa via `bu_origin_mapping`
+- Usar o `originId` selecionado no dialog em vez do passado via prop (com fallback para o prop quando não há seleção)
 
 ```tsx
-import * as XLSX from 'xlsx';
+// Nova prop
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  deals: any[];
+  originId?: string;
+  activeBU?: BusinessUnit | null;  // ← novo
+}
 
-const handleFileChange = async (e) => {
-  const selectedFile = e.target.files?.[0];
-  const ext = selectedFile.name.split('.').pop()?.toLowerCase();
-  
-  if (ext === 'xlsx' || ext === 'xls') {
-    // Convert to CSV client-side
-    const data = await selectedFile.arrayBuffer();
-    const workbook = XLSX.read(data);
-    const csvText = XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]);
-    const csvFile = new File([csvText], selectedFile.name.replace(/\.[^.]+$/, '.csv'), { type: 'text/csv' });
-    setFile(csvFile);
-  } else {
-    setFile(selectedFile);
-  }
-};
+// No step results, antes do seletor de Estágio:
+<div className="space-y-1">
+  <label>Pipeline de destino</label>
+  <Select value={selectedDestinationOriginId || originId || ''} onValueChange={setSelectedDestinationOriginId}>
+    {/* Só pipelines da BU ativa */}
+  </Select>
+</div>
 ```
 
-This is clean — no edge function changes needed, just transparent XLSX→CSV conversion before upload.
+### 2. `src/pages/crm/Negocios.tsx`
 
-## Summary
+Passar `activeBU` para o dialog:
+```tsx
+<SpreadsheetCompareDialog
+  open={spreadsheetDialogOpen}
+  onOpenChange={setSpreadsheetDialogOpen}
+  deals={dealsData || []}
+  originId={effectiveOriginId}
+  activeBU={activeBU}   // ← novo
+/>
+```
 
-| File | Change |
+### 3. `src/pages/crm/ImportarNegocios.tsx`
+
+Já foi corrigido com `useActiveBU()`. Verificar se o filtro funciona ao confirmar que `buKey` é sempre `'consorcio'` dentro da BU-Consórcio. **Não precisa de mudança adicional** — o fix anterior já está correto.
+
+---
+
+## Resumo das Mudanças
+
+| Arquivo | Mudança |
 |---|---|
-| `src/pages/crm/Negocios.tsx` | Add `coordenador` to role guard (1 line) |
-| `src/pages/crm/ImportarNegocios.tsx` | Add XLSX→CSV conversion on file select; fix BU to use `useActiveBU()`; update file input accept |
+| `SpreadsheetCompareDialog.tsx` | Adicionar seletor de pipeline de destino filtrado pela BU ativa (prop `activeBU`) no passo de resultados |
+| `Negocios.tsx` | Passar `activeBU` para `SpreadsheetCompareDialog` |
