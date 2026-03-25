@@ -126,9 +126,10 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   deals: any[];
   originId?: string;
+  activeBU?: BusinessUnit | null;
 }
 
-export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId }: Props) {
+export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, activeBU }: Props) {
   const [step, setStep] = useState<Step>('upload');
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawData, setRawData] = useState<any[]>([]);
