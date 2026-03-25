@@ -1,56 +1,44 @@
 
 
-## Correção: Simulação da Limpeza Completa não exibe grupos
+## Mostrar etapas do Clint no editor de pipeline
 
 ### Problema
+O `PipelineStagesEditor` só consulta `local_pipeline_stages`. Pipelines sincronizadas do Clint (como "Perpétuo - X1") têm etapas apenas em `crm_stages`, então o editor mostra vazio.
 
-A simulação "Limpeza Completa" mostra 500 grupos email + 500 telefone nos contadores, mas **0 grupos no detalhe** (Todos(0), Riscos(0), 0 contatos a remover).
+### Impacto nos deals existentes
+**Nenhum.** Os deals referenciam `crm_stages.id` via FK. A importação copia dados para `local_pipeline_stages` usando os **mesmos UUIDs**, e qualquer edição é espelhada de volta em `crm_stages`. Os deals continuam apontando para os mesmos IDs.
 
-**Causa raiz**: A função `full_cleanup` com `dry_run=true` tenta processar 500+500 = 1000 grupos sequencialmente, cada um fazendo uma query ao banco. Isso causa:
-1. **Timeout** da Edge Function (limite de ~60s do Supabase) — os logs mostram apenas processamento de telefone, sem mensagem de conclusão
-2. **Payload enorme** — mesmo que completasse, 1000 grupos com detalhes de contatos excederia o limite de resposta
+### Mudanças
 
-### Solução
+**Arquivo:** `src/components/crm/PipelineStagesEditor.tsx`
 
-Limitar o número de grupos processados na simulação para um valor viável (ex: 50 por tipo) e otimizar a lógica para evitar timeout.
+#### 1. Query de fallback para crm_stages (linha ~62-74)
+Adicionar uma segunda query que busca `crm_stages` filtrada por `origin_id = targetId` (quando targetType é 'origin'). Habilitada apenas quando `local_pipeline_stages` retorna vazio.
 
-**Arquivo:** `supabase/functions/merge-duplicate-contacts/index.ts`
+#### 2. Exibição read-only quando só tem crm_stages
+Quando `stages` está vazio mas `crmStages` tem dados, mostrar a lista das etapas com cores, em modo read-only, com aviso "Etapas sincronizadas do Clint CRM".
 
-#### Mudança 1 — Limitar grupos na simulação
-No path `full_cleanup` com `dry_run=true`, processar no máximo 50 grupos de email e 50 de telefone para a simulação detalhada (suficiente para revisão), enquanto mantém os contadores totais corretos.
-
-```
-// Step 1: Email - pegar contagem total mas processar só amostra
-const emailsToProcess = dryRun ? (duplicateEmails || []).slice(0, 50) : (duplicateEmails || []);
-
-// Step 2: Phone - mesma lógica
-const phonesToProcess = dryRun ? (duplicatePhones || []).slice(0, 50) : (duplicatePhones || []);
-```
-
-#### Mudança 2 — Adicionar contagem de contatos a remover nos contadores
-Incluir `contacts_to_delete` no response do full_cleanup para que o modal mostre o total mesmo quando não processa todos os grupos:
-
-```
-contacts_to_delete: results.groups_processed.reduce(
-  (acc, g) => acc + (g.duplicates?.length || 0), 0
-)
+#### 3. Botão "Importar para edição local"
+Mutation que faz bulk insert em `local_pipeline_stages` a partir dos dados de `crm_stages`, preservando os mesmos IDs:
+```typescript
+const importData = crmStages.map(s => ({
+  id: s.id,  // mesmo UUID — mantém FK dos deals
+  name: s.stage_name,
+  color: s.color,
+  stage_order: s.stage_order,
+  origin_id: targetId,
+  stage_type: 'normal',
+}));
+await supabase.from('local_pipeline_stages').upsert(importData, { onConflict: 'id' });
 ```
 
-#### Mudança 3 — Consolidação de deals na simulação
-Na seção de deals do `full_cleanup` dry_run, popular `deal_consolidation_pairs` corretamente (já funciona no código, mas a contagem vem do Step 3 que pode não executar por timeout).
-
-### Impacto
-
-- A simulação abrirá rapidamente com até 100 grupos detalhados para revisão
-- Os contadores totais (500 email, 500 telefone) continuam corretos
-- A execução real (`dry_run=false`) continua processando todos os grupos
-- O modal mostrará grupos com "Manter"/"Remover" e flags de risco
+Após importar, invalidar queries e o editor muda para o modo editável normal (drag & drop, rename, etc).
 
 ### Detalhes técnicos
 
 | Item | Detalhe |
 |------|---------|
-| Arquivo | `supabase/functions/merge-duplicate-contacts/index.ts` |
-| Linhas afetadas | ~90-145 (path full_cleanup) |
-| Deploy | Edge Function precisa ser redeployada |
+| Arquivo | `src/components/crm/PipelineStagesEditor.tsx` |
+| Segurança | Mesmos UUIDs = nenhum deal perde referência |
+| Comportamento | Pipelines locais: sem mudança. Pipelines Clint: mostra etapas + botão importar |
 
