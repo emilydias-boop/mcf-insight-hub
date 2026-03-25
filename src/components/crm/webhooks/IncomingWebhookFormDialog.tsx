@@ -441,6 +441,42 @@ export const IncomingWebhookFormDialog = ({
               )}
             />
 
+            {isDuplicating && duplicateMappingEntries.length > 0 && (
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium">Mapeamento de Campos</h4>
+                  <div className="flex gap-2">
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={selectAllMappings}>
+                      Todos
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAllMappings}>
+                      Limpar
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Selecione quais campos do mapeamento deseja copiar ({selectedMappings.size} de {duplicateMappingEntries.length})
+                </p>
+                <ScrollArea className="max-h-[200px] rounded-md border p-2">
+                  <div className="space-y-2">
+                    {duplicateMappingEntries.map(([key, value]) => (
+                      <div key={key} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`mapping-${key}`}
+                          checked={selectedMappings.has(key)}
+                          onCheckedChange={() => toggleMapping(key)}
+                        />
+                        <Label htmlFor={`mapping-${key}`} className="text-xs font-normal cursor-pointer flex-1">
+                          <span className="font-medium">{key}</span>
+                          <span className="text-muted-foreground"> → {String(value)}</span>
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+
             <div className="border-t pt-4">
               <h4 className="text-sm font-medium mb-3">Autenticação (opcional)</h4>
               <div className="grid grid-cols-2 gap-3">
