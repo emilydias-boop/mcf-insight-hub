@@ -161,7 +161,7 @@ export const SendToPipelineModal = ({ open, onOpenChange, selectedContactIds, on
           )}
 
           {/* Pipeline (Origin) */}
-          {selectedGroupId && origins && origins.length > 0 && (
+          {showOrigins && (
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Pipeline</label>
               <Select value={selectedOriginId} onValueChange={handleOriginChange}>
@@ -169,7 +169,7 @@ export const SendToPipelineModal = ({ open, onOpenChange, selectedContactIds, on
                   <SelectValue placeholder="Selecione a pipeline" />
                 </SelectTrigger>
                 <SelectContent>
-                  {origins.map((o: any) => (
+                  {availableOrigins?.map((o: any) => (
                     <SelectItem key={o.id} value={o.id}>{o.display_name || o.name}</SelectItem>
                   ))}
                 </SelectContent>
