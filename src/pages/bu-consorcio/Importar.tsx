@@ -703,7 +703,7 @@ export default function ImportarConsorcioPage() {
       {step === 'complete' && (
         <Card>
           <CardContent className="py-12 text-center">
-            <CheckCircle className="h-16 w-16 mx-auto text-green-500 mb-4" />
+            <CheckCircle className="h-16 w-16 mx-auto text-chart-2 mb-4" />
             <h2 className="text-2xl font-bold mb-2">Importação Concluída!</h2>
             <p className="text-muted-foreground mb-6">
               Os dados foram processados com sucesso.
