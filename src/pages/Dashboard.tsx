@@ -25,18 +25,6 @@ const SETOR_MODAL_CONFIG: Record<string, { title: string; sections: BURevenueSec
     title: "Efeito Alavanca",
     sections: [{ prefix: "setor_efeito_alavanca", label: "Efeito Alavanca (Valor em Carta)" }],
   },
-  credito: {
-    title: "MCF Crédito",
-    sections: [{ prefix: "setor_credito", label: "Crédito (Comissão)" }],
-  },
-  projetos: {
-    title: "MCF Projetos",
-    sections: [{ prefix: "setor_projetos", label: "Projetos" }],
-  },
-  leilao: {
-    title: "MCF Leilão",
-    sections: [{ prefix: "setor_leilao", label: "Leilão" }],
-  },
 };
 
 export default function Dashboard() {

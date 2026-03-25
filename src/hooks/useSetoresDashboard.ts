@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Building2, TrendingUp, CreditCard, FolderKanban, Gavel, LucideIcon } from "lucide-react";
+import { Building2, TrendingUp, CreditCard, LucideIcon } from "lucide-react";
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, format } from "date-fns";
 import { formatDateForDB } from "@/lib/dateHelpers";
 import { ptBR } from "date-fns/locale";
 import { getDeduplicatedGross, TransactionForGross } from "@/lib/incorporadorPricing";
 
 export interface SetorData {
-  id: 'incorporador' | 'efeito_alavanca' | 'credito' | 'projetos' | 'leilao';
+  id: 'incorporador' | 'efeito_alavanca' | 'credito';
   nome: string;
   icone: LucideIcon;
   apuradoSemanal: number;
@@ -26,8 +26,6 @@ const SETOR_CONFIG: { id: SetorData['id']; nome: string; icone: LucideIcon }[] =
   { id: 'incorporador', nome: 'MCF Incorporador', icone: Building2 },
   { id: 'efeito_alavanca', nome: 'Efeito Alavanca', icone: TrendingUp },
   { id: 'credito', nome: 'MCF Crédito', icone: CreditCard },
-  { id: 'projetos', nome: 'MCF Projetos', icone: FolderKanban },
-  { id: 'leilao', nome: 'MCF Leilão', icone: Gavel },
 ];
 
 // Week starts on Saturday (6) for most BUs 
