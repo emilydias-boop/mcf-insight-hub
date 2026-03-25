@@ -246,7 +246,7 @@ export function CloserColumnCalendar({
 
     meetings.forEach((meeting) => {
       const closerId = meeting.closer_id;
-      const attendeesCount = meeting.attendees?.length || 0;
+      const attendeesCount = meeting.attendees?.filter(a => !a.is_partner).length || 0;
       counts[closerId] = (counts[closerId] || 0) + attendeesCount;
     });
 
