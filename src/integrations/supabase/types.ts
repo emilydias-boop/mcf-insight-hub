@@ -9720,6 +9720,8 @@ export type Database = {
           created_by: string | null
           description: string | null
           field_mapping: Json | null
+          fixed_owner_email: string | null
+          fixed_owner_profile_id: string | null
           id: string
           is_active: boolean | null
           last_lead_at: string | null
@@ -9739,6 +9741,8 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           field_mapping?: Json | null
+          fixed_owner_email?: string | null
+          fixed_owner_profile_id?: string | null
           id?: string
           is_active?: boolean | null
           last_lead_at?: string | null
@@ -9758,6 +9762,8 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           field_mapping?: Json | null
+          fixed_owner_email?: string | null
+          fixed_owner_profile_id?: string | null
           id?: string
           is_active?: boolean | null
           last_lead_at?: string | null
