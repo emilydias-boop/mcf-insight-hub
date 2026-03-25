@@ -241,7 +241,7 @@ export const useContractReport = (
           leadName: row.attendee_name || 'N/A',
           leadPhone: row.attendee_phone || '',
           sdrEmail,
-          sdrName: sdrNameMap[sdrEmail] || sdrEmail,
+          sdrName,
           originName: origin?.display_name || origin?.name || 'N/A',
           currentStage: stage?.stage_name || 'N/A',
           contractPaidAt: row.contract_paid_at || slot?.scheduled_at || '',
