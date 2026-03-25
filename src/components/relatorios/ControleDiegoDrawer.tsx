@@ -147,7 +147,7 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
   const { data: purchaseHistory, isLoading: loadingPurchases } = useLeadPurchaseHistory(contract?.leadEmail, contract?.leadPhone);
   
   // Lead profile (anamnese)
-  const { data: profile, isLoading: loadingProfile } = useLeadProfile(contract?.contactId || null);
+  const { data: profile, isLoading: loadingProfile } = useLeadProfile(contract?.contactId || null, contract?.dealId || null);
   
   // Lead notes
   const { data: leadNotes = [], isLoading: loadingNotes } = useLeadNotes(contract?.dealId || null, contract?.id || null);
