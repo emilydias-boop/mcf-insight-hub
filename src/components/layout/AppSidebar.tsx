@@ -24,7 +24,6 @@ import {
   Users2,
   ShoppingCart,
   Crown,
-  CheckSquare,
   Briefcase,
   Megaphone,
   Monitor,
@@ -177,8 +176,6 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "Receita", url: "/receita" },
       { title: "Transações", url: "/financeiro?tab=transacoes" },
-      { title: "Custos", url: "/custos" },
-      { title: "Despesas", url: "/custos/despesas" },
       { title: "Pagamentos", url: "/financeiro", requiredRoles: ["admin", "financeiro"] },
       { title: "Cobranças", url: "/cobrancas", requiredRoles: ["admin", "financeiro"] },
     ],
@@ -208,13 +205,6 @@ const menuItems: MenuItem[] = [
     ],
   },
 
-  // TAREFAS
-  {
-    title: "Tarefas",
-    url: "/tarefas",
-    icon: CheckSquare,
-    requiredRoles: ["admin", "manager", "coordenador"],
-  },
 
   // PATRIMÔNIO
   {
@@ -304,7 +294,7 @@ const personalMenuItems: PersonalMenuItem[] = [
   { title: "Meu Playbook", url: "/playbook", icon: BookOpen },
   { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt, requiredRoles: ["sdr", "closer"] },
   { title: "Meus Equipamentos", url: "/patrimonio/meus-equipamentos", icon: Laptop },
-  { title: "Alertas", url: "/alertas", icon: Bell },
+  
 ];
 
 // Mapa de base paths do CRM por BU

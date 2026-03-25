@@ -85,7 +85,6 @@ export function RealTimeAlerts() {
                 )}
                 onClick={() => {
                   markAsRead(alert.id);
-                  navigate('/alertas');
                 }}
               >
                 <div className="flex items-center gap-2 w-full">
@@ -115,13 +114,6 @@ export function RealTimeAlerts() {
           </ScrollArea>
         )}
         
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="justify-center text-primary cursor-pointer"
-          onClick={() => navigate('/alertas')}
-        >
-          Ver todos os alertas
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1,6 +1,5 @@
 import { Toaster } from "@/components/ui/toaster";
 import MeuDesempenhoCloser from "./pages/closer/MeuDesempenhoCloser";
-import Tarefas from "./pages/Tarefas";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -27,20 +26,13 @@ import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Receita from "./pages/receita/Index";
-import ReceitaOverview from "./pages/receita/Overview";
 import A010 from "./pages/receita/A010";
 import ReceitaTransacoes from "./pages/receita/Transacoes";
-import ReceitaPorCanal from "./pages/receita/PorCanal";
 
 import ImportarHubla from "./pages/receita/ImportarHubla";
 import ReceitaAuditoria from "./pages/receita/Auditoria";
-import Custos from "./pages/custos/Index";
-import CustosOverview from "./pages/custos/Overview";
-import CustosDespesas from "./pages/custos/Despesas";
-import CustosPorCategoria from "./pages/custos/PorCategoria";
 import Relatorios from "./pages/Relatorios";
 import LeadsSemTag from "./pages/relatorios/LeadsSemTag";
-import Alertas from "./pages/Alertas";
 
 import Configuracoes from "./pages/Configuracoes";
 import GerenciamentoUsuarios from "./pages/GerenciamentoUsuarios";
@@ -163,22 +155,15 @@ const App = () => (
               <Route path="dashboard" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Dashboard /></RoleGuard>} />
               
               <Route path="receita" element={<ResourceGuard resource="receita"><Receita /></ResourceGuard>}>
-                <Route index element={<ReceitaOverview />} />
+                <Route index element={<Navigate to="a010" replace />} />
                 <Route path="a010" element={<A010 />} />
                 <Route path="transacoes" element={<ReceitaTransacoes />} />
-                <Route path="por-canal" element={<ReceitaPorCanal />} />
                 <Route path="importar-hubla" element={<ImportarHubla />} />
                 <Route path="auditoria" element={<ReceitaAuditoria />} />
               </Route>
-              
-              <Route path="custos" element={<ResourceGuard resource="custos"><Custos /></ResourceGuard>}>
-                <Route index element={<CustosOverview />} />
-                <Route path="despesas" element={<CustosDespesas />} />
-                <Route path="por-categoria" element={<CustosPorCategoria />} />
-              </Route>
               <Route path="relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Relatorios /></RoleGuard>} />
               <Route path="relatorios/leads-sem-tag" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsSemTag /></RoleGuard>} />
-              <Route path="alertas" element={<ResourceGuard resource="alertas"><Alertas /></ResourceGuard>} />
+              
               
               {/* BU Consórcio Routes - Unificado */}
               <Route path="consorcio" element={<ResourceGuard resource="crm"><ConsorcioIndex /></ResourceGuard>} />
@@ -240,7 +225,7 @@ const App = () => (
               <Route path="rh/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager']}><ConfiguracoesRH /></RoleGuard>} />
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="cobrancas" element={<RoleGuard allowedRoles={['admin', 'financeiro']}><Cobrancas /></RoleGuard>} />
-              <Route path="tarefas" element={<ResourceGuard resource="configuracoes"><Tarefas /></ResourceGuard>} />
+              
               
               
               <Route path="meu-rh" element={<MeuRH />} />
