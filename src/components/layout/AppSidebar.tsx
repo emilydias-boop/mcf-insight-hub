@@ -5,9 +5,6 @@ import {
   FileText,
   Bell,
   Handshake,
-  FolderKanban,
-  CreditCard,
-  Gavel,
   Settings,
   Users,
   LogOut,
@@ -154,49 +151,6 @@ const menuItems: MenuItem[] = [
     ],
   },
 
-  // BU - CRÉDITO
-  {
-    title: "BU - Crédito",
-    icon: CreditCard,
-    resource: "credito",
-    requiredRoles: ["admin", "manager"],
-    items: [
-      { title: "Overview", url: "/bu-credito" },
-      { title: "Negócios", url: "/bu-credito/deals" },
-      { title: "Sócios", url: "/bu-credito/socios" },
-      { title: "Clientes", url: "/bu-credito/clientes" },
-      { title: "CRM", url: "/bu-credito/crm" },
-      { title: "Gestão Legado", url: "/credito" },
-      { title: "Relatórios", url: "/bu-credito/relatorios" },
-      { title: "Documentos Estratégicos", url: "/bu-credito/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
-    ],
-  },
-
-  // BU - PROJETOS
-  {
-    title: "BU - Projetos",
-    icon: FolderKanban,
-    resource: "projetos",
-    items: [
-      { title: "Gestão de Projetos", url: "/projetos" },
-      { title: "CRM", url: "/bu-projetos/crm" },
-      { title: "Relatórios", url: "/bu-projetos/relatorios" },
-      { title: "Documentos Estratégicos", url: "/bu-projetos/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
-    ],
-  },
-
-  // LEILÃO
-  {
-    title: "Leilão",
-    icon: Gavel,
-    resource: "leilao",
-    requiredRoles: ["admin", "manager"],
-    items: [
-      { title: "Leilões Imobiliários", url: "/leilao" },
-      { title: "CRM", url: "/leilao/crm" },
-      { title: "Documentos Estratégicos", url: "/leilao/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
-    ],
-  },
 
   // BU - MARKETING
   {
@@ -357,15 +311,12 @@ const personalMenuItems: PersonalMenuItem[] = [
 const BU_CRM_BASE_PATH: Record<BusinessUnit, string> = {
   incorporador: '/crm',
   consorcio: '/consorcio/crm',
-  credito: '/bu-credito/crm',
-  projetos: '/bu-projetos/crm',
-  leilao: '/leilao/crm',
   marketing: '/bu-marketing',
 };
 
 // Helper para resolver o base path do CRM baseado nas BUs do usuário
 const getCRMBasePath = (userBUs: BusinessUnit[]): string => {
-  const buPriority: BusinessUnit[] = ['consorcio', 'credito', 'projetos', 'leilao', 'marketing'];
+  const buPriority: BusinessUnit[] = ['consorcio', 'marketing'];
   
   for (const bu of buPriority) {
     if (userBUs.includes(bu)) {

@@ -3,7 +3,7 @@ import { useMyBU } from '@/hooks/useMyBU';
 import { useUltrametaByBU } from '@/hooks/useUltrametaByBU';
 import { BUMoonCard } from '@/components/home/BUMoonCard';
 import { Button } from '@/components/ui/button';
-import { Building2, TrendingUp, CreditCard, Gavel, ArrowRight } from 'lucide-react';
+import { Building2, TrendingUp, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 // BU configuration with colors and icons
@@ -19,18 +19,6 @@ const BU_CONFIG = {
     icon: TrendingUp,
     color: 'hsl(142, 76%, 36%)', // Green
     href: '/consorcio',
-  },
-  credito: {
-    name: 'Crédito',
-    icon: CreditCard,
-    color: 'hsl(200, 80%, 50%)', // Cyan
-    href: '/bu-credito',
-  },
-  leilao: {
-    name: 'Leilão',
-    icon: Gavel,
-    color: 'hsl(45, 93%, 47%)', // Gold
-    href: '/leilao',
   },
 } as const;
 
@@ -89,9 +77,9 @@ export default function Home() {
           </p>
         </div>
 
-        {/* 4 Moons Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {(['incorporador', 'consorcio', 'credito', 'leilao'] as const).map((bu) => {
+        {/* 2 Moons Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
+          {(['incorporador', 'consorcio'] as const).map((bu) => {
             const config = BU_CONFIG[bu];
             const buMetrics = metrics?.find((m) => m.bu === bu);
 

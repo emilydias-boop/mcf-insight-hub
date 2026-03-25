@@ -42,9 +42,6 @@ import Relatorios from "./pages/Relatorios";
 import LeadsSemTag from "./pages/relatorios/LeadsSemTag";
 import Alertas from "./pages/Alertas";
 
-import Projetos from "./pages/Projetos";
-import Credito from "./pages/Credito";
-import Leilao from "./pages/Leilao";
 import Configuracoes from "./pages/Configuracoes";
 import GerenciamentoUsuarios from "./pages/GerenciamentoUsuarios";
 import CRM from "./pages/CRM";
@@ -101,22 +98,6 @@ import ConfiguracaoProdutos from "./pages/admin/ConfiguracaoProdutos";
 import LeadDistribution from "./pages/admin/LeadDistribution";
 import Automacoes from "./pages/admin/Automacoes";
 import ConfiguracaoBU from "./pages/admin/ConfiguracaoBU";
-import BUCreditoIndex from "./pages/bu-credito/Index";
-import CreditoOverview from "./pages/bu-credito/Overview";
-import CreditoDeals from "./pages/bu-credito/Deals";
-import CreditoSocios from "./pages/bu-credito/Socios";
-import CreditoClientes from "./pages/bu-credito/Clientes";
-import CreditoVendas from "./pages/bu-credito/Vendas";
-import CreditoRelatorios from "./pages/bu-credito/Relatorios";
-
-// BU Projetos
-import BUProjetosIndex from "./pages/bu-projetos/Index";
-import ProjetosVendas from "./pages/bu-projetos/Vendas";
-import ProjetosRelatorios from "./pages/bu-projetos/Relatorios";
-
-// BU Outros
-import BUOutrosIndex from "./pages/bu-outros/Index";
-import OutrosVendas from "./pages/bu-outros/Vendas";
 
 // BU Consórcio - Páginas Unificadas
 import ConsorcioFechamento from "./pages/bu-consorcio/Fechamento";
@@ -227,82 +208,6 @@ const App = () => (
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
               
-              <Route path="projetos" element={<ResourceGuard resource="projetos"><Projetos /></ResourceGuard>} />
-              <Route path="credito" element={<ResourceGuard resource="credito"><Credito /></ResourceGuard>} />
-              
-              {/* BU Crédito Routes */}
-              <Route path="bu-credito" element={<BUCreditoIndex />}>
-                <Route index element={<CreditoOverview />} />
-                <Route path="overview" element={<CreditoOverview />} />
-                <Route path="deals" element={<CreditoDeals />} />
-                <Route path="socios" element={<CreditoSocios />} />
-                <Route path="clientes" element={<CreditoClientes />} />
-                <Route path="vendas" element={<CreditoVendas />} />
-              </Route>
-              <Route path="bu-credito/relatorios" element={<ResourceGuard resource="relatorios"><CreditoRelatorios /></ResourceGuard>} />
-              <Route path="bu-credito/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="credito" /></ResourceGuard>} />
-              
-              {/* BU Crédito CRM - Dedicado */}
-              <Route path="bu-credito/crm" element={<ResourceGuard resource="crm"><BUCRMLayout bu="credito" basePath="/bu-credito/crm" /></ResourceGuard>}>
-                <Route index element={<CRMOverview />} />
-                <Route path="contatos" element={<Contatos />} />
-                <Route path="negocios" element={<Negocios />} />
-                <Route path="atendimentos" element={<Atendimentos />} />
-                <Route path="agenda" element={<Agenda />} />
-                <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
-                <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
-                <Route path="deals-orfaos" element={<DealsOrfaos />} />
-                <Route path="contatos-duplicados" element={<ContatosDuplicados />} />
-                <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
-                <Route path="configuracoes" element={<ConfiguracoesCRM />} />
-              </Route>
-              
-              {/* BU Projetos Routes */}
-              <Route path="bu-projetos" element={<BUProjetosIndex />}>
-                <Route index element={<ProjetosVendas />} />
-                <Route path="vendas" element={<ProjetosVendas />} />
-              </Route>
-              <Route path="bu-projetos/relatorios" element={<ResourceGuard resource="relatorios"><ProjetosRelatorios /></ResourceGuard>} />
-              <Route path="bu-projetos/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="projetos" /></ResourceGuard>} />
-              
-              {/* BU Projetos CRM - Dedicado */}
-              <Route path="bu-projetos/crm" element={<ResourceGuard resource="crm"><BUCRMLayout bu="projetos" basePath="/bu-projetos/crm" /></ResourceGuard>}>
-                <Route index element={<CRMOverview />} />
-                <Route path="contatos" element={<Contatos />} />
-                <Route path="negocios" element={<Negocios />} />
-                <Route path="atendimentos" element={<Atendimentos />} />
-                <Route path="agenda" element={<Agenda />} />
-                <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
-                <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
-                <Route path="deals-orfaos" element={<DealsOrfaos />} />
-                <Route path="contatos-duplicados" element={<ContatosDuplicados />} />
-                <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
-                <Route path="configuracoes" element={<ConfiguracoesCRM />} />
-              </Route>
-              
-              {/* BU Outros Routes */}
-              <Route path="bu-outros" element={<BUOutrosIndex />}>
-                <Route index element={<OutrosVendas />} />
-                <Route path="vendas" element={<OutrosVendas />} />
-              </Route>
-              
-              {/* BU Leilão CRM - Dedicado */}
-              <Route path="leilao/crm" element={<ResourceGuard resource="crm"><BUCRMLayout bu="leilao" basePath="/leilao/crm" /></ResourceGuard>}>
-                <Route index element={<CRMOverview />} />
-                <Route path="contatos" element={<Contatos />} />
-                <Route path="negocios" element={<Negocios />} />
-                <Route path="atendimentos" element={<Atendimentos />} />
-                <Route path="agenda" element={<Agenda />} />
-                <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
-                <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
-                <Route path="deals-orfaos" element={<DealsOrfaos />} />
-                <Route path="contatos-duplicados" element={<ContatosDuplicados />} />
-                <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
-                <Route path="configuracoes" element={<ConfiguracoesCRM />} />
-              </Route>
-              
-              <Route path="leilao/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="leilao" /></ResourceGuard>} />
-              <Route path="leilao" element={<ResourceGuard resource="leilao"><Leilao /></ResourceGuard>} />
               
               {/* BU Marketing Routes */}
               <Route path="bu-marketing" element={<ResourceGuard resource="dashboard"><MarketingDashboard /></ResourceGuard>} />
