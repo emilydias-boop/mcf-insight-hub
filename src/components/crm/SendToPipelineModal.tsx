@@ -57,6 +57,25 @@ export const SendToPipelineModal = ({ open, onOpenChange, selectedContactIds, on
     enabled: !!selectedGroupId,
   });
 
+  // Fetch direct origins when BU has no groups mapped
+  const hasGroups = (buMapping?.groups?.length ?? 0) > 0;
+  const { data: directOrigins } = useQuery({
+    queryKey: ['direct-origins-for-bu', selectedBU, buMapping?.origins],
+    queryFn: async () => {
+      if (!buMapping?.origins?.length) return [];
+      const { data } = await supabase
+        .from('crm_origins')
+        .select('id, name, display_name')
+        .in('id', buMapping.origins)
+        .order('name');
+      return data || [];
+    },
+    enabled: !!selectedBU && !!buMapping && !hasGroups && (buMapping?.origins?.length ?? 0) > 0,
+  });
+
+  const availableOrigins = hasGroups ? origins : directOrigins;
+  const showOrigins = hasGroups ? !!selectedGroupId && !!origins && origins.length > 0 : !!selectedBU && !!directOrigins && directOrigins.length > 0;
+
   // Fetch stages for selected origin
   const { data: stages } = useCRMStages(selectedOriginId || undefined);
 
