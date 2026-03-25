@@ -220,7 +220,11 @@ export const useContractReport = (
         const stage = deal?.crm_stages;
         const contact = deal?.crm_contacts;
         const customFields = deal?.custom_fields || {};
-        const sdrEmail = deal?.owner_id || '';
+        
+        // SDR: priorizar booked_by (quem agendou), fallback para owner_id
+        const bookedByProfile = row.booked_by ? bookedByMap[row.booked_by] : null;
+        const sdrEmail = bookedByProfile?.email || deal?.owner_id || '';
+        const sdrName = bookedByProfile?.full_name || sdrNameMap[sdrEmail] || sdrEmail;
         
         const contactEmail = contact?.email || null;
         const contactPhone = contact?.phone || row.attendee_phone || null;
