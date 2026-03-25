@@ -1,40 +1,28 @@
 
 
-## Fix: Consórcio BU Pipeline Mapping (Data Issue)
+## Fix: Aplicar correção do mapeamento Consórcio
 
-### Root cause
+### Problema
+A migration criada anteriormente (`20260325152340`) não foi aplicada ao banco. O `bu_origin_mapping` ainda contém apenas 1 entrada errada para `consorcio`:
+- `origin: 7d7b1cb5-...` (Efeito Alavanca + Clube)
 
-The `bu_origin_mapping` table for `consorcio` was overwritten (likely via the admin config at `/admin/configuracao-bu`) and now contains incorrect entries. The mapping points to a Leilão group (`f8a2b3c4-...`) with display_name "BU - Consorcio" instead of the actual consorcio pipeline groups.
+### Solução
+Criar uma nova migration (ou re-executar a SQL) para aplicar a correção:
 
-**Current mapping (wrong):**
-| entity_type | entity_id | name | is_default |
-|---|---|---|---|
-| group | f8a2b3c4-... | BU - LEILÃO (display: BU - Consorcio) | true |
-| origin | 7d7b1cb5-... | Efeito Alavanca + Clube | false |
+**Arquivo: nova migration SQL**
+```sql
+DELETE FROM bu_origin_mapping WHERE bu = 'consorcio';
 
-**Correct mapping (needs to be restored):**
-| entity_type | entity_id | name | is_default |
-|---|---|---|---|
-| group | b98e3746-... | Perpétuo - Construa para Alugar | true |
-| group | 267905ec-... | Hubla - Viver de Aluguel | false |
-| group | a6f3cbfc-... | Perpétuo - X1 | false |
-| origin | 57013597-... | PIPE LINE - INSIDE SALES | true |
-| origin | 4e2b810a-... | INSIDE SALES - VIVER DE ALUGUEL | false |
+INSERT INTO bu_origin_mapping (bu, entity_type, entity_id, is_default) VALUES
+  ('consorcio', 'group', 'b98e3746-d727-445b-b878-fc5742b6e6b8', true),
+  ('consorcio', 'group', '267905ec-8fcf-4373-8d62-273bb6c6f8ca', false),
+  ('consorcio', 'group', 'a6f3cbfc-0567-427f-a405-5a869aaa6010', false),
+  ('consorcio', 'origin', '57013597-22f6-4969-848c-404b81dcc0cb', true),
+  ('consorcio', 'origin', '4e2b810a-6782-4ce9-9c0d-10d04c018636', false);
+```
 
-### What this affects
+A migration anterior pode ter falhado silenciosamente. Vou criar uma nova migration com timestamp atualizado para forçar a aplicação.
 
-Ygor (SDR, squad: consorcio) can't see his pipeline because:
-1. The code uses `buMapping.groups` + `buMapping.origins` to filter the sidebar
-2. The wrong mapping excludes all actual consorcio groups/origins
-3. `SDR_ORIGIN_BY_BU['consorcio']` = `57013597-...` exists but isn't in the authorized list
-
-### Fix
-
-Create a migration to delete the incorrect entries and re-insert the correct consorcio mapping:
-
-**File: new migration**
-- DELETE from `bu_origin_mapping` WHERE `bu = 'consorcio'`
-- INSERT the 5 correct rows (3 groups + 2 origins) with proper `is_default` flags
-
-This is purely a data fix — no code changes needed.
+### Resultado esperado
+Após aplicação, Ygor (SDR, consorcio) verá as 3 pipelines corretas na sidebar e a página de Configuração BU mostrará os 5 itens vinculados ao Consórcio.
 
