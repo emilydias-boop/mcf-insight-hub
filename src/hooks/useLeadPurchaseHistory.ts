@@ -1,6 +1,51 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+function normalizeProductName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/^a\d{3}\s*-\s*/, '')
+    .trim();
+}
+
+function deduplicatePurchases(items: PurchaseHistoryItem[]): PurchaseHistoryItem[] {
+  const dayKey = (d: string) => d.slice(0, 10);
+  const prioritySources = ['hubla', 'kiwify'];
+
+  // Group by day + normalized product name
+  const groups = new Map<string, PurchaseHistoryItem[]>();
+  for (const item of items) {
+    const key = `${dayKey(item.sale_date)}|${normalizeProductName(item.product_name)}`;
+    const arr = groups.get(key) || [];
+    arr.push(item);
+    groups.set(key, arr);
+  }
+
+  const result: PurchaseHistoryItem[] = [];
+  for (const group of groups.values()) {
+    const priority = group.filter(i => prioritySources.includes(i.source || ''));
+    const others = group.filter(i => !prioritySources.includes(i.source || ''));
+
+    if (priority.length > 0) {
+      // Keep one per source from priority, drop make duplicates
+      const seen = new Set<string>();
+      for (const item of priority) {
+        const k = `${item.source}|${item.product_name}`;
+        if (!seen.has(k)) { seen.add(k); result.push(item); }
+      }
+    } else {
+      // No priority source, keep one per source
+      const seen = new Set<string>();
+      for (const item of others) {
+        const k = `${item.source}|${item.product_name}`;
+        if (!seen.has(k)) { seen.add(k); result.push(item); }
+      }
+    }
+  }
+
+  return result.sort((a, b) => b.sale_date.localeCompare(a.sale_date));
+}
+
 export interface PurchaseHistoryItem {
   id: string;
   product_name: string;
@@ -41,7 +86,7 @@ export function useLeadPurchaseHistory(email: string | null | undefined, phone?:
         .limit(20);
 
       if (error) throw error;
-      return (data || []) as PurchaseHistoryItem[];
+      return deduplicatePurchases((data || []) as PurchaseHistoryItem[]);
     },
     enabled: hasEmail || hasPhone,
   });
