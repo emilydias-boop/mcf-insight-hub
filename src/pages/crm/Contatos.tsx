@@ -7,6 +7,7 @@ import { useContactsEnriched, useContactFilterOptions, type EnrichedContact } fr
 import { useSyncClintData } from '@/hooks/useCRMData';
 import { usePartnerProductDetectionBatch, useAllPartnerProducts, PRODUCT_GROUPS } from '@/hooks/usePartnerProductDetection';
 import { Search, Plus, User, RefreshCw, Loader2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
 import { ContactFormDialog } from '@/components/crm/ContactFormDialog';
 import { ContactFilters, emptyFilters, type ContactFilterValues } from '@/components/crm/ContactFilters';
@@ -28,6 +29,9 @@ const THERMAL_ICONS: Record<string, string> = {
 };
 
 const Contatos = () => {
+  const { role } = useAuth();
+  const isReadOnly = role === 'sdr' || role === 'closer' || role === 'closer_sombra';
+
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
@@ -174,17 +178,19 @@ const Contatos = () => {
           <h2 className="text-xl sm:text-2xl font-bold text-foreground">Contatos</h2>
           <p className="text-sm text-muted-foreground hidden sm:block">Gerencie todos os seus contatos</p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <Button variant="outline" onClick={handleSync} disabled={syncMutation.isPending} className="flex-1 sm:flex-none" size="sm">
-            <RefreshCw className={`h-4 w-4 sm:mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Sincronizar</span>
-          </Button>
-          <Button onClick={() => setCreateDialogOpen(true)} className="flex-1 sm:flex-none" size="sm">
-            <Plus className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Novo Contato</span>
-            <span className="sm:hidden">Novo</span>
-          </Button>
-        </div>
+        {!isReadOnly && (
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button variant="outline" onClick={handleSync} disabled={syncMutation.isPending} className="flex-1 sm:flex-none" size="sm">
+              <RefreshCw className={`h-4 w-4 sm:mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Sincronizar</span>
+            </Button>
+            <Button onClick={() => setCreateDialogOpen(true)} className="flex-1 sm:flex-none" size="sm">
+              <Plus className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Novo Contato</span>
+              <span className="sm:hidden">Novo</span>
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Search */}
@@ -211,15 +217,17 @@ const Contatos = () => {
       {/* Select all toggle + info */}
       {filteredContacts.length > 0 && (
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={allFilteredSelected}
-              onCheckedChange={handleSelectAll}
-            />
-            <span className="text-xs text-muted-foreground">
-              Selecionar todos da página ({filteredContacts.length})
-            </span>
-          </div>
+          {!isReadOnly ? (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={allFilteredSelected}
+                onCheckedChange={handleSelectAll}
+              />
+              <span className="text-xs text-muted-foreground">
+                Selecionar todos da página ({filteredContacts.length})
+              </span>
+            </div>
+          ) : <div />}
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">
               Mostrando {showFrom}-{showTo} de {totalCount.toLocaleString('pt-BR')} contatos
@@ -241,7 +249,7 @@ const Contatos = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  <th className="w-10 px-3 py-2.5"></th>
+                  {!isReadOnly && <th className="w-10 px-3 py-2.5"></th>}
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Nome</th>
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden md:table-cell">Email</th>
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Telefone</th>
@@ -262,12 +270,14 @@ const Contatos = () => {
                       className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
                       onClick={() => handleContactClick(contact.id)}
                     >
-                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedIds.has(contact.id)}
-                          onCheckedChange={(checked) => handleSelect(contact.id, !!checked)}
-                        />
-                      </td>
+                      {!isReadOnly && (
+                        <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedIds.has(contact.id)}
+                            onCheckedChange={(checked) => handleSelect(contact.id, !!checked)}
+                          />
+                        </td>
+                      )}
                       <td className="px-3 py-2.5 font-medium text-foreground truncate max-w-[200px]">
                         {contact.name}
                       </td>
@@ -392,7 +402,7 @@ const Contatos = () => {
                 ? 'Tente ajustar os filtros ou buscar com outros termos'
                 : 'Comece adicionando seus primeiros contatos'}
             </p>
-            {!searchTerm && !Object.values(filters).some(v => v) && (
+            {!isReadOnly && !searchTerm && !Object.values(filters).some(v => v) && (
               <Button onClick={() => setCreateDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar Contato
@@ -402,49 +412,54 @@ const Contatos = () => {
         </Card>
       )}
 
-      {/* Bulk actions */}
-      <BulkActionsBar
-        selectedCount={selectedIds.size}
-        onTransfer={() => setPipelineModalOpen(true)}
-        onClearSelection={() => setSelectedIds(new Set())}
-        isTransferring={false}
-        onDuplicate={() => setDuplicateDialogOpen(true)}
-        isDuplicating={duplicateMutation.isPending}
-      />
+      {/* Bulk actions - hidden for read-only roles */}
+      {!isReadOnly && (
+        <>
+          <BulkActionsBar
+            selectedCount={selectedIds.size}
+            onTransfer={() => setPipelineModalOpen(true)}
+            onClearSelection={() => setSelectedIds(new Set())}
+            isTransferring={false}
+            onDuplicate={() => setDuplicateDialogOpen(true)}
+            isDuplicating={duplicateMutation.isPending}
+          />
 
-      <SendToPipelineModal
-        open={pipelineModalOpen}
-        onOpenChange={setPipelineModalOpen}
-        selectedContactIds={Array.from(selectedIds)}
-        onSuccess={() => setSelectedIds(new Set())}
-      />
+          <SendToPipelineModal
+            open={pipelineModalOpen}
+            onOpenChange={setPipelineModalOpen}
+            selectedContactIds={Array.from(selectedIds)}
+            onSuccess={() => setSelectedIds(new Set())}
+          />
 
-      <DuplicateToInsideDialog
-        open={duplicateDialogOpen}
-        onOpenChange={setDuplicateDialogOpen}
-        selectedCount={selectedIds.size}
-        isLoading={duplicateMutation.isPending}
-        onConfirm={(ownerEmail, ownerProfileId, stageId) => {
-          const leads = filteredContacts
-            .filter(c => selectedIds.has(c.id))
-            .map(c => ({
-              name: c.name,
-              email: c.email || '',
-              phone: c.phone || '',
-              sourceContactId: c.id,
-              sourceDealId: c.latestDeal?.id,
-            }));
-          duplicateMutation.mutate({ leads, ownerEmail, ownerProfileId, stageId }, {
-            onSuccess: () => {
-              setSelectedIds(new Set());
-              setDuplicateDialogOpen(false);
-            },
-          });
-        }}
-      />
+          <DuplicateToInsideDialog
+            open={duplicateDialogOpen}
+            onOpenChange={setDuplicateDialogOpen}
+            selectedCount={selectedIds.size}
+            isLoading={duplicateMutation.isPending}
+            onConfirm={(ownerEmail, ownerProfileId, stageId) => {
+              const leads = filteredContacts
+                .filter(c => selectedIds.has(c.id))
+                .map(c => ({
+                  name: c.name,
+                  email: c.email || '',
+                  phone: c.phone || '',
+                  sourceContactId: c.id,
+                  sourceDealId: c.latestDeal?.id,
+                }));
+              duplicateMutation.mutate({ leads, ownerEmail, ownerProfileId, stageId }, {
+                onSuccess: () => {
+                  setSelectedIds(new Set());
+                  setDuplicateDialogOpen(false);
+                },
+              });
+            }}
+          />
+
+          <ContactFormDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+        </>
+      )}
 
       <ContactDetailsDrawer contactId={selectedContactId} open={drawerOpen} onOpenChange={setDrawerOpen} />
-      <ContactFormDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
     </div>
   );
 };
