@@ -1,49 +1,45 @@
 
 
-## Fix: Modal "Enviar para Pipeline" not advancing after BU selection
+## Adicionar exclusão individual e em massa de leads (coordenadores+)
 
-### Root cause
-The modal has a strict cascade: BU -> Groups -> Origins -> Stages. Line 128 checks `groups && groups.length > 0` to show the Funil dropdown. But if the BU "incorporador" has **no groups** mapped in `bu_origin_mapping` (only direct origins), the groups query returns empty and no next step ever appears.
+### Contexto
+Atualmente não existe funcionalidade de excluir deals/leads no CRM. A feature deve permitir excluir leads individualmente (dentro do card/drawer) e em massa (via seleção no Kanban), visível apenas para roles `admin`, `manager` e `coordenador`.
 
-### Solution
-Handle both scenarios in the modal:
-1. **BU has groups mapped**: show Groups -> Origins (from group) -> Stages (current flow)
-2. **BU has direct origins mapped (no groups)**: skip Groups, show Origins directly from `buMapping.origins` -> Stages
+### Alterações
 
-### Changes in `src/components/crm/SendToPipelineModal.tsx`
+#### 1. Hook `src/hooks/useDeleteDeals.ts` (novo)
+- Criar mutation `useDeleteDeal` (single) e `useDeleteDeals` (bulk)
+- Deleta de `crm_deals` por ID(s)
+- Invalida queries `['crm-deals']` após sucesso
+- Toast de confirmação/erro
 
-- Add a new query to fetch origins directly from `buMapping.origins` when no groups exist
-- Compute `hasGroups = buMapping?.groups?.length > 0` and `hasDirectOrigins = buMapping?.origins?.length > 0`
-- When `hasGroups` is false but `hasDirectOrigins` is true, show origins dropdown directly (fetched by IDs from `buMapping.origins`)
-- When `hasGroups` is true, keep current cascade (group -> origins from group)
-- Merge both origin sources into one `availableOrigins` list for the Pipeline select
+#### 2. `src/components/crm/BulkActionsBar.tsx` — Adicionar botão "Excluir"
+- Nova prop opcional `onDelete`, `isDeleting`
+- Renderizar botão vermelho "Excluir" com ícone `Trash2` quando `onDelete` existe
+- Pedir confirmação antes de executar (dialog inline ou window.confirm)
 
-### Technical detail
+#### 3. `src/pages/crm/Negocios.tsx` — Integrar exclusão em massa
+- Importar `useDeleteDeals`
+- Verificar role: só passa `onDelete` ao `BulkActionsBar` se role é `admin`, `manager` ou `coordenador`
+- Callback executa delete dos IDs selecionados e limpa seleção
 
-```tsx
-// New query for direct origins (when no groups)
-const { data: directOrigins } = useQuery({
-  queryKey: ['direct-origins-for-bu', selectedBU, buMapping?.origins],
-  queryFn: async () => {
-    if (!buMapping?.origins?.length) return [];
-    const { data } = await supabase
-      .from('crm_origins')
-      .select('id, name, display_name')
-      .in('id', buMapping.origins)
-      .order('name');
-    return data || [];
-  },
-  enabled: !!selectedBU && !!buMapping && !buMapping.groups?.length && (buMapping.origins?.length ?? 0) > 0,
-});
+#### 4. `src/components/crm/DealKanbanCard.tsx` ou `DealDetailsDrawer.tsx` — Botão excluir individual
+- Verificar se já existe menu de contexto/ações no card
+- Adicionar opção "Excluir lead" visível apenas para coordenadores+
+- Confirmar via `AlertDialog` antes de executar
 
-const hasGroups = (buMapping?.groups?.length ?? 0) > 0;
+#### 5. Confirmação de exclusão `src/components/crm/DeleteDealsConfirmDialog.tsx` (novo)
+- Dialog com aviso do número de leads a excluir
+- Input de confirmação ("digite EXCLUIR") para bulk > 5 leads
+- Botão destrutivo
 
-// Show Pipeline select when:
-// - hasGroups && selectedGroupId (current behavior via group origins)
-// - !hasGroups && directOrigins exist (skip group step)
-const availableOrigins = hasGroups ? origins : directOrigins;
-const showOrigins = hasGroups ? !!selectedGroupId : !!selectedBU;
+### Visibilidade por role
+```typescript
+const canDelete = ['admin', 'manager', 'coordenador'].includes(role || '');
 ```
+Apenas essas roles verão os botões de exclusão. SDRs, closers e demais não terão acesso.
 
-This ensures that BUs with only direct origin mappings will show the pipeline dropdown immediately after BU selection.
+### Arquivos
+- **Novo**: `src/hooks/useDeleteDeals.ts`, `src/components/crm/DeleteDealsConfirmDialog.tsx`
+- **Editados**: `src/components/crm/BulkActionsBar.tsx`, `src/pages/crm/Negocios.tsx`, drawer/card de deal
 
