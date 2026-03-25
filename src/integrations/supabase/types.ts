@@ -3587,6 +3587,47 @@ export type Database = {
           },
         ]
       }
+      contract_video_control: {
+        Row: {
+          attendee_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          sent_at: string | null
+          sent_by: string | null
+          updated_at: string
+          video_sent: boolean
+        }
+        Insert: {
+          attendee_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          updated_at?: string
+          video_sent?: boolean
+        }
+        Update: {
+          attendee_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          updated_at?: string
+          video_sent?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_video_control_attendee_id_fkey"
+            columns: ["attendee_id"]
+            isOneToOne: true
+            referencedRelation: "meeting_slot_attendees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credit_clients: {
         Row: {
           cpf: string
