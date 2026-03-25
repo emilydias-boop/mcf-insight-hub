@@ -39,11 +39,48 @@ export interface ContractReportRow {
 
 export const useContractReport = (
   filters: ContractReportFilters,
-  allowedCloserIds: string[] | null // null = all closers (admin/manager)
+  allowedCloserIds: string[] | null, // null = all closers (admin/manager)
+  bu?: string // optional BU filter to restrict results to a specific business unit
 ) => {
   return useQuery({
-    queryKey: ['contract-report', filters, allowedCloserIds],
+    queryKey: ['contract-report', filters, allowedCloserIds, bu],
     queryFn: async (): Promise<ContractReportRow[]> => {
+      // If BU is specified, fetch allowed origin_ids from bu_origin_mapping
+      let buOriginIds: string[] | null = null;
+      if (bu) {
+        const { data: mappings } = await supabase
+          .from('bu_origin_mapping')
+          .select('entity_id, entity_type')
+          .eq('bu', bu);
+        
+        if (mappings && mappings.length > 0) {
+          // Get origin IDs directly mapped
+          const directOriginIds = mappings
+            .filter(m => m.entity_type === 'origin')
+            .map(m => m.entity_id);
+          
+          // Get origins belonging to mapped groups
+          const groupIds = mappings
+            .filter(m => m.entity_type === 'group')
+            .map(m => m.entity_id);
+          
+          if (groupIds.length > 0) {
+            const { data: groupOrigins } = await supabase
+              .from('crm_origins')
+              .select('id')
+              .in('group_id', groupIds);
+            
+            if (groupOrigins) {
+              directOriginIds.push(...groupOrigins.map(o => o.id));
+            }
+          }
+          
+          buOriginIds = directOriginIds;
+          
+          // If no origins mapped for this BU, return empty
+          if (buOriginIds.length === 0) return [];
+        }
+      }
       // Corrigir fuso horário BRT (UTC-3): somar 3h em ambos os extremos
       // Ex: filtrar "05/03 BRT" = buscar de 05/03 03:00 UTC até 06/03 02:59 UTC (janela 24h exata)
       const BRT_OFFSET_HOURS = 3;

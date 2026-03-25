@@ -80,7 +80,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
     return closers.map(c => c.id);
   }, [role, closers]);
 
-  const { data: agendaData = [], isLoading: loadingAgenda } = useContractReport(filters, allowedCloserIds);
+  const { data: agendaData = [], isLoading: loadingAgenda } = useContractReport(filters, allowedCloserIds, bu);
 
   const rows = useMemo<KanbanRow[]>(() => {
     let filtered = agendaData.map(row => ({
