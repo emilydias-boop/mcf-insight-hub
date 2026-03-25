@@ -1,0 +1,1 @@
+UPDATE webhook_endpoints SET fixed_owner_email = 'antony.elias@minhacasafinanciada.com' WHERE slug = 'anamnese-incompleta';
