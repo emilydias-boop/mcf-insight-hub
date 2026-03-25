@@ -17,8 +17,7 @@ import { BusinessUnit } from '@/hooks/useMyBU';
 import { ControleDiegoDrawer } from './ControleDiegoDrawer';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { TagFilterPopover } from '@/components/crm/TagFilterPopover';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -49,6 +48,7 @@ export interface KanbanRow {
   dealId: string | null;
   contactId: string | null;
   originId: string | null;
+  contactTags: string[];
 }
 
 export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
@@ -62,26 +62,12 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
   const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSource, setSelectedSource] = useState<string>('todos');
-  const [selectedOriginId, setSelectedOriginId] = useState<string>('all');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<string>('todos');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedContract, setSelectedContract] = useState<KanbanRow | null>(null);
 
   const { data: closers = [], isLoading: loadingClosers } = useGestorClosers('r1');
-
-  // Fetch origins for pipeline filter
-  const { data: origins = [] } = useQuery({
-    queryKey: ['crm-origins-list'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_origins')
-        .select('id, name, display_name')
-        .order('name');
-      if (error) throw error;
-      return data || [];
-    },
-    staleTime: 5 * 60 * 1000,
-  });
 
   const filters: ContractReportFilters = useMemo(() => ({
     startDate: dateRange?.from || defaultFilters.startDate,
@@ -113,11 +99,14 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
       dealId: row.dealId || null,
       contactId: row.contactId || null,
       originId: row.originId || null,
+      contactTags: row.contactTags || [],
     }));
 
-    // Filter by origin (client-side since crm_deals is not inner join)
-    if (selectedOriginId !== 'all') {
-      filtered = filtered.filter(r => r.originId === selectedOriginId);
+    // Filter by tags
+    if (selectedTags.length > 0) {
+      filtered = filtered.filter(r =>
+        r.contactTags.some(tag => selectedTags.includes(tag))
+      );
     }
 
     // Filter by channel
@@ -137,7 +126,13 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
     }
 
     return filtered.sort((a, b) => b.date.localeCompare(a.date));
-  }, [agendaData, searchTerm, selectedChannel, selectedOriginId]);
+  }, [agendaData, searchTerm, selectedChannel, selectedTags]);
+
+  // Extract unique tags from all rows for the filter
+  const availableTags = useMemo(() => {
+    const allTags = agendaData.flatMap(r => r.contactTags || []);
+    return [...new Set(allTags)].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  }, [agendaData]);
 
   const attendeeIds = useMemo(() => rows.map(r => r.id), [rows]);
   const { data: videoMap = {} } = useVideoControlBatch(attendeeIds);
@@ -238,7 +233,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
     const activeFilters: string[] = [];
     if (selectedCloserId !== 'all') activeFilters.push(`Closer: ${closers.find(c => c.id === selectedCloserId)?.name || selectedCloserId}`);
     if (selectedChannel !== 'todos') activeFilters.push(`Canal: ${selectedChannel}`);
-    if (selectedOriginId !== 'all') activeFilters.push(`Pipeline: ${origins.find(o => o.id === selectedOriginId)?.display_name || origins.find(o => o.id === selectedOriginId)?.name || selectedOriginId}`);
+    if (selectedTags.length > 0) activeFilters.push(`Tags: ${selectedTags.join(', ')}`);
     if (activeFilters.length > 0) {
       doc.text(`Filtros: ${activeFilters.join(' | ')}`, 14, 34);
     }
@@ -341,21 +336,13 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="w-[200px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Pipeline</label>
-              <Select value={selectedOriginId} onValueChange={setSelectedOriginId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as Origens</SelectItem>
-                  {origins.map(origin => (
-                    <SelectItem key={origin.id} value={origin.id}>
-                      {origin.display_name || origin.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">Tags</label>
+              <TagFilterPopover
+                availableTags={availableTags}
+                selectedTags={selectedTags}
+                onChange={setSelectedTags}
+              />
             </div>
             <div className="w-[140px]">
               <label className="text-sm font-medium text-muted-foreground mb-2 block">Canal</label>
