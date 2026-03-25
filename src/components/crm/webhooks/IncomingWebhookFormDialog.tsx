@@ -457,7 +457,7 @@ export const IncomingWebhookFormDialog = ({
                 <p className="text-xs text-muted-foreground mb-2">
                   Selecione quais campos do mapeamento deseja copiar ({selectedMappings.size} de {duplicateMappingEntries.length})
                 </p>
-                <ScrollArea className="max-h-[200px] rounded-md border p-2">
+                <ScrollArea className="h-[200px] rounded-md border p-2">
                   <div className="space-y-2">
                     {duplicateMappingEntries.map(([key, value]) => (
                       <div key={key} className="flex items-center space-x-2">
