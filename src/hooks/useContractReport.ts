@@ -129,7 +129,30 @@ export const useContractReport = (
         return dateB.localeCompare(dateA);
       });
       
-      // Fetch SDR names from profiles based on owner_id (email)
+      // Fetch SDR profiles from booked_by UUIDs (priority) and owner_id emails (fallback)
+      const bookedByIds = [...new Set(
+        sortedData
+          .map((row: any) => row.booked_by)
+          .filter(Boolean)
+      )];
+      
+      let bookedByMap: Record<string, { full_name: string; email: string }> = {};
+      
+      if (bookedByIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', bookedByIds);
+        
+        if (profiles) {
+          bookedByMap = profiles.reduce((acc: Record<string, { full_name: string; email: string }>, p: any) => {
+            if (p.id) acc[p.id] = { full_name: p.full_name || p.email, email: p.email };
+            return acc;
+          }, {});
+        }
+      }
+      
+      // Fallback: fetch SDR names from profiles based on owner_id (email)
       const sdrEmails = [...new Set(
         sortedData
           .map((row: any) => row.crm_deals?.owner_id)
