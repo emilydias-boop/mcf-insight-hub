@@ -673,7 +673,7 @@ export default function ImportarConsorcioPage() {
               )}
 
               {hasDuplicates && !duplicatesReviewed && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm">
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-muted border border-border text-foreground text-sm">
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   Confirme a revisão dos duplicados acima para liberar a importação.
                 </div>
