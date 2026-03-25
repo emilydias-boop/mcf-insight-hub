@@ -1,25 +1,25 @@
 
 
-## Limpeza final — 3 hooks órfãos + 2 edge functions + fix config.toml
+## Resultado da varredura — últimos itens encontrados
 
-### Arquivos a deletar (5)
-1. `src/hooks/useDuplicateActivities.ts` — 0 importadores
-2. `src/hooks/useCheckActiveMeeting.ts` — 0 importadores
-3. `src/hooks/useDirectorKPIs.ts` — referenciado apenas em comentários, não importado
-4. `supabase/functions/distribute-leads-batch/index.ts` — sem referência
-5. `supabase/functions/reprocess-mcfpay-skipped/index.ts` — sem referência
+Após verificar todos os 200+ hooks e 90+ edge functions, o sistema está **quase totalmente limpo**. Encontrei apenas **3 edge functions órfãs** restantes:
 
-### Arquivos a editar (1)
-**`supabase/config.toml`** — adicionar entrada para `admin-send-reset`:
-```toml
-[functions.admin-send-reset]
-verify_jwt = false
-```
+### Edge Functions sem nenhum consumidor (nem frontend, nem outras functions)
 
-### Edições cosméticas em comentários (2)
-- `src/hooks/useUltrameta.ts` linha 58: remover menção a `useDirectorKPIs` do comentário
-- `src/lib/transactionHelpers.ts` linha 2: remover menção a `useDirectorKPIs` do comentário
+| Função | Linhas | Situação |
+|--------|--------|----------|
+| `supabase/functions/detect-duplicate-activities/` | ~190 | Script manual de detecção de atividades duplicadas. Zero referências no frontend ou em outras edge functions |
+| `supabase/functions/repair-activity-owners/` | ~170 | Script manual para corrigir owners de atividades. Zero referências no frontend ou em outras edge functions |
+| `supabase/functions/reprocess-missing-activities/` | ~150 | Script manual para reprocessar atividades faltantes. Zero referências no frontend ou em outras edge functions |
 
-### Impacto: zero
-Nenhum módulo ativo importa esses arquivos. A adição do `admin-send-reset` ao config corrige uma lacuna existente.
+Todos são scripts utilitários de manutenção pontual (tipo backfill), sem nenhuma chamada automatizada ou via UI.
+
+### Ações
+
+1. Deletar as 3 pastas de edge functions
+2. Remover as 3 entradas correspondentes do `supabase/config.toml`
+
+### Conclusão
+
+Fora esses 3 itens, **o sistema está 100% limpo**. Todos os hooks, componentes, páginas e demais edge functions têm consumidores ativos e estão conectados.
 
