@@ -39,7 +39,7 @@ function getPhoneSuffix(phone: string | null): string {
 function getMaxStageOrder(contact: any): number {
   const deals = (contact.crm_deals as any[]) || [];
   if (deals.length === 0) return -1;
-  return Math.max(...deals.map((d: any) => d.crm_stages?.order ?? -1));
+  return Math.max(...deals.map((d: any) => d.crm_stages?.stage_order ?? -1));
 }
 
 /**
