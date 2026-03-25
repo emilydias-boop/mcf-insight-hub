@@ -1,49 +1,74 @@
 
 
-## Esconder sidebar quando BU tem apenas 1 pipeline (grupo ou origem)
+## Corrigir duplicação de leads do Make no webhook-make-a010
 
-### Problema
-Quando a BU está mapeada para uma única **origem** (como "PIPELINE INSIDE SALES"), o sistema não reconhece como "single pipeline" porque `buAllowedGroups` só conta grupos. A sidebar aparece mostrando apenas 1 item — redundante.
+### Problema identificado
+
+O `webhook-make-a010` tem falhas de deduplicação comparado ao `hubla-webhook-handler`:
+
+| Camada | hubla-webhook-handler | webhook-make-a010 |
+|--------|----------------------|-------------------|
+| Busca contato por email | ✅ | ✅ |
+| Busca contato por telefone (fallback) | ✅ | ❌ |
+| Verificação deal existente (contact_id + origin_id) | ✅ com update | ✅ mas sem upsert |
+| Upsert atômico com onConflict | ✅ | ❌ usa insert simples |
+| Cross-check por telefone sufixo | ✅ | ❌ |
+
+Resultado: se o mesmo lead chega pelo Hubla (cria contato) e depois pelo Make (não encontra por telefone, cria outro contato), aparecem 2 deals separados para a mesma pessoa.
 
 ### Solução
 
-**Arquivo:** `src/pages/crm/Negocios.tsx`
+**Arquivo:** `supabase/functions/webhook-make-a010/index.ts` — função `createCrmDeal`
 
-Alterar a lógica de `hasSinglePipeline` para considerar tanto grupos quanto origens:
-
-```typescript
-// Antes (só conta grupos):
-const hasSinglePipeline = buAllowedGroups.length === 1;
-
-// Depois (conta total de mapeamentos):
-const totalMappedPipelines = buAllowedGroups.length + (buMapping?.origins?.length || 0);
-const hasSinglePipeline = totalMappedPipelines === 1;
-```
-
-Também ajustar a auto-seleção (~linha 176) para considerar origens quando não há grupos:
+#### 1. Adicionar fallback de busca por telefone (linhas ~291-298)
+Após a busca por email falhar, buscar contato por telefone normalizado (formato exato + variações com/sem +55):
 
 ```typescript
-// Se há apenas 1 origem mapeada (sem grupo), auto-selecionar
-if (buAllowedGroups.length === 0 && buMapping?.origins?.length === 1) {
-  setSelectedPipelineId(buMapping.origins[0]);
-  return;
+// Fallback: buscar por telefone
+if (!contactId && data.phone) {
+  const normalizedPhone = normalizePhone(data.phone);
+  if (normalizedPhone) {
+    const phoneDigits = normalizedPhone.replace(/\D/g, '');
+    const phoneSuffix = phoneDigits.slice(-9);
+    const { data: byPhone } = await supabase
+      .from('crm_contacts')
+      .select('id')
+      .or(`phone.like.%${phoneSuffix}`)
+      .limit(1)
+      .maybeSingle();
+    if (byPhone) contactId = byPhone.id;
+  }
 }
 ```
 
-E ajustar o `PipelineConfigModal` (~linha 827) para usar o ID correto quando é uma origem:
+#### 2. Substituir insert por upsert atômico (linhas ~373-389)
+Trocar o `insert` simples por `upsert` com `onConflict: 'contact_id,origin_id'` e `ignoreDuplicates: true`, igual ao hubla-webhook-handler:
 
 ```typescript
-const singlePipelineId = buAllowedGroups[0] || buMapping?.origins?.[0];
-const singlePipelineType = buAllowedGroups.length === 1 ? 'group' : 'origin';
+const { data: newDeal, error: dealError } = await supabase
+  .from('crm_deals')
+  .upsert(dealData, {
+    onConflict: 'contact_id,origin_id',
+    ignoreDuplicates: true
+  })
+  .select('id')
+  .maybeSingle();
 ```
 
-### Resultado
-- 1 pipeline mapeada (grupo ou origem) → sidebar escondida, título mostra nome da pipeline
-- 2+ pipelines → sidebar visível normalmente
+#### 3. Tratar deal existente com update de tags/valor (antes da criação)
+Mover a verificação de deal existente (linha ~332) para também atualizar tags com "Make" e custom_fields, igual ao hubla-webhook-handler faz (linhas 450-478), evitando retornar "updated" sem marcar a tag.
+
+### Resultado esperado
+- Leads que chegam pelo Make e já existem por email OU telefone → atualizam o deal existente
+- Race conditions entre Hubla e Make → upsert atômico previne duplicação
+- Mesmo lead com variações de telefone → sufixo de 9 dígitos encontra o contato correto
+
+### Detalhes técnicos
 
 | Item | Detalhe |
 |------|---------|
-| Arquivo | `src/pages/crm/Negocios.tsx` |
-| Linhas | ~103-108, ~176-180, ~600-604, ~827-833 |
-| Impacto | Apenas visual, nenhuma mudança em dados |
+| Arquivo | `supabase/functions/webhook-make-a010/index.ts` |
+| Função | `createCrmDeal` (linhas 242-424) |
+| Deploy | Automático após edição |
+| Impacto | Apenas novos webhooks — deals duplicados existentes precisam de merge manual via Duplicados |
 
