@@ -217,15 +217,17 @@ const Contatos = () => {
       {/* Select all toggle + info */}
       {filteredContacts.length > 0 && (
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={allFilteredSelected}
-              onCheckedChange={handleSelectAll}
-            />
-            <span className="text-xs text-muted-foreground">
-              Selecionar todos da página ({filteredContacts.length})
-            </span>
-          </div>
+          {!isReadOnly ? (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={allFilteredSelected}
+                onCheckedChange={handleSelectAll}
+              />
+              <span className="text-xs text-muted-foreground">
+                Selecionar todos da página ({filteredContacts.length})
+              </span>
+            </div>
+          ) : <div />}
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">
               Mostrando {showFrom}-{showTo} de {totalCount.toLocaleString('pt-BR')} contatos
@@ -247,7 +249,7 @@ const Contatos = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  <th className="w-10 px-3 py-2.5"></th>
+                  {!isReadOnly && <th className="w-10 px-3 py-2.5"></th>}
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Nome</th>
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden md:table-cell">Email</th>
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Telefone</th>
@@ -268,12 +270,14 @@ const Contatos = () => {
                       className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
                       onClick={() => handleContactClick(contact.id)}
                     >
-                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedIds.has(contact.id)}
-                          onCheckedChange={(checked) => handleSelect(contact.id, !!checked)}
-                        />
-                      </td>
+                      {!isReadOnly && (
+                        <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedIds.has(contact.id)}
+                            onCheckedChange={(checked) => handleSelect(contact.id, !!checked)}
+                          />
+                        </td>
+                      )}
                       <td className="px-3 py-2.5 font-medium text-foreground truncate max-w-[200px]">
                         {contact.name}
                       </td>
