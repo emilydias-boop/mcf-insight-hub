@@ -1,43 +1,49 @@
 
 
-## Adicionar suporte a origens individuais na Configuração de BU
+## Esconder sidebar quando BU tem apenas 1 pipeline (grupo ou origem)
 
 ### Problema
-A página `/admin/configuracao-bu` lista apenas `crm_groups` (funis pai). Origens filhas como "PIPELINE INSIDE SALES" (que é uma `crm_origin` dentro de um grupo) não aparecem na lista, então não podem ser vinculadas individualmente a uma BU.
-
-A tabela `bu_origin_mapping` já suporta `entity_type: 'origin'`, mas a UI nunca oferece essa opção.
+Quando a BU está mapeada para uma única **origem** (como "PIPELINE INSIDE SALES"), o sistema não reconhece como "single pipeline" porque `buAllowedGroups` só conta grupos. A sidebar aparece mostrando apenas 1 item — redundante.
 
 ### Solução
 
-Modificar a página `ConfiguracaoBU` para mostrar uma lista hierárquica: grupos com suas origens filhas expansíveis. Permitir selecionar tanto grupos inteiros quanto origens individuais.
+**Arquivo:** `src/pages/crm/Negocios.tsx`
 
-**Arquivo:** `src/pages/admin/ConfiguracaoBU.tsx`
+Alterar a lógica de `hasSinglePipeline` para considerar tanto grupos quanto origens:
 
-#### 1. Buscar origens junto com grupos
-Adicionar query para `crm_origins` com `group_id`, agrupando-as sob seus respectivos grupos. Usar a query existente de `useCRMPipelines` para grupos e uma nova query para origens.
+```typescript
+// Antes (só conta grupos):
+const hasSinglePipeline = buAllowedGroups.length === 1;
 
-#### 2. UI hierárquica com accordion/collapsible
-Cada grupo na lista terá um ícone de expandir (chevron). Ao expandir, mostra as origens filhas com checkboxes individuais. O checkbox do grupo seleciona todas as origens do grupo de uma vez.
-
-```text
-☑ Perpétuo - X1              [expandir ▾]
-   ☐ PIPELINE INSIDE SALES
-   ☐ PIPELINE INSIDE SALES - LEAD GRATUITO
-   ☐ Perpétuo - Origem ABC
+// Depois (conta total de mapeamentos):
+const totalMappedPipelines = buAllowedGroups.length + (buMapping?.origins?.length || 0);
+const hasSinglePipeline = totalMappedPipelines === 1;
 ```
 
-#### 3. Salvar mapeamento misto (groups + origins)
-Atualizar `handleSave` para incluir tanto `entity_type: 'group'` quanto `entity_type: 'origin'` no array de mappings enviado ao `useSaveBUOriginMapping`.
+Também ajustar a auto-seleção (~linha 176) para considerar origens quando não há grupos:
 
-#### 4. Carregar mapeamento existente de origens
-Atualizar o `useEffect` que sincroniza `currentMapping` para também popular um `selectedOrigins` state separado, lendo entries com `entity_type === 'origin'`.
+```typescript
+// Se há apenas 1 origem mapeada (sem grupo), auto-selecionar
+if (buAllowedGroups.length === 0 && buMapping?.origins?.length === 1) {
+  setSelectedPipelineId(buMapping.origins[0]);
+  return;
+}
+```
 
-### Detalhes técnicos
+E ajustar o `PipelineConfigModal` (~linha 827) para usar o ID correto quando é uma origem:
+
+```typescript
+const singlePipelineId = buAllowedGroups[0] || buMapping?.origins?.[0];
+const singlePipelineType = buAllowedGroups.length === 1 ? 'group' : 'origin';
+```
+
+### Resultado
+- 1 pipeline mapeada (grupo ou origem) → sidebar escondida, título mostra nome da pipeline
+- 2+ pipelines → sidebar visível normalmente
 
 | Item | Detalhe |
 |------|---------|
-| Arquivo principal | `src/pages/admin/ConfiguracaoBU.tsx` |
-| Nova query | `crm_origins` com `select('id, name, display_name, group_id')` |
-| State novo | `selectedOrigins: Set<string>`, `expandedGroups: Set<string>` |
-| Compatibilidade | `bu_origin_mapping` já suporta `entity_type: 'origin'` — sem mudança no banco |
+| Arquivo | `src/pages/crm/Negocios.tsx` |
+| Linhas | ~103-108, ~176-180, ~600-604, ~827-833 |
+| Impacto | Apenas visual, nenhuma mudança em dados |
 
