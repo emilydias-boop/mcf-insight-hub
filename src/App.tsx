@@ -194,7 +194,7 @@ const App = () => (
                 <Route path="importar-hubla" element={<ImportarHubla />} />
                 <Route path="auditoria" element={<ReceitaAuditoria />} />
               </Route>
-              <Route path="importar-a010" element={<ImportarA010 />} />
+              
               <Route path="custos" element={<ResourceGuard resource="custos"><Custos /></ResourceGuard>}>
                 <Route index element={<CustosOverview />} />
                 <Route path="despesas" element={<CustosDespesas />} />
