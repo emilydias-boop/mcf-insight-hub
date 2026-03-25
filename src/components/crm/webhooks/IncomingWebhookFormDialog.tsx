@@ -79,6 +79,42 @@ export const IncomingWebhookFormDialog = ({
   const [tagInput, setTagInput] = useState('');
   const [copied, setCopied] = useState(false);
 
+  // Field mapping selection for duplication
+  const duplicateMappingEntries = useMemo(() => {
+    if (!duplicateData?.field_mapping) return [];
+    return Object.entries(duplicateData.field_mapping as Record<string, string>);
+  }, [duplicateData]);
+
+  const [selectedMappings, setSelectedMappings] = useState<Set<string>>(() => 
+    new Set(duplicateMappingEntries.map(([key]) => key))
+  );
+
+  // Re-init selectedMappings when duplicateData changes
+  useEffect(() => {
+    if (duplicateData?.field_mapping) {
+      setSelectedMappings(new Set(Object.keys(duplicateData.field_mapping as Record<string, string>)));
+    } else {
+      setSelectedMappings(new Set());
+    }
+  }, [duplicateData]);
+
+  const toggleMapping = (key: string) => {
+    setSelectedMappings(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const selectAllMappings = () => {
+    setSelectedMappings(new Set(duplicateMappingEntries.map(([key]) => key)));
+  };
+
+  const clearAllMappings = () => {
+    setSelectedMappings(new Set());
+  };
+
   const { data: endpoints } = useWebhookEndpoints(originId);
   const createMutation = useCreateWebhookEndpoint();
   const updateMutation = useUpdateWebhookEndpoint();
