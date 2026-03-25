@@ -39,7 +39,7 @@ function getPhoneSuffix(phone: string | null): string {
 function getMaxStageOrder(contact: any): number {
   const deals = (contact.crm_deals as any[]) || [];
   if (deals.length === 0) return -1;
-  return Math.max(...deals.map((d: any) => d.crm_stages?.order ?? -1));
+  return Math.max(...deals.map((d: any) => d.crm_stages?.stage_order ?? -1));
 }
 
 /**
@@ -114,7 +114,8 @@ serve(async (req) => {
         .from('crm_deals')
         .select('contact_id, origin_id')
         .not('contact_id', 'is', null)
-        .not('origin_id', 'is', null);
+        .not('origin_id', 'is', null)
+        .limit(10000);
 
       const dealsGroups: Record<string, number> = {};
       for (const d of allDeals || []) {
@@ -169,7 +170,8 @@ serve(async (req) => {
           .from('crm_deals')
           .select('contact_id, origin_id')
           .not('contact_id', 'is', null)
-          .not('origin_id', 'is', null);
+          .not('origin_id', 'is', null)
+          .limit(10000);
 
         if (allErr) throw allErr;
 
@@ -258,7 +260,7 @@ serve(async (req) => {
         .from('crm_contacts')
         .select(`
           id, email, phone, name, tags, created_at,
-          crm_deals(id, owner_id, stage_id, crm_stages(order, name), meeting_slots(id))
+          crm_deals(id, owner_id, stage_id, crm_stages!crm_deals_stage_id_fkey(stage_order, name), meeting_slots(id))
         `)
         .in('id', allIds);
 
@@ -329,7 +331,7 @@ async function processEmailGroup(supabase: any, email: string, dryRun: boolean, 
       .from('crm_contacts')
       .select(`
         id, email, phone, name, tags, created_at,
-        crm_deals(id, owner_id, stage_id, crm_stages(order, name), meeting_slots(id))
+        crm_deals(id, owner_id, stage_id, crm_stages!crm_deals_stage_id_fkey(stage_order, name), meeting_slots(id))
       `)
       .ilike('email', email)
       .order('created_at', { ascending: true });
@@ -355,7 +357,7 @@ async function processPhoneGroup(supabase: any, phoneSuffix: string, dryRun: boo
       .from('crm_contacts')
       .select(`
         id, email, phone, name, tags, created_at,
-        crm_deals(id, owner_id, stage_id, crm_stages(order, name), meeting_slots(id))
+        crm_deals(id, owner_id, stage_id, crm_stages!crm_deals_stage_id_fkey(stage_order, name), meeting_slots(id))
       `)
       .ilike('phone', `%${phoneSuffix}`)
       .order('created_at', { ascending: true });
@@ -421,7 +423,7 @@ async function mergeContacts(
   const getStageName = (c: any) => {
     const deals = (c.crm_deals as any[]) || [];
     if (!deals.length) return null;
-    const sorted = [...deals].sort((a: any, b: any) => (b.crm_stages?.order ?? -1) - (a.crm_stages?.order ?? -1));
+    const sorted = [...deals].sort((a: any, b: any) => (b.crm_stages?.stage_order ?? -1) - (a.crm_stages?.stage_order ?? -1));
     return sorted[0]?.crm_stages?.name || null;
   };
 
@@ -541,7 +543,7 @@ async function consolidateDeals(supabase: any, contactId: string, results: any) 
   // Buscar todos os deals do contato com stage info
   const { data: deals, error } = await supabase
     .from('crm_deals')
-    .select('id, origin_id, stage_id, tags, crm_stages(order)')
+    .select('id, origin_id, stage_id, tags, crm_stages!crm_deals_stage_id_fkey(stage_order)')
     .eq('contact_id', contactId);
 
   if (error || !deals?.length) return;
@@ -559,8 +561,8 @@ async function consolidateDeals(supabase: any, contactId: string, results: any) 
 
     // Ordenar por stage_order DESC — manter o mais avançado
     originDeals.sort((a: any, b: any) => {
-      const aOrder = a.crm_stages?.order ?? -1;
-      const bOrder = b.crm_stages?.order ?? -1;
+      const aOrder = a.crm_stages?.stage_order ?? -1;
+      const bOrder = b.crm_stages?.stage_order ?? -1;
       return bOrder - aOrder;
     });
 
