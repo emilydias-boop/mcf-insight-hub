@@ -187,11 +187,6 @@ verify_jwt = false
 [functions.reprocess-failed-webhooks-cron]
 verify_jwt = false
 
-[functions.backfill-deal-activities]
-verify_jwt = false
-
-[functions.backfill-deal-owners]
-verify_jwt = false
 
 [functions.backfill-orphan-owners]
 verify_jwt = false
@@ -205,8 +200,6 @@ verify_jwt = false
 [functions.webhook-consorcio]
 verify_jwt = false
 
-[functions.webhook-credito]
-verify_jwt = false
 
 
 [functions.notify-new-lead]
@@ -266,8 +259,6 @@ verify_jwt = false
 [functions.process-deal-replication]
 verify_jwt = false
 
-[functions.backfill-construir-alugar]
-verify_jwt = false
 
 [functions.send-document-email]
 verify_jwt = false
@@ -285,8 +276,6 @@ verify_jwt = false
 [functions.import-spreadsheet-leads]
 verify_jwt = false
 
-[functions.backfill-a010-offer-leads]
-verify_jwt = false
 
 
 [functions.move-partners-to-venda-realizada]
