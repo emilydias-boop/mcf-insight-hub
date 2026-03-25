@@ -1,51 +1,40 @@
 
 
-## Melhorias no Controle Diego: UX do Kanban + Drawer Rico
+## Fix: Consórcio BU Pipeline Mapping (Data Issue)
 
-### Problemas identificados
-1. **Drag & Drop**: O click no card abre o drawer ao invés de permitir arrastar — o drag handle (ícone de grip) é pequeno demais e confuso
-2. **Drawer pobre**: Faltam informações importantes como data da R1, data de compra A010, SDR que agendou, jornada do lead
-3. **Cards com poucas informações**: Não mostram dados como data da R1, SDR
+### Root cause
 
-### Solução
+The `bu_origin_mapping` table for `consorcio` was overwritten (likely via the admin config at `/admin/configuracao-bu`) and now contains incorrect entries. The mapping points to a Leilão group (`f8a2b3c4-...`) with display_name "BU - Consorcio" instead of the actual consorcio pipeline groups.
 
-**1. Corrigir UX do Kanban (ControleDiegoPanel.tsx)**
-- Remover o `onClick` do card inteiro — o click só abre drawer via um botão/área específica (ex: nome do lead clicável)
-- O card inteiro fica arrastável (sem precisar do grip handle pequeno)
-- Adicionar mais info nos cards: SDR, data da R1 (meetingDate)
-- Adicionar botão "Marcar como enviado" direto no card da coluna Pendentes (sem precisar arrastar)
+**Current mapping (wrong):**
+| entity_type | entity_id | name | is_default |
+|---|---|---|---|
+| group | f8a2b3c4-... | BU - LEILÃO (display: BU - Consorcio) | true |
+| origin | 7d7b1cb5-... | Efeito Alavanca + Clube | false |
 
-**2. Enriquecer o Drawer (ControleDiegoDrawer.tsx)**
-- Usar `useLeadJourney(dealId)` para buscar jornada completa (SDR, R1, R2)
-- Usar `useA010Journey(email, phone)` para dados de compra A010
-- Mostrar seções:
-  - **Dados do contrato**: Closer, SDR (nome resolvido), data pagamento, pipeline, canal
-  - **Jornada do Lead**: Entrada pipeline, R1 (data, closer, status), R2 (se houver)
-  - **A010**: Data da compra, valor pago, produto
-  - **Contato**: Email, telefone, WhatsApp
-  - **Controle de vídeo**: Toggle + observação (já existe)
-- O drawer precisa receber `dealId` para buscar a jornada
+**Correct mapping (needs to be restored):**
+| entity_type | entity_id | name | is_default |
+|---|---|---|---|
+| group | b98e3746-... | Perpétuo - Construa para Alugar | true |
+| group | 267905ec-... | Hubla - Viver de Aluguel | false |
+| group | a6f3cbfc-... | Perpétuo - X1 | false |
+| origin | 57013597-... | PIPE LINE - INSIDE SALES | true |
+| origin | 4e2b810a-... | INSIDE SALES - VIVER DE ALUGUEL | false |
 
-**3. Atualizar KanbanRow para incluir meetingDate e dealId**
-- `meetingDate` (data da R1) já vem do `useContractReport` — expor no card
-- `dealId` já está no KanbanRow — passar ao drawer
+### What this affects
 
-### Arquivos a modificar
+Ygor (SDR, squad: consorcio) can't see his pipeline because:
+1. The code uses `buMapping.groups` + `buMapping.origins` to filter the sidebar
+2. The wrong mapping excludes all actual consorcio groups/origins
+3. `SDR_ORIGIN_BY_BU['consorcio']` = `57013597-...` exists but isn't in the authorized list
 
-| Arquivo | Mudança |
-|---------|---------|
-| `ControleDiegoPanel.tsx` | Refatorar cards: drag no card inteiro, click no nome abre drawer, botão "enviar" no card, mostrar SDR e data R1 |
-| `ControleDiegoDrawer.tsx` | Adicionar `useLeadJourney` e `useA010Journey`, mostrar jornada completa, receber `dealId` |
+### Fix
 
-### Card do Kanban (novo layout)
+Create a migration to delete the incorrect entries and re-insert the correct consorcio mapping:
 
-```text
-┌────────────────────────────────┐
-│ André Meireles Gomes ← clicável (abre drawer)
-│ Closer: Thayna · SDR: Alex Dias
-│ R1: 20/03 · Pgto: 25/03 · A010
-│ 📱 21981541133    [✓ Enviar]
-└────────────────────────────────┘
-```
-Todo o card é arrastável. Nome abre drawer. Telefone abre WhatsApp. Botão marca como enviado.
+**File: new migration**
+- DELETE from `bu_origin_mapping` WHERE `bu = 'consorcio'`
+- INSERT the 5 correct rows (3 groups + 2 origins) with proper `is_default` flags
+
+This is purely a data fix — no code changes needed.
 
