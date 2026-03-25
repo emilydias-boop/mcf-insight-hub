@@ -27,7 +27,6 @@ import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTabl
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
 
-import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
@@ -219,12 +218,6 @@ export default function ReunioesEquipe() {
     return contarDiasUteis(start, end);
   }, [start, end]);
 
-  // Fetch meeting_slots KPIs for today (agenda-based)
-  const { data: dayAgendaKPIs } = useMeetingSlotsKPIs(dayStart, dayEnd);
-
-  // Fetch meeting_slots KPIs for the week (agenda-based)
-  const { data: weekAgendaKPIs } = useMeetingSlotsKPIs(weekStartDate, weekEndDate);
-
   // Fetch R2 agenda KPIs for today (from meeting_slots where meeting_type='r2')
   const { data: dayR2AgendaKPIs } = useR2MeetingSlotsKPIs(dayStart, dayEnd);
 
@@ -242,9 +235,6 @@ export default function ReunioesEquipe() {
     startDate: monthStartDate,
     endDate: monthEndDate,
   });
-
-  // Fetch meeting_slots KPIs for the month (agenda-based)
-  const { data: monthAgendaKPIs } = useMeetingSlotsKPIs(monthStartDate, monthEndDate);
 
   // Fetch R2 agenda KPIs for the month
   const { data: monthR2AgendaKPIs } = useR2MeetingSlotsKPIs(monthStartDate, monthEndDate);
