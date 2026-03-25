@@ -402,7 +402,7 @@ const Contatos = () => {
                 ? 'Tente ajustar os filtros ou buscar com outros termos'
                 : 'Comece adicionando seus primeiros contatos'}
             </p>
-            {!searchTerm && !Object.values(filters).some(v => v) && (
+            {!isReadOnly && !searchTerm && !Object.values(filters).some(v => v) && (
               <Button onClick={() => setCreateDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar Contato
@@ -412,49 +412,54 @@ const Contatos = () => {
         </Card>
       )}
 
-      {/* Bulk actions */}
-      <BulkActionsBar
-        selectedCount={selectedIds.size}
-        onTransfer={() => setPipelineModalOpen(true)}
-        onClearSelection={() => setSelectedIds(new Set())}
-        isTransferring={false}
-        onDuplicate={() => setDuplicateDialogOpen(true)}
-        isDuplicating={duplicateMutation.isPending}
-      />
+      {/* Bulk actions - hidden for read-only roles */}
+      {!isReadOnly && (
+        <>
+          <BulkActionsBar
+            selectedCount={selectedIds.size}
+            onTransfer={() => setPipelineModalOpen(true)}
+            onClearSelection={() => setSelectedIds(new Set())}
+            isTransferring={false}
+            onDuplicate={() => setDuplicateDialogOpen(true)}
+            isDuplicating={duplicateMutation.isPending}
+          />
 
-      <SendToPipelineModal
-        open={pipelineModalOpen}
-        onOpenChange={setPipelineModalOpen}
-        selectedContactIds={Array.from(selectedIds)}
-        onSuccess={() => setSelectedIds(new Set())}
-      />
+          <SendToPipelineModal
+            open={pipelineModalOpen}
+            onOpenChange={setPipelineModalOpen}
+            selectedContactIds={Array.from(selectedIds)}
+            onSuccess={() => setSelectedIds(new Set())}
+          />
 
-      <DuplicateToInsideDialog
-        open={duplicateDialogOpen}
-        onOpenChange={setDuplicateDialogOpen}
-        selectedCount={selectedIds.size}
-        isLoading={duplicateMutation.isPending}
-        onConfirm={(ownerEmail, ownerProfileId, stageId) => {
-          const leads = filteredContacts
-            .filter(c => selectedIds.has(c.id))
-            .map(c => ({
-              name: c.name,
-              email: c.email || '',
-              phone: c.phone || '',
-              sourceContactId: c.id,
-              sourceDealId: c.latestDeal?.id,
-            }));
-          duplicateMutation.mutate({ leads, ownerEmail, ownerProfileId, stageId }, {
-            onSuccess: () => {
-              setSelectedIds(new Set());
-              setDuplicateDialogOpen(false);
-            },
-          });
-        }}
-      />
+          <DuplicateToInsideDialog
+            open={duplicateDialogOpen}
+            onOpenChange={setDuplicateDialogOpen}
+            selectedCount={selectedIds.size}
+            isLoading={duplicateMutation.isPending}
+            onConfirm={(ownerEmail, ownerProfileId, stageId) => {
+              const leads = filteredContacts
+                .filter(c => selectedIds.has(c.id))
+                .map(c => ({
+                  name: c.name,
+                  email: c.email || '',
+                  phone: c.phone || '',
+                  sourceContactId: c.id,
+                  sourceDealId: c.latestDeal?.id,
+                }));
+              duplicateMutation.mutate({ leads, ownerEmail, ownerProfileId, stageId }, {
+                onSuccess: () => {
+                  setSelectedIds(new Set());
+                  setDuplicateDialogOpen(false);
+                },
+              });
+            }}
+          />
+
+          <ContactFormDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+        </>
+      )}
 
       <ContactDetailsDrawer contactId={selectedContactId} open={drawerOpen} onOpenChange={setDrawerOpen} />
-      <ContactFormDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
     </div>
   );
 };
