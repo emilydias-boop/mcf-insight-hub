@@ -39,8 +39,11 @@ import {
   getWebhookUrl,
   type WebhookEndpoint,
 } from '@/hooks/useWebhookEndpoints';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const formSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
@@ -75,6 +78,42 @@ export const IncomingWebhookFormDialog = ({
 }: IncomingWebhookFormDialogProps) => {
   const [tagInput, setTagInput] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // Field mapping selection for duplication
+  const duplicateMappingEntries = useMemo(() => {
+    if (!duplicateData?.field_mapping) return [];
+    return Object.entries(duplicateData.field_mapping as Record<string, string>);
+  }, [duplicateData]);
+
+  const [selectedMappings, setSelectedMappings] = useState<Set<string>>(() => 
+    new Set(duplicateMappingEntries.map(([key]) => key))
+  );
+
+  // Re-init selectedMappings when duplicateData changes
+  useEffect(() => {
+    if (duplicateData?.field_mapping) {
+      setSelectedMappings(new Set(Object.keys(duplicateData.field_mapping as Record<string, string>)));
+    } else {
+      setSelectedMappings(new Set());
+    }
+  }, [duplicateData]);
+
+  const toggleMapping = (key: string) => {
+    setSelectedMappings(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const selectAllMappings = () => {
+    setSelectedMappings(new Set(duplicateMappingEntries.map(([key]) => key)));
+  };
+
+  const clearAllMappings = () => {
+    setSelectedMappings(new Set());
+  };
 
   const { data: endpoints } = useWebhookEndpoints(originId);
   const createMutation = useCreateWebhookEndpoint();
@@ -228,7 +267,12 @@ export const IncomingWebhookFormDialog = ({
           auth_header_name: values.auth_header_name,
           auth_header_value: values.auth_header_value,
           is_active: values.is_active,
-          ...(duplicateData?.field_mapping ? { field_mapping: duplicateData.field_mapping } : {}),
+          ...(duplicateData?.field_mapping ? { 
+            field_mapping: Object.fromEntries(
+              Object.entries(duplicateData.field_mapping as Record<string, string>)
+                .filter(([key]) => selectedMappings.has(key))
+            )
+          } : {}),
         });
       }
       onOpenChange(false);
@@ -396,6 +440,42 @@ export const IncomingWebhookFormDialog = ({
                 </FormItem>
               )}
             />
+
+            {isDuplicating && duplicateMappingEntries.length > 0 && (
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium">Mapeamento de Campos</h4>
+                  <div className="flex gap-2">
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={selectAllMappings}>
+                      Todos
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAllMappings}>
+                      Limpar
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Selecione quais campos do mapeamento deseja copiar ({selectedMappings.size} de {duplicateMappingEntries.length})
+                </p>
+                <ScrollArea className="max-h-[200px] rounded-md border p-2">
+                  <div className="space-y-2">
+                    {duplicateMappingEntries.map(([key, value]) => (
+                      <div key={key} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`mapping-${key}`}
+                          checked={selectedMappings.has(key)}
+                          onCheckedChange={() => toggleMapping(key)}
+                        />
+                        <Label htmlFor={`mapping-${key}`} className="text-xs font-normal cursor-pointer flex-1">
+                          <span className="font-medium">{key}</span>
+                          <span className="text-muted-foreground"> → {String(value)}</span>
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
 
             <div className="border-t pt-4">
               <h4 className="text-sm font-medium mb-3">Autenticação (opcional)</h4>
