@@ -47,6 +47,7 @@ export interface KanbanRow {
   salesChannel: string;
   isRefunded: boolean;
   dealId: string | null;
+  contactId: string | null;
 }
 
 export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
@@ -110,6 +111,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
       salesChannel: row.salesChannel.toUpperCase(),
       isRefunded: row.isRefunded,
       dealId: row.dealId || null,
+      contactId: row.contactId || null,
     }));
 
     // Filter by channel
