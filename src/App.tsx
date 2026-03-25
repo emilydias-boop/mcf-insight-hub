@@ -31,7 +31,7 @@ import ReceitaOverview from "./pages/receita/Overview";
 import A010 from "./pages/receita/A010";
 import ReceitaTransacoes from "./pages/receita/Transacoes";
 import ReceitaPorCanal from "./pages/receita/PorCanal";
-import ImportarA010 from "./pages/receita/ImportarA010";
+
 import ImportarHubla from "./pages/receita/ImportarHubla";
 import ReceitaAuditoria from "./pages/receita/Auditoria";
 import Custos from "./pages/custos/Index";

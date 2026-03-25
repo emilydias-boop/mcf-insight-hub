@@ -131,27 +131,6 @@ const ConfiguracoesContent = () => {
       key: 'qualification',
     },
     {
-      icon: Database,
-      title: 'Campos Customizados',
-      description: 'Adicione campos personalizados aos seus contatos e negócios',
-      action: 'Gerenciar Campos',
-      key: 'custom-fields',
-    },
-    {
-      icon: Zap,
-      title: 'Automações',
-      description: 'Configure automações para otimizar seu fluxo de trabalho',
-      action: 'Configurar Automações',
-      key: 'automations',
-    },
-    {
-      icon: Users,
-      title: 'Estágios do Pipeline',
-      description: 'Personalize os estágios do seu funil de vendas',
-      action: 'Editar Estágios',
-      key: 'stages',
-    },
-    {
       icon: Shield,
       title: 'Permissões',
       description: 'Gerencie permissões de acesso ao CRM',
