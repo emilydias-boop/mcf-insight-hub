@@ -244,7 +244,9 @@ export const useContractReport = (
         
         const contactEmail = contact?.email || null;
         const contactPhone = contact?.phone || row.attendee_phone || null;
-        const contactTags: string[] = Array.isArray(contact?.tags) ? contact.tags : [];
+        const contactTags: string[] = Array.isArray(contact?.tags)
+          ? contact.tags.map((t: any) => (typeof t === 'string' ? t : t?.name)).filter(Boolean)
+          : [];
         const salesChannel = detectSalesChannel(contactEmail, contactTags);
         
         return {
