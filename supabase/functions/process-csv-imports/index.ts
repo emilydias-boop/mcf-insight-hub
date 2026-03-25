@@ -182,6 +182,37 @@ Deno.serve(async (req) => {
     // Set para rastrear contatos já processados neste chunk (deduplicação por contact_id + origin_id)
     const processedContactOrigins = new Set<string>(job.metadata.processed_contact_origins || [])
 
+    // Carregar deals existentes no banco para esta origin (prevenir duplicatas com webhook/Clint)
+    if (originId) {
+      console.log(`🔍 Carregando deals existentes para origin ${originId}...`)
+      let existingPage = 0
+      const PAGE_SIZE = 1000
+      let hasMore = true
+      while (hasMore) {
+        const { data: existingDeals, error: existErr } = await supabase
+          .from('crm_deals')
+          .select('contact_id')
+          .eq('origin_id', originId)
+          .not('contact_id', 'is', null)
+          .range(existingPage * PAGE_SIZE, (existingPage + 1) * PAGE_SIZE - 1)
+        
+        if (existErr) {
+          console.error('⚠️ Erro ao carregar deals existentes:', existErr)
+          break
+        }
+        
+        for (const d of existingDeals || []) {
+          if (d.contact_id) {
+            processedContactOrigins.add(`${d.contact_id}_${originId}`)
+          }
+        }
+        
+        hasMore = (existingDeals?.length || 0) === PAGE_SIZE
+        existingPage++
+      }
+      console.log(`📊 ${processedContactOrigins.size} combinações contact+origin já existentes no banco`)
+    }
+
     for (const csvDeal of chunkDeals) {
       try {
         // Extrair dados de contato do CSV
