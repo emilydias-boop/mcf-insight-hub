@@ -1,22 +1,22 @@
 
 
-## Substituir filtro Pipeline por filtro de Tags no Controle Diego
+## Corrigir exibição de Tags no Controle Diego
 
 ### Problema
-O filtro de Pipeline mostra todas as origens do sistema (incluindo de outras BUs), quando deveria mostrar apenas as da BU ativa. Além disso, o filtro mais útil seria por **Tags** dos contatos (ex: anamnese, seguimentos), não por pipeline.
+O campo `tags` em `crm_contacts` armazena objetos JSON (ex: `{"id": "uuid", "name": "Anamnese"}`) e não strings simples. O código atual faz `Array.isArray(contact.tags) ? contact.tags : []`, resultando em objetos sendo convertidos para string como `{"id":"00596262-..."}`.
 
-### Alterações
+### Solução
+No `useContractReport.ts`, ao extrair `contactTags`, parsear os objetos e extrair o campo `name`:
 
-#### `src/components/relatorios/ControleDiegoPanel.tsx`
+```typescript
+// Linha ~247 de useContractReport.ts
+const contactTags: string[] = Array.isArray(contact?.tags)
+  ? contact.tags
+      .map((t: any) => (typeof t === 'string' ? t : t?.name))
+      .filter(Boolean)
+  : [];
+```
 
-1. **Remover** estado `selectedOriginId` e a query de `crm-origins-list`
-2. **Adicionar** estado `selectedTags: string[]` para filtro por tags
-3. **Adicionar** `contactTags: string[]` ao tipo `KanbanRow` e mapeá-lo dos dados
-4. **Extrair tags únicas** dos dados carregados para popular o filtro
-5. **Substituir** o `<Select>` de Pipeline pelo componente `TagFilterPopover` já existente
-6. **Aplicar filtro client-side**: se há tags selecionadas, mostrar apenas rows cujo `contactTags` contenha pelo menos uma das tags selecionadas
-7. **Atualizar** dependências do `useMemo` e lógica de export (PDF/Excel) para refletir tags em vez de pipeline
-
-### Resultado
-O filtro de Pipeline será substituído por um filtro multi-select de Tags que permite filtrar por anamnese, seguimentos e demais tags dos contatos, usando o componente `TagFilterPopover` já disponível no projeto.
+### Arquivo modificado
+- `src/hooks/useContractReport.ts` -- parsear tags como objetos e extrair `.name`
 
