@@ -140,6 +140,19 @@ export const IncomingWebhookFormDialog = ({
     enabled: !!originId,
   });
 
+  // Fetch active profiles for fixed SDR selection
+  const { data: activeProfiles } = useQuery({
+    queryKey: ['active-profiles-for-webhook'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .order('full_name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const hasNoStages = stages && stages.length === 0;
 
   const form = useForm<FormValues>({
@@ -153,6 +166,7 @@ export const IncomingWebhookFormDialog = ({
       required_fields: ['name', 'email'],
       auth_header_name: '',
       auth_header_value: '',
+      fixed_owner_email: '',
       is_active: true,
     },
   });
