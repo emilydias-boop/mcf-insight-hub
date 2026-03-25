@@ -163,69 +163,6 @@ export function useDuplicateContacts(matchType: DuplicateMatchType = 'email') {
   });
 }
 
-// Hook legado para compatibilidade
-export function useDuplicateContactsLegacy() {
-  return useQuery({
-    queryKey: ['duplicate-contacts'],
-    queryFn: async () => {
-      const { data: contacts, error } = await supabase
-        .from('crm_contacts')
-        .select(`
-          id,
-          name,
-          email,
-          phone,
-          created_at,
-          crm_deals(id, owner_id)
-        `)
-        .not('email', 'is', null)
-        .order('email')
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-
-      const groups: Record<string, DuplicateContact[]> = {};
-      
-      for (const contact of contacts || []) {
-        const email = contact.email?.toLowerCase();
-        if (!email) continue;
-
-        const deals = (contact.crm_deals as any[]) || [];
-        
-        if (!groups[email]) {
-          groups[email] = [];
-        }
-        
-        groups[email].push({
-          id: contact.id,
-          name: contact.name,
-          email: contact.email,
-          phone: contact.phone,
-          created_at: contact.created_at,
-          deals_count: deals.length,
-          meetings_count: 0,
-          has_owner: deals.some((d: any) => d.owner_id),
-          max_stage_order: -1,
-        });
-      }
-
-      const duplicates: DuplicateGroup[] = Object.entries(groups)
-        .filter(([_, contacts]) => contacts.length >= 2)
-        .map(([email, contacts]) => ({
-          matchKey: email,
-          matchType: 'email' as DuplicateMatchType,
-          contacts: contacts.sort((a, b) => {
-            if (a.has_owner !== b.has_owner) return a.has_owner ? -1 : 1;
-            if (a.deals_count !== b.deals_count) return b.deals_count - a.deals_count;
-            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-          }),
-        }));
-
-      return duplicates;
-    },
-  });
-}
-
 export function useMergeDuplicates() {
   const queryClient = useQueryClient();
 
