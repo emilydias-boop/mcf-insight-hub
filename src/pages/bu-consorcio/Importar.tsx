@@ -620,12 +620,12 @@ export default function ImportarConsorcioPage() {
                         <TableCell>
                           {row.isDuplicate ? (
                             row.allowDuplicate ? (
-                              <Badge variant="outline" className="border-yellow-500 text-yellow-600 bg-yellow-50">Permitido</Badge>
+                              <Badge variant="outline" className="border-chart-4 text-chart-4">Permitido</Badge>
                             ) : (
                               <Badge variant="destructive">Bloqueado</Badge>
                             )
                           ) : (
-                            <Badge variant="outline" className="border-green-500 text-green-600 bg-green-50">Novo</Badge>
+                            <Badge variant="outline" className="border-chart-2 text-chart-2">Novo</Badge>
                           )}
                         </TableCell>
                         <TableCell className="font-medium">{row.consorciado}</TableCell>
