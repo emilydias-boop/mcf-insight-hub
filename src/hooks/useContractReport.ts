@@ -172,7 +172,7 @@ export const useContractReport = (
       
       // Collect linked attendee IDs to avoid duplicates
       const linkedAttendeeIds = new Set(
-        data.map((row: any) => row.id).filter(Boolean)
+        filteredData.map((row: any) => row.id).filter(Boolean)
       );
       
       // Fetch unlinked Hubla A000 transactions (contracts without meetings)
@@ -186,7 +186,7 @@ export const useContractReport = (
         .order('sale_date', { ascending: false });
       
       // Sort by payment date (DESC - most recent first)
-      const sortedData = [...data].sort((a: any, b: any) => {
+      const sortedData = [...filteredData].sort((a: any, b: any) => {
         const dateA = a.contract_paid_at || '';
         const dateB = b.contract_paid_at || '';
         return dateB.localeCompare(dateA);
