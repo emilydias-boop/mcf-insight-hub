@@ -1,31 +1,34 @@
 
 
-## Corrigir nome do SDR exibindo email em vez do nome
+## Corrigir SDR mostrando nome do Closer em vez do SDR real
 
 ### Problema
-O nome do SDR está aparecendo como email (ex: `cristiane.gomes@minhacasafinanciada.com`) em vez do nome completo. Isso ocorre porque no `useContractReport.ts`, a query na tabela `profiles` seleciona o campo `name` (que não existe) em vez de `full_name`. Como `p.name` retorna `undefined`, o fallback `p.name || p.email` sempre cai no email.
+O campo SDR no Controle Diego usa `crm_deals.owner_id` para identificar o SDR, mas em alguns deals esse campo contém o email do **closer** (ex: Cristiane Gomes) em vez do SDR real. O drawer (`useLeadJourney`) resolve corretamente usando `booked_by` da R1, que é quem de fato agendou a reunião (o SDR verdadeiro: Caroline Aparecida Corrêa).
 
-### Correção
-**Arquivo:** `src/hooks/useContractReport.ts` (linha 143)
+### Solução
+Alterar `useContractReport.ts` para usar a mesma lógica do `useLeadJourney`: priorizar o `booked_by` do attendee como SDR, caindo para `owner_id` apenas como fallback.
 
-Trocar:
-```ts
-.select('id, name, email')
-```
-Por:
-```ts
-.select('id, full_name, email')
+### Alterações — `src/hooks/useContractReport.ts`
+
+1. **Adicionar `booked_by`** na query do `meeting_slot_attendees`:
+   ```
+   select: ..., booked_by, ...
+   ```
+
+2. **Coletar todos os `booked_by` UUIDs** dos attendees e buscar seus nomes na tabela `profiles` (por `id`).
+
+3. **Na transformação dos dados**, priorizar o `booked_by` como SDR:
+   ```
+   const sdrEmail = bookedByProfile?.email || deal?.owner_id || '';
+   const sdrName = bookedByProfile?.full_name || sdrNameMap[sdrEmail] || sdrEmail;
+   ```
+
+### Lógica resumida
+```text
+Antes:  SDR = deal.owner_id (pode ser o closer)
+Depois: SDR = booked_by do attendee → fallback deal.owner_id
 ```
 
-E na linha 148, trocar:
-```ts
-acc[p.email] = p.name || p.email;
-```
-Por:
-```ts
-acc[p.email] = p.full_name || p.email;
-```
-
-### Impacto
-Apenas 2 linhas alteradas. O nome correto do SDR passará a aparecer nos cards do Controle Diego e em todos os relatórios que usam `useContractReport`.
+### Arquivo modificado
+- `src/hooks/useContractReport.ts`
 
