@@ -1,34 +1,13 @@
 
 
-## Fix: Tags exibindo IDs em vez de nomes no Controle Diego
+## Aumentar largura do drawer do Controle Diego
 
 ### Problema
-As tags em `crm_contacts.tags` são um array `text[]` onde alguns elementos são strings puras (ex: `"A010 Hubla"`) e outros são **JSON stringificado** (ex: `'{"id":"00596262...","name":"pastor","color":"#2196f3"}'`). O código atual tenta `t?.name`, mas como são strings e não objetos, o fallback retorna a string crua — mostrando o JSON inteiro com o ID.
+O drawer lateral tem 620px de largura, ficando apertado para exibir os dados do lead.
 
 ### Solução
-Corrigir a extração de tags em **2 arquivos** para parsear JSON quando necessário:
+Aumentar a largura de `w-[620px]` para `w-[820px]` no `SheetContent` em `src/components/relatorios/ControleDiegoDrawer.tsx` (linha 201). Isso fará o drawer ocupar mais espaço horizontal, alinhando aproximadamente com a coluna "Pendentes" do Kanban.
 
-**1. `src/hooks/useContractReport.ts` (linha ~293-294)**
-Substituir a lógica de extração de `contactTags`:
-```ts
-const contactTags: string[] = Array.isArray(contact?.tags)
-  ? contact.tags.map((t: any) => {
-      if (typeof t === 'string') {
-        try {
-          const parsed = JSON.parse(t);
-          return parsed?.name || t;
-        } catch { return t; }
-      }
-      return t?.name || String(t);
-    }).filter(Boolean)
-  : [];
-```
-
-**2. `src/hooks/useUniqueDealTags.ts` (linha ~51-53)**
-Adicionar a mesma lógica de parsing no `flatMap` para garantir consistência caso deals também tenham JSON stringificado no futuro. (Baixo risco, já que deal tags são strings limpas hoje.)
-
-**3. `src/components/crm/TagFilterPopover.tsx`** — sem alteração necessária, o componente exibe o que recebe.
-
-### Resultado
-Tags vão exibir nomes legíveis como "pastor", "A010 Hubla" em vez de `{id:"00596262-47f8..."}`.
+### Arquivo alterado
+- `src/components/relatorios/ControleDiegoDrawer.tsx` — linha 201: `w-[620px]` → `w-[820px]`
 
