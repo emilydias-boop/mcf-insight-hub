@@ -1,32 +1,23 @@
 
 
-## Liberar aba Contatos (somente leitura) para SDRs
+## Corrigir "Acesso Negado" na aba Contatos para SDRs
 
 ### Problema
-SDRs não conseguem ver a aba "Contatos" no CRM porque estão no grupo `agendaOnlyRoles`, que restringe a navegação apenas a Agenda R1 e Negócios.
+Na rota `/crm/contatos` (linha 366 do `App.tsx`), o componente `Contatos` está envolvido por um `RoleGuard` que só permite `admin`, `manager` e `coordenador`. Isso bloqueia SDRs, closers e closers_sombra.
 
-### Alterações
+### Solução
+Em `src/App.tsx`, linha 366, adicionar `'sdr'`, `'closer'` e `'closer_sombra'` à lista de `allowedRoles` do `RoleGuard` que envolve a rota `contatos`:
 
-#### 1. `src/pages/CRM.tsx` — Adicionar `/crm/contatos` às abas permitidas para SDRs
-- Na lista `allowedTabs` dentro do bloco `isAgendaOnly`, adicionar `'/crm/contatos'`
+```tsx
+// De:
+<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}>
 
-#### 2. `src/pages/crm/Contatos.tsx` — Ocultar ações de escrita para SDRs
-- Importar `useAuth` e verificar se o role é SDR
-- **Ocultar** para SDRs:
-  - Botão "Sincronizar"
-  - Botão "Novo Contato"
-  - Checkboxes de seleção (coluna + "Selecionar todos")
-  - `BulkActionsBar` (transferir, duplicar)
-  - `SendToPipelineModal`
-  - `DuplicateToInsideDialog`
-  - `ContactFormDialog`
-- **Manter** para SDRs:
-  - Busca, filtros, tabela (somente visualização)
-  - Click na row para abrir `ContactDetailsDrawer` (somente leitura)
+// Para:
+<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}>
+```
 
-#### 3. `src/components/crm/ContactDetailsDrawer.tsx` — Verificar se há ações de edição a ocultar
-- Revisar o drawer para ocultar botões de edição/exclusão para SDRs (se existirem)
+A proteção de somente leitura já está implementada dentro do componente `Contatos.tsx` (variável `isReadOnly`), então não há risco de SDRs realizarem ações.
 
-### Resultado
-SDRs poderão acessar a aba Contatos, buscar e visualizar leads com o drawer de detalhes, mas sem nenhuma ação de criação, edição, movimentação ou seleção em massa.
+### Arquivo alterado
+- `src/App.tsx` — expandir `allowedRoles` na rota `/crm/contatos`
 
