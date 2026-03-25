@@ -41,7 +41,7 @@ import CustosPorCategoria from "./pages/custos/PorCategoria";
 import Relatorios from "./pages/Relatorios";
 import LeadsSemTag from "./pages/relatorios/LeadsSemTag";
 import Alertas from "./pages/Alertas";
-import EfeitoAlavanca from "./pages/EfeitoAlavanca";
+
 import Projetos from "./pages/Projetos";
 import Credito from "./pages/Credito";
 import Leilao from "./pages/Leilao";
