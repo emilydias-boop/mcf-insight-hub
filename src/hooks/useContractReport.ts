@@ -11,6 +11,7 @@ export interface ContractReportFilters {
 
 export interface ContractReportRow {
   id: string;
+  dealId: string | null;
   closerName: string;
   closerEmail: string;
   meetingDate: string;
@@ -204,6 +205,7 @@ export const useContractReport = (
         
         return {
           id: row.id,
+          dealId: row.deal_id || null,
           closerName: closer?.name || 'N/A',
           closerEmail: closer?.email || '',
           meetingDate: slot?.scheduled_at || '',

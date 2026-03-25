@@ -1,11 +1,9 @@
 import { useState, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Video, Loader2, Search, CheckCircle2, Clock, MessageCircle, FileText } from 'lucide-react';
+import { Video, Loader2, Search, CheckCircle2, Clock, MessageCircle, FileText, GripVertical } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,6 +14,9 @@ import { useContractReport, getDefaultContractReportFilters, ContractReportFilte
 import { useVideoControlBatch, useToggleVideoSent } from '@/hooks/useVideoControl';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { ControleDiegoDrawer } from './ControleDiegoDrawer';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { cn } from '@/lib/utils';
 
 interface ControleDiegoPanelProps {
   bu?: BusinessUnit;
@@ -25,6 +26,21 @@ function formatWhatsAppUrl(phone: string): string {
   const digits = phone.replace(/\D/g, '');
   const number = digits.startsWith('55') ? digits : `55${digits}`;
   return `https://wa.me/${number}`;
+}
+
+interface KanbanRow {
+  id: string;
+  closerName: string;
+  leadName: string;
+  leadPhone: string;
+  leadEmail: string;
+  sdrName: string;
+  originName: string;
+  currentStage: string;
+  date: string;
+  salesChannel: string;
+  isRefunded: boolean;
+  dealId: string | null;
 }
 
 export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
@@ -38,7 +54,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
   const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedContract, setSelectedContract] = useState<any>(null);
+  const [selectedContract, setSelectedContract] = useState<KanbanRow | null>(null);
 
   const { data: closers = [], isLoading: loadingClosers } = useGestorClosers('r1');
 
@@ -55,8 +71,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
 
   const { data: agendaData = [], isLoading: loadingAgenda } = useContractReport(filters, allowedCloserIds);
 
-  // Build unified rows from agenda data
-  const rows = useMemo(() => {
+  const rows = useMemo<KanbanRow[]>(() => {
     let filtered = agendaData.map(row => ({
       id: row.id,
       closerName: row.closerName,
@@ -69,42 +84,53 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
       date: row.contractPaidAt || row.meetingDate,
       salesChannel: row.salesChannel.toUpperCase(),
       isRefunded: row.isRefunded,
+      dealId: row.dealId || null,
     }));
 
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
       const termDigits = searchTerm.replace(/\D/g, '');
-      filtered = filtered.filter(r => {
-        return r.leadName.toLowerCase().includes(term)
-          || r.leadEmail.toLowerCase().includes(term)
-          || (termDigits.length >= 4 && r.leadPhone.replace(/\D/g, '').includes(termDigits));
-      });
+      filtered = filtered.filter(r =>
+        r.leadName.toLowerCase().includes(term)
+        || r.leadEmail.toLowerCase().includes(term)
+        || (termDigits.length >= 4 && r.leadPhone.replace(/\D/g, '').includes(termDigits))
+      );
     }
 
     return filtered.sort((a, b) => b.date.localeCompare(a.date));
   }, [agendaData, searchTerm]);
 
-  // Batch fetch video control status
   const attendeeIds = useMemo(() => rows.map(r => r.id), [rows]);
   const { data: videoMap = {} } = useVideoControlBatch(attendeeIds);
   const toggleMutation = useToggleVideoSent();
 
-  // Stats
-  const stats = useMemo(() => {
-    const total = rows.length;
-    const sent = rows.filter(r => videoMap[r.id]?.video_sent).length;
-    return { total, sent, pending: total - sent };
+  const { pending, sent } = useMemo(() => {
+    const p: KanbanRow[] = [];
+    const s: KanbanRow[] = [];
+    for (const r of rows) {
+      if (videoMap[r.id]?.video_sent) s.push(r);
+      else p.push(r);
+    }
+    return { pending: p, sent: s };
   }, [rows, videoMap]);
 
   const isLoading = loadingClosers || loadingAgenda;
 
-  const handleRowClick = (row: any) => {
+  const handleCardClick = (row: KanbanRow) => {
     setSelectedContract(row);
     setDrawerOpen(true);
   };
 
-  const handleInlineToggle = async (attendeeId: string, currentSent: boolean) => {
-    await toggleMutation.mutateAsync({ attendeeId, videoSent: !currentSent });
+  const onDragEnd = (result: DropResult) => {
+    if (!result.destination || result.destination.droppableId === result.source.droppableId) return;
+    const isSent = result.destination.droppableId === 'enviados';
+    const cardId = result.draggableId;
+    const card = rows.find(r => r.id === cardId);
+    toggleMutation.mutate({
+      attendeeId: cardId,
+      videoSent: isSent,
+      dealId: card?.dealId || undefined,
+    });
   };
 
   return (
@@ -162,7 +188,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Contratos</p>
-                <p className="text-3xl font-bold">{stats.total}</p>
+                <p className="text-3xl font-bold">{rows.length}</p>
               </div>
             </div>
           </CardContent>
@@ -175,7 +201,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Vídeos Enviados</p>
-                <p className="text-3xl font-bold">{stats.sent}</p>
+                <p className="text-3xl font-bold">{sent.length}</p>
               </div>
             </div>
           </CardContent>
@@ -188,104 +214,54 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Pendentes</p>
-                <p className="text-3xl font-bold">{stats.pending}</p>
+                <p className="text-3xl font-bold">{pending.length}</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Video className="h-5 w-5" />
-            Controle Diego — Contratos pagos / envio de vídeo
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              Nenhum contrato encontrado no período selecionado.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]">Vídeo</TableHead>
-                    <TableHead>Closer</TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Lead</TableHead>
-                    <TableHead>Telefone</TableHead>
-                    <TableHead>Pipeline</TableHead>
-                    <TableHead>Canal</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map(row => {
-                    const vc = videoMap[row.id];
-                    const isSent = vc?.video_sent || false;
-
-                    return (
-                      <TableRow
-                        key={row.id}
-                        className="cursor-pointer"
-                        onClick={() => handleRowClick(row)}
-                      >
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            checked={isSent}
-                            onCheckedChange={() => handleInlineToggle(row.id, isSent)}
-                            disabled={toggleMutation.isPending}
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium">{row.closerName}</TableCell>
-                        <TableCell>
-                          {row.date ? format(parseISO(row.date), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
-                            {row.leadName}
-                            {row.isRefunded && (
-                              <Badge variant="destructive" className="bg-destructive/20 text-destructive border-destructive/30 text-[10px] px-1.5">
-                                Reembolsado
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          {row.leadPhone ? (
-                            <a
-                              href={formatWhatsAppUrl(row.leadPhone)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-green-600 hover:text-green-700 font-mono text-sm"
-                            >
-                              <MessageCircle className="h-3.5 w-3.5" />
-                              {row.leadPhone}
-                            </a>
-                          ) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{row.originName}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{row.salesChannel}</Badge>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Kanban */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : rows.length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-12 text-muted-foreground">
+            Nenhum contrato encontrado no período selecionado.
+          </CardContent>
+        </Card>
+      ) : (
+        <DragDropContext onDragEnd={onDragEnd}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <KanbanColumn
+              id="pendentes"
+              title="Pendentes"
+              count={pending.length}
+              items={pending}
+              colorClass="border-orange-500/50"
+              headerBg="bg-orange-500/10"
+              headerText="text-orange-700 dark:text-orange-400"
+              icon={<Clock className="h-4 w-4" />}
+              videoMap={videoMap}
+              onCardClick={handleCardClick}
+            />
+            <KanbanColumn
+              id="enviados"
+              title="Enviados"
+              count={sent.length}
+              items={sent}
+              colorClass="border-green-500/50"
+              headerBg="bg-green-500/10"
+              headerText="text-green-700 dark:text-green-400"
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              videoMap={videoMap}
+              onCardClick={handleCardClick}
+            />
+          </div>
+        </DragDropContext>
+      )}
 
       {/* Drawer */}
       <ControleDiegoDrawer
@@ -295,6 +271,99 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
         videoSent={selectedContract ? (videoMap[selectedContract.id]?.video_sent || false) : false}
         videoNotes={selectedContract ? (videoMap[selectedContract.id]?.notes || null) : null}
       />
+    </div>
+  );
+}
+
+interface KanbanColumnProps {
+  id: string;
+  title: string;
+  count: number;
+  items: KanbanRow[];
+  colorClass: string;
+  headerBg: string;
+  headerText: string;
+  icon: React.ReactNode;
+  videoMap: Record<string, any>;
+  onCardClick: (row: KanbanRow) => void;
+}
+
+function KanbanColumn({ id, title, count, items, colorClass, headerBg, headerText, icon, videoMap, onCardClick }: KanbanColumnProps) {
+  return (
+    <div className={cn('rounded-lg border-2 bg-muted/20', colorClass)}>
+      <div className={cn('flex items-center gap-2 px-4 py-3 rounded-t-lg font-semibold text-sm', headerBg, headerText)}>
+        {icon}
+        {title}
+        <Badge variant="secondary" className="ml-auto text-xs">{count}</Badge>
+      </div>
+      <Droppable droppableId={id}>
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className={cn(
+              'p-2 min-h-[200px] max-h-[60vh] overflow-y-auto space-y-2 transition-colors',
+              snapshot.isDraggingOver && 'bg-accent/30'
+            )}
+          >
+            {items.map((row, index) => (
+              <Draggable key={row.id} draggableId={row.id} index={index}>
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.draggableProps}
+                    className={cn(
+                      'rounded-md border bg-card p-3 shadow-sm cursor-pointer hover:shadow-md transition-shadow',
+                      snapshot.isDragging && 'shadow-lg ring-2 ring-primary/30'
+                    )}
+                    onClick={() => onCardClick(row)}
+                  >
+                    <div className="flex items-start gap-2">
+                      <div {...provided.dragHandleProps} className="mt-0.5 text-muted-foreground/50 hover:text-muted-foreground">
+                        <GripVertical className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-medium text-sm truncate">{row.leadName}</p>
+                          {row.isRefunded && (
+                            <Badge variant="destructive" className="bg-destructive/20 text-destructive border-destructive/30 text-[10px] px-1.5 shrink-0">
+                              Reembolsado
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Closer: {row.closerName}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{row.date ? format(parseISO(row.date), 'dd/MM', { locale: ptBR }) : '-'}</span>
+                          <span>·</span>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{row.salesChannel}</Badge>
+                        </div>
+                        {row.leadPhone && (
+                          <a
+                            href={formatWhatsAppUrl(row.leadPhone)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 text-xs font-mono"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MessageCircle className="h-3 w-3" />
+                            {row.leadPhone}
+                          </a>
+                        )}
+                        {videoMap[row.id]?.sent_at && (
+                          <p className="text-[10px] text-green-600">
+                            ✅ Enviado {format(parseISO(videoMap[row.id].sent_at), 'dd/MM', { locale: ptBR })}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Draggable>
+            ))}
+            {provided.placeholder}
+          </div>
+        )}
+      </Droppable>
     </div>
   );
 }
