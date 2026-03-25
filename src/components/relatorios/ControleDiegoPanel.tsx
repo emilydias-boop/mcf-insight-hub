@@ -48,6 +48,7 @@ export interface KanbanRow {
   isRefunded: boolean;
   dealId: string | null;
   contactId: string | null;
+  originId: string | null;
 }
 
 export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
@@ -86,8 +87,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
     startDate: dateRange?.from || defaultFilters.startDate,
     endDate: dateRange?.to || defaultFilters.endDate,
     closerId: selectedCloserId !== 'all' ? selectedCloserId : undefined,
-    originId: selectedOriginId !== 'all' ? selectedOriginId : undefined,
-  }), [dateRange, selectedCloserId, selectedOriginId, defaultFilters]);
+  }), [dateRange, selectedCloserId, defaultFilters]);
 
   const allowedCloserIds = useMemo(() => {
     if (role === 'admin' || role === 'manager') return null;
@@ -112,7 +112,13 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
       isRefunded: row.isRefunded,
       dealId: row.dealId || null,
       contactId: row.contactId || null,
+      originId: row.originId || null,
     }));
+
+    // Filter by origin (client-side since crm_deals is not inner join)
+    if (selectedOriginId !== 'all') {
+      filtered = filtered.filter(r => r.originId === selectedOriginId);
+    }
 
     // Filter by channel
     if (selectedChannel !== 'todos') {
@@ -131,7 +137,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
     }
 
     return filtered.sort((a, b) => b.date.localeCompare(a.date));
-  }, [agendaData, searchTerm, selectedChannel]);
+  }, [agendaData, searchTerm, selectedChannel, selectedOriginId]);
 
   const attendeeIds = useMemo(() => rows.map(r => r.id), [rows]);
   const { data: videoMap = {} } = useVideoControlBatch(attendeeIds);

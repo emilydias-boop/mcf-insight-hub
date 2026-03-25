@@ -28,6 +28,7 @@ export interface ContractReportRow {
   contactId: string | null;
   contactTags: string[];
   isRefunded: boolean;
+  originId: string | null;
   customFields: {
     profissao?: string;
     renda?: string;
@@ -251,6 +252,7 @@ export const useContractReport = (
           contactId: deal?.contact_id || null,
           contactTags,
           isRefunded: row.status === 'refunded',
+          originId: origin?.id || null,
           customFields,
         };
       });
