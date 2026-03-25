@@ -1,44 +1,43 @@
 
 
-## Mostrar etapas do Clint no editor de pipeline
+## Adicionar suporte a origens individuais na Configuração de BU
 
 ### Problema
-O `PipelineStagesEditor` só consulta `local_pipeline_stages`. Pipelines sincronizadas do Clint (como "Perpétuo - X1") têm etapas apenas em `crm_stages`, então o editor mostra vazio.
+A página `/admin/configuracao-bu` lista apenas `crm_groups` (funis pai). Origens filhas como "PIPELINE INSIDE SALES" (que é uma `crm_origin` dentro de um grupo) não aparecem na lista, então não podem ser vinculadas individualmente a uma BU.
 
-### Impacto nos deals existentes
-**Nenhum.** Os deals referenciam `crm_stages.id` via FK. A importação copia dados para `local_pipeline_stages` usando os **mesmos UUIDs**, e qualquer edição é espelhada de volta em `crm_stages`. Os deals continuam apontando para os mesmos IDs.
+A tabela `bu_origin_mapping` já suporta `entity_type: 'origin'`, mas a UI nunca oferece essa opção.
 
-### Mudanças
+### Solução
 
-**Arquivo:** `src/components/crm/PipelineStagesEditor.tsx`
+Modificar a página `ConfiguracaoBU` para mostrar uma lista hierárquica: grupos com suas origens filhas expansíveis. Permitir selecionar tanto grupos inteiros quanto origens individuais.
 
-#### 1. Query de fallback para crm_stages (linha ~62-74)
-Adicionar uma segunda query que busca `crm_stages` filtrada por `origin_id = targetId` (quando targetType é 'origin'). Habilitada apenas quando `local_pipeline_stages` retorna vazio.
+**Arquivo:** `src/pages/admin/ConfiguracaoBU.tsx`
 
-#### 2. Exibição read-only quando só tem crm_stages
-Quando `stages` está vazio mas `crmStages` tem dados, mostrar a lista das etapas com cores, em modo read-only, com aviso "Etapas sincronizadas do Clint CRM".
+#### 1. Buscar origens junto com grupos
+Adicionar query para `crm_origins` com `group_id`, agrupando-as sob seus respectivos grupos. Usar a query existente de `useCRMPipelines` para grupos e uma nova query para origens.
 
-#### 3. Botão "Importar para edição local"
-Mutation que faz bulk insert em `local_pipeline_stages` a partir dos dados de `crm_stages`, preservando os mesmos IDs:
-```typescript
-const importData = crmStages.map(s => ({
-  id: s.id,  // mesmo UUID — mantém FK dos deals
-  name: s.stage_name,
-  color: s.color,
-  stage_order: s.stage_order,
-  origin_id: targetId,
-  stage_type: 'normal',
-}));
-await supabase.from('local_pipeline_stages').upsert(importData, { onConflict: 'id' });
+#### 2. UI hierárquica com accordion/collapsible
+Cada grupo na lista terá um ícone de expandir (chevron). Ao expandir, mostra as origens filhas com checkboxes individuais. O checkbox do grupo seleciona todas as origens do grupo de uma vez.
+
+```text
+☑ Perpétuo - X1              [expandir ▾]
+   ☐ PIPELINE INSIDE SALES
+   ☐ PIPELINE INSIDE SALES - LEAD GRATUITO
+   ☐ Perpétuo - Origem ABC
 ```
 
-Após importar, invalidar queries e o editor muda para o modo editável normal (drag & drop, rename, etc).
+#### 3. Salvar mapeamento misto (groups + origins)
+Atualizar `handleSave` para incluir tanto `entity_type: 'group'` quanto `entity_type: 'origin'` no array de mappings enviado ao `useSaveBUOriginMapping`.
+
+#### 4. Carregar mapeamento existente de origens
+Atualizar o `useEffect` que sincroniza `currentMapping` para também popular um `selectedOrigins` state separado, lendo entries com `entity_type === 'origin'`.
 
 ### Detalhes técnicos
 
 | Item | Detalhe |
 |------|---------|
-| Arquivo | `src/components/crm/PipelineStagesEditor.tsx` |
-| Segurança | Mesmos UUIDs = nenhum deal perde referência |
-| Comportamento | Pipelines locais: sem mudança. Pipelines Clint: mostra etapas + botão importar |
+| Arquivo principal | `src/pages/admin/ConfiguracaoBU.tsx` |
+| Nova query | `crm_origins` com `select('id, name, display_name, group_id')` |
+| State novo | `selectedOrigins: Set<string>`, `expandedGroups: Set<string>` |
+| Compatibilidade | `bu_origin_mapping` já suporta `entity_type: 'origin'` — sem mudança no banco |
 
