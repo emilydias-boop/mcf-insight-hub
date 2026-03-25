@@ -1,39 +1,51 @@
 
 
-## Controle Diego: Kanban com Drag & Drop
+## Melhorias no Controle Diego: UX do Kanban + Drawer Rico
 
-### Mudança principal
-Substituir a tabela atual por um layout Kanban de 2 colunas (Pendentes / Enviados) com drag-and-drop nativo usando a biblioteca `@hello-pangea/dnd` (fork mantido do `react-beautiful-dnd`, já compatível com React 18+).
+### Problemas identificados
+1. **Drag & Drop**: O click no card abre o drawer ao invés de permitir arrastar — o drag handle (ícone de grip) é pequeno demais e confuso
+2. **Drawer pobre**: Faltam informações importantes como data da R1, data de compra A010, SDR que agendou, jornada do lead
+3. **Cards com poucas informações**: Não mostram dados como data da R1, SDR
 
-### Estrutura visual
+### Solução
 
-```text
-┌──────────────────────────┐  ┌──────────────────────────┐
-│ 🟠 Pendentes (152)       │  │ 🟢 Enviados (22)          │
-│──────────────────────────│  │──────────────────────────│
-│ ┌──────────────────────┐ │  │ ┌──────────────────────┐ │
-│ │ André Meireles       │ │  │ │ João Silva           │ │
-│ │ Closer: Thayna       │ │  │ │ Closer: Julio        │ │
-│ │ 25/03 · A010         │ │  │ │ 24/03 · LIVE         │ │
-│ │ 📱 21981541133       │ │  │ │ ✅ Enviado 24/03     │ │
-│ └──────────────────────┘ │  │ └──────────────────────┘ │
-│  (scroll vertical)       │  │                          │
-└──────────────────────────┘  └──────────────────────────┘
-```
+**1. Corrigir UX do Kanban (ControleDiegoPanel.tsx)**
+- Remover o `onClick` do card inteiro — o click só abre drawer via um botão/área específica (ex: nome do lead clicável)
+- O card inteiro fica arrastável (sem precisar do grip handle pequeno)
+- Adicionar mais info nos cards: SDR, data da R1 (meetingDate)
+- Adicionar botão "Marcar como enviado" direto no card da coluna Pendentes (sem precisar arrastar)
+
+**2. Enriquecer o Drawer (ControleDiegoDrawer.tsx)**
+- Usar `useLeadJourney(dealId)` para buscar jornada completa (SDR, R1, R2)
+- Usar `useA010Journey(email, phone)` para dados de compra A010
+- Mostrar seções:
+  - **Dados do contrato**: Closer, SDR (nome resolvido), data pagamento, pipeline, canal
+  - **Jornada do Lead**: Entrada pipeline, R1 (data, closer, status), R2 (se houver)
+  - **A010**: Data da compra, valor pago, produto
+  - **Contato**: Email, telefone, WhatsApp
+  - **Controle de vídeo**: Toggle + observação (já existe)
+- O drawer precisa receber `dealId` para buscar a jornada
+
+**3. Atualizar KanbanRow para incluir meetingDate e dealId**
+- `meetingDate` (data da R1) já vem do `useContractReport` — expor no card
+- `dealId` já está no KanbanRow — passar ao drawer
 
 ### Arquivos a modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `package.json` | Adicionar `@hello-pangea/dnd` |
-| `src/components/relatorios/ControleDiegoPanel.tsx` | Substituir `<Table>` por `<DragDropContext>` + 2 `<Droppable>` columns com `<Draggable>` cards. Manter filtros e KPIs. Ao dropar card entre colunas, chamar `toggleMutation`. |
-| `src/hooks/useVideoControl.ts` | Adicionar insert em `deal_activities` (type `video_sent`) na mutation quando `videoSent=true`. Precisa receber `dealId` opcional. |
-| `src/hooks/useContractReport.ts` | Expor `dealId` no `ContractReportRow` (já disponível via `row.deal_id`). |
+| `ControleDiegoPanel.tsx` | Refatorar cards: drag no card inteiro, click no nome abre drawer, botão "enviar" no card, mostrar SDR e data R1 |
+| `ControleDiegoDrawer.tsx` | Adicionar `useLeadJourney` e `useA010Journey`, mostrar jornada completa, receber `dealId` |
 
-### Comportamento do drag & drop
-- Arrastar card de "Pendentes" → "Enviados": marca `video_sent = true`, registra atividade no deal
-- Arrastar card de "Enviados" → "Pendentes": marca `video_sent = false`
-- Click no card: abre drawer (mantém comportamento atual)
-- Click no telefone: abre WhatsApp (mantém)
-- Cada coluna com scroll vertical independente
+### Card do Kanban (novo layout)
+
+```text
+┌────────────────────────────────┐
+│ André Meireles Gomes ← clicável (abre drawer)
+│ Closer: Thayna · SDR: Alex Dias
+│ R1: 20/03 · Pgto: 25/03 · A010
+│ 📱 21981541133    [✓ Enviar]
+└────────────────────────────────┘
+```
+Todo o card é arrastável. Nome abre drawer. Telefone abre WhatsApp. Botão marca como enviado.
 
