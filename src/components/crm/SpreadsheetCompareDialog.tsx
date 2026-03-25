@@ -833,6 +833,29 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
               </Badge>
             </div>
 
+            {/* Destination pipeline selector (only when BU has multiple origins) */}
+            {activeBU && buFilteredOrigins && buFilteredOrigins.length > 1 && (
+              <div className="flex items-center gap-3 p-2 border rounded-lg bg-muted/30">
+                <GitBranch className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="flex flex-col flex-1 gap-1">
+                  <label className="text-xs font-medium">Pipeline de destino</label>
+                  <Select
+                    value={activeOriginId || ''}
+                    onValueChange={setSelectedDestinationOriginId}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Selecionar pipeline de destino" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {buFilteredOrigins.map((origin: any) => (
+                        <SelectItem key={origin.id} value={origin.id}>{origin.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
             {/* Tag + Stage */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
