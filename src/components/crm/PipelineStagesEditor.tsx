@@ -397,7 +397,40 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
       )}
 
       {/* Stages list */}
-      {stages.length === 0 ? (
+      {stages.length === 0 && crmStages.length > 0 ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-border">
+            <Cloud className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground flex-1">
+              {crmStages.length} etapas sincronizadas do Clint CRM (somente leitura)
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => importMutation.mutate()}
+              disabled={importMutation.isPending}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              {importMutation.isPending ? 'Importando...' : 'Importar para edição'}
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {crmStages.map((stage, index) => (
+              <div
+                key={stage.id}
+                className="flex items-center gap-3 p-3 border rounded-lg bg-background opacity-80"
+              >
+                <span className="text-xs text-muted-foreground w-5 text-center">{index + 1}</span>
+                <div
+                  className="w-4 h-4 rounded flex-shrink-0"
+                  style={{ backgroundColor: stage.color || '#6b7280' }}
+                />
+                <span className="flex-1 font-medium">{stage.stage_name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : stages.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground border rounded-lg">
           <p>Nenhuma etapa local configurada.</p>
           <p className="text-sm">As etapas padrão do sistema serão usadas.</p>
