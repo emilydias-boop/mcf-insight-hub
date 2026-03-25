@@ -648,7 +648,7 @@ export default function ImportarConsorcioPage() {
                 <span className="text-muted-foreground">
                   Total: <strong>{previewData.length}</strong>
                 </span>
-                <span className="text-green-600">
+                <span className="text-chart-2">
                   Novos: <strong>{previewData.filter(r => !r.isDuplicate).length}</strong>
                 </span>
                 {hasDuplicates && (
@@ -656,7 +656,7 @@ export default function ImportarConsorcioPage() {
                     <span className="text-destructive">
                       Bloqueados: <strong>{previewData.filter(r => r.isDuplicate && !r.allowDuplicate).length}</strong>
                     </span>
-                    <span className="text-yellow-600">
+                    <span className="text-chart-4">
                       Duplicados permitidos: <strong>{previewData.filter(r => r.isDuplicate && r.allowDuplicate).length}</strong>
                     </span>
                   </>
