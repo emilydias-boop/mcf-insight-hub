@@ -1,21 +1,27 @@
 
 
-## Adicionar Histórico Completo de Compras no Drawer do Controle Diego
+## Deduplicar transações duplicadas no Histórico de Compras
 
 ### Problema
-A seção "Jornada A010" filtra apenas `product_category = 'a010'`, então o contrato (A000) e outras compras não aparecem. O lead mostra "Contrato Pago" mas a última compra visível é do A010 em 14/02.
+O lead Odegleyson comprou o contrato pela Hubla, mas no drawer aparece 3 vezes: 1x da fonte `make` ("Contrato") e 2x da fonte `hubla` ("A000 - Contrato"). Isso acontece porque o `useLeadPurchaseHistory` busca de todas as fontes (`hubla`, `kiwify`, `manual`, `make`) sem nenhuma deduplicação.
 
 ### Solução
-Adicionar uma nova seção **"Histórico de Compras"** no drawer que mostra **todas** as transações do lead (A010, A000/contrato, parcerias, etc.), usando o hook `useLeadPurchaseHistory` que já existe e busca por email + phone sem filtro de categoria.
+Aplicar deduplicação client-side no hook `useLeadPurchaseHistory`, seguindo a lógica já documentada no sistema:
+- Quando existe uma transação de fonte prioritária (`hubla`, `kiwify`) para o mesmo e-mail e mesma data de venda (`sale_date` no mesmo dia), remover a transação duplicada da fonte `make` com nome similar.
+- Adicionalmente, deduplicar transações da mesma fonte com mesmo `product_name` e mesma `sale_date` (mantendo apenas uma).
 
 ### Arquivo a alterar
-**`src/components/relatorios/ControleDiegoDrawer.tsx`**
+**`src/hooks/useLeadPurchaseHistory.ts`**
 
-1. Importar `useLeadPurchaseHistory` 
-2. Adicionar chamada do hook com `contract.leadEmail` e `contract.leadPhone`
-3. Inserir nova seção **"Histórico de Compras"** entre "Jornada A010" e "Contato", listando todas as transações com: produto, data, valor, status e fonte
-4. Manter a seção "Jornada A010" como está (resumo específico do A010)
+1. Após receber os dados, agrupar por `sale_date` (dia) + `product_name` normalizado
+2. Para cada grupo: se existir transação de fonte prioritária (`hubla`/`kiwify`), remover as de fonte `make` com nome similar (ex: "Contrato" vs "A000 - Contrato")
+3. Deduplicar registros idênticos (mesma fonte, mesmo produto, mesmo dia) mantendo apenas um
 
-### Resultado
-O drawer mostrará tanto o resumo A010 quanto o histórico completo incluindo o contrato A000, permitindo ver toda a jornada de compras do lead num só lugar.
+### Lógica de deduplicação
+```text
+Antes:  Contrato (make, 25/03) + A000-Contrato (hubla, 25/03) + A000-Contrato (hubla, 25/03)
+Após:   A000-Contrato (hubla, 25/03)  ← 1 único registro
+```
+
+Critério de similaridade: normalizar nome removendo prefixos como "A000 - " e comparar se contém a mesma palavra-chave (ex: "contrato").
 
