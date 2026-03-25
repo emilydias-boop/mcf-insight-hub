@@ -1,27 +1,37 @@
 
 
-## Deduplicar transações duplicadas no Histórico de Compras
+## Adicionar Filtros Completos + Exportação Excel/PDF ao Controle Diego
 
 ### Problema
-O lead Odegleyson comprou o contrato pela Hubla, mas no drawer aparece 3 vezes: 1x da fonte `make` ("Contrato") e 2x da fonte `hubla` ("A000 - Contrato"). Isso acontece porque o `useLeadPurchaseHistory` busca de todas as fontes (`hubla`, `kiwify`, `manual`, `make`) sem nenhuma deduplicação.
+O painel Controle Diego possui apenas 3 filtros (Período, Buscar, Closer) mas o usuário precisa dos mesmos filtros do relatório de Contratos: **Fonte**, **Pipeline** e **Canal**, além de opções de exportação em **Excel** e **PDF**.
 
-### Solução
-Aplicar deduplicação client-side no hook `useLeadPurchaseHistory`, seguindo a lógica já documentada no sistema:
-- Quando existe uma transação de fonte prioritária (`hubla`, `kiwify`) para o mesmo e-mail e mesma data de venda (`sale_date` no mesmo dia), remover a transação duplicada da fonte `make` com nome similar.
-- Adicionalmente, deduplicar transações da mesma fonte com mesmo `product_name` e mesma `sale_date` (mantendo apenas uma).
+### Alterações
 
-### Arquivo a alterar
-**`src/hooks/useLeadPurchaseHistory.ts`**
+#### 1. `src/components/relatorios/ControleDiegoPanel.tsx`
+- Adicionar estados para `selectedSource` (Fonte: Ambos/Agenda/Hubla/Pendentes), `selectedOriginId` (Pipeline), `selectedChannel` (Canal: Todos/A010/BIO/LIVE)
+- Importar `useHublaA000Contracts` para suportar filtro de Fonte (mesma lógica do `ContractReportPanel`)
+- Importar `useQuery` + `supabase` para buscar origens (pipelines) para o select
+- Adicionar os 3 novos Selects na barra de filtros
+- Aplicar filtros no `useMemo` de `rows`:
+  - **Fonte**: combinar agenda + hubla (como no ContractReportPanel)
+  - **Pipeline**: filtrar por `originName` 
+  - **Canal**: filtrar por `salesChannel`
+- Adicionar botão **Exportar Excel** que gera XLSX com todas as colunas relevantes (Nome, Closer, SDR, Pipeline, Canal, Data R1, Data Pgto, Telefone, Email, Status Vídeo)
+- Adicionar botão **Exportar PDF** que gera um relatório limpo e explicativo
 
-1. Após receber os dados, agrupar por `sale_date` (dia) + `product_name` normalizado
-2. Para cada grupo: se existir transação de fonte prioritária (`hubla`/`kiwify`), remover as de fonte `make` com nome similar (ex: "Contrato" vs "A000 - Contrato")
-3. Deduplicar registros idênticos (mesma fonte, mesmo produto, mesmo dia) mantendo apenas um
+#### 2. Exportação Excel
+- Usar `xlsx` (já instalado) para gerar planilha com dados filtrados
+- Colunas: Nome do Lead, Closer, SDR, Pipeline/Origem, Canal, Data R1, Data Pagamento, Telefone, Email, Status do Vídeo (Enviado/Pendente), Data Envio
 
-### Lógica de deduplicação
+#### 3. Exportação PDF
+- Usar abordagem de gerar HTML formatado e abrir `window.print()` com layout limpo, ou gerar PDF client-side
+- Incluir cabeçalho com período e filtros ativos, tabela com dados, totais/KPIs
+
+### Filtros adicionados (layout)
 ```text
-Antes:  Contrato (make, 25/03) + A000-Contrato (hubla, 25/03) + A000-Contrato (hubla, 25/03)
-Após:   A000-Contrato (hubla, 25/03)  ← 1 único registro
+Período | Buscar | Fonte | Closer | Pipeline | Canal | [Exportar Excel] [Exportar PDF]
 ```
 
-Critério de similaridade: normalizar nome removendo prefixos como "A000 - " e comparar se contém a mesma palavra-chave (ex: "contrato").
+### Arquivos modificados
+- `src/components/relatorios/ControleDiegoPanel.tsx` — filtros, lógica de filtragem, exportação
 
