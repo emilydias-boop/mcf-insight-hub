@@ -138,18 +138,39 @@ const ImportarNegocios = () => {
     }
   });
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      if (!selectedFile.name.endsWith('.csv')) {
-        toast.error('Por favor, selecione um arquivo CSV');
+      const ext = selectedFile.name.split('.').pop()?.toLowerCase();
+      if (!['csv', 'xlsx', 'xls'].includes(ext || '')) {
+        toast.error('Formato inválido. Use CSV, XLSX ou XLS');
         return;
       }
       if (selectedFile.size > 50 * 1024 * 1024) {
         toast.error('Arquivo muito grande. Máximo: 50 MB');
         return;
       }
-      setFile(selectedFile);
+
+      if (ext === 'xlsx' || ext === 'xls') {
+        try {
+          const data = await selectedFile.arrayBuffer();
+          const workbook = XLSX.read(data);
+          const csvText = XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]);
+          const csvFile = new File(
+            [csvText],
+            selectedFile.name.replace(/\.[^.]+$/, '.csv'),
+            { type: 'text/csv' }
+          );
+          setFile(csvFile);
+          toast.success('Arquivo XLSX convertido para CSV automaticamente');
+        } catch {
+          toast.error('Erro ao converter XLSX. Verifique o arquivo.');
+          return;
+        }
+      } else {
+        setFile(selectedFile);
+      }
+
       setJobStatus(null);
       setJobId(null);
     }
