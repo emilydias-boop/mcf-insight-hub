@@ -29,6 +29,9 @@ const THERMAL_ICONS: Record<string, string> = {
 };
 
 const Contatos = () => {
+  const { role } = useAuth();
+  const isReadOnly = role === 'sdr' || role === 'closer' || role === 'closer_sombra';
+
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
@@ -175,17 +178,19 @@ const Contatos = () => {
           <h2 className="text-xl sm:text-2xl font-bold text-foreground">Contatos</h2>
           <p className="text-sm text-muted-foreground hidden sm:block">Gerencie todos os seus contatos</p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <Button variant="outline" onClick={handleSync} disabled={syncMutation.isPending} className="flex-1 sm:flex-none" size="sm">
-            <RefreshCw className={`h-4 w-4 sm:mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Sincronizar</span>
-          </Button>
-          <Button onClick={() => setCreateDialogOpen(true)} className="flex-1 sm:flex-none" size="sm">
-            <Plus className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Novo Contato</span>
-            <span className="sm:hidden">Novo</span>
-          </Button>
-        </div>
+        {!isReadOnly && (
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button variant="outline" onClick={handleSync} disabled={syncMutation.isPending} className="flex-1 sm:flex-none" size="sm">
+              <RefreshCw className={`h-4 w-4 sm:mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Sincronizar</span>
+            </Button>
+            <Button onClick={() => setCreateDialogOpen(true)} className="flex-1 sm:flex-none" size="sm">
+              <Plus className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Novo Contato</span>
+              <span className="sm:hidden">Novo</span>
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Search */}
