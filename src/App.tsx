@@ -133,11 +133,6 @@ import CampanhasDashboard from "./pages/bu-marketing/CampanhasDashboard";
 import A010AcquisitionDashboard from "./pages/bu-marketing/A010AcquisitionDashboard";
 import A010LinkMappingsConfig from "./pages/bu-marketing/A010LinkMappingsConfig";
 
-// Gerentes de Relacionamento
-import GerenciamentoGRIndex from "./pages/gerentes-conta/Index";
-import MinhaCarteira from "./pages/gerentes-conta/MinhaCarteira";
-import GestaoCarteiras from "./pages/gerentes-conta/GestaoCarteiras";
-import GRDetail from "./pages/gerentes-conta/GRDetail";
 
 // Patrimônio (TI)
 import PatrimonioIndex from "./pages/patrimonio/Index";
@@ -342,13 +337,6 @@ const App = () => (
               <Route path="cobrancas" element={<RoleGuard allowedRoles={['admin', 'financeiro']}><Cobrancas /></RoleGuard>} />
               <Route path="tarefas" element={<ResourceGuard resource="configuracoes"><Tarefas /></ResourceGuard>} />
               
-              {/* Gerentes de Relacionamento Routes */}
-              <Route path="gerentes-conta" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'gr']}><GerenciamentoGRIndex /></RoleGuard>}>
-                <Route index element={<MinhaCarteira />} />
-                <Route path="minha-carteira" element={<MinhaCarteira />} />
-                <Route path="gestao" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><GestaoCarteiras /></RoleGuard>} />
-                <Route path="gestao/:walletId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><GRDetail /></RoleGuard>} />
-              </Route>
               
               <Route path="meu-rh" element={<MeuRH />} />
               <Route path="patrimonio" element={<ResourceGuard resource="patrimonio"><PatrimonioIndex /></ResourceGuard>} />
