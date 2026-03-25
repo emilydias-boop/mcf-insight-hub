@@ -567,7 +567,7 @@ export default function ImportarConsorcioPage() {
                       {duplicateRows.filter(r => !r.allowDuplicate).length} bloqueado(s)
                     </span>
                     {' · '}
-                    <span className="text-yellow-600 font-medium">
+                    <span className="text-chart-4 font-medium">
                       {duplicateRows.filter(r => r.allowDuplicate).length} permitido(s)
                     </span>
                   </div>
