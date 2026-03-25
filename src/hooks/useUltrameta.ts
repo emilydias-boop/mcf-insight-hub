@@ -55,7 +55,7 @@ const FATURAMENTO_CLINT_PRODUCTS = [
   'CONTRATO',
 ];
 
-// Categorias excluídas do Faturamento Total (sincronizado com useDirectorKPIs)
+// Categorias excluídas do Faturamento Total
 const EXCLUDED_CATEGORIES_FATURAMENTO = ["clube_arremate", "efeito_alavanca", "renovacao", "imersao", "contrato"];
 const EXCLUDED_PRODUCTS_FATURAMENTO = [
   "SÓCIO MCF", "SOCIO MCF", "SÓCIO", "SOCIO",

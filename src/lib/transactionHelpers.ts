@@ -1,5 +1,5 @@
 // ===== FUNÇÕES COMPARTILHADAS DE CÁLCULO DE MÉTRICAS =====
-// Usado por useDirectorKPIs.ts e useEvolutionData.ts para consistência
+// Usado por useEvolutionData.ts e useUltrameta.ts para consistência
 
 // Importar preços de referência e funções compartilhadas
 import { PRECO_REFERENCIA, normalizeProductForDedup, getPrecoReferencia } from './precosReferencia';

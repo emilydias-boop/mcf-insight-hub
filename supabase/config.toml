@@ -283,3 +283,6 @@ verify_jwt = false
 
 [functions.sync-billing-from-hubla]
 verify_jwt = false
+
+[functions.admin-send-reset]
+verify_jwt = false
