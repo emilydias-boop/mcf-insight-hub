@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { useToggleVideoSent } from '@/hooks/useVideoControl';
 import { useLeadJourney } from '@/hooks/useLeadJourney';
 import { useA010Journey } from '@/hooks/useA010Journey';
+import { useLeadPurchaseHistory } from '@/hooks/useLeadPurchaseHistory';
 import { useState, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { KanbanRow } from './ControleDiegoPanel';
@@ -49,6 +50,7 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
   // Lead journey data
   const { data: journey, isLoading: loadingJourney } = useLeadJourney(contract?.dealId || null);
   const { data: a010, isLoading: loadingA010 } = useA010Journey(contract?.leadEmail, contract?.leadPhone);
+  const { data: purchaseHistory, isLoading: loadingPurchases } = useLeadPurchaseHistory(contract?.leadEmail, contract?.leadPhone);
 
   useEffect(() => {
     setSent(videoSent);
@@ -216,7 +218,40 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
 
           <Separator />
 
-          {/* === Contato === */}
+          {/* === Histórico de Compras === */}
+          <div className="space-y-2">
+            <SectionTitle>Histórico de Compras</SectionTitle>
+            {loadingPurchases ? (
+              <Skeleton className="h-4 w-full" />
+            ) : purchaseHistory && purchaseHistory.length > 0 ? (
+              <div className="rounded-lg border divide-y">
+                {purchaseHistory.map((tx) => (
+                  <div key={tx.id} className="p-2.5 flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate">{tx.product_name}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] text-muted-foreground">{formatDateShort(tx.sale_date)}</span>
+                        {tx.source && <Badge variant="outline" className="text-[10px] px-1 py-0">{tx.source}</Badge>}
+                        <Badge
+                          variant={tx.sale_status === 'completed' ? 'default' : 'secondary'}
+                          className="text-[10px] px-1 py-0"
+                        >
+                          {tx.sale_status === 'completed' ? 'Pago' : tx.sale_status}
+                        </Badge>
+                      </div>
+                    </div>
+                    <span className="text-xs font-semibold text-primary whitespace-nowrap">
+                      R$ {tx.product_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">Sem histórico de compras</p>
+            )}
+          </div>
+
+          <Separator />
           <div className="space-y-2">
             <SectionTitle>Contato</SectionTitle>
             <div className="rounded-lg border p-3 space-y-2">
