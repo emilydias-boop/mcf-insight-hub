@@ -195,17 +195,17 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
 
   // Query stages for the current pipeline
   const { data: pipelineStages } = useQuery({
-    queryKey: ['pipeline-stages', originId],
+    queryKey: ['pipeline-stages', activeOriginId],
     queryFn: async () => {
-      if (!originId) return [];
+      if (!activeOriginId) return [];
       const { data } = await supabase
         .from('crm_stages')
         .select('id, stage_name, stage_order')
-        .eq('origin_id', originId)
+        .eq('origin_id', activeOriginId)
         .order('stage_order', { ascending: true });
       return data || [];
     },
-    enabled: !!originId && open && step === 'results',
+    enabled: !!activeOriginId && open && step === 'results',
   });
 
   // Detect extra columns (not mapped to name/email/phone)
