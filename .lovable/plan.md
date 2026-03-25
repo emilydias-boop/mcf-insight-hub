@@ -1,49 +1,58 @@
 
 
-## SDR fixo por webhook endpoint
+## Remoção completa do módulo Gerentes de Relacionamento
 
-### Resumo
-Adicionar campos `fixed_owner_email` e `fixed_owner_profile_id` na tabela `webhook_endpoints`. Quando preenchidos, o `webhook-lead-receiver` usa esse owner direto sem chamar `get_next_lead_owner`. Configurável via UI no formulário de webhook.
+### 1. Migration SQL — limpar banco de dados
+Uma única migration para remover tudo na ordem correta (dependências primeiro):
 
-### Alterações
-
-**1. Migration SQL** — novas colunas na tabela `webhook_endpoints`:
 ```sql
-ALTER TABLE webhook_endpoints 
-  ADD COLUMN fixed_owner_email text,
-  ADD COLUMN fixed_owner_profile_id uuid;
+-- Triggers
+DROP TRIGGER IF EXISTS trigger_sync_deal_to_gr ON crm_deals;
+DROP TRIGGER IF EXISTS trigger_sync_gr_to_deal ON gr_wallet_entries;
+DROP TRIGGER IF EXISTS trigger_update_gr_wallet_count ON gr_wallet_entries;
+
+-- Functions
+DROP FUNCTION IF EXISTS sync_deal_to_gr_wallet();
+DROP FUNCTION IF EXISTS sync_gr_entry_to_deal();
+DROP FUNCTION IF EXISTS update_gr_wallet_count();
+DROP FUNCTION IF EXISTS assign_partner_to_gr(uuid,text,text,text,text,numeric,text,text,text);
+DROP FUNCTION IF EXISTS sync_crm_deals_to_gr_wallets();
+
+-- Tables (ordem: dependentes primeiro)
+DROP TABLE IF EXISTS gr_transfers_log;
+DROP TABLE IF EXISTS gr_actions;
+DROP TABLE IF EXISTS gr_distribution_rules;
+DROP TABLE IF EXISTS gr_wallet_entries;
+DROP TABLE IF EXISTS gr_wallets;
+
+-- Types
+DROP TYPE IF EXISTS gr_entry_status;
+DROP TYPE IF EXISTS gr_action_type;
+DROP TYPE IF EXISTS gr_distribution_mode;
+
+-- Atualizar merge_duplicate_contacts (remover referência a gr_wallet_entries)
+CREATE OR REPLACE FUNCTION merge_duplicate_contacts(
+  keep_id uuid, remove_id uuid
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  UPDATE crm_deals SET contact_id = keep_id WHERE contact_id = remove_id;
+  UPDATE crm_interactions SET contact_id = keep_id WHERE contact_id = remove_id;
+  DELETE FROM crm_contacts WHERE id = remove_id;
+END;
+$$;
 ```
 
-**2. Data update** — setar Antony Elias no endpoint `anamnese-incompleta`:
-```sql
-UPDATE webhook_endpoints 
-SET fixed_owner_email = 'antony.elias@minhacasafinanciada.com'
-WHERE slug = 'anamnese-incompleta';
-```
-O `fixed_owner_profile_id` será resolvido automaticamente pela edge function.
+### 2. Deletar 24 arquivos frontend
+- 4 páginas em `src/pages/gerentes-conta/`
+- 15 componentes em `src/components/gr/`
+- 5 hooks: `useGRWallet.ts`, `useGRMetrics.ts`, `useGRActions.ts`, `useGRDetailMetrics.ts`, `useGRTransfer.ts`
+- 1 tipo: `src/types/gr-types.ts`
 
-**3. `supabase/functions/webhook-lead-receiver/index.ts`** — linhas 427-448:
-Antes de chamar `get_next_lead_owner`, verificar `endpoint.fixed_owner_email`:
-```typescript
-if (endpoint.fixed_owner_email) {
-  assignedOwner = endpoint.fixed_owner_email;
-  // resolver profile_id
-  const { data: ownerProfile } = await supabase
-    .from('profiles').select('id').eq('email', assignedOwner).maybeSingle();
-  if (ownerProfile) assignedOwnerProfileId = ownerProfile.id;
-  console.log('[WEBHOOK-RECEIVER] 🔒 Owner fixo:', assignedOwner);
-} else {
-  // distribuição normal via get_next_lead_owner (código atual)
-}
-```
+### 3. Editar 2 arquivos
+**`src/App.tsx`** — remover linhas 136-140 (imports) e 345-351 (rotas)
 
-**4. `src/hooks/useWebhookEndpoints.ts`** — adicionar `fixed_owner_email` e `fixed_owner_profile_id` nos tipos `WebhookEndpoint` e `CreateWebhookEndpoint`.
+**`src/components/layout/AppSidebar.tsx`** — remover linhas 277-286 (bloco sidebar GR)
 
-**5. `src/components/crm/webhooks/IncomingWebhookFormDialog.tsx`** — adicionar campo opcional "SDR Fixo" com select de perfis ativos (SDRs/Closers). Quando selecionado, salva o email no `fixed_owner_email`.
-
-### Resultado
-- `anamnese-incompleta` → sempre Antony Elias
-- Outros webhooks → distribuição normal
-- Lead que passa por dois webhooks → mantém owner do primeiro (já funciona)
-- Configurável via UI para qualquer endpoint
+### Impacto
+Zero impacto em outros módulos. Nenhum arquivo fora do escopo GR referencia esses componentes.
 
