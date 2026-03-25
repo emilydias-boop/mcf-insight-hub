@@ -1,28 +1,63 @@
 
+Problema identificado: o sistema está salvando corretamente a pipeline que você marca na tela de Configuração de BU, mas a página de Negócios do SDR do Consórcio ignora essa configuração.
 
-## Fix: Aplicar correção do mapeamento Consórcio
+O que confirmei:
+- No banco, a BU `consorcio` está atualmente com apenas 1 mapeamento:
+  - origin `7d7b1cb5-2a44-4552-9eff-c3b798646b78`
+  - nome: `Efeito Alavanca + Clube`
+  - `is_default = true`
+- Ou seja: o que você selecionou foi salvo.
+- O usuário Ygor está com `squad = ['consorcio']`, então a BU dele está correta.
+- A origem `Efeito Alavanca + Clube` pertence ao grupo `BU - LEILÃO` com `display_name = BU - Consorcio`, então ela aparece na tela admin exatamente como no print.
 
-### Problema
-A migration criada anteriormente (`20260325152340`) não foi aplicada ao banco. O `bu_origin_mapping` ainda contém apenas 1 entrada errada para `consorcio`:
-- `origin: 7d7b1cb5-...` (Efeito Alavanca + Clube)
+Causa real do erro:
+- Em `src/pages/crm/Negocios.tsx`, a lógica de SDR força sempre uma origem fixa para o Consórcio:
+  - `SDR_ORIGIN_BY_BU['consorcio'] = '57013597-22f6-4969-848c-404b81dcc0cb'`
+- Essa origem fixa é `PIPE LINE - INSIDE SALES`.
+- Mesmo que a Configuração de BU tenha `Efeito Alavanca + Clube` como padrão, a tela de Negócios usa a origem hardcoded para SDR.
+- Resultado: o admin mostra uma pipeline, mas o SDR continua preso em outra.
 
-### Solução
-Criar uma nova migration (ou re-executar a SQL) para aplicar a correção:
+Implementação proposta:
+1. Ajustar a prioridade na tela `src/pages/crm/Negocios.tsx`
+   - Para SDR de BU multi-pipeline, usar primeiro o `selectedOriginId` ou o `selectedPipelineId` escolhido.
+   - Se não houver escolha manual, usar `buMapping.defaultOrigin` quando existir.
+   - Só usar `SDR_ORIGIN_BY_BU[activeBU]` como fallback final.
 
-**Arquivo: nova migration SQL**
-```sql
-DELETE FROM bu_origin_mapping WHERE bu = 'consorcio';
+2. Corrigir a inicialização padrão
+   - No `useEffect` que define a pipeline inicial, manter a prioridade:
+     - `buMapping.defaultOrigin`
+     - grupo/origem única
+     - fallback SDR hardcoded
+   - Garantir que, no caso do Consórcio, o padrão salvo no admin seja respeitado também para SDR.
 
-INSERT INTO bu_origin_mapping (bu, entity_type, entity_id, is_default) VALUES
-  ('consorcio', 'group', 'b98e3746-d727-445b-b878-fc5742b6e6b8', true),
-  ('consorcio', 'group', '267905ec-8fcf-4373-8d62-273bb6c6f8ca', false),
-  ('consorcio', 'group', 'a6f3cbfc-0567-427f-a405-5a869aaa6010', false),
-  ('consorcio', 'origin', '57013597-22f6-4969-848c-404b81dcc0cb', true),
-  ('consorcio', 'origin', '4e2b810a-6782-4ce9-9c0d-10d04c018636', false);
+3. Validar consistência com a sidebar
+   - A sidebar já respeita `allowedOriginIds` e `allowedGroupIds`.
+   - O problema não está nela; está só no cálculo de `effectiveOriginId`.
+   - Vou manter a sidebar como está e alinhar apenas a regra de seleção efetiva.
+
+4. Resultado esperado após a correção
+   - Se você salvar `Efeito Alavanca + Clube` como pipeline/origem do Consórcio, o Ygor verá e carregará essa pipeline.
+   - Se futuramente trocar no admin, a tela do SDR passará a seguir o novo padrão salvo.
+   - O fallback hardcoded continuará existindo apenas quando não houver configuração no banco.
+
+Detalhes técnicos
+```text
+Hoje:
+Configuração BU salva -> bu_origin_mapping
+                     -> Negocios.tsx ignora para SDR Consórcio
+                     -> usa SDR_ORIGIN_BY_BU['consorcio']
+                     -> abre PIPE LINE - INSIDE SALES
+
+Após ajuste:
+Configuração BU salva -> bu_origin_mapping
+                     -> Negocios.tsx lê buMapping.defaultOrigin
+                     -> respeita origem escolhida no admin
+                     -> fallback hardcoded só se faltar configuração
 ```
 
-A migration anterior pode ter falhado silenciosamente. Vou criar uma nova migration com timestamp atualizado para forçar a aplicação.
+Arquivos a alterar:
+- `src/pages/crm/Negocios.tsx`
 
-### Resultado esperado
-Após aplicação, Ygor (SDR, consorcio) verá as 3 pipelines corretas na sidebar e a página de Configuração BU mostrará os 5 itens vinculados ao Consórcio.
-
+Observação importante:
+- A sua configuração atual não está “errada” nem “não salvando”.
+- O bug é de código: existem duas fontes de verdade concorrendo, e a regra hardcoded do SDR está ganhando da configuração do admin.
