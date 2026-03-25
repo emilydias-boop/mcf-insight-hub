@@ -141,11 +141,6 @@ verify_jwt = false
 [functions.twilio-voice-twiml]
 verify_jwt = false
 
-[functions.auto-close-weekly-metrics]
-verify_jwt = false
-
-[functions.detect-ghost-appointments]
-verify_jwt = false
 
 [functions.sync-newsale-orphans]
 verify_jwt = false
@@ -241,11 +236,6 @@ verify_jwt = false
 [functions.reprocess-contract-payments]
 verify_jwt = false
 
-[functions.bulk-transfer-by-name]
-verify_jwt = false
-
-[functions.bulk-update-contacts]
-verify_jwt = false
 
 [functions.process-deal-replication]
 verify_jwt = false
