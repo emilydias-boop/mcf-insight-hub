@@ -479,7 +479,7 @@ export default function ImportarConsorcioPage() {
                     <SelectValue placeholder="Selecione a coluna" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Não mapear</SelectItem>
+                    <SelectItem value="__none__">Não mapear</SelectItem>
                     {headers.map(h => (
                       <SelectItem key={h} value={h}>{h}</SelectItem>
                     ))}
