@@ -198,7 +198,7 @@ export function ControleDiegoDrawer({ open, onOpenChange, contract, videoSent, v
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[620px] max-w-full p-0 flex flex-col">
+      <SheetContent side="right" className="w-[820px] max-w-full p-0 flex flex-col">
         <SheetHeader className="px-4 py-4 border-b border-border">
           <SheetTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
