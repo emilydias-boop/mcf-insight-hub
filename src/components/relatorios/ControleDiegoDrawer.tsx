@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { useToggleVideoSent } from '@/hooks/useVideoControl';
 import { useLeadJourney } from '@/hooks/useLeadJourney';
 import { useA010Journey } from '@/hooks/useA010Journey';
+import { useLeadPurchaseHistory } from '@/hooks/useLeadPurchaseHistory';
 import { useState, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { KanbanRow } from './ControleDiegoPanel';
