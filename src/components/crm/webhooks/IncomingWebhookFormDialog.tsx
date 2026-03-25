@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { X, Copy, Check } from 'lucide-react';
+import { X, Copy, Check, Lock } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -56,6 +56,7 @@ const formSchema = z.object({
   required_fields: z.array(z.string()).default(['name', 'email']),
   auth_header_name: z.string().optional(),
   auth_header_value: z.string().optional(),
+  fixed_owner_email: z.string().optional(),
   is_active: z.boolean().default(true),
 });
 
@@ -139,6 +140,19 @@ export const IncomingWebhookFormDialog = ({
     enabled: !!originId,
   });
 
+  // Fetch active profiles for fixed SDR selection
+  const { data: activeProfiles } = useQuery({
+    queryKey: ['active-profiles-for-webhook'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .order('full_name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const hasNoStages = stages && stages.length === 0;
 
   const form = useForm<FormValues>({
@@ -152,6 +166,7 @@ export const IncomingWebhookFormDialog = ({
       required_fields: ['name', 'email'],
       auth_header_name: '',
       auth_header_value: '',
+      fixed_owner_email: '',
       is_active: true,
     },
   });
@@ -169,6 +184,7 @@ export const IncomingWebhookFormDialog = ({
           required_fields: endpoint.required_fields || ['name', 'email'],
           auth_header_name: endpoint.auth_header_name || '',
           auth_header_value: endpoint.auth_header_value || '',
+          fixed_owner_email: endpoint.fixed_owner_email || '',
           is_active: endpoint.is_active,
         });
       } else if (duplicateData) {
@@ -181,6 +197,7 @@ export const IncomingWebhookFormDialog = ({
           required_fields: duplicateData.required_fields || ['name', 'email'],
           auth_header_name: duplicateData.auth_header_name || '',
           auth_header_value: duplicateData.auth_header_value || '',
+          fixed_owner_email: duplicateData.fixed_owner_email || '',
           is_active: true,
         });
       } else {
@@ -193,6 +210,7 @@ export const IncomingWebhookFormDialog = ({
           required_fields: ['name', 'email'],
           auth_header_name: '',
           auth_header_value: '',
+          fixed_owner_email: '',
           is_active: true,
         });
       }
@@ -253,6 +271,7 @@ export const IncomingWebhookFormDialog = ({
           required_fields: values.required_fields,
           auth_header_name: values.auth_header_name || null,
           auth_header_value: values.auth_header_value || null,
+          fixed_owner_email: values.fixed_owner_email || null,
           is_active: values.is_active,
         });
       } else {
@@ -266,6 +285,7 @@ export const IncomingWebhookFormDialog = ({
           required_fields: values.required_fields,
           auth_header_name: values.auth_header_name,
           auth_header_value: values.auth_header_value,
+          fixed_owner_email: values.fixed_owner_email || null,
           is_active: values.is_active,
           ...(duplicateData?.field_mapping ? { 
             field_mapping: Object.fromEntries(
@@ -476,6 +496,43 @@ export const IncomingWebhookFormDialog = ({
                 </ScrollArea>
               </div>
             )}
+
+            <div className="border-t pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Lock className="h-4 w-4 text-muted-foreground" />
+                <h4 className="text-sm font-medium">SDR Fixo (opcional)</h4>
+              </div>
+              <FormField
+                control={form.control}
+                name="fixed_owner_email"
+                render={({ field }) => (
+                  <FormItem>
+                    <Select 
+                      onValueChange={(val) => field.onChange(val === '__none__' ? '' : val)} 
+                      value={field.value || '__none__'}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Distribuição automática" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">Distribuição automática</SelectItem>
+                        {activeProfiles?.filter(p => p.email).map((profile) => (
+                          <SelectItem key={profile.id} value={profile.email!}>
+                            {profile.full_name || profile.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Se selecionado, todos os leads deste webhook serão atribuídos a este SDR (sem rodízio)
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="border-t pt-4">
               <h4 className="text-sm font-medium mb-3">Autenticação (opcional)</h4>

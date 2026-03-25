@@ -424,26 +424,44 @@ serve(async (req) => {
       }
     }
 
-    // 10. Get next owner based on distribution
+    // 10. Get next owner based on distribution (or fixed owner)
     let assignedOwner: string | null = null;
     let assignedOwnerProfileId: string | null = null;
-    const { data: nextOwner, error: ownerError } = await supabase
-      .rpc('get_next_lead_owner', { p_origin_id: endpoint.origin_id });
 
-    if (ownerError) {
-      console.log('[WEBHOOK-RECEIVER] ⚠️ Erro ao buscar owner:', ownerError.message);
-    } else if (nextOwner) {
-      assignedOwner = nextOwner;
-      console.log('[WEBHOOK-RECEIVER] 👤 Owner atribuído:', assignedOwner);
-      
+    if (endpoint.fixed_owner_email) {
+      // SDR fixo configurado no endpoint — pula distribuição
+      assignedOwner = endpoint.fixed_owner_email;
+      console.log('[WEBHOOK-RECEIVER] 🔒 Owner fixo do endpoint:', assignedOwner);
+
       const { data: ownerProfile } = await supabase
         .from('profiles')
         .select('id')
         .eq('email', assignedOwner)
         .maybeSingle();
-      
+
       if (ownerProfile) {
         assignedOwnerProfileId = ownerProfile.id;
+      }
+    } else {
+      // Distribuição normal
+      const { data: nextOwner, error: ownerError } = await supabase
+        .rpc('get_next_lead_owner', { p_origin_id: endpoint.origin_id });
+
+      if (ownerError) {
+        console.log('[WEBHOOK-RECEIVER] ⚠️ Erro ao buscar owner:', ownerError.message);
+      } else if (nextOwner) {
+        assignedOwner = nextOwner;
+        console.log('[WEBHOOK-RECEIVER] 👤 Owner atribuído:', assignedOwner);
+        
+        const { data: ownerProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', assignedOwner)
+          .maybeSingle();
+        
+        if (ownerProfile) {
+          assignedOwnerProfileId = ownerProfile.id;
+        }
       }
     }
 

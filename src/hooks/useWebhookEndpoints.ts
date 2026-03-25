@@ -14,6 +14,8 @@ export interface WebhookEndpoint {
   required_fields: string[];
   auth_header_name: string | null;
   auth_header_value: string | null;
+  fixed_owner_email: string | null;
+  fixed_owner_profile_id: string | null;
   is_active: boolean;
   leads_received: number;
   last_lead_at: string | null;
@@ -33,6 +35,7 @@ export interface CreateWebhookEndpoint {
   required_fields?: string[];
   auth_header_name?: string;
   auth_header_value?: string;
+  fixed_owner_email?: string | null;
   is_active?: boolean;
 }
 
@@ -83,6 +86,7 @@ export const useCreateWebhookEndpoint = () => {
           required_fields: endpoint.required_fields || ['name', 'email'],
           auth_header_name: endpoint.auth_header_name || null,
           auth_header_value: endpoint.auth_header_value || null,
+          fixed_owner_email: endpoint.fixed_owner_email || null,
           is_active: endpoint.is_active ?? true,
         })
         .select()
