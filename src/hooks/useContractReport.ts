@@ -228,8 +228,8 @@ export const useContractReport = (
         return 'live';
       };
       
-      // Transform data
-      return sortedData.map((row: any) => {
+      // Transform meeting-based data
+      const meetingRows: ContractReportRow[] = sortedData.map((row: any) => {
         const slot = row.meeting_slots;
         const closer = slot?.closers;
         const deal = row.crm_deals;
@@ -238,7 +238,6 @@ export const useContractReport = (
         const contact = deal?.crm_contacts;
         const customFields = deal?.custom_fields || {};
         
-        // SDR: priorizar booked_by (quem agendou), fallback para owner_id
         const bookedByProfile = row.booked_by ? bookedByMap[row.booked_by] : null;
         const sdrEmail = bookedByProfile?.email || deal?.owner_id || '';
         const sdrName = bookedByProfile?.full_name || sdrNameMap[sdrEmail] || sdrEmail;
@@ -271,6 +270,35 @@ export const useContractReport = (
           customFields,
         };
       });
+      
+      // Transform unlinked Hubla transactions (direct purchases without meetings)
+      const unlinkedRows: ContractReportRow[] = (unlinkedHubla || []).map((h: any) => ({
+        id: `hubla-${h.id}`,
+        dealId: null,
+        closerName: 'Compra Direta',
+        closerEmail: '',
+        meetingDate: '',
+        meetingType: 'direct',
+        leadName: h.customer_name || 'N/A',
+        leadPhone: h.customer_phone || '',
+        sdrEmail: '',
+        sdrName: 'N/A',
+        originName: 'Compra Direta',
+        currentStage: 'N/A',
+        contractPaidAt: h.sale_date || '',
+        salesChannel: detectSalesChannel(h.customer_email, []),
+        contactEmail: h.customer_email || null,
+        contactId: null,
+        contactTags: [],
+        isRefunded: false,
+        originId: null,
+        customFields: {},
+      }));
+      
+      // Merge and sort all rows by payment date (DESC)
+      return [...meetingRows, ...unlinkedRows].sort((a, b) => 
+        (b.contractPaidAt || '').localeCompare(a.contractPaidAt || '')
+      );
     },
     enabled: filters.startDate instanceof Date && filters.endDate instanceof Date,
    staleTime: 10 * 60 * 1000,
