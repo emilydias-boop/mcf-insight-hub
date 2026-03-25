@@ -1,8 +1,8 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { FileText, DollarSign, BarChart3, Target, Package, Search, UserX, ShoppingCart, History } from 'lucide-react';
+import { FileText, DollarSign, BarChart3, Target, Package, Search, UserX, ShoppingCart, History, Video } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type ReportType = 'contracts' | 'sales' | 'performance' | 'acquisition' | 'products' | 'investigation' | 'nao_comprou' | 'carrinho' | 'cross_bu';
+export type ReportType = 'contracts' | 'sales' | 'performance' | 'acquisition' | 'products' | 'investigation' | 'nao_comprou' | 'carrinho' | 'cross_bu' | 'controle_diego';
 
 interface ReportTypeOption {
   id: ReportType;
@@ -65,6 +65,12 @@ const reportOptions: ReportTypeOption[] = [
     title: 'Cross-BU',
     description: 'Compras do lead em todas as BUs',
     icon: History,
+  },
+  {
+    id: 'controle_diego',
+    title: 'Controle Diego',
+    description: 'Contratos pagos - envio de vídeo',
+    icon: Video,
   },
 ];
 
