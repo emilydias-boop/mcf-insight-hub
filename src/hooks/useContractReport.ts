@@ -124,6 +124,21 @@ export const useContractReport = (
       
       if (!data) return [];
       
+      // Collect linked attendee IDs to avoid duplicates
+      const linkedAttendeeIds = new Set(
+        data.map((row: any) => row.id).filter(Boolean)
+      );
+      
+      // Fetch unlinked Hubla A000 transactions (contracts without meetings)
+      const { data: unlinkedHubla } = await supabase
+        .from('hubla_transactions')
+        .select('id, sale_date, customer_name, customer_email, customer_phone, product_name, net_value, source, linked_attendee_id')
+        .eq('product_category', 'contrato')
+        .is('linked_attendee_id', null)
+        .gte('sale_date', startISO)
+        .lte('sale_date', endISO)
+        .order('sale_date', { ascending: false });
+      
       // Sort by payment date (DESC - most recent first)
       const sortedData = [...data].sort((a: any, b: any) => {
         const dateA = a.contract_paid_at || '';
