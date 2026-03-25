@@ -233,32 +233,6 @@ verify_jwt = false
 [functions.create-user]
 verify_jwt = false
 
-[functions.reprocess-contract-payments]
-verify_jwt = false
-
-
-[functions.process-deal-replication]
-verify_jwt = false
-
-
-[functions.send-document-email]
-verify_jwt = false
-
-[functions.distribute-outside-leads]
-verify_jwt = false
-
-[functions.ensure-crm-stage-mirror]
-verify_jwt = false
-
-[functions.manage-roles]
-verify_jwt = false
-
-
-[functions.import-spreadsheet-leads]
-verify_jwt = false
-
-
-
 [functions.move-partners-to-venda-realizada]
 verify_jwt = false
 
