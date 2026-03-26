@@ -1,109 +1,91 @@
 
 
-## Fase 2: Fale com o RH — Sistema de Tickets/Ocorrências
+## Fase 3: PDI — Plano de Desenvolvimento Individual
 
 ### Visão geral
 
-Implementar a aba "Fale com o RH" como um sistema de tickets onde o colaborador pode abrir ocorrências, solicitações e sugestões, acompanhar status e receber respostas do RH.
+Implementar a aba "PDI" como uma trilha de desenvolvimento do colaborador, com metas/competências, etapas de progresso e comentários do gestor/RH.
 
-### Nova tabela: `rh_tickets`
+### Nova tabela: `employee_pdi`
 
 ```sql
-CREATE TABLE rh_tickets (
+CREATE TABLE employee_pdi (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  tipo TEXT NOT NULL CHECK (tipo IN ('ocorrencia', 'solicitacao', 'sugestao')),
-  assunto TEXT NOT NULL,
-  descricao TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'encaminhado' CHECK (status IN ('encaminhado', 'em_avaliacao', 'finalizado')),
-  resposta_rh TEXT,
-  respondido_por UUID REFERENCES auth.users(id),
-  anexo_url TEXT,
-  anexo_storage_path TEXT,
-  data_abertura TIMESTAMPTZ NOT NULL DEFAULT now(),
-  data_atualizacao TIMESTAMPTZ NOT NULL DEFAULT now(),
-  data_encerramento TIMESTAMPTZ,
+  titulo TEXT NOT NULL,
+  descricao TEXT,
+  categoria TEXT NOT NULL DEFAULT 'competencia' 
+    CHECK (categoria IN ('competencia', 'tecnico', 'comportamental', 'lideranca', 'outro')),
+  status TEXT NOT NULL DEFAULT 'nao_iniciado' 
+    CHECK (status IN ('nao_iniciado', 'em_andamento', 'concluido', 'cancelado')),
+  prioridade TEXT NOT NULL DEFAULT 'media' 
+    CHECK (prioridade IN ('baixa', 'media', 'alta')),
+  data_inicio DATE,
+  data_prevista DATE,
+  data_conclusao DATE,
+  progresso INTEGER NOT NULL DEFAULT 0 CHECK (progresso >= 0 AND progresso <= 100),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES auth.users(id)
 );
 
-ALTER TABLE rh_tickets ENABLE ROW LEVEL SECURITY;
-
--- Colaborador vê apenas seus próprios tickets
-CREATE POLICY "Employee can view own tickets"
-  ON rh_tickets FOR SELECT TO authenticated
-  USING (employee_id IN (
-    SELECT id FROM employees WHERE user_id = auth.uid()
-  ));
-
--- Colaborador pode criar tickets
-CREATE POLICY "Employee can create own tickets"
-  ON rh_tickets FOR INSERT TO authenticated
-  WITH CHECK (employee_id IN (
-    SELECT id FROM employees WHERE user_id = auth.uid()
-  ));
-
--- Colaborador pode atualizar seus tickets (ex: adicionar info)
-CREATE POLICY "Employee can update own tickets"
-  ON rh_tickets FOR UPDATE TO authenticated
-  USING (employee_id IN (
-    SELECT id FROM employees WHERE user_id = auth.uid()
-  ));
+CREATE TABLE employee_pdi_comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pdi_id UUID NOT NULL REFERENCES employee_pdi(id) ON DELETE CASCADE,
+  conteudo TEXT NOT NULL,
+  autor_nome TEXT,
+  autor_tipo TEXT NOT NULL DEFAULT 'rh' CHECK (autor_tipo IN ('colaborador', 'gestor', 'rh')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES auth.users(id)
+);
 ```
+
+RLS: colaborador vê apenas seus PDIs (via employee_id -> employees.user_id = auth.uid()). Comentários acessíveis via join com PDI.
 
 ### Arquivos novos
 
-**`src/hooks/useRhTickets.ts`** — Hooks React Query:
-- `useMyTickets(employeeId)` — lista tickets do colaborador ordenados por data
-- `useCreateTicket()` — mutation para criar ticket (com upload opcional de anexo ao bucket `user-files`)
-- `useUpdateTicket()` — mutation para o RH responder/alterar status
+**`src/hooks/useEmployeePdi.ts`** — Hooks React Query:
+- `useMyPdis(employeeId)` — lista PDIs do colaborador
+- `useMyPdiComments(pdiId)` — lista comentários de um PDI
+- `useAddPdiComment()` — mutation para colaborador adicionar comentário
 
-**`src/components/meu-rh/MeuRHFaleComRHSection.tsx`** — Componente principal da aba:
-- Lista de tickets do colaborador com status colorido (encaminhado=amarelo, em avaliação=azul, finalizado=verde)
-- Botão "Nova Solicitação" que abre modal
-- Cada ticket expandível mostrando: tipo, assunto, descrição, anexo, status, resposta do RH, datas
-
-**`src/components/meu-rh/NovoTicketModal.tsx`** — Modal de criação:
-- Select: tipo (Ocorrência, Solicitação, Sugestão)
-- Input: assunto
-- Textarea: descrição
-- File input: anexo opcional
-- Botão enviar
-
-### Arquivos editados
-
-**`src/pages/MeuRH.tsx`**:
-- Importar `MeuRHFaleComRHSection`
-- Substituir o `PlaceholderTab` de "fale-rh" pelo componente real
-
-**`src/types/hr.ts`**:
-- Adicionar interface `RhTicket` e constantes de labels/cores para status
+**`src/components/meu-rh/MeuRHPdiSection.tsx`** — Componente principal da aba:
+- Resumo no topo: total de PDIs, em andamento, concluídos, barra de progresso geral
+- Lista de cards por PDI mostrando: título, categoria badge, status badge, progresso (barra), datas
+- Cada card expansível com descrição completa e seção de comentários
+- Empty state com mensagem motivacional
 
 ### Layout da aba
 
 ```text
-┌─────────────────────────────────────────────────────┐
-│ Fale com o RH                [+ Nova Solicitação]   │
-├─────────────────────────────────────────────────────┤
-│ ┌─────────────────────────────────────────────────┐ │
-│ │ 🟡 Encaminhado · Solicitação                    │ │
-│ │ "Ajuste no contrato de prestação"               │ │
-│ │ Aberto em 20/03/2026                            │ │
-│ │ ▼ Expandir detalhes                             │ │
-│ └─────────────────────────────────────────────────┘ │
-│ ┌─────────────────────────────────────────────────┐ │
-│ │ 🟢 Finalizado · Ocorrência                     │ │
-│ │ "Erro no cálculo da NF de fevereiro"            │ │
-│ │ Aberto em 15/02/2026 · Encerrado em 18/02/2026 │ │
-│ │ Resposta do RH: "Corrigido e reprocessado..."   │ │
-│ └─────────────────────────────────────────────────┘ │
-│                                                     │
-│ Nenhum ticket? Mensagem vazia com CTA               │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│ Meu PDI                                              │
+├──────────────────────────────────────────────────────┤
+│ [3 Metas] [1 Em andamento] [2 Concluídas] [■■■ 67%] │
+├──────────────────────────────────────────────────────┤
+│ ┌──────────────────────────────────────────────────┐ │
+│ │ 🟡 Em andamento · Técnico · Alta                 │ │
+│ │ "Certificação em análise de crédito"             │ │
+│ │ Progresso: ████████░░ 80%                        │ │
+│ │ Prazo: 30/06/2026                                │ │
+│ │ ▼ Ver detalhes e comentários                     │ │
+│ └──────────────────────────────────────────────────┘ │
+│ ┌──────────────────────────────────────────────────┐ │
+│ │ 🟢 Concluído · Comportamental                   │ │
+│ │ "Desenvolver comunicação assertiva"              │ │
+│ │ Progresso: ██████████ 100%                       │ │
+│ └──────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────┘
 ```
 
-### O que NÃO muda
-- Nenhuma alteração nas abas existentes (Perfil, Documentos, Avaliações, Histórico)
-- Quick Cards e Quick Actions permanecem iguais
-- Abas PDI, Políticas e Comunicados continuam como placeholder
+### Arquivos editados
+
+**`src/pages/MeuRH.tsx`**: Substituir PlaceholderTab de "pdi" pelo componente `MeuRHPdiSection`
+
+**`src/types/hr.ts`**: Adicionar interfaces `EmployeePdi` e `EmployeePdiComment` + constantes de labels/cores
+
+### O que NAO muda
+- Todas as abas existentes (Perfil, Documentos, Fale com RH, Avaliações, Histórico)
+- Quick Cards e Quick Actions
+- Abas Políticas e Comunicados continuam placeholder
 
