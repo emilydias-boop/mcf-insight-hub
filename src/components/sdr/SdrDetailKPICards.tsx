@@ -155,8 +155,8 @@ function KPICard({ metric }: { metric: MetricWithMeta }) {
 export function SdrDetailKPICards({ metrics, isLoading }: SdrDetailKPICardsProps) {
   if (isLoading || metrics.length === 0) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        {[...Array(9)].map((_, i) => (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3">
+      {[...Array(6)].map((_, i) => (
           <Card key={i} className="bg-card border-border animate-pulse">
             <CardContent className="p-4 h-[140px]" />
           </Card>
@@ -166,7 +166,7 @@ export function SdrDetailKPICards({ metrics, isLoading }: SdrDetailKPICardsProps
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3">
       {metrics.map((metric) => (
         <KPICard key={metric.key} metric={metric} />
       ))}

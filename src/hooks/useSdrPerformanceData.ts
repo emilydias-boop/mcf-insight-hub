@@ -263,30 +263,8 @@ export function useSdrPerformanceData({
         invertGap: true,
       },
       {
-        label: "Taxa Contato",
-        key: "taxaContato",
-        realized: taxaContato,
-        meta: 40,
-        attainment: 40 > 0 ? (taxaContato / 40) * 100 : 0,
-        gap: taxaContato - 40,
-        compValue: null,
-        compVariation: null,
-        format: "percent" as const,
-      },
-      {
         ...makeMetric("Total Ligações", "totalCalls", callMetrics.totalCalls, metas.ligacoesMeta),
         extra: { answered: callMetrics.answered, unanswered: callMetrics.unanswered },
-      },
-      {
-        label: "Tempo Médio",
-        key: "avgDuration",
-        realized: callMetrics.avgDurationSeconds,
-        meta: 0,
-        attainment: 0,
-        gap: 0,
-        compValue: null,
-        compVariation: null,
-        format: "duration" as const,
       },
     ];
   }, [sm, callMetrics, metas, compSdrMetrics]);
