@@ -1,8 +1,6 @@
 import { ArrowLeft, User, Briefcase, Users2, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 
 interface SdrDetailHeaderProps {
   name: string;
@@ -69,12 +67,6 @@ export function SdrDetailHeader({
         </div>
       </div>
       
-      <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-4 py-2 rounded-lg">
-        <span className="font-medium">Período:</span>
-        <span>
-          {format(startDate, "dd/MM/yyyy", { locale: ptBR })} - {format(endDate, "dd/MM/yyyy", { locale: ptBR })}
-        </span>
-      </div>
     </div>
   );
 }

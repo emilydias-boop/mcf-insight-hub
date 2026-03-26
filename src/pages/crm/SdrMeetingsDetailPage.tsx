@@ -3,8 +3,6 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { getWeekStartsOn } from "@/lib/businessDays";
 import { useActiveBU } from "@/hooks/useActiveBU";
-import { RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -161,15 +159,9 @@ export default function SdrMeetingsDetailPage() {
         metaMode={metaMode}
         customMeta={customMeta}
         onFiltersChange={handleFiltersChange}
+        onRefresh={() => perfData.refetch()}
+        isLoading={perfData.isLoading}
       />
-
-      {/* Refresh */}
-      <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={() => perfData.refetch()} disabled={perfData.isLoading}>
-          <RefreshCw className={`h-4 w-4 mr-1 ${perfData.isLoading ? "animate-spin" : ""}`} />
-          Atualizar
-        </Button>
-      </div>
 
       <Tabs defaultValue="overview" className="space-y-5">
         <TabsList>
