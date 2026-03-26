@@ -1,24 +1,33 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { getWeekStartsOn } from "@/lib/businessDays";
 import { useActiveBU } from "@/hooks/useActiveBU";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { SdrDetailHeader } from "@/components/sdr/SdrDetailHeader";
+import { SdrPerformanceFilters } from "@/components/sdr/SdrPerformanceFilters";
+import { SdrAutoSummary } from "@/components/sdr/SdrAutoSummary";
 import { SdrDetailKPICards } from "@/components/sdr/SdrDetailKPICards";
+import { SdrProjectionCard } from "@/components/sdr/SdrProjectionCard";
+import { SdrMetaVsRealizadoChart } from "@/components/sdr/SdrMetaVsRealizadoChart";
+import { SdrFunnelPanel } from "@/components/sdr/SdrFunnelPanel";
 import { SdrMeetingsChart } from "@/components/sdr/SdrMeetingsChart";
-import { SdrRankingBlock } from "@/components/sdr/SdrRankingBlock";
+import { SdrCumulativeChart } from "@/components/sdr/SdrCumulativeChart";
+import { SdrTeamComparisonPanel } from "@/components/sdr/SdrTeamComparisonPanel";
+import { SdrDailyBreakdownTable } from "@/components/sdr/SdrDailyBreakdownTable";
 import { SdrLeadsTable } from "@/components/sdr/SdrLeadsTable";
 import { MeetingDetailsDrawer } from "@/components/sdr/MeetingDetailsDrawer";
-import { CallMetricsCards } from "@/components/sdr/CallMetricsCards";
-import { SdrDailyBreakdownTable } from "@/components/sdr/SdrDailyBreakdownTable";
 
-import { useSdrDetailData } from "@/hooks/useSdrDetailData";
-import { useSdrCallMetrics } from "@/hooks/useSdrCallMetrics";
+import {
+  useSdrPerformanceData,
+  computeCompDates,
+  ComparisonMode,
+  MetaMode,
+} from "@/hooks/useSdrPerformanceData";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { Meeting } from "@/hooks/useSdrMeetings";
 
@@ -28,23 +37,17 @@ export default function SdrMeetingsDetailPage() {
   const [searchParams] = useSearchParams();
   const activeBU = useActiveBU();
   const wso = getWeekStartsOn(activeBU);
-  
-  // Parse date range from query params
+
   const preset = searchParams.get("preset") || "month";
   const monthParam = searchParams.get("month");
-  
+
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
 
-  // Calculate date range
-  const { startDate, endDate } = useMemo(() => {
+  // Initial dates from URL
+  const initialDates = useMemo(() => {
     const today = new Date();
-    
-    if (preset === "today") {
-      return { startDate: startOfDay(today), endDate: endOfDay(today) };
-    }
-    if (preset === "week") {
-      return { startDate: startOfWeek(today, { weekStartsOn: wso }), endDate: endOfWeek(today, { weekStartsOn: wso }) };
-    }
+    if (preset === "today") return { startDate: startOfDay(today), endDate: endOfDay(today) };
+    if (preset === "week") return { startDate: startOfWeek(today, { weekStartsOn: wso }), endDate: endOfWeek(today, { weekStartsOn: wso }) };
     if (preset === "custom") {
       const start = searchParams.get("start");
       const end = searchParams.get("end");
@@ -53,156 +56,175 @@ export default function SdrMeetingsDetailPage() {
         endDate: end ? parseISO(end) : endOfMonth(today),
       };
     }
-    // Default: month
     const baseDate = monthParam ? parseISO(monthParam + "-01") : today;
     return { startDate: startOfMonth(baseDate), endDate: endOfMonth(baseDate) };
-  }, [preset, monthParam, searchParams]);
+  }, [preset, monthParam, searchParams, wso]);
 
-  const {
-    sdrInfo,
-    sdrMetrics,
-    teamAverages,
-    ranking,
-    meetings,
-    metaDiaria,
-    isLoading,
-    refetch,
-  } = useSdrDetailData({
+  // Filters state
+  const [startDate, setStartDate] = useState(initialDates.startDate);
+  const [endDate, setEndDate] = useState(initialDates.endDate);
+  const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("prev_month");
+  const [metaMode, setMetaMode] = useState<MetaMode>("monthly_prorated");
+  const [customMeta, setCustomMeta] = useState<number | undefined>();
+
+  const { compStartDate, compEndDate } = useMemo(
+    () => computeCompDates(startDate, endDate, comparisonMode),
+    [startDate, endDate, comparisonMode]
+  );
+
+  const handleFiltersChange = useCallback(
+    (f: {
+      startDate: Date;
+      endDate: Date;
+      comparisonMode: ComparisonMode;
+      metaMode: MetaMode;
+      customMeta?: number;
+    }) => {
+      setStartDate(f.startDate);
+      setEndDate(f.endDate);
+      setComparisonMode(f.comparisonMode);
+      setMetaMode(f.metaMode);
+      setCustomMeta(f.customMeta);
+    },
+    []
+  );
+
+  const perfData = useSdrPerformanceData({
     sdrEmail: sdrEmail || "",
     startDate,
     endDate,
+    compStartDate,
+    compEndDate,
+    metaMode,
+    customMeta,
   });
 
-  const callMetrics = useSdrCallMetrics(sdrEmail, startDate, endDate);
-
   const handleBack = () => {
-    // Navigate back preserving filters
     const params = new URLSearchParams();
     params.set("preset", preset);
     if (monthParam) params.set("month", monthParam);
     navigate(`/crm/reunioes-equipe?${params.toString()}`);
   };
 
-  // Convert MeetingV2 to Meeting for the drawer
   const handleSelectMeeting = (m: MeetingV2) => {
     const converted: Meeting = {
       id: m.deal_id,
       dealId: m.deal_id,
       dealName: m.deal_name,
-      contactName: m.contact_name || '',
+      contactName: m.contact_name || "",
       contactEmail: m.contact_email,
       contactPhone: m.contact_phone,
       scheduledDate: m.data_agendamento,
-      currentStage: m.status_atual || '',
-      currentStageClassification: m.status_atual?.toLowerCase().includes('realizada') ? 'realizada' :
-                                   m.status_atual?.toLowerCase().includes('no-show') ? 'noShow' :
-                                   m.status_atual?.toLowerCase().includes('contrato') ? 'contratoPago' : 'agendada',
+      currentStage: m.status_atual || "",
+      currentStageClassification: m.status_atual?.toLowerCase().includes("realizada")
+        ? "realizada"
+        : m.status_atual?.toLowerCase().includes("no-show")
+          ? "noShow"
+          : m.status_atual?.toLowerCase().includes("contrato")
+            ? "contratoPago"
+            : "agendada",
       originId: null,
-      originName: m.origin_name || '',
+      originName: m.origin_name || "",
       probability: m.probability,
       timeToSchedule: null,
       timeToContract: null,
-      createdAt: '',
+      createdAt: "",
     };
     setSelectedMeeting(converted);
   };
 
   if (!sdrEmail) {
     return (
-      <div className="p-6 text-center text-muted-foreground">
-        SDR não encontrado
-      </div>
+      <div className="p-6 text-center text-muted-foreground">SDR não encontrado</div>
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-5 p-6">
       {/* Header */}
       <SdrDetailHeader
-        name={sdrInfo?.name || sdrEmail.split("@")[0]}
+        name={perfData.sdrInfo?.name || sdrEmail.split("@")[0]}
         email={sdrEmail}
-        cargo={sdrInfo?.cargo}
-        squad={sdrInfo?.squad}
-        status={sdrInfo?.status}
+        cargo={perfData.sdrInfo?.cargo}
+        squad={perfData.sdrInfo?.squad}
+        status={perfData.sdrInfo?.status}
         startDate={startDate}
         endDate={endDate}
         onBack={handleBack}
       />
 
-      {/* Refresh button */}
+      {/* Filters */}
+      <SdrPerformanceFilters
+        startDate={startDate}
+        endDate={endDate}
+        comparisonMode={comparisonMode}
+        metaMode={metaMode}
+        customMeta={customMeta}
+        onFiltersChange={handleFiltersChange}
+      />
+
+      {/* Refresh */}
       <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
-          <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? "animate-spin" : ""}`} />
+        <Button variant="outline" size="sm" onClick={() => perfData.refetch()} disabled={perfData.isLoading}>
+          <RefreshCw className={`h-4 w-4 mr-1 ${perfData.isLoading ? "animate-spin" : ""}`} />
           Atualizar
         </Button>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="overview" className="space-y-6">
+      <Tabs defaultValue="overview" className="space-y-5">
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-          <TabsTrigger value="leads">Reuniões ({meetings.length})</TabsTrigger>
+          <TabsTrigger value="leads">Reuniões ({perfData.meetings.length})</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
+        <TabsContent value="overview" className="space-y-5">
+          {/* Auto Summary */}
+          <SdrAutoSummary text={perfData.summaryText} isLoading={perfData.isLoading} />
+
           {/* KPI Cards */}
-          <SdrDetailKPICards
-            metrics={sdrMetrics}
-            teamAverages={teamAverages}
-            isLoading={isLoading}
-          />
+          <SdrDetailKPICards metrics={perfData.metrics} isLoading={perfData.isLoading} />
 
-          {/* Call Metrics */}
-          <CallMetricsCards
-            totalCalls={callMetrics.data?.totalCalls ?? 0}
-            answered={callMetrics.data?.answered ?? 0}
-            unanswered={callMetrics.data?.unanswered ?? 0}
-            avgDurationSeconds={callMetrics.data?.avgDurationSeconds ?? 0}
-            isLoading={callMetrics.isLoading}
-          />
+          {/* Projection */}
+          <SdrProjectionCard data={perfData.projection} isLoading={perfData.isLoading} />
 
-          {/* Charts and Ranking */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <SdrMeetingsChart
-              meetings={meetings}
-              startDate={startDate}
-              endDate={endDate}
-              isLoading={isLoading}
-              metaDiaria={metaDiaria}
-            />
-            <SdrRankingBlock
-              sdrMetrics={sdrMetrics}
-              ranking={ranking}
-              teamAverages={teamAverages}
-              isLoading={isLoading}
-            />
+          {/* Meta vs Realizado + Funnel */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <SdrMetaVsRealizadoChart metrics={perfData.metrics} isLoading={perfData.isLoading} />
+            <SdrFunnelPanel funnel={perfData.funnel} isLoading={perfData.isLoading} />
           </div>
 
-          {/* Daily Breakdown */}
-          <SdrDailyBreakdownTable
-            meetings={meetings}
-            startDate={startDate}
-            endDate={endDate}
-            metaDiaria={metaDiaria}
-            isLoading={isLoading}
-          />
+          {/* Daily chart + Cumulative */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <SdrMeetingsChart
+              meetings={perfData.meetings}
+              startDate={startDate}
+              endDate={endDate}
+              isLoading={perfData.isLoading}
+              metaDiaria={perfData.metaDiaria}
+            />
+            <SdrCumulativeChart dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
+          </div>
+
+          {/* Team Comparison */}
+          <SdrTeamComparisonPanel data={perfData.teamComparison} isLoading={perfData.isLoading} />
+
+          {/* Daily Breakdown Table */}
+          <SdrDailyBreakdownTable dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
         </TabsContent>
 
         <TabsContent value="leads">
           <Card className="bg-card border-border">
             <CardContent className="p-4">
               <SdrLeadsTable
-                meetings={meetings}
-                isLoading={isLoading}
+                meetings={perfData.meetings}
+                isLoading={perfData.isLoading}
                 onSelectMeeting={handleSelectMeeting}
               />
             </CardContent>
           </Card>
         </TabsContent>
-
       </Tabs>
 
-      {/* Meeting Details Drawer */}
       <MeetingDetailsDrawer meeting={selectedMeeting} onClose={() => setSelectedMeeting(null)} />
     </div>
   );
