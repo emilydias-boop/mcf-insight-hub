@@ -177,6 +177,7 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
     ranking,
     meetings,
     allSdrs: teamData.bySDR,
+    metaDiaria: metaDiariaQuery.data ?? 10,
     isLoading: teamData.isLoading || sdrsQuery.isLoading,
     error: teamData.error || sdrsQuery.error || null,
     refetch: teamData.refetch,
