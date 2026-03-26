@@ -26,9 +26,10 @@ import { toast } from 'sonner';
 
 interface R2QualificationTabProps {
   attendee: R2AttendeeExtended;
+  saveTrigger?: number;
 }
 
-export function R2QualificationTab({ attendee }: R2QualificationTabProps) {
+export function R2QualificationTab({ attendee, saveTrigger = 0 }: R2QualificationTabProps) {
   const updateCustomFields = useUpdateDealCustomFields();
   
   const customFields = attendee.deal?.custom_fields || {};
@@ -90,6 +91,18 @@ export function R2QualificationTab({ attendee }: R2QualificationTabProps) {
       customFields: { profissao: localProfissao || null }
     });
   };
+
+  // Save all text fields when saveTrigger changes
+  useEffect(() => {
+    if (saveTrigger === 0 || !dealId) return;
+    const cf = attendee.deal?.custom_fields || {};
+    const updates: Record<string, string | null> = {};
+    if (localProfissao !== (cf.profissao || '')) updates.profissao = localProfissao || null;
+    if (localIdade !== (cf.idade || '')) updates.idade = localIdade || null;
+    if (Object.keys(updates).length > 0) {
+      updateCustomFields.mutate({ dealId, customFields: updates });
+    }
+  }, [saveTrigger]);
 
   const [isNoteOpen, setIsNoteOpen] = useState(true);
 
