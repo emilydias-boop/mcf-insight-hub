@@ -1,0 +1,1 @@
+UPDATE sdr SET active = false, role_type = 'closer' WHERE email = 'jessica.martins@minhacasafinanciada.com';
