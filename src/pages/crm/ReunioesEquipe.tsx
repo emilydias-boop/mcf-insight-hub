@@ -80,6 +80,7 @@ export default function ReunioesEquipe() {
   const canEditGoals = !!role && ['admin', 'manager', 'coordenador'].includes(role);
   const [incorpGoalsOpen, setIncorpGoalsOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   // Initialize state from URL params
   const initialPreset = (searchParams.get("preset") as DatePreset) || "month";
@@ -535,10 +536,10 @@ export default function ReunioesEquipe() {
             {/* SDR Filter */}
             <Select value={sdrFilter} onValueChange={setSdrFilter}>
               <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="Filtrar por SDR" />
+                <SelectValue placeholder={activeTab === "closers" ? "Filtrar por Closer" : "Filtrar por SDR"} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os SDRs</SelectItem>
+                <SelectItem value="all">{activeTab === "closers" ? "Todos os Closers" : "Todos os SDRs"}</SelectItem>
                 {(activeSdrsList || []).map(sdr => (
                   <SelectItem key={sdr.email} value={sdr.email}>
                     {sdr.name}
@@ -547,21 +548,35 @@ export default function ReunioesEquipe() {
               </SelectContent>
             </Select>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportExcel}
-              disabled={isLoading}
-              className="w-full sm:w-auto"
-            >
-              <Download className="h-4 w-4 mr-1" />
-              <span className="sm:inline">Exportar</span>
-            </Button>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  refetch();
+                  setLastRefresh(new Date());
+                }}
+                disabled={isLoading}
+              >
+                <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+                Atualizar
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportExcel}
+                disabled={isLoading}
+              >
+                <Download className="h-4 w-4 mr-1" />
+                Exportar
+              </Button>
+            </div>
           </div>
 
-          {/* Active period display */}
-          <div className="mt-3 text-xs text-muted-foreground">
-            Período: {format(start, "dd/MM/yyyy")} - {format(end, "dd/MM/yyyy")}
+          {/* Active period display + last refresh */}
+          <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+            <span>Período: {format(start, "dd/MM/yyyy")} - {format(end, "dd/MM/yyyy")}</span>
+            <span>Atualizado às {format(lastRefresh, "HH:mm")}</span>
           </div>
         </CardContent>
       </Card>
