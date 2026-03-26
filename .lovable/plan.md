@@ -1,66 +1,39 @@
 
 
-## Proteger leads existentes na importação — só adicionar informações, sem mover owner/stage
+## Adicionar botão "Salvar" no drawer R2
 
-### Problema atual
+### Problema
+Campos de texto (profissão, idade, link da reunião, observações) só salvam no `onBlur`. Se o usuário digita e não clica fora, perde os dados. Não existe um botão explícito para salvar tudo.
 
-Quando a importação encontra leads **já na pipeline** (found_in_current) **sem reunião**, o sistema:
-- **Transfere o owner** para o SDR selecionado (via `bulkTransfer`)
-- **Altera o stage** se um estágio foi selecionado
+### Solução
+Adicionar um botão "Salvar" no footer do drawer que dispara o save de todos os campos pendentes das 3 abas de uma vez.
 
-O correto é: leads já existentes devem **apenas receber tags e informações adicionais**, sem alterar owner nem stage.
+### Arquivos afetados
 
-### Mudanças
+| Arquivo | Mudança |
+|---------|---------|
+| `R2MeetingDetailDrawer.tsx` | Adicionar estado `saveTrigger` (counter), botão "Salvar" no footer, passar trigger para as tabs |
+| `R2QualificationTab.tsx` | Receber prop `saveTrigger`, useEffect que salva profissão e idade quando trigger muda |
+| `R2EvaluationTab.tsx` | Receber prop `saveTrigger`, useEffect que salva meeting_link e observações quando trigger muda |
 
-**Arquivo 1: `src/components/crm/SpreadsheetCompareDialog.tsx`** (linhas 396-458)
-- Remover a chamada de `bulkTransfer` para leads `found_in_current` (tanto single quanto distribute)
-- Manter apenas a atualização de **tags** para todos os deals existentes (com ou sem reunião)
-- Remover a distinção "com reunião / sem reunião" — todos recebem o mesmo tratamento: só tags
+### Mecânica
 
-Lógica nova para `found_in_current`:
-```typescript
-// Todos os deals existentes: só atualizar tags (preservar stage e owner)
-if (inCurrent.length > 0) {
-  const allDealIds = inCurrent.map(r => r.localDealId!);
-  if (tags?.length) {
-    await supabase
-      .from('crm_deals')
-      .update({ tags: [...new Set(['base clint', ...tags])] })
-      .in('id', allDealIds);
-  }
-  updatedCount += inCurrent.length;
-  toast.info(`${inCurrent.length} leads já existentes — apenas tags atualizadas (owner e estágio preservados)`);
-}
+1. Parent mantém `const [saveTrigger, setSaveTrigger] = useState(0)`
+2. Botão "Salvar" faz `setSaveTrigger(prev => prev + 1)`
+3. Cada tab recebe `saveTrigger` como prop
+4. Dentro de cada tab, `useEffect` reage ao `saveTrigger` e chama os mutates para todos os campos de texto pendentes (sem depender de blur)
+5. Toast de sucesso "Informações salvas" após o save
+
+### Botão no footer
+```tsx
+<Button 
+  className="w-full"
+  onClick={() => setSaveTrigger(p => p + 1)}
+>
+  <Save className="h-4 w-4 mr-2" />
+  Salvar Informações
+</Button>
 ```
 
-**Arquivo 2: `supabase/functions/import-spreadsheet-leads/index.ts`** (linhas 146-183)
-- Para deals existentes: **só atualizar tags**, remover update de `owner_id`, `owner_profile_id` e `stage_id`
-- Remover check de `meeting_slots` (não é mais necessário, todos são protegidos)
-
-Lógica nova:
-```typescript
-if (existingDeal?.length) {
-  // Deal já existe: só atualizar tags, preservar owner e stage
-  const { error: updateError } = await supabase
-    .from('crm_deals')
-    .update({ tags: finalTags })
-    .eq('id', existingDeal[0].id);
-  // ...
-  updated++;
-  continue;
-}
-```
-
-### O que NÃO muda
-- **found_elsewhere** (contato existe em outra pipeline): continua criando deal novo na pipeline atual com owner/stage selecionados
-- **not_found** (novos): continua criando contato + deal com todas as informações
-- **Deduplicação**: continua funcionando por email → telefone 9 dígitos → telefone 8 dígitos
-
-### Resumo do comportamento final
-
-| Categoria | Owner | Stage | Tags | Contato |
-|-----------|-------|-------|------|---------|
-| Já na pipeline | ❌ preserva | ❌ preserva | ✅ adiciona | ❌ preserva |
-| Outra pipeline | ✅ define | ✅ define | ✅ adiciona | ❌ reutiliza |
-| Novo | ✅ define | ✅ define | ✅ adiciona | ✅ cria |
+Posicionado acima dos botões de ação (Realizada, No-show, etc).
 
