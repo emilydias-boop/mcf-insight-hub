@@ -139,6 +139,7 @@ Deno.serve(async (req) => {
     }
 
     // Update profile with squad if provided
+    // The trigger sync_profile_squad_to_employee will auto-sync to employees and sdr
     if (squad) {
       const { error: profileError } = await supabaseAdmin
         .from("profiles")
