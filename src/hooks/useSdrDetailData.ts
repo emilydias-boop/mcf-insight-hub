@@ -35,6 +35,7 @@ export interface SdrDetailData {
   ranking: SdrRanking;
   meetings: MeetingV2[];
   allSdrs: SdrSummaryRow[];
+  metaDiaria: number;
   isLoading: boolean;
   error: Error | null;
   refetch: () => void;
@@ -49,6 +50,22 @@ interface UseSdrDetailParams {
 export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailParams): SdrDetailData {
   const teamData = useTeamMeetingsData({ startDate, endDate });
   const sdrsQuery = useSdrsFromSquad("inside_sales");
+
+  // Fetch meta_diaria from sdr table
+  const metaDiariaQuery = useQuery({
+    queryKey: ['sdr-meta-diaria-detail', sdrEmail],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('sdr')
+        .select('meta_diaria')
+        .eq('email', sdrEmail.toLowerCase())
+        .eq('active', true)
+        .maybeSingle();
+      return data?.meta_diaria ?? 10;
+    },
+    enabled: !!sdrEmail,
+    staleTime: 1000 * 60 * 5,
+  });
 
   // Find SDR info from database (dynamic, no hardcoded list)
   const sdrInfo = useMemo(() => {
