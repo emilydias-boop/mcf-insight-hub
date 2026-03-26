@@ -49,7 +49,7 @@ import ImportarContatos from "./pages/crm/ImportarContatos";
 import ImportarNegocios from "./pages/crm/ImportarNegocios";
 import ImportarHistorico from "./pages/crm/ImportarHistorico";
 import AuditoriaAgendamentos from "./pages/crm/AuditoriaAgendamentos";
-import Atendimentos from "./pages/crm/Atendimentos";
+
 import Agenda from "./pages/crm/Agenda";
 import DealsOrfaos from "./pages/crm/DealsOrfaos";
 import LeadsLimbo from "./pages/crm/LeadsLimbo";
@@ -181,7 +181,7 @@ const App = () => (
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />
                 <Route path="negocios" element={<Negocios />} />
-                <Route path="atendimentos" element={<Atendimentos />} />
+                
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
                 <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
@@ -243,7 +243,7 @@ const App = () => (
                 <Route index element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CRMOverview /></RoleGuard>} />
                 <Route path="contatos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><Contatos /></RoleGuard>} />
                 <Route path="negocios" element={<NegociosAccessGuard><Negocios /></NegociosAccessGuard>} />
-                <Route path="atendimentos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Atendimentos /></RoleGuard>} />
+                
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="agenda/metricas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AgendaMetricas /></RoleGuard>} />
                 <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />

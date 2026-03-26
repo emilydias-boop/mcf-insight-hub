@@ -65,7 +65,6 @@ import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
 import { LinkContractDialog } from './LinkContractDialog';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
-import { useConversationsContext } from '@/contexts/ConversationsContext';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -126,7 +125,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const isSdr = role === 'sdr';
   const [closerNotes, setCloserNotes] = useState(meeting?.closer_notes || '');
   const [sdrNote, setSdrNote] = useState(meeting?.notes || '');
-  const [isLoadingWhatsApp, setIsLoadingWhatsApp] = useState(false);
+  
   const [showAddPartner, setShowAddPartner] = useState(false);
   const [partnerName, setPartnerName] = useState('');
   const [partnerPhone, setPartnerPhone] = useState('');
@@ -150,7 +149,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const updateAttendeeAndSlotStatus = useUpdateAttendeeAndSlotStatus();
   const updateAttendeeNotes = useUpdateAttendeeNotes();
   const updateAttendeePhone = useUpdateAttendeePhone();
-  const { findOrCreateConversationByPhone, selectConversation } = useConversationsContext();
+  
 
   // Check if user can delete meetings
   const canDeleteMeeting = role && DELETE_ALLOWED_ROLES.includes(role);
@@ -340,26 +339,10 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     }
   };
 
-  const handleWhatsApp = async () => {
+  const handleWhatsApp = () => {
     if (!contact?.phone) return;
-    
-    setIsLoadingWhatsApp(true);
-    try {
-      const conversationId = await findOrCreateConversationByPhone(
-        contact.phone, 
-        contact.name
-      );
-      selectConversation(conversationId);
-      onOpenChange(false);
-      navigate('/crm/atendimentos');
-    } catch (error) {
-      console.error('Erro ao iniciar conversa:', error);
-      toast.error('Erro ao abrir conversa. Abrindo WhatsApp externo...');
-      const phone = contact.phone.replace(/\D/g, '');
-      window.open(`https://wa.me/55${phone}`, '_blank');
-    } finally {
-      setIsLoadingWhatsApp(false);
-    }
+    const phone = contact.phone.replace(/\D/g, '');
+    window.open(`https://wa.me/55${phone}`, '_blank');
   };
 
   const handleViewDeal = () => {

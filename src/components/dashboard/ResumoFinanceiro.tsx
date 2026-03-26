@@ -3,7 +3,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/formatters";
-import { SemanaMes } from "@/data/mockData";
+export type SemanaMes = {
+  dataInicio: string;
+  dataFim: string;
+  faturamentoA010: number;
+  vendasA010: number;
+  valorVendidoOBEvento: number;
+  vendasOBEvento: number;
+  faturamentoContrato: number;
+  vendasContratos: number;
+  faturamentoOBConstruir: number;
+  vendasOBConstruir: number;
+  faturamentoOBVitalicio: number;
+  vendasOBVitalicio: number;
+};
 import { useWeeklyResumo } from "@/hooks/useWeeklyMetrics";
 import { startOfMonth, endOfMonth } from "date-fns";
 
