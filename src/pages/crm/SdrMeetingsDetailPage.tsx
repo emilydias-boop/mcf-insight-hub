@@ -11,7 +11,7 @@ import { SdrPerformanceFilters } from "@/components/sdr/SdrPerformanceFilters";
 import { SdrAutoSummary } from "@/components/sdr/SdrAutoSummary";
 import { SdrDetailKPICards } from "@/components/sdr/SdrDetailKPICards";
 import { SdrProjectionCard } from "@/components/sdr/SdrProjectionCard";
-import { SdrMetaVsRealizadoChart } from "@/components/sdr/SdrMetaVsRealizadoChart";
+
 import { SdrFunnelPanel } from "@/components/sdr/SdrFunnelPanel";
 import { SdrMeetingsChart } from "@/components/sdr/SdrMeetingsChart";
 import { SdrCumulativeChart } from "@/components/sdr/SdrCumulativeChart";
@@ -177,11 +177,8 @@ export default function SdrMeetingsDetailPage() {
             <SdrProjectionCard data={perfData.projection} isLoading={perfData.isLoading} />
           </div>
 
-          {/* Meta vs Realizado + Funnel */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <SdrMetaVsRealizadoChart metrics={perfData.metrics} isLoading={perfData.isLoading} />
-            <SdrFunnelPanel funnel={perfData.funnel} isLoading={perfData.isLoading} />
-          </div>
+          {/* Funnel */}
+          <SdrFunnelPanel funnel={perfData.funnel} isLoading={perfData.isLoading} />
 
           {/* Daily chart + Cumulative */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
