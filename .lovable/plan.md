@@ -1,55 +1,53 @@
 
 
-## Melhorar legibilidade dos KPI Cards do SDR
+## Corrigir cálculo de metas derivadas — usar valores reais
 
 ### Problema
 
-Cada card mostra 5 informações em texto minúsculo (11px) sem hierarquia clara:
-- **Meta: 198** e **70%** na mesma linha — não fica claro que 70% é o atingimento
-- **Gap: -59** — termo técnico, muitos gestores não entendem de primeira
-- **↗ +31%** — não explica que é comparação com período anterior
-- Tudo tem a mesma cor e tamanho, vira "sopa de números"
+No `useSdrPerformanceData.ts` (linhas 191-196), as metas de R1 Realizada, No-Show e Contratos são calculadas a partir da **meta fixa** de R1 Agendada (= metaPeriodo). Isso está errado.
 
-### Solução
+A lógica correta (já documentada nas regras de negócio do sistema) é:
 
-Reorganizar cada card com **hierarquia visual clara** e **labels descritivos**:
+| Métrica | Cálculo correto |
+|---------|----------------|
+| R1 Realizada meta | 70% do **R1 Agendada real** |
+| No-Show meta | 30% do **R1 Agendada real** |
+| Contratos meta | 30% da **meta de R1 Realizada** (derivada acima) |
 
-```text
-┌─────────────────────────┐
-│  AGENDAMENTOS           │
-│  139                    │  ← valor grande, destaque
-│                         │
-│  ████████████░░░░  70%  │  ← barra com % atingimento
-│  Meta: 198              │  ← abaixo da barra, contexto
-│                         │
-│  🔴 Faltam 59           │  ← em vez de "Gap: -59"
-│  📈 +31% vs anterior    │  ← label explícito
-└─────────────────────────┘
+### Exemplo com dados da tela
+
+- R1 Agendada real = 47
+- R1 Realizada meta = round(47 × 0.7) = **33**
+- No-Show meta = round(47 × 0.3) = **14**
+- Contratos meta = round(33 × 0.3) = **10**
+
+### Mudança
+
+**Arquivo**: `src/hooks/useSdrPerformanceData.ts` (linhas 191-197)
+
+Trocar:
+```ts
+const r1AgendadaMeta = agendMeta;
+const r1RealizadaMeta = Math.round(r1AgendadaMeta * 0.7);
+const contratosMeta = Math.round(r1RealizadaMeta * 0.3);
 ```
 
-### Mudanças concretas no `SdrDetailKPICards.tsx`
+Por:
+```ts
+const r1AgendadaMeta = agendMeta; // meta fixa, mantida
+const r1Agendada_real = sm?.r1Agendada || 0;
+const r1RealizadaMeta = Math.round(r1Agendada_real * 0.7);
+const noShowMeta = Math.round(r1Agendada_real * 0.3);
+const contratosMeta = Math.round(r1RealizadaMeta * 0.3);
+```
 
-1. **Trocar "Gap: -X"** por linguagem natural:
-   - Negativo → "Faltam 59" (vermelho)
-   - Positivo → "Acima: +5" (verde)
-   - Zero → "Na meta ✓" (verde)
+E atualizar a linha 245 (No-Show) para usar `noShowMeta` em vez de `Math.round(metas.r1AgendadaMeta * 0.3)`.
 
-2. **Trocar "↗ +31%"** por "**+31% vs anterior**" — adicionar o texto "vs anterior" para contextualizar
-
-3. **Reordenar layout** do card:
-   - Título (11px uppercase)
-   - Valor realizado (2xl bold)
-   - Barra de progresso com % de atingimento à direita
-   - Meta abaixo da barra (texto discreto)
-   - Linha final: gap humanizado à esquerda, variação com label à direita
-
-4. **Adicionar Tooltip** em cada card com explicação completa (ex: "Agendamentos realizados no período vs meta calculada. Comparação com o mesmo período do mês anterior.")
+Adicionar `sm` como dependência do `useMemo` de metas.
 
 ### Arquivo afetado
 
 | Arquivo | Ação |
 |---------|------|
-| `SdrDetailKPICards.tsx` | Reescrever layout interno do `KPICard` — mesma estrutura de dados, apresentação mais clara |
-
-Nenhuma mudança em hooks ou dados — apenas apresentação visual.
+| `src/hooks/useSdrPerformanceData.ts` | Corrigir cálculo de metas derivadas — usar R1 Agendada real |
 
