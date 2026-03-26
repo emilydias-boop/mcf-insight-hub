@@ -1,36 +1,65 @@
 
 
-## Limpeza das páginas individuais SDR/Closer
+## Enriquecer a página de detalhe do SDR
 
-### 1. Closer Detail — Remover card "Resumo do Período" (redundante)
-**Arquivo**: `CloserMeetingsDetailPage.tsx` (linhas 147-181)
+### Problema
+A página atual mostra KPIs agregados, um gráfico de barras e ranking — mas falta visão operacional do dia-a-dia: o gestor não consegue ver se o SDR bate meta todo dia, nem como estão as ligações dele.
 
-O card repete exatamente os mesmos dados dos KPI cards acima (R1 Realizada, Contratos, Taxa Conversão, R2 Agendadas). Deletar o card e deixar o `CloserRankingBlock` ocupando largura total.
+### O que adicionar
 
-### 2. Closer Detail — Adicionar KPI "R2 Agendada"
-**Arquivo**: `CloserDetailKPICards.tsx`
+#### 1. Cards de Ligações (seção nova)
+Usar o hook `useSdrCallMetrics` (já existe, usado em "Minhas Reuniões") passando o email do SDR + período. Renderizar o componente `CallMetricsCards` (já existe) abaixo dos KPI cards, mostrando:
+- Total Ligações
+- Contatos (atendidas)
+- Não Atendidas
+- Tempo Médio
 
-Hoje os KPI cards não mostram R2 Agendada (que só aparecia no card redundante). Adicionar como 8º KPI card com ícone Calendar e média do time.
+**Arquivo**: `SdrMeetingsDetailPage.tsx` — importar `useSdrCallMetrics` e `CallMetricsCards`, adicionar na aba "Visão Geral" entre os KPI cards e o gráfico.
 
-**Nota**: R1 Agendada **não será adicionada** ao ranking do closer — essa métrica é responsabilidade do SDR. O closer só responde a partir do momento em que o lead comparece ou dá no-show.
+#### 2. Tabela de Performance Diária (componente novo)
+Criar `SdrDailyBreakdownTable.tsx` — tabela com uma linha por dia do período, colunas:
 
-### 3. SDR Detail — Remover aba "Todos os Negócios"
-**Arquivo**: `SdrMeetingsDetailPage.tsx`
+| Data | Agendamentos | R1 Agendada | R1 Realizada | No-Show | Meta | Status |
+|------|-------------|-------------|--------------|---------|------|--------|
 
-Essa aba puxa todos os deals do CRM sem filtro de período — fora do contexto de performance. Remover aba, import de `useSdrDeals` e `SdrDealsTable`. Verificar se esses 2 arquivos ficam órfãos e deletar se sim.
+- **Meta**: buscar `meta_diaria` do SDR (da tabela `sdr`)
+- **Status**: ícone verde (bateu) / vermelho (não bateu) comparando Agendamentos vs meta_diaria
+- Dados calculados a partir dos `meetings` já carregados, agrupados por dia
+- Linha de total no final
 
-### 4. Painel principal — Renomear "Realizadas" → "R1 Realizada"
-**Arquivo**: `TeamKPICards.tsx`
+**Arquivo novo**: `src/components/sdr/SdrDailyBreakdownTable.tsx`
+**Arquivo**: `SdrMeetingsDetailPage.tsx` — adicionar abaixo do gráfico + ranking, ocupando largura total
 
-Padronizar nomenclatura com tabelas e páginas individuais.
+#### 3. Buscar meta_diaria do SDR
+Criar query simples no `useSdrDetailData` para buscar `meta_diaria` da tabela `sdr` pelo email, ou fazer inline na page. Retornar como parte do `sdrDetailData`.
+
+**Arquivo**: `useSdrDetailData.ts` — adicionar campo `metaDiaria` ao retorno, buscar da tabela `sdr`.
+
+#### 4. Corrigir alert órfão
+Na aba "Reuniões", o alert ainda menciona "aba Todos os Negócios" que foi removida. Remover esse alert.
+
+**Arquivo**: `SdrMeetingsDetailPage.tsx` — deletar linhas 170-178.
+
+### Layout final da aba "Visão Geral"
+
+```text
+┌─────────────────────────────────────────────────┐
+│  KPI Cards (5 cards)                            │
+├─────────────────────────────────────────────────┤
+│  Ligações (4 cards compactos)                   │
+├────────────────────────┬────────────────────────┤
+│  Evolução Diária       │  Ranking no Time       │
+│  (gráfico barras)      │  (tabela ranking)      │
+├────────────────────────┴────────────────────────┤
+│  Performance Diária (tabela dia-a-dia)          │
+│  Data | Agend | R1 Ag | R1 Real | NoShow | Meta│
+└─────────────────────────────────────────────────┘
+```
 
 ### Arquivos afetados
 | Arquivo | Ação |
 |---------|------|
-| `CloserMeetingsDetailPage.tsx` | Remover card Resumo, CloserRankingBlock full-width |
-| `CloserDetailKPICards.tsx` | Adicionar KPI R2 Agendada |
-| `SdrMeetingsDetailPage.tsx` | Remover aba Negócios + imports |
-| `TeamKPICards.tsx` | Renomear label |
-| `useSdrDeals.ts` | Deletar se órfão |
-| `SdrDealsTable.tsx` | Deletar se órfão |
+| `src/components/sdr/SdrDailyBreakdownTable.tsx` | Criar — tabela diária com meta |
+| `src/pages/crm/SdrMeetingsDetailPage.tsx` | Adicionar CallMetrics + DailyBreakdown, remover alert órfão |
+| `src/hooks/useSdrDetailData.ts` | Adicionar `metaDiaria` ao retorno |
 
