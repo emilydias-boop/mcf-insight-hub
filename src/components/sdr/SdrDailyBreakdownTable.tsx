@@ -16,15 +16,6 @@ interface SdrDailyBreakdownTableProps {
   isLoading?: boolean;
 }
 
-interface DayRow {
-  date: Date;
-  agendamentos: number;
-  r1Agendada: number;
-  r1Realizada: number;
-  noShow: number;
-  isWeekend: boolean;
-}
-
 export const SdrDailyBreakdownTable = ({
   meetings,
   startDate,
@@ -32,65 +23,29 @@ export const SdrDailyBreakdownTable = ({
   metaDiaria,
   isLoading = false,
 }: SdrDailyBreakdownTableProps) => {
-  const rows = useMemo((): DayRow[] => {
+  const rows = useMemo(() => {
     const days = eachDayOfInterval({ start: startDate, end: endDate });
 
     return days.map((date) => {
       const dateStr = format(date, 'yyyy-MM-dd');
-
-      const dayMeetings = meetings.filter((m) => {
-        const mDate = m.data_agendamento?.substring(0, 10);
-        return mDate === dateStr;
-      });
-
-      let agendamentos = 0;
-      let r1Agendada = 0;
-      let r1Realizada = 0;
-      let noShow = 0;
-
-      for (const m of dayMeetings) {
-        agendamentos++;
-        const status = (m.status_atual || '').toLowerCase();
-        if (status.includes('agendada')) r1Agendada++;
-        if (status.includes('realizada') || status.includes('contrato')) r1Realizada++;
-        if (status.includes('no-show') || status.includes('noshow') || status.includes('no show')) noShow++;
-      }
+      const agendamentos = meetings.filter((m) => m.data_agendamento?.substring(0, 10) === dateStr).length;
 
       return {
         date,
         agendamentos,
-        r1Agendada,
-        r1Realizada,
-        noShow,
         isWeekend: isWeekend(date),
       };
     });
   }, [meetings, startDate, endDate]);
 
-  const totals = useMemo(() => {
-    return rows.reduce(
-      (acc, r) => ({
-        agendamentos: acc.agendamentos + r.agendamentos,
-        r1Agendada: acc.r1Agendada + r.r1Agendada,
-        r1Realizada: acc.r1Realizada + r.r1Realizada,
-        noShow: acc.noShow + r.noShow,
-      }),
-      { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShow: 0 }
-    );
-  }, [rows]);
-
-  // Only show business days that have data or are not weekends
+  const total = useMemo(() => rows.reduce((s, r) => s + r.agendamentos, 0), [rows]);
   const filteredRows = rows.filter((r) => !r.isWeekend || r.agendamentos > 0);
 
   if (isLoading) {
     return (
       <Card>
-        <CardHeader className="pb-3">
-          <Skeleton className="h-5 w-48" />
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-40 w-full" />
-        </CardContent>
+        <CardHeader className="pb-3"><Skeleton className="h-5 w-48" /></CardHeader>
+        <CardContent><Skeleton className="h-40 w-full" /></CardContent>
       </Card>
     );
   }
@@ -110,9 +65,6 @@ export const SdrDailyBreakdownTable = ({
               <TableRow>
                 <TableHead className="w-[120px]">Data</TableHead>
                 <TableHead className="text-center">Agendamentos</TableHead>
-                <TableHead className="text-center">R1 Agendada</TableHead>
-                <TableHead className="text-center">R1 Realizada</TableHead>
-                <TableHead className="text-center">No-Show</TableHead>
                 <TableHead className="text-center">Meta</TableHead>
                 <TableHead className="text-center">Status</TableHead>
               </TableRow>
@@ -131,17 +83,11 @@ export const SdrDailyBreakdownTable = ({
                     <TableCell className="font-medium text-xs">
                       {format(row.date, "dd/MM (EEE)", { locale: ptBR })}
                     </TableCell>
-                    <TableCell className="text-center font-semibold">
+                    <TableCell className={cn(
+                      "text-center font-bold text-base",
+                      row.agendamentos > 0 && (bateu ? "text-green-500" : "text-destructive")
+                    )}>
                       {row.agendamentos}
-                    </TableCell>
-                    <TableCell className="text-center">{row.r1Agendada}</TableCell>
-                    <TableCell className="text-center">{row.r1Realizada}</TableCell>
-                    <TableCell className="text-center">
-                      {row.noShow > 0 ? (
-                        <span className="text-destructive font-medium">{row.noShow}</span>
-                      ) : (
-                        row.noShow
-                      )}
                     </TableCell>
                     <TableCell className="text-center text-muted-foreground">
                       {metaDiaria}
@@ -158,19 +104,9 @@ export const SdrDailyBreakdownTable = ({
                   </TableRow>
                 );
               })}
-              {/* Total row */}
               <TableRow className="bg-muted/50 font-bold border-t-2">
                 <TableCell className="font-bold text-xs">TOTAL</TableCell>
-                <TableCell className="text-center font-bold">{totals.agendamentos}</TableCell>
-                <TableCell className="text-center font-bold">{totals.r1Agendada}</TableCell>
-                <TableCell className="text-center font-bold">{totals.r1Realizada}</TableCell>
-                <TableCell className="text-center font-bold">
-                  {totals.noShow > 0 ? (
-                    <span className="text-destructive">{totals.noShow}</span>
-                  ) : (
-                    totals.noShow
-                  )}
-                </TableCell>
+                <TableCell className="text-center font-bold text-base">{total}</TableCell>
                 <TableCell className="text-center text-muted-foreground">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
               </TableRow>
