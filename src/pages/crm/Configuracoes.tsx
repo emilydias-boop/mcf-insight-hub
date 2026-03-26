@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
 import { ActivityTemplateManager } from '@/components/crm/ActivityTemplateManager';
-import { WhatsAppConfigCard } from '@/components/whatsapp/WhatsAppConfigCard';
+
 import { CRMPermissionsManager } from '@/components/crm/CRMPermissionsManager';
 import { QualificationFieldsManager } from '@/components/crm/QualificationFieldsManager';
 import { useAuth } from '@/contexts/AuthContext';
@@ -142,9 +142,6 @@ const ConfiguracoesContent = () => {
   return (
     <div className="space-y-6">
       <WebhookMonitor />
-
-      {/* WhatsApp Z-API Configuration */}
-      <WhatsAppConfigCard />
 
       {/* Activity Templates - Only for admin/coordenador */}
       {canManageTemplates && (

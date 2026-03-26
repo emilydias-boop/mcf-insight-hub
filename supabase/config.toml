@@ -138,14 +138,6 @@ verify_jwt = false
 [functions.sync-newsale-orphans-cron]
 verify_jwt = false
 
-[functions.zapi-webhook]
-verify_jwt = false
-
-[functions.zapi-send-message]
-verify_jwt = false
-
-[functions.zapi-status]
-verify_jwt = false
 
 [functions.calendly-webhook-handler]
 verify_jwt = false
@@ -174,8 +166,6 @@ verify_jwt = false
 [functions.webhook-consorcio]
 verify_jwt = false
 
-[functions.notify-new-lead]
-verify_jwt = false
 
 [functions.backfill-deal-tasks]
 verify_jwt = false

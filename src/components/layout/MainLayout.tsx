@@ -3,9 +3,6 @@ import { AppSidebar } from "./AppSidebar";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { RealTimeAlerts } from "@/components/dashboard/RealTimeAlerts";
 import { TwilioSoftphone } from "@/components/crm/TwilioSoftphone";
-import { ConversationsProvider } from "@/contexts/ConversationsContext";
-import { ConversationsFloatingWidget } from "@/components/conversations/ConversationsFloatingWidget";
-import { ConversationsDrawer } from "@/components/conversations/ConversationsDrawer";
 import { QualificationAndScheduleModal } from "@/components/crm/QualificationAndScheduleModal";
 import { useTwilio } from "@/contexts/TwilioContext";
 import { Menu } from "lucide-react";
@@ -31,12 +28,8 @@ function GlobalQualificationModal() {
   );
 }
 
-// Feature flag - set to true when conversations feature is ready
-const ENABLE_CONVERSATIONS_WIDGET = false;
-
 export function MainLayout() {
   return (
-    <ConversationsProvider>
       <SidebarProvider defaultOpen={false}>
         <div className="min-h-screen flex w-full bg-background">
           <AppSidebar />
@@ -54,10 +47,7 @@ export function MainLayout() {
           </SidebarInset>
           <TwilioSoftphone />
           <GlobalQualificationModal />
-          {ENABLE_CONVERSATIONS_WIDGET && <ConversationsFloatingWidget />}
-          {ENABLE_CONVERSATIONS_WIDGET && <ConversationsDrawer />}
         </div>
       </SidebarProvider>
-    </ConversationsProvider>
   );
 }
