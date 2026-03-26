@@ -1,65 +1,35 @@
 
 
-## Enriquecer a página de detalhe do SDR
+## Simplificar a tabela de Performance Diária do SDR
 
 ### Problema
-A página atual mostra KPIs agregados, um gráfico de barras e ranking — mas falta visão operacional do dia-a-dia: o gestor não consegue ver se o SDR bate meta todo dia, nem como estão as ligações dele.
+A tabela mostra 7 colunas, mas R1 Agendada, R1 Realizada e No-Show ficam com zeros porque esses eventos acontecem em datas futuras, não na data do agendamento. Isso gera uma tabela cheia de zeros que confunde em vez de informar.
 
-### O que adicionar
+Além disso, o gráfico de barras (`SdrMeetingsChart`) já mostra a evolução diária — há redundância visual entre gráfico e tabela.
 
-#### 1. Cards de Ligações (seção nova)
-Usar o hook `useSdrCallMetrics` (já existe, usado em "Minhas Reuniões") passando o email do SDR + período. Renderizar o componente `CallMetricsCards` (já existe) abaixo dos KPI cards, mostrando:
-- Total Ligações
-- Contatos (atendidas)
-- Não Atendidas
-- Tempo Médio
+### Solução
 
-**Arquivo**: `SdrMeetingsDetailPage.tsx` — importar `useSdrCallMetrics` e `CallMetricsCards`, adicionar na aba "Visão Geral" entre os KPI cards e o gráfico.
+Simplificar a tabela para focar no que importa no dia-a-dia do SDR: **quantos agendamentos ele fez vs a meta**.
 
-#### 2. Tabela de Performance Diária (componente novo)
-Criar `SdrDailyBreakdownTable.tsx` — tabela com uma linha por dia do período, colunas:
+**Colunas da tabela simplificada:**
 
-| Data | Agendamentos | R1 Agendada | R1 Realizada | No-Show | Meta | Status |
-|------|-------------|-------------|--------------|---------|------|--------|
+| Data | Agendamentos | Meta | Status |
+|------|-------------|------|--------|
 
-- **Meta**: buscar `meta_diaria` do SDR (da tabela `sdr`)
-- **Status**: ícone verde (bateu) / vermelho (não bateu) comparando Agendamentos vs meta_diaria
-- Dados calculados a partir dos `meetings` já carregados, agrupados por dia
-- Linha de total no final
+- **Agendamentos**: valor em destaque, com cor verde se ≥ meta, vermelho se <
+- **Meta**: número da meta diária
+- **Status**: ícone check/X
 
-**Arquivo novo**: `src/components/sdr/SdrDailyBreakdownTable.tsx`
-**Arquivo**: `SdrMeetingsDetailPage.tsx` — adicionar abaixo do gráfico + ranking, ocupando largura total
+Isso é limpo, direto, e complementa os KPI cards (que já mostram os totais de R1 Agendada, R1 Realizada, No-Show e Contratos no período).
 
-#### 3. Buscar meta_diaria do SDR
-Criar query simples no `useSdrDetailData` para buscar `meta_diaria` da tabela `sdr` pelo email, ou fazer inline na page. Retornar como parte do `sdrDetailData`.
+### Remover redundância do gráfico
 
-**Arquivo**: `useSdrDetailData.ts` — adicionar campo `metaDiaria` ao retorno, buscar da tabela `sdr`.
-
-#### 4. Corrigir alert órfão
-Na aba "Reuniões", o alert ainda menciona "aba Todos os Negócios" que foi removida. Remover esse alert.
-
-**Arquivo**: `SdrMeetingsDetailPage.tsx` — deletar linhas 170-178.
-
-### Layout final da aba "Visão Geral"
-
-```text
-┌─────────────────────────────────────────────────┐
-│  KPI Cards (5 cards)                            │
-├─────────────────────────────────────────────────┤
-│  Ligações (4 cards compactos)                   │
-├────────────────────────┬────────────────────────┤
-│  Evolução Diária       │  Ranking no Time       │
-│  (gráfico barras)      │  (tabela ranking)      │
-├────────────────────────┴────────────────────────┤
-│  Performance Diária (tabela dia-a-dia)          │
-│  Data | Agend | R1 Ag | R1 Real | NoShow | Meta│
-└─────────────────────────────────────────────────┘
-```
+O gráfico `SdrMeetingsChart` também mostra agendamentos por dia — mas com barras de "agendadas", "realizadas" e "noShow" que sofrem do mesmo problema de zeros. Vou simplificar o gráfico para mostrar apenas barras de **Agendamentos** com uma **linha de referência da meta diária**, tornando gráfico e tabela complementares em vez de redundantes.
 
 ### Arquivos afetados
+
 | Arquivo | Ação |
 |---------|------|
-| `src/components/sdr/SdrDailyBreakdownTable.tsx` | Criar — tabela diária com meta |
-| `src/pages/crm/SdrMeetingsDetailPage.tsx` | Adicionar CallMetrics + DailyBreakdown, remover alert órfão |
-| `src/hooks/useSdrDetailData.ts` | Adicionar `metaDiaria` ao retorno |
+| `SdrDailyBreakdownTable.tsx` | Simplificar: remover colunas R1 Agendada, R1 Realizada, No-Show. Manter Data, Agendamentos (com cor), Meta, Status |
+| `SdrMeetingsChart.tsx` | Simplificar: só barra de Agendamentos + linha de referência da meta |
 
