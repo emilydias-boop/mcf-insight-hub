@@ -7942,6 +7942,45 @@ export type Database = {
         }
         Relationships: []
       }
+      rh_announcements: {
+        Row: {
+          ativo: boolean
+          conteudo: string
+          created_at: string
+          created_by: string | null
+          data_expiracao: string | null
+          data_publicacao: string
+          destaque: boolean
+          id: string
+          tipo: string
+          titulo: string
+        }
+        Insert: {
+          ativo?: boolean
+          conteudo: string
+          created_at?: string
+          created_by?: string | null
+          data_expiracao?: string | null
+          data_publicacao?: string
+          destaque?: boolean
+          id?: string
+          tipo?: string
+          titulo: string
+        }
+        Update: {
+          ativo?: boolean
+          conteudo?: string
+          created_at?: string
+          created_by?: string | null
+          data_expiracao?: string | null
+          data_publicacao?: string
+          destaque?: boolean
+          id?: string
+          tipo?: string
+          titulo?: string
+        }
+        Relationships: []
+      }
       rh_nfse: {
         Row: {
           ano: number
@@ -8009,6 +8048,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      rh_policies: {
+        Row: {
+          arquivo_url: string | null
+          ativa: boolean
+          categoria: string
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          id: string
+          obrigatoria: boolean
+          storage_path: string | null
+          titulo: string
+          updated_at: string
+          versao: string | null
+        }
+        Insert: {
+          arquivo_url?: string | null
+          ativa?: boolean
+          categoria?: string
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          obrigatoria?: boolean
+          storage_path?: string | null
+          titulo: string
+          updated_at?: string
+          versao?: string | null
+        }
+        Update: {
+          arquivo_url?: string | null
+          ativa?: boolean
+          categoria?: string
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          obrigatoria?: boolean
+          storage_path?: string | null
+          titulo?: string
+          updated_at?: string
+          versao?: string | null
+        }
+        Relationships: []
       }
       rh_tickets: {
         Row: {
