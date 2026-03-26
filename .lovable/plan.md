@@ -1,39 +1,61 @@
 
 
-## Adicionar botão "Salvar" no drawer R2
+## Fase 1: Layout com abas + Quick Actions no Meu RH
 
-### Problema
-Campos de texto (profissão, idade, link da reunião, observações) só salvam no `onBlur`. Se o usuário digita e não clica fora, perde os dados. Não existe um botão explícito para salvar tudo.
+### Visão geral
 
-### Solução
-Adicionar um botão "Salvar" no footer do drawer que dispara o save de todos os campos pendentes das 3 abas de uma vez.
+Transformar a tela de ficha linear em um portal com abas, mantendo todo o conteúdo existente reorganizado.
 
-### Arquivos afetados
+### Layout proposto
 
-| Arquivo | Mudança |
-|---------|---------|
-| `R2MeetingDetailDrawer.tsx` | Adicionar estado `saveTrigger` (counter), botão "Salvar" no footer, passar trigger para as tabs |
-| `R2QualificationTab.tsx` | Receber prop `saveTrigger`, useEffect que salva profissão e idade quando trigger muda |
-| `R2EvaluationTab.tsx` | Receber prop `saveTrigger`, useEffect que salva meeting_link e observações quando trigger muda |
-
-### Mecânica
-
-1. Parent mantém `const [saveTrigger, setSaveTrigger] = useState(0)`
-2. Botão "Salvar" faz `setSaveTrigger(prev => prev + 1)`
-3. Cada tab recebe `saveTrigger` como prop
-4. Dentro de cada tab, `useEffect` reage ao `saveTrigger` e chama os mutates para todos os campos de texto pendentes (sem depender de blur)
-5. Toast de sucesso "Informações salvas" após o save
-
-### Botão no footer
-```tsx
-<Button 
-  className="w-full"
-  onClick={() => setSaveTrigger(p => p + 1)}
->
-  <Save className="h-4 w-4 mr-2" />
-  Salvar Informações
-</Button>
+```text
+┌─────────────────────────────────────────────────────────┐
+│ [Avatar] Nome · Status Badge · Cargo                    │
+│ PJ · Entrada: 04/05/2025 · Gestor: Fulano              │
+├─────────────────────────────────────────────────────────┤
+│ ┌─────────┐ ┌──────────┐ ┌───────────┐ ┌────────────┐  │
+│ │ Status  │ │ Vínculo  │ │ Jornada   │ │ Local      │  │
+│ │ Ativo   │ │ PJ       │ │ 44h sem.  │ │ Remoto     │  │
+│ └─────────┘ └──────────┘ └───────────┘ └────────────┘  │
+├─────────────────────────────────────────────────────────┤
+│ [Enviar NFSe] [Abrir Solicitação] [Ver Docs] [Ver PDI] │
+├─────────────────────────────────────────────────────────┤
+│ [Meu Perfil] [Documentos] [Políticas] [Fale c/ RH]     │
+│              [Avaliações] [PDI] [Comunicados]           │
+├─────────────────────────────────────────────────────────┤
+│ Conteúdo da aba ativa                                   │
+└─────────────────────────────────────────────────────────┘
 ```
 
-Posicionado acima dos botões de ação (Realizada, No-show, etc).
+### Mudanças
+
+**Arquivo 1: `src/pages/MeuRH.tsx`** — Reestruturar completamente:
+- Manter header existente (`MeuRHHeader`)
+- Substituir `MeuRHVinculoSection` por **4 cards compactos** inline (status, vínculo, jornada, local)
+- Adicionar **barra de ações rápidas** com 4 botões (Enviar NFSe, Abrir Solicitação, Ver Documentos, Ver PDI) — botões que abrem modais ou trocam de aba
+- Adicionar **`Tabs`** com as seguintes abas:
+  - **Meu Perfil** — conteúdo atual: `MeuRHDadosPessoaisSection`, `MeuRHRemuneracaoSection`, `MeuRHNfseSection`
+  - **Documentos** — conteúdo atual: `MeuRHDocumentosSection`
+  - **Políticas MCF** — placeholder com mensagem "Em breve"
+  - **Fale com o RH** — placeholder com mensagem "Em breve"
+  - **Avaliações** — conteúdo atual: `MeuRHAvaliacoesSection`
+  - **PDI** — placeholder com mensagem "Em breve"
+  - **Comunicados** — placeholder com mensagem "Em breve"
+  - **Histórico** — conteúdo atual: `MeuRHHistoricoSection`
+
+**Arquivo 2: `src/components/meu-rh/MeuRHQuickActions.tsx`** — Novo componente:
+- 4 botões com ícones: "Enviar NFSe" (só PJ), "Abrir Solicitação", "Ver Documentos", "Ver PDI"
+- Cada botão dispara callback para trocar aba ou abrir modal
+
+**Arquivo 3: `src/components/meu-rh/MeuRHQuickCards.tsx`** — Novo componente:
+- Grid de 4 mini-cards substituindo `MeuRHVinculoSection`
+- Cards: Status (com badge colorido), Tipo de contrato, Jornada, Local de atuação
+- Adicionar indicador de pendências (ex: NFSe pendente em vermelho)
+
+**Arquivo 4: `src/components/meu-rh/MeuRHVinculoSection.tsx`** — Remover (substituído por QuickCards)
+
+### O que NÃO muda
+- `MeuRHHeader`, `MeuRHDadosPessoaisSection`, `MeuRHRemuneracaoSection`, `MeuRHNfseSection`, `MeuRHDocumentosSection`, `MeuRHAvaliacoesSection`, `MeuRHHistoricoSection` — todos mantidos como estão, apenas reorganizados dentro das abas
+- Nenhuma mudança no banco de dados nesta fase
+- Abas "Políticas", "Fale com RH", "PDI" e "Comunicados" ficam como placeholder para Fase 2
 
