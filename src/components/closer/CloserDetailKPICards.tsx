@@ -74,7 +74,7 @@ export function CloserDetailKPICards({
 }: CloserDetailKPICardsProps) {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
         {[...Array(7)].map((_, i) => (
           <Card key={i} className="bg-card border-border">
             <CardContent className="p-4">
@@ -107,7 +107,7 @@ export function CloserDetailKPICards({
     : 0;
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
       <KPICard
         title="R1 Agendada"
         value={m.r1_agendada}
@@ -153,6 +153,12 @@ export function CloserDetailKPICards({
         average={teamAverages.avgTaxaConversao}
         icon={TrendingUp}
         format={(v) => `${v.toFixed(1)}%`}
+      />
+      <KPICard
+        title="R2 Agendada"
+        value={m.r2_agendada}
+        average={teamAverages.avgR2Agendada}
+        icon={Calendar}
       />
     </div>
   );

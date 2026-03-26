@@ -44,7 +44,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje }: TeamKP
       tooltip: "Total de reuniões agendadas no período"
     },
     {
-      title: "Realizadas",
+      title: "R1 Realizada",
       value: kpis.totalRealizadas,
       icon: CheckCircle,
       color: "text-green-500",
