@@ -145,10 +145,7 @@ export default function MeuRH() {
         </TabsContent>
 
         <TabsContent value="politicas">
-          <PlaceholderTab
-            title="Políticas da MCF"
-            description="Em breve você terá acesso à biblioteca de políticas, diretrizes internas, código de conduta e materiais institucionais."
-          />
+          <MeuRHPoliticasSection />
         </TabsContent>
 
         <TabsContent value="fale-rh">
@@ -164,10 +161,7 @@ export default function MeuRH() {
         </TabsContent>
 
         <TabsContent value="comunicados">
-          <PlaceholderTab
-            title="Comunicados"
-            description="Em breve você verá aniversariantes do mês, recados da gestão e avisos da empresa."
-          />
+          <MeuRHComunicadosSection />
         </TabsContent>
 
         <TabsContent value="historico">
