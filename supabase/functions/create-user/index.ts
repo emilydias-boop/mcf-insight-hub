@@ -172,14 +172,20 @@ Deno.serve(async (req) => {
         }
       } else {
         // Create employee record linked to cargo
-        const { error: empCreateError } = await supabaseAdmin
-          .from("employees")
-          .insert({
+        const employeeData: Record<string, any> = {
             user_id: newUser.user.id,
             nome_completo: full_name,
             email_pessoal: email,
+            email_corporativo: email,
             cargo_catalogo_id: cargo_id,
-          });
+        };
+        // Set squad on employee so the trigger syncs everything
+        if (squad) {
+          employeeData.squad = squad;
+        }
+        const { error: empCreateError } = await supabaseAdmin
+          .from("employees")
+          .insert(employeeData);
         
         if (empCreateError) {
           console.error("Error creating employee:", empCreateError);
