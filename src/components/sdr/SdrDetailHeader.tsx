@@ -17,8 +17,6 @@ export function SdrDetailHeader({
   cargo = "SDR",
   squad = "Inside Sales",
   status = "Ativo",
-  startDate,
-  endDate,
   onBack,
 }: SdrDetailHeaderProps) {
   return (
