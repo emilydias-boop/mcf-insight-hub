@@ -171,11 +171,11 @@ export default function SdrMeetingsDetailPage() {
           {/* Auto Summary */}
           <SdrAutoSummary text={perfData.summaryText} isLoading={perfData.isLoading} />
 
-          {/* KPI Cards */}
-          <SdrDetailKPICards metrics={perfData.metrics} isLoading={perfData.isLoading} />
-
-          {/* Projection */}
-          <SdrProjectionCard data={perfData.projection} isLoading={perfData.isLoading} />
+          {/* KPI Cards + Projection side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
+            <SdrDetailKPICards metrics={perfData.metrics} isLoading={perfData.isLoading} />
+            <SdrProjectionCard data={perfData.projection} isLoading={perfData.isLoading} />
+          </div>
 
           {/* Meta vs Realizado + Funnel */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
