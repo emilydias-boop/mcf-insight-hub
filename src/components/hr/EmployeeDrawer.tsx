@@ -3,7 +3,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Employee, EMPLOYEE_STATUS_LABELS } from '@/types/hr';
 import { useEmployees } from '@/hooks/useEmployees';
-import { User, DollarSign, FileText, History, StickyNote, Calendar, Users, Shield, ClipboardList } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { User, DollarSign, FileText, History, StickyNote, Calendar, Users, Shield, ClipboardList, Clock, ShieldAlert } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import EmployeeGeneralTab from './tabs/EmployeeGeneralTab';
@@ -14,6 +15,8 @@ import EmployeeHistoryTab from './tabs/EmployeeHistoryTab';
 import EmployeeNotesTab from './tabs/EmployeeNotesTab';
 import EmployeePermissionsTab from './tabs/EmployeePermissionsTab';
 import EmployeeExamsTab from './tabs/EmployeeExamsTab';
+import EmployeeTimeTab from './tabs/EmployeeTimeTab';
+import EmployeeComplianceTab from './tabs/EmployeeComplianceTab';
 
 interface EmployeeDrawerProps {
   employee: Employee | null;
@@ -23,6 +26,7 @@ interface EmployeeDrawerProps {
 
 export default function EmployeeDrawer({ employee, open, onOpenChange }: EmployeeDrawerProps) {
   const { data: employees } = useEmployees();
+  const { session } = useAuth();
   
   if (!employee) return null;
 
@@ -32,6 +36,13 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
     : null;
 
   const isPJ = employee.tipo_contrato === 'PJ';
+
+  // Check if user has admin/rh/manager role for compliance visibility
+  const userRole = (session?.user as any)?.user_metadata?.role || 
+    (session as any)?.user?.app_metadata?.role || '';
+  const jwtClaims = (session as any)?.user?.app_metadata || {};
+  const effectiveRole = jwtClaims.user_role || userRole;
+  const canSeeCompliance = ['admin', 'manager', 'rh'].includes(effectiveRole?.toLowerCase?.() || '');
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -44,7 +55,6 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
             <div className="flex-1 min-w-0">
               <SheetTitle className="text-xl truncate">{employee.nome_completo}</SheetTitle>
               
-              {/* Cargo + Status */}
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="text-sm text-muted-foreground">{employee.cargo || 'Sem cargo'}</span>
                 <Badge className={EMPLOYEE_STATUS_LABELS[employee.status].color}>
@@ -52,7 +62,6 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
                 </Badge>
               </div>
 
-              {/* Datas e informações adicionais */}
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
                 {employee.data_admissao && (
                   <div className="flex items-center gap-1">
@@ -68,7 +77,6 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
                 )}
               </div>
 
-              {/* Squad e Gestor */}
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 {employee.squad && (
                   <Badge variant="outline" className="text-xs">
@@ -108,8 +116,18 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
             </TabsTrigger>
             <TabsTrigger value="historico" className="flex items-center gap-1">
               <History className="h-3 w-3" />
-              <span className="hidden sm:inline">Hist.</span>
+              <span className="hidden sm:inline">Desemp.</span>
             </TabsTrigger>
+            <TabsTrigger value="tempo" className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              <span className="hidden sm:inline">Tempo</span>
+            </TabsTrigger>
+            {canSeeCompliance && (
+              <TabsTrigger value="compliance" className="flex items-center gap-1">
+                <ShieldAlert className="h-3 w-3" />
+                <span className="hidden sm:inline">Compl.</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="notas" className="flex items-center gap-1">
               <StickyNote className="h-3 w-3" />
               <span className="hidden sm:inline">Notas</span>
@@ -145,6 +163,16 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
           <TabsContent value="historico" className="mt-4">
             <EmployeeHistoryTab employee={employee} />
           </TabsContent>
+
+          <TabsContent value="tempo" className="mt-4">
+            <EmployeeTimeTab employee={employee} />
+          </TabsContent>
+
+          {canSeeCompliance && (
+            <TabsContent value="compliance" className="mt-4">
+              <EmployeeComplianceTab employee={employee} />
+            </TabsContent>
+          )}
 
           <TabsContent value="notas" className="mt-4">
             <EmployeeNotesTab employee={employee} />

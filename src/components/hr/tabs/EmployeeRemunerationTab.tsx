@@ -17,7 +17,41 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { DollarSign, TrendingUp, Calendar, AlertCircle, Pencil, X, Save, Plus, FileText, Trash2, Eye, Download, Loader2 } from 'lucide-react';
+import { DollarSign, TrendingUp, Calendar, AlertCircle, Pencil, X, Save, Plus, FileText, Trash2, Eye, Download, Loader2, ArrowRight } from 'lucide-react';
+import { useEmployeeEvents } from '@/hooks/useEmployees';
+
+function EmployeeRemunerationHistory({ employeeId }: { employeeId: string }) {
+  const { data: events } = useEmployeeEvents(employeeId);
+  const salaryEvents = events?.filter(e => 
+    ['reajuste', 'promocao', 'ajuste_salarial'].includes(e.tipo_evento)
+  ) || [];
+
+  if (salaryEvents.length === 0) {
+    return <p className="text-sm text-muted-foreground">Nenhuma alteração registrada.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {salaryEvents.slice(0, 10).map(event => (
+        <div key={event.id} className="flex items-center justify-between p-2 rounded border text-sm">
+          <div>
+            <span className="font-medium">{event.titulo}</span>
+            <span className="text-xs text-muted-foreground ml-2">
+              {format(new Date(event.data_evento), 'dd/MM/yyyy', { locale: ptBR })}
+            </span>
+          </div>
+          {(event.valor_anterior || event.valor_novo) && (
+            <div className="flex items-center gap-1 text-xs">
+              {event.valor_anterior && <span className="line-through text-muted-foreground">{event.valor_anterior}</span>}
+              {event.valor_anterior && event.valor_novo && <ArrowRight className="h-3 w-3" />}
+              {event.valor_novo && <span className="text-green-600 font-medium">{event.valor_novo}</span>}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 import { toast } from 'sonner';
 
 interface EmployeeRemunerationTabProps {
@@ -399,6 +433,19 @@ export default function EmployeeRemunerationTab({ employee }: EmployeeRemunerati
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Histórico de Alterações Salariais */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" />
+            Histórico de Alterações
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EmployeeRemunerationHistory employeeId={employee.id} />
         </CardContent>
       </Card>
 

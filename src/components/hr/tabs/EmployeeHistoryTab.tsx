@@ -28,7 +28,8 @@ import {
   UserMinus,
   RefreshCcw,
   DollarSign,
-  LogOut
+  LogOut,
+  Download
 } from 'lucide-react';
 
 interface EmployeeHistoryTabProps {
@@ -151,7 +152,29 @@ export default function EmployeeHistoryTab({ employee }: EmployeeHistoryTabProps
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <Button variant="outline" size="sm" onClick={() => {
+          import('@/lib/exportEmployees').then(mod => {
+            // Export timeline as simple XLSX
+            const rows = (events || []).map(e => ({
+              Data: format(new Date(e.data_evento), 'dd/MM/yyyy', { locale: ptBR }),
+              Tipo: EVENT_TYPES.find(t => t.value === e.tipo_evento)?.label || e.tipo_evento,
+              Título: e.titulo,
+              Descrição: e.descricao || '',
+              'Valor Anterior': e.valor_anterior || '',
+              'Valor Novo': e.valor_novo || '',
+            }));
+            import('xlsx').then(XLSX => {
+              const ws = XLSX.utils.json_to_sheet(rows);
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, 'Histórico');
+              XLSX.writeFile(wb, `historico-${employee.nome_completo.replace(/\s+/g, '_')}.xlsx`);
+            });
+          });
+        }}>
+          <Download className="h-4 w-4 mr-2" />
+          Exportar
+        </Button>
         <Button variant="outline" onClick={openCreateDialog}>
           <Plus className="h-4 w-4 mr-2" />
           Adicionar Evento
