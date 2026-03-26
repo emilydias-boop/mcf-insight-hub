@@ -7913,6 +7913,68 @@ export type Database = {
           },
         ]
       }
+      rh_tickets: {
+        Row: {
+          anexo_storage_path: string | null
+          anexo_url: string | null
+          assunto: string
+          created_at: string
+          data_abertura: string
+          data_atualizacao: string
+          data_encerramento: string | null
+          descricao: string
+          employee_id: string
+          id: string
+          respondido_por: string | null
+          resposta_rh: string | null
+          status: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          anexo_storage_path?: string | null
+          anexo_url?: string | null
+          assunto: string
+          created_at?: string
+          data_abertura?: string
+          data_atualizacao?: string
+          data_encerramento?: string | null
+          descricao: string
+          employee_id: string
+          id?: string
+          respondido_por?: string | null
+          resposta_rh?: string | null
+          status?: string
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          anexo_storage_path?: string | null
+          anexo_url?: string | null
+          assunto?: string
+          created_at?: string
+          data_abertura?: string
+          data_atualizacao?: string
+          data_encerramento?: string | null
+          descricao?: string
+          employee_id?: string
+          id?: string
+          respondido_por?: string | null
+          resposta_rh?: string | null
+          status?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_tickets_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_permissions: {
         Row: {
           bu: string | null
