@@ -177,11 +177,11 @@ export default function SdrMeetingsDetailPage() {
             <SdrProjectionCard data={perfData.projection} isLoading={perfData.isLoading} />
           </div>
 
-          {/* Funnel */}
-          <SdrFunnelPanel funnel={perfData.funnel} isLoading={perfData.isLoading} />
-
-          {/* Daily chart */}
-          <SdrCumulativeChart dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
+          {/* Funnel + Daily chart side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <SdrFunnelPanel funnel={perfData.funnel} isLoading={perfData.isLoading} />
+            <SdrCumulativeChart dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
+          </div>
 
           {/* Team Comparison */}
           <SdrTeamComparisonPanel data={perfData.teamComparison} isLoading={perfData.isLoading} />
