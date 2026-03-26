@@ -14,7 +14,6 @@ const SDR_CONFIG = [
   { email: 'juliana.rodrigues@minhacasafinanciada.com', profileId: 'baa6047c-6b41-42ef-bfd0-248eef9b560a', name: 'Juliana Rodrigues' },
   { email: 'leticia.nunes@minhacasafinanciada.com', profileId: 'c1ede6ed-e3ae-465f-91dd-a708200a85fc', name: 'Leticia Nunes' },
   { email: 'antony.elias@minhacasafinanciada.com', profileId: '70113bef-a779-414c-8ab4-ce8b13229d3a', name: 'Antony Elias' },
-  { email: 'jessica.martins@minhacasafinanciada.com', profileId: 'b0ea004d-ca72-4190-ab69-a9685b34bd06', name: 'Jessica Martins' },
   { email: 'alex.dias@minhacasafinanciada.com', profileId: '16c5d025-9cda-45fa-ae2f-7170bfb8dee8', name: 'Alex Dias' },
 ];
 

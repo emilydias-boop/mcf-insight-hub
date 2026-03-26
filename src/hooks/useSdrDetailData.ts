@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useTeamMeetingsData, SdrSummaryRow } from "./useTeamMeetingsData";
 import { MeetingV2 } from "./useSdrMetricsV2";
-import { SDR_LIST } from "@/constants/team";
+import { useSdrsFromSquad } from "./useSdrsFromSquad";
 
 export interface TeamAverages {
   avgAgendamentos: number;
@@ -46,20 +46,22 @@ interface UseSdrDetailParams {
 
 export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailParams): SdrDetailData {
   const teamData = useTeamMeetingsData({ startDate, endDate });
+  const sdrsQuery = useSdrsFromSquad("inside_sales");
 
-  // Find SDR info from constants
+  // Find SDR info from database (dynamic, no hardcoded list)
   const sdrInfo = useMemo(() => {
-    const sdrFromList = SDR_LIST.find(s => s.email.toLowerCase() === sdrEmail.toLowerCase());
-    if (!sdrFromList) return null;
+    const sdrs = sdrsQuery.data || [];
+    const sdrFromDb = sdrs.find(s => s.email?.toLowerCase() === sdrEmail.toLowerCase());
+    if (!sdrFromDb) return null;
     
     return {
-      email: sdrFromList.email,
-      name: sdrFromList.nome,
-      cargo: "SDR",
+      email: sdrFromDb.email || sdrEmail,
+      name: sdrFromDb.name,
+      cargo: sdrFromDb.role_type || "SDR",
       squad: "Inside Sales",
       status: "Ativo",
     };
-  }, [sdrEmail]);
+  }, [sdrEmail, sdrsQuery.data]);
 
   // Get specific SDR metrics
   const sdrMetrics = useMemo(() => {
@@ -115,23 +117,18 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
       };
     }
 
-    // Agendamentos (higher is better)
     const byAgendamentos = [...sdrs].sort((a, b) => b.agendamentos - a.agendamentos);
     const agendamentosRank = byAgendamentos.findIndex(s => s.sdrEmail === sdrEmail) + 1;
 
-    // R1 Agendada (higher is better)
     const byR1Agendada = [...sdrs].sort((a, b) => b.r1Agendada - a.r1Agendada);
     const r1AgendadaRank = byR1Agendada.findIndex(s => s.sdrEmail === sdrEmail) + 1;
 
-    // R1 Realizada (higher is better)
     const byR1Realizada = [...sdrs].sort((a, b) => b.r1Realizada - a.r1Realizada);
     const r1RealizadaRank = byR1Realizada.findIndex(s => s.sdrEmail === sdrEmail) + 1;
 
-    // Contratos (higher is better)
     const byContratos = [...sdrs].sort((a, b) => b.contratos - a.contratos);
     const contratosRank = byContratos.findIndex(s => s.sdrEmail === sdrEmail) + 1;
 
-    // Taxa Contrato (Contratos / R1 Realizada - higher % is better)
     const withTaxaContrato = sdrs.map(s => ({
       ...s,
       taxaContrato: s.r1Realizada > 0 ? (s.contratos / s.r1Realizada) * 100 : 0
@@ -161,8 +158,8 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
     ranking,
     meetings,
     allSdrs: teamData.bySDR,
-    isLoading: teamData.isLoading,
-    error: teamData.error,
+    isLoading: teamData.isLoading || sdrsQuery.isLoading,
+    error: teamData.error || sdrsQuery.error || null,
     refetch: teamData.refetch,
   };
 }
