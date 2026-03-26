@@ -15,8 +15,8 @@ export function SdrCumulativeChart({ dailyRows, isLoading }: SdrCumulativeChartP
   const chartData = useMemo(() => {
     return dailyRows.map((row) => ({
       date: format(row.date, "dd/MM", { locale: ptBR }),
-      realizado: row.accumulated,
-      meta: row.metaAccumulated,
+      realizado: row.realized,
+      meta: row.metaDiaria,
     }));
   }, [dailyRows]);
 
@@ -33,7 +33,7 @@ export function SdrCumulativeChart({ dailyRows, isLoading }: SdrCumulativeChartP
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
           <TrendingUp className="h-4 w-4 text-primary" />
-          Evolução Acumulada
+          Evolução Diária
         </CardTitle>
       </CardHeader>
       <CardContent className="p-4">

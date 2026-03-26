@@ -13,7 +13,7 @@ import { SdrDetailKPICards } from "@/components/sdr/SdrDetailKPICards";
 import { SdrProjectionCard } from "@/components/sdr/SdrProjectionCard";
 
 import { SdrFunnelPanel } from "@/components/sdr/SdrFunnelPanel";
-import { SdrMeetingsChart } from "@/components/sdr/SdrMeetingsChart";
+
 import { SdrCumulativeChart } from "@/components/sdr/SdrCumulativeChart";
 import { SdrTeamComparisonPanel } from "@/components/sdr/SdrTeamComparisonPanel";
 import { SdrDailyBreakdownTable } from "@/components/sdr/SdrDailyBreakdownTable";
@@ -180,17 +180,8 @@ export default function SdrMeetingsDetailPage() {
           {/* Funnel */}
           <SdrFunnelPanel funnel={perfData.funnel} isLoading={perfData.isLoading} />
 
-          {/* Daily chart + Cumulative */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <SdrMeetingsChart
-              meetings={perfData.meetings}
-              startDate={startDate}
-              endDate={endDate}
-              isLoading={perfData.isLoading}
-              metaDiaria={perfData.metaDiaria}
-            />
-            <SdrCumulativeChart dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
-          </div>
+          {/* Daily chart */}
+          <SdrCumulativeChart dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
 
           {/* Team Comparison */}
           <SdrTeamComparisonPanel data={perfData.teamComparison} isLoading={perfData.isLoading} />
