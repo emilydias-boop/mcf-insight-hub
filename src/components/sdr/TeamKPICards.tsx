@@ -1,5 +1,4 @@
 import { 
-  Users, 
   Calendar, 
   CheckCircle, 
   XCircle, 
@@ -27,15 +26,7 @@ interface TeamKPICardsProps {
 
 export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje }: TeamKPICardsProps) {
   const cards = [
-    {
-      title: "SDRs Ativos",
-      value: kpis.sdrCount,
-      icon: Users,
-      color: "text-cyan-500",
-      bgColor: "bg-cyan-500/10",
-      tooltip: "SDRs com atividade no período"
-    },
-    // Card condicional: Pendentes Hoje (2ª posição)
+    // Card condicional: Pendentes Hoje (1ª posição)
     ...(isToday ? [{
       title: "Pendentes Hoje",
       value: pendentesHoje ?? 0,
@@ -74,7 +65,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje }: TeamKP
       icon: FileText,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
-      tooltip: "Contratos pagos (excluindo outside)"
+      tooltip: "Contratos pagos via R1 (exclui outside)"
     },
     {
       title: "Outside",
@@ -104,7 +95,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje }: TeamKP
 
   return (
     <TooltipProvider>
-      <div className={`grid grid-cols-2 md:grid-cols-4 ${isToday ? 'lg:grid-cols-9' : 'lg:grid-cols-8'} gap-3`}>
+      <div className={`grid grid-cols-2 md:grid-cols-4 ${isToday ? 'lg:grid-cols-8' : 'lg:grid-cols-7'} gap-3`}>
         {cards.map((card) => (
           <Tooltip key={card.title}>
             <TooltipTrigger asChild>

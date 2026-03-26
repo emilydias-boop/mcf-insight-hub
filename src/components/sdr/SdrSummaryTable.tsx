@@ -52,6 +52,26 @@ export function SdrSummaryTable({
     return rankMap;
   }, [data]);
 
+  // Calculate totals
+  const totals = useMemo(() => {
+    return data.reduce(
+      (acc, row) => ({
+        agendamentos: acc.agendamentos + row.agendamentos,
+        r1Agendada: acc.r1Agendada + row.r1Agendada,
+        r1Realizada: acc.r1Realizada + row.r1Realizada,
+        noShows: acc.noShows + row.noShows,
+        contratos: acc.contratos + row.contratos,
+      }),
+      { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0 }
+    );
+  }, [data]);
+
+  const totalTaxaContrato = totals.r1Realizada > 0 
+    ? ((totals.contratos / totals.r1Realizada) * 100) : 0;
+
+  const totalTaxaNoShow = totals.r1Agendada > 0 
+    ? ((totals.noShows / totals.r1Agendada) * 100) : 0;
+
   if (isLoading) {
     return (
       <div className="space-y-2 p-4">
@@ -84,7 +104,6 @@ export function SdrSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Contrato PAGO</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa Contrato</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">% Presença</TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
           </TableHeader>
@@ -93,17 +112,6 @@ export function SdrSummaryTable({
               const metaDiaria = sdrMetaMap?.get(row.sdrEmail.toLowerCase()) || 10;
               const metaPeriodo = metaDiaria * (diasUteisNoPeriodo || 1);
               const bateuMeta = row.agendamentos >= metaPeriodo;
-
-              const taxaConversao = row.r1Agendada > 0 
-                ? ((row.r1Realizada / row.r1Agendada) * 100)
-                : 0;
-              const taxaConversaoFormatted = taxaConversao.toFixed(1);
-
-              const taxaColorClass = taxaConversao >= 70 
-                ? 'text-green-400' 
-                : taxaConversao >= 40 
-                  ? 'text-amber-400' 
-                  : 'text-red-400';
 
               const taxaContrato = row.r1Realizada > 0 
                 ? ((row.contratos / row.r1Realizada) * 100)
@@ -129,8 +137,8 @@ export function SdrSummaryTable({
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
-                    <span className={`font-medium ${bateuMeta ? 'text-green-400' : 'text-amber-400'}`}>
-                      {metaPeriodo}
+                    <span className={`font-medium ${bateuMeta ? 'text-green-400' : 'text-red-400'}`}>
+                      {row.agendamentos}/{metaPeriodo}
                     </span>
                   </TableCell>
                   <TableCell className="text-center">
@@ -173,9 +181,6 @@ export function SdrSummaryTable({
                       <span className={`font-medium ${taxaContratoColorClass}`}>{taxaContratoFormatted}%</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-center">
-                    <span className={`font-medium ${taxaColorClass}`}>{taxaConversaoFormatted}%</span>
-                  </TableCell>
                   {!disableNavigation && (
                     <TableCell>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -184,6 +189,52 @@ export function SdrSummaryTable({
                 </TableRow>
               );
             })}
+
+            {/* Totals Row */}
+            <TableRow className="bg-muted/30 font-semibold border-t-2 border-border">
+              <TableCell className="text-foreground">Total</TableCell>
+              <TableCell className="text-center text-muted-foreground">—</TableCell>
+              <TableCell className="text-center">
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                  {totals.agendamentos}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-center">
+                <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                  {totals.r1Agendada}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className="text-green-400">{totals.r1Realizada}</span>
+              </TableCell>
+              <TableCell className="text-center">
+                <div className="flex flex-col items-center">
+                  <span className="text-red-400">{totals.noShows}</span>
+                  {totals.r1Agendada > 0 && (
+                    <span className={`text-xs ${
+                      totalTaxaNoShow <= 20 ? 'text-green-400' 
+                        : totalTaxaNoShow <= 35 ? 'text-amber-400' 
+                        : 'text-red-400'
+                    }`}>
+                      ({totalTaxaNoShow.toFixed(1)}%)
+                    </span>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className="text-amber-400">{totals.contratos}</span>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className={`font-medium ${
+                  totalTaxaContrato >= 20 ? 'text-green-400' 
+                    : totalTaxaContrato >= 10 ? 'text-amber-400' 
+                    : 'text-red-400'
+                }`}>
+                  {totalTaxaContrato.toFixed(1)}%
+                </span>
+              </TableCell>
+              {!disableNavigation && <TableCell />}
+            </TableRow>
           </TableBody>
         </Table>
       </div>
