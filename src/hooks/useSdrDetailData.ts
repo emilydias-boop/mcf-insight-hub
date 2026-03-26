@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { useTeamMeetingsData, SdrSummaryRow } from "./useTeamMeetingsData";
 import { MeetingV2 } from "./useSdrMetricsV2";
 import { useSdrsFromSquad } from "./useSdrsFromSquad";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface TeamAverages {
   avgAgendamentos: number;
