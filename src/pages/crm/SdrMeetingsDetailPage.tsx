@@ -70,8 +70,6 @@ export default function SdrMeetingsDetailPage() {
     endDate,
   });
 
-  const handleBack
-
   const handleBack = () => {
     // Navigate back preserving filters
     const params = new URLSearchParams();
