@@ -1,23 +1,55 @@
 
 
-## Corrigir duplicidade de período e botão solto
+## Melhorar legibilidade dos KPI Cards do SDR
 
-### Problemas identificados
+### Problema
 
-1. **Período exibido 2 vezes**: no `SdrDetailHeader` (badge "Período: 01/03/2026 - 31/03/2026") e no `SdrPerformanceFilters` (texto "01/03/2026 — 31/03/2026" à direita)
-2. **Botão "Atualizar" solto**: fica em um `div` próprio entre os filtros e as tabs, criando espaço desnecessário
+Cada card mostra 5 informações em texto minúsculo (11px) sem hierarquia clara:
+- **Meta: 198** e **70%** na mesma linha — não fica claro que 70% é o atingimento
+- **Gap: -59** — termo técnico, muitos gestores não entendem de primeira
+- **↗ +31%** — não explica que é comparação com período anterior
+- Tudo tem a mesma cor e tamanho, vira "sopa de números"
 
 ### Solução
 
+Reorganizar cada card com **hierarquia visual clara** e **labels descritivos**:
+
+```text
+┌─────────────────────────┐
+│  AGENDAMENTOS           │
+│  139                    │  ← valor grande, destaque
+│                         │
+│  ████████████░░░░  70%  │  ← barra com % atingimento
+│  Meta: 198              │  ← abaixo da barra, contexto
+│                         │
+│  🔴 Faltam 59           │  ← em vez de "Gap: -59"
+│  📈 +31% vs anterior    │  ← label explícito
+└─────────────────────────┘
+```
+
+### Mudanças concretas no `SdrDetailKPICards.tsx`
+
+1. **Trocar "Gap: -X"** por linguagem natural:
+   - Negativo → "Faltam 59" (vermelho)
+   - Positivo → "Acima: +5" (verde)
+   - Zero → "Na meta ✓" (verde)
+
+2. **Trocar "↗ +31%"** por "**+31% vs anterior**" — adicionar o texto "vs anterior" para contextualizar
+
+3. **Reordenar layout** do card:
+   - Título (11px uppercase)
+   - Valor realizado (2xl bold)
+   - Barra de progresso com % de atingimento à direita
+   - Meta abaixo da barra (texto discreto)
+   - Linha final: gap humanizado à esquerda, variação com label à direita
+
+4. **Adicionar Tooltip** em cada card com explicação completa (ex: "Agendamentos realizados no período vs meta calculada. Comparação com o mesmo período do mês anterior.")
+
+### Arquivo afetado
+
 | Arquivo | Ação |
 |---------|------|
-| `SdrDetailHeader.tsx` | Remover o badge de período (linhas 72-77) — o período já está controlado e exibido nos filtros |
-| `SdrPerformanceFilters.tsx` | Adicionar o botão "Atualizar" dentro da barra de filtros, ao lado do texto de período (à direita) |
-| `SdrMeetingsDetailPage.tsx` | Remover o `div` standalone do botão Atualizar (linhas 167-172), passar `onRefresh` e `isLoading` como props ao `SdrPerformanceFilters` |
+| `SdrDetailKPICards.tsx` | Reescrever layout interno do `KPICard` — mesma estrutura de dados, apresentação mais clara |
 
-### Resultado
-
-- Header mostra apenas nome, cargo, squad e status
-- Filtros ficam com: Período | Comparação | Meta | datas | botão Atualizar — tudo numa linha
-- Zero espaço desperdiçado entre filtros e conteúdo
+Nenhuma mudança em hooks ou dados — apenas apresentação visual.
 
