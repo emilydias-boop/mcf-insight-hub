@@ -14,11 +14,9 @@ import { SdrDetailKPICards } from "@/components/sdr/SdrDetailKPICards";
 import { SdrMeetingsChart } from "@/components/sdr/SdrMeetingsChart";
 import { SdrRankingBlock } from "@/components/sdr/SdrRankingBlock";
 import { SdrLeadsTable } from "@/components/sdr/SdrLeadsTable";
-import { SdrDealsTable } from "@/components/sdr/SdrDealsTable";
 import { MeetingDetailsDrawer } from "@/components/sdr/MeetingDetailsDrawer";
 
 import { useSdrDetailData } from "@/hooks/useSdrDetailData";
-import { useSdrDeals } from "@/hooks/useSdrDeals";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { Meeting } from "@/hooks/useSdrMeetings";
 
@@ -142,7 +140,6 @@ export default function SdrMeetingsDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="leads">Reuniões ({meetings.length})</TabsTrigger>
-          <TabsTrigger value="deals">Todos os Negócios ({sdrDeals.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -191,16 +188,6 @@ export default function SdrMeetingsDetailPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="deals">
-          <Card className="bg-card border-border">
-            <CardContent className="p-4">
-              <SdrDealsTable
-                deals={sdrDeals}
-                isLoading={isLoadingDeals}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
 
       {/* Meeting Details Drawer */}

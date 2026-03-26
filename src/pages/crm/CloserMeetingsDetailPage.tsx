@@ -7,7 +7,7 @@ import { useActiveBU } from "@/hooks/useActiveBU";
 import { RefreshCw } from "lucide-react";
 import { ManualSaleAttributionDialog } from "@/components/closer/ManualSaleAttributionDialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CloserDetailHeader } from "@/components/closer/CloserDetailHeader";
 import { CloserDetailKPICards } from "@/components/closer/CloserDetailKPICards";
@@ -136,49 +136,12 @@ export default function CloserMeetingsDetailPage() {
           />
 
           {/* Ranking Block */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <CloserRankingBlock
-              closerMetrics={closerMetrics}
-              ranking={ranking}
-              teamAverages={teamAverages}
-              isLoading={isLoading}
-            />
-            
-            {/* Quick Stats Card */}
-            <Card className="bg-card border-border">
-              <CardContent className="p-6">
-                <h3 className="text-lg font-semibold text-foreground mb-4">Resumo do Período</h3>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Total de Leads Realizados</span>
-                    <span className="text-xl font-bold text-green-400">
-                      {closerMetrics?.r1_realizada || 0}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Contratos Fechados</span>
-                    <span className="text-xl font-bold text-amber-400">
-                      {closerMetrics?.contrato_pago || 0}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Taxa de Conversão</span>
-                    <span className="text-xl font-bold text-blue-400">
-                      {closerMetrics?.r1_realizada && closerMetrics.r1_realizada > 0
-                        ? ((closerMetrics.contrato_pago / closerMetrics.r1_realizada) * 100).toFixed(1)
-                        : '0.0'}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">R2 Agendadas</span>
-                    <span className="text-xl font-bold text-purple-400">
-                      {closerMetrics?.r2_agendada || 0}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <CloserRankingBlock
+            closerMetrics={closerMetrics}
+            ranking={ranking}
+            teamAverages={teamAverages}
+            isLoading={isLoading}
+          />
         </TabsContent>
 
         <TabsContent value="leads">
