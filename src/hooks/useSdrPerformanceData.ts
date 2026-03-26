@@ -245,7 +245,7 @@ export function useSdrPerformanceData({
         compVariation: null,
         format: "percent" as const,
       },
-      makeMetric("No-Show", "noShows", noshows, Math.round(metas.r1AgendadaMeta * 0.3), "noShows"),
+      makeMetric("No-Show", "noShows", noshows, metas.noShowMeta, "noShows"),
       {
         label: "Taxa Contato",
         key: "taxaContato",
