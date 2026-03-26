@@ -1,40 +1,82 @@
 
 
-## Remover Jessica Martins dos SDRs + Eliminar listas hardcoded desnecessárias
+## Sincronização bidirecional: Colaborador ↔ Usuário (squad/BU)
 
-### Problema
-Existem **3 listas hardcoded** de SDRs que precisam de manutenção manual toda vez que alguém entra/sai:
+### Problema atual
 
-1. **`SDR_LIST`** em `src/constants/team.ts` — usada por `useSdrDetailData` e `useSalesCelebration`
-2. **`SDR_CONFIG`** em `supabase/functions/distribute-leads-list/index.ts` — edge function de distribuição com lista fixa de 8 SDRs + 200 emails de leads
-3. **Tabela `sdr`** no banco — fonte dinâmica já usada por `useSdrsFromSquad`
+Existem **duas tabelas independentes** que guardam BU/squad:
 
-O sistema já tem `useSdrsFromSquad` que consulta o banco dinamicamente. As listas hardcoded são redundantes e causam exatamente esse problema: Jessica Martins saiu de SDR para Closer R2 mas continua aparecendo porque ninguém atualizou as constantes.
+| Tabela | Campo | Tipo | Usado para |
+|--------|-------|------|------------|
+| `profiles` | `squad` | `TEXT[]` (array) | Sidebar, permissões, menu, painel comercial |
+| `employees` | `squad` | `TEXT` (texto simples) | Ficha de RH, filtros de colaborador |
+
+Quando você altera o squad no Colaborador (employees), o `profiles.squad` **não muda**. E vice-versa. Resultado: o SDR não vê o menu porque o `profiles.squad` continua vazio, mesmo tendo squad definido na ficha de RH.
+
+### Solução: 2 triggers SQL de sincronização
+
+**Trigger 1 — employees → profiles**
+Quando `employees.squad` ou `employees.departamento` muda e o employee tem `profile_id`, atualizar `profiles.squad` com o valor equivalente mapeado (ex: departamento "BU - Incorporador 50K" → squad `['incorporador']`).
+
+**Trigger 2 — profiles → employees**
+Quando `profiles.squad` muda, encontrar o employee vinculado via `profile_id` e atualizar `employees.squad` com o valor correspondente.
+
+Também sincronizar a tabela `sdr` (campo `squad`) para manter tudo consistente.
+
+### Mapeamento departamento → squad (já existe no trigger `auto_link_employee_sdr`)
+
+```text
+departamento ILIKE '%incorporador%' → 'incorporador'
+departamento ILIKE '%consórcio%'    → 'consorcio'  
+departamento ILIKE '%crédito%'      → 'credito'
+departamento ILIKE '%leilão%'       → 'leilao'
+departamento ILIKE '%marketing%'    → 'marketing'
+departamento ILIKE '%projetos%'     → 'projetos'
+```
 
 ### Ações
 
 | # | Ação | Arquivo |
 |---|------|---------|
-| 1 | **Remover Jessica Martins do `SDR_LIST`** | `src/constants/team.ts` (linha 7) |
-| 2 | **Remover Jessica Martins do `SDR_CONFIG`** | `supabase/functions/distribute-leads-list/index.ts` (linha 17) |
-| 3 | **Refatorar `useSdrDetailData`** para buscar info do SDR via banco (`useSdrsFromSquad`) em vez de `SDR_LIST` | `src/hooks/useSdrDetailData.ts` |
-| 4 | **Refatorar `useSalesCelebration`** para buscar SDRs do banco em vez de validar contra `SDR_LIST` hardcoded | `src/hooks/useSalesCelebration.ts` |
-| 5 | **Atualizar banco** — setar `active = false` para Jessica Martins na tabela `sdr` | SQL UPDATE via insert tool |
+| 1 | **Criar migration** com 2 triggers de sync | `supabase/migrations/sync_squad_bidirectional.sql` |
+| 2 | **Corrigir dados existentes** | UPDATE na mesma migration para sincronizar todos os employees ativos com profiles desatualizados |
+| 3 | **Atualizar `create-user` edge function** | Quando cria employee, setar `squad` e `departamento` consistentes com o `profiles.squad` |
 
-### Resultado
-- `SDR_LIST` deixa de ser a fonte de verdade — o banco é a única fonte
-- Quando alguém entra/sai, basta atualizar a tabela `sdr` no banco (ou via tela de admin)
-- A edge function `distribute-leads-list` ainda mantém `SDR_CONFIG` hardcoded porque é uma function serverless sem acesso ao hook — mas Jessica sai dela
+### Detalhe dos triggers
 
-### Detalhe técnico
+**`sync_employee_squad_to_profile()`** — AFTER UPDATE OF squad, departamento ON employees:
+- Se `employees.squad` mudou e employee tem `profile_id`, faz `UPDATE profiles SET squad = ARRAY[NEW.squad]` (ou adiciona ao array existente se necessário)
+- Também atualiza `sdr.squad` se o SDR existe
 
-**`useSdrDetailData`** (linhas 50-60): trocar de:
-```ts
-const sdrFromList = SDR_LIST.find(...)
+**`sync_profile_squad_to_employee()`** — AFTER UPDATE OF squad ON profiles:
+- Encontra employee com `profile_id = NEW.id`
+- Atualiza `employees.squad` com o primeiro valor do array
+- Também atualiza `sdr.squad` se o SDR existe
+
+Ambos os triggers usam um guard para evitar loop infinito (um flag de sessão `pg_catalog.set_config('app.syncing_squad', 'true', true)`).
+
+### Correção de dados na mesma migration
+
+```sql
+-- Preencher profiles.squad para employees ativos com squad definido
+UPDATE profiles p
+SET squad = ARRAY[
+  CASE 
+    WHEN e.squad ILIKE '%incorporador%' THEN 'incorporador'
+    WHEN e.squad ILIKE '%consórcio%' THEN 'consorcio'
+    ...
+  END
+]::text[]
+FROM employees e
+WHERE e.profile_id = p.id
+  AND e.status = 'ativo'
+  AND e.squad IS NOT NULL
+  AND (p.squad IS NULL OR p.squad = '{}');
 ```
-Para consultar a tabela `sdr` diretamente via query inline ou reusar `useSdrsFromSquad`.
 
-**`useSalesCelebration`** (linhas 246, 268, 297): trocar validação `SDR_LIST.some(...)` por consulta ao banco (fetch SDRs ativos uma vez e cachear).
-
-**`distribute-leads-list`**: como é edge function serverless, a opção é consultar a tabela `sdr` dinamicamente em vez do array hardcoded — mas como primeiro passo, apenas remover Jessica.
+### Impacto
+- Alterar squad no Colaborador (RH) → perfil do usuário atualiza automaticamente → menu aparece
+- Alterar BU na aba de Usuário → ficha do colaborador atualiza automaticamente
+- Nunca mais precisará pedir aqui para corrigir manualmente
+- Zero mudança nos componentes frontend — apenas triggers SQL no banco
 
