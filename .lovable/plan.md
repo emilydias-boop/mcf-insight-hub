@@ -1,83 +1,103 @@
 
 
-## Evolucao da Tela de Colaboradores — Central Administrativa de Gestao de Pessoas
+## Evolucao do Drawer — Perfil Unico do Colaborador
 
 ### Visao geral
 
-Transformar a listagem atual em uma central gerencial com cards expandidos, filtros robustos, acoes rapidas, ordenacao de tabela e exportacao XLSX.
+Transformar o drawer de 8 abas em um perfil 360 com 10 abas. As 8 abas existentes serao mantidas e enriquecidas, e 2 novas abas serao criadas: **Gestao de Tempo** e **Compliance**.
 
-### 1. Cards gerenciais expandidos (8 cards, grid 2x4)
+### Mudancas por aba
 
-Manter os 4 atuais (Total, Ativos, Em Experiencia, NFSe Pendente) e adicionar:
-- **Turnover**: desligados nos ultimos 30 dias / headcount ativo (%)
-- **Pendencias RH**: count de `rh_tickets` com status != `finalizado`
-- **Red Flags**: count de `user_flags` com `is_resolved = false` (via query direta)
-- **Chamados Abertos**: count de `rh_tickets` com status `aberto` ou `em_andamento`
+**1. Geral** — Ja completa. Sem mudancas.
 
-Queries adicionais no proprio componente via `useQuery` direto no Supabase (sem tabelas novas).
+**2. Remuneracao** — Ja inclui fixo/variavel/OTE/bancario/NFSe. Adicionar:
+- Subsecao "Historico de Alteracoes" mostrando events do tipo `ajuste_salarial`, `promocao` filtrados de `employee_events`
+- Cards visuais de resumo (Fixo atual, OTE, Nivel)
 
-### 2. Filtros robustos
+**3. NFSe** — Ja completa. Sem mudancas estruturais.
 
-Substituir a barra de filtros atual por uma linha mais completa:
-- **Busca** (nome, cargo, squad — ja existe)
-- **Status** (ativo, ferias, afastado, desligado — ja existe)
-- **Cargo** (ja existe, manter dinamico)
-- **Squad** (ja existe)
-- **Tipo de contrato**: PJ / CLT / Estagio (novo select, valores dinamicos)
-- **Gestor**: select com gestores unicos extraidos dos employees (novo)
-- **Area/Departamento**: select dinamico (novo)
+**4. Documentos** — Ja tem upload/download/CRUD. Adicionar:
+- Categorias visuais agrupadas: "Contrato", "Job Description", "Plano de Carreira", "Pessoais", "Outros"
+- Filtro por categoria no topo
 
-Adicionar botao "Limpar filtros" quando houver filtro ativo e contador de resultados.
+**5. Historico e Desempenho** (renomear de "Hist.") — Ja tem timeline de events. Adicionar:
+- Subsecao "Avaliacoes de Desempenho" (puxar do `employee_exams` existente)
+- Campo de observacoes
+- Botao exportar Excel/PDF da timeline
 
-### 3. Acoes rapidas no topo
+**6. Gestao de Tempo** (NOVA) — Nova tabela `employee_time_records`:
+```sql
+CREATE TABLE employee_time_records (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL CHECK (tipo IN ('ferias','ausencia_justificada','ausencia_injustificada','atestado','licenca')),
+  data_inicio DATE NOT NULL,
+  data_fim DATE,
+  dias INT,
+  motivo TEXT,
+  anexo_path TEXT,
+  observacoes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES auth.users(id)
+);
+ALTER TABLE employee_time_records ENABLE ROW LEVEL SECURITY;
+```
+- UI: Cards de saldo (ferias tiradas/restantes, ausencias, atestados)
+- Tabela com CRUD de registros
+- Filtro por tipo e periodo
 
-Substituir o botao unico "Novo Colaborador" por uma toolbar com:
-- **Novo Colaborador** (mantido, botao primario)
-- **Exportar Base** (gera XLSX com dados filtrados usando `xlsx` lib)
-- **Ver Organograma** (link para `/rh/configuracoes` aba organograma, ou modal futuro)
-- **Pendencias RH** (scroll/filter para tickets abertos)
-- **Chamados Abertos** (abre filtro rapido)
+**7. Compliance** (NOVA, acesso RH/CEO) — Nova tabela `employee_compliance`:
+```sql
+CREATE TABLE employee_compliance (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL CHECK (tipo IN ('advertencia','descumprimento_politica','investigacao','flag_risco')),
+  severidade TEXT NOT NULL CHECK (severidade IN ('leve','media','grave')),
+  titulo TEXT NOT NULL,
+  descricao TEXT,
+  data_ocorrencia DATE NOT NULL,
+  anexo_path TEXT,
+  status TEXT NOT NULL DEFAULT 'aberto' CHECK (status IN ('aberto','em_andamento','encerrado')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES auth.users(id)
+);
+ALTER TABLE employee_compliance ENABLE ROW LEVEL SECURITY;
+```
+- UI: Cards resumo (total abertos, por severidade)
+- Timeline com CRUD, badge de severidade, status
+- Upload de evidencias
+- Visibilidade restrita: aba so aparece para roles admin/rh/manager
 
-### 4. Tabela melhorada
+**8. Notas** — Ja completa com CRUD e categorias. Sem mudancas.
 
-- **Ordenacao por colunas**: estado local `sortField` + `sortDirection`, clicar no header alterna ASC/DESC com icone visual
-- **Coluna "Admissao"**: nova coluna com `data_admissao` formatada
-- **Coluna "Tipo"**: tipo de contrato (PJ/CLT)
-- **Acoes por linha**: dropdown menu (tres pontos) com "Abrir ficha", "Editar", "Excluir" em vez de so icone de lixeira
-- **Contador de resultados**: "Mostrando X de Y colaboradores"
+**9. Permissoes** — Ja completa com vinculo, roles, permissoes por modulo, integracoes. Sem mudancas.
 
-### 5. Contexto por perfil (visibilidade)
-
-Usar `useAuth()` + roles do JWT para filtrar:
-- **admin, rh, manager**: veem todos
-- **coordenador, gestor**: veem apenas employees onde `gestor_id` = seu employee id
-- **demais**: redirect ou acesso negado (ja controlado pelo RoleGuard existente)
-
-Isso sera uma filtragem client-side sobre os dados retornados, usando o `user_id` autenticado para encontrar o employee correspondente e filtrar por `gestor_id`.
+**10. Avaliacoes / PDI** (expandir) — Ja tem historico de provas. Adicionar:
+- Subsecao PDI: listar `employee_pdi` do colaborador com progresso
+- Subsecao Competencias (placeholder inicial com texto)
 
 ### Arquivos
 
-**Editado: `src/pages/rh/Colaboradores.tsx`** — Refactor completo:
-- Stats cards expandidos (8 cards)
-- Toolbar de acoes rapidas
-- Filtros expandidos com tipo contrato, gestor, departamento
-- Tabela com sort, colunas extras, dropdown de acoes
-- Contador de resultados
-- Filtro por perfil/role
+**Novas tabelas (migration):**
+- `employee_time_records`
+- `employee_compliance`
+Com RLS: authenticated pode ler/inserir onde employee_id pertence ao contexto (admin/rh full access).
 
-**Novo: `src/components/hr/ColaboradoresStatsCards.tsx`** — Componente dos 8 cards gerenciais (queries de tickets e flags)
+**Novos componentes:**
+- `src/components/hr/tabs/EmployeeTimeTab.tsx` — Gestao de Tempo com CRUD
+- `src/components/hr/tabs/EmployeeComplianceTab.tsx` — Compliance com CRUD
 
-**Novo: `src/components/hr/ColaboradoresToolbar.tsx`** — Toolbar de acoes rapidas
-
-**Novo: `src/components/hr/ColaboradoresFilters.tsx`** — Barra de filtros expandida
-
-**Novo: `src/components/hr/ColaboradoresTable.tsx`** — Tabela com sort, dropdown de acoes, colunas extras
-
-**Novo: `src/lib/exportEmployees.ts`** — Funcao de exportacao XLSX da lista filtrada
+**Editados:**
+- `src/components/hr/EmployeeDrawer.tsx` — Adicionar 2 abas novas (Tempo + Compliance), renomear "Hist." para "Desemp.", compliance condicional por role
+- `src/components/hr/tabs/EmployeeRemunerationTab.tsx` — Adicionar subsecao historico de alteracoes salariais
+- `src/components/hr/tabs/EmployeeDocumentsTab.tsx` — Adicionar filtro por categoria
+- `src/components/hr/tabs/EmployeeHistoryTab.tsx` — Adicionar botao exportar e subsecao feedbacks
+- `src/components/hr/tabs/EmployeeExamsTab.tsx` — Adicionar subsecao PDI do colaborador
+- `src/hooks/useEmployees.ts` — Adicionar hooks para time_records e compliance
 
 ### O que NAO muda
-- `EmployeeDrawer` e `EmployeeFormDialog` mantidos intactos
-- Nenhuma tabela nova no banco (usa queries existentes em `rh_tickets`, `user_flags`)
-- Logica de NFSe no mes atual mantida
-- Delete confirmation dialog mantido
+- Layout do drawer (Sheet side panel)
+- Header com avatar/nome/status/cargo/datas
+- Abas Geral, NFSe, Notas, Permissoes (conteudo existente intacto)
+- Nenhuma tabela existente e alterada
 
