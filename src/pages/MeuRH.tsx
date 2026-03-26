@@ -1,9 +1,13 @@
-import { AlertCircle } from "lucide-react";
+import { useState } from "react";
+import { AlertCircle, BookOpen, MessageSquare, Target, Megaphone, History, Star, User, FolderOpen } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMyEmployee, useMyEmployeeGestor } from "@/hooks/useMyEmployee";
 import { MeuRHHeader } from "@/components/meu-rh/MeuRHHeader";
-import { MeuRHVinculoSection } from "@/components/meu-rh/MeuRHVinculoSection";
+import { MeuRHQuickCards } from "@/components/meu-rh/MeuRHQuickCards";
+import { MeuRHQuickActions } from "@/components/meu-rh/MeuRHQuickActions";
 import { MeuRHDadosPessoaisSection } from "@/components/meu-rh/MeuRHDadosPessoaisSection";
 import { MeuRHRemuneracaoSection } from "@/components/meu-rh/MeuRHRemuneracaoSection";
 import { MeuRHNfseSection } from "@/components/meu-rh/MeuRHNfseSection";
@@ -11,7 +15,22 @@ import { MeuRHDocumentosSection } from "@/components/meu-rh/MeuRHDocumentosSecti
 import { MeuRHAvaliacoesSection } from "@/components/meu-rh/MeuRHAvaliacoesSection";
 import { MeuRHHistoricoSection } from "@/components/meu-rh/MeuRHHistoricoSection";
 
+function PlaceholderTab({ title, description }: { title: string; description: string }) {
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="p-3 rounded-full bg-muted mb-4">
+          <AlertCircle className="h-6 w-6 text-muted-foreground" />
+        </div>
+        <h3 className="text-lg font-semibold mb-1">{title}</h3>
+        <p className="text-sm text-muted-foreground max-w-md">{description}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function MeuRH() {
+  const [activeTab, setActiveTab] = useState("perfil");
   const { data: employee, isLoading, error } = useMyEmployee();
   const { data: gestorName } = useMyEmployeeGestor(employee?.gestor_id);
 
@@ -26,12 +45,11 @@ export default function MeuRH() {
             <Skeleton className="h-3 w-64" />
           </div>
         </div>
-        <Skeleton className="h-24 w-full" />
-        <div className="grid grid-cols-2 gap-4">
-          <Skeleton className="h-40" />
-          <Skeleton className="h-40" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20" />)}
         </div>
-        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
@@ -63,32 +81,101 @@ export default function MeuRH() {
   }
 
   return (
-    <div className="max-w-[1200px] mx-auto p-5 space-y-6">
-      {/* 1. Header */}
+    <div className="max-w-[1200px] mx-auto p-5 space-y-5">
+      {/* Header */}
       <MeuRHHeader employee={employee} gestorName={gestorName} />
 
-      {/* 2. Resumo do vínculo */}
-      <MeuRHVinculoSection employee={employee} />
+      {/* Quick Cards */}
+      <MeuRHQuickCards employee={employee} />
 
-      {/* 3. Dados pessoais */}
-      <MeuRHDadosPessoaisSection employee={employee} />
+      {/* Quick Actions */}
+      <MeuRHQuickActions employee={employee} onTabChange={setActiveTab} />
 
-      {/* 4. Remuneração */}
-      <MeuRHRemuneracaoSection employee={employee} />
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="w-full justify-start">
+          <TabsTrigger value="perfil" className="gap-1.5">
+            <User className="h-3.5 w-3.5" />
+            Meu Perfil
+          </TabsTrigger>
+          <TabsTrigger value="documentos" className="gap-1.5">
+            <FolderOpen className="h-3.5 w-3.5" />
+            Documentos
+          </TabsTrigger>
+          <TabsTrigger value="politicas" className="gap-1.5">
+            <BookOpen className="h-3.5 w-3.5" />
+            Políticas MCF
+          </TabsTrigger>
+          <TabsTrigger value="fale-rh" className="gap-1.5">
+            <MessageSquare className="h-3.5 w-3.5" />
+            Fale com o RH
+          </TabsTrigger>
+          <TabsTrigger value="avaliacoes" className="gap-1.5">
+            <Star className="h-3.5 w-3.5" />
+            Avaliações
+          </TabsTrigger>
+          <TabsTrigger value="pdi" className="gap-1.5">
+            <Target className="h-3.5 w-3.5" />
+            PDI
+          </TabsTrigger>
+          <TabsTrigger value="comunicados" className="gap-1.5">
+            <Megaphone className="h-3.5 w-3.5" />
+            Comunicados
+          </TabsTrigger>
+          <TabsTrigger value="historico" className="gap-1.5">
+            <History className="h-3.5 w-3.5" />
+            Histórico
+          </TabsTrigger>
+        </TabsList>
 
-      {/* 5. NFSe / Pagamentos (PJ only) */}
-      {employee.tipo_contrato === 'PJ' && (
-        <MeuRHNfseSection employee={employee} />
-      )}
+        <TabsContent value="perfil" className="space-y-6">
+          <MeuRHDadosPessoaisSection employee={employee} />
+          <MeuRHRemuneracaoSection employee={employee} />
+          {employee.tipo_contrato === 'PJ' && (
+            <MeuRHNfseSection employee={employee} />
+          )}
+        </TabsContent>
 
-      {/* 6. Documentos */}
-      <MeuRHDocumentosSection employee={employee} />
+        <TabsContent value="documentos">
+          <MeuRHDocumentosSection employee={employee} />
+        </TabsContent>
 
-      {/* 7. Avaliações */}
-      <MeuRHAvaliacoesSection employee={employee} />
+        <TabsContent value="politicas">
+          <PlaceholderTab
+            title="Políticas da MCF"
+            description="Em breve você terá acesso à biblioteca de políticas, diretrizes internas, código de conduta e materiais institucionais."
+          />
+        </TabsContent>
 
-      {/* 8. Histórico */}
-      <MeuRHHistoricoSection employee={employee} />
+        <TabsContent value="fale-rh">
+          <PlaceholderTab
+            title="Fale com o RH"
+            description="Em breve você poderá abrir ocorrências, solicitações e sugestões diretamente por aqui, com acompanhamento de status."
+          />
+        </TabsContent>
+
+        <TabsContent value="avaliacoes">
+          <MeuRHAvaliacoesSection employee={employee} />
+        </TabsContent>
+
+        <TabsContent value="pdi">
+          <PlaceholderTab
+            title="Plano de Desenvolvimento Individual"
+            description="Em breve você terá acesso à sua trilha de desenvolvimento, competências essenciais, progresso e comentários do gestor."
+          />
+        </TabsContent>
+
+        <TabsContent value="comunicados">
+          <PlaceholderTab
+            title="Comunicados"
+            description="Em breve você verá aniversariantes do mês, recados da gestão e avisos da empresa."
+          />
+        </TabsContent>
+
+        <TabsContent value="historico">
+          <MeuRHHistoricoSection employee={employee} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
