@@ -107,6 +107,15 @@ function KPICard({ metric }: { metric: MetricWithMeta }) {
           </div>
         )}
 
+        {/* Extra breakdown (e.g. Contatos / Sem contato) */}
+        {metric.extra && metric.key === "totalCalls" && (
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground pt-0.5 border-t border-border">
+            <span>Contatos: <strong className="text-green-500">{metric.extra.answered}</strong></span>
+            <span>·</span>
+            <span>Sem contato: <strong className="text-orange-500">{metric.extra.unanswered}</strong></span>
+          </div>
+        )}
+
         {/* Gap + comparison */}
         <div className="flex items-center justify-between text-xs pt-0.5">
           {hasMeta ? (
