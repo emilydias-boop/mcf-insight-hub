@@ -14,6 +14,7 @@ import { MeuRHNfseSection } from "@/components/meu-rh/MeuRHNfseSection";
 import { MeuRHDocumentosSection } from "@/components/meu-rh/MeuRHDocumentosSection";
 import { MeuRHAvaliacoesSection } from "@/components/meu-rh/MeuRHAvaliacoesSection";
 import { MeuRHHistoricoSection } from "@/components/meu-rh/MeuRHHistoricoSection";
+import { MeuRHFaleComRHSection } from "@/components/meu-rh/MeuRHFaleComRHSection";
 
 function PlaceholderTab({ title, description }: { title: string; description: string }) {
   return (
@@ -148,10 +149,7 @@ export default function MeuRH() {
         </TabsContent>
 
         <TabsContent value="fale-rh">
-          <PlaceholderTab
-            title="Fale com o RH"
-            description="Em breve você poderá abrir ocorrências, solicitações e sugestões diretamente por aqui, com acompanhamento de status."
-          />
+          <MeuRHFaleComRHSection employee={employee} />
         </TabsContent>
 
         <TabsContent value="avaliacoes">
