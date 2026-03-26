@@ -190,13 +190,12 @@ export function useSdrPerformanceData({
   // Derived metas
   const metas = useMemo(() => {
     const agendMeta = metaPeriodo;
-    const r1AgendadaMeta = agendMeta;
-    // Metas derivadas usam R1 Agendada REAL, não a meta fixa
-    const r1Agendada_real = sm?.r1Agendada || 0;
-    const r1RealizadaMeta = Math.round(r1Agendada_real * 0.7);
-    const noShowMeta = Math.round(r1Agendada_real * 0.3);
+    // Metas derivadas usam Agendamentos REAIS do período como base
+    const agendamentos_real = sm?.agendamentos || 0;
+    const r1RealizadaMeta = Math.round(agendamentos_real * 0.7);
+    const noShowMeta = Math.round(agendamentos_real * 0.3);
     const contratosMeta = Math.round(r1RealizadaMeta * 0.3);
-    return { agendMeta, r1AgendadaMeta, r1RealizadaMeta, noShowMeta, contratosMeta };
+    return { agendMeta, r1RealizadaMeta, noShowMeta, contratosMeta };
   }, [metaPeriodo, sm]);
 
   // Build main metrics
@@ -231,7 +230,7 @@ export function useSdrPerformanceData({
 
     return [
       makeMetric("Agendamentos", "agendamentos", agend, metas.agendMeta, "agendamentos"),
-      makeMetric("R1 Agendada", "r1Agendada", r1ag, metas.r1AgendadaMeta, "r1Agendada"),
+      
       makeMetric("R1 Realizada", "r1Realizada", r1re, metas.r1RealizadaMeta, "r1Realizada"),
       makeMetric("Contratos Pagos", "contratos", contr, metas.contratosMeta, "contratos"),
       {
