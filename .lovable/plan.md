@@ -1,22 +1,36 @@
 
 
-## Resultado da varredura final
+## Limpeza das páginas individuais SDR/Closer
 
-Após verificar todos os ~245 hooks e suas importações, o sistema está **praticamente limpo**. Encontrei apenas **1 arquivo órfão**:
+### 1. Closer Detail — Remover card "Resumo do Período" (redundante)
+**Arquivo**: `CloserMeetingsDetailPage.tsx` (linhas 147-181)
 
-| Arquivo | Linhas | Motivo |
-|---------|--------|--------|
-| `src/hooks/usePlaybookDocs.ts` | 205 | Zero importadores — substituído pelo `useNotionPlaybook.ts` que é usado em todos os componentes de playbook |
+O card repete exatamente os mesmos dados dos KPI cards acima (R1 Realizada, Contratos, Taxa Conversão, R2 Agendadas). Deletar o card e deixar o `CloserRankingBlock` ocupando largura total.
 
-### Contexto
+### 2. Closer Detail — Adicionar KPI "R2 Agendada"
+**Arquivo**: `CloserDetailKPICards.tsx`
 
-O sistema de Playbook migrou para usar `useNotionPlaybook.ts` (que é importado por 7 componentes). O antigo `usePlaybookDocs.ts` ficou para trás sem nenhum consumidor.
+Hoje os KPI cards não mostram R2 Agendada (que só aparecia no card redundante). Adicionar como 8º KPI card com ícone Calendar e média do time.
 
-### Ação
+**Nota**: R1 Agendada **não será adicionada** ao ranking do closer — essa métrica é responsabilidade do SDR. O closer só responde a partir do momento em que o lead comparece ou dá no-show.
 
-Deletar `src/hooks/usePlaybookDocs.ts`.
+### 3. SDR Detail — Remover aba "Todos os Negócios"
+**Arquivo**: `SdrMeetingsDetailPage.tsx`
 
-### Resultado
+Essa aba puxa todos os deals do CRM sem filtro de período — fora do contexto de performance. Remover aba, import de `useSdrDeals` e `SdrDealsTable`. Verificar se esses 2 arquivos ficam órfãos e deletar se sim.
 
-Após essa remoção, **100% dos hooks, componentes e páginas do sistema têm pelo menos 1 importador ativo**. Não há mais código morto.
+### 4. Painel principal — Renomear "Realizadas" → "R1 Realizada"
+**Arquivo**: `TeamKPICards.tsx`
+
+Padronizar nomenclatura com tabelas e páginas individuais.
+
+### Arquivos afetados
+| Arquivo | Ação |
+|---------|------|
+| `CloserMeetingsDetailPage.tsx` | Remover card Resumo, CloserRankingBlock full-width |
+| `CloserDetailKPICards.tsx` | Adicionar KPI R2 Agendada |
+| `SdrMeetingsDetailPage.tsx` | Remover aba Negócios + imports |
+| `TeamKPICards.tsx` | Renomear label |
+| `useSdrDeals.ts` | Deletar se órfão |
+| `SdrDealsTable.tsx` | Deletar se órfão |
 
