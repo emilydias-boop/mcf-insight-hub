@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -25,6 +25,8 @@ interface SdrPerformanceFiltersProps {
   comparisonMode: ComparisonMode;
   metaMode: MetaMode;
   customMeta?: number;
+  onRefresh?: () => void;
+  isLoading?: boolean;
 }
 
 export function SdrPerformanceFilters({
@@ -34,6 +36,8 @@ export function SdrPerformanceFilters({
   comparisonMode,
   metaMode,
   customMeta,
+  onRefresh,
+  isLoading,
 }: SdrPerformanceFiltersProps) {
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("this_month");
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -188,9 +192,17 @@ export function SdrPerformanceFilters({
         />
       )}
 
-      {/* Period display */}
-      <div className="ml-auto text-xs text-muted-foreground">
-        {format(startDate, "dd/MM/yyyy", { locale: ptBR })} — {format(endDate, "dd/MM/yyyy", { locale: ptBR })}
+      {/* Period display + Refresh */}
+      <div className="ml-auto flex items-center gap-3">
+        <span className="text-xs text-muted-foreground">
+          {format(startDate, "dd/MM/yyyy", { locale: ptBR })} — {format(endDate, "dd/MM/yyyy", { locale: ptBR })}
+        </span>
+        {onRefresh && (
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={onRefresh} disabled={isLoading}>
+            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isLoading ? "animate-spin" : ""}`} />
+            Atualizar
+          </Button>
+        )}
       </div>
     </div>
   );
