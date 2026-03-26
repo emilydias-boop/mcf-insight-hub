@@ -1,27 +1,22 @@
 
 
-## Limpeza final: último hook órfão
+## Resultado da varredura final
 
-### Encontrado
+Após verificar todos os ~245 hooks e suas importações, o sistema está **praticamente limpo**. Encontrei apenas **1 arquivo órfão**:
 
 | Arquivo | Linhas | Motivo |
 |---------|--------|--------|
-| `src/hooks/useSalesCelebration.ts` | 368 | Zero importadores em todo o projeto — hook de celebração com confetti que nunca é chamado |
+| `src/hooks/usePlaybookDocs.ts` | 205 | Zero importadores — substituído pelo `useNotionPlaybook.ts` que é usado em todos os componentes de playbook |
+
+### Contexto
+
+O sistema de Playbook migrou para usar `useNotionPlaybook.ts` (que é importado por 7 componentes). O antigo `usePlaybookDocs.ts` ficou para trás sem nenhum consumidor.
 
 ### Ação
 
-Deletar `src/hooks/useSalesCelebration.ts`.
+Deletar `src/hooks/usePlaybookDocs.ts`.
 
-### Resultado da varredura
+### Resultado
 
-Após essa remoção, o sistema está **100% limpo**:
-- Todos os outros ~230 hooks têm pelo menos 1 importador ativo
-- Nenhum componente órfão restante
-- Nenhuma feature flag morta
-- Nenhum mock data residual
-
-### Impacto
-
-- 368 linhas de código morto removidas
-- Zero impacto funcional
+Após essa remoção, **100% dos hooks, componentes e páginas do sistema têm pelo menos 1 importador ativo**. Não há mais código morto.
 
