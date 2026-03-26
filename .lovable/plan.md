@@ -1,53 +1,33 @@
 
 
-## Corrigir cálculo de metas derivadas — usar valores reais
+## Remover KPI "R1 Agendada" e usar Agendamentos como base dos cálculos
 
 ### Problema
 
-No `useSdrPerformanceData.ts` (linhas 191-196), as metas de R1 Realizada, No-Show e Contratos são calculadas a partir da **meta fixa** de R1 Agendada (= metaPeriodo). Isso está errado.
-
-A lógica correta (já documentada nas regras de negócio do sistema) é:
-
-| Métrica | Cálculo correto |
-|---------|----------------|
-| R1 Realizada meta | 70% do **R1 Agendada real** |
-| No-Show meta | 30% do **R1 Agendada real** |
-| Contratos meta | 30% da **meta de R1 Realizada** (derivada acima) |
-
-### Exemplo com dados da tela
-
-- R1 Agendada real = 47
-- R1 Realizada meta = round(47 × 0.7) = **33**
-- No-Show meta = round(47 × 0.3) = **14**
-- Contratos meta = round(33 × 0.3) = **10**
+A tela mostra "Agendamentos" e "R1 Agendada" lado a lado com valores diferentes (37 vs 47), o que confunde o gestor. Para o SDR, o número que importa é quantos agendamentos ele fez **no período** — e as metas derivadas (R1 Realizada, No-Show, Contratos) devem partir desse valor.
 
 ### Mudança
 
-**Arquivo**: `src/hooks/useSdrPerformanceData.ts` (linhas 191-197)
+**Arquivo**: `src/hooks/useSdrPerformanceData.ts`
 
-Trocar:
-```ts
-const r1AgendadaMeta = agendMeta;
-const r1RealizadaMeta = Math.round(r1AgendadaMeta * 0.7);
-const contratosMeta = Math.round(r1RealizadaMeta * 0.3);
-```
+1. **Metas derivadas** (linhas 191-200): trocar `sm?.r1Agendada` por `sm?.agendamentos` como base:
+   - `r1RealizadaMeta = round(agendamentos_real * 0.7)`
+   - `noShowMeta = round(agendamentos_real * 0.3)`
+   - `contratosMeta = round(r1RealizadaMeta * 0.3)`
 
-Por:
-```ts
-const r1AgendadaMeta = agendMeta; // meta fixa, mantida
-const r1Agendada_real = sm?.r1Agendada || 0;
-const r1RealizadaMeta = Math.round(r1Agendada_real * 0.7);
-const noShowMeta = Math.round(r1Agendada_real * 0.3);
-const contratosMeta = Math.round(r1RealizadaMeta * 0.3);
-```
+2. **Remover linha 234**: `makeMetric("R1 Agendada", "r1Agendada", ...)` — eliminar esse KPI do array de métricas
 
-E atualizar a linha 245 (No-Show) para usar `noShowMeta` em vez de `Math.round(metas.r1AgendadaMeta * 0.3)`.
+3. Remover `r1AgendadaMeta` do objeto `metas` (não é mais usado)
 
-Adicionar `sm` como dependência do `useMemo` de metas.
+### Resultado
 
-### Arquivo afetado
+- KPI cards: Agendamentos → R1 Realizada → Contratos → Taxa Contrato → No-Show → Taxa Contato → Ligações → Tempo Médio
+- Metas derivadas partem dos **37 agendamentos** do período
+- R1 Realizada meta = round(37 × 0.7) = **26**
+- No-Show meta = round(37 × 0.3) = **11**
+- Contratos meta = round(26 × 0.3) = **8**
 
 | Arquivo | Ação |
 |---------|------|
-| `src/hooks/useSdrPerformanceData.ts` | Corrigir cálculo de metas derivadas — usar R1 Agendada real |
+| `src/hooks/useSdrPerformanceData.ts` | Remover R1 Agendada do array de métricas, derivar metas a partir de agendamentos reais |
 
