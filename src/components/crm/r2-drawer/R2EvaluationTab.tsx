@@ -17,12 +17,14 @@ interface R2EvaluationTabProps {
   attendee: R2AttendeeExtended;
   statusOptions: R2StatusOption[];
   thermometerOptions: R2ThermometerOption[];
+  saveTrigger?: number;
 }
 
 export function R2EvaluationTab({ 
   attendee, 
   statusOptions, 
-  thermometerOptions 
+  thermometerOptions,
+  saveTrigger = 0
 }: R2EvaluationTabProps) {
   const updateAttendee = useUpdateR2Attendee();
   
@@ -108,6 +110,17 @@ export function R2EvaluationTab({
       updates: { r2_observations: localR2Observations || null }
     });
   };
+
+  // Save all text fields when saveTrigger changes
+  useEffect(() => {
+    if (saveTrigger === 0) return;
+    const updates: Record<string, unknown> = {};
+    if (localMeetingLink !== (attendee.meeting_link ?? '')) updates.meeting_link = localMeetingLink || null;
+    if (localR2Observations !== (attendee.r2_observations ?? '')) updates.r2_observations = localR2Observations || null;
+    if (Object.keys(updates).length > 0) {
+      updateAttendee.mutate({ attendeeId: attendee.id, updates });
+    }
+  }, [saveTrigger]);
 
   return (
     <div className="space-y-4">

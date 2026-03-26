@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Mail, Calendar, CheckCircle, XCircle, 
-  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft, Pencil, Edit2, Check, X
+  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft, Pencil, Edit2, Check, X, Save
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -61,6 +61,7 @@ export function R2MeetingDetailDrawer({
   const [attendeeToTransfer, setAttendeeToTransfer] = useState<R2AttendeeExtended | null>(null);
   const [editingPhone, setEditingPhone] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
+  const [saveTrigger, setSaveTrigger] = useState(0);
   const [phoneValue, setPhoneValue] = useState('');
   const [emailValue, setEmailValue] = useState('');
   
@@ -468,7 +469,7 @@ export function R2MeetingDetailDrawer({
                 </TabsList>
                 
                 <TabsContent value="qualificacao" className="mt-4">
-                  <R2QualificationTab attendee={attendee} />
+                  <R2QualificationTab attendee={attendee} saveTrigger={saveTrigger} />
                 </TabsContent>
                 
                 <TabsContent value="avaliacao" className="mt-4">
@@ -476,6 +477,7 @@ export function R2MeetingDetailDrawer({
                     attendee={attendee}
                     statusOptions={statusOptions}
                     thermometerOptions={thermometerOptions}
+                    saveTrigger={saveTrigger}
                   />
                 </TabsContent>
                 
@@ -489,6 +491,16 @@ export function R2MeetingDetailDrawer({
 
         {/* Footer Actions */}
         <div className="border-t p-4 space-y-2">
+          <Button 
+            className="w-full"
+            onClick={() => {
+              setSaveTrigger(p => p + 1);
+              toast.success('Informações salvas!');
+            }}
+          >
+            <Save className="h-4 w-4 mr-2" />
+            Salvar Informações
+          </Button>
           <div className={cn("grid gap-2", isSdr ? "grid-cols-1" : "grid-cols-2")}>
             {!isSdr && (
               <Button 
