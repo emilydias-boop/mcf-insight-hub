@@ -19,6 +19,7 @@ export interface MetricWithMeta {
   compValue: number | null;
   compVariation: number | null; // percentage
   format?: "number" | "percent" | "duration";
+  extra?: Record<string, number>;
 }
 
 export interface ProjectionData {
@@ -260,7 +261,10 @@ export function useSdrPerformanceData({
         compVariation: null,
         format: "percent" as const,
       },
-      makeMetric("Total Ligações", "totalCalls", callMetrics.totalCalls, metas.ligacoesMeta),
+      {
+        ...makeMetric("Total Ligações", "totalCalls", callMetrics.totalCalls, metas.ligacoesMeta),
+        extra: { answered: callMetrics.answered, unanswered: callMetrics.unanswered },
+      },
       {
         label: "Tempo Médio",
         key: "avgDuration",
