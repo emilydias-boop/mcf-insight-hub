@@ -1,32 +1,17 @@
 
 
-## Limpeza e melhorias do Painel Comercial
+## Simplificar coluna Meta — mostrar apenas o número da meta
 
-### Remover (ruído)
+### Problema
+A coluna "Meta" mostra `11/10` (agendamentos/meta), mas a coluna "Agendamento" ao lado já mostra `11`. Fica duplicado e confuso.
 
-| Item | Arquivo |
-|------|---------|
-| KPI Card "SDRs Ativos" | `TeamKPICards.tsx` — remover do array `cards` |
-| Coluna "% Presença" da tabela SDRs | `SdrSummaryTable.tsx` — remover coluna |
-| Linha separada "Outside" na tabela Closers | `CloserSummaryTable.tsx` — remover TableRow "Outside" (já tem coluna por closer) |
+### Solução
+A coluna **Meta** mostra **apenas o número da meta** (ex: `10`), com cor indicando se bateu ou não:
+- **Verde**: agendamentos ≥ meta
+- **Vermelho**: agendamentos < meta
 
-### Manter
-- **KPI Card "Outside"** — fica como está
+O número da meta em si fica em destaque. Quem olhar entende: "a meta é 10" e compara visualmente com a coluna Agendamento ao lado.
 
-### Adicionar
-
-| Item | Arquivo | Detalhe |
-|------|---------|---------|
-| Linha **Total** na tabela SDRs | `SdrSummaryTable.tsx` | Soma de todas as colunas, igual à tabela Closers |
-| Botão **Atualizar** | `ReunioesEquipe.tsx` | Ícone RefreshCw ao lado do botão Exportar, chama `refetch()` |
-| Timestamp "Atualizado há X min" | `ReunioesEquipe.tsx` | Texto pequeno ao lado dos filtros |
-| Coluna Meta como `agendamento/meta` | `SdrSummaryTable.tsx` | Formato `58/72` com cor verde (bateu) / vermelho (não bateu) |
-| Filtro contextual por aba | `ReunioesEquipe.tsx` | Dropdown muda para "Todos os Closers" na aba Closers |
-| Tooltip melhorado em "Contratos" | `TeamKPICards.tsx` | Explicar que exclui outside |
-
-### Arquivos afetados
-- `src/components/sdr/TeamKPICards.tsx`
-- `src/components/sdr/SdrSummaryTable.tsx`
-- `src/components/sdr/CloserSummaryTable.tsx`
-- `src/pages/crm/ReunioesEquipe.tsx`
+### Arquivo
+`src/components/sdr/SdrSummaryTable.tsx` — linhas 139-143: trocar `{row.agendamentos}/{metaPeriodo}` para apenas `{metaPeriodo}`, mantendo a cor condicional verde/vermelho baseada em `bateuMeta`.
 
