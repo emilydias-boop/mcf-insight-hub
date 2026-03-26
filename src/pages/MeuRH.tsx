@@ -16,6 +16,8 @@ import { MeuRHAvaliacoesSection } from "@/components/meu-rh/MeuRHAvaliacoesSecti
 import { MeuRHHistoricoSection } from "@/components/meu-rh/MeuRHHistoricoSection";
 import { MeuRHFaleComRHSection } from "@/components/meu-rh/MeuRHFaleComRHSection";
 import { MeuRHPdiSection } from "@/components/meu-rh/MeuRHPdiSection";
+import { MeuRHPoliticasSection } from "@/components/meu-rh/MeuRHPoliticasSection";
+import { MeuRHComunicadosSection } from "@/components/meu-rh/MeuRHComunicadosSection";
 
 function PlaceholderTab({ title, description }: { title: string; description: string }) {
   return (
@@ -143,10 +145,7 @@ export default function MeuRH() {
         </TabsContent>
 
         <TabsContent value="politicas">
-          <PlaceholderTab
-            title="Políticas da MCF"
-            description="Em breve você terá acesso à biblioteca de políticas, diretrizes internas, código de conduta e materiais institucionais."
-          />
+          <MeuRHPoliticasSection />
         </TabsContent>
 
         <TabsContent value="fale-rh">
@@ -162,10 +161,7 @@ export default function MeuRH() {
         </TabsContent>
 
         <TabsContent value="comunicados">
-          <PlaceholderTab
-            title="Comunicados"
-            description="Em breve você verá aniversariantes do mês, recados da gestão e avisos da empresa."
-          />
+          <MeuRHComunicadosSection />
         </TabsContent>
 
         <TabsContent value="historico">
