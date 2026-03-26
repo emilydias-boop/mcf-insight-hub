@@ -70,8 +70,7 @@ export default function SdrMeetingsDetailPage() {
     endDate,
   });
 
-  // Buscar todos os deals do SDR (independente de reunião)
-  const { data: sdrDeals = [], isLoading: isLoadingDeals } = useSdrDeals(sdrEmail);
+  const handleBack
 
   const handleBack = () => {
     // Navigate back preserving filters

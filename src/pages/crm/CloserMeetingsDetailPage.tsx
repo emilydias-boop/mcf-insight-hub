@@ -7,7 +7,7 @@ import { useActiveBU } from "@/hooks/useActiveBU";
 import { RefreshCw } from "lucide-react";
 import { ManualSaleAttributionDialog } from "@/components/closer/ManualSaleAttributionDialog";
 import { Button } from "@/components/ui/button";
-import { CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CloserDetailHeader } from "@/components/closer/CloserDetailHeader";
 import { CloserDetailKPICards } from "@/components/closer/CloserDetailKPICards";
