@@ -4,7 +4,7 @@ import { ClipboardList, TrendingUp, Target } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEmployeeExamHistory } from '@/hooks/useExams';
-import { useEmployeePdi } from '@/hooks/useEmployeePdi';
+import { useMyPdis } from '@/hooks/useEmployeePdi';
 import { Employee } from '@/types/hr';
 import { Progress } from '@/components/ui/progress';
 
@@ -14,7 +14,7 @@ interface EmployeeExamsTabProps {
 
 export default function EmployeeExamsTab({ employee }: EmployeeExamsTabProps) {
   const { data: history = [], isLoading } = useEmployeeExamHistory(employee.id);
-  const { data: pdis = [], isLoading: pdiLoading } = useEmployeePdi(employee.id);
+  const { data: pdis = [], isLoading: pdiLoading } = useMyPdis(employee.id);
 
   const media = history.length > 0
     ? (history.reduce((acc, h) => acc + Number(h.nota), 0) / history.length).toFixed(1)
