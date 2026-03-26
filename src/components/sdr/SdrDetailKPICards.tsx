@@ -1,87 +1,117 @@
-import { Calendar, CheckCircle, XCircle, FileCheck, TrendingUp, TrendingDown, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
-import { TeamAverages } from "@/hooks/useSdrDetailData";
+import { Progress } from "@/components/ui/progress";
+import { TrendingUp, TrendingDown } from "lucide-react";
+import { MetricWithMeta } from "@/hooks/useSdrPerformanceData";
+import { cn } from "@/lib/utils";
 
 interface SdrDetailKPICardsProps {
-  metrics: SdrSummaryRow | null;
-  teamAverages: TeamAverages;
+  metrics: MetricWithMeta[];
   isLoading?: boolean;
 }
 
-interface KPICardProps {
-  title: string;
-  value: number | string;
-  teamAverage: number;
-  icon: React.ReactNode;
-  tooltip?: string;
-  format?: "number" | "percent";
-  invertComparison?: boolean;
-}
+const formatDuration = (seconds: number): string => {
+  if (seconds === 0) return "0s";
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (minutes === 0) return `${secs}s`;
+  return `${minutes}m ${secs}s`;
+};
 
-function KPICard({ title, value, teamAverage, icon, tooltip, format = "number", invertComparison = false }: KPICardProps) {
-  const numValue = typeof value === 'number' ? value : parseFloat(value.toString());
-  const diff = numValue - teamAverage;
-  const isPositive = invertComparison ? diff < 0 : diff > 0;
-  const diffPercent = teamAverage > 0 ? Math.abs((diff / teamAverage) * 100) : 0;
-  
-  const formattedValue = format === "percent" 
-    ? `${numValue.toFixed(1)}%` 
-    : numValue.toFixed(0);
-    
-  const formattedAvg = format === "percent"
-    ? `${teamAverage.toFixed(1)}%`
-    : teamAverage.toFixed(1);
+function KPICard({ metric }: { metric: MetricWithMeta }) {
+  const hasMeta = metric.meta > 0;
+  const progressPct = hasMeta ? Math.min(metric.attainment, 100) : 0;
+  const isPositive = metric.gap >= 0;
+
+  const formattedValue =
+    metric.format === "percent"
+      ? `${metric.realized.toFixed(1)}%`
+      : metric.format === "duration"
+        ? formatDuration(metric.realized)
+        : metric.realized.toFixed(0);
+
+  const formattedMeta =
+    metric.format === "percent"
+      ? `${metric.meta.toFixed(0)}%`
+      : metric.meta.toFixed(0);
 
   return (
     <Card className="bg-card border-border">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-1">
-              <p className="text-xs text-muted-foreground">{title}</p>
-              {tooltip && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="h-3 w-3 text-muted-foreground/60 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[220px] text-xs">
-                    {tooltip}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-            <p className="text-2xl font-bold text-foreground">{formattedValue}</p>
-          </div>
-          <div className="p-2 rounded-lg bg-primary/10 text-primary">
-            {icon}
-          </div>
-        </div>
-        
-        <div className="mt-3 pt-3 border-t border-border">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Média do time: {formattedAvg}</span>
-            {diffPercent > 0 && (
-              <span className={`flex items-center gap-1 ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                {diff > 0 ? '+' : ''}{format === "percent" ? diff.toFixed(1) + '%' : diff.toFixed(0)}
+      <CardContent className="p-4 space-y-3">
+        {/* Title */}
+        <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">
+          {metric.label}
+        </p>
+
+        {/* Value */}
+        <p className="text-2xl font-bold text-foreground">{formattedValue}</p>
+
+        {/* Meta + attainment */}
+        {hasMeta && (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-muted-foreground">Meta: {formattedMeta}</span>
+              <span
+                className={cn(
+                  "font-semibold",
+                  metric.attainment >= 100
+                    ? "text-green-500"
+                    : metric.attainment >= 70
+                      ? "text-yellow-500"
+                      : "text-destructive"
+                )}
+              >
+                {metric.attainment.toFixed(0)}%
               </span>
-            )}
+            </div>
+            <Progress value={progressPct} className="h-1.5" />
           </div>
+        )}
+
+        {/* Gap + comparison */}
+        <div className="flex items-center justify-between text-[11px]">
+          {hasMeta ? (
+            <span
+              className={cn(
+                "font-medium",
+                isPositive ? "text-green-500" : "text-destructive"
+              )}
+            >
+              Gap: {metric.gap > 0 ? "+" : ""}
+              {metric.format === "percent" ? `${metric.gap.toFixed(1)}%` : metric.gap.toFixed(0)}
+            </span>
+          ) : (
+            <span />
+          )}
+
+          {metric.compVariation !== null && (
+            <span
+              className={cn(
+                "flex items-center gap-0.5",
+                metric.compVariation >= 0 ? "text-green-500" : "text-destructive"
+              )}
+            >
+              {metric.compVariation >= 0 ? (
+                <TrendingUp className="h-3 w-3" />
+              ) : (
+                <TrendingDown className="h-3 w-3" />
+              )}
+              {metric.compVariation > 0 ? "+" : ""}
+              {metric.compVariation.toFixed(0)}%
+            </span>
+          )}
         </div>
       </CardContent>
     </Card>
   );
 }
 
-export function SdrDetailKPICards({ metrics, teamAverages, isLoading }: SdrDetailKPICardsProps) {
-  if (isLoading || !metrics) {
+export function SdrDetailKPICards({ metrics, isLoading }: SdrDetailKPICardsProps) {
+  if (isLoading || metrics.length === 0) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {[...Array(6)].map((_, i) => (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        {[...Array(9)].map((_, i) => (
           <Card key={i} className="bg-card border-border animate-pulse">
-            <CardContent className="p-4 h-[120px]" />
+            <CardContent className="p-4 h-[140px]" />
           </Card>
         ))}
       </div>
@@ -89,45 +119,10 @@ export function SdrDetailKPICards({ metrics, teamAverages, isLoading }: SdrDetai
   }
 
   return (
-    <TooltipProvider delayDuration={200}>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <KPICard
-          title="Agendamentos"
-          value={metrics.agendamentos}
-          teamAverage={teamAverages.avgAgendamentos}
-          icon={<Calendar className="h-4 w-4" />}
-          tooltip="Leads agendados pelo SDR neste período (pela data de criação do agendamento)"
-        />
-        <KPICard
-          title="R1 Agendada"
-          value={metrics.r1Agendada}
-          teamAverage={teamAverages.avgR1Agendada}
-          icon={<Calendar className="h-4 w-4" />}
-          tooltip="Reuniões marcadas PARA este período (pela data da reunião)"
-        />
-        <KPICard
-          title="R1 Realizada"
-          value={metrics.r1Realizada}
-          teamAverage={teamAverages.avgR1Realizada}
-          icon={<CheckCircle className="h-4 w-4" />}
-          tooltip="Reuniões que de fato aconteceram no período"
-        />
-        <KPICard
-          title="No-Show"
-          value={metrics.noShows}
-          teamAverage={teamAverages.avgNoShows}
-          icon={<XCircle className="h-4 w-4" />}
-          invertComparison={true}
-          tooltip="Reuniões agendadas para o período que não ocorreram (R1 Agendada − R1 Realizada)"
-        />
-        <KPICard
-          title="Contratos Pagos"
-          value={metrics.contratos}
-          teamAverage={teamAverages.avgContratos}
-          icon={<FileCheck className="h-4 w-4" />}
-          tooltip="Contratos pagos no período"
-        />
-      </div>
-    </TooltipProvider>
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      {metrics.map((metric) => (
+        <KPICard key={metric.key} metric={metric} />
+      ))}
+    </div>
   );
 }
