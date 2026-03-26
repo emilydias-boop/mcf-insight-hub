@@ -138,7 +138,7 @@ export function SdrSummaryTable({
                   </TableCell>
                   <TableCell className="text-center">
                     <span className={`font-medium ${bateuMeta ? 'text-green-400' : 'text-red-400'}`}>
-                      {row.agendamentos}/{metaPeriodo}
+                      {metaPeriodo}
                     </span>
                   </TableCell>
                   <TableCell className="text-center">
