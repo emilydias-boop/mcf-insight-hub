@@ -58,9 +58,26 @@ export default function EmployeeDocumentsTab({ employee }: EmployeeDocumentsTabP
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const pendingDocs = documents?.filter(d => d.status === 'pendente') || [];
-  const approvedDocs = documents?.filter(d => d.status === 'aprovado') || [];
-  const otherDocs = documents?.filter(d => !['pendente', 'aprovado'].includes(d.status)) || [];
+  const [filterCategoria, setFilterCategoria] = useState<string>('all');
+
+  const CATEGORIAS = [
+    { value: 'all', label: 'Todas categorias' },
+    { value: 'contrato', label: 'Contrato', types: ['Contrato de Trabalho', 'NDA / Confidencialidade', 'Termo de Comissão'] },
+    { value: 'pessoais', label: 'Pessoais', types: ['RG', 'CPF', 'CNH', 'Certidão de Nascimento', 'Comprovante de Residência'] },
+    { value: 'saude', label: 'Saúde', types: ['Atestado Médico'] },
+    { value: 'outros', label: 'Outros', types: ['Certificado', 'Outro', 'Política LGPD'] },
+  ];
+
+  const filteredDocs = filterCategoria === 'all' 
+    ? documents 
+    : documents?.filter(d => {
+        const cat = CATEGORIAS.find(c => c.value === filterCategoria);
+        return cat?.types?.includes(d.tipo_documento);
+      });
+
+  const pendingDocs = filteredDocs?.filter(d => d.status === 'pendente') || [];
+  const approvedDocs = filteredDocs?.filter(d => d.status === 'aprovado') || [];
+  const otherDocs = filteredDocs?.filter(d => !['pendente', 'aprovado'].includes(d.status)) || [];
 
   const resetForm = () => {
     setFormData({
@@ -258,7 +275,13 @@ export default function EmployeeDocumentsTab({ employee }: EmployeeDocumentsTabP
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3">
+        <Select value={filterCategoria} onValueChange={setFilterCategoria}>
+          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <Button onClick={openCreateDialog}>
           <Upload className="h-4 w-4 mr-2" />
           Adicionar Documento

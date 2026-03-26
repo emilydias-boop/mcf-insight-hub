@@ -4916,6 +4916,56 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_compliance: {
+        Row: {
+          anexo_path: string | null
+          created_at: string
+          created_by: string | null
+          data_ocorrencia: string
+          descricao: string | null
+          employee_id: string
+          id: string
+          severidade: string
+          status: string
+          tipo: string
+          titulo: string
+        }
+        Insert: {
+          anexo_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_ocorrencia: string
+          descricao?: string | null
+          employee_id: string
+          id?: string
+          severidade: string
+          status?: string
+          tipo: string
+          titulo: string
+        }
+        Update: {
+          anexo_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_ocorrencia?: string
+          descricao?: string | null
+          employee_id?: string
+          id?: string
+          severidade?: string
+          status?: string
+          tipo?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_compliance_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_documents: {
         Row: {
           created_at: string | null
@@ -5278,6 +5328,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "employee_products_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_time_records: {
+        Row: {
+          anexo_path: string | null
+          created_at: string
+          created_by: string | null
+          data_fim: string | null
+          data_inicio: string
+          dias: number | null
+          employee_id: string
+          id: string
+          motivo: string | null
+          observacoes: string | null
+          tipo: string
+        }
+        Insert: {
+          anexo_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string | null
+          data_inicio: string
+          dias?: number | null
+          employee_id: string
+          id?: string
+          motivo?: string | null
+          observacoes?: string | null
+          tipo: string
+        }
+        Update: {
+          anexo_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string | null
+          data_inicio?: string
+          dias?: number | null
+          employee_id?: string
+          id?: string
+          motivo?: string | null
+          observacoes?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_time_records_employee_id_fkey"
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
