@@ -8,8 +8,6 @@ interface SdrDetailHeaderProps {
   cargo?: string;
   squad?: string;
   status?: string;
-  startDate: Date;
-  endDate: Date;
   onBack: () => void;
 }
 
