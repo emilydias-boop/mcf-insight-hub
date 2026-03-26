@@ -194,9 +194,13 @@ export function useSdrPerformanceData({
     const agendamentos_real = sm?.agendamentos || 0;
     const r1RealizadaMeta = Math.round(agendamentos_real * 0.7);
     const noShowMeta = Math.round(agendamentos_real * 0.3);
-    const contratosMeta = Math.round(r1RealizadaMeta * 0.3);
-    return { agendMeta, r1RealizadaMeta, noShowMeta, contratosMeta };
-  }, [metaPeriodo, sm]);
+    // Contratos: 30% do R1 Realizada REAL (não da meta)
+    const r1Realizada_real = sm?.r1Realizada || 0;
+    const contratosMeta = Math.round(r1Realizada_real * 0.3);
+    // Ligações: 84 por dia útil do período
+    const ligacoesMeta = 84 * businessDaysTotal;
+    return { agendMeta, r1RealizadaMeta, noShowMeta, contratosMeta, ligacoesMeta };
+  }, [metaPeriodo, sm, businessDaysTotal]);
 
   // Build main metrics
   const metrics = useMemo((): MetricWithMeta[] => {
@@ -256,16 +260,7 @@ export function useSdrPerformanceData({
         compVariation: null,
         format: "percent" as const,
       },
-      {
-        label: "Total Ligações",
-        key: "totalCalls",
-        realized: callMetrics.totalCalls,
-        meta: 0,
-        attainment: 0,
-        gap: 0,
-        compValue: null,
-        compVariation: null,
-      },
+      makeMetric("Total Ligações", "totalCalls", callMetrics.totalCalls, metas.ligacoesMeta),
       {
         label: "Tempo Médio",
         key: "avgDuration",
