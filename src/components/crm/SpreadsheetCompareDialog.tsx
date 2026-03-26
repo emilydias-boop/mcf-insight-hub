@@ -394,87 +394,23 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       let createdCount = 0;
       let skippedCount = 0;
 
-      // 1. found_in_current → update owner (use first SDR for single, round-robin for distribute)
+      // 1. found_in_current → só atualizar tags (preservar owner e stage)
       const inCurrent = results.filter(r => r.matchStatus === 'found_in_current' && r.localDealId);
       if (inCurrent.length > 0) {
         setBatchProgress({ current: 1, total: 3 });
-
-        // Verificar quais deals têm reunião (R1/R2) — proteger esses
         const allDealIds = inCurrent.map(r => r.localDealId!);
-        const { data: dealsWithMeetings } = await supabase
-          .from('meeting_slots')
-          .select('deal_id')
-          .in('deal_id', allDealIds);
 
-        const meetingDealIds = new Set(dealsWithMeetings?.map(m => m.deal_id) || []);
-        const withoutMeeting = inCurrent.filter(r => !meetingDealIds.has(r.localDealId!));
-        const withMeetingCount = allDealIds.length - withoutMeeting.length;
-
-        // Deals SEM reunião: transfer owner + stage + tags (fluxo normal)
-        if (withoutMeeting.length > 0) {
-          if (assignMode === 'distribute') {
-            const groups = new Map<string, string[]>();
-            withoutMeeting.forEach((r, i) => {
-              const sdr = sdrList[i % sdrList.length];
-              if (!groups.has(sdr.email)) groups.set(sdr.email, []);
-              groups.get(sdr.email)!.push(r.localDealId!);
-            });
-            for (const [email, dealIds] of groups) {
-              const sdr = sdrList.find(s => s.email === email)!;
-              const result = await bulkTransfer.mutateAsync({
-                dealIds,
-                newOwnerEmail: sdr.email,
-                newOwnerName: sdr.name,
-                newOwnerProfileId: sdr.id,
-              });
-              updatedCount += result.success;
-            }
-          } else {
-            const sdr = sdrList[0];
-            const transferResult = await bulkTransfer.mutateAsync({
-              dealIds: withoutMeeting.map(r => r.localDealId!),
-              newOwnerEmail: sdr.email,
-              newOwnerName: sdr.name,
-              newOwnerProfileId: sdr.id,
-            });
-            updatedCount = transferResult.success;
-          }
-
-          // Update stage_id and tags for deals WITHOUT meetings
-          const updateData: any = {};
-          if (stageId) updateData.stage_id = stageId;
-          if (tags?.length) updateData.tags = [...new Set(['base clint', ...tags])];
-
-          if (Object.keys(updateData).length > 0) {
-            const safeDealIds = withoutMeeting.map(r => r.localDealId!);
-            const { error: updateError } = await supabase
-              .from('crm_deals')
-              .update(updateData)
-              .in('id', safeDealIds);
-            if (updateError) {
-              console.error('Error updating stage/tags for existing deals:', updateError);
-            }
+        if (tags?.length) {
+          const { error: tagError } = await supabase
+            .from('crm_deals')
+            .update({ tags: [...new Set(['base clint', ...tags])] })
+            .in('id', allDealIds);
+          if (tagError) {
+            console.error('Error updating tags for existing deals:', tagError);
           }
         }
-
-        // Deals COM reunião: só atualizar tags (preservar stage e owner)
-        if (withMeetingCount > 0) {
-          const meetingDealIdsList = inCurrent
-            .filter(r => meetingDealIds.has(r.localDealId!))
-            .map(r => r.localDealId!);
-
-          if (tags?.length && meetingDealIdsList.length > 0) {
-            const { error: tagError } = await supabase
-              .from('crm_deals')
-              .update({ tags: [...new Set(['base clint', ...tags])] })
-              .in('id', meetingDealIdsList);
-            if (tagError) {
-              console.error('Error updating tags for deals with meetings:', tagError);
-            }
-          }
-          updatedCount += withMeetingCount;
-          toast.info(`${withMeetingCount} leads com reunião mantidos no estágio atual (apenas tags atualizadas)`);
-        }
+        updatedCount += inCurrent.length;
+        toast.info(`${inCurrent.length} leads já existentes — apenas tags atualizadas (owner e estágio preservados)`);
       }
 
       // 2. found_elsewhere → create deal with existing contact_id
