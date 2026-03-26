@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { format, parseISO, eachDayOfInterval, startOfDay } from "date-fns";
+import { format, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { BarChart3 } from "lucide-react";
 
@@ -11,49 +11,29 @@ interface SdrMeetingsChartProps {
   startDate: Date;
   endDate: Date;
   isLoading?: boolean;
+  metaDiaria?: number;
 }
 
-export function SdrMeetingsChart({ meetings, startDate, endDate, isLoading }: SdrMeetingsChartProps) {
-  // Group meetings by day based on data_agendamento
+export function SdrMeetingsChart({ meetings, startDate, endDate, isLoading, metaDiaria }: SdrMeetingsChartProps) {
   const chartData = useMemo(() => {
     if (!meetings.length) return [];
 
-    // Create array of all days in range
     const days = eachDayOfInterval({ start: startDate, end: endDate });
-    
-    // Initialize counts per day
-    const dayMap = new Map<string, { date: string; agendadas: number; realizadas: number; noShow: number }>();
-    
+    const dayMap = new Map<string, { date: string; agendamentos: number }>();
+
     days.forEach(day => {
       const key = format(day, "yyyy-MM-dd");
       dayMap.set(key, {
         date: format(day, "dd/MM", { locale: ptBR }),
-        agendadas: 0,
-        realizadas: 0,
-        noShow: 0,
+        agendamentos: 0,
       });
     });
 
-    // Count meetings by their agendamento date and status
     meetings.forEach(meeting => {
       if (!meeting.data_agendamento || !meeting.conta) return;
-      
-      const agendDate = startOfDay(parseISO(meeting.data_agendamento));
-      const key = format(agendDate, "yyyy-MM-dd");
-      
+      const key = meeting.data_agendamento.substring(0, 10);
       if (dayMap.has(key)) {
-        const entry = dayMap.get(key)!;
-        
-        // Toda reunião conta como agendada
-        entry.agendadas++;
-        
-        // Adicionalmente classificar o resultado
-        const status = meeting.status_atual?.toLowerCase() || '';
-        if (status.includes('realizada') || status === 'completed' || status === 'contract_paid' || status.includes('contrato')) {
-          entry.realizadas++;
-        } else if (status.includes('no-show') || status.includes('noshow') || status === 'no_show') {
-          entry.noShow++;
-        }
+        dayMap.get(key)!.agendamentos++;
       }
     });
 
@@ -98,20 +78,20 @@ export function SdrMeetingsChart({ meetings, startDate, endDate, isLoading }: Sd
         <ResponsiveContainer width="100%" height={250}>
           <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-            <XAxis 
-              dataKey="date" 
+            <XAxis
+              dataKey="date"
               tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
               tickLine={false}
               axisLine={{ stroke: 'hsl(var(--border))' }}
             />
-            <YAxis 
+            <YAxis
               tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
               tickLine={false}
               axisLine={{ stroke: 'hsl(var(--border))' }}
               allowDecimals={false}
             />
-            <Tooltip 
-              contentStyle={{ 
+            <Tooltip
+              contentStyle={{
                 backgroundColor: 'hsl(var(--card))',
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '8px',
@@ -119,13 +99,15 @@ export function SdrMeetingsChart({ meetings, startDate, endDate, isLoading }: Sd
               }}
               labelStyle={{ color: 'hsl(var(--foreground))' }}
             />
-            <Legend 
-              wrapperStyle={{ fontSize: '12px' }}
-              iconType="circle"
-            />
-            <Bar dataKey="agendadas" name="Agendadas" fill="hsl(210, 100%, 60%)" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="realizadas" name="Realizadas" fill="hsl(142, 76%, 45%)" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="noShow" name="No-Show" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} />
+            {metaDiaria && (
+              <ReferenceLine
+                y={metaDiaria}
+                stroke="hsl(var(--destructive))"
+                strokeDasharray="6 3"
+                label={{ value: `Meta: ${metaDiaria}`, position: 'right', fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+              />
+            )}
+            <Bar dataKey="agendamentos" name="Agendamentos" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

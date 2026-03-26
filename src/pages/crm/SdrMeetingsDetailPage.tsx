@@ -168,6 +168,7 @@ export default function SdrMeetingsDetailPage() {
               startDate={startDate}
               endDate={endDate}
               isLoading={isLoading}
+              metaDiaria={metaDiaria}
             />
             <SdrRankingBlock
               sdrMetrics={sdrMetrics}
