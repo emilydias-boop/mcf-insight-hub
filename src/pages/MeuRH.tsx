@@ -16,6 +16,8 @@ import { MeuRHAvaliacoesSection } from "@/components/meu-rh/MeuRHAvaliacoesSecti
 import { MeuRHHistoricoSection } from "@/components/meu-rh/MeuRHHistoricoSection";
 import { MeuRHFaleComRHSection } from "@/components/meu-rh/MeuRHFaleComRHSection";
 import { MeuRHPdiSection } from "@/components/meu-rh/MeuRHPdiSection";
+import { MeuRHPoliticasSection } from "@/components/meu-rh/MeuRHPoliticasSection";
+import { MeuRHComunicadosSection } from "@/components/meu-rh/MeuRHComunicadosSection";
 
 function PlaceholderTab({ title, description }: { title: string; description: string }) {
   return (
