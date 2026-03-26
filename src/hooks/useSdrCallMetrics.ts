@@ -187,19 +187,37 @@ export const useSdrCallMetricsBySdrId = (
       const startDate = new Date(year, month - 1, 1);
       const endDate = new Date(year, month, 0);
 
-      // Buscar ligações
-      const { data: calls, error } = await supabase
-        .from('calls')
-        .select('id, status, outcome, duration_seconds, started_at, ended_at')
-        .eq('user_id', sdr.user_id)
-        .eq('direction', 'outbound')
-        .gte('created_at', format(startDate, "yyyy-MM-dd'T'00:00:00"))
-        .lte('created_at', format(endDate, "yyyy-MM-dd'T'23:59:59"));
+      // Buscar ligações com paginação
+      const PAGE_SIZE = 1000;
+      let allCalls: any[] = [];
+      let page = 0;
+      let hasMore = true;
 
-      if (error) {
-        console.error('Erro ao buscar ligações:', error);
-        throw error;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('calls')
+          .select('id, status, outcome, duration_seconds, started_at, ended_at')
+          .eq('user_id', sdr.user_id)
+          .eq('direction', 'outbound')
+          .gte('created_at', format(startDate, "yyyy-MM-dd'T'00:00:00"))
+          .lte('created_at', format(endDate, "yyyy-MM-dd'T'23:59:59"))
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+        if (error) {
+          console.error('Erro ao buscar ligações:', error);
+          throw error;
+        }
+
+        if (data && data.length > 0) {
+          allCalls = allCalls.concat(data);
+          hasMore = data.length === PAGE_SIZE;
+          page++;
+        } else {
+          hasMore = false;
+        }
       }
+
+      const calls = allCalls;
 
       if (!calls || calls.length === 0) {
         return {
