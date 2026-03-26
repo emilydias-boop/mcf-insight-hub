@@ -4,19 +4,21 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, e
 import { ptBR } from "date-fns/locale";
 import { getWeekStartsOn } from "@/lib/businessDays";
 import { useActiveBU } from "@/hooks/useActiveBU";
-import { RefreshCw, Info } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SdrDetailHeader } from "@/components/sdr/SdrDetailHeader";
 import { SdrDetailKPICards } from "@/components/sdr/SdrDetailKPICards";
 import { SdrMeetingsChart } from "@/components/sdr/SdrMeetingsChart";
 import { SdrRankingBlock } from "@/components/sdr/SdrRankingBlock";
 import { SdrLeadsTable } from "@/components/sdr/SdrLeadsTable";
 import { MeetingDetailsDrawer } from "@/components/sdr/MeetingDetailsDrawer";
+import { CallMetricsCards } from "@/components/sdr/CallMetricsCards";
+import { SdrDailyBreakdownTable } from "@/components/sdr/SdrDailyBreakdownTable";
 
 import { useSdrDetailData } from "@/hooks/useSdrDetailData";
+import { useSdrCallMetrics } from "@/hooks/useSdrCallMetrics";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { Meeting } from "@/hooks/useSdrMeetings";
 
