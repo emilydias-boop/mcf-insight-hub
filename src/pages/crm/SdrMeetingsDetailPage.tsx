@@ -146,8 +146,6 @@ export default function SdrMeetingsDetailPage() {
         cargo={perfData.sdrInfo?.cargo}
         squad={perfData.sdrInfo?.squad}
         status={perfData.sdrInfo?.status}
-        startDate={startDate}
-        endDate={endDate}
         onBack={handleBack}
       />
 
