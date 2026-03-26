@@ -15,6 +15,7 @@ import { MeuRHDocumentosSection } from "@/components/meu-rh/MeuRHDocumentosSecti
 import { MeuRHAvaliacoesSection } from "@/components/meu-rh/MeuRHAvaliacoesSection";
 import { MeuRHHistoricoSection } from "@/components/meu-rh/MeuRHHistoricoSection";
 import { MeuRHFaleComRHSection } from "@/components/meu-rh/MeuRHFaleComRHSection";
+import { MeuRHPdiSection } from "@/components/meu-rh/MeuRHPdiSection";
 
 function PlaceholderTab({ title, description }: { title: string; description: string }) {
   return (
@@ -157,10 +158,7 @@ export default function MeuRH() {
         </TabsContent>
 
         <TabsContent value="pdi">
-          <PlaceholderTab
-            title="Plano de Desenvolvimento Individual"
-            description="Em breve você terá acesso à sua trilha de desenvolvimento, competências essenciais, progresso e comentários do gestor."
-          />
+          <MeuRHPdiSection employee={employee} />
         </TabsContent>
 
         <TabsContent value="comunicados">

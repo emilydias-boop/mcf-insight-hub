@@ -5156,6 +5156,103 @@ export type Database = {
           },
         ]
       }
+      employee_pdi: {
+        Row: {
+          categoria: string
+          created_at: string
+          created_by: string | null
+          data_conclusao: string | null
+          data_inicio: string | null
+          data_prevista: string | null
+          descricao: string | null
+          employee_id: string
+          id: string
+          prioridade: string
+          progresso: number
+          status: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          categoria?: string
+          created_at?: string
+          created_by?: string | null
+          data_conclusao?: string | null
+          data_inicio?: string | null
+          data_prevista?: string | null
+          descricao?: string | null
+          employee_id: string
+          id?: string
+          prioridade?: string
+          progresso?: number
+          status?: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          categoria?: string
+          created_at?: string
+          created_by?: string | null
+          data_conclusao?: string | null
+          data_inicio?: string | null
+          data_prevista?: string | null
+          descricao?: string | null
+          employee_id?: string
+          id?: string
+          prioridade?: string
+          progresso?: number
+          status?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_pdi_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_pdi_comments: {
+        Row: {
+          autor_nome: string | null
+          autor_tipo: string
+          conteudo: string
+          created_at: string
+          created_by: string | null
+          id: string
+          pdi_id: string
+        }
+        Insert: {
+          autor_nome?: string | null
+          autor_tipo?: string
+          conteudo: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          pdi_id: string
+        }
+        Update: {
+          autor_nome?: string | null
+          autor_tipo?: string
+          conteudo?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          pdi_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_pdi_comments_pdi_id_fkey"
+            columns: ["pdi_id"]
+            isOneToOne: false
+            referencedRelation: "employee_pdi"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_products: {
         Row: {
           created_at: string | null
