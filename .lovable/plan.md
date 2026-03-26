@@ -1,39 +1,23 @@
 
 
-## Reorganizar KPIs + Projeção lado a lado
+## Remover gráfico "Meta × Realizado"
 
-### Layout proposto
-
-```text
-┌──────────────────────────────────┐ ┌──────────────────┐
-│  Agend.  │ R1 Real. │ Contratos │ │ Projeção Período │
-│──────────┼──────────┼───────────│ │                  │
-│  Tx Cont │ Tx NoSh  │ Ligações  │ │ Meta Final: 110  │
-└──────────────────────────────────┘ │ Realizado:  96   │
-                                     │ Projeção:   111  │
-                                     │ Faltam:     14   │
-                                     │ Necess/dia: 4.7  │
-                                     │ ████████░░  87%  │
-                                     └──────────────────┘
-```
+O gráfico é redundante — os KPI cards já mostram meta vs realizado com % de atingimento, gap e cores. Além disso, a escala distorcida por Ligações torna os outros valores invisíveis.
 
 ### Mudanças
 
-**Arquivo 1: `src/pages/crm/SdrMeetingsDetailPage.tsx`**
-- Agrupar KPIs e Projeção num wrapper flex/grid lado a lado:
-  - Esquerda (~65%): `<SdrDetailKPICards />`
-  - Direita (~35%): `<SdrProjectionCard />`
+**Arquivo: `src/pages/crm/SdrMeetingsDetailPage.tsx`**
+- Remover a importação de `SdrMetaVsRealizadoChart`
+- Remover o grid que contém `SdrMetaVsRealizadoChart` + `SdrFunnelPanel` (linhas 181-184)
+- Mover `SdrFunnelPanel` para outro lugar ou colocá-lo sozinho em largura total
 
-**Arquivo 2: `src/components/sdr/SdrProjectionCard.tsx`**
-- Mudar layout de horizontal (grid-cols-5) para vertical (stack)
-- Cada item (Meta Final, Realizado, Projeção, Faltam, Necessário/dia) empilhado
-- Barra de progresso no rodapé
-- Altura se ajusta automaticamente aos KPIs ao lado
-
-### Arquivos afetados
-
-| Arquivo | Ação |
-|---------|------|
-| `src/pages/crm/SdrMeetingsDetailPage.tsx` | Wrapper flex para KPIs + Projeção lado a lado |
-| `src/components/sdr/SdrProjectionCard.tsx` | Layout vertical em vez de horizontal |
+**Layout resultante** (seção "Visão Geral"):
+```text
+[Auto Summary]
+[KPIs 3×2] [Projeção vertical]
+[Funnel - largura total]
+[Evolução Diária] [Evolução Acumulada]
+[Team Comparison]
+[Daily Breakdown]
+```
 
