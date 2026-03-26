@@ -64,6 +64,7 @@ export default function SdrMeetingsDetailPage() {
     teamAverages,
     ranking,
     meetings,
+    metaDiaria,
     isLoading,
     refetch,
   } = useSdrDetailData({
@@ -71,6 +72,8 @@ export default function SdrMeetingsDetailPage() {
     startDate,
     endDate,
   });
+
+  const callMetrics = useSdrCallMetrics(sdrEmail, startDate, endDate);
 
   const handleBack = () => {
     // Navigate back preserving filters
