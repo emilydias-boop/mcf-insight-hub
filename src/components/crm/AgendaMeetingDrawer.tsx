@@ -64,6 +64,7 @@ import { MovementHistorySection } from '@/components/sdr/MovementHistorySection'
 import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
 import { LinkContractDialog } from './LinkContractDialog';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
