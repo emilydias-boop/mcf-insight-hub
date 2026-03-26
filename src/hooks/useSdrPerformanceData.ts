@@ -190,11 +190,14 @@ export function useSdrPerformanceData({
   // Derived metas
   const metas = useMemo(() => {
     const agendMeta = metaPeriodo;
-    const r1AgendadaMeta = agendMeta; // same as agendamentos
-    const r1RealizadaMeta = Math.round(r1AgendadaMeta * 0.7);
+    const r1AgendadaMeta = agendMeta;
+    // Metas derivadas usam R1 Agendada REAL, não a meta fixa
+    const r1Agendada_real = sm?.r1Agendada || 0;
+    const r1RealizadaMeta = Math.round(r1Agendada_real * 0.7);
+    const noShowMeta = Math.round(r1Agendada_real * 0.3);
     const contratosMeta = Math.round(r1RealizadaMeta * 0.3);
-    return { agendMeta, r1AgendadaMeta, r1RealizadaMeta, contratosMeta };
-  }, [metaPeriodo]);
+    return { agendMeta, r1AgendadaMeta, r1RealizadaMeta, noShowMeta, contratosMeta };
+  }, [metaPeriodo, sm]);
 
   // Build main metrics
   const metrics = useMemo((): MetricWithMeta[] => {
