@@ -152,6 +152,15 @@ export default function SdrMeetingsDetailPage() {
             isLoading={isLoading}
           />
 
+          {/* Call Metrics */}
+          <CallMetricsCards
+            totalCalls={callMetrics.data?.totalCalls ?? 0}
+            answered={callMetrics.data?.answered ?? 0}
+            unanswered={callMetrics.data?.unanswered ?? 0}
+            avgDurationSeconds={callMetrics.data?.avgDurationSeconds ?? 0}
+            isLoading={callMetrics.isLoading}
+          />
+
           {/* Charts and Ranking */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <SdrMeetingsChart
@@ -167,20 +176,20 @@ export default function SdrMeetingsDetailPage() {
               isLoading={isLoading}
             />
           </div>
+
+          {/* Daily Breakdown */}
+          <SdrDailyBreakdownTable
+            meetings={meetings}
+            startDate={startDate}
+            endDate={endDate}
+            metaDiaria={metaDiaria}
+            isLoading={isLoading}
+          />
         </TabsContent>
 
         <TabsContent value="leads">
           <Card className="bg-card border-border">
             <CardContent className="p-4">
-              {meetings.length === 0 && !isLoading && (
-                <Alert className="mb-4">
-                  <Info className="h-4 w-4" />
-                  <AlertDescription>
-                    Esta aba lista apenas leads que tiveram movimento para "Reunião 01 Agendada / R1 Agendada" no período selecionado. 
-                    Leads em estágios anteriores (Novo Lead, Lead Qualificado) aparecem na aba "Todos os Negócios".
-                  </AlertDescription>
-                </Alert>
-              )}
               <SdrLeadsTable
                 meetings={meetings}
                 isLoading={isLoading}
