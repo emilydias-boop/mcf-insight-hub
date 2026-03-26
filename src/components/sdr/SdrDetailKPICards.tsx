@@ -52,22 +52,24 @@ function KPICard({ metric }: { metric: MetricWithMeta }) {
       : metric.meta.toFixed(0);
 
   const absGap = Math.abs(metric.gap);
+  const isInverted = metric.invertGap === true;
+
   const gapLabel =
     metric.gap < 0
-      ? `Faltam ${metric.format === "percent" ? `${absGap.toFixed(1)}%` : absGap.toFixed(0)}`
+      ? isInverted
+        ? `Abaixo: -${metric.format === "percent" ? `${absGap.toFixed(1)}%` : absGap.toFixed(0)}`
+        : `Faltam ${metric.format === "percent" ? `${absGap.toFixed(1)}%` : absGap.toFixed(0)}`
       : metric.gap > 0
         ? `Acima: +${metric.format === "percent" ? `${absGap.toFixed(1)}%` : absGap.toFixed(0)}`
         : "Na meta ✓";
 
-  const gapColor =
-    metric.gap < 0 ? "text-destructive" : "text-green-500";
+  const gapColor = isInverted
+    ? (metric.gap > 0 ? "text-destructive" : "text-green-500")
+    : (metric.gap < 0 ? "text-destructive" : "text-green-500");
 
-  const attainmentColor =
-    metric.attainment >= 100
-      ? "text-green-500"
-      : metric.attainment >= 70
-        ? "text-yellow-500"
-        : "text-destructive";
+  const attainmentColor = isInverted
+    ? (metric.attainment <= 100 ? "text-green-500" : metric.attainment <= 130 ? "text-yellow-500" : "text-destructive")
+    : (metric.attainment >= 100 ? "text-green-500" : metric.attainment >= 70 ? "text-yellow-500" : "text-destructive");
 
   const tooltipText = tooltipDescriptions[metric.key] || `Métrica: ${metric.label}`;
 

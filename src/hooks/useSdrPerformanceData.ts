@@ -20,6 +20,7 @@ export interface MetricWithMeta {
   compVariation: number | null; // percentage
   format?: "number" | "percent" | "duration";
   extra?: Record<string, number>;
+  invertGap?: boolean;
 }
 
 export interface ProjectionData {
@@ -249,7 +250,18 @@ export function useSdrPerformanceData({
         compVariation: null,
         format: "percent" as const,
       },
-      makeMetric("No-Show", "noShows", noshows, metas.noShowMeta, "noShows"),
+      {
+        label: "Taxa No-Show",
+        key: "taxaNoShow",
+        realized: agend > 0 ? (noshows / agend) * 100 : 0,
+        meta: 30,
+        attainment: agend > 0 ? ((noshows / agend) * 100 / 30) * 100 : 0,
+        gap: agend > 0 ? (noshows / agend) * 100 - 30 : 0,
+        compValue: compSdrMetrics ? (compSdrMetrics.agendamentos > 0 ? (compSdrMetrics.noShows / compSdrMetrics.agendamentos) * 100 : 0) : null,
+        compVariation: null,
+        format: "percent" as const,
+        invertGap: true,
+      },
       {
         label: "Taxa Contato",
         key: "taxaContato",
