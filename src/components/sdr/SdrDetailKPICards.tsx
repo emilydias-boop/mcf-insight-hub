@@ -1,8 +1,14 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { TrendingUp, TrendingDown, CheckCircle2, Info } from "lucide-react";
 import { MetricWithMeta } from "@/hooks/useSdrPerformanceData";
 import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface SdrDetailKPICardsProps {
   metrics: MetricWithMeta[];
@@ -17,10 +23,21 @@ const formatDuration = (seconds: number): string => {
   return `${minutes}m ${secs}s`;
 };
 
+const tooltipDescriptions: Record<string, string> = {
+  agendamentos: "Total de reuniões agendadas no período selecionado vs meta calculada.",
+  r1_agendada: "Reuniões de 1ª rodada com status 'agendada' no período.",
+  r1_realizada: "Reuniões de 1ª rodada efetivamente realizadas no período.",
+  no_show: "Reuniões agendadas onde o lead não compareceu.",
+  contratos: "Contratos pagos originados dos agendamentos deste SDR.",
+  ligacoes: "Total de ligações realizadas no período.",
+  contatos: "Ligações que foram atendidas (contato efetivo).",
+  taxa_contato: "Percentual de ligações que resultaram em contato efetivo.",
+  tempo_medio: "Tempo médio de duração das ligações atendidas.",
+};
+
 function KPICard({ metric }: { metric: MetricWithMeta }) {
   const hasMeta = metric.meta > 0;
   const progressPct = hasMeta ? Math.min(metric.attainment, 100) : 0;
-  const isPositive = metric.gap >= 0;
 
   const formattedValue =
     metric.format === "percent"
@@ -34,50 +51,68 @@ function KPICard({ metric }: { metric: MetricWithMeta }) {
       ? `${metric.meta.toFixed(0)}%`
       : metric.meta.toFixed(0);
 
+  const absGap = Math.abs(metric.gap);
+  const gapLabel =
+    metric.gap < 0
+      ? `Faltam ${metric.format === "percent" ? `${absGap.toFixed(1)}%` : absGap.toFixed(0)}`
+      : metric.gap > 0
+        ? `Acima: +${metric.format === "percent" ? `${absGap.toFixed(1)}%` : absGap.toFixed(0)}`
+        : "Na meta ✓";
+
+  const gapColor =
+    metric.gap < 0 ? "text-destructive" : "text-green-500";
+
+  const attainmentColor =
+    metric.attainment >= 100
+      ? "text-green-500"
+      : metric.attainment >= 70
+        ? "text-yellow-500"
+        : "text-destructive";
+
+  const tooltipText = tooltipDescriptions[metric.key] || `Métrica: ${metric.label}`;
+
   return (
     <Card className="bg-card border-border">
-      <CardContent className="p-4 space-y-3">
-        {/* Title */}
-        <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">
-          {metric.label}
-        </p>
+      <CardContent className="p-4 space-y-2.5">
+        {/* Title + tooltip */}
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">
+            {metric.label}
+          </p>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-3.5 w-3.5 text-muted-foreground/50 cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[220px] text-xs">
+                {tooltipText}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
 
         {/* Value */}
         <p className="text-2xl font-bold text-foreground">{formattedValue}</p>
 
-        {/* Meta + attainment */}
+        {/* Progress bar + attainment */}
         {hasMeta && (
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-muted-foreground">Meta: {formattedMeta}</span>
-              <span
-                className={cn(
-                  "font-semibold",
-                  metric.attainment >= 100
-                    ? "text-green-500"
-                    : metric.attainment >= 70
-                      ? "text-yellow-500"
-                      : "text-destructive"
-                )}
-              >
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Progress value={progressPct} className="h-1.5 flex-1" />
+              <span className={cn("text-xs font-semibold tabular-nums min-w-[32px] text-right", attainmentColor)}>
                 {metric.attainment.toFixed(0)}%
               </span>
             </div>
-            <Progress value={progressPct} className="h-1.5" />
+            <p className="text-[11px] text-muted-foreground">Meta: {formattedMeta}</p>
           </div>
         )}
 
         {/* Gap + comparison */}
-        <div className="flex items-center justify-between text-[11px]">
+        <div className="flex items-center justify-between text-xs pt-0.5">
           {hasMeta ? (
-            <span
-              className={cn(
-                "font-medium",
-                isPositive ? "text-green-500" : "text-destructive"
-              )}
-            >
-              Gap: {metric.gap > 0 ? "+" : ""}
-              {metric.format === "percent" ? `${metric.gap.toFixed(1)}%` : metric.gap.toFixed(0)}
+            <span className={cn("font-medium flex items-center gap-1", gapColor)}>
+              {metric.gap === 0 && <CheckCircle2 className="h-3 w-3" />}
+              {gapLabel}
             </span>
           ) : (
             <span />
@@ -86,7 +121,7 @@ function KPICard({ metric }: { metric: MetricWithMeta }) {
           {metric.compVariation !== null && (
             <span
               className={cn(
-                "flex items-center gap-0.5",
+                "flex items-center gap-0.5 text-[11px]",
                 metric.compVariation >= 0 ? "text-green-500" : "text-destructive"
               )}
             >
@@ -97,6 +132,7 @@ function KPICard({ metric }: { metric: MetricWithMeta }) {
               )}
               {metric.compVariation > 0 ? "+" : ""}
               {metric.compVariation.toFixed(0)}%
+              <span className="text-muted-foreground ml-0.5">vs ant.</span>
             </span>
           )}
         </div>
