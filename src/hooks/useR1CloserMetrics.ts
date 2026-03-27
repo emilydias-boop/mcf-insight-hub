@@ -447,6 +447,12 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           // Skip partners (sócios) from all metrics
           if ((att as any).is_partner) return;
 
+          // Skip outsides from ALL closer metrics (R1 Agendada, Realizada, No-show)
+          // Outside = lead bought contract BEFORE the meeting — not a closer conversion
+          const attEmail = att.deal_id ? dealEmailMap.get(att.deal_id) : undefined;
+          const isOutsideLead = attEmail && emailContractDate.has(attEmail) && emailContractDate.get(attEmail)! < new Date(meeting.scheduled_at);
+          if (isOutsideLead) return; // Outside — skip from closer metrics entirely
+
           const status = att.status;
           
           // R1 Agendada: only statuses in allowedAgendadaStatuses
@@ -454,14 +460,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
             metric!.r1_agendada++;
           }
           
-          // R1 Realizada: completed OR contract_paid (excluindo Outside)
-          // Outside = contrato pago ANTES da reunião, não conta como realizada
-          if (status === 'contract_paid') {
-            const isOutside = att.contract_paid_at && new Date(att.contract_paid_at) < new Date(meeting.scheduled_at);
-            if (!isOutside) {
-              metric!.r1_realizada++;
-            }
-          } else if (status === 'completed' || status === 'refunded') {
+          // R1 Realizada: completed OR contract_paid OR refunded
+          if (['completed', 'contract_paid', 'refunded'].includes(status)) {
             metric!.r1_realizada++;
           }
           
