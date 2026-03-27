@@ -1,50 +1,35 @@
 
 
-## Fix: Contagem de Contratos — 98 → 62
+## Adicionar "Leads que Avancaram" ao Relatorio de Analise de Carrinho
 
-### Causa raiz
-O relatório de análise de carrinho usa filtros muito amplos comparado à página de Vendas:
+### Problema
+O relatorio so mostra leads perdidos na tabela detalhada. O usuario precisa ver tambem os leads que avancaram (comunicados, R2 agendada, R2 realizada) para comparar ganhos vs perdas e identificar melhorias.
 
-| Filtro | Página de Vendas (62) | Relatório Carrinho (98) |
-|--------|----------------------|------------------------|
-| Produto | Apenas `A000 - Contrato` | Todos (`incorporador` + `contrato`) |
-| Join `product_configurations` | Sim (`target_bu = 'incorporador'`) | Não |
-| Exclui `newsale-%` | Sim | Não |
-| Exclui `make` duplicatas | Sim | Não |
-| Filtra por `source` | Sim (hubla, manual, make, mcfpay, kiwify) | Não |
+### Solucao
 
-### Correção: `src/hooks/useCarrinhoAnalysisReport.ts`
+**1. Hook `useCarrinhoAnalysisReport.ts`**
+- Criar novo array `leadsAvancados: LeadAvancado[]` com os leads que tiveram R2 realizada (ou ao menos R2 agendada)
+- Interface `LeadAvancado`: nome, telefone, estado, dataCompra, produto, statusAtual, r2Agendada, r2Realizada, closerName, dataR2, isOutside
+- No loop de processamento (linha 381), quando `isR2Realizada` ou `isR2Agendada`, adicionar ao array `leadsAvancados` em vez de so pular
+- Retornar `leadsAvancados` no objeto de resposta
 
-Alinhar a query de transações com a mesma lógica da RPC `get_all_hubla_transactions`:
+**2. Painel `CarrinhoAnalysisReportPanel.tsx`**
+- Adicionar tabs "Perdidos" e "Avancaram" na secao de tabela detalhada (usando o componente `Tabs` existente)
+- Tab "Avancaram": tabela com colunas Nome, Telefone, UF, Data Compra, Status, Closer, Data R2, Outside
+- Tab "Perdidos": tabela atual (sem mudanca)
+- Filtros proprios para cada tab (motivo so aparece nos perdidos, closer aparece nos avancados)
+- Contador em cada tab badge: "Avancaram (44)" / "Perdidos (14)"
+- Exportar Excel tambem funciona para a tab ativa
 
-1. **Filtrar apenas `product_name = 'A000 - Contrato'`** — é o único produto que representa contrato real no carrinho
-2. **Adicionar filtro `hubla_id NOT LIKE 'newsale-%'`** — remove duplicatas de importação
-3. **Filtrar por `source IN ('hubla', 'manual', 'make', 'mcfpay', 'kiwify')`** — exclui fontes inválidas
-4. **Excluir `make` + `contrato` lowercase** — mesma regra da RPC
-5. **Filtrar `sale_status IN ('completed', 'refunded')`** em vez de excluir event_type — alinha com a lógica correta
+**3. Comparativo visual**
+- Acima das tabs, adicionar um mini resumo lado a lado:
+  - Card verde: "Avancaram" com count e % do total
+  - Card vermelho: "Perdidos" com count e % do total
+  - Card amarelo: "Gap Operacional" = perdidos com tipo "operacional" (os que poderiam ter sido salvos)
 
-A query atualizada será client-side pois Supabase JS não suporta `NOT LIKE`, então filtraremos após fetch:
-
-```typescript
-const { data: transactions } = await supabase
-  .from('hubla_transactions')
-  .select('...')
-  .eq('product_name', 'A000 - Contrato')
-  .in('sale_status', ['completed', 'refunded'])
-  .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
-  .gte('sale_date', startStr)
-  .lte('sale_date', endStr + 'T23:59:59');
-
-// Client-side: remove newsale- and make/contrato duplicates
-const validTransactions = transactions.filter(t => {
-  if (t.hubla_id?.startsWith('newsale-')) return false;
-  if (t.source === 'make' && t.product_name?.toLowerCase() === 'contrato') return false;
-  if (t.installment_number > 1) return false;
-  return true;
-});
-```
-
-### Resultado esperado
-- Contratos: **62** (alinhado com página de Vendas)
-- Refunds identificados corretamente via `sale_status = 'refunded'`
+### Detalhes tecnicos
+- `LeadAvancado` sera uma interface separada (campos diferentes de `LeadDetalhado`)
+- `CarrinhoAnalysisData` ganha campo `leadsAvancados: LeadAvancado[]`
+- Tab state com `useState<'avancados' | 'perdidos'>('avancados')`
+- Export Excel adapta colunas conforme tab ativa
 
