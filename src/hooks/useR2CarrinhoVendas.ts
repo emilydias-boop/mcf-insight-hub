@@ -213,8 +213,19 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
         let attendeeData: { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt: string | null } | undefined;
         let linkedScheduledAt: string | null = null;
 
+        // PRIMEIRO: Match por linked_attendee_id (vinculação manual — mais confiável)
+        if (tx.linked_attendee_id) {
+          const linkedData = linkedAttendeesMap.get(tx.linked_attendee_id);
+          if (linkedData) {
+            matched = true;
+            isManualLink = true;
+            attendeeData = linkedData;
+            linkedScheduledAt = linkedData.scheduledAt;
+          }
+        }
+
         // Match por email
-        if (txEmail && emailsSet.has(txEmail)) {
+        if (!matched && txEmail && emailsSet.has(txEmail)) {
           matched = true;
           attendeeData = attendeeMap.get(txEmail);
         }
@@ -233,17 +244,6 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
           if (txName && nameMap.has(txName)) {
             matched = true;
             attendeeData = nameMap.get(txName);
-          }
-        }
-
-        // Match manual (linked_attendee_id) - pode ser de outra semana
-        if (!matched && tx.linked_attendee_id) {
-          const linkedData = linkedAttendeesMap.get(tx.linked_attendee_id);
-          if (linkedData) {
-            matched = true;
-            isManualLink = true;
-            attendeeData = linkedData;
-            linkedScheduledAt = linkedData.scheduledAt;
           }
         }
 
