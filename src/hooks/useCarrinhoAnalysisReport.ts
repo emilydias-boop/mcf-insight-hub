@@ -63,6 +63,10 @@ export interface LeadAvancado {
   statusAtual: string;
   closerName: string;
   dataR2: string;
+  dataR1: string | null;
+  comprouParceria: boolean;
+  dataParceria: string | null;
+  valorContrato: number;
   isOutside: boolean;
   r2Realizada: boolean;
 }
@@ -397,6 +401,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           // Lead avançou — adicionar à lista de avançados
           const closerName = (attendee?.meeting_slot as any)?.closer?.name || '';
           const dataR2 = (attendee?.meeting_slot as any)?.scheduled_at || '';
+          const r1DateValue = contactId ? r1DateByContactId.get(contactId) : null;
           leadsAvancados.push({
             nome: tx.customer_name || 'Sem nome',
             telefone: tx.customer_phone || attendee?.attendee_phone || '',
@@ -406,6 +411,10 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
             statusAtual: isR2Realizada ? 'R2 Realizada' : 'R2 Agendada',
             closerName,
             dataR2,
+            dataR1: r1DateValue ? r1DateValue.toISOString() : null,
+            comprouParceria: false, // will be enriched after loop
+            dataParceria: null,
+            valorContrato: tx.net_value || 0,
             isOutside,
             r2Realizada: isR2Realizada,
           });
@@ -445,6 +454,42 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
             diasSemAndamento: dias,
             isOutside,
           });
+        }
+      }
+
+      // Enrich advanced leads with partnership data
+      const advancedEmails = leadsAvancados
+        .map((_, i) => {
+          const tx = uniqueContracts.find(t => t.customer_name === leadsAvancados[i].nome && t.sale_date === leadsAvancados[i].dataCompra);
+          return tx ? (tx.customer_email || '').toLowerCase().trim() : '';
+        })
+        .filter(Boolean);
+
+      if (advancedEmails.length > 0) {
+        const { data: parcerias } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email, sale_date, product_name')
+          .eq('product_category', 'parceria')
+          .in('sale_status', ['completed', 'paid'])
+          .in('customer_email', advancedEmails);
+
+        const parceriaMap = new Map<string, { date: string; product: string }>();
+        for (const p of parcerias || []) {
+          const pEmail = (p.customer_email || '').toLowerCase().trim();
+          if (pEmail && !parceriaMap.has(pEmail)) {
+            parceriaMap.set(pEmail, { date: p.sale_date || '', product: p.product_name || '' });
+          }
+        }
+
+        // Map back to leadsAvancados
+        for (let i = 0; i < leadsAvancados.length; i++) {
+          const tx = uniqueContracts.find(t => t.customer_name === leadsAvancados[i].nome && t.sale_date === leadsAvancados[i].dataCompra);
+          const txEmail = tx ? (tx.customer_email || '').toLowerCase().trim() : '';
+          const parceria = parceriaMap.get(txEmail);
+          if (parceria) {
+            leadsAvancados[i].comprouParceria = true;
+            leadsAvancados[i].dataParceria = parceria.date;
+          }
         }
       }
 
