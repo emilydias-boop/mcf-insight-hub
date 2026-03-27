@@ -83,18 +83,20 @@ export function useR2AgendaMeetings(startDate: Date, endDate: Date) {
 
       if (error) throw error;
       
-      // Filter out orphan slots (no attendees) and map column names
+      // Filter out cancelled attendees and orphan slots
       return (data || [])
-        .filter(meeting => meeting.attendees && meeting.attendees.length > 0)
         .map(meeting => ({
           ...meeting,
-          attendees: (meeting.attendees || []).map((att: Record<string, unknown>) => ({
-            ...att,
-            name: att.attendee_name as string | null,
-            phone: att.attendee_phone as string | null,
-            email: null,
-          })),
-        })) as unknown as R2Meeting[];
+          attendees: (meeting.attendees || [])
+            .filter((att: Record<string, unknown>) => att.status !== 'cancelled')
+            .map((att: Record<string, unknown>) => ({
+              ...att,
+              name: att.attendee_name as string | null,
+              phone: att.attendee_phone as string | null,
+              email: null,
+            })),
+        }))
+        .filter(meeting => meeting.attendees.length > 0) as unknown as R2Meeting[];
     }
   });
 }
@@ -137,18 +139,20 @@ export function useR2MeetingsByCloser(closerId: string, startDate: Date, endDate
 
       if (error) throw error;
       
-      // Filter out orphan slots (no attendees) and map column names
+      // Filter out cancelled attendees and orphan slots
       return (data || [])
-        .filter(meeting => meeting.attendees && meeting.attendees.length > 0)
         .map(meeting => ({
           ...meeting,
-          attendees: (meeting.attendees || []).map((att: Record<string, unknown>) => ({
-            ...att,
-            name: att.attendee_name as string | null,
-            phone: att.attendee_phone as string | null,
-            email: null,
-          })),
-        })) as unknown as R2Meeting[];
+          attendees: (meeting.attendees || [])
+            .filter((att: Record<string, unknown>) => att.status !== 'cancelled')
+            .map((att: Record<string, unknown>) => ({
+              ...att,
+              name: att.attendee_name as string | null,
+              phone: att.attendee_phone as string | null,
+              email: null,
+            })),
+        }))
+        .filter(meeting => meeting.attendees.length > 0) as unknown as R2Meeting[];
     },
     enabled: !!closerId
   });
