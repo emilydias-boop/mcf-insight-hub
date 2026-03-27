@@ -77,9 +77,21 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
     return data.leadsAvancados.filter(l => {
       if (filterCloser !== 'all' && l.closerName !== filterCloser) return false;
       if (filterEstadoAv !== 'all' && l.estado !== filterEstadoAv) return false;
+      if (filterR1 === 'com' && !l.dataR1) return false;
+      if (filterR1 === 'sem' && l.dataR1) return false;
       return true;
     });
-  }, [data, filterCloser, filterEstadoAv]);
+  }, [data, filterCloser, filterEstadoAv, filterR1]);
+
+  const avancadosStats = useMemo(() => {
+    const total = filteredAvancados.length;
+    const comR1 = filteredAvancados.filter(l => !!l.dataR1).length;
+    const comR2 = filteredAvancados.filter(l => !!l.dataR2).length;
+    const comParceria = filteredAvancados.filter(l => l.comprouParceria).length;
+    const r2Realizada = filteredAvancados.filter(l => l.r2Realizada).length;
+    const outsides = filteredAvancados.filter(l => l.isOutside).length;
+    return { total, comR1, semR1: total - comR1, comR2, comParceria, r2Realizada, outsides };
+  }, [filteredAvancados]);
 
   const uniqueMotivos = useMemo(() => data ? [...new Set(data.leadsDetalhados.map(l => l.motivoPerda))] : [], [data]);
   const uniqueEstados = useMemo(() => data ? [...new Set(data.leadsDetalhados.map(l => l.estado))].sort() : [], [data]);
