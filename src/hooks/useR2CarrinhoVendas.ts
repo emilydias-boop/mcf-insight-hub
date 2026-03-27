@@ -142,14 +142,14 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
         return [];
       }
 
-      // 3. Buscar transações de parceria da semana que matcham com os leads aprovados
-      // Matching por email/telefone já garante relevância - não filtrar por product_name
+      // 3. Buscar transações de parceria da semana (usar endOfDay para incluir vendas do dia inteiro)
+      // O corte do carrinho define quais R2s pertencem à semana, mas vendas podem acontecer o dia todo
       let query = supabase
         .from('hubla_transactions')
         .select('*')
         .eq('product_category', 'parceria')
         .gte('sale_date', effectiveStart.toISOString())
-        .lt('sale_date', effectiveEnd.toISOString())
+        .lte('sale_date', endOfDay(weekEnd).toISOString())
         .order('sale_date', { ascending: false });
 
       // Construir filtro OR para emails e telefones
