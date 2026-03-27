@@ -297,21 +297,11 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         }
       });
 
-      // ========== OUTSIDE DETECTION ==========
+      // ========== OUTSIDE DETECTION (attributed by SALE DATE) ==========
       // Outside = lead bought contract BEFORE their R1 meeting
-      
-      // Collect all contact_ids from R1 meetings in period
-      const contactIds = new Set<string>();
-      const attendeeContactMap = new Map<string, { closerId: string; meetingDate: string }[]>();
-      
-      meetings?.forEach(meeting => {
-        meeting.meeting_slot_attendees?.forEach(att => {
-          // We need to get contact_id from deal - but attendees don't have contact_id directly
-          // We'll need to match by email instead using the deal's contact
-        });
-      });
+      // Count is attributed to the CONTRACT SALE DATE period, not the meeting date
 
-      // Get all deal_ids from the meetings
+      // --- Part A: dealEmailMap + emailContractDate for EXCLUSION logic ---
       const dealIds = new Set<string>();
       meetings?.forEach(meeting => {
         meeting.meeting_slot_attendees?.forEach(att => {
@@ -319,13 +309,11 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         });
       });
 
-      // Fetch deals with their contact emails (batched to avoid URL limit)
       const deals = await batchedIn<{ id: string; contact: { id: string; email: string | null } | null }>(
         (chunk) => supabase.from('crm_deals').select('id, contact:crm_contacts(id, email)').in('id', chunk),
         Array.from(dealIds)
       );
 
-      // Map deal_id -> email
       const dealEmailMap = new Map<string, string>();
       deals?.forEach(deal => {
         const contact = deal.contact as { id: string; email: string | null } | null;
@@ -334,10 +322,9 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         }
       });
 
-      // Get unique emails from deals in this period
       const attendeeEmails = [...new Set(Array.from(dealEmailMap.values()))];
 
-      // Fetch contract transactions for these emails (batched to avoid URL limit)
+      // Fetch ALL contracts for these emails (no date filter) — needed for exclusion
       const contracts = await batchedIn<{ customer_email: string | null; sale_date: string }>(
         (chunk) => supabase
           .from('hubla_transactions')
@@ -350,7 +337,6 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         attendeeEmails.length > 0 ? attendeeEmails : []
       );
 
-      // Map email -> earliest contract date
       const emailContractDate = new Map<string, Date>();
       contracts?.forEach(c => {
         const email = c.customer_email?.toLowerCase();
@@ -362,28 +348,92 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         }
       });
 
-      // Count outsides per closer (contract purchased BEFORE meeting)
-      const outsideByCloser = new Map<string, number>();
-      meetings?.forEach(meeting => {
-        if (!meeting.closer_id) return;
-        
-        meeting.meeting_slot_attendees?.forEach(att => {
-          if (!att.deal_id) return;
-          if ((att as any).is_partner) return;
-          
-          // Count all attendees regardless of SDR status
-          
-          const email = dealEmailMap.get(att.deal_id);
-          if (email && emailContractDate.has(email)) {
-            const contractDate = emailContractDate.get(email)!;
-            const meetingDate = new Date(meeting.scheduled_at);
-            
-            // Outside = contract purchased BEFORE meeting
-            if (contractDate < meetingDate) {
-              outsideByCloser.set(meeting.closer_id, (outsideByCloser.get(meeting.closer_id) || 0) + 1);
-            }
+      // --- Part B: Count outsides by SALE DATE in period ---
+      // 1. Fetch contract transactions with sale_date in the filtered period
+      const { data: outsidePeriodContracts } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, sale_date')
+        .in('product_category', ['contrato', 'incorporador'])
+        .ilike('product_name', '%contrato%')
+        .eq('sale_status', 'completed')
+        .gte('sale_date', start)
+        .lte('sale_date', end)
+        .order('sale_date', { ascending: true });
+
+      // 2. Build map: email → earliest sale_date in period
+      const periodContractByEmail = new Map<string, Date>();
+      outsidePeriodContracts?.forEach(c => {
+        const email = c.customer_email?.toLowerCase();
+        if (email) {
+          const date = new Date(c.sale_date);
+          if (!periodContractByEmail.has(email) || date < periodContractByEmail.get(email)!) {
+            periodContractByEmail.set(email, date);
           }
-        });
+        }
+      });
+
+      const contractEmailsList = Array.from(periodContractByEmail.keys());
+
+      // 3. Find contacts → deals for these contract emails
+      const outsideContacts = contractEmailsList.length > 0
+        ? await batchedIn<{ id: string; email: string }>(
+            (chunk) => supabase.from('crm_contacts').select('id, email').in('email', chunk),
+            contractEmailsList
+          )
+        : [];
+
+      const outsideContactEmailMap = new Map<string, string>();
+      outsideContacts.forEach(c => outsideContactEmailMap.set(c.id, c.email.toLowerCase()));
+
+      const outsideDeals = outsideContacts.length > 0
+        ? await batchedIn<{ id: string; contact_id: string }>(
+            (chunk) => supabase.from('crm_deals').select('id, contact_id').in('contact_id', chunk),
+            Array.from(outsideContactEmailMap.keys())
+          )
+        : [];
+
+      const outsideDealToEmail = new Map<string, string>();
+      outsideDeals.forEach(d => {
+        const email = outsideContactEmailMap.get(d.contact_id);
+        if (email) outsideDealToEmail.set(d.id, email);
+      });
+
+      // 4. Find R1 meeting attendees with these deal_ids (no date filter)
+      const outsideDealIds = Array.from(outsideDealToEmail.keys());
+      const outsideAttendees = outsideDealIds.length > 0
+        ? await batchedIn<{ deal_id: string; is_partner: boolean; meeting_slot: { closer_id: string; scheduled_at: string } }>(
+            (chunk) => supabase
+              .from('meeting_slot_attendees')
+              .select('deal_id, is_partner, meeting_slot:meeting_slots!inner(closer_id, scheduled_at, meeting_type, status)')
+              .in('deal_id', chunk)
+              .eq('meeting_slot.meeting_type', 'r1')
+              .neq('meeting_slot.status', 'cancelled')
+              .neq('meeting_slot.status', 'canceled')
+              .eq('is_partner', false),
+            outsideDealIds
+          )
+        : [];
+
+      // 5. Count outsides per closer (attributed to sale_date period)
+      const outsideByCloser = new Map<string, number>();
+      const countedOutsideEmails = new Set<string>();
+
+      outsideAttendees.forEach(att => {
+        const email = outsideDealToEmail.get(att.deal_id);
+        if (!email || countedOutsideEmails.has(email)) return;
+
+        const contractDate = periodContractByEmail.get(email);
+        if (!contractDate) return;
+
+        const meetingSlot = att.meeting_slot as any;
+        const scheduledAt = new Date(meetingSlot.scheduled_at);
+        const closerId = meetingSlot.closer_id;
+
+        // Outside = contract purchased BEFORE meeting
+        if (contractDate < scheduledAt && closerId) {
+          outsideByCloser.set(closerId, (outsideByCloser.get(closerId) || 0) + 1);
+          countedOutsideEmails.add(email);
+        }
       });
 
       // ========== MANUAL SALE ATTRIBUTIONS ==========
