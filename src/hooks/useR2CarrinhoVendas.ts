@@ -308,6 +308,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
             .select('customer_email, product_name, product_price, sale_date')
             .in('customer_email', emailsToEnrich)
             .eq('source', 'hubla')
+            .in('product_category', ['incorporador', 'parceria', 'ob_vitalicio'])
             .gte('sale_date', weekStart.toISOString())
             .lte('sale_date', endOfDay(weekEnd).toISOString());
 
