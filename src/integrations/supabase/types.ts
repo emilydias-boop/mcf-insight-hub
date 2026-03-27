@@ -1980,7 +1980,11 @@ export type Database = {
           area: string
           ativo: boolean
           cargo_base: string
+          competencias_essenciais: string[] | null
+          competencias_tecnicas: string[] | null
           created_at: string
+          descricao: string | null
+          documentos_padrao: string[] | null
           fixo_valor: number
           id: string
           modelo_variavel: string
@@ -1988,6 +1992,7 @@ export type Database = {
           nome_exibicao: string
           ote_total: number
           role_sistema: string | null
+          trilha_pdi: string | null
           updated_at: string
           variavel_valor: number
         }
@@ -1995,7 +2000,11 @@ export type Database = {
           area: string
           ativo?: boolean
           cargo_base: string
+          competencias_essenciais?: string[] | null
+          competencias_tecnicas?: string[] | null
           created_at?: string
+          descricao?: string | null
+          documentos_padrao?: string[] | null
           fixo_valor?: number
           id?: string
           modelo_variavel?: string
@@ -2003,6 +2012,7 @@ export type Database = {
           nome_exibicao: string
           ote_total?: number
           role_sistema?: string | null
+          trilha_pdi?: string | null
           updated_at?: string
           variavel_valor?: number
         }
@@ -2010,7 +2020,11 @@ export type Database = {
           area?: string
           ativo?: boolean
           cargo_base?: string
+          competencias_essenciais?: string[] | null
+          competencias_tecnicas?: string[] | null
           created_at?: string
+          descricao?: string | null
+          documentos_padrao?: string[] | null
           fixo_valor?: number
           id?: string
           modelo_variavel?: string
@@ -2018,6 +2032,7 @@ export type Database = {
           nome_exibicao?: string
           ote_total?: number
           role_sistema?: string | null
+          trilha_pdi?: string | null
           updated_at?: string
           variavel_valor?: number
         }

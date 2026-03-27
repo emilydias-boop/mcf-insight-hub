@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Plus, Search, Pencil, Trash2, Building2, Users } from "lucide-react";
 import DepartamentoFormDialog from "./DepartamentoFormDialog";
 import {
@@ -21,12 +23,13 @@ export default function DepartamentosTab() {
   const { data: departamentos, isLoading } = useDepartamentos();
   const { remove } = useDepartamentoMutations();
   const [search, setSearch] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedDepartamento, setSelectedDepartamento] = useState<Departamento | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const filtered = departamentos?.filter(d => 
-    d.ativo &&
+    (showInactive || d.ativo) &&
     (d.nome.toLowerCase().includes(search.toLowerCase()) ||
      (d.codigo?.toLowerCase().includes(search.toLowerCase())))
   ) || [];
@@ -55,14 +58,20 @@ export default function DepartamentosTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar departamento..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
+        <div className="flex items-center gap-4 flex-1">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar departamento..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={showInactive} onCheckedChange={setShowInactive} id="show-inactive-dept" />
+            <Label htmlFor="show-inactive-dept" className="text-sm text-muted-foreground">Mostrar inativos</Label>
+          </div>
         </div>
         <Button onClick={handleCreate}>
           <Plus className="h-4 w-4 mr-2" />
@@ -76,7 +85,7 @@ export default function DepartamentosTab() {
             {filtered.map((departamento) => (
               <div
                 key={departamento.id}
-                className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+                className={`flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors ${!departamento.ativo ? 'opacity-60' : ''}`}
               >
                 <div className="flex items-center gap-3">
                   <Building2 className="h-5 w-5 text-muted-foreground" />
@@ -88,6 +97,9 @@ export default function DepartamentosTab() {
                           BU
                         </Badge>
                       )}
+                      <Badge variant={departamento.ativo ? "default" : "secondary"} className="text-xs">
+                        {departamento.ativo ? "Ativo" : "Inativo"}
+                      </Badge>
                     </div>
                     {departamento.codigo && (
                       <div className="text-sm text-muted-foreground">
@@ -141,16 +153,16 @@ export default function DepartamentosTab() {
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir departamento?</AlertDialogTitle>
+            <AlertDialogTitle>Desativar departamento?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita. Colaboradores associados 
-              a este departamento perderão a referência.
+              O departamento será desativado. Colaboradores associados
+              continuarão com a referência, mas o departamento não aparecerá em novas seleções.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-              Excluir
+              Desativar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

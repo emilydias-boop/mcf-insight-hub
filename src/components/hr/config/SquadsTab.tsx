@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Select,
@@ -30,20 +32,19 @@ export default function SquadsTab() {
   const { data: departamentos } = useDepartamentos();
   const { remove } = useSquadMutations();
   const [search, setSearch] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [filterDepartamento, setFilterDepartamento] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSquad, setSelectedSquad] = useState<Squad | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [openDepts, setOpenDepts] = useState<Record<string, boolean>>({});
 
-  // Filter squads
   const filtered = squads?.filter(s => 
-    s.ativo &&
+    (showInactive || s.ativo) &&
     s.nome.toLowerCase().includes(search.toLowerCase()) &&
     (filterDepartamento === "all" || s.departamento_id === filterDepartamento)
   ) || [];
 
-  // Group by departamento
   const grouped = filtered.reduce((acc, squad) => {
     const deptName = squad.departamento?.nome || 'Sem Departamento';
     if (!acc[deptName]) acc[deptName] = [];
@@ -102,6 +103,10 @@ export default function SquadsTab() {
               ))}
             </SelectContent>
           </Select>
+          <div className="flex items-center gap-2">
+            <Switch checked={showInactive} onCheckedChange={setShowInactive} id="show-inactive-squads" />
+            <Label htmlFor="show-inactive-squads" className="text-sm text-muted-foreground">Mostrar inativos</Label>
+          </div>
         </div>
         <Button onClick={handleCreate}>
           <Plus className="h-4 w-4 mr-2" />
@@ -135,11 +140,14 @@ export default function SquadsTab() {
                   {deptSquads.map((squad) => (
                     <div
                       key={squad.id}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+                      className={`flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors ${!squad.ativo ? 'opacity-60' : ''}`}
                     >
                       <div className="flex items-center gap-3">
                         <Users className="h-5 w-5 text-muted-foreground" />
                         <span className="font-medium">{squad.nome}</span>
+                        <Badge variant={squad.ativo ? "default" : "secondary"} className="text-xs">
+                          {squad.ativo ? "Ativo" : "Inativo"}
+                        </Badge>
                       </div>
 
                       <div className="flex items-center gap-4">
@@ -189,16 +197,16 @@ export default function SquadsTab() {
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir squad?</AlertDialogTitle>
+            <AlertDialogTitle>Desativar squad?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita. Colaboradores associados 
-              a esta squad perderão a referência.
+              A squad será desativada. Colaboradores associados
+              continuarão com a referência, mas a squad não aparecerá em novas seleções.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-              Excluir
+              Desativar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

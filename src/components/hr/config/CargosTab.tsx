@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Plus, Search, ChevronDown, Pencil, Trash2, Users } from "lucide-react";
+import { Plus, Search, ChevronDown, Pencil, Trash2, Users, FileText, Brain, Shield } from "lucide-react";
 import CargoFormDialog from "./CargoFormDialog";
 import {
   AlertDialog,
@@ -26,17 +28,17 @@ export default function CargosTab() {
   const { data: cargos, isLoading } = useCargosConfig();
   const { remove } = useCargoMutations();
   const [search, setSearch] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedCargo, setSelectedCargo] = useState<Cargo | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [openAreas, setOpenAreas] = useState<Record<string, boolean>>({});
 
-  // Group by area
   const groupedCargos = useMemo(() => {
     if (!cargos) return {};
     
     const filtered = cargos.filter(c => 
-      c.ativo && 
+      (showInactive || c.ativo) && 
       (c.nome_exibicao.toLowerCase().includes(search.toLowerCase()) ||
        c.cargo_base.toLowerCase().includes(search.toLowerCase()) ||
        c.area.toLowerCase().includes(search.toLowerCase()))
@@ -48,7 +50,7 @@ export default function CargosTab() {
       acc[area].push(cargo);
       return acc;
     }, {} as Record<string, Cargo[]>);
-  }, [cargos, search]);
+  }, [cargos, search, showInactive]);
 
   const handleEdit = (cargo: Cargo) => {
     setSelectedCargo(cargo);
@@ -78,14 +80,20 @@ export default function CargosTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar cargo..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
+        <div className="flex items-center gap-4 flex-1">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar cargo..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={showInactive} onCheckedChange={setShowInactive} id="show-inactive-cargos" />
+            <Label htmlFor="show-inactive-cargos" className="text-sm text-muted-foreground">Mostrar inativos</Label>
+          </div>
         </div>
         <Button onClick={handleCreate}>
           <Plus className="h-4 w-4 mr-2" />
@@ -121,58 +129,82 @@ export default function CargosTab() {
                       <thead className="bg-muted/50">
                         <tr>
                           <th className="text-left px-4 py-2 font-medium">Nome</th>
+                          <th className="text-center px-4 py-2 font-medium">Status</th>
                           <th className="text-center px-4 py-2 font-medium">Nível</th>
-                          <th className="text-right px-4 py-2 font-medium">Fixo</th>
-                          <th className="text-right px-4 py-2 font-medium">Variável</th>
+                          <th className="text-center px-4 py-2 font-medium">
+                            <span title="Role"><Shield className="h-4 w-4 inline" /></span>
+                          </th>
                           <th className="text-right px-4 py-2 font-medium">OTE</th>
                           <th className="text-center px-4 py-2 font-medium">
-                            <Users className="h-4 w-4 inline" />
+                            <span title="Competências"><Brain className="h-4 w-4 inline" /></span>
+                          </th>
+                          <th className="text-center px-4 py-2 font-medium">
+                            <span title="Documentos"><FileText className="h-4 w-4 inline" /></span>
+                          </th>
+                          <th className="text-center px-4 py-2 font-medium">
+                            <span title="Pessoas"><Users className="h-4 w-4 inline" /></span>
                           </th>
                           <th className="text-right px-4 py-2 font-medium">Ações</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
-                        {areaCargos.map((cargo) => (
-                          <tr key={cargo.id} className="hover:bg-muted/30">
-                            <td className="px-4 py-2">
-                              <span className="font-medium">{cargo.nome_exibicao}</span>
-                            </td>
-                            <td className="text-center px-4 py-2">
-                              {cargo.nivel ? `N${cargo.nivel}` : '-'}
-                            </td>
-                            <td className="text-right px-4 py-2 text-muted-foreground">
-                              {formatCurrency(cargo.fixo_valor)}
-                            </td>
-                            <td className="text-right px-4 py-2 text-muted-foreground">
-                              {formatCurrency(cargo.variavel_valor)}
-                            </td>
-                            <td className="text-right px-4 py-2 font-medium text-primary">
-                              {formatCurrency(cargo.ote_total)}
-                            </td>
-                            <td className="text-center px-4 py-2 text-muted-foreground">
-                              {cargo.employee_count || 0}
-                            </td>
-                            <td className="text-right px-4 py-2">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleEdit(cargo)}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setDeleteId(cargo.id)}
-                                  className="text-destructive hover:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                        {areaCargos.map((cargo) => {
+                          const compCount = (cargo.competencias_essenciais?.length || 0) + (cargo.competencias_tecnicas?.length || 0);
+                          const docCount = cargo.documentos_padrao?.length || 0;
+                          return (
+                            <tr key={cargo.id} className={`hover:bg-muted/30 ${!cargo.ativo ? 'opacity-60' : ''}`}>
+                              <td className="px-4 py-2">
+                                <span className="font-medium">{cargo.nome_exibicao}</span>
+                              </td>
+                              <td className="text-center px-4 py-2">
+                                <Badge variant={cargo.ativo ? "default" : "secondary"} className="text-xs">
+                                  {cargo.ativo ? "Ativo" : "Inativo"}
+                                </Badge>
+                              </td>
+                              <td className="text-center px-4 py-2">
+                                {cargo.nivel ? `N${cargo.nivel}` : '-'}
+                              </td>
+                              <td className="text-center px-4 py-2">
+                                {cargo.role_sistema ? (
+                                  <Badge variant="outline" className="text-xs">
+                                    {cargo.role_sistema}
+                                  </Badge>
+                                ) : '-'}
+                              </td>
+                              <td className="text-right px-4 py-2 font-medium text-primary">
+                                {formatCurrency(cargo.ote_total)}
+                              </td>
+                              <td className="text-center px-4 py-2 text-muted-foreground">
+                                {compCount > 0 ? compCount : '-'}
+                              </td>
+                              <td className="text-center px-4 py-2 text-muted-foreground">
+                                {docCount > 0 ? docCount : '-'}
+                              </td>
+                              <td className="text-center px-4 py-2 text-muted-foreground">
+                                {cargo.employee_count || 0}
+                              </td>
+                              <td className="text-right px-4 py-2">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleEdit(cargo)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setDeleteId(cargo.id)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
