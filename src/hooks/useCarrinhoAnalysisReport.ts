@@ -284,11 +284,36 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         }
       }
 
-      // 7. R2 status options
-      const { data: r2StatusOptions } = await supabase
-        .from('r2_status_options')
-        .select('id, name')
-        .eq('is_active', true);
+      // 7. R2 status options + R1 meetings for outside detection
+      const contactIds = Array.from(new Set(crmContactMap.values()));
+      
+      const [r2StatusResult, r1MeetingsResult] = await Promise.all([
+        supabase.from('r2_status_options').select('id, name').eq('is_active', true),
+        // Fetch R1 meetings for contacts to detect outsides
+        contactIds.length > 0
+          ? supabase
+              .from('meeting_slot_attendees')
+              .select('contact_id, meeting_slots!inner(scheduled_at, meeting_type)')
+              .in('contact_id', contactIds)
+              .eq('meeting_slots.meeting_type', 'r1')
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const r2StatusOptions = r2StatusResult.data;
+      const r1Meetings = r1MeetingsResult.data || [];
+
+      // Build contact_id → earliest R1 date
+      const r1DateByContactId = new Map<string, Date>();
+      for (const m of r1Meetings) {
+        const cid = (m as any).contact_id;
+        const scheduledAt = new Date((m as any).meeting_slots?.scheduled_at);
+        if (cid && !isNaN(scheduledAt.getTime())) {
+          const existing = r1DateByContactId.get(cid);
+          if (!existing || scheduledAt < existing) {
+            r1DateByContactId.set(cid, scheduledAt);
+          }
+        }
+      }
 
       const statusNameMap = new Map<string, string>();
       for (const s of r2StatusOptions || []) {
@@ -311,6 +336,12 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         let attendee = tx.linked_attendee_id ? attendeeMap.get(tx.linked_attendee_id) : null;
         if (!attendee) attendee = attendeeMap.get(`email:${email}`);
         if (!attendee) attendee = attendeeMap.get(`phone:${email}`);
+
+        // Detect outside: sale_date < R1 scheduled_at
+        const contactId = crmContactMap.get(email);
+        const r1Date = contactId ? r1DateByContactId.get(contactId) : null;
+        const saleDate = new Date(tx.sale_date);
+        const isOutside = r1Date ? saleDate < r1Date : false;
 
         const r2StatusName = attendee?.r2_status_id ? statusNameMap.get(attendee.r2_status_id) || null : null;
 
@@ -344,11 +375,15 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         if (isR2Realizada) sd.realizados++;
 
         if (!isR2Realizada) {
-          // Check if contact exists in CRM for better classification
           const txPhone9 = normalizePhoneSuffix(tx.customer_phone);
           const contactExistsInCRM = allCRMEmails.has(email) || (txPhone9 ? allCRMPhones.has(txPhone9) : false);
 
-          const loss = classifyLoss(attendee, hasRefund, r2StatusName, contactExistsInCRM);
+          let loss: { motivo: string; tipo: 'legitima' | 'operacional' };
+          if (isOutside && !isR2Agendada) {
+            loss = { motivo: 'Outside sem R2', tipo: 'legitima' };
+          } else {
+            loss = classifyLoss(attendee, hasRefund, r2StatusName, contactExistsInCRM);
+          }
           sd.perdidos++;
 
           const existing = motivosCount.get(loss.motivo);
@@ -373,6 +408,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
             responsavel: closerName,
             ultimaInteracao: lastInteraction,
             diasSemAndamento: dias,
+            isOutside,
           });
         }
       }
