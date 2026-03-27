@@ -1,37 +1,50 @@
 
 
-## Fix: Contagem de Contratos no Relatório de Análise de Carrinho
+## Fix: Contagem de Contratos — 98 → 62
 
-### Problemas identificados
+### Causa raiz
+O relatório de análise de carrinho usa filtros muito amplos comparado à página de Vendas:
 
-1. **Recorrências inflando a contagem**: A query não filtra por `installment_number = 1`, então P2, P3, etc. são contadas como novos contratos
-2. **Outsides sem R2 agendada contam como perdidos**: Leads que compraram ANTES da R1 (outside) e nunca agendaram R2 estão inflando "perdidos", mas nem todos deveriam estar no funil do carrinho
-3. **Leads que fizeram R1 e compraram ali** deveriam fluir naturalmente para R2 — se compraram durante/após R1, a R2 é o próximo passo esperado
+| Filtro | Página de Vendas (62) | Relatório Carrinho (98) |
+|--------|----------------------|------------------------|
+| Produto | Apenas `A000 - Contrato` | Todos (`incorporador` + `contrato`) |
+| Join `product_configurations` | Sim (`target_bu = 'incorporador'`) | Não |
+| Exclui `newsale-%` | Sim | Não |
+| Exclui `make` duplicatas | Sim | Não |
+| Filtra por `source` | Sim (hubla, manual, make, mcfpay, kiwify) | Não |
 
-### Correções no `src/hooks/useCarrinhoAnalysisReport.ts`
+### Correção: `src/hooks/useCarrinhoAnalysisReport.ts`
 
-**1. Filtrar apenas primeira parcela**
-- Adicionar `.eq('installment_number', 1)` ou filtro client-side `installment_number === 1 || installment_number === null` na query de `hubla_transactions`
-- Isso remove recorrências (P2, P3...) da contagem
+Alinhar a query de transações com a mesma lógica da RPC `get_all_hubla_transactions`:
 
-**2. Detectar outsides**
-- Para cada contrato, verificar se o lead tem R1 agendada/realizada
-- Buscar `meeting_slot_attendees` com `meeting_type = 'r1'` para os mesmos `contact_id`/email
-- Se `sale_date < scheduled_at` da R1 → outside
-- Outsides que NÃO agendaram R2 devem ter motivo de perda específico: "Outside sem R2"
-- Outsides que agendaram R2 continuam no funil normalmente
+1. **Filtrar apenas `product_name = 'A000 - Contrato'`** — é o único produto que representa contrato real no carrinho
+2. **Adicionar filtro `hubla_id NOT LIKE 'newsale-%'`** — remove duplicatas de importação
+3. **Filtrar por `source IN ('hubla', 'manual', 'make', 'mcfpay', 'kiwify')`** — exclui fontes inválidas
+4. **Excluir `make` + `contrato` lowercase** — mesma regra da RPC
+5. **Filtrar `sale_status IN ('completed', 'refunded')`** em vez de excluir event_type — alinha com a lógica correta
 
-**3. Leads que compraram via R1**
-- Se `sale_date >= scheduled_at` da R1 (ou não tem R1) → comprou no fluxo normal
-- Estes são os leads que DEVEM virar R2 agendada
-- Se não viraram, é falha operacional real
+A query atualizada será client-side pois Supabase JS não suporta `NOT LIKE`, então filtraremos após fetch:
 
-**4. Novo campo no LeadDetalhado**
-- Adicionar `isOutside: boolean` para sinalizar na tabela
-- Adicionar coluna "Outside" na tabela detalhada
+```typescript
+const { data: transactions } = await supabase
+  .from('hubla_transactions')
+  .select('...')
+  .eq('product_name', 'A000 - Contrato')
+  .in('sale_status', ['completed', 'refunded'])
+  .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
+  .gte('sale_date', startStr)
+  .lte('sale_date', endStr + 'T23:59:59');
+
+// Client-side: remove newsale- and make/contrato duplicates
+const validTransactions = transactions.filter(t => {
+  if (t.hubla_id?.startsWith('newsale-')) return false;
+  if (t.source === 'make' && t.product_name?.toLowerCase() === 'contrato') return false;
+  if (t.installment_number > 1) return false;
+  return true;
+});
+```
 
 ### Resultado esperado
-- Os 99 devem cair para ~70-80 (removendo recorrências)
-- Outsides ficam classificados separadamente
-- O funil mostra apenas leads que realmente deveriam ter virado R2
+- Contratos: **62** (alinhado com página de Vendas)
+- Refunds identificados corretamente via `sale_status = 'refunded'`
 
