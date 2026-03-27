@@ -109,7 +109,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
       const nameMap = new Map<string, { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt: string | null }>();
       const attendeeMap = new Map<string, { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt: string | null }>();
 
-      approvedAttendees.forEach((att: any) => {
+      (approvedAttendees || []).forEach((att: any) => {
         const email = att.deal?.contact?.email?.toLowerCase();
         const phone = att.attendee_phone || att.deal?.contact?.phone;
         const normalizedPhone = phone ? normalizeForMatch(phone) : null;
@@ -137,10 +137,6 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
       });
 
       const emails = Array.from(emailsSet);
-
-      if (emails.length === 0 && phonesSet.size === 0 && nameMap.size === 0) {
-        return [];
-      }
 
       // 3. Buscar transações de parceria da semana (usar endOfDay para incluir vendas do dia inteiro)
       // O corte do carrinho define quais R2s pertencem à semana, mas vendas podem acontecer o dia todo
