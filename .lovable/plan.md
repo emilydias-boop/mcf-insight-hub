@@ -1,101 +1,69 @@
 
 
-## Evolucao das Configuracoes do RH — Central Estrutural
+## Diagnostico: Outsides nas Metricas de Closer
 
-### Visao geral
+### Regra de negocio confirmada
 
-Enriquecer a tela de Configuracoes do RH em 3 frentes: (1) expandir o modal de cargo com novos campos, (2) adicionar colunas e badges na listagem de cargos, (3) melhorar as abas de departamentos, squads e areas com mais informacoes e toggle ativo/inativo.
+**Para o SDR**: Outside conta como agendamento (o SDR fez o trabalho de agendar).
+**Para o Closer**: Outside NAO deve contar em NENHUMA metrica (R1 Agendada, R1 Realizada, No-show). Deve aparecer apenas na coluna "Outside" separada.
 
-### 1. Migration — Novos campos em `cargos_catalogo`
+### Status atual — onde esta o problema
 
-Adicionar colunas que nao existem hoje:
+**1. Painel "Reunioes da Equipe" (`useR1CloserMetrics.ts`):**
 
-```sql
-ALTER TABLE cargos_catalogo
-  ADD COLUMN IF NOT EXISTS descricao TEXT,
-  ADD COLUMN IF NOT EXISTS competencias_essenciais TEXT[] DEFAULT '{}',
-  ADD COLUMN IF NOT EXISTS competencias_tecnicas TEXT[] DEFAULT '{}',
-  ADD COLUMN IF NOT EXISTS documentos_padrao TEXT[] DEFAULT '{}',
-  ADD COLUMN IF NOT EXISTS trilha_pdi TEXT;
+| Metrica | Exclui Outside? | Status |
+|---------|-----------------|--------|
+| R1 Agendada (linha 452-455) | NAO — conta todos com allowedAgendadaStatuses | BUG |
+| R1 Realizada (linha 457-466) | SIM para `contract_paid` (verifica isOutside) | PARCIAL — se outside tiver status `completed`, ainda conta |
+| No-show (linha 469-471) | NAO — conta todos com `no_show` | BUG |
+| Contrato Pago (linha 270-288) | SIM — exclui corretamente | OK |
+| Outside (linha 365-387) | N/A — contagem propria | OK |
+
+**2. "Meu Desempenho" do Closer (`useCloserAgendaMetrics.ts`):**
+
+| Metrica | Exclui Outside? | Status |
+|---------|-----------------|--------|
+| R1 Alocadas (linha 99) | NAO — conta todos non-partner | BUG |
+| R1 Realizadas (linha 104) | NAO — conta `completed`/`contract_paid`/`refunded` sem verificar | BUG |
+| No-shows (linha 109) | NAO — conta todos `no_show` | BUG |
+| Contratos Pagos (linha 157-170) | SIM — exclui outsides | OK |
+
+**3. RPC `get_sdr_metrics_from_agenda` (painel SDR):**
+- `contratos` conta por `contract_paid_at` sem verificar se e outside — mas para SDR isso esta CORRETO (outside conta como contrato do SDR)
+
+### Correcao necessaria
+
+**Arquivo 1: `src/hooks/useR1CloserMetrics.ts`**
+
+No loop de processamento de meetings (linha 446+), antes de contar R1 Agendada, R1 Realizada e No-show, verificar se o attendee e outside usando `dealEmailMap` e `emailContractDate` (que ja existem no codigo). Se `contractDate < meetingDate`, pular o attendee dessas 3 metricas.
+
+Mudanca no bloco linhas 446-474: para cada attendee, adicionar check:
+```
+const email = dealEmailMap.get(att.deal_id);
+const isOutsideLead = email && emailContractDate.has(email) && emailContractDate.get(email)! < new Date(meeting.scheduled_at);
+if (isOutsideLead) return; // Skip outsides from closer metrics
 ```
 
-Nenhuma tabela nova. Apenas enriquecimento da tabela existente com campos opcionais.
+Isso remove outsides de R1 Agendada, R1 Realizada e No-show de uma vez.
 
-### 2. Modal de cargo expandido (`CargoFormDialog.tsx`)
+**Arquivo 2: `src/hooks/useCloserAgendaMetrics.ts`**
 
-Converter de `max-w-lg` para `max-w-2xl` e organizar em secoes:
+Este hook NAO tem deteccao de outside. Precisa adicionar:
+1. Coletar `deal_id`s dos attendees
+2. Buscar emails dos deals via `crm_deals` + `crm_contacts`
+3. Buscar `hubla_transactions` para encontrar data do contrato mais antigo
+4. No loop de contagem (linha 92-113), pular attendees cujo email tem contrato anterior a `slot.scheduled_at`
 
-**Secao 1 — Dados basicos** (mantidos):
-- Nome exibicao, Cargo base, Area, Nivel, Modelo variavel, Role sistema
+### Resultado esperado
 
-**Secao 2 — Descricao** (novo):
-- Textarea para descricao do cargo
+Todas as metricas do closer (R1 Agendada, R1 Realizada, No-show) passam a excluir outsides. Outsides continuam aparecendo apenas na coluna "Outside" dedicada. A taxa de conversao e no-show refletem apenas leads que o closer realmente atendeu ou deveria ter atendido.
 
-**Secao 3 — Competencias** (novo):
-- Campo de tags/chips para competencias essenciais (input + enter para adicionar)
-- Campo de tags/chips para competencias tecnicas
-
-**Secao 4 — Documentos padrao** (novo):
-- Campo de tags/chips para tipos de documentos padrao vinculados ao cargo (ex: "Contrato PJ", "Job Description")
-
-**Secao 5 — Desenvolvimento** (novo):
-- Campo texto para trilha de PDI sugerida
-
-**Secao 6 — Remuneracao** (mantida):
-- Fixo, Variavel, OTE
-
-**Secao 7 — Status** (novo):
-- Toggle ativo/inativo visivel no form (hoje so existe no soft delete)
-
-### 3. Listagem de cargos (`CargosTab.tsx`)
-
-Manter a estrutura de tabela agrupada por area. Adicionar:
-
-- Coluna **Status**: badge verde "Ativo" / cinza "Inativo" (mostrar inativos tambem, filtrados por toggle)
-- Coluna **Docs**: icone + contagem de `documentos_padrao.length`
-- Coluna **Comp.**: icone + contagem de `competencias_essenciais.length + competencias_tecnicas.length`
-- Coluna **Role**: badge com `role_sistema`
-- Toggle no topo para "Mostrar inativos"
-- Remover filtro que esconde inativos (agora controlado pelo toggle)
-
-### 4. Abas Departamentos e Squads — Melhorias
-
-**DepartamentosTab.tsx**:
-- Adicionar coluna de cargos vinculados (count de cargos ativos com employees naquele departamento)
-- Adicionar badge de status ativo/inativo
-- Toggle "Mostrar inativos" no topo
-- Mudar delete para soft-delete (set `ativo = false`) em vez de hard delete
-
-**SquadsTab.tsx**:
-- Adicionar badge de status ativo/inativo
-- Toggle "Mostrar inativos"
-- Mudar delete para soft-delete
-
-**AreasTab.tsx** — ja tem cargo_count e status. Sem mudancas.
-
-### 5. Hooks (`useHRConfig.ts`)
-
-- Atualizar interface `Cargo` com novos campos (`descricao`, `competencias_essenciais`, `competencias_tecnicas`, `documentos_padrao`, `trilha_pdi`)
-- Remover filtro `.eq('ativo', true)` de `useCargosConfig` (agora retorna todos)
-- Atualizar `useDepartamentos` para retornar tambem inativos
-- Atualizar `useSquads` para retornar tambem inativos
-- Mutation de departamento `remove` passa a ser soft-delete (`ativo = false`)
-- Mutation de squad `remove` passa a ser soft-delete (`ativo = false`)
-
-### Arquivos
-
-**Migration**: Adicionar campos em `cargos_catalogo`
-
-**Editados**:
-- `src/components/hr/config/CargoFormDialog.tsx` — Modal expandido com descricao, competencias, docs padrao, trilha PDI, toggle ativo
-- `src/components/hr/config/CargosTab.tsx` — Novas colunas (status, docs, comp, role), toggle inativos
-- `src/components/hr/config/DepartamentosTab.tsx` — Badge status, toggle inativos, soft-delete
-- `src/components/hr/config/SquadsTab.tsx` — Badge status, toggle inativos, soft-delete
-- `src/hooks/useHRConfig.ts` — Novos campos na interface Cargo, queries sem filtro ativo, soft-delete para dept/squad
+### Arquivos editados
+- `src/hooks/useR1CloserMetrics.ts` — Adicionar check de outside no loop de metricas
+- `src/hooks/useCloserAgendaMetrics.ts` — Adicionar deteccao de outside e excluir de r1_alocadas, r1_realizadas, no_shows
 
 ### O que NAO muda
-- Pagina `Configuracoes.tsx` (layout de abas)
-- `AreasTab.tsx` (ja completa)
-- Formularios de Departamento, Squad e Area (sem campos novos)
-- Nenhuma rota nova
+- RPC `get_sdr_metrics_from_agenda` (SDR metrics — outside conta como agendamento/contrato para SDR)
+- Contagem de `contrato_pago` e `outside` (ja estao corretos)
+- `CloserSummaryTable` e `SdrSummaryTable` (consomem dados dos hooks)
 
