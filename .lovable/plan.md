@@ -1,27 +1,27 @@
 
 
-## Relatorio: Compras detalhadas dos 632 leads A010 sem dono
+## Relatório PDF: 420 Leads A010 Puros Sem Dono — Março 2026
 
 ### Objetivo
-Gerar um PDF com o historico completo de compras de cada um dos 632 leads A010 sem dono de marco 2026, para permitir a reclassificacao correta por estagio.
+Gerar um PDF focado nos **420 leads que compraram APENAS A010** (sem contrato, renovação, parceria ou OB), que estão sem dono e parados — prontos para distribuição.
 
-### Execucao
+### Filtros aplicados
+- Pipeline: Inside Sales (incorporador) — origin `e3c04f21-...`
+- Período: Março 2026
+- Sem dono (`owner_id IS NULL`)
+- Tem compra A010 confirmada (`product_category = 'a010'`, `sale_status = 'completed'`)
+- **NÃO** tem compra em categorias avançadas: `contrato`, `renovacao`, `parceria`, `ob_vitalicio`, `contrato-anticrise`, `contrato_clube_arremate`, `socios`
 
-1. **Query ao banco** — Para cada lead sem dono (pipeline Inside Sales, marco 2026, owner_id IS NULL), buscar TODAS as transacoes em `hubla_transactions` vinculadas por email ou telefone (nao so A010, mas todas as compras: contrato, renovacao, OB, etc.)
+### Conteúdo do PDF
 
-2. **Gerar PDF** com:
-   - Resumo geral: total de leads, distribuicao por quantidade de produtos comprados
-   - Tabela principal agrupada por lead: Nome, Email, Telefone, Estagio Atual, e lista de compras (Produto, Data, Valor, Status, Categoria, Fonte)
-   - Destaque para leads com contrato pago, renovacao, ou multiplas compras (potenciais parceiros)
-   - Ordenacao por quantidade de compras (mais compras primeiro)
+1. **Resumo executivo**: Total (420), distribuição por estágio, distribuição por semana de compra A010
+2. **Tabela principal**: Nome, Email, Telefone, Produto A010, Data da Compra, Valor Pago, Estágio Atual
+3. Ordenado por data de compra (mais antigos primeiro — prioridade de contato)
+4. Landscape, multi-página com reportlab
 
-3. **QA visual** das paginas geradas
-
-4. **Salvar em `/mnt/documents/`**
-
-### Detalhes tecnicos
-- Query 1: deals sem dono em marco na pipeline incorporador com emails/telefones dos contatos
-- Query 2: todas as transacoes em `hubla_transactions` para esses emails/telefones (sem filtro de categoria)
-- Cruzamento client-side para agrupar transacoes por lead
-- PDF landscape com reportlab, tabela multi-pagina
+### Execução
+1. Query SQL extraindo os 420 leads com JOIN em `hubla_transactions` para dados da compra A010
+2. Gerar PDF com reportlab (landscape)
+3. QA visual das páginas
+4. Salvar em `/mnt/documents/`
 
