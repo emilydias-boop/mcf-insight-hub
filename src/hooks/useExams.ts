@@ -12,6 +12,7 @@ export interface Exam {
   created_at: string;
   updated_at: string;
   participantes_count?: number;
+  media?: number | null;
 }
 
 export interface ExamScore {
@@ -57,17 +58,19 @@ export function useExams() {
 
       if (error) throw error;
 
-      // Buscar contagem de participantes para cada prova
+      // Buscar contagem e média de participantes para cada prova
       const examsWithCounts = await Promise.all(
         (exams || []).map(async (exam) => {
-          const { count } = await supabase
+          const { data: scoresData } = await supabase
             .from('employee_exam_scores')
-            .select('*', { count: 'exact', head: true })
+            .select('nota')
             .eq('exam_id', exam.id);
-          
+
+          const notas = (scoresData || []).map(s => Number(s.nota));
           return {
             ...exam,
-            participantes_count: count || 0,
+            participantes_count: notas.length,
+            media: notas.length > 0 ? notas.reduce((a, b) => a + b, 0) / notas.length : null,
           };
         })
       );
