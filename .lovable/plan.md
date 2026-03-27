@@ -1,79 +1,41 @@
 
 
-## Relatorio de Analise de Carrinho — Novo tipo de relatorio
+## Fix: Relatório de Análise de Carrinho — Dados + Mapa do Brasil
 
-### Resumo
-Criar um novo relatorio interativo na Central de Relatorios que mostra o aproveitamento real do carrinho ate a R2, com funil visual, KPIs, motivos de perda, analise por estado (inferido por DDD) e tabela detalhada filtravel dos leads perdidos.
+### Problema 1: Dados não aparecem
+O hook filtra por `event_type IN ('purchase', 'PURCHASE')` mas os valores reais no banco são:
+- `invoice.payment_succeeded` (2180)
+- `NewSale` (1300)
+- `kiwify.purchase_approved` (8)
 
-### Arquitetura
+Também filtra por `product_code` começando com `A0`, mas quase todos os registros têm `product_code = null`. O correto é filtrar por `product_category IN ('incorporador', 'contrato')` — que tem 866 registros em março.
 
-O relatorio sera 100% frontend — sem migrations. Ele consulta dados existentes em `hubla_transactions`, `meeting_slots`, `meeting_slot_attendees`, `crm_deals`, `crm_contacts` e `r2_status_options`.
+### Problema 2: Análise por estado pouco legível
+Substituir a tabela por um **mapa interativo do Brasil** (SVG) colorido por intensidade, mostrando a porcentagem de aproveitamento/perda por estado.
 
-### Arquivos a criar/modificar
+### Alterações
 
-**1. `src/hooks/useCarrinhoAnalysisReport.ts`** (novo)
-Hook principal que recebe um periodo (start/end dates) e retorna:
-- Contratos pagos no periodo (A000, incorporador) de `hubla_transactions`
-- Para cada email de contrato, buscar se existe R2 agendada, R2 realizada, reembolso, no-show, sem sucesso
-- Cruzamento via `customer_email` → `crm_contacts.email` → `crm_deals` → `meeting_slot_attendees`
-- Classificacao de motivo de perda para cada lead que nao chegou a R2 realizada
-- Inferencia de estado via DDD do telefone (mapa hardcoded de DDD→UF)
+**1. `src/hooks/useCarrinhoAnalysisReport.ts`**
+- Remover filtro `event_type IN ('purchase', 'PURCHASE')`
+- Filtrar por `product_category IN ('incorporador', 'contrato')` 
+- Excluir refunds: filtrar onde `event_type NOT IN ('refund', 'REFUND', 'chargeback')`
+- Remover filtro por `product_code.startsWith('A0')` — usar product_category como critério
+- Buscar refunds separadamente pelo email (manter lógica atual)
 
-Dados retornados:
-```typescript
-interface CarrinhoAnalysisData {
-  kpis: { carrinhoInicio, novosContratos, totalElegivel, comunicados, r2Agendadas, r2Realizadas, perdidos, taxaAproveitamento, taxaPerda }
-  funnelSteps: { label, count, pct }[]
-  motivosPerda: { motivo, count, pct }[]
-  analysisByState: { uf, contratos, carrinho, agendados, realizados, perdidos, taxaPerda }[]
-  leadsDetalhados: { nome, telefone, estado, dataCompra, produto, statusAtual, r2Agendada, r2Realizada, motivoPerda, responsavel, ultimaInteracao, diasSemAndamento }[]
-}
-```
+**2. `src/components/relatorios/BrazilMap.tsx`** (novo)
+- Componente SVG do mapa do Brasil com os 27 estados
+- Cada estado colorido por gradiente (verde → vermelho) baseado na taxa de perda
+- Hover mostra tooltip com: UF, contratos, agendados, realizados, perdidos, % perda
+- Clique no estado filtra a tabela detalhada abaixo
 
-**2. `src/lib/dddToUF.ts`** (novo)
-Mapa de DDD para UF brasileiro (11→SP, 21→RJ, etc). Funcao `getUFFromPhone(phone)` que extrai DDD e retorna a UF.
+**3. `src/components/relatorios/CarrinhoAnalysisReportPanel.tsx`**
+- Substituir a seção "Análise por Estado" (tabela) pelo componente `BrazilMap`
+- Manter uma tabela resumida abaixo do mapa com os top 10 estados
+- Melhorar legibilidade geral dos KPIs
 
-**3. `src/components/relatorios/CarrinhoAnalysisReportPanel.tsx`** (novo)
-Componente principal com:
-- **Seletor de periodo**: semana (qui-qua), mes, ano, personalizado
-- **KPI cards**: 9 metricas em grid
-- **Funil visual**: barras horizontais decrescentes (carrinho → elegivel → comunicados → agendadas → realizadas)
-- **Motivos de perda**: tabela/grafico de barras horizontais
-- **Analise por estado**: tabela com UF, metricas e taxa de perda
-- **Tabela detalhada de leads perdidos**: com filtros por periodo, estado, motivo, responsavel e status
-- **Exportar Excel**: botao para download da tabela detalhada
-
-**4. Modificar `src/components/relatorios/ReportTypeSelector.tsx`**
-- Adicionar novo `ReportType`: `'carrinho_analysis'`
-- Card: icone `BarChart3` ou `TrendingDown`, titulo "Analise de Carrinho", descricao "Aproveitamento do carrinho ate R2"
-
-**5. Modificar `src/components/relatorios/BUReportCenter.tsx`**
-- Importar e renderizar `CarrinhoAnalysisReportPanel` quando `selectedReport === 'carrinho_analysis'`
-
-**6. Modificar `src/pages/bu-incorporador/Relatorios.tsx`**
-- Adicionar `'carrinho_analysis'` ao array `availableReports`
-
-### Logica do periodo "semana do carrinho"
-Quando o filtro for semana: quinta-feira a quarta-feira seguinte, usando `weekStartsOn: 4` (quinta) no `startOfWeek`. O usuario navega entre semanas com botoes ← →.
-
-### Classificacao de motivos de perda
-Para cada lead com contrato pago que NAO tem R2 realizada:
-1. Verificar se tem reembolso em `hubla_transactions` (event_type = 'refund') → "Reembolso"
-2. Verificar `r2_status_id` no attendee → mapear para nome do status (Desistente, Reprovado, etc.)
-3. Verificar se tem R2 agendada mas status = no_show → "No-Show"
-4. Verificar se tem attendee com status = sem_sucesso → "Sem Sucesso / Sem Contato"
-5. Verificar se tem R2 agendada mas nao realizada → "Agendamento nao realizado"
-6. Se tem deal mas nenhuma R2 → "Nao agendado"
-7. Se nao tem deal no CRM → "Sem cadastro no CRM"
-8. Fallback → "Outros"
-
-### Inferencia de estado por DDD
-Extrair os 2 primeiros digitos do telefone (apos +55) e mapear para UF via tabela hardcoded com os 67 DDDs brasileiros.
-
-### Detalhes tecnicos
-- Periodo custom com `DatePickerCustom` (ja existe no projeto)
-- Funil visual com barras CSS (sem biblioteca de graficos adicional)
-- Tabela com `Table` components existentes + filtros com `Select`
-- Export Excel com `xlsx` (ja instalado)
-- Sem novas tabelas no banco — tudo via queries nos dados existentes
+### Detalhes técnicos
+- SVG do Brasil com paths para cada UF (hardcoded, ~300 linhas)
+- Escala de cor: `hsl(120, 70%, X%)` para verde (baixa perda) até `hsl(0, 70%, X%)` para vermelho (alta perda)
+- Tooltip posicionado no cursor com `onMouseMove`
+- Sem dependência externa — SVG puro + React state
 
