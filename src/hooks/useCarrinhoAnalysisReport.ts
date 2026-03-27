@@ -340,6 +340,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
       // 8. Process each contract
       const leadsDetalhados: LeadDetalhado[] = [];
+      const leadsAvancados: LeadAvancado[] = [];
       let comunicados = 0;
       let r2Agendadas = 0;
       let r2Realizadas = 0;
