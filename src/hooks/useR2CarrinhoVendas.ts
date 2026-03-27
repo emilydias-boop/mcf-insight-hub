@@ -70,7 +70,8 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
     queryKey: ['r2-carrinho-vendas', weekStart.toISOString(), weekEnd.toISOString()],
     queryFn: async () => {
       const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig);
-      // 1. Buscar attendees aprovados da semana com dados do closer
+      // 1. Buscar attendees aprovados dos últimos 60 dias (lead pode ter R2 em outra semana mas comprar parceria esta semana)
+      const lookbackStart = subDays(weekEnd, 60);
       const { data: approvedAttendees, error: attendeesError } = await supabase
         .from('meeting_slot_attendees')
         .select(`
@@ -95,16 +96,12 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
             )
           )
         `)
-      .gte('meeting_slot.scheduled_at', effectiveStart.toISOString())
-      .lt('meeting_slot.scheduled_at', effectiveEnd.toISOString())
+      .gte('meeting_slot.scheduled_at', lookbackStart.toISOString())
+      .lte('meeting_slot.scheduled_at', endOfDay(weekEnd).toISOString())
         .eq('meeting_slot.meeting_type', 'r2')
         .eq('r2_status_id', '24d9a326-378b-4191-a4b3-d0ec8b9d23eb');
 
       if (attendeesError) throw attendeesError;
-
-      if (!approvedAttendees || approvedAttendees.length === 0) {
-        return [];
-      }
 
       // 2. Coletar emails e telefones normalizados dos aprovados
       const emailsSet = new Set<string>();
