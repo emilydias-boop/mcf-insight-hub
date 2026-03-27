@@ -1,27 +1,32 @@
 
 
-## Relatório PDF: 420 Leads A010 Puros Sem Dono — Março 2026
+## Relatório PDF: 366 Leads A010 Verdadeiramente Limpos — Março 2026
 
 ### Objetivo
-Gerar um PDF focado nos **420 leads que compraram APENAS A010** (sem contrato, renovação, parceria ou OB), que estão sem dono e parados — prontos para distribuição.
+Gerar um PDF final filtrado com apenas os leads que realmente precisam de distribuição, excluindo parceiros, duplicatas e leads já atendidos.
 
-### Filtros aplicados
-- Pipeline: Inside Sales (incorporador) — origin `e3c04f21-...`
-- Período: Março 2026
-- Sem dono (`owner_id IS NULL`)
-- Tem compra A010 confirmada (`product_category = 'a010'`, `sale_status = 'completed'`)
-- **NÃO** tem compra em categorias avançadas: `contrato`, `renovacao`, `parceria`, `ob_vitalicio`, `contrato-anticrise`, `contrato_clube_arremate`, `socios`
+### Filtros aplicados (expandidos)
+- Pipeline Inside Sales (incorporador), Março 2026, sem dono
+- Tem compra A010 confirmada
+- **EXCLUI** contatos com compras em QUALQUER destas categorias: `contrato`, `renovacao`, `parceria`, `ob_vitalicio`, `contrato-anticrise`, `contrato_clube_arremate`, `socios`, `incorporador`, `p2`, `imersao_socios`, `efeito_alavanca`, `clube_arremate`, `ob_construir`, `ob_construir_alugar`, `imersao`
+- **EXCLUI** contatos com produtos cujo nome contém: "Contrato", "MCF Incorporador", "Parceria", "Renovação", "Sócio", "MCF P2", "Anticrise"
+- **EXCLUI** contatos que já têm deal com dono na mesma pipeline (duplicatas)
+- **EXCLUI** contatos que já têm deal com dono em qualquer outra pipeline (já atendidos)
 
 ### Conteúdo do PDF
 
-1. **Resumo executivo**: Total (420), distribuição por estágio, distribuição por semana de compra A010
-2. **Tabela principal**: Nome, Email, Telefone, Produto A010, Data da Compra, Valor Pago, Estágio Atual
-3. Ordenado por data de compra (mais antigos primeiro — prioridade de contato)
-4. Landscape, multi-página com reportlab
+1. **Resumo executivo**:
+   - Total original: 632 → 265 parceiros removidos → 2 duplicatas → ~71 já atendidos em outra pipeline → **~366 limpos**
+   - Distribuição por estágio atual e semana de compra
+
+2. **Tabela principal**: Nome, Email, Telefone, Produto A010, Data Compra, Valor, Estágio Atual
+   - Ordenado por data de compra (mais antigos primeiro)
+
+3. Landscape, multi-página com reportlab
 
 ### Execução
-1. Query SQL extraindo os 420 leads com JOIN em `hubla_transactions` para dados da compra A010
-2. Gerar PDF com reportlab (landscape)
-3. QA visual das páginas
+1. Query SQL com todos os filtros expandidos
+2. Gerar PDF com reportlab
+3. QA visual
 4. Salvar em `/mnt/documents/`
 
