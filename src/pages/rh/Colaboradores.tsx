@@ -1,11 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useEmployees } from '@/hooks/useEmployees';
 import { Employee } from '@/types/hr';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmployeeMutations } from '@/hooks/useEmployees';
-import EmployeeDrawer from '@/components/hr/EmployeeDrawer';
 import EmployeeFormDialog from '@/components/hr/EmployeeFormDialog';
 import ColaboradoresStatsCards from '@/components/hr/ColaboradoresStatsCards';
 import ColaboradoresToolbar from '@/components/hr/ColaboradoresToolbar';
@@ -23,8 +22,7 @@ export default function Colaboradores() {
     search: '', status: 'all', cargo: 'all', squad: 'all',
     tipoContrato: 'all', gestor: 'all', departamento: 'all',
   });
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const navigate = useNavigate();
   const [formOpen, setFormOpen] = useState(false);
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
@@ -93,11 +91,11 @@ export default function Colaboradores() {
     const employeeId = searchParams.get('employee');
     if (employeeId && employees?.length) {
       const found = employees.find(e => e.id === employeeId);
-      if (found) { setSelectedEmployee(found); setDrawerOpen(true); }
+      if (found) navigate(`/rh/colaboradores/${found.id}`, { replace: true });
     }
-  }, [searchParams, employees]);
+  }, [searchParams, employees, navigate]);
 
-  const handleRowClick = (emp: Employee) => { setSelectedEmployee(emp); setDrawerOpen(true); };
+  const handleRowClick = (emp: Employee) => navigate(`/rh/colaboradores/${emp.id}`);
   const handleEdit = (emp: Employee) => { setEditEmployee(emp); setFormOpen(true); };
 
   return (
@@ -133,7 +131,6 @@ export default function Colaboradores() {
         onDelete={setEmployeeToDelete}
       />
 
-      <EmployeeDrawer employee={selectedEmployee} open={drawerOpen} onOpenChange={setDrawerOpen} />
       <EmployeeFormDialog open={formOpen} onOpenChange={setFormOpen} />
 
       <AlertDialog open={!!employeeToDelete} onOpenChange={(open) => !open && setEmployeeToDelete(null)}>
