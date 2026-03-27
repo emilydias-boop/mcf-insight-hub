@@ -43,6 +43,7 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
   // Filters for advanced leads
   const [filterCloser, setFilterCloser] = useState<string>('all');
   const [filterEstadoAv, setFilterEstadoAv] = useState<string>('all');
+  const [filterR1, setFilterR1] = useState<string>('all');
 
   const [activeTab, setActiveTab] = useState<string>('avancados');
 
