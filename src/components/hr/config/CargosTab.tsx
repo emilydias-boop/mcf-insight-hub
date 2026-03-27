@@ -132,17 +132,17 @@ export default function CargosTab() {
                           <th className="text-center px-4 py-2 font-medium">Status</th>
                           <th className="text-center px-4 py-2 font-medium">Nível</th>
                           <th className="text-center px-4 py-2 font-medium">
-                            <Shield className="h-4 w-4 inline" title="Role" />
+                            <span title="Role"><Shield className="h-4 w-4 inline" /></span>
                           </th>
                           <th className="text-right px-4 py-2 font-medium">OTE</th>
                           <th className="text-center px-4 py-2 font-medium">
-                            <Brain className="h-4 w-4 inline" title="Competências" />
+                            <span title="Competências"><Brain className="h-4 w-4 inline" /></span>
                           </th>
                           <th className="text-center px-4 py-2 font-medium">
-                            <FileText className="h-4 w-4 inline" title="Documentos" />
+                            <span title="Documentos"><FileText className="h-4 w-4 inline" /></span>
                           </th>
                           <th className="text-center px-4 py-2 font-medium">
-                            <Users className="h-4 w-4 inline" title="Pessoas" />
+                            <span title="Pessoas"><Users className="h-4 w-4 inline" /></span>
                           </th>
                           <th className="text-right px-4 py-2 font-medium">Ações</th>
                         </tr>
