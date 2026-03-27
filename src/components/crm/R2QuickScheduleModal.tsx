@@ -515,36 +515,64 @@ export function R2QuickScheduleModal({
                 <Select 
                   value={selectedTime} 
                   onValueChange={setSelectedTime}
-                  disabled={!selectedCloser || !selectedDate || loadingSlots || availableTimeSlots.length === 0}
+                  disabled={!selectedCloser || !selectedDate || (loadingSlots && !isPreSchedule) || (!isPreSchedule && availableTimeSlots.length === 0)}
                 >
                   <SelectTrigger className="h-9">
                     <Clock className="mr-2 h-4 w-4" />
                     <SelectValue placeholder={getTimePlaceholder()} />
                   </SelectTrigger>
                   <SelectContent>
-                    {allConfiguredSlots.map(slot => (
-                      <SelectItem 
-                        key={slot.time} 
-                        value={slot.time}
-                        disabled={!slot.isAvailable}
-                        className={cn(!slot.isAvailable && "opacity-50")}
-                      >
-                        <span className="flex items-center gap-2">
-                          {slot.time}
-                          {slot.link && <ExternalLink className="h-3 w-3 text-muted-foreground" />}
-                          {!slot.isAvailable && <span className="text-xs text-destructive">(ocupado)</span>}
-                        </span>
-                      </SelectItem>
-                    ))}
+                    {isPreSchedule ? (
+                      // Pre-schedule: show all times 08:00-21:00
+                      allFreeTimeSlots.map(time => {
+                        const configured = allConfiguredSlots.find(s => s.time === time);
+                        const isOccupied = configured && !configured.isAvailable;
+                        return (
+                          <SelectItem key={time} value={time}>
+                            <span className="flex items-center gap-2">
+                              {time}
+                              {isOccupied && <span className="text-xs text-amber-600">(ocupado)</span>}
+                              {!configured && <span className="text-xs text-amber-600">(encaixe)</span>}
+                            </span>
+                          </SelectItem>
+                        );
+                      })
+                    ) : (
+                      // Normal: show only configured slots
+                      allConfiguredSlots.map(slot => (
+                        <SelectItem 
+                          key={slot.time} 
+                          value={slot.time}
+                          disabled={!slot.isAvailable}
+                          className={cn(!slot.isAvailable && "opacity-50")}
+                        >
+                          <span className="flex items-center gap-2">
+                            {slot.time}
+                            {slot.link && <ExternalLink className="h-3 w-3 text-muted-foreground" />}
+                            {!slot.isAvailable && <span className="text-xs text-destructive">(ocupado)</span>}
+                          </span>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            {selectedCloser && selectedDate && !loadingSlots && allConfiguredSlots.length === 0 && (
+            {selectedCloser && selectedDate && !loadingSlots && !isPreSchedule && allConfiguredSlots.length === 0 && (
               <p className="text-xs text-amber-600">
                 Closer sem horários configurados para {format(selectedDate, 'EEEE', { locale: ptBR })}.
               </p>
+            )}
+
+            {/* Warning for unconfigured time slot in pre-schedule */}
+            {isPreSchedule && selectedTime && !isTimeConfigured && selectedCloser && selectedDate && (
+              <div className="flex items-center gap-2 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/20 px-3 py-2">
+                <Clock className="h-4 w-4 text-amber-600 shrink-0" />
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  Horário não configurado na grade — será um encaixe. A coordenação precisará confirmar.
+                </p>
+              </div>
             )}
 
             {/* Separator */}
