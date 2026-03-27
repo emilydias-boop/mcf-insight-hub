@@ -10,6 +10,8 @@ export interface R2PreScheduledLead {
   deal_id: string | null;
   booked_by: string | null;
   created_at: string;
+  notes: string | null;
+  r2_observations: string | null;
   meeting_slot: {
     id: string;
     scheduled_at: string;
@@ -46,6 +48,8 @@ export function useR2PreScheduledLeads() {
           deal_id,
           booked_by,
           created_at,
+          notes,
+          r2_observations,
           meeting_slot:meeting_slots!meeting_slot_id(
             id,
             scheduled_at,
@@ -96,6 +100,49 @@ export function useConfirmR2PreScheduled() {
     mutationFn: async (attendeeId: string) => {
       const { data: { user } } = await supabase.auth.getUser();
       
+      // 1. Get attendee + meeting slot info to check if r2_daily_slot exists
+      const { data: attendee } = await supabase
+        .from('meeting_slot_attendees')
+        .select('meeting_slot_id')
+        .eq('id', attendeeId)
+        .single();
+
+      if (attendee?.meeting_slot_id) {
+        const { data: slot } = await supabase
+          .from('meeting_slots')
+          .select('closer_id, scheduled_at')
+          .eq('id', attendee.meeting_slot_id)
+          .single();
+
+        if (slot) {
+          const scheduledDate = new Date(slot.scheduled_at);
+          const dateStr = scheduledDate.toISOString().split('T')[0];
+          const timeStr = `${String(scheduledDate.getHours()).padStart(2, '0')}:${String(scheduledDate.getMinutes()).padStart(2, '0')}`;
+
+          // Check if r2_daily_slot exists for this closer/date/time
+          const { data: existingDailySlot } = await supabase
+            .from('r2_daily_slots')
+            .select('id')
+            .eq('closer_id', slot.closer_id)
+            .eq('slot_date', dateStr)
+            .eq('start_time', timeStr)
+            .maybeSingle();
+
+          // Auto-create r2_daily_slot if it doesn't exist
+          if (!existingDailySlot) {
+            await supabase
+              .from('r2_daily_slots')
+              .insert({
+                closer_id: slot.closer_id,
+                slot_date: dateStr,
+                start_time: timeStr,
+                is_available: true,
+              });
+          }
+        }
+      }
+
+      // 2. Confirm the attendee
       const { error } = await supabase
         .from('meeting_slot_attendees')
         .update({
