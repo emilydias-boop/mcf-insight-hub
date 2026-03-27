@@ -1,89 +1,101 @@
 
 
-## Evolucao da Tela Prova Equipe — Modulo de Avaliacao e Desenvolvimento
+## Evolucao das Configuracoes do RH — Central Estrutural
 
 ### Visao geral
 
-Transformar a tela simples de listagem em um modulo completo de avaliacao com dashboard gerencial, tela de detalhe por prova (pagina dedicada), metricas por cargo/squad, ranking e integracao com PDI. Nenhuma tabela nova necessaria — tudo sera derivado das tabelas `employee_exams`, `employee_exam_scores`, `employees` e `employee_pdi` existentes.
+Enriquecer a tela de Configuracoes do RH em 3 frentes: (1) expandir o modal de cargo com novos campos, (2) adicionar colunas e badges na listagem de cargos, (3) melhorar as abas de departamentos, squads e areas com mais informacoes e toggle ativo/inativo.
 
-### 1. Cards gerenciais expandidos (7 cards, grid responsivo)
+### 1. Migration — Novos campos em `cargos_catalogo`
 
-Manter os 3 atuais e adicionar 4:
-- **Media Geral**: media de todas as notas de todas as provas
-- **Maior Nota**: nota maxima global
-- **Menor Nota**: nota minima global
-- **Taxa de Participacao**: total de scores / (total de provas x total de employees ativos) em %
+Adicionar colunas que nao existem hoje:
 
-Dados calculados client-side a partir dos scores ja carregados no hook `useExams` (adicionar um hook `useAllExamScores` que busca todos os scores de provas ativas para as metricas globais).
+```sql
+ALTER TABLE cargos_catalogo
+  ADD COLUMN IF NOT EXISTS descricao TEXT,
+  ADD COLUMN IF NOT EXISTS competencias_essenciais TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS competencias_tecnicas TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS documentos_padrao TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS trilha_pdi TEXT;
+```
 
-### 2. Lista de provas melhorada
+Nenhuma tabela nova. Apenas enriquecimento da tabela existente com campos opcionais.
 
-Cada item da lista passa a exibir:
-- Titulo + descricao
-- Data de aplicacao
-- Participantes (badge)
-- **Media da prova** (badge colorido >=7 verde, >=5 amarelo, <5 vermelho)
-- **Status**: "Em andamento" se participantes < headcount, "Finalizada" caso contrario (badge)
-- Botao de acoes (dropdown: ver detalhe, excluir)
+### 2. Modal de cargo expandido (`CargoFormDialog.tsx`)
 
-O hook `useExams` sera enriquecido para retornar tambem a `media` de cada prova (buscar scores junto com contagem).
+Converter de `max-w-lg` para `max-w-2xl` e organizar em secoes:
 
-### 3. Tela de detalhe da prova (pagina dedicada)
+**Secao 1 — Dados basicos** (mantidos):
+- Nome exibicao, Cargo base, Area, Nivel, Modelo variavel, Role sistema
 
-Converter o drawer `ExamScoresDrawer` em uma pagina `/rh/prova-equipe/:id` com:
+**Secao 2 — Descricao** (novo):
+- Textarea para descricao do cargo
 
-**Header**: titulo, data, descricao, media geral, participantes, botao voltar, botao exportar XLSX
+**Secao 3 — Competencias** (novo):
+- Campo de tags/chips para competencias essenciais (input + enter para adicionar)
+- Campo de tags/chips para competencias tecnicas
 
-**Secao "Participantes"**: tabela completa com:
-- Nome, Cargo, Squad do employee
-- Nota (badge colorido)
-- Observacao
-- Data de avaliacao
-- Acoes (editar nota, remover)
-- Botao "Adicionar Participante" (form inline ou dialog)
+**Secao 4 — Documentos padrao** (novo):
+- Campo de tags/chips para tipos de documentos padrao vinculados ao cargo (ex: "Contrato PJ", "Job Description")
 
-**Secao "Metricas"**:
-- Media por cargo (agrupamento dos scores por `employee.cargo`)
-- Media por squad (agrupamento por `employee.squad`)
-- Ranking (lista ordenada por nota desc, com posicao)
+**Secao 5 — Desenvolvimento** (novo):
+- Campo texto para trilha de PDI sugerida
 
-**Exportacao**: botao que gera XLSX com todos os dados da prova (usando `xlsx`)
+**Secao 6 — Remuneracao** (mantida):
+- Fixo, Variavel, OTE
 
-### 4. Integracao com PDI
+**Secao 7 — Status** (novo):
+- Toggle ativo/inativo visivel no form (hoje so existe no soft delete)
 
-Na tela de detalhe, adicionar secao "Vincular ao PDI":
-- Para cada participante com nota < 7, exibir sugestao de vinculacao
-- Botao "Criar PDI" que abre dialog pre-preenchido com titulo da prova como competencia
-- Isso cria um registro em `employee_pdi` vinculado
+### 3. Listagem de cargos (`CargosTab.tsx`)
+
+Manter a estrutura de tabela agrupada por area. Adicionar:
+
+- Coluna **Status**: badge verde "Ativo" / cinza "Inativo" (mostrar inativos tambem, filtrados por toggle)
+- Coluna **Docs**: icone + contagem de `documentos_padrao.length`
+- Coluna **Comp.**: icone + contagem de `competencias_essenciais.length + competencias_tecnicas.length`
+- Coluna **Role**: badge com `role_sistema`
+- Toggle no topo para "Mostrar inativos"
+- Remover filtro que esconde inativos (agora controlado pelo toggle)
+
+### 4. Abas Departamentos e Squads — Melhorias
+
+**DepartamentosTab.tsx**:
+- Adicionar coluna de cargos vinculados (count de cargos ativos com employees naquele departamento)
+- Adicionar badge de status ativo/inativo
+- Toggle "Mostrar inativos" no topo
+- Mudar delete para soft-delete (set `ativo = false`) em vez de hard delete
+
+**SquadsTab.tsx**:
+- Adicionar badge de status ativo/inativo
+- Toggle "Mostrar inativos"
+- Mudar delete para soft-delete
+
+**AreasTab.tsx** — ja tem cargo_count e status. Sem mudancas.
+
+### 5. Hooks (`useHRConfig.ts`)
+
+- Atualizar interface `Cargo` com novos campos (`descricao`, `competencias_essenciais`, `competencias_tecnicas`, `documentos_padrao`, `trilha_pdi`)
+- Remover filtro `.eq('ativo', true)` de `useCargosConfig` (agora retorna todos)
+- Atualizar `useDepartamentos` para retornar tambem inativos
+- Atualizar `useSquads` para retornar tambem inativos
+- Mutation de departamento `remove` passa a ser soft-delete (`ativo = false`)
+- Mutation de squad `remove` passa a ser soft-delete (`ativo = false`)
 
 ### Arquivos
 
-**Nova rota em `src/App.tsx`**: `/rh/prova-equipe/:id` apontando para `ExamDetail`
+**Migration**: Adicionar campos em `cargos_catalogo`
 
-**Novo: `src/pages/rh/ExamDetail.tsx`**
-- Pagina de detalhe da prova com header, tabela de participantes, metricas por cargo/squad, ranking, exportacao XLSX, integracao PDI
-
-**Novo: `src/components/hr/exams/ExamStatsCards.tsx`**
-- 7 cards gerenciais com metricas globais
-
-**Novo: `src/components/hr/exams/ExamMetrics.tsx`**
-- Componente de metricas da prova (media por cargo, por squad, ranking)
-
-**Editado: `src/pages/rh/ProvaEquipe.tsx`**
-- Substituir cards por `ExamStatsCards`
-- Lista de provas com media, status e navegacao para `/rh/prova-equipe/:id`
-- Remover drawer, usar navegacao por rota
-
-**Editado: `src/hooks/useExams.ts`**
-- Enriquecer `useExams` para retornar media por prova
-- Novo hook `useAllExamStats` para metricas globais (todas as notas)
-- Enriquecer `useExamScores` para incluir `squad` do employee
-
-**Editado: `src/components/hr/exams/ExamFormDialog.tsx`** — sem mudancas
+**Editados**:
+- `src/components/hr/config/CargoFormDialog.tsx` — Modal expandido com descricao, competencias, docs padrao, trilha PDI, toggle ativo
+- `src/components/hr/config/CargosTab.tsx` — Novas colunas (status, docs, comp, role), toggle inativos
+- `src/components/hr/config/DepartamentosTab.tsx` — Badge status, toggle inativos, soft-delete
+- `src/components/hr/config/SquadsTab.tsx` — Badge status, toggle inativos, soft-delete
+- `src/hooks/useHRConfig.ts` — Novos campos na interface Cargo, queries sem filtro ativo, soft-delete para dept/squad
 
 ### O que NAO muda
-- Tabelas do banco (nenhuma migration)
-- `ExamFormDialog` (criacao de prova)
-- Hooks de mutations (create/update/delete score)
-- Integracao existente no perfil do colaborador (aba Avaliacoes/PDI)
+- Pagina `Configuracoes.tsx` (layout de abas)
+- `AreasTab.tsx` (ja completa)
+- Formularios de Departamento, Squad e Area (sem campos novos)
+- Nenhuma rota nova
 
