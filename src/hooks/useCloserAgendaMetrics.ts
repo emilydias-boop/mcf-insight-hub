@@ -9,13 +9,14 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
  * - Conta contratos pagos (contract_paid + refunded) pela DATA DO PAGAMENTO
  * - Conta no-shows
  * - Conta vendas parceria de hubla_transactions
+ * - EXCLUI outsides de r1_alocadas, r1_realizadas e no_shows
  */
 export interface CloserAgendaMetrics {
   closerId: string | null;
-  r1_alocadas: number;        // Total de slots alocados ao closer
-  r1_realizadas: number;      // completed + contract_paid + refunded
+  r1_alocadas: number;        // Total de slots alocados ao closer (excl. outsides)
+  r1_realizadas: number;      // completed + contract_paid + refunded (excl. outsides)
   contratos_pagos: number;    // contract_paid + refunded (pela data do pagamento)
-  no_shows: number;           // status = no_show
+  no_shows: number;           // status = no_show (excl. outsides)
   vendas_parceria: number;    // hubla_transactions com product_category='parceria'
   r2_agendadas: number;       // R2 meetings attributed to this closer (via R1 deal_id)
 }
@@ -24,9 +25,9 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
   return useQuery({
     queryKey: ['closer-agenda-metrics', sdrId, anoMes],
     queryFn: async (): Promise<CloserAgendaMetrics> => {
-      if (!sdrId || !anoMes) {
-        return { closerId: null, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0, r2_agendadas: 0 };
-      }
+      const empty: CloserAgendaMetrics = { closerId: null, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0, r2_agendadas: 0 };
+
+      if (!sdrId || !anoMes) return empty;
 
       // 1. Buscar email do SDR
       const { data: sdr, error: sdrError } = await supabase
@@ -37,7 +38,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
 
       if (sdrError || !sdr?.email) {
         console.error('[useCloserAgendaMetrics] Error fetching SDR:', sdrError);
-        return { closerId: null, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0, r2_agendadas: 0 };
+        return empty;
       }
 
       // 2. Buscar closer_id pelo email
@@ -50,7 +51,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
 
       if (closerError || !closer?.id) {
         console.warn('[useCloserAgendaMetrics] Closer not found for email:', sdr.email);
-        return { closerId: null, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0, r2_agendadas: 0 };
+        return empty;
       }
 
       const closerId = closer.id;
@@ -61,7 +62,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
       const startDate = format(startOfMonth(monthDate), 'yyyy-MM-dd');
       const endDate = format(endOfMonth(monthDate), 'yyyy-MM-dd');
 
-      // 4. Buscar todos os meeting_slots do closer no período (para R1 alocadas, realizadas, no-shows)
+      // 4. Buscar todos os meeting_slots do closer no período
       const { data: slots, error: slotsError } = await supabase
         .from('meeting_slots')
         .select(`
@@ -81,10 +82,68 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
 
       if (slotsError) {
         console.error('[useCloserAgendaMetrics] Error fetching slots:', slotsError);
-        return { closerId, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0, r2_agendadas: 0 };
+        return { ...empty, closerId };
       }
 
-      // 5. Contar métricas baseadas nos attendees (EXCETO contratos_pagos)
+      // ========== OUTSIDE DETECTION ==========
+      // Collect deal_ids from attendees
+      const dealIds = new Set<string>();
+      slots?.forEach(slot => {
+        (slot.meeting_slot_attendees || []).forEach((att: any) => {
+          if (att.deal_id && !att.is_partner) dealIds.add(att.deal_id);
+        });
+      });
+
+      // Fetch deals → contact emails
+      const dealEmailMap = new Map<string, string>();
+      if (dealIds.size > 0) {
+        const { data: deals } = await supabase
+          .from('crm_deals')
+          .select('id, contact:crm_contacts(id, email)')
+          .in('id', Array.from(dealIds));
+
+        deals?.forEach(deal => {
+          const contact = deal.contact as { id: string; email: string | null } | null;
+          if (contact?.email) {
+            dealEmailMap.set(deal.id, contact.email.toLowerCase());
+          }
+        });
+      }
+
+      // Fetch earliest contract date per email
+      const emailContractDate = new Map<string, Date>();
+      const attendeeEmails = [...new Set(Array.from(dealEmailMap.values()))];
+
+      if (attendeeEmails.length > 0) {
+        const { data: contracts } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email, sale_date')
+          .in('customer_email', attendeeEmails)
+          .in('product_category', ['contrato', 'incorporador'])
+          .ilike('product_name', '%contrato%')
+          .eq('sale_status', 'completed')
+          .order('sale_date', { ascending: true });
+
+        contracts?.forEach(c => {
+          const email = c.customer_email?.toLowerCase();
+          if (email) {
+            const date = new Date(c.sale_date);
+            if (!emailContractDate.has(email) || date < emailContractDate.get(email)!) {
+              emailContractDate.set(email, date);
+            }
+          }
+        });
+      }
+
+      // Helper: check if attendee is an outside lead
+      const isOutside = (dealId: string | null, scheduledAt: string): boolean => {
+        if (!dealId) return false;
+        const email = dealEmailMap.get(dealId);
+        if (!email || !emailContractDate.has(email)) return false;
+        return emailContractDate.get(email)! < new Date(scheduledAt);
+      };
+
+      // 5. Contar métricas baseadas nos attendees (EXCLUINDO outsides)
       let r1_alocadas = 0;
       let r1_realizadas = 0;
       let no_shows = 0;
@@ -93,19 +152,19 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         const attendees = slot.meeting_slot_attendees || [];
         
         attendees.forEach((att: any) => {
-          // Skip partners from metrics
           if (att.is_partner) return;
+          
+          // Skip outsides from closer metrics
+          if (isOutside(att.deal_id, slot.scheduled_at)) return;
           
           r1_alocadas++;
           
           const status = att.status?.toLowerCase();
           
-          // Realizadas: completed, contract_paid, refunded
           if (['completed', 'contract_paid', 'refunded'].includes(status)) {
             r1_realizadas++;
           }
           
-          // No-shows
           if (status === 'no_show') {
             no_shows++;
           }
@@ -113,7 +172,6 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
       });
 
       // 6. CONTRATOS PAGOS: Buscar pela DATA DO PAGAMENTO (contract_paid_at)
-      // Query 1: Contratos com contract_paid_at no período (inclui scheduled_at para detectar Outside)
       const { data: contractsByPaymentDate, error: contractsError } = await supabase
         .from('meeting_slot_attendees')
         .select(`
@@ -133,8 +191,6 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         console.error('[useCloserAgendaMetrics] Error fetching contracts by payment date:', contractsError);
       }
 
-      // Query 2: Fallback para contratos antigos sem contract_paid_at (usa scheduled_at)
-      // Nota: fallback nunca é Outside por definição (usa scheduled_at como data)
       const { data: contractsWithoutTimestamp, error: fallbackError } = await supabase
         .from('meeting_slot_attendees')
         .select(`
@@ -161,7 +217,6 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         const scheduledAt = (att.meeting_slot as any)?.scheduled_at;
         const contractPaidAt = att.contract_paid_at;
         
-        // Excluir Outside: contrato pago ANTES da reunião não conta
         if (contractPaidAt && scheduledAt && new Date(contractPaidAt) < new Date(scheduledAt)) {
           return; // Outside - não contar
         }
@@ -169,15 +224,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         contratos_pagos++;
       });
       
-      // Fallback: adicionar contratos sem timestamp (nunca são Outside)
       contratos_pagos += contractsWithoutTimestamp?.length || 0;
-
-      console.log('[useCloserAgendaMetrics] Contratos pagos:', {
-        byPaymentDate: contractsByPaymentDate?.length || 0,
-        outsideExcluded: (contractsByPaymentDate?.length || 0) - contratos_pagos + (contractsWithoutTimestamp?.length || 0),
-        fallback: contractsWithoutTimestamp?.length || 0,
-        total: contratos_pagos
-      });
 
       // 7. Buscar vendas parceria de hubla_transactions
       const attendeeIds = slots?.flatMap(s => 
@@ -201,8 +248,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         }
       }
 
-      // 8. Buscar R2 agendadas atribuídas a este closer (R2 cujo deal teve R1 com contrato pago)
-      // Mapa deal_id → contract_paid_at (só contract_paid/refunded, excluindo parceiros)
+      // 8. Buscar R2 agendadas atribuídas a este closer
       const r1DealMap = new Map<string, string>();
       for (const slot of (slots || [])) {
         for (const att of (slot.meeting_slot_attendees || [])) {
@@ -210,7 +256,6 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
           const dealId = (att as any).deal_id;
           if (dealId && !(att as any).is_partner && 
               ['contract_paid', 'refunded'].includes(attStatus)) {
-            // Usar contract_paid_at se disponível, senão fallback para scheduled_at do slot
             const paidAt = (att as any).contract_paid_at || slot.scheduled_at;
             if (!r1DealMap.has(dealId)) {
               r1DealMap.set(dealId, paidAt);
@@ -222,7 +267,6 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
       let r2_agendadas = 0;
       const r1DealIds = [...r1DealMap.keys()];
 
-      // Query R2 meeting slots for deals that had R1 with this closer
       if (r1DealIds.length > 0) {
         const { data: r2Slots, error: r2Error } = await supabase
           .from('meeting_slots')
@@ -233,7 +277,6 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
           .lte('scheduled_at', `${endDate}T23:59:59`);
 
         if (!r2Error && r2Slots) {
-          // Filtrar: só contar R2 criada APÓS o pagamento do contrato
           r2_agendadas = r2Slots.filter((r2: any) => {
             const paidAt = r1DealMap.get(r2.deal_id);
             return paidAt && new Date(r2.created_at) >= new Date(paidAt);
@@ -241,7 +284,6 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         }
       }
 
-      // Fallback: R2 slots directly assigned to this closer
       if (r2_agendadas === 0) {
         const { data: r2Direct, error: r2DirectError } = await supabase
           .from('meeting_slots')
@@ -252,10 +294,8 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
           .lte('scheduled_at', `${endDate}T23:59:59`);
 
         if (!r2DirectError && r2Direct) {
-          // Mesmo filtro: R2 criada após pagamento do contrato (se deal estiver no mapa)
           r2_agendadas = r2Direct.filter((r2: any) => {
             const paidAt = r1DealMap.get(r2.deal_id);
-            // Se deal não está no mapa, contar (fallback direto do closer)
             if (!paidAt) return true;
             return new Date(r2.created_at) >= new Date(paidAt);
           }).length;
