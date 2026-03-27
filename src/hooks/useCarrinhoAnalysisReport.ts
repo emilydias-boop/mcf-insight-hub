@@ -401,6 +401,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           // Lead avançou — adicionar à lista de avançados
           const closerName = (attendee?.meeting_slot as any)?.closer?.name || '';
           const dataR2 = (attendee?.meeting_slot as any)?.scheduled_at || '';
+          const r1DateValue = contactId ? r1DateByContactId.get(contactId) : null;
           leadsAvancados.push({
             nome: tx.customer_name || 'Sem nome',
             telefone: tx.customer_phone || attendee?.attendee_phone || '',
@@ -410,6 +411,10 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
             statusAtual: isR2Realizada ? 'R2 Realizada' : 'R2 Agendada',
             closerName,
             dataR2,
+            dataR1: r1DateValue ? r1DateValue.toISOString() : null,
+            comprouParceria: false, // will be enriched after loop
+            dataParceria: null,
+            valorContrato: tx.net_value || 0,
             isOutside,
             r2Realizada: isR2Realizada,
           });
