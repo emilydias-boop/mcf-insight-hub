@@ -43,6 +43,7 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
   // Filters for advanced leads
   const [filterCloser, setFilterCloser] = useState<string>('all');
   const [filterEstadoAv, setFilterEstadoAv] = useState<string>('all');
+  const [filterR1, setFilterR1] = useState<string>('all');
 
   const [activeTab, setActiveTab] = useState<string>('avancados');
 
@@ -76,9 +77,21 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
     return data.leadsAvancados.filter(l => {
       if (filterCloser !== 'all' && l.closerName !== filterCloser) return false;
       if (filterEstadoAv !== 'all' && l.estado !== filterEstadoAv) return false;
+      if (filterR1 === 'com' && !l.dataR1) return false;
+      if (filterR1 === 'sem' && l.dataR1) return false;
       return true;
     });
-  }, [data, filterCloser, filterEstadoAv]);
+  }, [data, filterCloser, filterEstadoAv, filterR1]);
+
+  const avancadosStats = useMemo(() => {
+    const total = filteredAvancados.length;
+    const comR1 = filteredAvancados.filter(l => !!l.dataR1).length;
+    const comR2 = filteredAvancados.filter(l => !!l.dataR2).length;
+    const comParceria = filteredAvancados.filter(l => l.comprouParceria).length;
+    const r2Realizada = filteredAvancados.filter(l => l.r2Realizada).length;
+    const outsides = filteredAvancados.filter(l => l.isOutside).length;
+    return { total, comR1, semR1: total - comR1, comR2, comParceria, r2Realizada, outsides };
+  }, [filteredAvancados]);
 
   const uniqueMotivos = useMemo(() => data ? [...new Set(data.leadsDetalhados.map(l => l.motivoPerda))] : [], [data]);
   const uniqueEstados = useMemo(() => data ? [...new Set(data.leadsDetalhados.map(l => l.estado))].sort() : [], [data]);
@@ -395,6 +408,16 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                 </TabsList>
 
                 <TabsContent value="avancados">
+                  {/* Summary stats bar */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <Badge variant="outline" className="text-xs px-3 py-1">Total: {avancadosStats.total}</Badge>
+                    <Badge className="bg-blue-100 text-blue-800 text-xs px-3 py-1">Com R1: {avancadosStats.comR1} ({avancadosStats.total > 0 ? ((avancadosStats.comR1 / avancadosStats.total) * 100).toFixed(0) : 0}%)</Badge>
+                    <Badge className="bg-orange-100 text-orange-800 text-xs px-3 py-1">Sem R1: {avancadosStats.semR1} ({avancadosStats.total > 0 ? ((avancadosStats.semR1 / avancadosStats.total) * 100).toFixed(0) : 0}%)</Badge>
+                    <Badge className="bg-green-100 text-green-800 text-xs px-3 py-1">Parceria: {avancadosStats.comParceria} ({avancadosStats.total > 0 ? ((avancadosStats.comParceria / avancadosStats.total) * 100).toFixed(0) : 0}%)</Badge>
+                    <Badge className="bg-purple-100 text-purple-800 text-xs px-3 py-1">Outside: {avancadosStats.outsides}</Badge>
+                    <Badge className="bg-emerald-100 text-emerald-800 text-xs px-3 py-1">R2 Realizada: {avancadosStats.r2Realizada}</Badge>
+                  </div>
+
                   {/* Filters */}
                   <div className="flex flex-wrap gap-3 mb-4">
                     <Select value={filterCloser} onValueChange={setFilterCloser}>
@@ -413,6 +436,16 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                       <SelectContent>
                         <SelectItem value="all">Todos UFs</SelectItem>
                         {uniqueEstadosAv.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={filterR1} onValueChange={setFilterR1}>
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="Data R1" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas R1</SelectItem>
+                        <SelectItem value="com">Com R1</SelectItem>
+                        <SelectItem value="sem">Sem R1</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -452,13 +485,32 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                               )}
                             </TableCell>
                             <TableCell>
-                              <Badge className={cn('text-xs', l.r2Realizada ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800')}>
-                                {l.statusAtual}
-                              </Badge>
+                              <div className="flex gap-1">
+                                <Badge className={cn('text-xs', l.r2Realizada ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800')}>
+                                  {l.statusAtual}
+                                </Badge>
+                                {l.isOutside && (
+                                  <Badge className="bg-purple-100 text-purple-800 text-xs">Outside</Badge>
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
+                      {/* Footer with totals */}
+                      <tfoot>
+                        <TableRow className="font-bold bg-muted/50">
+                          <TableCell>{avancadosStats.total} leads</TableCell>
+                          <TableCell></TableCell>
+                          <TableCell></TableCell>
+                          <TableCell className="text-xs">{avancadosStats.total}</TableCell>
+                          <TableCell className="text-xs">{avancadosStats.comR1}</TableCell>
+                          <TableCell className="text-xs">{avancadosStats.comR2}</TableCell>
+                          <TableCell></TableCell>
+                          <TableCell className="text-xs">{avancadosStats.comParceria}</TableCell>
+                          <TableCell></TableCell>
+                        </TableRow>
+                      </tfoot>
                     </Table>
                     {filteredAvancados.length > 200 && (
                       <p className="text-sm text-muted-foreground text-center mt-2">
