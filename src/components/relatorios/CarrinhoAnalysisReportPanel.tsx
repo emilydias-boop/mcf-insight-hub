@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronLeft, ChevronRight, Download, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Users, Phone, Calendar } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
+import { format, startOfMonth, endOfMonth, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
-import { useCarrinhoAnalysisReport, LeadDetalhado } from '@/hooks/useCarrinhoAnalysisReport';
+import { useCarrinhoAnalysisReport, LeadDetalhado, LeadAvancado } from '@/hooks/useCarrinhoAnalysisReport';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
@@ -18,7 +19,6 @@ import { BrazilMap } from './BrazilMap';
 type PeriodType = 'semana' | 'mes' | 'personalizado';
 
 function getCartWeekStart(date: Date): Date {
-  // Cart week: Thursday to Wednesday
   return startOfWeek(date, { weekStartsOn: 4 });
 }
 
@@ -40,6 +40,11 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
   const [filterMotivo, setFilterMotivo] = useState<string>('all');
   const [filterEstado, setFilterEstado] = useState<string>('all');
   const [filterTipo, setFilterTipo] = useState<string>('all');
+  // Filters for advanced leads
+  const [filterCloser, setFilterCloser] = useState<string>('all');
+  const [filterEstadoAv, setFilterEstadoAv] = useState<string>('all');
+
+  const [activeTab, setActiveTab] = useState<string>('avancados');
 
   const { startDate, endDate } = useMemo(() => {
     if (periodType === 'semana') {
@@ -66,29 +71,62 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
     });
   }, [data, filterMotivo, filterEstado, filterTipo]);
 
+  const filteredAvancados = useMemo(() => {
+    if (!data) return [];
+    return data.leadsAvancados.filter(l => {
+      if (filterCloser !== 'all' && l.closerName !== filterCloser) return false;
+      if (filterEstadoAv !== 'all' && l.estado !== filterEstadoAv) return false;
+      return true;
+    });
+  }, [data, filterCloser, filterEstadoAv]);
+
   const uniqueMotivos = useMemo(() => data ? [...new Set(data.leadsDetalhados.map(l => l.motivoPerda))] : [], [data]);
   const uniqueEstados = useMemo(() => data ? [...new Set(data.leadsDetalhados.map(l => l.estado))].sort() : [], [data]);
+  const uniqueClosers = useMemo(() => data ? [...new Set(data.leadsAvancados.map(l => l.closerName).filter(Boolean))].sort() : [], [data]);
+  const uniqueEstadosAv = useMemo(() => data ? [...new Set(data.leadsAvancados.map(l => l.estado))].sort() : [], [data]);
+
+  const gapOperacional = useMemo(() => {
+    if (!data) return 0;
+    return data.leadsDetalhados.filter(l => l.tipoPerda === 'operacional').length;
+  }, [data]);
 
   const exportExcel = () => {
-    if (!filteredLeads.length) return;
-    const ws = XLSX.utils.json_to_sheet(filteredLeads.map(l => ({
-      Nome: l.nome,
-      Telefone: l.telefone,
-      Estado: l.estado,
-      'Data Compra': format(new Date(l.dataCompra), 'dd/MM/yyyy'),
-      Produto: l.produto,
-      'Status Atual': l.statusAtual,
-      'R2 Agendada': l.r2Agendada ? 'Sim' : 'Não',
-      'R2 Realizada': l.r2Realizada ? 'Sim' : 'Não',
-      'Motivo Perda': l.motivoPerda,
-      'Tipo': l.tipoPerda === 'legitima' ? 'Exclusão Legítima' : 'Falha Operacional',
-      Responsável: l.responsavel,
-      'Última Interação': l.ultimaInteracao ? format(new Date(l.ultimaInteracao), 'dd/MM/yyyy') : '',
-      'Dias Sem Andamento': l.diasSemAndamento,
-    })));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Leads Perdidos');
-    XLSX.writeFile(wb, `analise-carrinho-${format(startDate!, 'yyyy-MM-dd')}.xlsx`);
+    if (activeTab === 'avancados') {
+      if (!filteredAvancados.length) return;
+      const ws = XLSX.utils.json_to_sheet(filteredAvancados.map(l => ({
+        Nome: l.nome,
+        Telefone: l.telefone,
+        Estado: l.estado,
+        'Data Compra': format(new Date(l.dataCompra), 'dd/MM/yyyy'),
+        Status: l.statusAtual,
+        Closer: l.closerName || '—',
+        'Data R2': l.dataR2 ? format(new Date(l.dataR2), 'dd/MM/yyyy HH:mm') : '—',
+        Outside: l.isOutside ? 'Sim' : 'Não',
+      })));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Leads Avançaram');
+      XLSX.writeFile(wb, `carrinho-avancaram-${format(startDate!, 'yyyy-MM-dd')}.xlsx`);
+    } else {
+      if (!filteredLeads.length) return;
+      const ws = XLSX.utils.json_to_sheet(filteredLeads.map(l => ({
+        Nome: l.nome,
+        Telefone: l.telefone,
+        Estado: l.estado,
+        'Data Compra': format(new Date(l.dataCompra), 'dd/MM/yyyy'),
+        Produto: l.produto,
+        'Status Atual': l.statusAtual,
+        'R2 Agendada': l.r2Agendada ? 'Sim' : 'Não',
+        'R2 Realizada': l.r2Realizada ? 'Sim' : 'Não',
+        'Motivo Perda': l.motivoPerda,
+        'Tipo': l.tipoPerda === 'legitima' ? 'Exclusão Legítima' : 'Falha Operacional',
+        Responsável: l.responsavel,
+        'Última Interação': l.ultimaInteracao ? format(new Date(l.ultimaInteracao), 'dd/MM/yyyy') : '',
+        'Dias Sem Andamento': l.diasSemAndamento,
+      })));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Leads Perdidos');
+      XLSX.writeFile(wb, `carrinho-perdidos-${format(startDate!, 'yyyy-MM-dd')}.xlsx`);
+    }
   };
 
   const periodLabel = useMemo(() => {
@@ -226,7 +264,6 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
 
           {/* Motivos de Perda + Mapa do Brasil side by side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Motivos de Perda */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Motivos de Perda</CardTitle>
@@ -259,7 +296,6 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
               </CardContent>
             </Card>
 
-            {/* Mapa do Brasil */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Distribuição por Estado</CardTitle>
@@ -271,7 +307,6 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                   onStateClick={(uf) => setFilterEstado(prev => prev === uf ? 'all' : uf)}
                   selectedState={filterEstado !== 'all' ? filterEstado : undefined}
                 />
-                {/* Top states summary */}
                 <div className="mt-4 space-y-1.5">
                   {data.analysisByState.slice(0, 5).map((s, i) => (
                     <div key={i} className="flex items-center justify-between text-xs">
@@ -295,120 +330,240 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
             </Card>
           </div>
 
-          {/* Tabela Detalhada */}
+          {/* Comparativo Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="border-green-200 bg-green-50/50 dark:bg-green-950/20 dark:border-green-900">
+              <CardContent className="pt-4 pb-3 px-4 flex items-center gap-3">
+                <CheckCircle2 className="h-8 w-8 text-green-600 shrink-0" />
+                <div>
+                  <div className="text-2xl font-bold text-green-700 dark:text-green-400">{data.leadsAvancados.length}</div>
+                  <div className="text-sm text-green-600 dark:text-green-500">
+                    Avançaram ({data.kpis.totalElegivel > 0 ? ((data.leadsAvancados.length / data.kpis.totalElegivel) * 100).toFixed(1) : 0}%)
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20 dark:border-red-900">
+              <CardContent className="pt-4 pb-3 px-4 flex items-center gap-3">
+                <XCircle className="h-8 w-8 text-red-600 shrink-0" />
+                <div>
+                  <div className="text-2xl font-bold text-red-700 dark:text-red-400">{data.leadsDetalhados.length}</div>
+                  <div className="text-sm text-red-600 dark:text-red-500">
+                    Perdidos ({data.kpis.totalElegivel > 0 ? ((data.leadsDetalhados.length / data.kpis.totalElegivel) * 100).toFixed(1) : 0}%)
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900">
+              <CardContent className="pt-4 pb-3 px-4 flex items-center gap-3">
+                <AlertTriangle className="h-8 w-8 text-amber-600 shrink-0" />
+                <div>
+                  <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">{gapOperacional}</div>
+                  <div className="text-sm text-amber-600 dark:text-amber-500">
+                    Gap Operacional (poderiam avançar)
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Tabela Detalhada com Tabs */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base">Leads Perdidos — Detalhado</CardTitle>
-                  <CardDescription>{filteredLeads.length} leads</CardDescription>
+                  <CardTitle className="text-base">Detalhamento de Leads</CardTitle>
+                  <CardDescription>Compare quem avançou vs quem se perdeu no funil</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={exportExcel} disabled={!filteredLeads.length}>
+                <Button variant="outline" size="sm" onClick={exportExcel} disabled={activeTab === 'avancados' ? !filteredAvancados.length : !filteredLeads.length}>
                   <Download className="h-4 w-4 mr-2" />
                   Exportar Excel
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              {/* Filters */}
-              <div className="flex flex-wrap gap-3 mb-4">
-                <Select value={filterMotivo} onValueChange={setFilterMotivo}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Motivo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os motivos</SelectItem>
-                    {uniqueMotivos.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={filterEstado} onValueChange={setFilterEstado}>
-                  <SelectTrigger className="w-[120px]">
-                    <SelectValue placeholder="Estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos UFs</SelectItem>
-                    {uniqueEstados.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={filterTipo} onValueChange={setFilterTipo}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os tipos</SelectItem>
-                    <SelectItem value="operacional">Falha Operacional</SelectItem>
-                    <SelectItem value="legitima">Exclusão Legítima</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="mb-4">
+                  <TabsTrigger value="avancados">
+                    ✅ Avançaram ({data.leadsAvancados.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="perdidos">
+                    ❌ Perdidos ({data.leadsDetalhados.length})
+                  </TabsTrigger>
+                </TabsList>
 
-              <div className="max-h-[500px] overflow-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Telefone</TableHead>
-                      <TableHead>UF</TableHead>
-                      <TableHead>Data Compra</TableHead>
-                      <TableHead>Produto</TableHead>
-                      <TableHead>Outside</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>R2</TableHead>
-                      <TableHead>Motivo</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Responsável</TableHead>
-                      <TableHead className="text-right">Dias Parado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredLeads.slice(0, 200).map((l, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium max-w-[150px] truncate">{l.nome}</TableCell>
-                        <TableCell className="text-xs">{l.telefone}</TableCell>
-                        <TableCell>{l.estado}</TableCell>
-                        <TableCell className="text-xs">{format(new Date(l.dataCompra), 'dd/MM/yy')}</TableCell>
-                        <TableCell className="text-xs max-w-[120px] truncate">{l.produto}</TableCell>
-                        <TableCell>
-                          {l.isOutside ? (
-                            <Badge className="bg-purple-100 text-purple-800 text-xs">Sim</Badge>
-                          ) : (
-                            <span className="text-muted-foreground text-xs">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">{l.statusAtual}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          {l.r2Agendada ? (
-                            l.r2Realizada ? 
-                              <Badge className="bg-green-100 text-green-800 text-xs">Realizada</Badge> :
-                              <Badge className="bg-amber-100 text-amber-800 text-xs">Agendada</Badge>
-                          ) : (
-                            <Badge variant="secondary" className="text-xs">Não</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs">{l.motivoPerda}</TableCell>
-                        <TableCell>
-                          <Badge variant={l.tipoPerda === 'operacional' ? 'destructive' : 'secondary'} className="text-xs">
-                            {l.tipoPerda === 'operacional' ? 'Oper.' : 'Legít.'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-xs">{l.responsavel || '—'}</TableCell>
-                        <TableCell className="text-right">
-                          <span className={cn(l.diasSemAndamento > 7 ? 'text-red-600 font-medium' : '')}>
-                            {l.diasSemAndamento}d
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                {filteredLeads.length > 200 && (
-                  <p className="text-sm text-muted-foreground text-center mt-2">
-                    Mostrando 200 de {filteredLeads.length} leads. Exporte para ver todos.
-                  </p>
-                )}
-              </div>
+                <TabsContent value="avancados">
+                  {/* Filters */}
+                  <div className="flex flex-wrap gap-3 mb-4">
+                    <Select value={filterCloser} onValueChange={setFilterCloser}>
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Closer" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os closers</SelectItem>
+                        {uniqueClosers.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={filterEstadoAv} onValueChange={setFilterEstadoAv}>
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue placeholder="Estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos UFs</SelectItem>
+                        {uniqueEstadosAv.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="max-h-[500px] overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nome</TableHead>
+                          <TableHead>Telefone</TableHead>
+                          <TableHead>UF</TableHead>
+                          <TableHead>Data Compra</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Closer</TableHead>
+                          <TableHead>Data R2</TableHead>
+                          <TableHead>Outside</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredAvancados.slice(0, 200).map((l, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="font-medium max-w-[150px] truncate">{l.nome}</TableCell>
+                            <TableCell className="text-xs">{l.telefone}</TableCell>
+                            <TableCell>{l.estado}</TableCell>
+                            <TableCell className="text-xs">{format(new Date(l.dataCompra), 'dd/MM/yy')}</TableCell>
+                            <TableCell>
+                              <Badge className={cn('text-xs', l.r2Realizada ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800')}>
+                                {l.statusAtual}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs">{l.closerName || '—'}</TableCell>
+                            <TableCell className="text-xs">{l.dataR2 ? format(new Date(l.dataR2), 'dd/MM/yy HH:mm') : '—'}</TableCell>
+                            <TableCell>
+                              {l.isOutside ? (
+                                <Badge className="bg-purple-100 text-purple-800 text-xs">Sim</Badge>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {filteredAvancados.length > 200 && (
+                      <p className="text-sm text-muted-foreground text-center mt-2">
+                        Mostrando 200 de {filteredAvancados.length} leads. Exporte para ver todos.
+                      </p>
+                    )}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="perdidos">
+                  {/* Filters */}
+                  <div className="flex flex-wrap gap-3 mb-4">
+                    <Select value={filterMotivo} onValueChange={setFilterMotivo}>
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Motivo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os motivos</SelectItem>
+                        {uniqueMotivos.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={filterEstado} onValueChange={setFilterEstado}>
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue placeholder="Estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos UFs</SelectItem>
+                        {uniqueEstados.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={filterTipo} onValueChange={setFilterTipo}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os tipos</SelectItem>
+                        <SelectItem value="operacional">Falha Operacional</SelectItem>
+                        <SelectItem value="legitima">Exclusão Legítima</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="max-h-[500px] overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nome</TableHead>
+                          <TableHead>Telefone</TableHead>
+                          <TableHead>UF</TableHead>
+                          <TableHead>Data Compra</TableHead>
+                          <TableHead>Produto</TableHead>
+                          <TableHead>Outside</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>R2</TableHead>
+                          <TableHead>Motivo</TableHead>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead>Responsável</TableHead>
+                          <TableHead className="text-right">Dias Parado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredLeads.slice(0, 200).map((l, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="font-medium max-w-[150px] truncate">{l.nome}</TableCell>
+                            <TableCell className="text-xs">{l.telefone}</TableCell>
+                            <TableCell>{l.estado}</TableCell>
+                            <TableCell className="text-xs">{format(new Date(l.dataCompra), 'dd/MM/yy')}</TableCell>
+                            <TableCell className="text-xs max-w-[120px] truncate">{l.produto}</TableCell>
+                            <TableCell>
+                              {l.isOutside ? (
+                                <Badge className="bg-purple-100 text-purple-800 text-xs">Sim</Badge>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">{l.statusAtual}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              {l.r2Agendada ? (
+                                l.r2Realizada ? 
+                                  <Badge className="bg-green-100 text-green-800 text-xs">Realizada</Badge> :
+                                  <Badge className="bg-amber-100 text-amber-800 text-xs">Agendada</Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">Não</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs">{l.motivoPerda}</TableCell>
+                            <TableCell>
+                              <Badge variant={l.tipoPerda === 'operacional' ? 'destructive' : 'secondary'} className="text-xs">
+                                {l.tipoPerda === 'operacional' ? 'Oper.' : 'Legít.'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs">{l.responsavel || '—'}</TableCell>
+                            <TableCell className="text-right">
+                              <span className={cn(l.diasSemAndamento > 7 ? 'text-red-600 font-medium' : '')}>
+                                {l.diasSemAndamento}d
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {filteredLeads.length > 200 && (
+                      <p className="text-sm text-muted-foreground text-center mt-2">
+                        Mostrando 200 de {filteredLeads.length} leads. Exporte para ver todos.
+                      </p>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
         </>
