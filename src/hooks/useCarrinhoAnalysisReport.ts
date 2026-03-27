@@ -156,14 +156,14 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
       const emails = uniqueContracts.map(t => (t.customer_email || '').toLowerCase().trim()).filter(Boolean);
 
-      // 2. Find refund emails
+      // 2. Find refund emails — use sale_status = 'refunded' for accuracy
       let refundEmails = new Set<string>();
       if (emails.length > 0) {
         const { data: refunds } = await supabase
           .from('hubla_transactions')
           .select('customer_email')
           .in('customer_email', emails)
-          .in('event_type', ['refund', 'REFUND', 'chargeback', 'CHARGEBACK']);
+          .eq('sale_status', 'refunded');
         refundEmails = new Set((refunds || []).map(r => (r.customer_email || '').toLowerCase().trim()));
       }
 
