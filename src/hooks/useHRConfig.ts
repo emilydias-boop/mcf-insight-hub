@@ -54,6 +54,11 @@ export interface Cargo {
   modelo_variavel: string;
   role_sistema: string | null;
   ativo: boolean;
+  descricao: string | null;
+  competencias_essenciais: string[];
+  competencias_tecnicas: string[];
+  documentos_padrao: string[];
+  trilha_pdi: string | null;
   created_at: string;
   updated_at: string;
   // Computed
@@ -158,16 +163,16 @@ export function useDepartamentoMutations() {
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('departamentos')
-        .delete()
+        .update({ ativo: false })
         .eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['departamentos'] });
-      toast({ title: 'Departamento removido' });
+      toast({ title: 'Departamento desativado' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover departamento', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao desativar departamento', description: error.message, variant: 'destructive' });
     }
   });
 
@@ -262,16 +267,16 @@ export function useSquadMutations() {
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('squads')
-        .delete()
+        .update({ ativo: false })
         .eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['squads'] });
-      toast({ title: 'Squad removida' });
+      toast({ title: 'Squad desativada' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover squad', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao desativar squad', description: error.message, variant: 'destructive' });
     }
   });
 
@@ -307,6 +312,9 @@ export function useCargosConfig() {
       
       return (data || []).map(c => ({
         ...c,
+        competencias_essenciais: c.competencias_essenciais || [],
+        competencias_tecnicas: c.competencias_tecnicas || [],
+        documentos_padrao: c.documentos_padrao || [],
         employee_count: countMap[c.id] || 0
       }));
     }
@@ -359,7 +367,6 @@ export function useCargoMutations() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      // Soft delete - just set ativo = false
       const { error } = await supabase
         .from('cargos_catalogo')
         .update({ ativo: false })
