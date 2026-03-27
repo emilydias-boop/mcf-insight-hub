@@ -102,21 +102,23 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const startStr = format(startDate, 'yyyy-MM-dd');
       const endStr = format(endDate, 'yyyy-MM-dd');
 
+      // Fetch paid contracts (exclude refunds/chargebacks)
       const { data: transactions } = await supabase
         .from('hubla_transactions')
         .select('id, customer_name, customer_email, customer_phone, product_name, product_code, product_category, sale_date, net_value, event_type, sale_status, linked_attendee_id')
+        .in('product_category', ['incorporador', 'contrato'])
         .gte('sale_date', startStr)
         .lte('sale_date', endStr + 'T23:59:59')
-        .in('event_type', ['purchase', 'PURCHASE'])
         .order('sale_date', { ascending: true });
 
-      const a0Transactions = (transactions || []).filter(t => {
-        const code = (t.product_code || '').toUpperCase();
-        return code.startsWith('A0') || code.startsWith('A00');
+      // Filter out refunds/chargebacks on the client side
+      const validTransactions = (transactions || []).filter(t => {
+        const evType = (t.event_type || '').toLowerCase();
+        return evType !== 'refund' && evType !== 'chargeback';
       });
 
-      const emailMap = new Map<string, typeof a0Transactions[0]>();
-      for (const t of a0Transactions) {
+      const emailMap = new Map<string, typeof validTransactions[0]>();
+      for (const t of validTransactions) {
         const email = (t.customer_email || '').toLowerCase().trim();
         if (email && !emailMap.has(email)) {
           emailMap.set(email, t);
