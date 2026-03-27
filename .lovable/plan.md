@@ -1,27 +1,49 @@
 
 
-## Relatório PDF Final: Leads A010 Limpos SEM Duplicatas — Março 2026
+## Distribuicao automatica na replicacao cross-pipeline
 
-### Problema identificado
-O filtro anterior verificava duplicatas apenas pelo `contact_id` (mesmo registro de contato). Porém, a importação CSV de 3 de março criou **novos registros de contato** para pessoas que já existiam no CRM (ex: Ellen Bertella, Caio Rainho). O cruzamento precisa ser feito por **email e telefone (9 dígitos)**, não por `contact_id`.
+### Problema
+Quando um deal e replicado para a pipeline de destino, ele chega sem dono (`owner_id = NULL`). O usuario precisa que a regra de replicacao ja defina como o deal sera distribuido na pipeline destino — usando o sistema de distribuicao equitativa (`get_next_lead_owner`) que ja existe.
 
-### Números reais
-- **362** leads "puros A010" (sem parceria/contrato/renovação)
-- **75** são duplicatas — já têm deal com dono no CRM (mesmo email ou telefone)
-- **287** são verdadeiramente limpos e precisam de distribuição
+### Solucao
 
-### Execução
+Adicionar uma opcao de **"Distribuicao automatica"** na regra de replicacao, que ao criar o deal replicado, chama `get_next_lead_owner(target_origin_id)` para atribuir um dono automaticamente.
 
-1. **Query SQL** com cruzamento forçado por email e sufixo de 9 dígitos do telefone contra TODOS os deals com dono no CRM (não apenas mesmo `contact_id` ou mesma pipeline)
-2. **Excluir** os 75 leads que já aparecem com dono em qualquer deal
-3. **Gerar PDF** com os 287 leads restantes:
-   - Resumo: funil de limpeza (2013 → 362 A010 puros → 287 sem duplicata)
-   - Tabela: Nome, Email, Telefone, Produto A010, Data Compra, Valor, Estágio Atual
-   - Ordenado por data de compra (mais antigos primeiro)
-4. **QA visual** e salvar em `/mnt/documents/`
+### Alteracoes
 
-### Detalhes técnicos
-- Cruzamento global: `LOWER(email)` e `RIGHT(phone_digits, 9)` contra todos os deals com `owner_id IS NOT NULL`
-- Mantém exclusão de categorias avançadas (contrato, renovacao, parceria, etc.)
-- PDF landscape via reportlab
+**1. Migration — Novo campo na tabela `deal_replication_rules`**
+- `auto_distribute BOOLEAN DEFAULT false` — habilita a distribuicao automatica via `get_next_lead_owner`
+
+**2. Edge Function `process-deal-replication/index.ts`**
+- Apos criar o deal replicado, se `rule.auto_distribute = true`:
+  - Chamar `get_next_lead_owner(rule.target_origin_id)` via RPC
+  - Atualizar o deal replicado com o `owner_id` retornado
+  - Resolver `owner_profile_id` pelo email (trigger `sync_owner_profile_id` ja faz isso)
+  - Registrar o owner atribuido nos logs e atividades
+
+**3. Frontend — `ReplicationRulesEditor.tsx`**
+- Adicionar toggle "Distribuir automaticamente" no formulario (ao lado dos toggles existentes de "Ativa" e "Copiar campos")
+- Quando ativo, mostrar um indicador de que a `lead_distribution_config` da pipeline destino sera usada
+- Exibir na listagem de regras se a distribuicao esta ativa (badge)
+
+**4. Hook `useDealReplicationRules.ts`**
+- Adicionar `auto_distribute` ao tipo `DealReplicationRule` e `CreateReplicationRuleInput`
+
+**5. Types `supabase/types.ts`**
+- Sera regenerado automaticamente apos a migration
+
+### Fluxo resultante
+
+```text
+Deal atinge etapa trigger
+  → Regra de replicacao dispara
+    → Cria deal na pipeline destino
+    → Se auto_distribute = true:
+        → get_next_lead_owner(target_origin_id) → "sdr@email.com"
+        → owner_id = "sdr@email.com"
+        → Log: "Replicado e distribuido para sdr@email.com"
+```
+
+### Pre-requisito
+A pipeline de destino precisa ter `lead_distribution_config` configurada com SDRs ativos. Se nao houver configuracao, o deal sera criado sem dono (comportamento atual) e um warning sera logado.
 
