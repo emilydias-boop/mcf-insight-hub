@@ -457,6 +457,42 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         }
       }
 
+      // Enrich advanced leads with partnership data
+      const advancedEmails = leadsAvancados
+        .map((_, i) => {
+          const tx = uniqueContracts.find(t => t.customer_name === leadsAvancados[i].nome && t.sale_date === leadsAvancados[i].dataCompra);
+          return tx ? (tx.customer_email || '').toLowerCase().trim() : '';
+        })
+        .filter(Boolean);
+
+      if (advancedEmails.length > 0) {
+        const { data: parcerias } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email, sale_date, product_name')
+          .eq('product_category', 'parceria')
+          .in('sale_status', ['completed', 'paid'])
+          .in('customer_email', advancedEmails);
+
+        const parceriaMap = new Map<string, { date: string; product: string }>();
+        for (const p of parcerias || []) {
+          const pEmail = (p.customer_email || '').toLowerCase().trim();
+          if (pEmail && !parceriaMap.has(pEmail)) {
+            parceriaMap.set(pEmail, { date: p.sale_date || '', product: p.product_name || '' });
+          }
+        }
+
+        // Map back to leadsAvancados
+        for (let i = 0; i < leadsAvancados.length; i++) {
+          const tx = uniqueContracts.find(t => t.customer_name === leadsAvancados[i].nome && t.sale_date === leadsAvancados[i].dataCompra);
+          const txEmail = tx ? (tx.customer_email || '').toLowerCase().trim() : '';
+          const parceria = parceriaMap.get(txEmail);
+          if (parceria) {
+            leadsAvancados[i].comprouParceria = true;
+            leadsAvancados[i].dataParceria = parceria.date;
+          }
+        }
+      }
+
       const totalElegivel = uniqueContracts.length;
       const perdidos = totalElegivel - r2Realizadas;
 
