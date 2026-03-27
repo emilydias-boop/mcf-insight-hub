@@ -1,35 +1,38 @@
 
 
-## Adicionar "Leads que Avancaram" ao Relatorio de Analise de Carrinho
+## Enriquecer tab "Avançaram" com detalhes do carrinho
 
 ### Problema
-O relatorio so mostra leads perdidos na tabela detalhada. O usuario precisa ver tambem os leads que avancaram (comunicados, R2 agendada, R2 realizada) para comparar ganhos vs perdas e identificar melhorias.
+A tab "Avançaram" mostra apenas dados basicos (nome, telefone, closer, data R2). O usuario precisa ver a jornada completa do carrinho: data da compra do contrato, data da R1, se comprou parceria, e quando.
 
-### Solucao
+### Alteracoes
 
 **1. Hook `useCarrinhoAnalysisReport.ts`**
-- Criar novo array `leadsAvancados: LeadAvancado[]` com os leads que tiveram R2 realizada (ou ao menos R2 agendada)
-- Interface `LeadAvancado`: nome, telefone, estado, dataCompra, produto, statusAtual, r2Agendada, r2Realizada, closerName, dataR2, isOutside
-- No loop de processamento (linha 381), quando `isR2Realizada` ou `isR2Agendada`, adicionar ao array `leadsAvancados` em vez de so pular
-- Retornar `leadsAvancados` no objeto de resposta
+
+Enriquecer `LeadAvancado` com novos campos:
+- `dataR1: string | null` — data da R1 do lead (ja temos `r1DateByContactId`, so precisa mapear)
+- `comprouParceria: boolean` — se comprou produto com `product_category = 'parceria'`
+- `dataParceria: string | null` — data da compra da parceria
+- `valorContrato: number` — `net_value` da transacao do contrato
+
+Para parceria: apos processar os contratos, fazer uma query batch em `hubla_transactions` com `product_category = 'parceria'` e `customer_email IN (emails dos avancados)`, filtrar por `sale_status IN ('completed', 'paid')`. Montar um map email → { date, product_name }.
+
+Para R1: ja temos `r1DateByContactId` no hook. Basta usar `crmContactMap` para pegar o `contact_id` e buscar a data.
 
 **2. Painel `CarrinhoAnalysisReportPanel.tsx`**
-- Adicionar tabs "Perdidos" e "Avancaram" na secao de tabela detalhada (usando o componente `Tabs` existente)
-- Tab "Avancaram": tabela com colunas Nome, Telefone, UF, Data Compra, Status, Closer, Data R2, Outside
-- Tab "Perdidos": tabela atual (sem mudanca)
-- Filtros proprios para cada tab (motivo so aparece nos perdidos, closer aparece nos avancados)
-- Contador em cada tab badge: "Avancaram (44)" / "Perdidos (14)"
-- Exportar Excel tambem funciona para a tab ativa
 
-**3. Comparativo visual**
-- Acima das tabs, adicionar um mini resumo lado a lado:
-  - Card verde: "Avancaram" com count e % do total
-  - Card vermelho: "Perdidos" com count e % do total
-  - Card amarelo: "Gap Operacional" = perdidos com tipo "operacional" (os que poderiam ter sido salvos)
+Atualizar tabela "Avançaram" com novas colunas:
+- **Data Contrato** (ja existe como "Data Compra")
+- **Data R1** — formatada dd/MM/yy HH:mm
+- **Data R2** (ja existe)
+- **Parceria** — badge verde "Sim" com data, ou "—"
+- Remover coluna "Produto" (sempre A000) e "Outside" (pouco relevante aqui)
+
+Ordem das colunas: Nome | Telefone | UF | Data Contrato | Data R1 | Data R2 | Closer | Parceria | Status
+
+Atualizar export Excel com os mesmos campos.
 
 ### Detalhes tecnicos
-- `LeadAvancado` sera uma interface separada (campos diferentes de `LeadDetalhado`)
-- `CarrinhoAnalysisData` ganha campo `leadsAvancados: LeadAvancado[]`
-- Tab state com `useState<'avancados' | 'perdidos'>('avancados')`
-- Export Excel adapta colunas conforme tab ativa
+- Query de parceria: `supabase.from('hubla_transactions').select('customer_email, sale_date, product_name').eq('product_category', 'parceria').in('sale_status', ['completed', 'paid']).in('customer_email', emails)` — executada em paralelo com as queries existentes
+- R1 date: reutilizar `r1DateByContactId` que ja e construido na linha 324
 
