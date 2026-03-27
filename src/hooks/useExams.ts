@@ -27,6 +27,7 @@ export interface ExamScore {
     id: string;
     nome_completo: string;
     cargo: string | null;
+    squad: string | null;
   };
 }
 
@@ -119,7 +120,7 @@ export function useExamScores(examId: string | null) {
 
       const { data: employees } = await supabase
         .from('employees')
-        .select('id, nome_completo, cargo')
+        .select('id, nome_completo, cargo, squad')
         .in('id', employeeIds);
 
       const employeeMap = new Map((employees || []).map(e => [e.id, e]));
