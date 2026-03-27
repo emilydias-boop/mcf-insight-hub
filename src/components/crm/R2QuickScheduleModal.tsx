@@ -137,6 +137,22 @@ export function R2QuickScheduleModal({
     return closerSlots.availableSlots;
   }, [closerSlots]);
 
+  // Generate full 08:00-21:00 time slots for pre-schedule mode
+  const allFreeTimeSlots = useMemo(() => {
+    const slots: string[] = [];
+    for (let h = 8; h <= 21; h++) {
+      slots.push(`${String(h).padStart(2, '0')}:00`);
+      if (h < 21) slots.push(`${String(h).padStart(2, '0')}:30`);
+    }
+    return slots;
+  }, []);
+
+  // Check if selected time is configured in the grid
+  const isTimeConfigured = useMemo(() => {
+    if (!selectedTime || !allConfiguredSlots.length) return false;
+    return allConfiguredSlots.some(s => s.time === selectedTime);
+  }, [selectedTime, allConfiguredSlots]);
+
   useEffect(() => {
     if (open) {
       if (preselectedCloserId) setSelectedCloser(preselectedCloserId);
@@ -241,6 +257,7 @@ export function R2QuickScheduleModal({
     if (!selectedCloser) return 'Selecione closer';
     if (!selectedDate) return 'Selecione data';
     if (loadingSlots) return 'Carregando...';
+    if (isPreSchedule) return 'Selecione';
     if (allConfiguredSlots.length === 0) return 'Sem horários';
     if (availableTimeSlots.length === 0) return 'Todos ocupados';
     return 'Selecione';
