@@ -172,12 +172,28 @@ export function useCancelR2PreScheduled() {
 
   return useMutation({
     mutationFn: async (attendeeId: string) => {
-      const { error } = await supabase
+      // 1. Get meeting_slot_id
+      const { data: attendee } = await supabase
         .from('meeting_slot_attendees')
-        .update({ status: 'cancelled' })
-        .eq('id', attendeeId);
+        .select('meeting_slot_id')
+        .eq('id', attendeeId)
+        .single();
 
-      if (error) throw error;
+      // 2. Delete attendee
+      const { error: delAttError } = await supabase
+        .from('meeting_slot_attendees')
+        .delete()
+        .eq('id', attendeeId);
+      if (delAttError) throw delAttError;
+
+      // 3. Delete meeting_slot (pre-agendamentos have 1 attendee)
+      if (attendee?.meeting_slot_id) {
+        const { error: delSlotError } = await supabase
+          .from('meeting_slots')
+          .delete()
+          .eq('id', attendee.meeting_slot_id);
+        if (delSlotError) throw delSlotError;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-pre-scheduled-leads'] });
