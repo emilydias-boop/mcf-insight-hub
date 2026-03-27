@@ -1,38 +1,50 @@
 
 
-## Enriquecer tab "Avançaram" com detalhes do carrinho
+## Melhorar tab "Avançaram" — Totais por coluna + Filtro R1 + Investigar leads sem R1
 
-### Problema
-A tab "Avançaram" mostra apenas dados basicos (nome, telefone, closer, data R2). O usuario precisa ver a jornada completa do carrinho: data da compra do contrato, data da R1, se comprou parceria, e quando.
+### Problemas identificados
 
-### Alteracoes
+1. **Leads sem Data R1 na tab "Avançaram"**: Alguns leads aparecem com "—" na coluna R1. Isso acontece porque o matching por `contactId` no `r1DateByContactId` falha — o lead pode não ter sido encontrado no CRM ou não teve R1 registrada. Esses leads provavelmente são outsides (compraram antes da R1) e devem ser sinalizados.
 
-**1. Hook `useCarrinhoAnalysisReport.ts`**
+2. **Sem totais por coluna**: Não há resumo mostrando quantos leads têm R1, quantos têm R2, quantos compraram parceria, etc.
 
-Enriquecer `LeadAvancado` com novos campos:
-- `dataR1: string | null` — data da R1 do lead (ja temos `r1DateByContactId`, so precisa mapear)
-- `comprouParceria: boolean` — se comprou produto com `product_category = 'parceria'`
-- `dataParceria: string | null` — data da compra da parceria
-- `valorContrato: number` — `net_value` da transacao do contrato
+3. **Sem filtro por R1**: Não é possível filtrar leads com/sem Data R1.
 
-Para parceria: apos processar os contratos, fazer uma query batch em `hubla_transactions` com `product_category = 'parceria'` e `customer_email IN (emails dos avancados)`, filtrar por `sale_status IN ('completed', 'paid')`. Montar um map email → { date, product_name }.
+### Alterações
 
-Para R1: ja temos `r1DateByContactId` no hook. Basta usar `crmContactMap` para pegar o `contact_id` e buscar a data.
+**1. `CarrinhoAnalysisReportPanel.tsx` — Barra de totais acima da tabela**
 
-**2. Painel `CarrinhoAnalysisReportPanel.tsx`**
+Adicionar uma linha de resumo com badges/contadores:
+- **Total**: X leads
+- **Com R1**: Y (Z%)
+- **Sem R1**: W (K%)
+- **Com Parceria**: N (M%)
+- **R2 Realizada**: P / **R2 Agendada**: Q
 
-Atualizar tabela "Avançaram" com novas colunas:
-- **Data Contrato** (ja existe como "Data Compra")
-- **Data R1** — formatada dd/MM/yy HH:mm
-- **Data R2** (ja existe)
-- **Parceria** — badge verde "Sim" com data, ou "—"
-- Remover coluna "Produto" (sempre A000) e "Outside" (pouco relevante aqui)
+**2. `CarrinhoAnalysisReportPanel.tsx` — Novo filtro "Data R1"**
 
-Ordem das colunas: Nome | Telefone | UF | Data Contrato | Data R1 | Data R2 | Closer | Parceria | Status
+Adicionar um Select ao lado dos filtros existentes (Closer, UF):
+- "Todas" (default)
+- "Com R1"
+- "Sem R1"
 
-Atualizar export Excel com os mesmos campos.
+Atualizar `filteredAvancados` para aplicar este filtro.
 
-### Detalhes tecnicos
-- Query de parceria: `supabase.from('hubla_transactions').select('customer_email, sale_date, product_name').eq('product_category', 'parceria').in('sale_status', ['completed', 'paid']).in('customer_email', emails)` — executada em paralelo com as queries existentes
-- R1 date: reutilizar `r1DateByContactId` que ja e construido na linha 324
+**3. `CarrinhoAnalysisReportPanel.tsx` — Footer da tabela com totais**
+
+Adicionar um `TableRow` no footer com contagem de cada coluna:
+- Nome: total de leads
+- Data Contrato: total (sempre 100%)
+- Data R1: contagem dos que têm data
+- Data R2: contagem dos que têm data
+- Parceria: contagem dos que compraram
+
+**4. Hook — Marcar leads sem R1 como Outside**
+
+No hook, leads que avançaram mas não têm `dataR1` já têm o campo `isOutside` — verificar se está sendo setado corretamente. Se o lead não tem R1 mas tem R2, ele provavelmente é outside e deve ser marcado. Adicionar uma badge "Outside" na coluna Status para esses casos.
+
+### Detalhes técnicos
+- Novo state: `filterR1: 'all' | 'com' | 'sem'`
+- Contadores calculados via `useMemo` sobre `filteredAvancados`
+- Footer row com `className="font-bold bg-muted/50"` para destaque visual
 
