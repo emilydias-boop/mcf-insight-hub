@@ -63,6 +63,10 @@ export interface LeadAvancado {
   statusAtual: string;
   closerName: string;
   dataR2: string;
+  dataR1: string | null;
+  comprouParceria: boolean;
+  dataParceria: string | null;
+  valorContrato: number;
   isOutside: boolean;
   r2Realizada: boolean;
 }
