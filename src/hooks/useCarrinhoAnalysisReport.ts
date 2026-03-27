@@ -51,6 +51,7 @@ export interface LeadDetalhado {
   responsavel: string;
   ultimaInteracao: string;
   diasSemAndamento: number;
+  isOutside: boolean;
 }
 
 export interface CarrinhoAnalysisData {
@@ -121,10 +122,10 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const startStr = format(startDate, 'yyyy-MM-dd');
       const endStr = format(endDate, 'yyyy-MM-dd');
 
-      // 1. Fetch transactions (incorporador/contrato), exclude refunds client-side
+      // 1. Fetch transactions (incorporador/contrato), exclude refunds and recurrences
       const { data: transactions } = await supabase
         .from('hubla_transactions')
-        .select('id, customer_name, customer_email, customer_phone, product_name, product_code, product_category, sale_date, net_value, event_type, sale_status, linked_attendee_id')
+        .select('id, customer_name, customer_email, customer_phone, product_name, product_code, product_category, sale_date, net_value, event_type, sale_status, linked_attendee_id, installment_number')
         .in('product_category', ['incorporador', 'contrato'])
         .gte('sale_date', startStr)
         .lte('sale_date', endStr + 'T23:59:59')
@@ -132,7 +133,11 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
       const validTransactions = (transactions || []).filter(t => {
         const evType = (t.event_type || '').toLowerCase();
-        return evType !== 'refund' && evType !== 'chargeback';
+        if (evType === 'refund' || evType === 'chargeback') return false;
+        // Filter out recurrences — only keep first installment
+        const installment = t.installment_number;
+        if (installment !== null && installment !== undefined && installment > 1) return false;
+        return true;
       });
 
       // Deduplicate by email
