@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
-import { endOfDay, format } from 'date-fns';
+import { endOfDay, format, subDays } from 'date-fns';
 import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
 import { getCarrinhoWeekBoundaries } from '@/lib/carrinhoWeekBoundaries';
 import { getCachedPrecoReferencia } from './useProductPricesCache';
