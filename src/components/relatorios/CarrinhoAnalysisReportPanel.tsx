@@ -13,6 +13,7 @@ import { BusinessUnit } from '@/hooks/useMyBU';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { DateRange } from 'react-day-picker';
+import { BrazilMap } from './BrazilMap';
 
 type PeriodType = 'semana' | 'mes' | 'personalizado';
 
@@ -223,7 +224,7 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
             </CardContent>
           </Card>
 
-          {/* Motivos de Perda + Estado side by side */}
+          {/* Motivos de Perda + Mapa do Brasil side by side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Motivos de Perda */}
             <Card>
@@ -258,41 +259,37 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
               </CardContent>
             </Card>
 
-            {/* Análise por Estado */}
+            {/* Mapa do Brasil */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Análise por Estado</CardTitle>
+                <CardTitle className="text-base">Distribuição por Estado</CardTitle>
+                <CardDescription>Clique em um estado para filtrar a tabela abaixo</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="max-h-[400px] overflow-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>UF</TableHead>
-                        <TableHead className="text-right">Contratos</TableHead>
-                        <TableHead className="text-right">Agend.</TableHead>
-                        <TableHead className="text-right">Realiz.</TableHead>
-                        <TableHead className="text-right">Perdidos</TableHead>
-                        <TableHead className="text-right">% Perda</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.analysisByState.map((s, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="font-medium">{s.uf}</TableCell>
-                          <TableCell className="text-right">{s.contratos}</TableCell>
-                          <TableCell className="text-right">{s.agendados}</TableCell>
-                          <TableCell className="text-right">{s.realizados}</TableCell>
-                          <TableCell className="text-right">{s.perdidos}</TableCell>
-                          <TableCell className="text-right">
-                            <span className={s.taxaPerda > 70 ? 'text-red-600 font-medium' : ''}>
-                              {s.taxaPerda.toFixed(0)}%
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                <BrazilMap
+                  stateData={data.analysisByState}
+                  onStateClick={(uf) => setFilterEstado(prev => prev === uf ? 'all' : uf)}
+                  selectedState={filterEstado !== 'all' ? filterEstado : undefined}
+                />
+                {/* Top states summary */}
+                <div className="mt-4 space-y-1.5">
+                  {data.analysisByState.slice(0, 5).map((s, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <span className="font-medium w-8">{s.uf}</span>
+                      <div className="flex-1 mx-2 h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${Math.max((s.contratos / (data.analysisByState[0]?.contratos || 1)) * 100, 4)}%`,
+                            background: `hsl(${120 - (s.taxaPerda / 100) * 120}, 65%, 48%)`,
+                          }}
+                        />
+                      </div>
+                      <span className="text-muted-foreground w-20 text-right">
+                        {s.contratos} contr. · {s.taxaPerda.toFixed(0)}%
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
