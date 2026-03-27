@@ -1,27 +1,27 @@
 
 
-## Relatorio PDF: 632 Leads A010 Sem Dono - Marco 2026
+## Relatorio: Compras detalhadas dos 632 leads A010 sem dono
 
 ### Objetivo
-Gerar um PDF completo com os 632 leads A010 sem dono do mes de marco, incluindo dados de contato, compra e estagio atual no CRM.
+Gerar um PDF com o historico completo de compras de cada um dos 632 leads A010 sem dono de marco 2026, para permitir a reclassificacao correta por estagio.
 
 ### Execucao
 
-1. **Query ao banco** — Extrair os 632 deals sem dono da pipeline "INSIDE SALES" (incorporador) criados em marco 2026, cruzando com `hubla_transactions` para pegar dados da compra A010 (produto, data, valor). Joins com `crm_contacts` (nome, email, telefone) e `crm_stages` (estagio atual).
+1. **Query ao banco** — Para cada lead sem dono (pipeline Inside Sales, marco 2026, owner_id IS NULL), buscar TODAS as transacoes em `hubla_transactions` vinculadas por email ou telefone (nao so A010, mas todas as compras: contrato, renovacao, OB, etc.)
 
-2. **Gerar PDF com reportlab** — Documento com:
-   - Capa com titulo, data de geracao, total de leads
-   - Resumo executivo: distribuicao por estagio, por origem, por semana de compra
-   - Tabela principal com colunas: Nome, Email, Telefone, Produto A010, Data da Compra, Valor Pago, Estagio Atual, Origem
-   - Paginacao e cabecalho em todas as paginas
+2. **Gerar PDF** com:
+   - Resumo geral: total de leads, distribuicao por quantidade de produtos comprados
+   - Tabela principal agrupada por lead: Nome, Email, Telefone, Estagio Atual, e lista de compras (Produto, Data, Valor, Status, Categoria, Fonte)
+   - Destaque para leads com contrato pago, renovacao, ou multiplas compras (potenciais parceiros)
+   - Ordenacao por quantidade de compras (mais compras primeiro)
 
-3. **QA visual** — Converter paginas para imagem e verificar layout, texto cortado, alinhamento de tabela.
+3. **QA visual** das paginas geradas
 
-4. **Salvar em `/mnt/documents/`** e entregar ao usuario.
+4. **Salvar em `/mnt/documents/`**
 
 ### Detalhes tecnicos
-- Query via `psql` com JOIN entre `crm_deals`, `crm_contacts`, `crm_stages`, `hubla_transactions`
-- Filtros: `owner_id IS NULL`, pipeline da BU incorporador, `created_at` em marco 2026, produto com `product_category = 'a010'` ou `product_name ilike '%a010%'`
-- PDF gerado com `reportlab` (platypus para tabelas multi-pagina)
-- Landscape para caber todas as colunas
+- Query 1: deals sem dono em marco na pipeline incorporador com emails/telefones dos contatos
+- Query 2: todas as transacoes em `hubla_transactions` para esses emails/telefones (sem filtro de categoria)
+- Cruzamento client-side para agrupar transacoes por lead
+- PDF landscape com reportlab, tabela multi-pagina
 
