@@ -54,12 +54,26 @@ export interface LeadDetalhado {
   isOutside: boolean;
 }
 
+export interface LeadAvancado {
+  nome: string;
+  telefone: string;
+  estado: string;
+  dataCompra: string;
+  produto: string;
+  statusAtual: string;
+  closerName: string;
+  dataR2: string;
+  isOutside: boolean;
+  r2Realizada: boolean;
+}
+
 export interface CarrinhoAnalysisData {
   kpis: CarrinhoAnalysisKPIs;
   funnelSteps: FunnelStep[];
   motivosPerda: MotivoPerda[];
   analysisByState: StateAnalysis[];
   leadsDetalhados: LeadDetalhado[];
+  leadsAvancados: LeadAvancado[];
 }
 
 function normalizePhoneSuffix(phone: string | null | undefined): string {
