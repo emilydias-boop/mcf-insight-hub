@@ -6,10 +6,11 @@ import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
 import { getCarrinhoWeekBoundaries } from '@/lib/carrinhoWeekBoundaries';
 import { getCachedPrecoReferencia } from './useProductPricesCache';
 
-// Helper para normalização consistente (apenas dígitos, últimos 11)
+// Helper para normalização consistente (apenas dígitos, últimos 9 — número local sem DDD variável)
 const normalizeForMatch = (phone: string | null): string | null => {
   if (!phone) return null;
-  return phone.replace(/\D/g, '').slice(-11);
+  const digits = phone.replace(/\D/g, '');
+  return digits.length >= 9 ? digits.slice(-9) : null;
 };
 
 // Helper para obter preço de referência dinamicamente do cache (product_configurations)
@@ -108,6 +109,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
       // 2. Coletar emails e telefones normalizados dos aprovados
       const emailsSet = new Set<string>();
       const phonesSet = new Set<string>();
+      const nameMap = new Map<string, { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt: string | null }>();
       const attendeeMap = new Map<string, { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt: string | null }>();
 
       approvedAttendees.forEach((att: any) => {
@@ -126,16 +128,20 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
           emailsSet.add(email);
           attendeeMap.set(email, closerData);
         }
-        if (normalizedPhone && normalizedPhone.length >= 10) {
+        if (normalizedPhone && normalizedPhone.length >= 8) {
           phonesSet.add(normalizedPhone);
           attendeeMap.set(normalizedPhone, closerData);
+        }
+        // Fallback por nome normalizado
+        const attName = att.attendee_name?.toUpperCase().trim();
+        if (attName) {
+          nameMap.set(attName, closerData);
         }
       });
 
       const emails = Array.from(emailsSet);
-      const phones = Array.from(phonesSet);
 
-      if (emails.length === 0 && phones.length === 0) {
+      if (emails.length === 0 && phonesSet.size === 0 && nameMap.size === 0) {
         return [];
       }
 
@@ -216,11 +222,20 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
           attendeeData = attendeeMap.get(txEmail);
         }
 
-        // Match por telefone (comparação exata após normalização)
-        if (!matched && txPhone && txPhone.length >= 10) {
+        // Match por telefone (comparação por sufixo de 9 dígitos)
+        if (!matched && txPhone && txPhone.length >= 8) {
           if (phonesSet.has(txPhone)) {
             matched = true;
             attendeeData = attendeeMap.get(txPhone);
+          }
+        }
+
+        // Fallback: match por nome normalizado
+        if (!matched) {
+          const txName = tx.customer_name?.toUpperCase().trim();
+          if (txName && nameMap.has(txName)) {
+            matched = true;
+            attendeeData = nameMap.get(txName);
           }
         }
 
