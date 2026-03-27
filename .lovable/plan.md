@@ -1,69 +1,62 @@
 
 
-## Diagnostico: Outsides nas Metricas de Closer
+## Pre-agendamento com Horario Livre (Sugestao de Encaixe)
 
-### Regra de negocio confirmada
+### Problema
 
-**Para o SDR**: Outside conta como agendamento (o SDR fez o trabalho de agendar).
-**Para o Closer**: Outside NAO deve contar em NENHUMA metrica (R1 Agendada, R1 Realizada, No-show). Deve aparecer apenas na coluna "Outside" separada.
+Hoje o pre-agendamento so permite selecionar horarios ja configurados e disponiveis. O closer quer sugerir "14:00 com Claudia" mesmo que esse horario nao exista na grade. O lead fica esquecido porque depende de alguem abrir o slot primeiro.
 
-### Status atual — onde esta o problema
+### Solucao
 
-**1. Painel "Reunioes da Equipe" (`useR1CloserMetrics.ts`):**
+Quando o toggle "Pre-agendamento" esta ativo, liberar a selecao de horario para qualquer hora (input livre ou grade completa 08:00-21:00), permitindo que o closer sugira um encaixe. O item aparece na agenda com visual diferenciado (laranja tracejado, como ja existe) e fica na aba "Pre-Agendados" para a coordenadora revisar, abrir o slot se necessario, e confirmar.
 
-| Metrica | Exclui Outside? | Status |
-|---------|-----------------|--------|
-| R1 Agendada (linha 452-455) | NAO — conta todos com allowedAgendadaStatuses | BUG |
-| R1 Realizada (linha 457-466) | SIM para `contract_paid` (verifica isOutside) | PARCIAL — se outside tiver status `completed`, ainda conta |
-| No-show (linha 469-471) | NAO — conta todos com `no_show` | BUG |
-| Contrato Pago (linha 270-288) | SIM — exclui corretamente | OK |
-| Outside (linha 365-387) | N/A — contagem propria | OK |
+### Mudancas
 
-**2. "Meu Desempenho" do Closer (`useCloserAgendaMetrics.ts`):**
+**1. `src/components/crm/R2QuickScheduleModal.tsx`**
 
-| Metrica | Exclui Outside? | Status |
-|---------|-----------------|--------|
-| R1 Alocadas (linha 99) | NAO — conta todos non-partner | BUG |
-| R1 Realizadas (linha 104) | NAO — conta `completed`/`contract_paid`/`refunded` sem verificar | BUG |
-| No-shows (linha 109) | NAO — conta todos `no_show` | BUG |
-| Contratos Pagos (linha 157-170) | SIM — exclui outsides | OK |
+- Quando `isPreSchedule = true`:
+  - Substituir o `Select` de horario por um input de texto com mascara `HH:mm` (ou um Select com todos os horarios de 08:00 a 21:00 em intervalos de 30min)
+  - Remover a restricao `disabled={availableTimeSlots.length === 0}` — sempre permitir selecionar horario
+  - Adicionar campo opcional "Preferencia do lead" (textarea curta) para o closer anotar contexto (ex: "Lead so pode as 14h, pedir pra Claudia abrir")
+  - Mostrar aviso visual quando o horario escolhido nao esta configurado: badge amarelo "Horario nao configurado — sera encaixe"
 
-**3. RPC `get_sdr_metrics_from_agenda` (painel SDR):**
-- `contratos` conta por `contract_paid_at` sem verificar se e outside — mas para SDR isso esta CORRETO (outside conta como contrato do SDR)
+- Quando `isPreSchedule = false`: comportamento atual inalterado
 
-### Correcao necessaria
+**2. `src/hooks/useR2AgendaData.ts` (mutation `useCreateR2Meeting`)**
 
-**Arquivo 1: `src/hooks/useR1CloserMetrics.ts`**
+- Quando `isPreSchedule = true`, passar `bypassCapacity: true` na logica de criacao do slot — ja cria o `meeting_slot` mesmo sem slot configurado (isso ja funciona, pois o insert em `meeting_slots` nao valida contra `r2_daily_slots`)
+- Salvar o campo de preferencia do lead em `r2_observations` ou em `notes`
 
-No loop de processamento de meetings (linha 446+), antes de contar R1 Agendada, R1 Realizada e No-show, verificar se o attendee e outside usando `dealEmailMap` e `emailContractDate` (que ja existem no codigo). Se `contractDate < meetingDate`, pular o attendee dessas 3 metricas.
+**3. `src/components/crm/R2PreScheduledTab.tsx`**
 
-Mudanca no bloco linhas 446-474: para cada attendee, adicionar check:
+- Adicionar coluna "Obs/Preferencia" mostrando as observacoes do pre-agendamento
+- Adicionar indicador visual quando o horario sugerido NAO tem slot configurado (badge "Sem slot") para a coordenadora saber que precisa abrir o horario antes de confirmar
+- Ao confirmar: se o slot nao existe na grade, mostrar alerta "Este horario nao esta configurado. Deseja abrir o slot e confirmar?"
+
+**4. `src/hooks/useR2PreScheduledLeads.ts`**
+
+- Na query, incluir `r2_observations` e `notes` do attendee para exibir na aba
+- No `useConfirmR2PreScheduled`, adicionar verificacao: consultar `r2_daily_slots` para ver se o horario ja existe. Se nao existir, criar o slot automaticamente ao confirmar (insert em `r2_daily_slots` com o closer_id, data e horario)
+
+### Fluxo final
+
+```text
+Closer R1 → abre modal → marca "Pre-agendamento" → 
+  seleciona socio (Claudia) → data (30/03) → 
+  digita horario livre (14:00) → 
+  ve aviso "Horario nao configurado" → 
+  anota "Lead so pode 14h, verificar com Claudia" → 
+  clica "Pre-agendar R2"
+
+Agenda R2 → mostra item laranja tracejado no 14:00 da Claudia
+
+Aba Pre-Agendados → Leticia ve o item com badge "Sem slot" → 
+  clica Confirmar → sistema cria o slot + confirma o agendamento
 ```
-const email = dealEmailMap.get(att.deal_id);
-const isOutsideLead = email && emailContractDate.has(email) && emailContractDate.get(email)! < new Date(meeting.scheduled_at);
-if (isOutsideLead) return; // Skip outsides from closer metrics
-```
-
-Isso remove outsides de R1 Agendada, R1 Realizada e No-show de uma vez.
-
-**Arquivo 2: `src/hooks/useCloserAgendaMetrics.ts`**
-
-Este hook NAO tem deteccao de outside. Precisa adicionar:
-1. Coletar `deal_id`s dos attendees
-2. Buscar emails dos deals via `crm_deals` + `crm_contacts`
-3. Buscar `hubla_transactions` para encontrar data do contrato mais antigo
-4. No loop de contagem (linha 92-113), pular attendees cujo email tem contrato anterior a `slot.scheduled_at`
-
-### Resultado esperado
-
-Todas as metricas do closer (R1 Agendada, R1 Realizada, No-show) passam a excluir outsides. Outsides continuam aparecendo apenas na coluna "Outside" dedicada. A taxa de conversao e no-show refletem apenas leads que o closer realmente atendeu ou deveria ter atendido.
-
-### Arquivos editados
-- `src/hooks/useR1CloserMetrics.ts` — Adicionar check de outside no loop de metricas
-- `src/hooks/useCloserAgendaMetrics.ts` — Adicionar deteccao de outside e excluir de r1_alocadas, r1_realizadas, no_shows
 
 ### O que NAO muda
-- RPC `get_sdr_metrics_from_agenda` (SDR metrics — outside conta como agendamento/contrato para SDR)
-- Contagem de `contrato_pago` e `outside` (ja estao corretos)
-- `CloserSummaryTable` e `SdrSummaryTable` (consomem dados dos hooks)
+- Visual dos itens pre-agendados na agenda (laranja tracejado)
+- Fluxo de agendamento normal (sem pre-agendamento)
+- Cancelamento de pre-agendamento
+- Deteccao automatica de Closer R1
 
