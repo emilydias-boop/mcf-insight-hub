@@ -1,50 +1,69 @@
 
 
-## Melhorar tab "Avançaram" — Totais por coluna + Filtro R1 + Investigar leads sem R1
+## Fix: Vendas de Parceria mostrando 0 no Carrinho R2
 
-### Problemas identificados
+### Causa raiz
 
-1. **Leads sem Data R1 na tab "Avançaram"**: Alguns leads aparecem com "—" na coluna R1. Isso acontece porque o matching por `contactId` no `r1DateByContactId` falha — o lead pode não ter sido encontrado no CRM ou não teve R1 registrada. Esses leads provavelmente são outsides (compraram antes da R1) e devem ser sinalizados.
+O hook `useR2CarrinhoVendas` busca transacoes de parceria da semana e tenta vincular aos leads aprovados por **email** (do CRM contact) e **telefone** (attendee_phone ou CRM contact phone). Se nenhum match ocorre, retorna array vazio.
 
-2. **Sem totais por coluna**: Não há resumo mostrando quantos leads têm R1, quantos têm R2, quantos compraram parceria, etc.
+A tela mostra **"Vendas Sem Vinculo (5)"** — ou seja, 5 transacoes de parceria EXISTEM, mas nao matcham com nenhum aprovado. Isso indica que:
 
-3. **Sem filtro por R1**: Não é possível filtrar leads com/sem Data R1.
+1. Os emails dos clientes no Hubla (`customer_email`) nao batem com os emails no CRM (`crm_contacts.email`)
+2. Os telefones tambem nao batem — ou os aprovados nao tem deal/contact linkado
 
-### Alterações
+### Problema adicional
 
-**1. `CarrinhoAnalysisReportPanel.tsx` — Barra de totais acima da tabela**
+O `R2VendasList` chama `useR2CarrinhoVendas(weekStart, weekEnd)` SEM o `config`, ignorando o horario de corte configurado. Isso pode excluir transacoes perto do limite.
 
-Adicionar uma linha de resumo com badges/contadores:
-- **Total**: X leads
-- **Com R1**: Y (Z%)
-- **Sem R1**: W (K%)
-- **Com Parceria**: N (M%)
-- **R2 Realizada**: P / **R2 Agendada**: Q
+### Solucao
 
-**2. `CarrinhoAnalysisReportPanel.tsx` — Novo filtro "Data R1"**
+**1. Hook `useR2CarrinhoVendas.ts` — Melhorar matching**
 
-Adicionar um Select ao lado dos filtros existentes (Closer, UF):
-- "Todas" (default)
-- "Com R1"
-- "Sem R1"
+Adicionar mais estrategias de matching alem de email e telefone:
+- **Match por `attendee_phone` direto** (hoje so usa `att.attendee_phone`, mas a comparacao pode falhar por formato)
+- **Match por nome normalizado** como fallback (UPPER + TRIM)
+- **Match por sufixo de 9 digitos** do telefone (hoje usa 11 digitos, mas muitos telefones tem formatos inconsistentes como `41998554545` vs `+5541998554545`)
 
-Atualizar `filteredAvancados` para aplicar este filtro.
+Alterar `normalizeForMatch` para usar **9 digitos** (ultimos 9) em vez de 11 — isso elimina problemas de DDD/+55.
 
-**3. `CarrinhoAnalysisReportPanel.tsx` — Footer da tabela com totais**
+**2. Hook `useR2CarrinhoVendas.ts` — Incluir A010 transactions**
 
-Adicionar um `TableRow` no footer com contagem de cada coluna:
-- Nome: total de leads
-- Data Contrato: total (sempre 100%)
-- Data R1: contagem dos que têm data
-- Data R2: contagem dos que têm data
-- Parceria: contagem dos que compraram
+Verificar se transacoes de produto A010 (que sao upgrades/parceria) tambem devem ser incluidas. Atualmente filtra apenas `product_category = 'parceria'`.
 
-**4. Hook — Marcar leads sem R1 como Outside**
+**3. `R2VendasList.tsx` — Passar config**
 
-No hook, leads que avançaram mas não têm `dataR1` já têm o campo `isOutside` — verificar se está sendo setado corretamente. Se o lead não tem R1 mas tem R2, ele provavelmente é outside e deve ser marcado. Adicionar uma badge "Outside" na coluna Status para esses casos.
+Atualizar para receber e usar `carrinhoConfig` na chamada do hook.
 
-### Detalhes técnicos
-- Novo state: `filterR1: 'all' | 'com' | 'sem'`
-- Contadores calculados via `useMemo` sobre `filteredAvancados`
-- Footer row com `className="font-bold bg-muted/50"` para destaque visual
+**4. `R2Carrinho.tsx` — Passar config ao componente**
+
+Enviar `config` como prop para `R2VendasList`.
+
+### Detalhes tecnicos
+
+Mudanca principal no matching (sufixo 9 digitos):
+```
+// Antes: slice(-11) — falha com formatos diferentes
+// Depois: slice(-9) — pega apenas o numero local (sem DDD variavel)
+const normalizeForMatch = (phone: string | null): string | null => {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  return digits.length >= 9 ? digits.slice(-9) : null;
+};
+```
+
+Fallback por nome:
+```
+// Se email e telefone nao matcham, tentar nome normalizado
+const txName = tx.customer_name?.toUpperCase().trim();
+if (!matched && txName && nameMap.has(txName)) {
+  matched = true;
+  attendeeData = nameMap.get(txName);
+}
+```
+
+### Arquivos alterados
+- `src/hooks/useR2CarrinhoVendas.ts` — matching com 9 digitos + fallback nome + receber config
+- `src/hooks/useUnlinkedTransactions.ts` — alinhar matching com 9 digitos
+- `src/components/crm/R2VendasList.tsx` — aceitar e usar config prop
+- `src/pages/crm/R2Carrinho.tsx` — passar config para R2VendasList
 
