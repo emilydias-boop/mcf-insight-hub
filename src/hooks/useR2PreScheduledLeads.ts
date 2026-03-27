@@ -10,6 +10,8 @@ export interface R2PreScheduledLead {
   deal_id: string | null;
   booked_by: string | null;
   created_at: string;
+  notes: string | null;
+  r2_observations: string | null;
   meeting_slot: {
     id: string;
     scheduled_at: string;
@@ -46,6 +48,8 @@ export function useR2PreScheduledLeads() {
           deal_id,
           booked_by,
           created_at,
+          notes,
+          r2_observations,
           meeting_slot:meeting_slots!meeting_slot_id(
             id,
             scheduled_at,
