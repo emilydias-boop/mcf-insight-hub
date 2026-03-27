@@ -293,6 +293,7 @@ export default function R2Carrinho() {
             weekStart={weekStart} 
             weekEnd={weekEnd}
             filteredVendas={selectedCarrinhoId ? vendasData : undefined}
+            carrinhoConfig={config}
           />
         </TabsContent>
 

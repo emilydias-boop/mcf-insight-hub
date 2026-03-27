@@ -57,15 +57,21 @@ export function useUnlinkedTransactions(weekDate: Date) {
       const approvedEmails = new Set<string>();
       const approvedPhones = new Set<string>();
 
+      const approvedNames = new Set<string>();
+
       approvedAttendees?.forEach((att: any) => {
         const email = att.deal?.contact?.email?.toLowerCase();
         const phone = att.attendee_phone || att.deal?.contact?.phone;
         
         if (email) approvedEmails.add(email);
         if (phone) {
-          const normalized = phone.replace(/\D/g, '').slice(-11);
-          if (normalized.length >= 10) approvedPhones.add(normalized);
+          const digits = phone.replace(/\D/g, '');
+          const normalized = digits.length >= 9 ? digits.slice(-9) : null;
+          if (normalized) approvedPhones.add(normalized);
         }
+        // Nome normalizado como fallback
+        const name = att.deal?.contact?.name?.toUpperCase().trim();
+        if (name) approvedNames.add(name);
       });
 
       // Filtrar transações que NÃO têm match automático
@@ -73,13 +79,16 @@ export function useUnlinkedTransactions(weekDate: Date) {
 
       transactions.forEach((tx: any) => {
         const txEmail = tx.customer_email?.toLowerCase();
-        const txPhone = tx.customer_phone?.replace(/\D/g, '').slice(-11);
+        const txPhoneDigits = tx.customer_phone?.replace(/\D/g, '') || '';
+        const txPhone = txPhoneDigits.length >= 9 ? txPhoneDigits.slice(-9) : null;
+        const txName = tx.customer_name?.toUpperCase().trim();
 
         const hasEmailMatch = txEmail && approvedEmails.has(txEmail);
-        const hasPhoneMatch = txPhone && txPhone.length >= 10 && approvedPhones.has(txPhone);
+        const hasPhoneMatch = txPhone && approvedPhones.has(txPhone);
+        const hasNameMatch = txName && approvedNames.has(txName);
 
         // Se não tem match automático, adiciona na lista
-        if (!hasEmailMatch && !hasPhoneMatch) {
+        if (!hasEmailMatch && !hasPhoneMatch && !hasNameMatch) {
           unlinkedTransactions.push({
             id: tx.id,
             hubla_id: tx.hubla_id,
