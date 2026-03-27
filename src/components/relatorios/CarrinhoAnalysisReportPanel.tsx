@@ -97,11 +97,13 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
         Nome: l.nome,
         Telefone: l.telefone,
         Estado: l.estado,
-        'Data Compra': format(new Date(l.dataCompra), 'dd/MM/yyyy'),
-        Status: l.statusAtual,
-        Closer: l.closerName || '—',
+        'Data Contrato': format(new Date(l.dataCompra), 'dd/MM/yyyy'),
+        'Valor Contrato': l.valorContrato,
+        'Data R1': l.dataR1 ? format(new Date(l.dataR1), 'dd/MM/yyyy HH:mm') : '—',
         'Data R2': l.dataR2 ? format(new Date(l.dataR2), 'dd/MM/yyyy HH:mm') : '—',
-        Outside: l.isOutside ? 'Sim' : 'Não',
+        Closer: l.closerName || '—',
+        Parceria: l.comprouParceria ? `Sim (${l.dataParceria ? format(new Date(l.dataParceria), 'dd/MM/yyyy') : ''})` : 'Não',
+        Status: l.statusAtual,
       })));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Leads Avançaram');
@@ -422,11 +424,12 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                           <TableHead>Nome</TableHead>
                           <TableHead>Telefone</TableHead>
                           <TableHead>UF</TableHead>
-                          <TableHead>Data Compra</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Closer</TableHead>
+                          <TableHead>Data Contrato</TableHead>
+                          <TableHead>Data R1</TableHead>
                           <TableHead>Data R2</TableHead>
-                          <TableHead>Outside</TableHead>
+                          <TableHead>Closer</TableHead>
+                          <TableHead>Parceria</TableHead>
+                          <TableHead>Status</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -436,19 +439,22 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                             <TableCell className="text-xs">{l.telefone}</TableCell>
                             <TableCell>{l.estado}</TableCell>
                             <TableCell className="text-xs">{format(new Date(l.dataCompra), 'dd/MM/yy')}</TableCell>
+                            <TableCell className="text-xs">{l.dataR1 ? format(new Date(l.dataR1), 'dd/MM/yy HH:mm') : '—'}</TableCell>
+                            <TableCell className="text-xs">{l.dataR2 ? format(new Date(l.dataR2), 'dd/MM/yy HH:mm') : '—'}</TableCell>
+                            <TableCell className="text-xs">{l.closerName || '—'}</TableCell>
+                            <TableCell>
+                              {l.comprouParceria ? (
+                                <Badge className="bg-green-100 text-green-800 text-xs">
+                                  Sim {l.dataParceria ? format(new Date(l.dataParceria), 'dd/MM') : ''}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
+                            </TableCell>
                             <TableCell>
                               <Badge className={cn('text-xs', l.r2Realizada ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800')}>
                                 {l.statusAtual}
                               </Badge>
-                            </TableCell>
-                            <TableCell className="text-xs">{l.closerName || '—'}</TableCell>
-                            <TableCell className="text-xs">{l.dataR2 ? format(new Date(l.dataR2), 'dd/MM/yy HH:mm') : '—'}</TableCell>
-                            <TableCell>
-                              {l.isOutside ? (
-                                <Badge className="bg-purple-100 text-purple-800 text-xs">Sim</Badge>
-                              ) : (
-                                <span className="text-muted-foreground text-xs">—</span>
-                              )}
                             </TableCell>
                           </TableRow>
                         ))}
