@@ -1,43 +1,27 @@
 
 
-## Outside: Atribuir pela Data da Compra, nao pela Data da Reuniao
+## Relatorio PDF: 632 Leads A010 Sem Dono - Marco 2026
 
-### Problema atual
+### Objetivo
+Gerar um PDF completo com os 632 leads A010 sem dono do mes de marco, incluindo dados de contato, compra e estagio atual no CRM.
 
-Hoje o outside aparece no painel no dia da **reuniao R1** (scheduled_at). Exemplo: contrato comprado em 25/02, reuniao em 27/03 — o outside aparece em 27/03. O correto e aparecer em **25/02**, que e quando a compra aconteceu.
+### Execucao
 
-A exclusao das metricas do closer (R1 Agendada, Realizada, No-show) continua igual — outsides sao excluidos independente da data.
+1. **Query ao banco** — Extrair os 632 deals sem dono da pipeline "INSIDE SALES" (incorporador) criados em marco 2026, cruzando com `hubla_transactions` para pegar dados da compra A010 (produto, data, valor). Joins com `crm_contacts` (nome, email, telefone) e `crm_stages` (estagio atual).
 
-### Mudanca
+2. **Gerar PDF com reportlab** — Documento com:
+   - Capa com titulo, data de geracao, total de leads
+   - Resumo executivo: distribuicao por estagio, por origem, por semana de compra
+   - Tabela principal com colunas: Nome, Email, Telefone, Produto A010, Data da Compra, Valor Pago, Estagio Atual, Origem
+   - Paginacao e cabecalho em todas as paginas
 
-A contagem de outsides por closer precisa ser invertida: em vez de "pegar reunioes no periodo e ver quais tem contrato anterior", fazer "pegar contratos no periodo e ver quais tem reuniao posterior".
+3. **QA visual** — Converter paginas para imagem e verificar layout, texto cortado, alinhamento de tabela.
 
-### Arquivos editados
+4. **Salvar em `/mnt/documents/`** e entregar ao usuario.
 
-**`src/hooks/useR1CloserMetrics.ts`** — Bloco "OUTSIDE DETECTION" (linhas 300-387)
-
-Logica atual:
-1. Busca meetings no periodo → detecta quais attendees tem contrato anterior → conta outside
-
-Logica nova:
-1. Buscar `hubla_transactions` com `sale_date` no periodo filtrado, `product_category` contrato/incorporador, `sale_status = completed`
-2. Para cada contrato encontrado, buscar se existe meeting R1 com `scheduled_at > sale_date` para o mesmo email
-3. Se existe meeting posterior, contar o outside no closer daquela meeting, mas atribuido ao periodo do `sale_date`
-
-Isso significa: buscar meetings **sem filtro de data** para os emails dos contratos do periodo, e verificar se alguma R1 e posterior.
-
-**`src/hooks/useSdrOutsideMetrics.ts`** — Mesma inversao de logica
-
-Logica atual: busca meetings no periodo → detecta outsides
-Logica nova: busca contratos no periodo → verifica se tem R1 posterior → conta outside por SDR (booked_by da meeting)
-
-**`src/hooks/useCloserAgendaMetrics.ts`** — Ajuste na contagem de outsides
-
-Mesma inversao: contar outsides pelo `sale_date` dentro do mes, nao pelo `scheduled_at`.
-
-### O que NAO muda
-- Exclusao de outsides das metricas do closer (R1 Agendada, Realizada, No-show) — continua baseada na reuniao
-- `contrato_pago` contagem (baseada em `contract_paid_at`)
-- Deteccao de outside no kanban, na agenda R2, nos drawers
-- Nenhuma migration
+### Detalhes tecnicos
+- Query via `psql` com JOIN entre `crm_deals`, `crm_contacts`, `crm_stages`, `hubla_transactions`
+- Filtros: `owner_id IS NULL`, pipeline da BU incorporador, `created_at` em marco 2026, produto com `product_category = 'a010'` ou `product_name ilike '%a010%'`
+- PDF gerado com `reportlab` (platypus para tabelas multi-pagina)
+- Landscape para caber todas as colunas
 
