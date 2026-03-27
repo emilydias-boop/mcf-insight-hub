@@ -393,7 +393,23 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         if (isR2Agendada) sd.agendados++;
         if (isR2Realizada) sd.realizados++;
 
-        if (!isR2Realizada) {
+        if (isR2Agendada || isR2Realizada) {
+          // Lead avançou — adicionar à lista de avançados
+          const closerName = (attendee?.meeting_slot as any)?.closer?.name || '';
+          const dataR2 = (attendee?.meeting_slot as any)?.scheduled_at || '';
+          leadsAvancados.push({
+            nome: tx.customer_name || 'Sem nome',
+            telefone: tx.customer_phone || attendee?.attendee_phone || '',
+            estado: uf,
+            dataCompra: tx.sale_date,
+            produto: tx.product_name || tx.product_code || '',
+            statusAtual: isR2Realizada ? 'R2 Realizada' : 'R2 Agendada',
+            closerName,
+            dataR2,
+            isOutside,
+            r2Realizada: isR2Realizada,
+          });
+        } else {
           const txPhone9 = normalizePhoneSuffix(tx.customer_phone);
           const contactExistsInCRM = allCRMEmails.has(email) || (txPhone9 ? allCRMPhones.has(txPhone9) : false);
 
@@ -475,7 +491,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         }))
         .sort((a, b) => b.contratos - a.contratos);
 
-      return { kpis, funnelSteps, motivosPerda, analysisByState, leadsDetalhados };
+      return { kpis, funnelSteps, motivosPerda, analysisByState, leadsDetalhados, leadsAvancados };
     },
   });
 }
