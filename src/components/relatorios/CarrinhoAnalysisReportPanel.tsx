@@ -351,6 +351,7 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                       <TableHead>UF</TableHead>
                       <TableHead>Data Compra</TableHead>
                       <TableHead>Produto</TableHead>
+                      <TableHead>Outside</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>R2</TableHead>
                       <TableHead>Motivo</TableHead>
@@ -367,6 +368,13 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                         <TableCell>{l.estado}</TableCell>
                         <TableCell className="text-xs">{format(new Date(l.dataCompra), 'dd/MM/yy')}</TableCell>
                         <TableCell className="text-xs max-w-[120px] truncate">{l.produto}</TableCell>
+                        <TableCell>
+                          {l.isOutside ? (
+                            <Badge className="bg-purple-100 text-purple-800 text-xs">Sim</Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">{l.statusAtual}</Badge>
                         </TableCell>
