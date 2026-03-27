@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
-import { endOfDay, format } from 'date-fns';
+import { endOfDay, format, subDays } from 'date-fns';
 import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
 import { getCarrinhoWeekBoundaries } from '@/lib/carrinhoWeekBoundaries';
 import { getCachedPrecoReferencia } from './useProductPricesCache';
@@ -70,7 +70,8 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
     queryKey: ['r2-carrinho-vendas', weekStart.toISOString(), weekEnd.toISOString()],
     queryFn: async () => {
       const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig);
-      // 1. Buscar attendees aprovados da semana com dados do closer
+      // 1. Buscar attendees aprovados dos últimos 60 dias (lead pode ter R2 em outra semana mas comprar parceria esta semana)
+      const lookbackStart = subDays(weekEnd, 60);
       const { data: approvedAttendees, error: attendeesError } = await supabase
         .from('meeting_slot_attendees')
         .select(`
@@ -95,16 +96,12 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
             )
           )
         `)
-      .gte('meeting_slot.scheduled_at', effectiveStart.toISOString())
-      .lt('meeting_slot.scheduled_at', effectiveEnd.toISOString())
+      .gte('meeting_slot.scheduled_at', lookbackStart.toISOString())
+      .lte('meeting_slot.scheduled_at', endOfDay(weekEnd).toISOString())
         .eq('meeting_slot.meeting_type', 'r2')
         .eq('r2_status_id', '24d9a326-378b-4191-a4b3-d0ec8b9d23eb');
 
       if (attendeesError) throw attendeesError;
-
-      if (!approvedAttendees || approvedAttendees.length === 0) {
-        return [];
-      }
 
       // 2. Coletar emails e telefones normalizados dos aprovados
       const emailsSet = new Set<string>();
@@ -112,7 +109,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
       const nameMap = new Map<string, { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt: string | null }>();
       const attendeeMap = new Map<string, { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt: string | null }>();
 
-      approvedAttendees.forEach((att: any) => {
+      (approvedAttendees || []).forEach((att: any) => {
         const email = att.deal?.contact?.email?.toLowerCase();
         const phone = att.attendee_phone || att.deal?.contact?.phone;
         const normalizedPhone = phone ? normalizeForMatch(phone) : null;
@@ -141,18 +138,14 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
 
       const emails = Array.from(emailsSet);
 
-      if (emails.length === 0 && phonesSet.size === 0 && nameMap.size === 0) {
-        return [];
-      }
-
-      // 3. Buscar transações de parceria da semana que matcham com os leads aprovados
-      // Matching por email/telefone já garante relevância - não filtrar por product_name
+      // 3. Buscar transações de parceria da semana (usar endOfDay para incluir vendas do dia inteiro)
+      // O corte do carrinho define quais R2s pertencem à semana, mas vendas podem acontecer o dia todo
       let query = supabase
         .from('hubla_transactions')
         .select('*')
         .eq('product_category', 'parceria')
         .gte('sale_date', effectiveStart.toISOString())
-        .lt('sale_date', effectiveEnd.toISOString())
+        .lte('sale_date', endOfDay(weekEnd).toISOString())
         .order('sale_date', { ascending: false });
 
       // Construir filtro OR para emails e telefones
@@ -216,8 +209,19 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
         let attendeeData: { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt: string | null } | undefined;
         let linkedScheduledAt: string | null = null;
 
+        // PRIMEIRO: Match por linked_attendee_id (vinculação manual — mais confiável)
+        if (tx.linked_attendee_id) {
+          const linkedData = linkedAttendeesMap.get(tx.linked_attendee_id);
+          if (linkedData) {
+            matched = true;
+            isManualLink = true;
+            attendeeData = linkedData;
+            linkedScheduledAt = linkedData.scheduledAt;
+          }
+        }
+
         // Match por email
-        if (txEmail && emailsSet.has(txEmail)) {
+        if (!matched && txEmail && emailsSet.has(txEmail)) {
           matched = true;
           attendeeData = attendeeMap.get(txEmail);
         }
@@ -236,17 +240,6 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
           if (txName && nameMap.has(txName)) {
             matched = true;
             attendeeData = nameMap.get(txName);
-          }
-        }
-
-        // Match manual (linked_attendee_id) - pode ser de outra semana
-        if (!matched && tx.linked_attendee_id) {
-          const linkedData = linkedAttendeesMap.get(tx.linked_attendee_id);
-          if (linkedData) {
-            matched = true;
-            isManualLink = true;
-            attendeeData = linkedData;
-            linkedScheduledAt = linkedData.scheduledAt;
           }
         }
 
