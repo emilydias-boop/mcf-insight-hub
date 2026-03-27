@@ -4714,6 +4714,7 @@ export type Database = {
       }
       deal_replication_rules: {
         Row: {
+          auto_distribute: boolean | null
           copy_custom_fields: boolean
           copy_tasks: boolean
           created_at: string
@@ -4731,6 +4732,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_distribute?: boolean | null
           copy_custom_fields?: boolean
           copy_tasks?: boolean
           created_at?: string
@@ -4748,6 +4750,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_distribute?: boolean | null
           copy_custom_fields?: boolean
           copy_tasks?: boolean
           created_at?: string

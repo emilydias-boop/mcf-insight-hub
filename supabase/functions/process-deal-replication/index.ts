@@ -24,6 +24,7 @@ interface ReplicationRule {
   is_active: boolean;
   copy_custom_fields: boolean;
   copy_tasks: boolean;
+  auto_distribute: boolean;
   priority: number;
 }
 
@@ -247,7 +248,31 @@ async function processReplication(supabase: any, item: QueueItem) {
       continue;
     }
 
-    // 6. Log the replication
+    // 6. Auto-distribute if enabled
+    let assignedOwner: string | null = null;
+    if (rule.auto_distribute) {
+      try {
+        const { data: nextOwner, error: ownerError } = await supabase
+          .rpc('get_next_lead_owner', { p_origin_id: rule.target_origin_id });
+        
+        if (ownerError) {
+          console.warn(`Auto-distribute warning for rule ${rule.id}: ${ownerError.message}`);
+        } else if (nextOwner) {
+          assignedOwner = nextOwner;
+          await supabase
+            .from('crm_deals')
+            .update({ owner_id: nextOwner })
+            .eq('id', createdDeal.id);
+          console.log(`Auto-distributed deal ${createdDeal.id} to ${nextOwner}`);
+        } else {
+          console.warn(`No owner available for auto-distribution in origin ${rule.target_origin_id}`);
+        }
+      } catch (distError) {
+        console.error(`Auto-distribute failed for deal ${createdDeal.id}:`, distError);
+      }
+    }
+
+    // 7. Log the replication
     await supabase.from('deal_replication_logs').insert({
       rule_id: rule.id,
       source_deal_id: deal.id,
@@ -257,41 +282,47 @@ async function processReplication(supabase: any, item: QueueItem) {
         rule_name: rule.name,
         source_origin: item.origin_id,
         target_origin: rule.target_origin_id,
-        match_condition: rule.match_condition
+        match_condition: rule.match_condition,
+        auto_distributed: rule.auto_distribute,
+        assigned_owner: assignedOwner
       }
     });
 
-    // 7. Create activity on source deal
+    // 8. Create activity on source deal
+    const distMsg = assignedOwner ? ` — Distribuído para ${assignedOwner}` : '';
     await supabase.from('deal_activities').insert({
       deal_id: deal.id,
       activity_type: 'replication',
-      description: `Deal replicado para pipeline "${rule.name}" - ID: ${createdDeal.id}`,
+      description: `Deal replicado para pipeline "${rule.name}" - ID: ${createdDeal.id}${distMsg}`,
       metadata: {
         rule_id: rule.id,
         target_deal_id: createdDeal.id,
-        target_origin_id: rule.target_origin_id
+        target_origin_id: rule.target_origin_id,
+        assigned_owner: assignedOwner
       }
     });
 
-    // 8. Create activity on target deal
+    // 9. Create activity on target deal
     await supabase.from('deal_activities').insert({
       deal_id: createdDeal.id,
       activity_type: 'creation',
-      description: `Deal criado automaticamente via replicação do deal ${deal.id}`,
+      description: `Deal criado automaticamente via replicação do deal ${deal.id}${distMsg}`,
       metadata: {
         source_deal_id: deal.id,
         rule_id: rule.id,
-        rule_name: rule.name
+        rule_name: rule.name,
+        assigned_owner: assignedOwner
       }
     });
 
     replicationsCreated.push({
       rule_id: rule.id,
       rule_name: rule.name,
-      target_deal_id: createdDeal.id
+      target_deal_id: createdDeal.id,
+      assigned_owner: assignedOwner
     });
 
-    console.log(`Created replica: ${createdDeal.id} from ${deal.id} via rule ${rule.name}`);
+    console.log(`Created replica: ${createdDeal.id} from ${deal.id} via rule ${rule.name}${assignedOwner ? ` → ${assignedOwner}` : ''}`);
   }
 
   return {

@@ -1,0 +1,1 @@
+ALTER TABLE public.deal_replication_rules ADD COLUMN auto_distribute BOOLEAN DEFAULT false;

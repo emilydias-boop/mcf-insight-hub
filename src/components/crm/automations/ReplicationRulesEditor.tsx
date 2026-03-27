@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Pencil, Trash2, Play, RefreshCw, ArrowRight, Copy, History } from 'lucide-react';
+import { Plus, Pencil, Trash2, Play, RefreshCw, ArrowRight, Copy, History, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -46,6 +46,7 @@ export function ReplicationRulesEditor({ originId }: ReplicationRulesEditorProps
     is_active: true,
     copy_custom_fields: true,
     copy_tasks: false,
+    auto_distribute: false,
     priority: 0,
   });
   const [matchType, setMatchType] = useState<'none' | 'product_name' | 'tags'>('none');
@@ -101,6 +102,7 @@ export function ReplicationRulesEditor({ originId }: ReplicationRulesEditorProps
       is_active: true,
       copy_custom_fields: true,
       copy_tasks: false,
+      auto_distribute: false,
       priority: 0,
     });
     setMatchType('none');
@@ -121,6 +123,7 @@ export function ReplicationRulesEditor({ originId }: ReplicationRulesEditorProps
       is_active: rule.is_active,
       copy_custom_fields: rule.copy_custom_fields,
       copy_tasks: rule.copy_tasks,
+      auto_distribute: (rule as any).auto_distribute ?? false,
       priority: rule.priority,
     });
     
@@ -350,7 +353,7 @@ export function ReplicationRulesEditor({ originId }: ReplicationRulesEditorProps
                       </div>
                     </Card>
 
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-6 flex-wrap">
                       <div className="flex items-center gap-2">
                         <Switch
                           checked={formData.is_active}
@@ -365,7 +368,22 @@ export function ReplicationRulesEditor({ originId }: ReplicationRulesEditorProps
                         />
                         <Label>Copiar campos personalizados</Label>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={formData.auto_distribute}
+                          onCheckedChange={(v) => setFormData({ ...formData, auto_distribute: v })}
+                        />
+                        <Label className="flex items-center gap-1">
+                          <Users className="h-3.5 w-3.5" />
+                          Distribuir automaticamente
+                        </Label>
+                      </div>
                     </div>
+                    {formData.auto_distribute && (
+                      <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                        O deal replicado será distribuído automaticamente usando a configuração de distribuição da pipeline destino (<code>lead_distribution_config</code>).
+                      </p>
+                    )}
                   </div>
 
                   <DialogFooter>
@@ -411,6 +429,12 @@ export function ReplicationRulesEditor({ originId }: ReplicationRulesEditorProps
                             <Badge variant={rule.is_active ? 'default' : 'secondary'}>
                               {rule.is_active ? 'Ativa' : 'Inativa'}
                             </Badge>
+                            {(rule as any).auto_distribute && (
+                              <Badge variant="outline" className="text-xs flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                Auto-dist
+                              </Badge>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                             <span>{rule.source_origin?.name}</span>

@@ -21,6 +21,7 @@ export interface DealReplicationRule {
   is_active: boolean;
   copy_custom_fields: boolean;
   copy_tasks: boolean;
+  auto_distribute: boolean;
   priority: number;
   created_at: string;
   updated_at: string;
@@ -43,6 +44,7 @@ export interface CreateReplicationRuleInput {
   is_active?: boolean;
   copy_custom_fields?: boolean;
   copy_tasks?: boolean;
+  auto_distribute?: boolean;
   priority?: number;
 }
 
@@ -109,6 +111,7 @@ export const useCreateReplicationRule = () => {
           is_active: input.is_active ?? true,
           copy_custom_fields: input.copy_custom_fields ?? true,
           copy_tasks: input.copy_tasks ?? false,
+          auto_distribute: input.auto_distribute ?? false,
           priority: input.priority ?? 0,
         })
         .select()
