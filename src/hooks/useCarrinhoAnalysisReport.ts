@@ -366,7 +366,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
           for (const d of newDeals.data || []) {
             if (d.contact_id && !dealMap.has(d.contact_id)) {
-              dealMap.set(d.contact_id, { id: d.id, sdrName: (d as any).owner?.name || null });
+              dealMap.set(d.contact_id, { id: d.id, sdrName: (d as any).owner?.name || null, leadChannel: (d as any).custom_fields?.lead_channel || null, dataSource: (d as any).data_source || null });
             }
           }
           for (const a of newR1.data || []) {
