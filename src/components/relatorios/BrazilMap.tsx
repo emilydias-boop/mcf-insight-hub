@@ -1,7 +1,13 @@
 import { useState, useCallback } from 'react';
-import { StateAnalysis } from '@/hooks/useCarrinhoAnalysisReport';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
+export interface BrazilMapStateData {
+  uf: string;
+  contratos: number;
+  agendados: number;
+  realizados: number;
+  perdidos: number;
+  taxaPerda: number;
+}
 // Simplified SVG paths for Brazilian states (centered viewBox)
 const BRAZIL_STATES: Record<string, { path: string; labelX: number; labelY: number }> = {
   AC: { path: 'M95,280 L125,275 L130,295 L100,300Z', labelX: 112, labelY: 288 },
@@ -41,7 +47,7 @@ function getLossColor(taxaPerda: number): string {
 }
 
 interface BrazilMapProps {
-  stateData: StateAnalysis[];
+  stateData: BrazilMapStateData[];
   onStateClick?: (uf: string) => void;
   selectedState?: string;
 }
