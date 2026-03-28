@@ -188,12 +188,60 @@ async function autoMarkSaleComplete(supabase: any, data: {
       }
     }
 
+    // === FALLBACK: buscar deal diretamente se não encontrou R2 aprovado ===
+    let usedFallback = false;
+
     if (!matchedAttendee || !deal) {
-      console.log(`⚠️ ${logPrefix} Nenhum lead R2 aprovado encontrado para: ${data.customerEmail} / ${data.customerPhone || 'sem telefone'}`);
-      return { success: false, message: 'No matching approved R2 lead found' };
+      console.log(`⚠️ ${logPrefix} Nenhum R2 aprovado encontrado, tentando fallback direto por deal...`);
+
+      // Buscar contacts por email
+      const { data: fallbackContacts } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', data.customerEmail)
+        .limit(5);
+
+      const fallbackContactIds = (fallbackContacts || []).map((c: any) => c.id);
+
+      // Se não achou por email, tentar por telefone
+      if (fallbackContactIds.length === 0 && data.customerPhone) {
+        const phoneSuffix = data.customerPhone.replace(/\D/g, '').slice(-9);
+        if (phoneSuffix.length >= 8) {
+          const { data: phoneContacts } = await supabase
+            .from('crm_contacts')
+            .select('id')
+            .ilike('phone', `%${phoneSuffix}`)
+            .limit(5);
+          if (phoneContacts) fallbackContactIds.push(...phoneContacts.map((c: any) => c.id));
+        }
+      }
+
+      // Buscar deals desses contacts (pegar o mais recente)
+      for (const contactId of fallbackContactIds) {
+        const { data: deals } = await supabase
+          .from('crm_deals')
+          .select('id, origin_id, stage_id')
+          .eq('contact_id', contactId)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        if (deals && deals.length > 0) {
+          deal = deals[0]; // Pegar o deal mais recente
+          usedFallback = true;
+          console.log(`✅ ${logPrefix} Fallback: Deal ${deal.id} encontrado para contact ${contactId}`);
+          break;
+        }
+      }
+
+      if (!deal) {
+        console.log(`⚠️ ${logPrefix} Fallback também falhou. Nenhum deal encontrado para: ${data.customerEmail}`);
+        return { success: false, message: 'No matching deal found (R2 and fallback both failed)' };
+      }
     }
 
-    console.log(`✅ ${logPrefix} Lead R2 encontrado: Deal ${deal.id}, Attendee ${matchedAttendee.id}`);
+    if (!usedFallback) {
+      console.log(`✅ ${logPrefix} Lead R2 encontrado: Deal ${deal.id}, Attendee ${matchedAttendee.id}`);
+    }
 
     // 3. Find "Venda Realizada" stage in the same origin
     const { data: vendaStage, error: stageError } = await supabase
@@ -220,35 +268,42 @@ async function autoMarkSaleComplete(supabase: any, data: {
       return { success: false, message: 'Failed to update deal stage' };
     }
     
-    // 5. Mark attendee as "comprou"
-    const { error: attendeeUpdateError } = await supabase
-      .from('meeting_slot_attendees')
-      .update({ 
-        carrinho_status: 'comprou',
-        carrinho_updated_at: new Date().toISOString()
-      })
-      .eq('id', matchedAttendee.id);
-    
-    if (attendeeUpdateError) {
-      console.error(`⚠️ ${logPrefix} Erro ao atualizar attendee:`, attendeeUpdateError);
+    // 5. Mark attendee as "comprou" (only if we have one)
+    if (matchedAttendee) {
+      const { error: attendeeUpdateError } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ 
+          carrinho_status: 'comprou',
+          carrinho_updated_at: new Date().toISOString()
+        })
+        .eq('id', matchedAttendee.id);
+      
+      if (attendeeUpdateError) {
+        console.error(`⚠️ ${logPrefix} Erro ao atualizar attendee:`, attendeeUpdateError);
+      }
     }
     
     // 6. Log activity in deal_activities
+    const activityDescription = usedFallback
+      ? `Parceria comprada — movido automaticamente (sem R2): ${data.productName}`
+      : `Venda de parceria realizada: ${data.productName}`;
+
     await supabase
       .from('deal_activities')
       .insert({
         deal_id: deal.id,
         activity_type: 'stage_change',
-        description: `Venda de parceria realizada: ${data.productName}`,
+        description: activityDescription,
         to_stage: vendaStage.stage_name,
         metadata: {
-          via: 'webhook_parceria',
+          via: usedFallback ? 'webhook_parceria_fallback' : 'webhook_parceria',
+          used_fallback: usedFallback,
           product_name: data.productName,
           net_value: data.netValue,
           sale_date: data.saleDate,
           customer_email: data.customerEmail,
-          attendee_id: matchedAttendee.id,
-          closer_name: matchedAttendee.meeting_slot?.closer?.name
+          attendee_id: matchedAttendee?.id || null,
+          closer_name: matchedAttendee?.meeting_slot?.closer?.name || null
         }
       });
     
