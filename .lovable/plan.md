@@ -1,33 +1,23 @@
 
 
-## Fix: Valor bruto da parceria usando `reference_price` do banco
+## Fix: Preços dos produtos de parceria hardcoded no dialog de edição
 
 ### Problema
 
-A query de parcerias (linha 422) **não busca `reference_price`** da tabela `hubla_transactions`. A função `getDeduplicatedGross()` então cai no fallback hardcoded (`getFixedGrossPrice`), que pode retornar valores desatualizados ou incorretos — ignorando o que foi configurado na aba Produtos.
+O `R2CarrinhoTransactionFormDialog.tsx` usa uma lista `PARCERIA_PRODUCTS` hardcoded (linhas 43-48) com preços antigos (ex: A001 = R$ 14.500). Quando o usuário seleciona um produto ou edita uma venda, o "Valor Bruto" vem dessa lista ao invés dos preços configurados na aba Produtos (`product_configurations`).
 
 ### Correção
 
-**`src/hooks/useCarrinhoAnalysisReport.ts`** — 2 pontos:
+**`src/components/crm/R2CarrinhoTransactionFormDialog.tsx`**:
 
-1. **Expandir select** (linha 423): adicionar `reference_price`
-```typescript
-.select('id, customer_email, sale_date, product_name, product_price, net_value, gross_override, installment_number, reference_price')
-```
+1. **Remover `PARCERIA_PRODUCTS` hardcoded** (linhas 43-48)
+2. **Importar `useProductConfigurations`** e buscar produtos com `product_category = 'parceria'` (ou categorias relevantes como `incorporador`, `parceria`, `ob_vitalicio`)
+3. **Construir lista dinâmica** a partir de `product_configurations`, usando `reference_price` como preço exibido no dropdown
+4. **Atualizar `handleProductChange`** (linhas 148-156) para usar o `reference_price` da configuração ao invés do preço hardcoded
+5. **Atualizar o dropdown** (renderização dos `SelectItem`) para mostrar o preço dinâmico
 
-2. **Passar `reference_price` para `getDeduplicatedGross`** (linhas 455-460):
-```typescript
-const grossValue = getDeduplicatedGross({
-  product_name: p.product_name,
-  product_price: p.product_price,
-  installment_number: p.installment_number,
-  gross_override: p.gross_override,
-  reference_price: p.reference_price,  // ← ADICIONADO
-}, true);
-```
-
-Isso faz a Regra 5 (`reference_price`) ser aplicada antes do fallback hardcoded (Regra 6), respeitando o valor configurado na aba Produtos.
+Resultado: quando o preço é alterado na aba Produtos, o dropdown e o auto-preenchimento do dialog refletem imediatamente.
 
 ### Arquivo alterado
-- `src/hooks/useCarrinhoAnalysisReport.ts` (2 pontos)
+- `src/components/crm/R2CarrinhoTransactionFormDialog.tsx`
 
