@@ -3,7 +3,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { getUFFromPhone, getClusterFromUF } from '@/lib/dddToUF';
 
-function classifyChannel(tags: string[], dataSource: string | null, hasA010: boolean): string {
+function classifyChannel(opts: {
+  tags: string[];
+  originName: string | null;
+  leadChannel: string | null;
+  dataSource: string | null;
+  hasA010: boolean;
+}): string {
+  const { tags, originName, leadChannel, dataSource, hasA010 } = opts;
   const allTags = tags.map(t => {
     if (typeof t === 'string') {
       if (t.startsWith('{')) {
@@ -14,7 +21,11 @@ function classifyChannel(tags: string[], dataSource: string | null, hasA010: boo
     return (t as any)?.name?.toUpperCase() || '';
   });
 
-  // Tags são a fonte primária (lead_channel é unreliable)
+  // Also check originName and leadChannel as additional signals
+  const originUpper = (originName || '').toUpperCase();
+  const channelUpper = (leadChannel || '').toUpperCase();
+
+  // 1. Tags are primary source
   if (allTags.some(t => t.includes('ANAMNESE-INSTA') || t.includes('ANAMNESE INSTA'))) return 'ANAMNESE-INSTA';
   if (allTags.some(t => t.includes('ANAMNESE'))) return 'ANAMNESE';
   if (allTags.some(t => t.includes('BIO-INSTAGRAM') || t.includes('BIO INSTAGRAM'))) return 'BIO-INSTAGRAM';
@@ -25,7 +36,18 @@ function classifyChannel(tags: string[], dataSource: string | null, hasA010: boo
   if (allTags.some(t => t.includes('HUBLA'))) return 'HUBLA';
   if (allTags.some(t => t.includes('BASE CLINT'))) return 'BASE CLINT';
 
-  // Fallback
+  // 2. Origin name (from crm_origins) as secondary source
+  if (originUpper.includes('ANAMNESE-INSTA') || originUpper.includes('ANAMNESE INSTA')) return 'ANAMNESE-INSTA';
+  if (originUpper.includes('ANAMNESE')) return 'ANAMNESE';
+  if (originUpper.includes('BIO-INSTAGRAM') || originUpper.includes('BIO INSTAGRAM')) return 'BIO-INSTAGRAM';
+
+  // 3. lead_channel as tertiary source
+  if (channelUpper.includes('ANAMNESE-INSTA')) return 'ANAMNESE-INSTA';
+  if (channelUpper.includes('ANAMNESE')) return 'ANAMNESE';
+  if (channelUpper.includes('LIVE')) return 'LIVE';
+  if (channelUpper.includes('LEAD-FORM')) return 'LEAD-FORM';
+
+  // 4. Fallback
   if (dataSource === 'csv') return 'CSV';
   if (hasA010) return 'HUBLA (A010)';
   if (dataSource === 'webhook') return 'WEBHOOK';
@@ -238,7 +260,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const [dealsResult, r1Result, r2Result] = await Promise.all([
         contactIds.length > 0
           ? supabase.from('crm_deals')
-              .select('id, contact_id, owner_profile_id, custom_fields, data_source, tags, owner:profiles!crm_deals_owner_profile_id_fkey(name)')
+              .select('id, contact_id, owner_profile_id, custom_fields, data_source, tags, origin:crm_origins(name), owner:profiles!crm_deals_owner_profile_id_fkey(name)')
               .in('contact_id', contactIds)
           : Promise.resolve({ data: [] }),
         contactIds.length > 0
@@ -268,19 +290,24 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       }
 
       // Build deal map: contact_id → deal (merge tags from ALL deals)
-      const dealMap = new Map<string, { id: string; sdrName: string | null; dataSource: string | null; tags: string[] }>();
+      const dealMap = new Map<string, { id: string; sdrName: string | null; dataSource: string | null; tags: string[]; originName: string | null; leadChannel: string | null }>();
       for (const d of dealsResult.data || []) {
         if (d.contact_id) {
           const sdrName = (d as any).owner?.name || null;
           const dataSource = (d as any).data_source || null;
           const tags: string[] = ((d as any).tags || []).map((t: any) => typeof t === 'string' ? t : t?.name || '');
+          const originName = (d as any).origin?.name || null;
+          const leadChannel = (d as any).custom_fields?.lead_channel || null;
           if (dealMap.has(d.contact_id)) {
             const existing = dealMap.get(d.contact_id)!;
             existing.tags = [...new Set([...existing.tags, ...tags])];
             if (!existing.sdrName && sdrName) existing.sdrName = sdrName;
             if (!existing.dataSource && dataSource) existing.dataSource = dataSource;
+            // Prefer more informative origin (non-null, non-generic)
+            if (!existing.originName && originName) existing.originName = originName;
+            if (!existing.leadChannel && leadChannel) existing.leadChannel = leadChannel;
           } else {
-            dealMap.set(d.contact_id, { id: d.id, sdrName, dataSource, tags });
+            dealMap.set(d.contact_id, { id: d.id, sdrName, dataSource, tags, originName, leadChannel });
           }
         }
       }
@@ -387,7 +414,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         if (newContactIds.length > 0) {
           const [newDeals, newR1, newR2] = await Promise.all([
             supabase.from('crm_deals')
-              .select('id, contact_id, owner_profile_id, custom_fields, data_source, tags, owner:profiles!crm_deals_owner_profile_id_fkey(name)')
+              .select('id, contact_id, owner_profile_id, custom_fields, data_source, tags, origin:crm_origins(name), owner:profiles!crm_deals_owner_profile_id_fkey(name)')
               .in('contact_id', newContactIds),
             supabase.from('meeting_slot_attendees')
               .select('contact_id, status, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, closer:closers(name))')
@@ -404,12 +431,16 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
               const sdrName = (d as any).owner?.name || null;
               const dataSource = (d as any).data_source || null;
               const tags: string[] = ((d as any).tags || []).map((t: any) => typeof t === 'string' ? t : t?.name || '');
+              const originName = (d as any).origin?.name || null;
+              const leadChannel = (d as any).custom_fields?.lead_channel || null;
               if (dealMap.has(d.contact_id)) {
                 const existing = dealMap.get(d.contact_id)!;
                 existing.tags = [...new Set([...existing.tags, ...tags])];
                 if (!existing.sdrName && sdrName) existing.sdrName = sdrName;
+                if (!existing.originName && originName) existing.originName = originName;
+                if (!existing.leadChannel && leadChannel) existing.leadChannel = leadChannel;
               } else {
-                dealMap.set(d.contact_id, { id: d.id, sdrName, dataSource, tags });
+                dealMap.set(d.contact_id, { id: d.id, sdrName, dataSource, tags, originName, leadChannel });
               }
             }
           }
@@ -539,7 +570,13 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           dataParceria: parceria?.date || null,
           reembolso: hasRefund,
           isOutside,
-          canalEntrada: classifyChannel(deal?.tags || [], deal?.dataSource || null, !!a010Date) || null,
+          canalEntrada: classifyChannel({
+            tags: deal?.tags || [],
+            originName: deal?.originName || null,
+            leadChannel: deal?.leadChannel || null,
+            dataSource: deal?.dataSource || null,
+            hasA010: !!a010Date,
+          }) || null,
           motivoGap,
           tipoGap,
           observacao: null,
