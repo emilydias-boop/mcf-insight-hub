@@ -340,6 +340,22 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const startStr = format(startDate, 'yyyy-MM-dd');
       const endStr = format(endDate, 'yyyy-MM-dd');
 
+      // Fetch incorporador origin IDs for SDR prioritization
+      const [buOriginMappings, buGroupMappings] = await Promise.all([
+        supabase.from('bu_origin_mapping').select('entity_id').eq('bu', 'incorporador').eq('entity_type', 'origin'),
+        supabase.from('bu_origin_mapping').select('entity_id').eq('bu', 'incorporador').eq('entity_type', 'group'),
+      ]);
+      const incorporadorOriginIds = new Set((buOriginMappings.data || []).map(o => o.entity_id));
+      // Expand group mappings: fetch origins belonging to incorporador groups
+      const groupIds = (buGroupMappings.data || []).map(g => g.entity_id);
+      if (groupIds.length > 0) {
+        const { data: groupOrigins } = await supabase
+          .from('crm_origins')
+          .select('id')
+          .in('group_id', groupIds);
+        for (const o of groupOrigins || []) incorporadorOriginIds.add(o.id);
+      }
+
       // 1. Anchor: Contratos pagos na semana
       const { data: transactions } = await supabase
         .from('hubla_transactions')
@@ -507,7 +523,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
       // Build deal map: contact_id → deal (merge tags from ALL deals)
       const dealMap = new Map<string, DealLookup>();
-      mergeDealsIntoMap(dealsResult.data, dealMap);
+      mergeDealsIntoMap(dealsResult.data, dealMap, incorporadorOriginIds);
 
 
       // Build R1 map: contact_id → best R1
@@ -617,7 +633,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
               .eq('meeting_slots.meeting_type', 'r2'),
           ]);
 
-          mergeDealsIntoMap(newDeals.data, dealMap);
+          mergeDealsIntoMap(newDeals.data, dealMap, incorporadorOriginIds);
           mergeR1IntoMap(newR1.data, r1Map);
           mergeR2IntoMap(newR2.data, r2Map);
         }
