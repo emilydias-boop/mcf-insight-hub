@@ -380,9 +380,15 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         if (e && !a010Map.has(e)) a010Map.set(e, a.sale_date);
       }
 
-      const contactMap = new Map<string, ContactLookup>(); // email → contact
+      const contactMap = new Map<string, ContactLookup>(); // email → contact (initially last one wins, re-evaluated after deals load)
+      const allContactsByEmail = new Map<string, ContactLookup[]>(); // email → ALL contacts
       for (const c of contactsResult.data || []) {
-        if (c.email) contactMap.set(c.email.toLowerCase().trim(), { id: c.id, phone: c.phone });
+        if (c.email) {
+          const eKey = c.email.toLowerCase().trim();
+          contactMap.set(eKey, { id: c.id, phone: c.phone });
+          if (!allContactsByEmail.has(eKey)) allContactsByEmail.set(eKey, []);
+          allContactsByEmail.get(eKey)!.push({ id: c.id, phone: c.phone });
+        }
       }
 
       const refundEmails = new Set((refundsResult.data || []).map(r => (r.customer_email || '').toLowerCase().trim()));
@@ -433,9 +439,9 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         }
       }
 
-      // 3. Get contact_ids for CRM queries
+      // 3. Get contact_ids for CRM queries — use ALL contacts, not just one per email
       const contactIds = Array.from(new Set(
-        Array.from(contactMap.values()).map(c => c.id)
+        Array.from(allContactsByEmail.values()).flat().map(c => c.id)
       ));
 
       // Parallel: deals, R1 attendees, R2 attendees
