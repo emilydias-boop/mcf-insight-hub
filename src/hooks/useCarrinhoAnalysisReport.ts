@@ -1,18 +1,58 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, differenceInDays } from 'date-fns';
-import { getUFFromPhone } from '@/lib/dddToUF';
+import { format } from 'date-fns';
+import { getUFFromPhone, getClusterFromUF } from '@/lib/dddToUF';
+
+export interface LeadCarrinhoCompleto {
+  nome: string;
+  telefone: string;
+  email: string;
+  estado: string;
+  cluster: string;
+  // A010
+  dataA010: string | null;
+  // Classificação
+  classificado: boolean;
+  sdrName: string | null;
+  // R1
+  r1Agendada: boolean;
+  dataR1: string | null;
+  r1Realizada: boolean;
+  closerR1: string | null;
+  // Contrato
+  dataContrato: string;
+  valorContrato: number;
+  // R2
+  r2Agendada: boolean;
+  dataR2: string | null;
+  r2Realizada: boolean;
+  closerR2: string | null;
+  statusR2: string | null;
+  // Desfecho
+  comprouParceria: boolean;
+  dataParceria: string | null;
+  reembolso: boolean;
+  isOutside: boolean;
+  // Gap
+  motivoGap: string | null;
+  tipoGap: 'operacional' | 'legitima' | null;
+  observacao: string | null;
+}
 
 export interface CarrinhoAnalysisKPIs {
-  carrinhoInicio: number;
-  novosContratos: number;
-  totalElegivel: number;
-  comunicados: number;
+  entradasA010: number;
+  classificados: number;
+  r1Agendadas: number;
+  r1Realizadas: number;
+  contratosPagos: number;
   r2Agendadas: number;
+  gapContratoR2: number;
   r2Realizadas: number;
-  perdidos: number;
-  taxaAproveitamento: number;
-  taxaPerda: number;
+  aprovados: number;
+  reprovados: number;
+  proximaSemana: number;
+  reembolsos: number;
+  parceriasVendidas: number;
 }
 
 export interface FunnelStep {
@@ -30,45 +70,13 @@ export interface MotivoPerda {
 
 export interface StateAnalysis {
   uf: string;
+  cluster: string;
   contratos: number;
-  agendados: number;
-  realizados: number;
-  perdidos: number;
-  taxaPerda: number;
-}
-
-export interface LeadDetalhado {
-  nome: string;
-  telefone: string;
-  estado: string;
-  dataCompra: string;
-  produto: string;
-  statusAtual: string;
-  r2Agendada: boolean;
-  r2Realizada: boolean;
-  motivoPerda: string;
-  tipoPerda: 'legitima' | 'operacional';
-  responsavel: string;
-  ultimaInteracao: string;
-  diasSemAndamento: number;
-  isOutside: boolean;
-}
-
-export interface LeadAvancado {
-  nome: string;
-  telefone: string;
-  estado: string;
-  dataCompra: string;
-  produto: string;
-  statusAtual: string;
-  closerName: string;
-  dataR2: string;
-  dataR1: string | null;
-  comprouParceria: boolean;
-  dataParceria: string | null;
-  valorContrato: number;
-  isOutside: boolean;
-  r2Realizada: boolean;
+  r2Agendadas: number;
+  r2Realizadas: number;
+  aprovados: number;
+  reembolsos: number;
+  parcerias: number;
 }
 
 export interface CarrinhoAnalysisData {
@@ -76,8 +84,7 @@ export interface CarrinhoAnalysisData {
   funnelSteps: FunnelStep[];
   motivosPerda: MotivoPerda[];
   analysisByState: StateAnalysis[];
-  leadsDetalhados: LeadDetalhado[];
-  leadsAvancados: LeadAvancado[];
+  leads: LeadCarrinhoCompleto[];
 }
 
 function normalizePhoneSuffix(phone: string | null | undefined): string {
@@ -86,53 +93,21 @@ function normalizePhoneSuffix(phone: string | null | undefined): string {
   return digits.length >= 9 ? digits.slice(-9) : '';
 }
 
-function classifyLoss(
-  attendee: any | null,
-  hasRefund: boolean,
-  r2StatusName: string | null,
-  contactExistsInCRM: boolean,
-): { motivo: string; tipo: 'legitima' | 'operacional' } {
-  if (hasRefund) return { motivo: 'Reembolso', tipo: 'legitima' };
-
-  if (!attendee) {
-    if (contactExistsInCRM) {
-      return { motivo: 'Contato existe mas sem R2', tipo: 'operacional' };
-    }
-    return { motivo: 'Sem contato no CRM', tipo: 'operacional' };
-  }
-
-  const status = attendee.status?.toLowerCase() || '';
-  const carrStatus = attendee.carrinho_status?.toLowerCase() || '';
-
-  if (r2StatusName) {
-    const name = r2StatusName.toLowerCase();
-    if (name.includes('desist')) return { motivo: 'Desistente', tipo: 'legitima' };
-    if (name.includes('reprov')) return { motivo: 'Reprovado', tipo: 'legitima' };
-    if (name.includes('cancel')) return { motivo: 'Cancelado', tipo: 'legitima' };
-  }
-
-  if (status === 'no_show') return { motivo: 'No-Show na R2', tipo: 'operacional' };
-  if (status === 'sem_sucesso' || carrStatus === 'sem_sucesso') return { motivo: 'Sem sucesso / Sem contato', tipo: 'operacional' };
-  if (status === 'cancelled' || status === 'canceled') return { motivo: 'Cancelado', tipo: 'legitima' };
-
-  if (attendee.meeting_slot_id && !attendee.confirmed_at) return { motivo: 'R2 agendada mas não realizada', tipo: 'operacional' };
-
-  if (!attendee.meeting_slot_id && attendee.deal_id) return { motivo: 'Não agendado', tipo: 'operacional' };
-  if (carrStatus === 'pendente' || !carrStatus) return { motivo: 'Sem comunicação', tipo: 'operacional' };
-
-  return { motivo: 'Outros', tipo: 'operacional' };
+function classifyGap(
+  lead: { reembolso: boolean; isOutside: boolean; r2Agendada: boolean; contactExists: boolean; dealExists: boolean; statusR2Lower: string | null },
+): { motivo: string; tipo: 'operacional' | 'legitima' } {
+  if (lead.reembolso) return { motivo: 'Reembolso', tipo: 'legitima' };
+  if (lead.isOutside && !lead.r2Agendada) return { motivo: 'Outside sem R2', tipo: 'legitima' };
+  if (lead.statusR2Lower?.includes('próxima') || lead.statusR2Lower?.includes('proxima')) return { motivo: 'Próxima semana', tipo: 'legitima' };
+  if (!lead.contactExists) return { motivo: 'Sem contato no CRM', tipo: 'operacional' };
+  if (!lead.dealExists) return { motivo: 'Cadastro incompleto', tipo: 'operacional' };
+  if (lead.contactExists && !lead.r2Agendada) return { motivo: 'Sem agendamento', tipo: 'operacional' };
+  return { motivo: 'Outro motivo', tipo: 'operacional' };
 }
-
-const ATTENDEE_SELECT = `
-  id, attendee_name, attendee_phone, status, carrinho_status,
-  contact_id, deal_id, meeting_slot_id, r2_status_id,
-  confirmed_at, booked_at, booked_by, updated_at,
-  meeting_slot:meeting_slots(scheduled_at, status, closer_id, meeting_type, closer:closers(name))
-`;
 
 export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date | null) {
   return useQuery({
-    queryKey: ['carrinho-analysis', startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ['carrinho-analysis-v2', startDate?.toISOString(), endDate?.toISOString()],
     enabled: !!startDate && !!endDate,
     queryFn: async (): Promise<CarrinhoAnalysisData> => {
       if (!startDate || !endDate) throw new Error('Datas não definidas');
@@ -140,10 +115,10 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const startStr = format(startDate, 'yyyy-MM-dd');
       const endStr = format(endDate, 'yyyy-MM-dd');
 
-      // 1. Fetch transactions — aligned with get_all_hubla_transactions RPC filters
+      // 1. Anchor: Contratos pagos na semana
       const { data: transactions } = await supabase
         .from('hubla_transactions')
-        .select('id, hubla_id, source, customer_name, customer_email, customer_phone, product_name, product_code, product_category, sale_date, net_value, event_type, sale_status, linked_attendee_id, installment_number')
+        .select('id, hubla_id, source, customer_name, customer_email, customer_phone, product_name, product_category, sale_date, net_value, sale_status, linked_attendee_id, installment_number')
         .eq('product_name', 'A000 - Contrato')
         .in('sale_status', ['completed', 'refunded'])
         .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
@@ -151,392 +126,319 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         .lte('sale_date', endStr + 'T23:59:59')
         .order('sale_date', { ascending: true });
 
-      const validTransactions = (transactions || []).filter(t => {
-        // Exclude phantom newsale- records
+      const validTx = (transactions || []).filter(t => {
         if (t.hubla_id?.startsWith('newsale-')) return false;
-        // Exclude make duplicates with generic lowercase "contrato"
         if (t.source === 'make' && t.product_name?.toLowerCase() === 'contrato') return false;
-        // Filter out recurrences — only keep first installment
-        const installment = t.installment_number;
-        if (installment !== null && installment !== undefined && installment > 1) return false;
+        if (t.installment_number && t.installment_number > 1) return false;
         return true;
       });
 
-      // Deduplicate by email
-      const emailMap = new Map<string, typeof validTransactions[0]>();
-      for (const t of validTransactions) {
+      // Dedupe by email
+      const emailMap = new Map<string, typeof validTx[0]>();
+      for (const t of validTx) {
         const email = (t.customer_email || '').toLowerCase().trim();
-        if (email && !emailMap.has(email)) {
-          emailMap.set(email, t);
-        }
+        if (email && !emailMap.has(email)) emailMap.set(email, t);
       }
       const uniqueContracts = Array.from(emailMap.values());
-
       const emails = uniqueContracts.map(t => (t.customer_email || '').toLowerCase().trim()).filter(Boolean);
 
-      // 2. Find refund emails — use sale_status = 'refunded' for accuracy
-      let refundEmails = new Set<string>();
-      if (emails.length > 0) {
-        const { data: refunds } = await supabase
-          .from('hubla_transactions')
+      if (emails.length === 0) {
+        return {
+          kpis: { entradasA010: 0, classificados: 0, r1Agendadas: 0, r1Realizadas: 0, contratosPagos: 0, r2Agendadas: 0, gapContratoR2: 0, r2Realizadas: 0, aprovados: 0, reprovados: 0, proximaSemana: 0, reembolsos: 0, parceriasVendidas: 0 },
+          funnelSteps: [], motivosPerda: [], analysisByState: [], leads: [],
+        };
+      }
+
+      // 2. Parallel queries with emails
+      const [a010Result, contactsResult, refundsResult, parceriasResult, r2StatusResult] = await Promise.all([
+        // A010 purchases (retroactive)
+        supabase.from('hubla_transactions')
+          .select('customer_email, sale_date')
+          .in('product_category', ['a010'])
+          .in('customer_email', emails)
+          .order('sale_date', { ascending: true }),
+        // CRM contacts
+        supabase.from('crm_contacts')
+          .select('id, email, phone')
+          .in('email', emails),
+        // Refunds
+        supabase.from('hubla_transactions')
           .select('customer_email')
           .in('customer_email', emails)
-          .eq('sale_status', 'refunded');
-        refundEmails = new Set((refunds || []).map(r => (r.customer_email || '').toLowerCase().trim()));
-      }
-
-      // 3. Fetch attendees by linked_attendee_id (with R2 filter)
-      const attendeeIds = uniqueContracts.map(t => t.linked_attendee_id).filter(Boolean) as string[];
-      const attendeeMap = new Map<string, any>();
-
-      if (attendeeIds.length > 0) {
-        const { data: attendees } = await supabase
-          .from('meeting_slot_attendees')
-          .select(ATTENDEE_SELECT)
-          .in('id', attendeeIds);
-
-        for (const a of attendees || []) {
-          // Only keep R2 attendees, or those without a slot (unassigned)
-          const meetingType = (a.meeting_slot as any)?.meeting_type?.toLowerCase() || '';
-          if (meetingType === 'r2' || meetingType === '' || !a.meeting_slot_id) {
-            attendeeMap.set(a.id, a);
-          }
-        }
-      }
-
-      // 4. Fetch attendees by email → contact_id (R2 only)
-      const crmContactMap = new Map<string, string>(); // email → contact_id
-      if (emails.length > 0) {
-        const { data: contactsWithEmail } = await supabase
-          .from('crm_contacts')
-          .select('id, email')
-          .in('email', emails);
-
-        for (const c of contactsWithEmail || []) {
-          if (c.email) crmContactMap.set(c.email.toLowerCase().trim(), c.id);
-        }
-
-        const contactIds = Array.from(new Set(crmContactMap.values()));
-        if (contactIds.length > 0) {
-          const { data: attendeesByContact } = await supabase
-            .from('meeting_slot_attendees')
-            .select(ATTENDEE_SELECT)
-            .in('contact_id', contactIds);
-
-          const contactIdToEmail = new Map<string, string>();
-          for (const [email, cid] of crmContactMap) {
-            contactIdToEmail.set(cid, email);
-          }
-
-          for (const a of attendeesByContact || []) {
-            const meetingType = (a.meeting_slot as any)?.meeting_type?.toLowerCase() || '';
-            if (meetingType !== 'r2' && a.meeting_slot_id) continue; // skip non-R2
-
-            if (a.contact_id) {
-              const email = contactIdToEmail.get(a.contact_id);
-              if (email) {
-                const tx = uniqueContracts.find(t => (t.customer_email || '').toLowerCase().trim() === email);
-                if (tx && !tx.linked_attendee_id && !attendeeMap.has(a.id)) {
-                  attendeeMap.set(`email:${email}`, a);
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // 5. Phone matching fallback — collect unmatched transaction phones
-      const unmatchedPhones: { phone9: string; email: string }[] = [];
-      for (const tx of uniqueContracts) {
-        const email = (tx.customer_email || '').toLowerCase().trim();
-        const hasLinked = tx.linked_attendee_id && attendeeMap.has(tx.linked_attendee_id);
-        const hasEmailMatch = attendeeMap.has(`email:${email}`);
-        if (!hasLinked && !hasEmailMatch) {
-          const phone9 = normalizePhoneSuffix(tx.customer_phone);
-          if (phone9) unmatchedPhones.push({ phone9, email });
-        }
-      }
-
-      if (unmatchedPhones.length > 0) {
-        // Fetch all R2 attendees with phones to match against
-        const { data: allR2Attendees } = await supabase
-          .from('meeting_slot_attendees')
-          .select(ATTENDEE_SELECT)
-          .not('attendee_phone', 'is', null);
-
-        if (allR2Attendees) {
-          // Build phone suffix → attendee map (only R2)
-          const phoneSuffixMap = new Map<string, any>();
-          for (const a of allR2Attendees) {
-            const meetingType = (a.meeting_slot as any)?.meeting_type?.toLowerCase() || '';
-            if (meetingType !== 'r2' && a.meeting_slot_id) continue;
-            const suffix = normalizePhoneSuffix(a.attendee_phone);
-            if (suffix) {
-              // Keep most recent by updated_at
-              const existing = phoneSuffixMap.get(suffix);
-              if (!existing || (a.updated_at && (!existing.updated_at || a.updated_at > existing.updated_at))) {
-                phoneSuffixMap.set(suffix, a);
-              }
-            }
-          }
-
-          for (const { phone9, email } of unmatchedPhones) {
-            const matched = phoneSuffixMap.get(phone9);
-            if (matched && !attendeeMap.has(`phone:${email}`)) {
-              attendeeMap.set(`phone:${email}`, matched);
-            }
-          }
-        }
-      }
-
-      // 6. Also check which unmatched emails exist in CRM (for classification)
-      const allCRMEmails = new Set(crmContactMap.keys());
-      // Build phone set from CRM contacts for classification
-      let allCRMPhones = new Set<string>();
-      if (unmatchedPhones.length > 0) {
-        const { data: crmPhones } = await supabase
-          .from('crm_contacts')
-          .select('phone')
-          .not('phone', 'is', null);
-        if (crmPhones) {
-          for (const c of crmPhones) {
-            const s = normalizePhoneSuffix(c.phone);
-            if (s) allCRMPhones.add(s);
-          }
-        }
-      }
-
-      // 7. R2 status options + R1 meetings for outside detection
-      const contactIds = Array.from(new Set(crmContactMap.values()));
-      
-      const [r2StatusResult, r1MeetingsResult] = await Promise.all([
-        supabase.from('r2_status_options').select('id, name').eq('is_active', true),
-        // Fetch R1 meetings for contacts to detect outsides
-        contactIds.length > 0
-          ? supabase
-              .from('meeting_slot_attendees')
-              .select('contact_id, meeting_slots!inner(scheduled_at, meeting_type)')
-              .in('contact_id', contactIds)
-              .eq('meeting_slots.meeting_type', 'r1')
-          : Promise.resolve({ data: [] }),
-      ]);
-
-      const r2StatusOptions = r2StatusResult.data;
-      const r1Meetings = r1MeetingsResult.data || [];
-
-      // Build contact_id → earliest R1 date
-      const r1DateByContactId = new Map<string, Date>();
-      for (const m of r1Meetings) {
-        const cid = (m as any).contact_id;
-        const scheduledAt = new Date((m as any).meeting_slots?.scheduled_at);
-        if (cid && !isNaN(scheduledAt.getTime())) {
-          const existing = r1DateByContactId.get(cid);
-          if (!existing || scheduledAt < existing) {
-            r1DateByContactId.set(cid, scheduledAt);
-          }
-        }
-      }
-
-      const statusNameMap = new Map<string, string>();
-      for (const s of r2StatusOptions || []) {
-        statusNameMap.set(s.id, s.name);
-      }
-
-      // 8. Process each contract
-      const leadsDetalhados: LeadDetalhado[] = [];
-      const leadsAvancados: LeadAvancado[] = [];
-      let comunicados = 0;
-      let r2Agendadas = 0;
-      let r2Realizadas = 0;
-      const motivosCount = new Map<string, { count: number; tipo: 'legitima' | 'operacional' }>();
-      const stateData = new Map<string, { contratos: number; agendados: number; realizados: number; perdidos: number }>();
-
-      for (const tx of uniqueContracts) {
-        const email = (tx.customer_email || '').toLowerCase().trim();
-        const hasRefund = refundEmails.has(email);
-
-        // Try all matching strategies
-        let attendee = tx.linked_attendee_id ? attendeeMap.get(tx.linked_attendee_id) : null;
-        if (!attendee) attendee = attendeeMap.get(`email:${email}`);
-        if (!attendee) attendee = attendeeMap.get(`phone:${email}`);
-
-        // Detect outside: sale_date < R1 scheduled_at
-        const contactId = crmContactMap.get(email);
-        const r1Date = contactId ? r1DateByContactId.get(contactId) : null;
-        const saleDate = new Date(tx.sale_date);
-        const isOutside = r1Date ? saleDate < r1Date : false;
-
-        const r2StatusName = attendee?.r2_status_id ? statusNameMap.get(attendee.r2_status_id) || null : null;
-
-        const slotStatus = attendee?.meeting_slot?.status?.toLowerCase() || '';
-        const attendeeStatus = attendee?.status?.toLowerCase() || '';
-        const isR2Agendada = !!attendee?.meeting_slot_id;
-        const isR2Realizada = isR2Agendada && (
-          attendeeStatus === 'completed' ||
-          attendeeStatus === 'presente' ||
-          !!attendee?.confirmed_at ||
-          slotStatus === 'completed'
-        );
-
-        const isComunicado = !!attendee && (
-          attendee.carrinho_status === 'comunicado' ||
-          attendee.carrinho_status === 'agendado' ||
-          !!attendee.booked_at ||
-          isR2Agendada
-        );
-
-        if (isComunicado) comunicados++;
-        if (isR2Agendada) r2Agendadas++;
-        if (isR2Realizada) r2Realizadas++;
-
-        const uf = getUFFromPhone(tx.customer_phone || attendee?.attendee_phone);
-
-        if (!stateData.has(uf)) stateData.set(uf, { contratos: 0, agendados: 0, realizados: 0, perdidos: 0 });
-        const sd = stateData.get(uf)!;
-        sd.contratos++;
-        if (isR2Agendada) sd.agendados++;
-        if (isR2Realizada) sd.realizados++;
-
-        if (isR2Agendada || isR2Realizada) {
-          // Lead avançou — adicionar à lista de avançados
-          const closerName = (attendee?.meeting_slot as any)?.closer?.name || '';
-          const dataR2 = (attendee?.meeting_slot as any)?.scheduled_at || '';
-          const r1DateValue = contactId ? r1DateByContactId.get(contactId) : null;
-          leadsAvancados.push({
-            nome: tx.customer_name || 'Sem nome',
-            telefone: tx.customer_phone || attendee?.attendee_phone || '',
-            estado: uf,
-            dataCompra: tx.sale_date,
-            produto: tx.product_name || tx.product_code || '',
-            statusAtual: isR2Realizada ? 'R2 Realizada' : 'R2 Agendada',
-            closerName,
-            dataR2,
-            dataR1: r1DateValue ? r1DateValue.toISOString() : null,
-            comprouParceria: false, // will be enriched after loop
-            dataParceria: null,
-            valorContrato: tx.net_value || 0,
-            isOutside,
-            r2Realizada: isR2Realizada,
-          });
-        } else {
-          const txPhone9 = normalizePhoneSuffix(tx.customer_phone);
-          const contactExistsInCRM = allCRMEmails.has(email) || (txPhone9 ? allCRMPhones.has(txPhone9) : false);
-
-          let loss: { motivo: string; tipo: 'legitima' | 'operacional' };
-          if (isOutside && !isR2Agendada) {
-            loss = { motivo: 'Outside sem R2', tipo: 'legitima' };
-          } else {
-            loss = classifyLoss(attendee, hasRefund, r2StatusName, contactExistsInCRM);
-          }
-          sd.perdidos++;
-
-          const existing = motivosCount.get(loss.motivo);
-          if (existing) existing.count++;
-          else motivosCount.set(loss.motivo, { count: 1, tipo: loss.tipo });
-
-          const closerName = (attendee?.meeting_slot as any)?.closer?.name || '';
-          const lastInteraction = attendee?.updated_at || tx.sale_date;
-          const dias = differenceInDays(new Date(), new Date(lastInteraction));
-
-          leadsDetalhados.push({
-            nome: tx.customer_name || 'Sem nome',
-            telefone: tx.customer_phone || attendee?.attendee_phone || '',
-            estado: uf,
-            dataCompra: tx.sale_date,
-            produto: tx.product_name || tx.product_code || '',
-            statusAtual: attendee?.carrinho_status || attendee?.status || 'Sem status',
-            r2Agendada: isR2Agendada,
-            r2Realizada: isR2Realizada,
-            motivoPerda: loss.motivo,
-            tipoPerda: loss.tipo,
-            responsavel: closerName,
-            ultimaInteracao: lastInteraction,
-            diasSemAndamento: dias,
-            isOutside,
-          });
-        }
-      }
-
-      // Enrich advanced leads with partnership data
-      const advancedEmails = leadsAvancados
-        .map((_, i) => {
-          const tx = uniqueContracts.find(t => t.customer_name === leadsAvancados[i].nome && t.sale_date === leadsAvancados[i].dataCompra);
-          return tx ? (tx.customer_email || '').toLowerCase().trim() : '';
-        })
-        .filter(Boolean);
-
-      if (advancedEmails.length > 0) {
-        const { data: parcerias } = await supabase
-          .from('hubla_transactions')
+          .eq('sale_status', 'refunded'),
+        // Parcerias
+        supabase.from('hubla_transactions')
           .select('customer_email, sale_date, product_name')
           .eq('product_category', 'parceria')
           .in('sale_status', ['completed', 'paid'])
-          .in('customer_email', advancedEmails);
+          .in('customer_email', emails),
+        // R2 status options
+        supabase.from('r2_status_options').select('id, name').eq('is_active', true),
+      ]);
 
-        const parceriaMap = new Map<string, { date: string; product: string }>();
-        for (const p of parcerias || []) {
-          const pEmail = (p.customer_email || '').toLowerCase().trim();
-          if (pEmail && !parceriaMap.has(pEmail)) {
-            parceriaMap.set(pEmail, { date: p.sale_date || '', product: p.product_name || '' });
-          }
-        }
+      // Build lookup maps
+      const a010Map = new Map<string, string>(); // email → earliest sale_date
+      for (const a of a010Result.data || []) {
+        const e = (a.customer_email || '').toLowerCase().trim();
+        if (e && !a010Map.has(e)) a010Map.set(e, a.sale_date);
+      }
 
-        // Map back to leadsAvancados
-        for (let i = 0; i < leadsAvancados.length; i++) {
-          const tx = uniqueContracts.find(t => t.customer_name === leadsAvancados[i].nome && t.sale_date === leadsAvancados[i].dataCompra);
-          const txEmail = tx ? (tx.customer_email || '').toLowerCase().trim() : '';
-          const parceria = parceriaMap.get(txEmail);
-          if (parceria) {
-            leadsAvancados[i].comprouParceria = true;
-            leadsAvancados[i].dataParceria = parceria.date;
-          }
+      const contactMap = new Map<string, { id: string; phone: string | null }>(); // email → contact
+      for (const c of contactsResult.data || []) {
+        if (c.email) contactMap.set(c.email.toLowerCase().trim(), { id: c.id, phone: c.phone });
+      }
+
+      const refundEmails = new Set((refundsResult.data || []).map(r => (r.customer_email || '').toLowerCase().trim()));
+
+      const parceriaMap = new Map<string, { date: string; product: string }>();
+      for (const p of parceriasResult.data || []) {
+        const e = (p.customer_email || '').toLowerCase().trim();
+        if (e && !parceriaMap.has(e)) parceriaMap.set(e, { date: p.sale_date || '', product: p.product_name || '' });
+      }
+
+      const statusNameMap = new Map<string, string>();
+      for (const s of r2StatusResult.data || []) statusNameMap.set(s.id, s.name);
+
+      // 3. Get contact_ids for CRM queries
+      const contactIds = Array.from(new Set(
+        Array.from(contactMap.values()).map(c => c.id)
+      ));
+
+      // Parallel: deals, R1 attendees, R2 attendees
+      const [dealsResult, r1Result, r2Result] = await Promise.all([
+        contactIds.length > 0
+          ? supabase.from('crm_deals')
+              .select('id, contact_id, owner_id, profiles:owner_id(name)')
+              .in('contact_id', contactIds)
+          : Promise.resolve({ data: [] }),
+        contactIds.length > 0
+          ? supabase.from('meeting_slot_attendees')
+              .select('contact_id, status, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, closer:closers(name))')
+              .in('contact_id', contactIds)
+              .eq('meeting_slots.meeting_type', 'r1')
+          : Promise.resolve({ data: [] }),
+        contactIds.length > 0
+          ? supabase.from('meeting_slot_attendees')
+              .select('id, contact_id, status, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status, closer:closers(name))')
+              .in('contact_id', contactIds)
+              .eq('meeting_slots.meeting_type', 'r2')
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      // Also try matching R2 by linked_attendee_id
+      const linkedIds = uniqueContracts.map(t => t.linked_attendee_id).filter(Boolean) as string[];
+      let linkedR2Map = new Map<string, any>();
+      if (linkedIds.length > 0) {
+        const { data: linkedR2 } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id, contact_id, status, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status, closer:closers(name))')
+          .in('id', linkedIds)
+          .eq('meeting_slots.meeting_type', 'r2');
+        for (const a of linkedR2 || []) linkedR2Map.set(a.id, a);
+      }
+
+      // Build deal map: contact_id → deal
+      const dealMap = new Map<string, { id: string; sdrName: string | null }>();
+      for (const d of dealsResult.data || []) {
+        if (d.contact_id) {
+          const sdrName = (d as any).profiles?.name || null;
+          dealMap.set(d.contact_id, { id: d.id, sdrName });
         }
       }
 
-      const totalElegivel = uniqueContracts.length;
-      const perdidos = totalElegivel - r2Realizadas;
+      // Build R1 map: contact_id → best R1
+      const r1Map = new Map<string, { date: string; realized: boolean; closerName: string | null }>();
+      for (const a of r1Result.data || []) {
+        const cid = (a as any).contact_id;
+        const slot = a.meeting_slot as any;
+        if (!cid || !slot?.scheduled_at) continue;
+        const existing = r1Map.get(cid);
+        if (!existing || slot.scheduled_at < existing.date) {
+          const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
+          r1Map.set(cid, { date: slot.scheduled_at, realized, closerName: slot.closer?.name || null });
+        }
+      }
+
+      // Build R2 map: contact_id → best R2
+      const r2Map = new Map<string, { id: string; date: string; realized: boolean; closerName: string | null; statusId: string | null; slotStatus: string }>();
+      for (const a of r2Result.data || []) {
+        const cid = (a as any).contact_id;
+        const slot = a.meeting_slot as any;
+        if (!cid || !slot?.scheduled_at) continue;
+        const existing = r2Map.get(cid);
+        // Keep latest R2
+        if (!existing || slot.scheduled_at > existing.date) {
+          const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
+          r2Map.set(cid, {
+            id: a.id,
+            date: slot.scheduled_at,
+            realized,
+            closerName: slot.closer?.name || null,
+            statusId: (a as any).r2_status_id || null,
+            slotStatus: slot.status || '',
+          });
+        }
+      }
+
+      // 4. Build leads
+      const leads: LeadCarrinhoCompleto[] = [];
+      const motivosCount = new Map<string, { count: number; tipo: 'operacional' | 'legitima' }>();
+      const stateData = new Map<string, StateAnalysis>();
+
+      for (const tx of uniqueContracts) {
+        const email = (tx.customer_email || '').toLowerCase().trim();
+        const phone = tx.customer_phone || '';
+        const contact = contactMap.get(email);
+        const contactId = contact?.id;
+        const uf = getUFFromPhone(phone || contact?.phone);
+        const cluster = getClusterFromUF(uf);
+
+        const hasRefund = refundEmails.has(email);
+        const a010Date = a010Map.get(email) || null;
+        const deal = contactId ? dealMap.get(contactId) : null;
+        const r1 = contactId ? r1Map.get(contactId) : null;
+
+        // R2: try linked first, then by contact
+        let r2 = tx.linked_attendee_id ? linkedR2Map.get(tx.linked_attendee_id) : null;
+        let r2Data: typeof r2Map extends Map<string, infer V> ? V : never | null = null;
+        if (r2) {
+          const slot = r2.meeting_slot as any;
+          r2Data = {
+            id: r2.id,
+            date: slot?.scheduled_at || '',
+            realized: r2.status === 'completed' || r2.status === 'presente' || slot?.status === 'completed',
+            closerName: slot?.closer?.name || null,
+            statusId: r2.r2_status_id || null,
+            slotStatus: slot?.status || '',
+          };
+        } else if (contactId) {
+          r2Data = r2Map.get(contactId) || null;
+        }
+
+        const r2StatusName = r2Data?.statusId ? statusNameMap.get(r2Data.statusId) || null : null;
+        const r2StatusLower = r2StatusName?.toLowerCase() || null;
+
+        const isOutside = r1?.date ? new Date(tx.sale_date) < new Date(r1.date) : !r1 && !deal;
+        const isR2Agendada = !!r2Data;
+        const isR2Realizada = r2Data?.realized || false;
+
+        const parceria = parceriaMap.get(email);
+
+        // Gap classification for leads without R2
+        let motivoGap: string | null = null;
+        let tipoGap: 'operacional' | 'legitima' | null = null;
+        if (!isR2Agendada) {
+          const gap = classifyGap({
+            reembolso: hasRefund,
+            isOutside,
+            r2Agendada: isR2Agendada,
+            contactExists: !!contact,
+            dealExists: !!deal,
+            statusR2Lower: r2StatusLower,
+          });
+          motivoGap = gap.motivo;
+          tipoGap = gap.tipo;
+
+          const existing = motivosCount.get(gap.motivo);
+          if (existing) existing.count++;
+          else motivosCount.set(gap.motivo, { count: 1, tipo: gap.tipo });
+        }
+
+        // State aggregation
+        if (!stateData.has(uf)) {
+          stateData.set(uf, { uf, cluster, contratos: 0, r2Agendadas: 0, r2Realizadas: 0, aprovados: 0, reembolsos: 0, parcerias: 0 });
+        }
+        const sd = stateData.get(uf)!;
+        sd.contratos++;
+        if (isR2Agendada) sd.r2Agendadas++;
+        if (isR2Realizada) sd.r2Realizadas++;
+        if (r2StatusLower?.includes('aprov')) sd.aprovados++;
+        if (hasRefund) sd.reembolsos++;
+        if (parceria) sd.parcerias++;
+
+        leads.push({
+          nome: tx.customer_name || 'Sem nome',
+          telefone: phone,
+          email,
+          estado: uf,
+          cluster,
+          dataA010: a010Date,
+          classificado: !!deal,
+          sdrName: deal?.sdrName || null,
+          r1Agendada: !!r1,
+          dataR1: r1?.date || null,
+          r1Realizada: r1?.realized || false,
+          closerR1: r1?.closerName || null,
+          dataContrato: tx.sale_date,
+          valorContrato: tx.net_value || 0,
+          r2Agendada: isR2Agendada,
+          dataR2: r2Data?.date || null,
+          r2Realizada: isR2Realizada,
+          closerR2: r2Data?.closerName || null,
+          statusR2: r2StatusName || null,
+          comprouParceria: !!parceria,
+          dataParceria: parceria?.date || null,
+          reembolso: hasRefund,
+          isOutside,
+          motivoGap,
+          tipoGap,
+          observacao: null,
+        });
+      }
+
+      // KPIs
+      const contratosPagos = leads.length;
+      const entradasA010 = leads.filter(l => l.dataA010).length;
+      const classificados = leads.filter(l => l.classificado).length;
+      const r1Agendadas = leads.filter(l => l.r1Agendada).length;
+      const r1Realizadas = leads.filter(l => l.r1Realizada).length;
+      const r2Agendadas = leads.filter(l => l.r2Agendada).length;
+      const r2Realizadas = leads.filter(l => l.r2Realizada).length;
+      const aprovados = leads.filter(l => l.statusR2?.toLowerCase().includes('aprov')).length;
+      const reprovados = leads.filter(l => l.statusR2?.toLowerCase().includes('reprov')).length;
+      const proximaSemana = leads.filter(l => {
+        const s = l.statusR2?.toLowerCase() || '';
+        return s.includes('próxima') || s.includes('proxima');
+      }).length;
+      const reembolsos = leads.filter(l => l.reembolso).length;
+      const parceriasVendidas = leads.filter(l => l.comprouParceria).length;
 
       const kpis: CarrinhoAnalysisKPIs = {
-        carrinhoInicio: 0,
-        novosContratos: totalElegivel,
-        totalElegivel,
-        comunicados,
+        entradasA010,
+        classificados,
+        r1Agendadas,
+        r1Realizadas,
+        contratosPagos,
         r2Agendadas,
+        gapContratoR2: contratosPagos - r2Agendadas,
         r2Realizadas,
-        perdidos,
-        taxaAproveitamento: totalElegivel > 0 ? (r2Realizadas / totalElegivel) * 100 : 0,
-        taxaPerda: totalElegivel > 0 ? (perdidos / totalElegivel) * 100 : 0,
+        aprovados,
+        reprovados,
+        proximaSemana,
+        reembolsos,
+        parceriasVendidas,
       };
 
       const funnelSteps: FunnelStep[] = [
-        { label: 'Contratos no período', count: totalElegivel, pct: 100 },
-        { label: 'Comunicados', count: comunicados, pct: totalElegivel > 0 ? (comunicados / totalElegivel) * 100 : 0 },
-        { label: 'R2 Agendadas', count: r2Agendadas, pct: totalElegivel > 0 ? (r2Agendadas / totalElegivel) * 100 : 0 },
-        { label: 'R2 Realizadas', count: r2Realizadas, pct: totalElegivel > 0 ? (r2Realizadas / totalElegivel) * 100 : 0 },
+        { label: 'A010', count: entradasA010, pct: contratosPagos > 0 ? (entradasA010 / contratosPagos) * 100 : 0 },
+        { label: 'Classificação', count: classificados, pct: contratosPagos > 0 ? (classificados / contratosPagos) * 100 : 0 },
+        { label: 'R1 Agendada', count: r1Agendadas, pct: contratosPagos > 0 ? (r1Agendadas / contratosPagos) * 100 : 0 },
+        { label: 'R1 Realizada', count: r1Realizadas, pct: contratosPagos > 0 ? (r1Realizadas / contratosPagos) * 100 : 0 },
+        { label: 'Contrato Pago', count: contratosPagos, pct: 100 },
+        { label: 'R2 Agendada', count: r2Agendadas, pct: contratosPagos > 0 ? (r2Agendadas / contratosPagos) * 100 : 0 },
+        { label: 'R2 Realizada', count: r2Realizadas, pct: contratosPagos > 0 ? (r2Realizadas / contratosPagos) * 100 : 0 },
+        { label: 'Parceria Vendida', count: parceriasVendidas, pct: contratosPagos > 0 ? (parceriasVendidas / contratosPagos) * 100 : 0 },
       ];
 
-      const totalPerdidos = leadsDetalhados.length || 1;
+      const totalGap = leads.filter(l => !l.r2Agendada).length || 1;
       const motivosPerda: MotivoPerda[] = Array.from(motivosCount.entries())
-        .map(([motivo, { count, tipo }]) => ({
-          motivo,
-          count,
-          pct: (count / totalPerdidos) * 100,
-          tipo,
-        }))
+        .map(([motivo, { count, tipo }]) => ({ motivo, count, pct: (count / totalGap) * 100, tipo }))
         .sort((a, b) => b.count - a.count);
 
-      const analysisByState: StateAnalysis[] = Array.from(stateData.entries())
-        .map(([uf, d]) => ({
-          uf,
-          contratos: d.contratos,
-          agendados: d.agendados,
-          realizados: d.realizados,
-          perdidos: d.perdidos,
-          taxaPerda: d.contratos > 0 ? (d.perdidos / d.contratos) * 100 : 0,
-        }))
+      const analysisByState: StateAnalysis[] = Array.from(stateData.values())
         .sort((a, b) => b.contratos - a.contratos);
 
-      return { kpis, funnelSteps, motivosPerda, analysisByState, leadsDetalhados, leadsAvancados };
+      return { kpis, funnelSteps, motivosPerda, analysisByState, leads };
     },
   });
 }

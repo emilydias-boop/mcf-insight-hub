@@ -39,3 +39,13 @@ export function getUFFromPhone(phone: string | null | undefined): string {
   }
   return DDD_UF_MAP[ddd] || 'N/D';
 }
+
+const UF_CLUSTER: Record<string, string> = {
+  'SP': 'Alto', 'RJ': 'Alto', 'MG': 'Alto', 'PR': 'Alto',
+  'SC': 'Médio', 'RS': 'Médio', 'DF': 'Médio', 'GO': 'Médio',
+  'BA': 'Médio', 'PE': 'Médio', 'CE': 'Médio', 'ES': 'Médio',
+};
+
+export function getClusterFromUF(uf: string): string {
+  return UF_CLUSTER[uf] || 'Menor';
+}

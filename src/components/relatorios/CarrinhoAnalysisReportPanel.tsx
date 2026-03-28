@@ -4,12 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ChevronLeft, ChevronRight, Download, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Users, Phone, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Users, Calendar, ShieldAlert, BarChart3, MapPin } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
-import { useCarrinhoAnalysisReport, LeadDetalhado, LeadAvancado } from '@/hooks/useCarrinhoAnalysisReport';
+import { useCarrinhoAnalysisReport, LeadCarrinhoCompleto } from '@/hooks/useCarrinhoAnalysisReport';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
@@ -21,7 +20,6 @@ type PeriodType = 'semana' | 'mes' | 'personalizado';
 function getCartWeekStart(date: Date): Date {
   return startOfWeek(date, { weekStartsOn: 4 });
 }
-
 function getCartWeekEnd(date: Date): Date {
   return endOfWeek(date, { weekStartsOn: 4 });
 }
@@ -35,17 +33,16 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
   const [weekDate, setWeekDate] = useState(new Date());
   const [monthDate, setMonthDate] = useState(new Date());
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
-  
-  // Filters for detailed table
-  const [filterMotivo, setFilterMotivo] = useState<string>('all');
-  const [filterEstado, setFilterEstado] = useState<string>('all');
-  const [filterTipo, setFilterTipo] = useState<string>('all');
-  // Filters for advanced leads
-  const [filterCloser, setFilterCloser] = useState<string>('all');
-  const [filterEstadoAv, setFilterEstadoAv] = useState<string>('all');
-  const [filterR1, setFilterR1] = useState<string>('all');
 
-  const [activeTab, setActiveTab] = useState<string>('avancados');
+  // Filters
+  const [filterCloserR1, setFilterCloserR1] = useState('all');
+  const [filterCloserR2, setFilterCloserR2] = useState('all');
+  const [filterEstado, setFilterEstado] = useState('all');
+  const [filterCluster, setFilterCluster] = useState('all');
+  const [filterStatusR2, setFilterStatusR2] = useState('all');
+  const [filterMotivoGap, setFilterMotivoGap] = useState('all');
+  const [filterR2Agendada, setFilterR2Agendada] = useState('all');
+  const [filterParceria, setFilterParceria] = useState('all');
 
   const { startDate, endDate } = useMemo(() => {
     if (periodType === 'semana') {
@@ -64,96 +61,88 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
 
   const filteredLeads = useMemo(() => {
     if (!data) return [];
-    return data.leadsDetalhados.filter(l => {
-      if (filterMotivo !== 'all' && l.motivoPerda !== filterMotivo) return false;
+    return data.leads.filter(l => {
+      if (filterCloserR1 !== 'all' && (l.closerR1 || '') !== filterCloserR1) return false;
+      if (filterCloserR2 !== 'all' && (l.closerR2 || '') !== filterCloserR2) return false;
       if (filterEstado !== 'all' && l.estado !== filterEstado) return false;
-      if (filterTipo !== 'all' && l.tipoPerda !== filterTipo) return false;
+      if (filterCluster !== 'all' && l.cluster !== filterCluster) return false;
+      if (filterStatusR2 !== 'all' && (l.statusR2 || '') !== filterStatusR2) return false;
+      if (filterMotivoGap !== 'all' && (l.motivoGap || '') !== filterMotivoGap) return false;
+      if (filterR2Agendada === 'sim' && !l.r2Agendada) return false;
+      if (filterR2Agendada === 'nao' && l.r2Agendada) return false;
+      if (filterParceria === 'sim' && !l.comprouParceria) return false;
+      if (filterParceria === 'nao' && l.comprouParceria) return false;
       return true;
     });
-  }, [data, filterMotivo, filterEstado, filterTipo]);
+  }, [data, filterCloserR1, filterCloserR2, filterEstado, filterCluster, filterStatusR2, filterMotivoGap, filterR2Agendada, filterParceria]);
 
-  const filteredAvancados = useMemo(() => {
-    if (!data) return [];
-    return data.leadsAvancados.filter(l => {
-      if (filterCloser !== 'all' && l.closerName !== filterCloser) return false;
-      if (filterEstadoAv !== 'all' && l.estado !== filterEstadoAv) return false;
-      if (filterR1 === 'com' && !l.dataR1) return false;
-      if (filterR1 === 'sem' && l.dataR1) return false;
-      return true;
-    });
-  }, [data, filterCloser, filterEstadoAv, filterR1]);
-
-  const avancadosStats = useMemo(() => {
-    const total = filteredAvancados.length;
-    const comR1 = filteredAvancados.filter(l => !!l.dataR1).length;
-    const comR2 = filteredAvancados.filter(l => !!l.dataR2).length;
-    const comParceria = filteredAvancados.filter(l => l.comprouParceria).length;
-    const r2Realizada = filteredAvancados.filter(l => l.r2Realizada).length;
-    const outsides = filteredAvancados.filter(l => l.isOutside).length;
-    return { total, comR1, semR1: total - comR1, comR2, comParceria, r2Realizada, outsides };
-  }, [filteredAvancados]);
-
-  const uniqueMotivos = useMemo(() => data ? [...new Set(data.leadsDetalhados.map(l => l.motivoPerda))] : [], [data]);
-  const uniqueEstados = useMemo(() => data ? [...new Set(data.leadsDetalhados.map(l => l.estado))].sort() : [], [data]);
-  const uniqueClosers = useMemo(() => data ? [...new Set(data.leadsAvancados.map(l => l.closerName).filter(Boolean))].sort() : [], [data]);
-  const uniqueEstadosAv = useMemo(() => data ? [...new Set(data.leadsAvancados.map(l => l.estado))].sort() : [], [data]);
-
-  const gapOperacional = useMemo(() => {
-    if (!data) return 0;
-    return data.leadsDetalhados.filter(l => l.tipoPerda === 'operacional').length;
-  }, [data]);
-
-  const exportExcel = () => {
-    if (activeTab === 'avancados') {
-      if (!filteredAvancados.length) return;
-      const ws = XLSX.utils.json_to_sheet(filteredAvancados.map(l => ({
-        Nome: l.nome,
-        Telefone: l.telefone,
-        Estado: l.estado,
-        'Data Contrato': format(new Date(l.dataCompra), 'dd/MM/yyyy'),
-        'Valor Contrato': l.valorContrato,
-        'Data R1': l.dataR1 ? format(new Date(l.dataR1), 'dd/MM/yyyy HH:mm') : '—',
-        'Data R2': l.dataR2 ? format(new Date(l.dataR2), 'dd/MM/yyyy HH:mm') : '—',
-        Closer: l.closerName || '—',
-        Parceria: l.comprouParceria ? `Sim (${l.dataParceria ? format(new Date(l.dataParceria), 'dd/MM/yyyy') : ''})` : 'Não',
-        Status: l.statusAtual,
-      })));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Leads Avançaram');
-      XLSX.writeFile(wb, `carrinho-avancaram-${format(startDate!, 'yyyy-MM-dd')}.xlsx`);
-    } else {
-      if (!filteredLeads.length) return;
-      const ws = XLSX.utils.json_to_sheet(filteredLeads.map(l => ({
-        Nome: l.nome,
-        Telefone: l.telefone,
-        Estado: l.estado,
-        'Data Compra': format(new Date(l.dataCompra), 'dd/MM/yyyy'),
-        Produto: l.produto,
-        'Status Atual': l.statusAtual,
-        'R2 Agendada': l.r2Agendada ? 'Sim' : 'Não',
-        'R2 Realizada': l.r2Realizada ? 'Sim' : 'Não',
-        'Motivo Perda': l.motivoPerda,
-        'Tipo': l.tipoPerda === 'legitima' ? 'Exclusão Legítima' : 'Falha Operacional',
-        Responsável: l.responsavel,
-        'Última Interação': l.ultimaInteracao ? format(new Date(l.ultimaInteracao), 'dd/MM/yyyy') : '',
-        'Dias Sem Andamento': l.diasSemAndamento,
-      })));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Leads Perdidos');
-      XLSX.writeFile(wb, `carrinho-perdidos-${format(startDate!, 'yyyy-MM-dd')}.xlsx`);
-    }
-  };
+  // Unique values for filters
+  const uniqueClosersR1 = useMemo(() => data ? [...new Set(data.leads.map(l => l.closerR1).filter(Boolean) as string[])].sort() : [], [data]);
+  const uniqueClosersR2 = useMemo(() => data ? [...new Set(data.leads.map(l => l.closerR2).filter(Boolean) as string[])].sort() : [], [data]);
+  const uniqueEstados = useMemo(() => data ? [...new Set(data.leads.map(l => l.estado))].sort() : [], [data]);
+  const uniqueStatusR2 = useMemo(() => data ? [...new Set(data.leads.map(l => l.statusR2).filter(Boolean) as string[])].sort() : [], [data]);
+  const uniqueMotivos = useMemo(() => data ? [...new Set(data.leads.map(l => l.motivoGap).filter(Boolean) as string[])].sort() : [], [data]);
 
   const periodLabel = useMemo(() => {
     if (!startDate || !endDate) return 'Selecione um período';
     if (periodType === 'semana') {
       return `Semana: ${format(startDate, 'dd/MM', { locale: ptBR })} - ${format(endDate, 'dd/MM/yyyy', { locale: ptBR })}`;
     }
-    if (periodType === 'mes') {
-      return format(startDate, 'MMMM yyyy', { locale: ptBR });
-    }
+    if (periodType === 'mes') return format(startDate, 'MMMM yyyy', { locale: ptBR });
     return `${format(startDate, 'dd/MM/yyyy')} - ${format(endDate, 'dd/MM/yyyy')}`;
   }, [startDate, endDate, periodType]);
+
+  const exportExcel = () => {
+    if (!filteredLeads.length) return;
+    const ws = XLSX.utils.json_to_sheet(filteredLeads.map(l => ({
+      Nome: l.nome,
+      Telefone: l.telefone,
+      Estado: l.estado,
+      Cluster: l.cluster,
+      'Data A010': l.dataA010 ? format(new Date(l.dataA010), 'dd/MM/yyyy') : '—',
+      SDR: l.sdrName || '—',
+      'Classificado': l.classificado ? 'Sim' : 'Não',
+      'Data R1': l.dataR1 ? format(new Date(l.dataR1), 'dd/MM/yyyy HH:mm') : '—',
+      'R1 Realizada': l.r1Realizada ? 'Sim' : 'Não',
+      'Closer R1': l.closerR1 || '—',
+      'Data Contrato': format(new Date(l.dataContrato), 'dd/MM/yyyy'),
+      'Valor Contrato': l.valorContrato,
+      'R2 Agendada': l.r2Agendada ? 'Sim' : 'Não',
+      'Data R2': l.dataR2 ? format(new Date(l.dataR2), 'dd/MM/yyyy HH:mm') : '—',
+      'Closer R2': l.closerR2 || '—',
+      'R2 Realizada': l.r2Realizada ? 'Sim' : 'Não',
+      'Status R2': l.statusR2 || '—',
+      'Parceria': l.comprouParceria ? 'Sim' : 'Não',
+      'Reembolso': l.reembolso ? 'Sim' : 'Não',
+      'Motivo Gap': l.motivoGap || '—',
+      'Tipo Gap': l.tipoGap === 'operacional' ? 'Operacional' : l.tipoGap === 'legitima' ? 'Legítima' : '—',
+    })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Análise Carrinho');
+    XLSX.writeFile(wb, `carrinho-analise-${format(startDate!, 'yyyy-MM-dd')}.xlsx`);
+  };
+
+  // Audit block data
+  const auditData = useMemo(() => {
+    if (!data) return null;
+    const total = data.kpis.contratosPagos;
+    const comR2 = data.kpis.r2Agendadas;
+    const semR2 = total - comR2;
+    return { total, comR2, semR2, pctComR2: total > 0 ? (comR2 / total) * 100 : 0, pctSemR2: total > 0 ? (semR2 / total) * 100 : 0 };
+  }, [data]);
+
+  // Map state data for BrazilMap
+  const mapStateData = useMemo(() => {
+    if (!data) return [];
+    return data.analysisByState.map(s => ({
+      uf: s.uf,
+      contratos: s.contratos,
+      agendados: s.r2Agendadas,
+      realizados: s.r2Realizadas,
+      perdidos: s.contratos - s.r2Agendadas,
+      taxaPerda: s.contratos > 0 ? ((s.contratos - s.r2Agendadas) / s.contratos) * 100 : 0,
+    }));
+  }, [data]);
 
   return (
     <div className="space-y-6">
@@ -161,19 +150,17 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <TrendingDown className="h-5 w-5" />
-            Análise de Carrinho
+            <BarChart3 className="h-5 w-5" />
+            Análise de Carrinho — Funil Completo
           </CardTitle>
-          <CardDescription>Aproveitamento do carrinho até a R2 — identifique onde os leads se perdem</CardDescription>
+          <CardDescription>Acompanhe a jornada do lead desde A010 até a venda da parceria</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-4">
             <div>
               <label className="text-sm font-medium text-muted-foreground mb-1 block">Período</label>
               <Select value={periodType} onValueChange={(v) => setPeriodType(v as PeriodType)}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="semana">Semana (Qui-Qua)</SelectItem>
                   <SelectItem value="mes">Mês</SelectItem>
@@ -181,447 +168,361 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                 </SelectContent>
               </Select>
             </div>
-
             {periodType === 'semana' && (
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={() => setWeekDate(d => subWeeks(d, 1))}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
+                <Button variant="outline" size="icon" onClick={() => setWeekDate(d => subWeeks(d, 1))}><ChevronLeft className="h-4 w-4" /></Button>
                 <span className="text-sm font-medium min-w-[200px] text-center">{periodLabel}</span>
-                <Button variant="outline" size="icon" onClick={() => setWeekDate(d => addWeeks(d, 1))}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+                <Button variant="outline" size="icon" onClick={() => setWeekDate(d => addWeeks(d, 1))}><ChevronRight className="h-4 w-4" /></Button>
               </div>
             )}
-
             {periodType === 'mes' && (
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={() => setMonthDate(d => subMonths(d, 1))}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
+                <Button variant="outline" size="icon" onClick={() => setMonthDate(d => subMonths(d, 1))}><ChevronLeft className="h-4 w-4" /></Button>
                 <span className="text-sm font-medium min-w-[200px] text-center capitalize">{periodLabel}</span>
-                <Button variant="outline" size="icon" onClick={() => setMonthDate(d => addMonths(d, 1))}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+                <Button variant="outline" size="icon" onClick={() => setMonthDate(d => addMonths(d, 1))}><ChevronRight className="h-4 w-4" /></Button>
               </div>
             )}
-
             {periodType === 'personalizado' && (
-              <DatePickerCustom
-                mode="range"
-                selected={customRange}
-                onSelect={(d) => setCustomRange(d as DateRange)}
-                placeholder="Selecione o período"
-              />
+              <DatePickerCustom mode="range" selected={customRange} onSelect={(d) => setCustomRange(d as DateRange)} placeholder="Selecione o período" />
             )}
           </div>
         </CardContent>
       </Card>
 
       {isLoading && (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            Carregando dados...
-          </CardContent>
-        </Card>
+        <Card><CardContent className="py-12 text-center text-muted-foreground">Carregando dados...</CardContent></Card>
       )}
 
       {data && (
         <>
-          {/* KPIs */}
-          <div className="grid grid-cols-3 md:grid-cols-3 lg:grid-cols-9 gap-3">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 xl:grid-cols-13 gap-2">
             {[
-              { label: 'Contratos', value: data.kpis.novosContratos, icon: Users, color: 'text-blue-600' },
-              { label: 'Elegíveis', value: data.kpis.totalElegivel, icon: Users, color: 'text-indigo-600' },
-              { label: 'Comunicados', value: data.kpis.comunicados, icon: Phone, color: 'text-cyan-600' },
-              { label: 'R2 Agendadas', value: data.kpis.r2Agendadas, icon: Calendar, color: 'text-amber-600' },
-              { label: 'R2 Realizadas', value: data.kpis.r2Realizadas, icon: CheckCircle2, color: 'text-green-600' },
-              { label: 'Perdidos', value: data.kpis.perdidos, icon: XCircle, color: 'text-red-600' },
-              { label: 'Aproveitamento', value: `${data.kpis.taxaAproveitamento.toFixed(1)}%`, icon: TrendingUp, color: 'text-green-600' },
-              { label: 'Taxa Perda', value: `${data.kpis.taxaPerda.toFixed(1)}%`, icon: TrendingDown, color: 'text-red-600' },
-              { label: 'Gap', value: data.kpis.totalElegivel - data.kpis.r2Realizadas, icon: AlertTriangle, color: 'text-orange-600' },
+              { label: 'A010', value: data.kpis.entradasA010, color: 'text-slate-600' },
+              { label: 'Classificados', value: data.kpis.classificados, color: 'text-blue-600' },
+              { label: 'R1 Agend.', value: data.kpis.r1Agendadas, color: 'text-indigo-600' },
+              { label: 'R1 Realiz.', value: data.kpis.r1Realizadas, color: 'text-cyan-600' },
+              { label: 'Contratos', value: data.kpis.contratosPagos, color: 'text-blue-700' },
+              { label: 'R2 Agend.', value: data.kpis.r2Agendadas, color: 'text-amber-600' },
+              { label: 'Gap C→R2', value: data.kpis.gapContratoR2, color: 'text-orange-600' },
+              { label: 'R2 Realiz.', value: data.kpis.r2Realizadas, color: 'text-green-600' },
+              { label: 'Aprovados', value: data.kpis.aprovados, color: 'text-green-700' },
+              { label: 'Reprovados', value: data.kpis.reprovados, color: 'text-red-600' },
+              { label: 'Próx. Sem.', value: data.kpis.proximaSemana, color: 'text-yellow-600' },
+              { label: 'Reembolsos', value: data.kpis.reembolsos, color: 'text-red-500' },
+              { label: 'Parcerias', value: data.kpis.parceriasVendidas, color: 'text-emerald-600' },
             ].map((kpi, i) => (
               <Card key={i}>
-                <CardContent className="pt-4 pb-3 px-3 text-center">
-                  <kpi.icon className={cn('h-5 w-5 mx-auto mb-1', kpi.color)} />
-                  <div className="text-xl font-bold">{kpi.value}</div>
-                  <div className="text-xs text-muted-foreground">{kpi.label}</div>
+                <CardContent className="pt-3 pb-2 px-2 text-center">
+                  <div className={cn('text-lg font-bold', kpi.color)}>{kpi.value}</div>
+                  <div className="text-[10px] text-muted-foreground leading-tight">{kpi.label}</div>
                 </CardContent>
               </Card>
             ))}
           </div>
 
-          {/* Funnel */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Funil do Carrinho</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {data.funnelSteps.map((step, i) => (
-                <div key={i} className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="font-medium">{step.label}</span>
-                    <span className="text-muted-foreground">{step.count} ({step.pct.toFixed(1)}%)</span>
+          {/* Auditoria Contrato → R2 */}
+          {auditData && (
+            <Card className="border-orange-200 dark:border-orange-900">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ShieldAlert className="h-5 w-5 text-orange-600" />
+                  Auditoria Contrato → R2
+                </CardTitle>
+                <CardDescription>Gap entre contratos pagos e R2 agendada na semana</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <div className="text-2xl font-bold">{auditData.total}</div>
+                    <div className="text-xs text-muted-foreground">Contratos Pagos</div>
                   </div>
-                  <div className="h-6 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={cn(
-                        'h-full rounded-full transition-all',
-                        i === 0 ? 'bg-blue-500' : i === 1 ? 'bg-cyan-500' : i === 2 ? 'bg-amber-500' : 'bg-green-500'
-                      )}
-                      style={{ width: `${Math.max(step.pct, 2)}%` }}
-                    />
+                  <div className="text-center p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+                    <div className="text-2xl font-bold text-green-700 dark:text-green-400">{auditData.comR2}</div>
+                    <div className="text-xs text-green-600">Com R2 ({auditData.pctComR2.toFixed(0)}%)</div>
+                  </div>
+                  <div className="text-center p-3 bg-red-50 dark:bg-red-950/30 rounded-lg">
+                    <div className="text-2xl font-bold text-red-700 dark:text-red-400">{auditData.semR2}</div>
+                    <div className="text-xs text-red-600">Sem R2 ({auditData.pctSemR2.toFixed(0)}%)</div>
+                  </div>
+                  <div className="text-center p-3 bg-orange-50 dark:bg-orange-950/30 rounded-lg">
+                    <div className="text-2xl font-bold text-orange-700 dark:text-orange-400">
+                      {data.motivosPerda.filter(m => m.tipo === 'operacional').reduce((s, m) => s + m.count, 0)}
+                    </div>
+                    <div className="text-xs text-orange-600">Gap Operacional</div>
                   </div>
                 </div>
-              ))}
+                {data.motivosPerda.length > 0 && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Motivo</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead className="text-right">Qtd</TableHead>
+                        <TableHead className="text-right">%</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.motivosPerda.map((m, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium text-sm">{m.motivo}</TableCell>
+                          <TableCell>
+                            <Badge variant={m.tipo === 'operacional' ? 'destructive' : 'secondary'} className="text-xs">
+                              {m.tipo === 'operacional' ? 'Operacional' : 'Legítima'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">{m.count}</TableCell>
+                          <TableCell className="text-right">{m.pct.toFixed(0)}%</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Funil Visual */}
+          <Card>
+            <CardHeader><CardTitle className="text-base">Funil do Carrinho</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {data.funnelSteps.map((step, i) => {
+                const colors = ['bg-slate-500', 'bg-blue-500', 'bg-indigo-500', 'bg-cyan-500', 'bg-blue-700', 'bg-amber-500', 'bg-green-500', 'bg-emerald-600'];
+                return (
+                  <div key={i} className="space-y-0.5">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">{step.label}</span>
+                      <span className="text-muted-foreground">{step.count} ({step.pct.toFixed(0)}%)</span>
+                    </div>
+                    <div className="h-5 bg-muted rounded-full overflow-hidden">
+                      <div className={cn('h-full rounded-full transition-all', colors[i] || 'bg-primary')}
+                        style={{ width: `${Math.max(step.pct, 2)}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
 
-          {/* Motivos de Perda + Mapa do Brasil side by side */}
+          {/* Geo + Map */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Motivos de Perda</CardTitle>
+                <CardTitle className="text-base flex items-center gap-2"><MapPin className="h-4 w-4" /> Análise Geográfica</CardTitle>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Motivo</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead className="text-right">Qtd</TableHead>
-                      <TableHead className="text-right">%</TableHead>
+                      <TableHead>UF</TableHead>
+                      <TableHead>Cluster</TableHead>
+                      <TableHead className="text-right">Contr.</TableHead>
+                      <TableHead className="text-right">R2 Ag.</TableHead>
+                      <TableHead className="text-right">R2 Re.</TableHead>
+                      <TableHead className="text-right">Aprov.</TableHead>
+                      <TableHead className="text-right">Reemb.</TableHead>
+                      <TableHead className="text-right">Parc.</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.motivosPerda.map((m, i) => (
+                    {data.analysisByState.map((s, i) => (
                       <TableRow key={i}>
-                        <TableCell className="font-medium">{m.motivo}</TableCell>
+                        <TableCell className="font-medium">{s.uf}</TableCell>
                         <TableCell>
-                          <Badge variant={m.tipo === 'legitima' ? 'secondary' : 'destructive'} className="text-xs">
-                            {m.tipo === 'legitima' ? 'Legítima' : 'Operacional'}
-                          </Badge>
+                          <Badge variant="outline" className={cn('text-xs',
+                            s.cluster === 'Alto' ? 'border-green-500 text-green-700' :
+                            s.cluster === 'Médio' ? 'border-amber-500 text-amber-700' :
+                            'border-slate-400 text-slate-600'
+                          )}>{s.cluster}</Badge>
                         </TableCell>
-                        <TableCell className="text-right">{m.count}</TableCell>
-                        <TableCell className="text-right">{m.pct.toFixed(1)}%</TableCell>
+                        <TableCell className="text-right">{s.contratos}</TableCell>
+                        <TableCell className="text-right">{s.r2Agendadas}</TableCell>
+                        <TableCell className="text-right">{s.r2Realizadas}</TableCell>
+                        <TableCell className="text-right">{s.aprovados}</TableCell>
+                        <TableCell className="text-right">{s.reembolsos}</TableCell>
+                        <TableCell className="text-right">{s.parcerias}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </CardContent>
             </Card>
-
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Distribuição por Estado</CardTitle>
-                <CardDescription>Clique em um estado para filtrar a tabela abaixo</CardDescription>
+                <CardTitle className="text-base">Mapa</CardTitle>
               </CardHeader>
               <CardContent>
                 <BrazilMap
-                  stateData={data.analysisByState}
+                  stateData={mapStateData}
                   onStateClick={(uf) => setFilterEstado(prev => prev === uf ? 'all' : uf)}
                   selectedState={filterEstado !== 'all' ? filterEstado : undefined}
                 />
-                <div className="mt-4 space-y-1.5">
-                  {data.analysisByState.slice(0, 5).map((s, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs">
-                      <span className="font-medium w-8">{s.uf}</span>
-                      <div className="flex-1 mx-2 h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${Math.max((s.contratos / (data.analysisByState[0]?.contratos || 1)) * 100, 4)}%`,
-                            background: `hsl(${120 - (s.taxaPerda / 100) * 120}, 65%, 48%)`,
-                          }}
-                        />
-                      </div>
-                      <span className="text-muted-foreground w-20 text-right">
-                        {s.contratos} contr. · {s.taxaPerda.toFixed(0)}%
-                      </span>
-                    </div>
-                  ))}
-                </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Comparativo Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="border-green-200 bg-green-50/50 dark:bg-green-950/20 dark:border-green-900">
-              <CardContent className="pt-4 pb-3 px-4 flex items-center gap-3">
-                <CheckCircle2 className="h-8 w-8 text-green-600 shrink-0" />
-                <div>
-                  <div className="text-2xl font-bold text-green-700 dark:text-green-400">{data.leadsAvancados.length}</div>
-                  <div className="text-sm text-green-600 dark:text-green-500">
-                    Avançaram ({data.kpis.totalElegivel > 0 ? ((data.leadsAvancados.length / data.kpis.totalElegivel) * 100).toFixed(1) : 0}%)
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20 dark:border-red-900">
-              <CardContent className="pt-4 pb-3 px-4 flex items-center gap-3">
-                <XCircle className="h-8 w-8 text-red-600 shrink-0" />
-                <div>
-                  <div className="text-2xl font-bold text-red-700 dark:text-red-400">{data.leadsDetalhados.length}</div>
-                  <div className="text-sm text-red-600 dark:text-red-500">
-                    Perdidos ({data.kpis.totalElegivel > 0 ? ((data.leadsDetalhados.length / data.kpis.totalElegivel) * 100).toFixed(1) : 0}%)
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900">
-              <CardContent className="pt-4 pb-3 px-4 flex items-center gap-3">
-                <AlertTriangle className="h-8 w-8 text-amber-600 shrink-0" />
-                <div>
-                  <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">{gapOperacional}</div>
-                  <div className="text-sm text-amber-600 dark:text-amber-500">
-                    Gap Operacional (poderiam avançar)
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Tabela Detalhada com Tabs */}
+          {/* Tabela Detalhada */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base">Detalhamento de Leads</CardTitle>
-                  <CardDescription>Compare quem avançou vs quem se perdeu no funil</CardDescription>
+                  <CardTitle className="text-base">Tabela Detalhada — Todos os Leads</CardTitle>
+                  <CardDescription>Jornada completa de cada lead com contrato pago na semana</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={exportExcel} disabled={activeTab === 'avancados' ? !filteredAvancados.length : !filteredLeads.length}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Exportar Excel
+                <Button variant="outline" size="sm" onClick={exportExcel} disabled={!filteredLeads.length}>
+                  <Download className="h-4 w-4 mr-2" />Exportar Excel
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="mb-4">
-                  <TabsTrigger value="avancados">
-                    ✅ Avançaram ({data.leadsAvancados.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="perdidos">
-                    ❌ Perdidos ({data.leadsDetalhados.length})
-                  </TabsTrigger>
-                </TabsList>
+              {/* Filters */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Select value={filterCloserR1} onValueChange={setFilterCloserR1}>
+                  <SelectTrigger className="w-[160px]"><SelectValue placeholder="Closer R1" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Closer R1: Todos</SelectItem>
+                    {uniqueClosersR1.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterCloserR2} onValueChange={setFilterCloserR2}>
+                  <SelectTrigger className="w-[160px]"><SelectValue placeholder="Closer R2" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Closer R2: Todos</SelectItem>
+                    {uniqueClosersR2.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterEstado} onValueChange={setFilterEstado}>
+                  <SelectTrigger className="w-[120px]"><SelectValue placeholder="UF" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">UF: Todos</SelectItem>
+                    {uniqueEstados.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterCluster} onValueChange={setFilterCluster}>
+                  <SelectTrigger className="w-[140px]"><SelectValue placeholder="Cluster" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Cluster: Todos</SelectItem>
+                    <SelectItem value="Alto">Alto</SelectItem>
+                    <SelectItem value="Médio">Médio</SelectItem>
+                    <SelectItem value="Menor">Menor</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterStatusR2} onValueChange={setFilterStatusR2}>
+                  <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status R2" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Status R2: Todos</SelectItem>
+                    {uniqueStatusR2.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterMotivoGap} onValueChange={setFilterMotivoGap}>
+                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="Motivo Gap" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Motivo: Todos</SelectItem>
+                    {uniqueMotivos.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterR2Agendada} onValueChange={setFilterR2Agendada}>
+                  <SelectTrigger className="w-[140px]"><SelectValue placeholder="R2?" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">R2: Todos</SelectItem>
+                    <SelectItem value="sim">Com R2</SelectItem>
+                    <SelectItem value="nao">Sem R2</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterParceria} onValueChange={setFilterParceria}>
+                  <SelectTrigger className="w-[140px]"><SelectValue placeholder="Parceria?" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Parceria: Todos</SelectItem>
+                    <SelectItem value="sim">Com Parceria</SelectItem>
+                    <SelectItem value="nao">Sem Parceria</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                <TabsContent value="avancados">
-                  {/* Summary stats bar */}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    <Badge variant="outline" className="text-xs px-3 py-1">Total: {avancadosStats.total}</Badge>
-                    <Badge className="bg-blue-100 text-blue-800 text-xs px-3 py-1">Com R1: {avancadosStats.comR1} ({avancadosStats.total > 0 ? ((avancadosStats.comR1 / avancadosStats.total) * 100).toFixed(0) : 0}%)</Badge>
-                    <Badge className="bg-orange-100 text-orange-800 text-xs px-3 py-1">Sem R1: {avancadosStats.semR1} ({avancadosStats.total > 0 ? ((avancadosStats.semR1 / avancadosStats.total) * 100).toFixed(0) : 0}%)</Badge>
-                    <Badge className="bg-green-100 text-green-800 text-xs px-3 py-1">Parceria: {avancadosStats.comParceria} ({avancadosStats.total > 0 ? ((avancadosStats.comParceria / avancadosStats.total) * 100).toFixed(0) : 0}%)</Badge>
-                    <Badge className="bg-purple-100 text-purple-800 text-xs px-3 py-1">Outside: {avancadosStats.outsides}</Badge>
-                    <Badge className="bg-emerald-100 text-emerald-800 text-xs px-3 py-1">R2 Realizada: {avancadosStats.r2Realizada}</Badge>
-                  </div>
+              {/* Summary badges */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Badge variant="outline" className="text-xs px-2 py-1">{filteredLeads.length} leads</Badge>
+                <Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-1">R1: {filteredLeads.filter(l => l.r1Agendada).length}</Badge>
+                <Badge className="bg-amber-100 text-amber-800 text-xs px-2 py-1">R2 Ag: {filteredLeads.filter(l => l.r2Agendada).length}</Badge>
+                <Badge className="bg-green-100 text-green-800 text-xs px-2 py-1">R2 Re: {filteredLeads.filter(l => l.r2Realizada).length}</Badge>
+                <Badge className="bg-emerald-100 text-emerald-800 text-xs px-2 py-1">Parceria: {filteredLeads.filter(l => l.comprouParceria).length}</Badge>
+                <Badge className="bg-red-100 text-red-800 text-xs px-2 py-1">Reembolso: {filteredLeads.filter(l => l.reembolso).length}</Badge>
+              </div>
 
-                  {/* Filters */}
-                  <div className="flex flex-wrap gap-3 mb-4">
-                    <Select value={filterCloser} onValueChange={setFilterCloser}>
-                      <SelectTrigger className="w-[200px]">
-                        <SelectValue placeholder="Closer" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos os closers</SelectItem>
-                        {uniqueClosers.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Select value={filterEstadoAv} onValueChange={setFilterEstadoAv}>
-                      <SelectTrigger className="w-[120px]">
-                        <SelectValue placeholder="Estado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos UFs</SelectItem>
-                        {uniqueEstadosAv.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Select value={filterR1} onValueChange={setFilterR1}>
-                      <SelectTrigger className="w-[150px]">
-                        <SelectValue placeholder="Data R1" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas R1</SelectItem>
-                        <SelectItem value="com">Com R1</SelectItem>
-                        <SelectItem value="sem">Sem R1</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="max-h-[500px] overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Nome</TableHead>
-                          <TableHead>Telefone</TableHead>
-                          <TableHead>UF</TableHead>
-                          <TableHead>Data Contrato</TableHead>
-                          <TableHead>Data R1</TableHead>
-                          <TableHead>Data R2</TableHead>
-                          <TableHead>Closer</TableHead>
-                          <TableHead>Parceria</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredAvancados.slice(0, 200).map((l, i) => (
-                          <TableRow key={i}>
-                            <TableCell className="font-medium max-w-[150px] truncate">{l.nome}</TableCell>
-                            <TableCell className="text-xs">{l.telefone}</TableCell>
-                            <TableCell>{l.estado}</TableCell>
-                            <TableCell className="text-xs">{format(new Date(l.dataCompra), 'dd/MM/yy')}</TableCell>
-                            <TableCell className="text-xs">{l.dataR1 ? format(new Date(l.dataR1), 'dd/MM/yy HH:mm') : '—'}</TableCell>
-                            <TableCell className="text-xs">{l.dataR2 ? format(new Date(l.dataR2), 'dd/MM/yy HH:mm') : '—'}</TableCell>
-                            <TableCell className="text-xs">{l.closerName || '—'}</TableCell>
-                            <TableCell>
-                              {l.comprouParceria ? (
-                                <Badge className="bg-green-100 text-green-800 text-xs">
-                                  Sim {l.dataParceria ? format(new Date(l.dataParceria), 'dd/MM') : ''}
-                                </Badge>
-                              ) : (
-                                <span className="text-muted-foreground text-xs">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-1">
-                                <Badge className={cn('text-xs', l.r2Realizada ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800')}>
-                                  {l.statusAtual}
-                                </Badge>
-                                {l.isOutside && (
-                                  <Badge className="bg-purple-100 text-purple-800 text-xs">Outside</Badge>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                      {/* Footer with totals */}
-                      <tfoot>
-                        <TableRow className="font-bold bg-muted/50">
-                          <TableCell>{avancadosStats.total} leads</TableCell>
-                          <TableCell></TableCell>
-                          <TableCell></TableCell>
-                          <TableCell className="text-xs">{avancadosStats.total}</TableCell>
-                          <TableCell className="text-xs">{avancadosStats.comR1}</TableCell>
-                          <TableCell className="text-xs">{avancadosStats.comR2}</TableCell>
-                          <TableCell></TableCell>
-                          <TableCell className="text-xs">{avancadosStats.comParceria}</TableCell>
-                          <TableCell></TableCell>
-                        </TableRow>
-                      </tfoot>
-                    </Table>
-                    {filteredAvancados.length > 200 && (
-                      <p className="text-sm text-muted-foreground text-center mt-2">
-                        Mostrando 200 de {filteredAvancados.length} leads. Exporte para ver todos.
-                      </p>
-                    )}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="perdidos">
-                  {/* Filters */}
-                  <div className="flex flex-wrap gap-3 mb-4">
-                    <Select value={filterMotivo} onValueChange={setFilterMotivo}>
-                      <SelectTrigger className="w-[200px]">
-                        <SelectValue placeholder="Motivo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos os motivos</SelectItem>
-                        {uniqueMotivos.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Select value={filterEstado} onValueChange={setFilterEstado}>
-                      <SelectTrigger className="w-[120px]">
-                        <SelectValue placeholder="Estado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos UFs</SelectItem>
-                        {uniqueEstados.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Select value={filterTipo} onValueChange={setFilterTipo}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Tipo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos os tipos</SelectItem>
-                        <SelectItem value="operacional">Falha Operacional</SelectItem>
-                        <SelectItem value="legitima">Exclusão Legítima</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="max-h-[500px] overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Nome</TableHead>
-                          <TableHead>Telefone</TableHead>
-                          <TableHead>UF</TableHead>
-                          <TableHead>Data Compra</TableHead>
-                          <TableHead>Produto</TableHead>
-                          <TableHead>Outside</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>R2</TableHead>
-                          <TableHead>Motivo</TableHead>
-                          <TableHead>Tipo</TableHead>
-                          <TableHead>Responsável</TableHead>
-                          <TableHead className="text-right">Dias Parado</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredLeads.slice(0, 200).map((l, i) => (
-                          <TableRow key={i}>
-                            <TableCell className="font-medium max-w-[150px] truncate">{l.nome}</TableCell>
-                            <TableCell className="text-xs">{l.telefone}</TableCell>
-                            <TableCell>{l.estado}</TableCell>
-                            <TableCell className="text-xs">{format(new Date(l.dataCompra), 'dd/MM/yy')}</TableCell>
-                            <TableCell className="text-xs max-w-[120px] truncate">{l.produto}</TableCell>
-                            <TableCell>
-                              {l.isOutside ? (
-                                <Badge className="bg-purple-100 text-purple-800 text-xs">Sim</Badge>
-                              ) : (
-                                <span className="text-muted-foreground text-xs">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-xs">{l.statusAtual}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              {l.r2Agendada ? (
-                                l.r2Realizada ? 
-                                  <Badge className="bg-green-100 text-green-800 text-xs">Realizada</Badge> :
-                                  <Badge className="bg-amber-100 text-amber-800 text-xs">Agendada</Badge>
-                              ) : (
-                                <Badge variant="secondary" className="text-xs">Não</Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-xs">{l.motivoPerda}</TableCell>
-                            <TableCell>
-                              <Badge variant={l.tipoPerda === 'operacional' ? 'destructive' : 'secondary'} className="text-xs">
-                                {l.tipoPerda === 'operacional' ? 'Oper.' : 'Legít.'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-xs">{l.responsavel || '—'}</TableCell>
-                            <TableCell className="text-right">
-                              <span className={cn(l.diasSemAndamento > 7 ? 'text-red-600 font-medium' : '')}>
-                                {l.diasSemAndamento}d
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    {filteredLeads.length > 200 && (
-                      <p className="text-sm text-muted-foreground text-center mt-2">
-                        Mostrando 200 de {filteredLeads.length} leads. Exporte para ver todos.
-                      </p>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
+              <div className="max-h-[600px] overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="sticky left-0 bg-background z-10">Nome</TableHead>
+                      <TableHead>Tel</TableHead>
+                      <TableHead>UF</TableHead>
+                      <TableHead>Cluster</TableHead>
+                      <TableHead>A010</TableHead>
+                      <TableHead>SDR</TableHead>
+                      <TableHead>Class.</TableHead>
+                      <TableHead>R1</TableHead>
+                      <TableHead>R1 Re.</TableHead>
+                      <TableHead>Closer R1</TableHead>
+                      <TableHead>Contrato</TableHead>
+                      <TableHead>R2 Ag.</TableHead>
+                      <TableHead>Data R2</TableHead>
+                      <TableHead>Closer R2</TableHead>
+                      <TableHead>R2 Re.</TableHead>
+                      <TableHead>Status R2</TableHead>
+                      <TableHead>Parceria</TableHead>
+                      <TableHead>Reemb.</TableHead>
+                      <TableHead>Gap</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredLeads.slice(0, 300).map((l, i) => (
+                      <TableRow key={i} className={cn(l.reembolso && 'opacity-60')}>
+                        <TableCell className="font-medium max-w-[140px] truncate sticky left-0 bg-background z-10">{l.nome}</TableCell>
+                        <TableCell className="text-xs whitespace-nowrap">{l.telefone}</TableCell>
+                        <TableCell className="text-xs">{l.estado}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn('text-[10px]',
+                            l.cluster === 'Alto' ? 'border-green-500 text-green-700' :
+                            l.cluster === 'Médio' ? 'border-amber-500 text-amber-700' : 'border-slate-400 text-slate-500'
+                          )}>{l.cluster}</Badge>
+                        </TableCell>
+                        <TableCell className="text-xs">{l.dataA010 ? format(new Date(l.dataA010), 'dd/MM/yy') : '—'}</TableCell>
+                        <TableCell className="text-xs max-w-[80px] truncate">{l.sdrName || '—'}</TableCell>
+                        <TableCell>{l.classificado ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> : <XCircle className="h-3.5 w-3.5 text-red-400" />}</TableCell>
+                        <TableCell className="text-xs">{l.dataR1 ? format(new Date(l.dataR1), 'dd/MM/yy') : '—'}</TableCell>
+                        <TableCell>{l.r1Realizada ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> : l.r1Agendada ? <Calendar className="h-3.5 w-3.5 text-amber-500" /> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
+                        <TableCell className="text-xs max-w-[80px] truncate">{l.closerR1 || '—'}</TableCell>
+                        <TableCell className="text-xs whitespace-nowrap">{format(new Date(l.dataContrato), 'dd/MM/yy')}</TableCell>
+                        <TableCell>{l.r2Agendada ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> : <XCircle className="h-3.5 w-3.5 text-red-400" />}</TableCell>
+                        <TableCell className="text-xs">{l.dataR2 ? format(new Date(l.dataR2), 'dd/MM/yy HH:mm') : '—'}</TableCell>
+                        <TableCell className="text-xs max-w-[80px] truncate">{l.closerR2 || '—'}</TableCell>
+                        <TableCell>{l.r2Realizada ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> : l.r2Agendada ? <Calendar className="h-3.5 w-3.5 text-amber-500" /> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
+                        <TableCell className="text-xs">{l.statusR2 || '—'}</TableCell>
+                        <TableCell>
+                          {l.comprouParceria ? (
+                            <Badge className="bg-green-100 text-green-800 text-[10px]">
+                              Sim {l.dataParceria ? format(new Date(l.dataParceria), 'dd/MM') : ''}
+                            </Badge>
+                          ) : <span className="text-muted-foreground text-xs">—</span>}
+                        </TableCell>
+                        <TableCell>
+                          {l.reembolso ? <Badge variant="destructive" className="text-[10px]">Sim</Badge> : <span className="text-muted-foreground text-xs">—</span>}
+                        </TableCell>
+                        <TableCell>
+                          {l.motivoGap ? (
+                            <Badge variant={l.tipoGap === 'operacional' ? 'destructive' : 'secondary'} className="text-[10px] whitespace-nowrap">
+                              {l.motivoGap}
+                            </Badge>
+                          ) : <span className="text-muted-foreground text-xs">—</span>}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {filteredLeads.length > 300 && (
+                  <p className="text-sm text-muted-foreground text-center mt-2">Mostrando 300 de {filteredLeads.length} leads. Exporte para ver todos.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </>
