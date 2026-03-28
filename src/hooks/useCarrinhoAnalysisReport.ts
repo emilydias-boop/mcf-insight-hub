@@ -99,6 +99,20 @@ export interface LeadCarrinhoCompleto {
   reembolso: boolean;
   isOutside: boolean;
   canalEntrada: string | null;
+  // Audit fields for canal classification debugging
+  _audit?: {
+    rawTags: string[];
+    rawOriginName: string | null;
+    rawLeadChannel: string | null;
+    rawDataSource: string | null;
+    saleOrigin: string | null;
+    hasA010: boolean;
+    hasR1: boolean;
+    hasDeal: boolean;
+    hasContact: boolean;
+    classifiedResult: string;
+    reason: string;
+  };
   // Gap
   motivoGap: string | null;
   tipoGap: 'operacional' | 'legitima' | null;
@@ -707,12 +721,14 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           reembolso: hasRefund,
           isOutside,
           canalEntrada: (() => {
-            // 1. Lançamento: sale_origin ou produto "contrato mcf"
             const prodLower = (tx.product_name || '').toLowerCase();
-            if ((tx as any).sale_origin === 'launch' || prodLower.includes('contrato mcf')) return 'LANÇAMENTO';
+            const saleOrigin = (tx as any).sale_origin;
+            const dealTags = deal?.tags || [];
+
+            // 1. Lançamento: sale_origin ou produto "contrato mcf"
+            if (saleOrigin === 'launch' || prodLower.includes('contrato mcf')) return 'LANÇAMENTO';
 
             // 2. Tags / origin / channel from CRM deal
-            const dealTags = deal?.tags || [];
             const classified = classifyChannel({
               tags: dealTags,
               originName: deal?.originName || null,
@@ -735,8 +751,41 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
             // 4. A010
             if (a010Date) return 'A010';
 
-            // 5. Default: LIVE (lead pagou contrato sem outra classificação)
+            // 5. Default: LIVE
             return 'LIVE';
+          })(),
+          _audit: (() => {
+            const dealTags = deal?.tags || [];
+            const saleOrigin = (tx as any).sale_origin;
+            const classified = classifyChannel({
+              tags: dealTags,
+              originName: deal?.originName || null,
+              leadChannel: deal?.leadChannel || null,
+              dataSource: deal?.dataSource || null,
+              hasA010: !!a010Date,
+            });
+            let reason = 'fallback:LIVE';
+            const prodLower = (tx.product_name || '').toLowerCase();
+            if (saleOrigin === 'launch' || prodLower.includes('contrato mcf')) reason = 'sale_origin=launch';
+            else if (classified) reason = `classifyChannel=${classified}`;
+            else if (getBestRawTag(dealTags)) reason = `rawTag=${getBestRawTag(dealTags)}`;
+            else if (deal?.originName) reason = `originName=${deal.originName}`;
+            else if (deal?.leadChannel) reason = `leadChannel=${deal.leadChannel}`;
+            else if (isOutside) reason = 'isOutside=true';
+            else if (a010Date) reason = 'hasA010';
+            return {
+              rawTags: dealTags,
+              rawOriginName: deal?.originName || null,
+              rawLeadChannel: deal?.leadChannel || null,
+              rawDataSource: deal?.dataSource || null,
+              saleOrigin: saleOrigin || null,
+              hasA010: !!a010Date,
+              hasR1: !!r1Fresh,
+              hasDeal: !!deal,
+              hasContact: !!contact,
+              classifiedResult: classified,
+              reason,
+            };
           })(),
           motivoGap,
           tipoGap,

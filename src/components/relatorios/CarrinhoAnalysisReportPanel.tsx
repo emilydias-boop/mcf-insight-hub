@@ -498,19 +498,21 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                         </TableCell>
                         <TableCell>
                           {l.canalEntrada ? (
-                            <Badge variant="outline" className={cn('text-[10px] whitespace-nowrap',
-                              l.canalEntrada === 'ANAMNESE-INSTA' ? 'border-pink-500 text-pink-700' :
-                              l.canalEntrada === 'ANAMNESE' ? 'border-purple-500 text-purple-700' :
-                              l.canalEntrada === 'BIO-INSTAGRAM' ? 'border-pink-400 text-pink-600' :
-                              l.canalEntrada === 'A010' || l.canalEntrada === 'A010 (MAKE)' || l.canalEntrada === 'HUBLA (A010)' || l.canalEntrada === 'HUBLA' ? 'border-amber-500 text-amber-700' :
-                              l.canalEntrada === 'LIVE' ? 'border-blue-500 text-blue-700' :
-                              l.canalEntrada === 'LANÇAMENTO' ? 'border-violet-500 text-violet-700' :
-                              l.canalEntrada === 'OUTSIDE' ? 'border-red-500 text-red-700' :
-                              l.canalEntrada === 'LEAD-FORM' ? 'border-yellow-500 text-yellow-700' :
-                              l.canalEntrada === 'BASE CLINT' ? 'border-slate-500 text-slate-700' :
-                              l.canalEntrada === 'CLIENTDATA' ? 'border-slate-400 text-slate-600' :
-                              'border-muted-foreground text-muted-foreground'
-                            )}>{l.canalEntrada}</Badge>
+                            <span title={l._audit ? `Reason: ${l._audit.reason}\nTags: [${l._audit.rawTags.join(', ')}]\nOrigin: ${l._audit.rawOriginName || '—'}\nChannel: ${l._audit.rawLeadChannel || '—'}\nSaleOrigin: ${l._audit.saleOrigin || '—'}\nHasDeal: ${l._audit.hasDeal}\nHasContact: ${l._audit.hasContact}\nHasR1: ${l._audit.hasR1}\nHasA010: ${l._audit.hasA010}` : ''}>
+                              <Badge variant="outline" className={cn('text-[10px] whitespace-nowrap cursor-help',
+                                l.canalEntrada === 'ANAMNESE-INSTA' ? 'border-pink-500 text-pink-700' :
+                                l.canalEntrada === 'ANAMNESE' ? 'border-purple-500 text-purple-700' :
+                                l.canalEntrada === 'BIO-INSTAGRAM' ? 'border-pink-400 text-pink-600' :
+                                l.canalEntrada === 'A010' || l.canalEntrada === 'A010 (MAKE)' || l.canalEntrada === 'HUBLA (A010)' || l.canalEntrada === 'HUBLA' ? 'border-amber-500 text-amber-700' :
+                                l.canalEntrada === 'LIVE' ? 'border-blue-500 text-blue-700' :
+                                l.canalEntrada === 'LANÇAMENTO' ? 'border-violet-500 text-violet-700' :
+                                l.canalEntrada === 'OUTSIDE' ? 'border-red-500 text-red-700' :
+                                l.canalEntrada === 'LEAD-FORM' ? 'border-yellow-500 text-yellow-700' :
+                                l.canalEntrada === 'BASE CLINT' ? 'border-slate-500 text-slate-700' :
+                                l.canalEntrada === 'CLIENTDATA' ? 'border-slate-400 text-slate-600' :
+                                'border-muted-foreground text-muted-foreground'
+                              )}>{l.canalEntrada}</Badge>
+                            </span>
                           ) : <span className="text-muted-foreground text-xs">—</span>}
                         </TableCell>
                         <TableCell className="text-xs max-w-[80px] truncate">{l.sdrName || '—'}</TableCell>
