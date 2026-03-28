@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/s
 import { RealTimeAlerts } from "@/components/dashboard/RealTimeAlerts";
 import { TwilioSoftphone } from "@/components/crm/TwilioSoftphone";
 import { QualificationAndScheduleModal } from "@/components/crm/QualificationAndScheduleModal";
+import { OverdueAlertOverlay } from "@/components/sdr/OverdueAlertOverlay";
 import { useTwilio } from "@/contexts/TwilioContext";
 import { Menu } from "lucide-react";
 
@@ -46,6 +47,7 @@ export function MainLayout() {
             </div>
           </SidebarInset>
           <TwilioSoftphone />
+          <OverdueAlertOverlay />
           <GlobalQualificationModal />
         </div>
       </SidebarProvider>

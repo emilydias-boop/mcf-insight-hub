@@ -8,12 +8,12 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Phone, MessageCircle, Mail, Video, CheckCircle2,
-  ChevronDown, AlertTriangle, Bell, Loader2, Volume2, VolumeX
+  ChevronDown, AlertTriangle, Bell, Loader2
 } from 'lucide-react';
 import { usePendingNextActions, useCompleteNextAction, PendingAction } from '@/hooks/usePendingNextActions';
 import { useTwilio } from '@/contexts/TwilioContext';
 import { normalizePhoneNumber } from '@/lib/phoneUtils';
-import { useOverdueAlertSound } from '@/hooks/useOverdueAlertSound';
+
 import { toast } from 'sonner';
 
 const ACTION_ICONS: Record<string, React.ReactNode> = {
@@ -40,7 +40,7 @@ export const PendingActionsPanel = () => {
   const todayCount = actions.filter(a => a.isToday).length;
   const totalCount = actions.length;
 
-  const { isMuted, muteFor5Min } = useOverdueAlertSound(overdueCount);
+  
 
   if (isLoading || totalCount === 0) return null;
 
@@ -112,21 +112,7 @@ export const PendingActionsPanel = () => {
                 )}
               </CardTitle>
               <div className="flex items-center gap-2">
-                {overdueCount > 0 && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={(e) => { e.stopPropagation(); muteFor5Min(); }}
-                    title={isMuted ? 'Som silenciado (5min)' : 'Silenciar alerta por 5 min'}
-                  >
-                    {isMuted ? (
-                      <VolumeX className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <Volume2 className="h-4 w-4 text-destructive animate-pulse" />
-                    )}
-                  </Button>
-                )}
+                
                 <ChevronDown className={cn(
                   "h-4 w-4 text-muted-foreground transition-transform",
                   isOpen && "rotate-180"
