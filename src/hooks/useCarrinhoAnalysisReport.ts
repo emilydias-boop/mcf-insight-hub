@@ -97,7 +97,7 @@ function classifyGap(
   lead: { reembolso: boolean; isOutside: boolean; r2Agendada: boolean; contactExists: boolean; dealExists: boolean; statusR2Lower: string | null },
 ): { motivo: string; tipo: 'operacional' | 'legitima' } {
   if (lead.reembolso) return { motivo: 'Reembolso', tipo: 'legitima' };
-  if (lead.isOutside && !lead.r2Agendada) return { motivo: 'Outside sem R2', tipo: 'legitima' };
+  // Outside NÃO é motivo legítimo — lead outside continua no funil normalmente
   if (lead.statusR2Lower?.includes('próxima') || lead.statusR2Lower?.includes('proxima')) return { motivo: 'Próxima semana', tipo: 'legitima' };
   if (!lead.contactExists) return { motivo: 'Sem contato no CRM', tipo: 'operacional' };
   if (!lead.dealExists) return { motivo: 'Cadastro incompleto', tipo: 'operacional' };
@@ -208,7 +208,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const [dealsResult, r1Result, r2Result] = await Promise.all([
         contactIds.length > 0
           ? supabase.from('crm_deals')
-              .select('id, contact_id, owner_id, profiles:owner_id(name)')
+              .select('id, contact_id, owner_profile_id, owner:profiles!crm_deals_owner_profile_id_fkey(name)')
               .in('contact_id', contactIds)
           : Promise.resolve({ data: [] }),
         contactIds.length > 0
@@ -241,7 +241,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const dealMap = new Map<string, { id: string; sdrName: string | null }>();
       for (const d of dealsResult.data || []) {
         if (d.contact_id) {
-          const sdrName = (d as any).profiles?.name || null;
+          const sdrName = (d as any).owner?.name || null;
           dealMap.set(d.contact_id, { id: d.id, sdrName });
         }
       }
@@ -318,7 +318,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         const r2StatusName = r2Data?.statusId ? statusNameMap.get(r2Data.statusId) || null : null;
         const r2StatusLower = r2StatusName?.toLowerCase() || null;
 
-        const isOutside = r1?.date ? new Date(tx.sale_date) < new Date(r1.date) : !r1 && !deal;
+        const isOutside = r1?.date ? new Date(tx.sale_date) < new Date(r1.date) : false;
         const isR2Agendada = !!r2Data;
         const isR2Realizada = r2Data?.realized || false;
 
