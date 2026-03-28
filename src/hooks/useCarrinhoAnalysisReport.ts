@@ -153,6 +153,32 @@ export interface CarrinhoAnalysisData {
   leads: LeadCarrinhoCompleto[];
 }
 
+type ContactLookup = { id: string; phone: string | null };
+
+type DealLookup = {
+  id: string;
+  sdrName: string | null;
+  dataSource: string | null;
+  tags: string[];
+  originName: string | null;
+  leadChannel: string | null;
+};
+
+type R1Lookup = {
+  date: string;
+  realized: boolean;
+  closerName: string | null;
+};
+
+type R2Lookup = {
+  id: string;
+  date: string;
+  realized: boolean;
+  closerName: string | null;
+  statusId: string | null;
+  slotStatus: string;
+};
+
 function normalizePhoneSuffix(phone: string | null | undefined): string {
   if (!phone) return '';
   const digits = phone.replace(/\D/g, '');
@@ -169,6 +195,97 @@ function classifyGap(
   if (!lead.dealExists) return { motivo: 'Cadastro incompleto', tipo: 'operacional' };
   if (lead.contactExists && !lead.r2Agendada) return { motivo: 'Sem agendamento', tipo: 'operacional' };
   return { motivo: 'Outro motivo', tipo: 'operacional' };
+}
+
+function mergeDealsIntoMap(rows: any[] | null | undefined, dealMap: Map<string, DealLookup>) {
+  for (const d of rows || []) {
+    if (!d.contact_id) continue;
+
+    const sdrName = (d as any).owner?.name || null;
+    const dataSource = (d as any).data_source || null;
+    const tags: string[] = ((d as any).tags || []).map((t: any) => typeof t === 'string' ? t : t?.name || '');
+    const originName = (d as any).origin?.name || null;
+    const leadChannel = (d as any).custom_fields?.lead_channel || null;
+
+    if (dealMap.has(d.contact_id)) {
+      const existing = dealMap.get(d.contact_id)!;
+      existing.tags = [...new Set([...existing.tags, ...tags])];
+      if (!existing.sdrName && sdrName) existing.sdrName = sdrName;
+      if (!existing.dataSource && dataSource) existing.dataSource = dataSource;
+      if (!existing.originName && originName) existing.originName = originName;
+      if (!existing.leadChannel && leadChannel) existing.leadChannel = leadChannel;
+      continue;
+    }
+
+    dealMap.set(d.contact_id, {
+      id: d.id,
+      sdrName,
+      dataSource,
+      tags,
+      originName,
+      leadChannel,
+    });
+  }
+}
+
+function mergeR1IntoMap(rows: any[] | null | undefined, r1Map: Map<string, R1Lookup>) {
+  for (const a of rows || []) {
+    const cid = (a as any).contact_id;
+    const slot = a.meeting_slot as any;
+    if (!cid || !slot?.scheduled_at) continue;
+
+    const existing = r1Map.get(cid);
+    if (!existing || slot.scheduled_at < existing.date) {
+      const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
+      r1Map.set(cid, { date: slot.scheduled_at, realized, closerName: slot.closer?.name || null });
+    }
+  }
+}
+
+function mergeR2IntoMap(rows: any[] | null | undefined, r2Map: Map<string, R2Lookup>) {
+  for (const a of rows || []) {
+    const cid = (a as any).contact_id;
+    const slot = a.meeting_slot as any;
+    if (!cid || !slot?.scheduled_at) continue;
+
+    const existing = r2Map.get(cid);
+    if (!existing || slot.scheduled_at > existing.date) {
+      const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
+      r2Map.set(cid, {
+        id: a.id,
+        date: slot.scheduled_at,
+        realized,
+        closerName: slot.closer?.name || null,
+        statusId: (a as any).r2_status_id || null,
+        slotStatus: slot.status || '',
+      });
+    }
+  }
+}
+
+function getContactScore(contactId: string, dealMap: Map<string, DealLookup>, r1Map: Map<string, R1Lookup>, r2Map: Map<string, R2Lookup>) {
+  return (dealMap.has(contactId) ? 4 : 0) + (r2Map.has(contactId) ? 2 : 0) + (r1Map.has(contactId) ? 1 : 0);
+}
+
+function pickBestPhoneMatchedContact(
+  currentContact: ContactLookup | undefined,
+  phoneContacts: ContactLookup[],
+  dealMap: Map<string, DealLookup>,
+  r1Map: Map<string, R1Lookup>,
+  r2Map: Map<string, R2Lookup>,
+): ContactLookup | undefined {
+  const candidates = [
+    ...(currentContact ? [currentContact] : []),
+    ...phoneContacts.filter(contact => contact.id !== currentContact?.id),
+  ];
+
+  if (candidates.length === 0) return currentContact;
+
+  return candidates.reduce((best, candidate) => {
+    const bestScore = getContactScore(best.id, dealMap, r1Map, r2Map);
+    const candidateScore = getContactScore(candidate.id, dealMap, r1Map, r2Map);
+    return candidateScore > bestScore ? candidate : best;
+  });
 }
 
 export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date | null) {
@@ -249,7 +366,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         if (e && !a010Map.has(e)) a010Map.set(e, a.sale_date);
       }
 
-      const contactMap = new Map<string, { id: string; phone: string | null }>(); // email → contact
+      const contactMap = new Map<string, ContactLookup>(); // email → contact
       for (const c of contactsResult.data || []) {
         if (c.email) contactMap.set(c.email.toLowerCase().trim(), { id: c.id, phone: c.phone });
       }
@@ -264,6 +381,43 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
       const statusNameMap = new Map<string, string>();
       for (const s of r2StatusResult.data || []) statusNameMap.set(s.id, s.name);
+
+      // 2.1 A010 fallback by phone suffix when email does not match exactly
+      const a010PhoneCandidates = new Map<string, string[]>();
+      for (const tx of uniqueContracts) {
+        const email = (tx.customer_email || '').toLowerCase().trim();
+        if (!email || a010Map.has(email)) continue;
+
+        const suffix = normalizePhoneSuffix(tx.customer_phone);
+        if (!suffix) continue;
+
+        if (!a010PhoneCandidates.has(suffix)) a010PhoneCandidates.set(suffix, []);
+        a010PhoneCandidates.get(suffix)!.push(email);
+      }
+
+      if (a010PhoneCandidates.size > 0) {
+        const suffixes = Array.from(a010PhoneCandidates.keys());
+        const a010PhoneResults = await Promise.all(
+          suffixes.map(suffix =>
+            supabase.from('hubla_transactions')
+              .select('customer_phone, sale_date')
+              .or('product_category.eq.a010,product_name.ilike.%a010%')
+              .ilike('customer_phone', `%${suffix}`)
+              .order('sale_date', { ascending: true })
+          )
+        );
+
+        for (let i = 0; i < suffixes.length; i++) {
+          const suffix = suffixes[i];
+          const matchedRows = (a010PhoneResults[i].data || []).filter(row => normalizePhoneSuffix(row.customer_phone) === suffix);
+          const earliestSaleDate = matchedRows[0]?.sale_date;
+          if (!earliestSaleDate) continue;
+
+          for (const email of a010PhoneCandidates.get(suffix) || []) {
+            if (!a010Map.has(email)) a010Map.set(email, earliestSaleDate);
+          }
+        }
+      }
 
       // 3. Get contact_ids for CRM queries
       const contactIds = Array.from(new Set(
@@ -304,77 +458,27 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       }
 
       // Build deal map: contact_id → deal (merge tags from ALL deals)
-      const dealMap = new Map<string, { id: string; sdrName: string | null; dataSource: string | null; tags: string[]; originName: string | null; leadChannel: string | null }>();
-      for (const d of dealsResult.data || []) {
-        if (d.contact_id) {
-          const sdrName = (d as any).owner?.name || null;
-          const dataSource = (d as any).data_source || null;
-          const tags: string[] = ((d as any).tags || []).map((t: any) => typeof t === 'string' ? t : t?.name || '');
-          const originName = (d as any).origin?.name || null;
-          const leadChannel = (d as any).custom_fields?.lead_channel || null;
-          if (dealMap.has(d.contact_id)) {
-            const existing = dealMap.get(d.contact_id)!;
-            existing.tags = [...new Set([...existing.tags, ...tags])];
-            if (!existing.sdrName && sdrName) existing.sdrName = sdrName;
-            if (!existing.dataSource && dataSource) existing.dataSource = dataSource;
-            // Prefer more informative origin (non-null, non-generic)
-            if (!existing.originName && originName) existing.originName = originName;
-            if (!existing.leadChannel && leadChannel) existing.leadChannel = leadChannel;
-          } else {
-            dealMap.set(d.contact_id, { id: d.id, sdrName, dataSource, tags, originName, leadChannel });
-          }
-        }
-      }
+      const dealMap = new Map<string, DealLookup>();
+      mergeDealsIntoMap(dealsResult.data, dealMap);
 
 
       // Build R1 map: contact_id → best R1
-      const r1Map = new Map<string, { date: string; realized: boolean; closerName: string | null }>();
-      for (const a of r1Result.data || []) {
-        const cid = (a as any).contact_id;
-        const slot = a.meeting_slot as any;
-        if (!cid || !slot?.scheduled_at) continue;
-        const existing = r1Map.get(cid);
-        if (!existing || slot.scheduled_at < existing.date) {
-          const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
-          r1Map.set(cid, { date: slot.scheduled_at, realized, closerName: slot.closer?.name || null });
-        }
-      }
+      const r1Map = new Map<string, R1Lookup>();
+      mergeR1IntoMap(r1Result.data, r1Map);
 
       // Build R2 map: contact_id → best R2
-      const r2Map = new Map<string, { id: string; date: string; realized: boolean; closerName: string | null; statusId: string | null; slotStatus: string }>();
-      for (const a of r2Result.data || []) {
-        const cid = (a as any).contact_id;
-        const slot = a.meeting_slot as any;
-        if (!cid || !slot?.scheduled_at) continue;
-        const existing = r2Map.get(cid);
-        // Keep latest R2
-        if (!existing || slot.scheduled_at > existing.date) {
-          const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
-          r2Map.set(cid, {
-            id: a.id,
-            date: slot.scheduled_at,
-            realized,
-            closerName: slot.closer?.name || null,
-            statusId: (a as any).r2_status_id || null,
-            slotStatus: slot.status || '',
-          });
-        }
-      }
+      const r2Map = new Map<string, R2Lookup>();
+      mergeR2IntoMap(r2Result.data, r2Map);
 
       // === PHONE FALLBACK: Find contacts by phone when email-based contact has no deals ===
       const phoneSuffixesForLookup: string[] = [];
-      const suffixToEmail = new Map<string, string[]>();
       for (const tx of uniqueContracts) {
         const email = (tx.customer_email || '').toLowerCase().trim();
         const contact = contactMap.get(email);
         const contactId = contact?.id;
         if (!contactId || !dealMap.has(contactId)) {
           const suffix = normalizePhoneSuffix(tx.customer_phone);
-          if (suffix) {
-            phoneSuffixesForLookup.push(suffix);
-            if (!suffixToEmail.has(suffix)) suffixToEmail.set(suffix, []);
-            suffixToEmail.get(suffix)!.push(email);
-          }
+          if (suffix) phoneSuffixesForLookup.push(suffix);
         }
       }
 
@@ -387,7 +491,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         );
         const phoneResults = await Promise.all(phoneQueries);
 
-        const suffixToContacts = new Map<string, { id: string; phone: string | null }[]>();
+        const suffixToContacts = new Map<string, ContactLookup[]>();
         for (let i = 0; i < uniqueSuffixes.length; i++) {
           const suffix = uniqueSuffixes[i];
           const contacts = (phoneResults[i].data || [])
@@ -397,32 +501,9 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           }
         }
 
-        // Replace contactMap entries with phone-matched contacts that have deals
-        for (const tx of uniqueContracts) {
-          const email = (tx.customer_email || '').toLowerCase().trim();
-          const currentContact = contactMap.get(email);
-          if (currentContact && dealMap.has(currentContact.id)) continue;
-
-          const suffix = normalizePhoneSuffix(tx.customer_phone);
-          if (!suffix) continue;
-          const phoneContacts = suffixToContacts.get(suffix);
-          if (!phoneContacts) continue;
-
-          for (const pc of phoneContacts) {
-            if (dealMap.has(pc.id)) {
-              contactMap.set(email, { id: pc.id, phone: pc.phone });
-              break;
-            }
-          }
-          // Even if no deal, use phone contact if we had none
-          if (!contactMap.get(email) && phoneContacts.length > 0) {
-            contactMap.set(email, { id: phoneContacts[0].id, phone: phoneContacts[0].phone });
-          }
-        }
-
-        // Re-fetch deals/R1/R2 for new contact IDs
+        // Re-fetch deals/R1/R2 for all phone-matched contacts not queried yet
         const newContactIds = Array.from(new Set(
-          Array.from(contactMap.values()).map(c => c.id)
+          Array.from(suffixToContacts.values()).flat().map(c => c.id)
         )).filter(id => !contactIds.includes(id));
 
         if (newContactIds.length > 0) {
@@ -440,46 +521,23 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
               .eq('meeting_slots.meeting_type', 'r2'),
           ]);
 
-          for (const d of newDeals.data || []) {
-            if (d.contact_id) {
-              const sdrName = (d as any).owner?.name || null;
-              const dataSource = (d as any).data_source || null;
-              const tags: string[] = ((d as any).tags || []).map((t: any) => typeof t === 'string' ? t : t?.name || '');
-              const originName = (d as any).origin?.name || null;
-              const leadChannel = (d as any).custom_fields?.lead_channel || null;
-              if (dealMap.has(d.contact_id)) {
-                const existing = dealMap.get(d.contact_id)!;
-                existing.tags = [...new Set([...existing.tags, ...tags])];
-                if (!existing.sdrName && sdrName) existing.sdrName = sdrName;
-                if (!existing.originName && originName) existing.originName = originName;
-                if (!existing.leadChannel && leadChannel) existing.leadChannel = leadChannel;
-              } else {
-                dealMap.set(d.contact_id, { id: d.id, sdrName, dataSource, tags, originName, leadChannel });
-              }
-            }
-          }
-          for (const a of newR1.data || []) {
-            const cid = (a as any).contact_id;
-            const slot = a.meeting_slot as any;
-            if (!cid || !slot?.scheduled_at) continue;
-            if (!r1Map.has(cid) || slot.scheduled_at < r1Map.get(cid)!.date) {
-              const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
-              r1Map.set(cid, { date: slot.scheduled_at, realized, closerName: slot.closer?.name || null });
-            }
-          }
-          for (const a of newR2.data || []) {
-            const cid = (a as any).contact_id;
-            const slot = a.meeting_slot as any;
-            if (!cid || !slot?.scheduled_at) continue;
-            if (!r2Map.has(cid) || slot.scheduled_at > r2Map.get(cid)!.date) {
-              const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
-              r2Map.set(cid, {
-                id: a.id, date: slot.scheduled_at, realized,
-                closerName: slot.closer?.name || null,
-                statusId: (a as any).r2_status_id || null,
-                slotStatus: slot.status || '',
-              });
-            }
+          mergeDealsIntoMap(newDeals.data, dealMap);
+          mergeR1IntoMap(newR1.data, r1Map);
+          mergeR2IntoMap(newR2.data, r2Map);
+        }
+
+        // Choose the best contact candidate using deals/R1/R2 evidence from phone matches
+        for (const tx of uniqueContracts) {
+          const email = (tx.customer_email || '').toLowerCase().trim();
+          const suffix = normalizePhoneSuffix(tx.customer_phone);
+          if (!suffix) continue;
+
+          const currentContact = contactMap.get(email);
+          const phoneContacts = suffixToContacts.get(suffix) || [];
+          const bestContact = pickBestPhoneMatchedContact(currentContact, phoneContacts, dealMap, r1Map, r2Map);
+
+          if (bestContact) {
+            contactMap.set(email, bestContact);
           }
         }
       }
@@ -504,7 +562,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
         // R2: try linked first, then by contact
         let r2 = tx.linked_attendee_id ? linkedR2Map.get(tx.linked_attendee_id) : null;
-        let r2Data: typeof r2Map extends Map<string, infer V> ? V : never | null = null;
+         let r2Data: R2Lookup | null = null;
         if (r2) {
           const slot = r2.meeting_slot as any;
           r2Data = {
