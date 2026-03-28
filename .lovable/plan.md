@@ -1,57 +1,60 @@
 
-Objetivo: verificar se o problema é só no front. Pela leitura do código, não é.
 
-O que confirmei
-- A tela `src/components/relatorios/CarrinhoAnalysisReportPanel.tsx`:
-  - usa `data.leads` do hook
-  - filtra por `l.canalEntrada`
-  - renderiza o badge diretamente com `l.canalEntrada`
-  - já tem estilos para `ANAMNESE`, `OUTSIDE`, `LANÇAMENTO`, `LIVE` e `A010`
-- Ou seja: o front não “esconde” esses canais. Se eles não aparecem, o valor já está chegando errado do hook.
+## Fix: Canal classification fails because duplicate contacts are ignored
 
-Onde está o problema real
-- Em `src/hooks/useCarrinhoAnalysisReport.ts`, o campo `canalEntrada` é calculado no backend do hook.
-- Hoje a prioridade final está assim:
-  1. `sale_origin === 'launch'` ou produto “contrato mcf” -> `LANÇAMENTO`
-  2. `classifyChannel(...)` usando tags/origin/channel do deal
-  3. raw tag / origin / leadChannel
-  4. `isOutside` -> `OUTSIDE`
-  5. `a010Date` -> `A010`
-  6. fallback final -> `LIVE`
-- Portanto, se quase tudo virou `LIVE` ou `A010`, o defeito está em uma destas entradas:
-  - `deal.tags`, `originName`, `leadChannel` não estão sendo resolvidos para o contato certo
-  - `isOutside` está falso quando deveria ser true
-  - `sale_origin` não está vindo como esperado
-  - ou o fallback final está cobrindo casos demais
+### Root cause (confirmed by tooltip audit)
 
-Diagnóstico específico do front
-- Não encontrei bug de renderização no badge de Canal.
-- Não encontrei filtro removendo ANAMNESE/OUTSIDE/LANÇAMENTO.
-- Não encontrei mapeamento visual convertendo esses canais para `LIVE`/`A010`.
+The tooltip shows `HasDeal: false, HasContact: true, Tags: []` for Jader (ANAMNESE). This means:
 
-Plano de correção
-1. Auditar no hook a composição de `canalEntrada` para cada lead problemático:
-   - `deal?.tags`
-   - `deal?.originName`
-   - `deal?.leadChannel`
-   - `sale_origin`
-   - `isOutside`
-   - `a010Date`
-2. Remover o fallback excessivo para `LIVE` enquanto houver sinais incompletos, para não mascarar erro de classificação.
-3. Tornar o retorno mais auditável no hook, incluindo campos brutos temporários por lead, por exemplo:
-   - `rawTags`
-   - `rawOriginName`
-   - `rawLeadChannel`
-   - `classificationReason`
-4. Na UI, exibir temporariamente uma coluna/tooltip de auditoria para confirmar por que cada lead caiu em `LIVE`, `A010`, `OUTSIDE`, `LANÇAMENTO` ou `ANAMNESE`.
-5. Depois de validar os casos reais, manter a lógica final e remover os campos temporários se quiser.
+1. **Line 384**: `contactMap.set(email, ...)` — keeps only the **last** contact per email. If Jader has 2 contacts with the same email, one with deals (ANAMNESE tags) and one without, the wrong one may be kept.
+2. **Line 437**: `contactIds` is built from `contactMap` values — only one contact_id per email.
+3. **Line 442-460**: Deals, R1, R2 are queried only for those contact_ids — the contact with the actual ANAMNESE deal is never queried.
 
-Conclusão
-- Não parece ser “só front”.
-- O front está mostrando exatamente o que recebe.
-- A correção principal deve continuar em `src/hooks/useCarrinhoAnalysisReport.ts`.
-- Se quiser, a próxima etapa certa é fazer uma versão auditável do hook para enxergar, lead por lead, por que Wilmar, Thalita, Patricia, Elaine, Otávio e Ariel estão sendo classificados errado.
+This affects ALL leads with duplicate contacts: ANAMNESE, OUTSIDE, LIVE — any lead where the "wrong" contact was kept.
 
-Arquivos a revisar na implementação
+### Fix
+
+**`src/hooks/useCarrinhoAnalysisReport.ts`**:
+
+1. **Collect ALL contact IDs from the email query**, not just one per email:
+```typescript
+// Keep contactMap as-is (one per email for later lookup)
+// But build contactIds from ALL contacts returned
+const allContactIds = Array.from(new Set(
+  (contactsResult.data || []).map(c => c.id)
+));
+```
+
+2. **Use `allContactIds` for deals/R1/R2 queries** (lines 442-460) instead of `contactIds`.
+
+3. **After deals are loaded, pick the best contact per email** — the one with the most data (deals, R1, R2):
+```typescript
+// For each email with multiple contacts, pick the one with deals
+for (const c of contactsResult.data || []) {
+  const email = (c.email || '').toLowerCase().trim();
+  if (!email) continue;
+  const current = contactMap.get(email);
+  if (!current) {
+    contactMap.set(email, { id: c.id, phone: c.phone });
+  } else if (!dealMap.has(current.id) && dealMap.has(c.id)) {
+    // Swap to the contact that actually has deals
+    contactMap.set(email, { id: c.id, phone: c.phone });
+  } else if (dealMap.has(current.id) && dealMap.has(c.id)) {
+    // Both have deals — merge tags
+    mergeDealsIntoMap(/* already done */);
+  }
+}
+```
+
+4. **Merge deal tags across ALL contacts for the same email** so that even if we pick one contact, the ANAMNESE tag from another contact's deal is preserved.
+
+### Changes summary
+
+- Store all contact IDs for querying, not just one per email
+- After loading deals/R1/R2, re-evaluate which contact per email is best
+- Merge tags from all duplicate contacts' deals into the chosen contact's deal entry
+- This fixes ANAMNESE, OUTSIDE, and any classification that depends on deal data
+
+### File changed
 - `src/hooks/useCarrinhoAnalysisReport.ts`
-- opcionalmente `src/components/relatorios/CarrinhoAnalysisReportPanel.tsx` apenas para expor colunas de auditoria temporária
+
