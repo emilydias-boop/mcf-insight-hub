@@ -521,7 +521,6 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
             if (!bestDeal.originName && otherDeal.originName) bestDeal.originName = otherDeal.originName;
             if (!bestDeal.leadChannel && otherDeal.leadChannel) bestDeal.leadChannel = otherDeal.leadChannel;
             if (!bestDeal.dataSource && otherDeal.dataSource) bestDeal.dataSource = otherDeal.dataSource;
-            if (!bestDeal.dataSource && otherDeal.dataSource) bestDeal.dataSource = otherDeal.dataSource;
           } else {
             dealMap.set(bestContact.id, { ...otherDeal });
           }
