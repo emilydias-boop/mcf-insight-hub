@@ -69,6 +69,17 @@ export function R2CarrinhoTransactionFormDialog({
   editMode = false,
   transactionToEdit,
 }: R2CarrinhoTransactionFormDialogProps) {
+  const { data: allProductConfigs = [] } = useProductConfigurations();
+  
+  // Produtos de parceria dinâmicos (categorias: incorporador, parceria, ob_vitalicio)
+  const parceriaProducts = useMemo(() => {
+    const validCategories = ['incorporador', 'parceria', 'ob_vitalicio'];
+    return allProductConfigs
+      .filter(p => p.is_active && validCategories.includes(p.product_category))
+      .map(p => ({ name: p.product_name, price: p.reference_price }))
+      .sort((a, b) => b.price - a.price);
+  }, [allProductConfigs]);
+
   const { data: allApprovedAttendees = [], isLoading: isLoadingAttendees } = useAllApprovedAttendees();
   const createTransaction = useCreateCarrinhoTransaction();
   const updateTransaction = useUpdateCarrinhoTransaction();
@@ -140,7 +151,7 @@ export function R2CarrinhoTransactionFormDialog({
   // Quando selecionar produto, preencher preço
   const handleProductChange = (productName: string) => {
     setSelectedProduct(productName);
-    const product = PARCERIA_PRODUCTS.find(p => p.name === productName);
+    const product = parceriaProducts.find(p => p.name === productName);
     if (product) {
       setProductPrice(product.price);
       // Estimar líquido como ~67% do bruto (aproximação)
@@ -321,7 +332,7 @@ export function R2CarrinhoTransactionFormDialog({
                 <SelectValue placeholder="Selecione o produto" />
               </SelectTrigger>
               <SelectContent>
-                {PARCERIA_PRODUCTS.map((product) => (
+                {parceriaProducts.map((product) => (
                   <SelectItem key={product.name} value={product.name}>
                     <div className="flex justify-between items-center gap-4">
                       <span>{product.name}</span>
