@@ -1,30 +1,17 @@
 
 
-## Adicionar Bruto e Líquido da Parceria ao relatório de Análise de Carrinho
+## Simplificar coluna Parceria e adicionar coluna separada para Valor Bruto
 
-### O que muda
-
-Atualmente a coluna "Parceria" mostra apenas "Sim dd/MM" ou "—". O usuário quer ver também o valor bruto e líquido da parceria de cada lead.
-
-### Correção
-
-**`src/hooks/useCarrinhoAnalysisReport.ts`**:
-
-1. **Expandir select da query de parcerias** (linha 420): adicionar `product_price, net_value`
-2. **Expandir parceriaMap** para armazenar `grossValue` e `netValue` junto com `date` e `product`
-3. **Adicionar campos na interface `CarrinhoAnalysisLead`** (após linha 111):
-   - `parceriaBruto: number | null`
-   - `parceriaLiquido: number | null`
-4. **Preencher os novos campos** na construção do lead (linha ~863):
-   - `parceriaBruto: parceria?.grossValue || null`
-   - `parceriaLiquido: parceria?.netValue || null`
+### Mudanças
 
 **`src/components/relatorios/CarrinhoAnalysisReportPanel.tsx`**:
 
-1. **Substituir coluna "Parceria"** por exibição com valores: mostrar "Sim dd/MM" + bruto/líquido abaixo em fonte menor
-2. **Atualizar export Excel** para incluir colunas "Parceria Bruto" e "Parceria Líquido"
+1. **Coluna "Parceria"** (linha ~531-542): remover os valores B/L que aparecem abaixo do badge. Manter apenas o badge "Sim dd/MM" ou "—".
 
-### Arquivos alterados
-- `src/hooks/useCarrinhoAnalysisReport.ts`
+2. **Nova coluna "Vlr. Parceria"** após "Parceria" (linha ~484): adicionar `<TableHead>` e `<TableCell>` que exibe `l.parceriaBruto` formatado como currency (R$), ou "—" se null.
+
+3. **Excel export** (linhas 118-120): remover "Parceria Líquido", renomear "Parceria Bruto" para "Valor Parceria".
+
+### Arquivo alterado
 - `src/components/relatorios/CarrinhoAnalysisReportPanel.tsx`
 
