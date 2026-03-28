@@ -307,45 +307,43 @@ async function autoMarkSaleComplete(supabase: any, data: {
         }
       });
     
-    // 7. Create notification for the closer
-    const closerId = matchedAttendee.meeting_slot?.closer?.id;
-    const closerName = matchedAttendee.meeting_slot?.closer?.name;
+    // 7. Create notification for the closer (only if matched via R2)
+    const closerName = matchedAttendee?.meeting_slot?.closer?.name || null;
     
-    if (closerId) {
-      const closerEmail = matchedAttendee.meeting_slot?.closer?.email;
-      if (closerEmail) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', closerEmail)
-          .maybeSingle();
-        
-        if (profile) {
-          await supabase
-            .from('user_notifications')
-            .insert({
-              user_id: profile.id,
-              type: 'sale_completed',
-              title: '🎉 Venda de Parceria Realizada!',
-              message: `${data.productName} - ${matchedAttendee.attendee_name || data.customerEmail}`,
-              data: {
-                deal_id: deal.id,
-                product_name: data.productName,
-                net_value: data.netValue,
-                customer_email: data.customerEmail
-              },
-              read: false
-            });
-        }
+    if (matchedAttendee?.meeting_slot?.closer?.email) {
+      const closerEmail = matchedAttendee.meeting_slot.closer.email;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', closerEmail)
+        .maybeSingle();
+      
+      if (profile) {
+        await supabase
+          .from('user_notifications')
+          .insert({
+            user_id: profile.id,
+            type: 'sale_completed',
+            title: '🎉 Venda de Parceria Realizada!',
+            message: `${data.productName} - ${matchedAttendee.attendee_name || data.customerEmail}`,
+            data: {
+              deal_id: deal.id,
+              product_name: data.productName,
+              net_value: data.netValue,
+              customer_email: data.customerEmail
+            },
+            read: false
+          });
       }
     }
     
-    console.log(`🎉 ${logPrefix} Deal ${deal.id} movido para "${vendaStage.stage_name}"! Closer: ${closerName || 'N/A'}`);
+    const method = usedFallback ? 'fallback direto' : 'R2 aprovado';
+    console.log(`🎉 ${logPrefix} Deal ${deal.id} movido para "${vendaStage.stage_name}"! Via: ${method}, Closer: ${closerName || 'N/A'}`);
     
     return { 
       success: true, 
       dealId: deal.id, 
-      message: `Deal moved to ${vendaStage.stage_name}` 
+      message: `Deal moved to ${vendaStage.stage_name} (via ${method})` 
     };
   } catch (error) {
     console.error(`❌ ${logPrefix} Erro inesperado:`, error);
