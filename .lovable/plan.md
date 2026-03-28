@@ -1,45 +1,59 @@
 
 
-## Adicionar coluna "Canal de Entrada" no Relatório de Análise de Carrinho
+## Melhorar coluna "Canal" — distinguir ANAMNESE / ANAMNESE-INSTA / HUBLA (A010)
 
-### O que será feito
+### Problema atual
 
-Adicionar uma coluna **"Canal"** na tabela detalhada que mostra como o lead chegou — se foi por A010, Anamnese, Live, ClientData, etc. A informação vem do `crm_deals.custom_fields->>'lead_channel'` e `crm_deals.data_source`.
+A coluna "Canal" mostra `lead_channel` bruto (ex: `ANAMNESE-INSTA-MCF`, `CLIENTDATA-INSIDE`) ou `data_source` (`webhook`, `csv`). Isso não é claro o suficiente — o usuário quer saber de forma simples:
+- **ANAMNESE** — lead entrou pelo webhook de anamnese
+- **ANAMNESE-INSTA** — lead entrou pelo webhook de anamnese Instagram
+- **HUBLA / A010** — lead entrou pela compra direta do A010 na Hubla
+- **LIVE** — lead veio de live
+- **CLIENTDATA** — base de clientes
+- **LEAD-FORM** — formulário de captação
 
-### Dados disponíveis
+### Solução
 
-Na tabela `crm_deals`:
-- `custom_fields->>'lead_channel'`: ANAMNESE-INSTA-MCF, CLIENTDATA-INSIDE, LIVE, LEAD-FORM-50K, etc.
-- `data_source`: webhook, csv, bubble, replication
-- `tags`: array com tags como "A010 - Construa para Vend", "ANAMNESE", "base clint", etc.
-
-A prioridade será: `lead_channel` (mais preciso) → fallback para `data_source`.
-
-### Alterações
-
-**`src/hooks/useCarrinhoAnalysisReport.ts`**:
-1. Na interface `LeadCarrinhoCompleto`, adicionar `canalEntrada: string | null`
-2. Na query de deals (linha 210), adicionar `custom_fields, data_source` ao select
-3. No `dealMap`, guardar `leadChannel` e `dataSource` extraídos do deal
-4. No loop de montagem dos leads (linha 470+), popular `canalEntrada` com `deal.leadChannel || deal.dataSource || null`
-
-**`src/components/relatorios/CarrinhoAnalysisReportPanel.tsx`**:
-1. Adicionar coluna "Canal" na tabela, entre "SDR" e "Class."
-2. Renderizar com badge colorida (ex: ANAMNESE = roxo, A010 = verde, LIVE = azul, CLIENTDATA = cinza)
-3. Adicionar filtro dropdown "Canal: Todos" na barra de filtros
-
-### Detalhes técnicos
+**`src/hooks/useCarrinhoAnalysisReport.ts`** — Criar função `classifyChannel` que normaliza o canal:
 
 ```typescript
-// No dealMap, guardar canal
-dealMap.set(d.contact_id, {
-  id: d.id,
-  sdrName: (d as any).owner?.name || null,
-  leadChannel: (d as any).custom_fields?.lead_channel || null,
-  dataSource: d.data_source || null,
-});
-
-// No lead
-canalEntrada: deal?.leadChannel || deal?.dataSource || null
+function classifyChannel(leadChannel: string | null, dataSource: string | null, tags: string[]): string | null {
+  const lc = (leadChannel || '').toUpperCase();
+  
+  if (lc.includes('ANAMNESE-INSTA')) return 'ANAMNESE-INSTA';
+  if (lc.includes('ANAMNESE')) return 'ANAMNESE';
+  if (lc.includes('LIVE')) return 'LIVE';
+  if (lc.includes('LEAD-FORM') || lc.includes('LEADFORM')) return 'LEAD-FORM';
+  if (lc.includes('CLIENTDATA')) return 'CLIENTDATA';
+  if (lc) return lc; // outro lead_channel específico
+  
+  // Fallback: sem lead_channel, checar data_source
+  if (dataSource === 'webhook') return 'WEBHOOK';
+  if (dataSource === 'csv') return 'CSV';
+  
+  // Fallback: checar tags
+  if (tags.some(t => t.toUpperCase().includes('ANAMNESE'))) return 'ANAMNESE';
+  
+  // Se tem compra A010 na Hubla mas sem deal/webhook → veio direto pela Hubla
+  return null;
+}
 ```
+
+- Adicionar `tags` ao select de `crm_deals` (linha 212)
+- Guardar `tags` no `dealMap`
+- Na montagem do lead: `canalEntrada: classifyChannel(deal?.leadChannel, deal?.dataSource, deal?.tags || [])`
+- Se `canalEntrada` ficar null mas o lead tem `dataA010` (compra Hubla), marcar como `'HUBLA (A010)'`
+
+**`src/components/relatorios/CarrinhoAnalysisReportPanel.tsx`** — Atualizar as cores dos badges:
+- ANAMNESE → roxo
+- ANAMNESE-INSTA → rosa/pink
+- HUBLA (A010) → verde
+- LIVE → azul
+- CLIENTDATA → cinza
+- LEAD-FORM → amarelo
+- WEBHOOK/CSV → slate
+
+### Arquivos alterados
+- `src/hooks/useCarrinhoAnalysisReport.ts`
+- `src/components/relatorios/CarrinhoAnalysisReportPanel.tsx`
 
