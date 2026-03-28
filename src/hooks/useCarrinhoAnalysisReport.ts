@@ -495,11 +495,11 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         if (contacts.length <= 1) continue;
         const current = contactMap.get(email);
         let bestContact = current || contacts[0];
-        let bestScore = scoreContact(bestContact.id, dealMap, r1Map, r2Map);
+        let bestScore = getContactScore(bestContact.id, dealMap, r1Map, r2Map);
 
         for (const candidate of contacts) {
           if (candidate.id === bestContact.id) continue;
-          const score = scoreContact(candidate.id, dealMap, r1Map, r2Map);
+          const score = getContactScore(candidate.id, dealMap, r1Map, r2Map);
           if (score > bestScore) {
             bestContact = candidate;
             bestScore = score;
@@ -520,7 +520,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
             if (!bestDeal.sdrName && otherDeal.sdrName) bestDeal.sdrName = otherDeal.sdrName;
             if (!bestDeal.originName && otherDeal.originName) bestDeal.originName = otherDeal.originName;
             if (!bestDeal.leadChannel && otherDeal.leadChannel) bestDeal.leadChannel = otherDeal.leadChannel;
-            if (!bestDeal.saleOrigin && otherDeal.saleOrigin) bestDeal.saleOrigin = otherDeal.saleOrigin;
+            if (!bestDeal.dataSource && otherDeal.dataSource) bestDeal.dataSource = otherDeal.dataSource;
             if (!bestDeal.dataSource && otherDeal.dataSource) bestDeal.dataSource = otherDeal.dataSource;
           } else {
             dealMap.set(bestContact.id, { ...otherDeal });
