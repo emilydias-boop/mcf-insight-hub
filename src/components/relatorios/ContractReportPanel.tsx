@@ -30,7 +30,9 @@ interface UnifiedContractRow {
   source: 'agenda' | 'hubla' | 'pending';
   closerName: string;
   closerEmail: string;
-  date: string;
+  dealCreatedAt: string;
+  meetingDate: string;
+  contractPaidAt: string;
   leadName: string;
   leadPhone: string;
   leadEmail: string;
@@ -165,7 +167,9 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
           source: 'agenda',
           closerName: row.closerName,
           closerEmail: row.closerEmail,
-          date: row.contractPaidAt || row.meetingDate,
+          dealCreatedAt: row.dealCreatedAt || '',
+          meetingDate: row.meetingDate || '',
+          contractPaidAt: row.contractPaidAt || '',
           leadName: row.leadName,
           leadPhone: row.leadPhone,
           leadEmail: row.contactEmail || '',
@@ -189,7 +193,9 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
           source: 'hubla',
           closerName: '—',
           closerEmail: '',
-          date: tx.saleDate,
+          dealCreatedAt: '',
+          meetingDate: '',
+          contractPaidAt: tx.saleDate,
           leadName: tx.customerName,
           leadPhone: tx.customerPhone || '',
           leadEmail: tx.customerEmail || '',
@@ -210,7 +216,9 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
           source: 'pending',
           closerName: 'Sem atribuição',
           closerEmail: '',
-          date: tx.saleDate,
+          dealCreatedAt: '',
+          meetingDate: '',
+          contractPaidAt: tx.saleDate,
           leadName: tx.customerName,
           leadPhone: tx.customerPhone || '',
           leadEmail: tx.customerEmail || '',
@@ -232,7 +240,9 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
           source: 'pending',
           closerName: 'Sem atribuição',
           closerEmail: '',
-          date: tx.saleDate,
+          dealCreatedAt: '',
+          meetingDate: '',
+          contractPaidAt: tx.saleDate,
           leadName: tx.customerName,
           leadPhone: tx.customerPhone || '',
           leadEmail: tx.customerEmail || '',
