@@ -23,6 +23,7 @@ export interface ContractReportRow {
   originName: string;
   currentStage: string;
   contractPaidAt: string;
+  dealCreatedAt: string;
   salesChannel: 'a010' | 'bio' | 'live';
   contactEmail: string | null;
   contactId: string | null;
@@ -120,6 +121,7 @@ export const useContractReport = (
             origin_id,
             stage_id,
             contact_id,
+            created_at,
             crm_origins (
               id,
               name,
@@ -317,6 +319,7 @@ export const useContractReport = (
           originName: origin?.display_name || origin?.name || 'N/A',
           currentStage: stage?.stage_name || 'N/A',
           contractPaidAt: row.contract_paid_at || slot?.scheduled_at || '',
+          dealCreatedAt: deal?.created_at || '',
           salesChannel,
           contactEmail,
           contactId: deal?.contact_id || null,
@@ -342,6 +345,7 @@ export const useContractReport = (
         originName: 'Compra Direta',
         currentStage: 'N/A',
         contractPaidAt: h.sale_date || '',
+        dealCreatedAt: '',
         salesChannel: detectSalesChannel(h.customer_email, []),
         contactEmail: h.customer_email || null,
         contactId: null,
