@@ -54,6 +54,20 @@ function classifyChannel(opts: {
   return '';
 }
 
+// Extract the best raw tag from a deal's tags for fallback display
+function getBestRawTag(tags: string[]): string | null {
+  const NOISE = new Set(['CSV', 'REPLICATION', 'BASE CLINT', 'CLIENTDATA-INSIDE', 'CLIENTDATA', 'WEBHOOK']);
+  for (const raw of tags) {
+    const t = typeof raw === 'string' ? raw.trim() : '';
+    if (!t) continue;
+    const upper = t.toUpperCase();
+    if (NOISE.has(upper)) continue;
+    // Return the first non-noise tag
+    return upper;
+  }
+  return null;
+}
+
 export interface LeadCarrinhoCompleto {
   nome: string;
   telefone: string;
