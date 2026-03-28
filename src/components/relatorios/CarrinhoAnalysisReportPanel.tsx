@@ -84,7 +84,7 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
   const uniqueEstados = useMemo(() => data ? [...new Set(data.leads.map(l => l.estado))].sort() : [], [data]);
   const uniqueStatusR2 = useMemo(() => data ? [...new Set(data.leads.map(l => l.statusR2).filter(Boolean) as string[])].sort() : [], [data]);
   const uniqueMotivos = useMemo(() => data ? [...new Set(data.leads.map(l => l.motivoGap).filter(Boolean) as string[])].sort() : [], [data]);
-  const uniqueCanais = useMemo(() => data ? [...new Set(data.leads.map(l => l.canalEntrada).filter(Boolean) as string[])].sort() : [], [data]);
+  const uniqueCanais = ['A010', 'LIVE', 'ANAMNESE', 'ANAMNESE-INSTA', 'OUTSIDE', 'LANÇAMENTO'];
 
   const periodLabel = useMemo(() => {
     if (!startDate || !endDate) return 'Selecione um período';
