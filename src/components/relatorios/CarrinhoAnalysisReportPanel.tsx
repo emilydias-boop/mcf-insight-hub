@@ -132,7 +132,7 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
   }, [data]);
 
   // Map state data for BrazilMap
-  const mapStateData = useMemo(() => {
+  const mapStateData = useMemo((): BrazilMapStateData[] => {
     if (!data) return [];
     return data.analysisByState.map(s => ({
       uf: s.uf,
