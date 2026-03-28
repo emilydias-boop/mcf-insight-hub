@@ -189,6 +189,7 @@ type DealLookup = {
   tags: string[];
   originName: string | null;
   leadChannel: string | null;
+  isIncorporador: boolean;
 };
 
 type R1Lookup = {
@@ -224,7 +225,7 @@ function classifyGap(
   return { motivo: 'Outro motivo', tipo: 'operacional' };
 }
 
-function mergeDealsIntoMap(rows: any[] | null | undefined, dealMap: Map<string, DealLookup>) {
+function mergeDealsIntoMap(rows: any[] | null | undefined, dealMap: Map<string, DealLookup>, incorporadorOriginIds?: Set<string>) {
   for (const d of rows || []) {
     if (!d.contact_id) continue;
 
@@ -233,14 +234,27 @@ function mergeDealsIntoMap(rows: any[] | null | undefined, dealMap: Map<string, 
     const tags: string[] = ((d as any).tags || []).map((t: any) => typeof t === 'string' ? t : t?.name || '');
     const originName = (d as any).origin?.name || null;
     const leadChannel = (d as any).custom_fields?.lead_channel || null;
+    const isIncorporador = !!(d.origin_id && incorporadorOriginIds?.has(d.origin_id));
 
     if (dealMap.has(d.contact_id)) {
       const existing = dealMap.get(d.contact_id)!;
+      // Always merge tags from all deals
       existing.tags = [...new Set([...existing.tags, ...tags])];
-      if (!existing.sdrName && sdrName) existing.sdrName = sdrName;
-      if (!existing.dataSource && dataSource) existing.dataSource = dataSource;
-      if (!existing.originName && originName) existing.originName = originName;
-      if (!existing.leadChannel && leadChannel) existing.leadChannel = leadChannel;
+
+      // Prioritize incorporador deal for SDR/origin/channel
+      if (!existing.isIncorporador && isIncorporador) {
+        existing.id = d.id;
+        existing.sdrName = sdrName;
+        existing.dataSource = dataSource;
+        existing.originName = originName;
+        existing.leadChannel = leadChannel;
+        existing.isIncorporador = true;
+      } else {
+        if (!existing.sdrName && sdrName) existing.sdrName = sdrName;
+        if (!existing.dataSource && dataSource) existing.dataSource = dataSource;
+        if (!existing.originName && originName) existing.originName = originName;
+        if (!existing.leadChannel && leadChannel) existing.leadChannel = leadChannel;
+      }
       continue;
     }
 
@@ -251,6 +265,7 @@ function mergeDealsIntoMap(rows: any[] | null | undefined, dealMap: Map<string, 
       tags,
       originName,
       leadChannel,
+      isIncorporador,
     });
   }
 }
@@ -324,6 +339,22 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
       const startStr = format(startDate, 'yyyy-MM-dd');
       const endStr = format(endDate, 'yyyy-MM-dd');
+
+      // Fetch incorporador origin IDs for SDR prioritization
+      const [buOriginMappings, buGroupMappings] = await Promise.all([
+        supabase.from('bu_origin_mapping').select('entity_id').eq('bu', 'incorporador').eq('entity_type', 'origin'),
+        supabase.from('bu_origin_mapping').select('entity_id').eq('bu', 'incorporador').eq('entity_type', 'group'),
+      ]);
+      const incorporadorOriginIds = new Set((buOriginMappings.data || []).map(o => o.entity_id));
+      // Expand group mappings: fetch origins belonging to incorporador groups
+      const groupIds = (buGroupMappings.data || []).map(g => g.entity_id);
+      if (groupIds.length > 0) {
+        const { data: groupOrigins } = await supabase
+          .from('crm_origins')
+          .select('id')
+          .in('group_id', groupIds);
+        for (const o of groupOrigins || []) incorporadorOriginIds.add(o.id);
+      }
 
       // 1. Anchor: Contratos pagos na semana
       const { data: transactions } = await supabase
@@ -461,7 +492,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const [dealsResult, r1Result, r2Result] = await Promise.all([
         contactIds.length > 0
           ? supabase.from('crm_deals')
-              .select('id, contact_id, owner_profile_id, custom_fields, data_source, tags, origin:crm_origins(name), owner:profiles!crm_deals_owner_profile_id_fkey(full_name)')
+              .select('id, contact_id, origin_id, owner_profile_id, custom_fields, data_source, tags, origin:crm_origins(name), owner:profiles!crm_deals_owner_profile_id_fkey(full_name)')
               .in('contact_id', contactIds)
           : Promise.resolve({ data: [] }),
         contactIds.length > 0
@@ -492,7 +523,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
       // Build deal map: contact_id → deal (merge tags from ALL deals)
       const dealMap = new Map<string, DealLookup>();
-      mergeDealsIntoMap(dealsResult.data, dealMap);
+      mergeDealsIntoMap(dealsResult.data, dealMap, incorporadorOriginIds);
 
 
       // Build R1 map: contact_id → best R1
@@ -590,7 +621,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         if (newContactIds.length > 0) {
           const [newDeals, newR1, newR2] = await Promise.all([
             supabase.from('crm_deals')
-              .select('id, contact_id, owner_profile_id, custom_fields, data_source, tags, origin:crm_origins(name), owner:profiles!crm_deals_owner_profile_id_fkey(full_name)')
+              .select('id, contact_id, origin_id, owner_profile_id, custom_fields, data_source, tags, origin:crm_origins(name), owner:profiles!crm_deals_owner_profile_id_fkey(full_name)')
               .in('contact_id', newContactIds),
             supabase.from('meeting_slot_attendees')
               .select('contact_id, status, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, closer:closers(name))')
@@ -602,7 +633,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
               .eq('meeting_slots.meeting_type', 'r2'),
           ]);
 
-          mergeDealsIntoMap(newDeals.data, dealMap);
+          mergeDealsIntoMap(newDeals.data, dealMap, incorporadorOriginIds);
           mergeR1IntoMap(newR1.data, r1Map);
           mergeR2IntoMap(newR2.data, r2Map);
         }
