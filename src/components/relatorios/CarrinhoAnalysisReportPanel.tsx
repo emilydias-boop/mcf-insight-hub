@@ -502,9 +502,10 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                               l.canalEntrada === 'ANAMNESE-INSTA' ? 'border-pink-500 text-pink-700' :
                               l.canalEntrada === 'ANAMNESE' ? 'border-purple-500 text-purple-700' :
                               l.canalEntrada === 'BIO-INSTAGRAM' ? 'border-pink-400 text-pink-600' :
-                              l.canalEntrada === 'HUBLA (A010)' || l.canalEntrada === 'HUBLA' ? 'border-green-500 text-green-700' :
-                              l.canalEntrada === 'A010' || l.canalEntrada === 'A010 (MAKE)' ? 'border-amber-500 text-amber-700' :
+                              l.canalEntrada === 'A010' || l.canalEntrada === 'A010 (MAKE)' || l.canalEntrada === 'HUBLA (A010)' || l.canalEntrada === 'HUBLA' ? 'border-amber-500 text-amber-700' :
                               l.canalEntrada === 'LIVE' ? 'border-blue-500 text-blue-700' :
+                              l.canalEntrada === 'LANÇAMENTO' ? 'border-violet-500 text-violet-700' :
+                              l.canalEntrada === 'OUTSIDE' ? 'border-red-500 text-red-700' :
                               l.canalEntrada === 'LEAD-FORM' ? 'border-yellow-500 text-yellow-700' :
                               l.canalEntrada === 'BASE CLINT' ? 'border-slate-500 text-slate-700' :
                               l.canalEntrada === 'CLIENTDATA' ? 'border-slate-400 text-slate-600' :
