@@ -1,34 +1,43 @@
 
 
-## Fix: Fronteiras da semana do carrinho devem usar meia-noite de sábado
+## Melhorar tabela e export de Contratos
 
-### Problema
+### Mudanças
 
-A função `getCarrinhoWeekBoundaries` usa o `horario_corte` (12:00) para definir quando a semana começa e termina. Isso faz vendas de sexta após 12:00 caírem na semana seguinte. 
+O hook `useContractReport` já retorna `meetingDate` (data da R1), `contractPaidAt`, `sdrName`, `salesChannel`, `contactEmail`, `leadPhone`, `currentStage`, `isRefunded`. Falta buscar `created_at` do deal (data de entrada no sistema).
 
-O correto segundo a regra de negócio:
-- Vendas de sexta (mesmo após 12:00) pertencem à semana **atual**
-- A semana só muda à **meia-noite de sábado** (00:00)
-- O `horario_corte` define apenas quando acontece a reunião do carrinho, **não** a fronteira da semana
+### 1. `src/hooks/useContractReport.ts`
 
-### Correção
+- Adicionar `created_at` no select de `crm_deals` (linha ~115-138)
+- Adicionar `dealCreatedAt: string` na interface `ContractReportRow`
+- Mapear `dealCreatedAt: deal?.created_at || ''` na transformação
 
-**`src/lib/carrinhoWeekBoundaries.ts`**:
+### 2. `src/components/relatorios/ContractReportPanel.tsx`
 
-Alterar a lógica para usar o início do sábado (weekStart) como `effectiveStart` e o início do próximo sábado como `effectiveEnd`:
+**Interface `UnifiedContractRow`** — adicionar campos:
+- `meetingDate: string` (data da R1)
+- `contractPaidAt: string` (data do contrato)  
+- `dealCreatedAt: string` (data de entrada no sistema)
+- `contactEmail: string` (email, já existe como `leadEmail`)
 
-```typescript
-// effectiveStart = weekStart (sábado) à 00:00
-const effectiveStart = new Date(weekStart);
-effectiveStart.setHours(0, 0, 0, 0);
+**Tabela** — reorganizar colunas para:
+1. Fonte (badge)
+2. Data Entrada (created_at do deal, formatado dd/MM/yyyy)
+3. SDR
+4. Data R1 (meetingDate, formatado dd/MM/yyyy)
+5. Lead (nome)
+6. Telefone
+7. Email
+8. Canal (badge A010/BIO/LIVE)
+9. Estágio (badge)
+10. Contrato (contractPaidAt formatado dd/MM/yyyy, ou "—")
+11. Valor (netValue formatado R$)
+12. Reembolso (badge Sim/Não)
+13. Closer
 
-// effectiveEnd = próximo sábado à 00:00 (weekEnd + 1 dia)
-const effectiveEnd = addDays(new Date(weekEnd), 1);
-effectiveEnd.setHours(0, 0, 0, 0);
-```
+**Excel export** — atualizar para incluir as mesmas colunas na mesma ordem, com nomes claros em português.
 
-Atualizar imports (`addDays` em vez de `subDays`) e o JSDoc.
-
-### Arquivo alterado
-- `src/lib/carrinhoWeekBoundaries.ts`
+### Arquivos alterados
+- `src/hooks/useContractReport.ts` (adicionar `created_at` no select + interface)
+- `src/components/relatorios/ContractReportPanel.tsx` (tabela + export)
 
