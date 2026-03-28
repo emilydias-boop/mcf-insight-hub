@@ -4,8 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, isToday, addDays, addMonths, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+type DateFilter = 'hoje' | 'semana' | 'mes' | 'todas';
 import {
   Phone, MessageCircle, Mail, Video, CheckCircle2,
   ChevronDown, AlertTriangle, Bell, Loader2
