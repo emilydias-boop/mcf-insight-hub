@@ -49,7 +49,7 @@ function classifyChannel(opts: {
 
   // 4. Fallback
   if (dataSource === 'csv') return 'CSV';
-  if (hasA010) return 'HUBLA (A010)';
+  if (hasA010) return 'A010';
   if (dataSource === 'webhook') return 'WEBHOOK';
   return '';
 }
@@ -643,6 +643,10 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           reembolso: hasRefund,
           isOutside,
           canalEntrada: (() => {
+            // Lançamento: produto "contrato mcf"
+            const prodLower = (tx.product_name || '').toLowerCase();
+            if (prodLower.includes('contrato mcf')) return 'LANÇAMENTO';
+
             const dealTags = deal?.tags || [];
             const classified = classifyChannel({
               tags: dealTags,
@@ -659,11 +663,15 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
             if (deal?.originName) return deal.originName.toUpperCase();
             // Fallback: lead channel
             if (deal?.leadChannel) return deal.leadChannel.toUpperCase();
-            // Fallback: data source
-            if (deal?.dataSource && deal.dataSource !== 'csv' && deal.dataSource !== 'webhook') return deal.dataSource.toUpperCase();
-            // Fallback: A010
-            if (a010Date) return 'HUBLA (A010)';
-            return null;
+
+            // Outside = comprou antes da R1
+            if (isOutside) return 'OUTSIDE';
+
+            // A010
+            if (a010Date) return 'A010';
+
+            // Default: LIVE (lead pagou contrato sem outra classificação)
+            return 'LIVE';
           })(),
           motivoGap,
           tipoGap,
