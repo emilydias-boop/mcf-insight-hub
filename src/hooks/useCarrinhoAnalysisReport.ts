@@ -458,7 +458,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
             installment_number: p.installment_number,
             gross_override: p.gross_override,
           }, true);
-          parceriaMap.set(e, { date: p.sale_date || '', product: p.product_name || '', grossValue, netValue: (p as any).net_value ?? null });
+          parceriaMap.set(e, { date: p.sale_date || '', product: p.product_name || '', grossValue, netValue: p.net_value ?? null });
         }
       }
 
