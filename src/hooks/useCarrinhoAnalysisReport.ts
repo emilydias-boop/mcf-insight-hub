@@ -54,6 +54,20 @@ function classifyChannel(opts: {
   return '';
 }
 
+// Extract the best raw tag from a deal's tags for fallback display
+function getBestRawTag(tags: string[]): string | null {
+  const NOISE = new Set(['CSV', 'REPLICATION', 'BASE CLINT', 'CLIENTDATA-INSIDE', 'CLIENTDATA', 'WEBHOOK']);
+  for (const raw of tags) {
+    const t = typeof raw === 'string' ? raw.trim() : '';
+    if (!t) continue;
+    const upper = t.toUpperCase();
+    if (NOISE.has(upper)) continue;
+    // Return the first non-noise tag
+    return upper;
+  }
+  return null;
+}
+
 export interface LeadCarrinhoCompleto {
   nome: string;
   telefone: string;
@@ -570,13 +584,29 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           dataParceria: parceria?.date || null,
           reembolso: hasRefund,
           isOutside,
-          canalEntrada: classifyChannel({
-            tags: deal?.tags || [],
-            originName: deal?.originName || null,
-            leadChannel: deal?.leadChannel || null,
-            dataSource: deal?.dataSource || null,
-            hasA010: !!a010Date,
-          }) || null,
+          canalEntrada: (() => {
+            const dealTags = deal?.tags || [];
+            const classified = classifyChannel({
+              tags: dealTags,
+              originName: deal?.originName || null,
+              leadChannel: deal?.leadChannel || null,
+              dataSource: deal?.dataSource || null,
+              hasA010: !!a010Date,
+            });
+            if (classified) return classified;
+            // Fallback: best raw tag
+            const rawTag = getBestRawTag(dealTags);
+            if (rawTag) return rawTag;
+            // Fallback: origin name
+            if (deal?.originName) return deal.originName.toUpperCase();
+            // Fallback: lead channel
+            if (deal?.leadChannel) return deal.leadChannel.toUpperCase();
+            // Fallback: data source
+            if (deal?.dataSource && deal.dataSource !== 'csv' && deal.dataSource !== 'webhook') return deal.dataSource.toUpperCase();
+            // Fallback: A010
+            if (a010Date) return 'HUBLA (A010)';
+            return null;
+          })(),
           motivoGap,
           tipoGap,
           observacao: null,
