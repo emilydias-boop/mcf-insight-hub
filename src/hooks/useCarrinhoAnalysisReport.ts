@@ -420,7 +420,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           .eq('sale_status', 'refunded'),
         // Parcerias
         supabase.from('hubla_transactions')
-          .select('id, customer_email, sale_date, product_name, product_price, net_value, gross_override, installment_number, reference_price')
+          .select('id, customer_email, sale_date, product_name, product_price, net_value, gross_override, installment_number')
           .eq('product_category', 'parceria')
           .in('sale_status', ['completed', 'paid'])
           .in('customer_email', emails),
