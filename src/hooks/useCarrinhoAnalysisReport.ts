@@ -3,6 +3,30 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { getUFFromPhone, getClusterFromUF } from '@/lib/dddToUF';
 
+function classifyChannel(leadChannel: string | null, dataSource: string | null, tags: string[], hasA010: boolean): string {
+  const lc = (leadChannel || '').toUpperCase();
+  
+  if (lc.includes('ANAMNESE-INSTA')) return 'ANAMNESE-INSTA';
+  if (lc.includes('ANAMNESE')) return 'ANAMNESE';
+  if (lc.includes('LIVE')) return 'LIVE';
+  if (lc.includes('LEAD-FORM') || lc.includes('LEADFORM')) return 'LEAD-FORM';
+  if (lc.includes('CLIENTDATA')) return 'CLIENTDATA';
+  if (lc) return lc;
+  
+  // Fallback: check tags
+  if (tags.some(t => t.toUpperCase().includes('ANAMNESE-INSTA'))) return 'ANAMNESE-INSTA';
+  if (tags.some(t => t.toUpperCase().includes('ANAMNESE'))) return 'ANAMNESE';
+  
+  // Fallback: data_source
+  if (dataSource === 'webhook') return 'WEBHOOK';
+  if (dataSource === 'csv') return 'CSV';
+  
+  // No CRM info but has Hubla A010 purchase
+  if (hasA010) return 'HUBLA (A010)';
+  
+  return '';
+}
+
 export interface LeadCarrinhoCompleto {
   nome: string;
   telefone: string;
@@ -209,7 +233,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const [dealsResult, r1Result, r2Result] = await Promise.all([
         contactIds.length > 0
           ? supabase.from('crm_deals')
-              .select('id, contact_id, owner_profile_id, custom_fields, data_source, owner:profiles!crm_deals_owner_profile_id_fkey(name)')
+              .select('id, contact_id, owner_profile_id, custom_fields, data_source, tags, owner:profiles!crm_deals_owner_profile_id_fkey(name)')
               .in('contact_id', contactIds)
           : Promise.resolve({ data: [] }),
         contactIds.length > 0
@@ -239,14 +263,15 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       }
 
       // Build deal map: contact_id → deal
-      const dealMap = new Map<string, { id: string; sdrName: string | null; leadChannel: string | null; dataSource: string | null }>();
+      const dealMap = new Map<string, { id: string; sdrName: string | null; leadChannel: string | null; dataSource: string | null; tags: string[] }>();
       for (const d of dealsResult.data || []) {
         if (d.contact_id) {
           const sdrName = (d as any).owner?.name || null;
           const cf = (d as any).custom_fields;
           const leadChannel = cf?.lead_channel || null;
           const dataSource = (d as any).data_source || null;
-          dealMap.set(d.contact_id, { id: d.id, sdrName, leadChannel, dataSource });
+          const tags = (d as any).tags || [];
+          dealMap.set(d.contact_id, { id: d.id, sdrName, leadChannel, dataSource, tags });
         }
       }
 
@@ -352,7 +377,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         if (newContactIds.length > 0) {
           const [newDeals, newR1, newR2] = await Promise.all([
             supabase.from('crm_deals')
-              .select('id, contact_id, owner_profile_id, owner:profiles!crm_deals_owner_profile_id_fkey(name)')
+              .select('id, contact_id, owner_profile_id, custom_fields, data_source, tags, owner:profiles!crm_deals_owner_profile_id_fkey(name)')
               .in('contact_id', newContactIds),
             supabase.from('meeting_slot_attendees')
               .select('contact_id, status, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, closer:closers(name))')
@@ -366,7 +391,8 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
           for (const d of newDeals.data || []) {
             if (d.contact_id && !dealMap.has(d.contact_id)) {
-              dealMap.set(d.contact_id, { id: d.id, sdrName: (d as any).owner?.name || null, leadChannel: (d as any).custom_fields?.lead_channel || null, dataSource: (d as any).data_source || null });
+              const cf = (d as any).custom_fields;
+              dealMap.set(d.contact_id, { id: d.id, sdrName: (d as any).owner?.name || null, leadChannel: cf?.lead_channel || null, dataSource: (d as any).data_source || null, tags: (d as any).tags || [] });
             }
           }
           for (const a of newR1.data || []) {
@@ -495,7 +521,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           dataParceria: parceria?.date || null,
           reembolso: hasRefund,
           isOutside,
-          canalEntrada: deal?.leadChannel || deal?.dataSource || null,
+          canalEntrada: classifyChannel(deal?.leadChannel || null, deal?.dataSource || null, deal?.tags || [], !!a010Date) || null,
           motivoGap,
           tipoGap,
           observacao: null,

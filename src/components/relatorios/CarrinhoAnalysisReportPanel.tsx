@@ -502,10 +502,12 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                         <TableCell>
                           {l.canalEntrada ? (
                             <Badge variant="outline" className={cn('text-[10px] whitespace-nowrap',
-                              l.canalEntrada.includes('ANAMNESE') ? 'border-purple-500 text-purple-700' :
-                              l.canalEntrada.includes('LIVE') ? 'border-blue-500 text-blue-700' :
-                              l.canalEntrada.includes('LEAD-FORM') || l.canalEntrada.includes('A010') ? 'border-green-500 text-green-700' :
-                              l.canalEntrada.includes('CLIENTDATA') ? 'border-slate-400 text-slate-600' :
+                              l.canalEntrada === 'ANAMNESE-INSTA' ? 'border-pink-500 text-pink-700' :
+                              l.canalEntrada === 'ANAMNESE' ? 'border-purple-500 text-purple-700' :
+                              l.canalEntrada === 'HUBLA (A010)' ? 'border-green-500 text-green-700' :
+                              l.canalEntrada === 'LIVE' ? 'border-blue-500 text-blue-700' :
+                              l.canalEntrada === 'LEAD-FORM' ? 'border-yellow-500 text-yellow-700' :
+                              l.canalEntrada === 'CLIENTDATA' ? 'border-slate-400 text-slate-600' :
                               'border-muted-foreground text-muted-foreground'
                             )}>{l.canalEntrada}</Badge>
                           ) : <span className="text-muted-foreground text-xs">—</span>}
