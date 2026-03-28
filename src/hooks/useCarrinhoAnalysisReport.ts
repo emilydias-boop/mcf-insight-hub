@@ -740,7 +740,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           const existing = r1Map.get(contact.id);
           if (!existing || slot.scheduled_at < existing.date) {
             const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
-            r1Map.set(contact.id, { date: slot.scheduled_at, realized, closerName: slot.closer?.name || null });
+            r1Map.set(contact.id, { date: slot.scheduled_at, realized, closerName: slot.closer?.name || null, bookedByName: null, bookedById: (a as any).booked_by || null });
           }
         }
       }
