@@ -1,23 +1,29 @@
 
 
-## Tornar o alerta sonoro mais agressivo e alto
+## Overlay global de ações atrasadas + botão "Ignorar 2min"
 
 ### Problema
-O beep atual usa ganho de 0.3 com onda quadrada a 800Hz — volume baixo e tom pouco chamativo.
+O `OverdueAlertOverlay` só aparece em MinhasReunioes. Se o SDR navega para Negócios ou outra tela, o alerta desaparece.
 
 ### Solução
 
-Alterar `src/hooks/useOverdueAlertSound.ts`:
+#### 1. Mover overlay para `MainLayout.tsx`
+- Importar e renderizar `<OverdueAlertOverlay />` dentro do `MainLayout`, ao lado do `<TwilioSoftphone />` — assim aparece em **todas as páginas**
+- Remover o `<OverdueAlertOverlay />` de `MinhasReunioes.tsx`
+- O overlay só deve renderizar para usuários com role SDR (verificar com `useAuth`)
 
-1. **Aumentar volume**: ganho de `0.3` → `0.8`
-2. **Usar dois tons alternados** (sirene): 800Hz e 1200Hz alternando nos 3 beeps — padrão de alarme mais irritante
-3. **Aumentar duração**: `BEEP_DURATION` de 0.15s → 0.3s
-4. **Aumentar repetições**: `BEEP_COUNT` de 3 → 5
-5. **Adicionar distorção**: usar `WaveShaperNode` para criar um som mais áspero e impossível de ignorar
-6. **Tom tipo sirene**: frequência sobe de 600Hz para 1200Hz durante cada beep (`linearRampToValueAtTime`)
+#### 2. Adicionar botão "Ignorar 2min" no overlay
+- Atualizar `OverdueAlertOverlay.tsx` com estado `isDismissed` + `setTimeout` de 2 minutos
+- Ao clicar no X/botão "Ignorar", o overlay some por 2 minutos e depois reaparece
+- O click no corpo do overlay continua navegando para `/sdr/minhas-reunioes` (ou scroll se já estiver na página)
+- Layout: botão X pequeno no canto superior direito do overlay
 
-O resultado será um som tipo alarme/sirene que sobe e desce, bem mais alto e irritante que o beep atual.
+#### 3. Também mover o som para o MainLayout
+- O som está no `PendingActionsPanel` (só roda em MinhasReunioes). Mover o `useOverdueAlertSound` para o overlay global para que toque em qualquer página
+- Respeitar o mesmo `isDismissed` de 2min para silenciar o som
 
-### Arquivo alterado
-- `src/hooks/useOverdueAlertSound.ts`
+### Arquivos alterados
+- `src/components/sdr/OverdueAlertOverlay.tsx` — adicionar dismiss 2min + som + check de role SDR
+- `src/components/layout/MainLayout.tsx` — renderizar `<OverdueAlertOverlay />`
+- `src/pages/sdr/MinhasReunioes.tsx` — remover `<OverdueAlertOverlay />`
 
