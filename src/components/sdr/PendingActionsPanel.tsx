@@ -135,16 +135,42 @@ export const PendingActionsPanel = () => {
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <CardContent className="pt-0 px-4 pb-3 space-y-2 max-h-72 overflow-y-auto">
-            {actions.map((action) => (
-              <ActionItem
-                key={action.dealId}
-                action={action}
-                onQuickAction={handleQuickAction}
-                onComplete={(id) => completeAction.mutate(id)}
-                isCompleting={completeAction.isPending}
-              />
-            ))}
+          <CardContent className="pt-0 px-4 pb-3 space-y-2">
+            {/* Filtros de período */}
+            <div className="flex gap-1">
+              {([
+                ['hoje', 'Hoje'],
+                ['semana', 'Semana'],
+                ['mes', 'Mês'],
+                ['todas', 'Todas'],
+              ] as [DateFilter, string][]).map(([key, label]) => (
+                <Button
+                  key={key}
+                  variant={dateFilter === key ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-6 text-xs flex-1"
+                  onClick={() => setDateFilter(key)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+
+            <div className="max-h-72 overflow-y-auto space-y-2">
+              {filteredActions.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Nenhuma ação neste período</p>
+              ) : (
+                filteredActions.map((action) => (
+                  <ActionItem
+                    key={action.dealId}
+                    action={action}
+                    onQuickAction={handleQuickAction}
+                    onComplete={(id) => completeAction.mutate(id)}
+                    isCompleting={completeAction.isPending}
+                  />
+                ))
+              )}
+            </div>
           </CardContent>
         </CollapsibleContent>
       </Card>
