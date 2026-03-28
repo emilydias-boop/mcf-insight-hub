@@ -196,6 +196,8 @@ type R1Lookup = {
   date: string;
   realized: boolean;
   closerName: string | null;
+  bookedByName: string | null;
+  bookedById: string | null;
 };
 
 type R2Lookup = {
@@ -279,7 +281,13 @@ function mergeR1IntoMap(rows: any[] | null | undefined, r1Map: Map<string, R1Loo
     const existing = r1Map.get(cid);
     if (!existing || slot.scheduled_at < existing.date) {
       const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
-      r1Map.set(cid, { date: slot.scheduled_at, realized, closerName: slot.closer?.name || null });
+      r1Map.set(cid, {
+        date: slot.scheduled_at,
+        realized,
+        closerName: slot.closer?.name || null,
+        bookedByName: null,
+        bookedById: (a as any).booked_by || null,
+      });
     }
   }
 }
@@ -497,7 +505,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           : Promise.resolve({ data: [] }),
         contactIds.length > 0
           ? supabase.from('meeting_slot_attendees')
-              .select('contact_id, status, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, closer:closers(name))')
+              .select('contact_id, status, booked_by, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, closer:closers(name))')
               .in('contact_id', contactIds)
               .eq('meeting_slots.meeting_type', 'r1')
           : Promise.resolve({ data: [] }),
@@ -529,6 +537,27 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       // Build R1 map: contact_id → best R1
       const r1Map = new Map<string, R1Lookup>();
       mergeR1IntoMap(r1Result.data, r1Map);
+
+      // Resolve booked_by names for R1
+      const bookedByIds = new Set<string>();
+      for (const r1 of r1Map.values()) {
+        if (r1.bookedById) bookedByIds.add(r1.bookedById);
+      }
+      if (bookedByIds.size > 0) {
+        const { data: bookerProfiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', Array.from(bookedByIds));
+        const bookerNameMap = new Map<string, string>();
+        for (const p of bookerProfiles || []) {
+          if (p.full_name) bookerNameMap.set(p.id, p.full_name);
+        }
+        for (const r1 of r1Map.values()) {
+          if (r1.bookedById && bookerNameMap.has(r1.bookedById)) {
+            r1.bookedByName = bookerNameMap.get(r1.bookedById)!;
+          }
+        }
+      }
 
       // Build R2 map: contact_id → best R2
       const r2Map = new Map<string, R2Lookup>();
@@ -711,7 +740,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           const existing = r1Map.get(contact.id);
           if (!existing || slot.scheduled_at < existing.date) {
             const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
-            r1Map.set(contact.id, { date: slot.scheduled_at, realized, closerName: slot.closer?.name || null });
+            r1Map.set(contact.id, { date: slot.scheduled_at, realized, closerName: slot.closer?.name || null, bookedByName: null, bookedById: (a as any).booked_by || null });
           }
         }
       }
@@ -802,7 +831,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           cluster,
           dataA010: a010Date,
           classificado: !!deal,
-          sdrName: deal?.sdrName || null,
+          sdrName: r1Fresh?.bookedByName || deal?.sdrName || null,
           r1Agendada: !!r1Fresh,
           dataR1: r1Fresh?.date || null,
           r1Realizada: r1Fresh?.realized || false,
