@@ -38,14 +38,7 @@ import { cn } from '@/lib/utils';
 import { useAllApprovedAttendees, ApprovedAttendeeWithWeek } from '@/hooks/useAllApprovedAttendees';
 import { useCreateCarrinhoTransaction } from '@/hooks/useCreateCarrinhoTransaction';
 import { useUpdateCarrinhoTransaction } from '@/hooks/useUpdateCarrinhoTransaction';
-
-// Produtos de parceria disponíveis
-const PARCERIA_PRODUCTS = [
-  { name: 'A009 - MCF INCORPORADOR COMPLETO + THE CLUB', price: 19500 },
-  { name: 'A001 - MCF INCORPORADOR COMPLETO', price: 14500 },
-  { name: 'A003 - INCORPORADOR ESSENCIAL', price: 7500 },
-  { name: 'A004 - INCORPORADOR START', price: 5500 },
-];
+import { useProductConfigurations } from '@/hooks/useProductConfigurations';
 
 // Transaction data for edit mode
 export interface TransactionToEdit {
