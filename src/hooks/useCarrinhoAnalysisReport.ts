@@ -33,6 +33,7 @@ export interface LeadCarrinhoCompleto {
   dataParceria: string | null;
   reembolso: boolean;
   isOutside: boolean;
+  canalEntrada: string | null;
   // Gap
   motivoGap: string | null;
   tipoGap: 'operacional' | 'legitima' | null;
@@ -208,7 +209,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const [dealsResult, r1Result, r2Result] = await Promise.all([
         contactIds.length > 0
           ? supabase.from('crm_deals')
-              .select('id, contact_id, owner_profile_id, owner:profiles!crm_deals_owner_profile_id_fkey(name)')
+              .select('id, contact_id, owner_profile_id, custom_fields, data_source, owner:profiles!crm_deals_owner_profile_id_fkey(name)')
               .in('contact_id', contactIds)
           : Promise.resolve({ data: [] }),
         contactIds.length > 0
@@ -238,11 +239,14 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       }
 
       // Build deal map: contact_id → deal
-      const dealMap = new Map<string, { id: string; sdrName: string | null }>();
+      const dealMap = new Map<string, { id: string; sdrName: string | null; leadChannel: string | null; dataSource: string | null }>();
       for (const d of dealsResult.data || []) {
         if (d.contact_id) {
           const sdrName = (d as any).owner?.name || null;
-          dealMap.set(d.contact_id, { id: d.id, sdrName });
+          const cf = (d as any).custom_fields;
+          const leadChannel = cf?.lead_channel || null;
+          const dataSource = (d as any).data_source || null;
+          dealMap.set(d.contact_id, { id: d.id, sdrName, leadChannel, dataSource });
         }
       }
 
@@ -491,6 +495,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           dataParceria: parceria?.date || null,
           reembolso: hasRefund,
           isOutside,
+          canalEntrada: deal?.leadChannel || deal?.dataSource || null,
           motivoGap,
           tipoGap,
           observacao: null,

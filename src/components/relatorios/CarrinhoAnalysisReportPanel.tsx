@@ -43,6 +43,7 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
   const [filterMotivoGap, setFilterMotivoGap] = useState('all');
   const [filterR2Agendada, setFilterR2Agendada] = useState('all');
   const [filterParceria, setFilterParceria] = useState('all');
+  const [filterCanal, setFilterCanal] = useState('all');
 
   const { startDate, endDate } = useMemo(() => {
     if (periodType === 'semana') {
@@ -72,9 +73,10 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
       if (filterR2Agendada === 'nao' && l.r2Agendada) return false;
       if (filterParceria === 'sim' && !l.comprouParceria) return false;
       if (filterParceria === 'nao' && l.comprouParceria) return false;
+      if (filterCanal !== 'all' && (l.canalEntrada || '') !== filterCanal) return false;
       return true;
     });
-  }, [data, filterCloserR1, filterCloserR2, filterEstado, filterCluster, filterStatusR2, filterMotivoGap, filterR2Agendada, filterParceria]);
+  }, [data, filterCloserR1, filterCloserR2, filterEstado, filterCluster, filterStatusR2, filterMotivoGap, filterR2Agendada, filterParceria, filterCanal]);
 
   // Unique values for filters
   const uniqueClosersR1 = useMemo(() => data ? [...new Set(data.leads.map(l => l.closerR1).filter(Boolean) as string[])].sort() : [], [data]);
@@ -82,6 +84,7 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
   const uniqueEstados = useMemo(() => data ? [...new Set(data.leads.map(l => l.estado))].sort() : [], [data]);
   const uniqueStatusR2 = useMemo(() => data ? [...new Set(data.leads.map(l => l.statusR2).filter(Boolean) as string[])].sort() : [], [data]);
   const uniqueMotivos = useMemo(() => data ? [...new Set(data.leads.map(l => l.motivoGap).filter(Boolean) as string[])].sort() : [], [data]);
+  const uniqueCanais = useMemo(() => data ? [...new Set(data.leads.map(l => l.canalEntrada).filter(Boolean) as string[])].sort() : [], [data]);
 
   const periodLabel = useMemo(() => {
     if (!startDate || !endDate) return 'Selecione um período';
@@ -100,6 +103,7 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
       Estado: l.estado,
       Cluster: l.cluster,
       'Data A010': l.dataA010 ? format(new Date(l.dataA010), 'dd/MM/yyyy') : '—',
+      Canal: l.canalEntrada || '—',
       SDR: l.sdrName || '—',
       'Classificado': l.classificado ? 'Sim' : 'Não',
       'Data R1': l.dataR1 ? format(new Date(l.dataR1), 'dd/MM/yyyy HH:mm') : '—',
@@ -437,6 +441,13 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                     <SelectItem value="nao">Sem Parceria</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={filterCanal} onValueChange={setFilterCanal}>
+                  <SelectTrigger className="w-[160px]"><SelectValue placeholder="Canal" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Canal: Todos</SelectItem>
+                    {uniqueCanais.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Summary badges */}
@@ -458,6 +469,7 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                       <TableHead>UF</TableHead>
                       <TableHead>Cluster</TableHead>
                       <TableHead>A010</TableHead>
+                      <TableHead>Canal</TableHead>
                       <TableHead>SDR</TableHead>
                       <TableHead>Class.</TableHead>
                       <TableHead>R1</TableHead>
@@ -487,6 +499,17 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                           )}>{l.cluster}</Badge>
                         </TableCell>
                         <TableCell className="text-xs">{l.dataA010 ? format(new Date(l.dataA010), 'dd/MM/yy') : '—'}</TableCell>
+                        <TableCell>
+                          {l.canalEntrada ? (
+                            <Badge variant="outline" className={cn('text-[10px] whitespace-nowrap',
+                              l.canalEntrada.includes('ANAMNESE') ? 'border-purple-500 text-purple-700' :
+                              l.canalEntrada.includes('LIVE') ? 'border-blue-500 text-blue-700' :
+                              l.canalEntrada.includes('LEAD-FORM') || l.canalEntrada.includes('A010') ? 'border-green-500 text-green-700' :
+                              l.canalEntrada.includes('CLIENTDATA') ? 'border-slate-400 text-slate-600' :
+                              'border-muted-foreground text-muted-foreground'
+                            )}>{l.canalEntrada}</Badge>
+                          ) : <span className="text-muted-foreground text-xs">—</span>}
+                        </TableCell>
                         <TableCell className="text-xs max-w-[80px] truncate">{l.sdrName || '—'}</TableCell>
                         <TableCell>{l.classificado ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> : <XCircle className="h-3.5 w-3.5 text-red-400" />}</TableCell>
                         <TableCell className="text-xs">{l.dataR1 ? format(new Date(l.dataR1), 'dd/MM/yy') : '—'}</TableCell>
