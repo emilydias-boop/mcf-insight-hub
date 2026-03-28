@@ -37,12 +37,22 @@ export const PendingActionsPanel = () => {
   const completeAction = useCompleteNextAction();
   const { makeCall, deviceStatus, initializeDevice } = useTwilio();
   const [isOpen, setIsOpen] = useState(true);
+  const [dateFilter, setDateFilter] = useState<DateFilter>('hoje');
+
+  const filteredActions = actions.filter(action => {
+    if (action.isOverdue) return true;
+    if (dateFilter === 'todas') return true;
+    const actionDate = new Date(action.actionDate);
+    const now = new Date();
+    if (dateFilter === 'hoje') return isToday(actionDate);
+    if (dateFilter === 'semana') return isBefore(actionDate, addDays(now, 7));
+    if (dateFilter === 'mes') return isBefore(actionDate, addMonths(now, 1));
+    return true;
+  });
 
   const overdueCount = actions.filter(a => a.isOverdue).length;
   const todayCount = actions.filter(a => a.isToday).length;
   const totalCount = actions.length;
-
-  
 
   if (isLoading || totalCount === 0) return null;
 
