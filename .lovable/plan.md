@@ -1,40 +1,38 @@
 
 
-## Normalizar Canal para apenas os 6 valores válidos
+## Fix: SDR mostra dono de qualquer pipeline em vez de filtrar por Incorporador
 
-### Problema
-O `classifyChannel` retorna muitos valores intermediários (BASE CLINT, HUBLA, BIO-INSTAGRAM, DUPLICADO-LIMBO, CSV, WEBHOOK, LEAD-FORM, A010 (MAKE), etc.) que não deveriam aparecer no relatório. O usuário quer apenas: **A010, LIVE, ANAMNESE, ANAMNESE-INSTA, OUTSIDE, LANÇAMENTO**.
+### Causa raiz
+
+A query de deals (linhas 463-465 e 592-594) busca **todos** os deals do contato sem filtrar por pipeline/origin. A função `mergeDealsIntoMap` usa o `owner.full_name` do **primeiro deal encontrado**, que pode ser de Consórcio, Crédito, etc. Resultado: o SDR exibido é "qualquer primeiro dono" e não o dono do deal na pipeline Incorporador.
 
 ### Correção
 
-**`src/hooks/useCarrinhoAnalysisReport.ts`** — Adicionar uma função de normalização e aplicá-la ao resultado do `canalEntrada`:
+**`src/hooks/useCarrinhoAnalysisReport.ts`**:
 
+1. **Buscar origin IDs do Incorporador** no início da queryFn, via `bu_origin_mapping`:
 ```typescript
-const VALID_CHANNELS = new Set(['A010', 'LIVE', 'ANAMNESE', 'ANAMNESE-INSTA', 'OUTSIDE', 'LANÇAMENTO']);
-
-function normalizeChannel(raw: string): string {
-  if (VALID_CHANNELS.has(raw)) return raw;
-  // Map known variants to valid channels
-  const upper = raw.toUpperCase();
-  if (upper.includes('ANAMNESE-INSTA') || upper.includes('ANAMNESE INSTA')) return 'ANAMNESE-INSTA';
-  if (upper.includes('ANAMNESE')) return 'ANAMNESE';
-  if (upper.includes('A010')) return 'A010';  // covers "A010 (MAKE)", "HUBLA (A010)", etc.
-  if (upper.includes('LANÇAMENTO') || upper.includes('LANCAMENTO')) return 'LANÇAMENTO';
-  // Everything else (BASE CLINT, HUBLA, BIO-INSTAGRAM, DUPLICADO-LIMBO, CSV, WEBHOOK, LEAD-FORM, etc.) → LIVE
-  return 'LIVE';
-}
+const { data: buOrigins } = await supabase
+  .from('bu_origin_mapping')
+  .select('entity_id')
+  .eq('bu', 'incorporador')
+  .eq('entity_type', 'origin');
+const incorporadorOriginIds = new Set((buOrigins || []).map(o => o.entity_id));
 ```
 
-Aplicar no IIFE do `canalEntrada` (linha ~810), envolvendo o resultado:
+2. **Adicionar `origin_id` ao select** das queries de deals (linhas 464 e 593):
 ```typescript
-canalEntrada: normalizeChannel((() => {
-  // ... lógica existente ...
-})()),
+.select('id, contact_id, origin_id, owner_profile_id, ...')
 ```
 
-Também atualizar o filtro de Canal no painel (`CarrinhoAnalysisReportPanel.tsx`) para listar apenas esses 6 valores.
+3. **Modificar `mergeDealsIntoMap`** para receber o set de origin IDs do Incorporador e **priorizar deals da pipeline Incorporador**:
+   - Adicionar campo `isIncorporador: boolean` ao `DealLookup`
+   - Na merge: se o deal existente NÃO é incorporador mas o novo É, substituir (não apenas mesclar tags)
+   - Se ambos são incorporador, mesclar tags normalmente
+   - Se nenhum é incorporador, manter comportamento atual
+
+4. **Resultado**: O SDR exibido será o dono do deal na pipeline Incorporador. Tags continuam sendo mescladas de todas as pipelines.
 
 ### Arquivos alterados
-- `src/hooks/useCarrinhoAnalysisReport.ts` (adicionar `normalizeChannel`, aplicar no IIFE)
-- `src/components/relatorios/CarrinhoAnalysisReportPanel.tsx` (filtro de Canal com valores fixos)
+- `src/hooks/useCarrinhoAnalysisReport.ts`
 
