@@ -8,11 +8,12 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Phone, MessageCircle, Mail, Video, CheckCircle2,
-  ChevronDown, AlertTriangle, Bell, Loader2
+  ChevronDown, AlertTriangle, Bell, Loader2, Volume2, VolumeX
 } from 'lucide-react';
 import { usePendingNextActions, useCompleteNextAction, PendingAction } from '@/hooks/usePendingNextActions';
 import { useTwilio } from '@/contexts/TwilioContext';
-import { extractPhoneFromDeal, normalizePhoneNumber } from '@/lib/phoneUtils';
+import { normalizePhoneNumber } from '@/lib/phoneUtils';
+import { useOverdueAlertSound } from '@/hooks/useOverdueAlertSound';
 import { toast } from 'sonner';
 
 const ACTION_ICONS: Record<string, React.ReactNode> = {
@@ -38,6 +39,8 @@ export const PendingActionsPanel = () => {
   const overdueCount = actions.filter(a => a.isOverdue).length;
   const todayCount = actions.filter(a => a.isToday).length;
   const totalCount = actions.length;
+
+  const { isMuted, muteFor5Min } = useOverdueAlertSound(overdueCount);
 
   if (isLoading || totalCount === 0) return null;
 
@@ -69,28 +72,37 @@ export const PendingActionsPanel = () => {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card className={cn(
-        "border-2 transition-colors",
-        overdueCount > 0
-          ? "border-destructive/60 bg-destructive/5"
-          : todayCount > 0
-            ? "border-yellow-500/60 bg-yellow-500/5"
-            : "border-primary/40 bg-primary/5"
-      )}>
+      <Card
+        id="pending-actions-panel"
+        className={cn(
+          "transition-colors",
+          overdueCount > 0
+            ? "border-4 border-destructive bg-destructive/10 shadow-lg shadow-destructive/20"
+            : todayCount > 0
+              ? "border-2 border-yellow-500/60 bg-yellow-500/5"
+              : "border-2 border-primary/40 bg-primary/5"
+        )}
+      >
         <CollapsibleTrigger asChild>
-          <CardHeader className="py-3 px-4 cursor-pointer hover:bg-accent/50 transition-colors">
+          <CardHeader className={cn(
+            "py-3 px-4 cursor-pointer transition-colors",
+            overdueCount > 0 ? "hover:bg-destructive/15 animate-pulse" : "hover:bg-accent/50"
+          )}>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <CardTitle className={cn(
+                "text-sm font-semibold flex items-center gap-2",
+                overdueCount > 0 && "animate-bounce"
+              )}>
                 <Bell className={cn(
-                  "h-4 w-4",
+                  "h-5 w-5",
                   overdueCount > 0 ? "text-destructive animate-pulse" : "text-primary"
                 )} />
                 Próximas Ações
                 <Badge variant="secondary" className="text-xs">{totalCount}</Badge>
                 {overdueCount > 0 && (
-                  <Badge variant="destructive" className="text-xs animate-pulse gap-1">
+                  <Badge variant="destructive" className="text-xs animate-pulse gap-1 font-bold">
                     <AlertTriangle className="h-3 w-3" />
-                    {overdueCount} atrasada{overdueCount > 1 ? 's' : ''}
+                    🚨 {overdueCount} ATRASADA{overdueCount > 1 ? 'S' : ''}!
                   </Badge>
                 )}
                 {todayCount > 0 && (
@@ -99,10 +111,27 @@ export const PendingActionsPanel = () => {
                   </Badge>
                 )}
               </CardTitle>
-              <ChevronDown className={cn(
-                "h-4 w-4 text-muted-foreground transition-transform",
-                isOpen && "rotate-180"
-              )} />
+              <div className="flex items-center gap-2">
+                {overdueCount > 0 && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    onClick={(e) => { e.stopPropagation(); muteFor5Min(); }}
+                    title={isMuted ? 'Som silenciado (5min)' : 'Silenciar alerta por 5 min'}
+                  >
+                    {isMuted ? (
+                      <VolumeX className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Volume2 className="h-4 w-4 text-destructive animate-pulse" />
+                    )}
+                  </Button>
+                )}
+                <ChevronDown className={cn(
+                  "h-4 w-4 text-muted-foreground transition-transform",
+                  isOpen && "rotate-180"
+                )} />
+              </div>
             </div>
           </CardHeader>
         </CollapsibleTrigger>
@@ -144,7 +173,6 @@ const ActionItem = ({ action, onQuickAction, onComplete, isCompleting }: ActionI
           ? "border-yellow-500/50 bg-yellow-500/10"
           : "border-border bg-background"
     )}>
-      {/* Icon */}
       <div className={cn(
         "flex items-center justify-center h-8 w-8 rounded-full shrink-0",
         action.isOverdue
@@ -156,15 +184,14 @@ const ActionItem = ({ action, onQuickAction, onComplete, isCompleting }: ActionI
         {ACTION_ICONS[action.actionType] || <Phone className="h-4 w-4" />}
       </div>
 
-      {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium truncate">
             {action.contactName || action.dealName}
           </span>
           {action.isOverdue && (
-            <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-              Atrasada
+            <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-bold">
+              ⚠️ Atrasada
             </Badge>
           )}
         </div>
@@ -181,7 +208,6 @@ const ActionItem = ({ action, onQuickAction, onComplete, isCompleting }: ActionI
         </div>
       </div>
 
-      {/* Actions */}
       <div className="flex items-center gap-1 shrink-0">
         <Button
           size="icon"
