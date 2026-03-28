@@ -3,7 +3,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { getUFFromPhone, getClusterFromUF } from '@/lib/dddToUF';
 
-function classifyChannel(tags: string[], dataSource: string | null, hasA010: boolean): string {
+function classifyChannel(opts: {
+  tags: string[];
+  originName: string | null;
+  leadChannel: string | null;
+  dataSource: string | null;
+  hasA010: boolean;
+}): string {
+  const { tags, originName, leadChannel, dataSource, hasA010 } = opts;
   const allTags = tags.map(t => {
     if (typeof t === 'string') {
       if (t.startsWith('{')) {
@@ -14,7 +21,11 @@ function classifyChannel(tags: string[], dataSource: string | null, hasA010: boo
     return (t as any)?.name?.toUpperCase() || '';
   });
 
-  // Tags são a fonte primária (lead_channel é unreliable)
+  // Also check originName and leadChannel as additional signals
+  const originUpper = (originName || '').toUpperCase();
+  const channelUpper = (leadChannel || '').toUpperCase();
+
+  // 1. Tags are primary source
   if (allTags.some(t => t.includes('ANAMNESE-INSTA') || t.includes('ANAMNESE INSTA'))) return 'ANAMNESE-INSTA';
   if (allTags.some(t => t.includes('ANAMNESE'))) return 'ANAMNESE';
   if (allTags.some(t => t.includes('BIO-INSTAGRAM') || t.includes('BIO INSTAGRAM'))) return 'BIO-INSTAGRAM';
@@ -25,7 +36,18 @@ function classifyChannel(tags: string[], dataSource: string | null, hasA010: boo
   if (allTags.some(t => t.includes('HUBLA'))) return 'HUBLA';
   if (allTags.some(t => t.includes('BASE CLINT'))) return 'BASE CLINT';
 
-  // Fallback
+  // 2. Origin name (from crm_origins) as secondary source
+  if (originUpper.includes('ANAMNESE-INSTA') || originUpper.includes('ANAMNESE INSTA')) return 'ANAMNESE-INSTA';
+  if (originUpper.includes('ANAMNESE')) return 'ANAMNESE';
+  if (originUpper.includes('BIO-INSTAGRAM') || originUpper.includes('BIO INSTAGRAM')) return 'BIO-INSTAGRAM';
+
+  // 3. lead_channel as tertiary source
+  if (channelUpper.includes('ANAMNESE-INSTA')) return 'ANAMNESE-INSTA';
+  if (channelUpper.includes('ANAMNESE')) return 'ANAMNESE';
+  if (channelUpper.includes('LIVE')) return 'LIVE';
+  if (channelUpper.includes('LEAD-FORM')) return 'LEAD-FORM';
+
+  // 4. Fallback
   if (dataSource === 'csv') return 'CSV';
   if (hasA010) return 'HUBLA (A010)';
   if (dataSource === 'webhook') return 'WEBHOOK';
