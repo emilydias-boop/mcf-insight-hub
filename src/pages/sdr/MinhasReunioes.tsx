@@ -26,6 +26,7 @@ import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawe
 import { ReviewRequestModal } from "@/components/sdr/ReviewRequestModal";
 import { CallMetricsCards } from "@/components/sdr/CallMetricsCards";
 import { SdrR2ConversionCard } from "@/components/sdr/SdrR2ConversionCard";
+import { PendingActionsPanel } from "@/components/sdr/PendingActionsPanel";
 import { useSdrCallMetrics } from "@/hooks/useSdrCallMetrics";
 import { useSDRR2Metrics } from "@/hooks/useSDRR2Metrics";
 import { useAuth } from "@/contexts/AuthContext";
@@ -226,6 +227,11 @@ export default function MinhasReunioes() {
         </div>
       </div>
       
+      {/* Painel de Próximas Ações (topo, destaque) */}
+      <div className="flex-shrink-0 mt-4">
+        <PendingActionsPanel />
+      </div>
+
       {/* Summary Cards */}
       <div className="flex-shrink-0 mt-4 sm:mt-6">
         <MeetingSummaryCards 
