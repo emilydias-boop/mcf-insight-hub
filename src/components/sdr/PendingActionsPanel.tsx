@@ -4,8 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, isToday, addDays, addMonths, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+type DateFilter = 'hoje' | 'semana' | 'mes' | 'todas';
 import {
   Phone, MessageCircle, Mail, Video, CheckCircle2,
   ChevronDown, AlertTriangle, Bell, Loader2
@@ -35,12 +37,22 @@ export const PendingActionsPanel = () => {
   const completeAction = useCompleteNextAction();
   const { makeCall, deviceStatus, initializeDevice } = useTwilio();
   const [isOpen, setIsOpen] = useState(true);
+  const [dateFilter, setDateFilter] = useState<DateFilter>('hoje');
+
+  const filteredActions = actions.filter(action => {
+    if (action.isOverdue) return true;
+    if (dateFilter === 'todas') return true;
+    const actionDate = new Date(action.actionDate);
+    const now = new Date();
+    if (dateFilter === 'hoje') return isToday(actionDate);
+    if (dateFilter === 'semana') return isBefore(actionDate, addDays(now, 7));
+    if (dateFilter === 'mes') return isBefore(actionDate, addMonths(now, 1));
+    return true;
+  });
 
   const overdueCount = actions.filter(a => a.isOverdue).length;
   const todayCount = actions.filter(a => a.isToday).length;
   const totalCount = actions.length;
-
-  
 
   if (isLoading || totalCount === 0) return null;
 
@@ -123,16 +135,42 @@ export const PendingActionsPanel = () => {
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <CardContent className="pt-0 px-4 pb-3 space-y-2 max-h-72 overflow-y-auto">
-            {actions.map((action) => (
-              <ActionItem
-                key={action.dealId}
-                action={action}
-                onQuickAction={handleQuickAction}
-                onComplete={(id) => completeAction.mutate(id)}
-                isCompleting={completeAction.isPending}
-              />
-            ))}
+          <CardContent className="pt-0 px-4 pb-3 space-y-2">
+            {/* Filtros de período */}
+            <div className="flex gap-1">
+              {([
+                ['hoje', 'Hoje'],
+                ['semana', 'Semana'],
+                ['mes', 'Mês'],
+                ['todas', 'Todas'],
+              ] as [DateFilter, string][]).map(([key, label]) => (
+                <Button
+                  key={key}
+                  variant={dateFilter === key ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-6 text-xs flex-1"
+                  onClick={() => setDateFilter(key)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+
+            <div className="max-h-72 overflow-y-auto space-y-2">
+              {filteredActions.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Nenhuma ação neste período</p>
+              ) : (
+                filteredActions.map((action) => (
+                  <ActionItem
+                    key={action.dealId}
+                    action={action}
+                    onQuickAction={handleQuickAction}
+                    onComplete={(id) => completeAction.mutate(id)}
+                    isCompleting={completeAction.isPending}
+                  />
+                ))
+              )}
+            </div>
           </CardContent>
         </CollapsibleContent>
       </Card>
