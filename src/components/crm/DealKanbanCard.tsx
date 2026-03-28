@@ -19,15 +19,26 @@ import {
   Mail,
   RefreshCw,
   Clock,
+  Video,
+  AlertCircle,
 } from "lucide-react";
 import { useTwilio } from "@/contexts/TwilioContext";
 import { toast } from "sonner";
 import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phoneUtils";
 import { ActivitySummary } from "@/hooks/useDealActivitySummary";
 import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
 import { OwnerChangeDialog } from "./OwnerChangeDialog";
 import { SalesChannel, detectSalesChannel } from "@/hooks/useBulkA010Check";
+import { cn } from "@/lib/utils";
+
+const NEXT_ACTION_ICONS: Record<string, React.ReactNode> = {
+  ligar: <Phone className="h-2.5 w-2.5" />,
+  whatsapp: <MessageCircle className="h-2.5 w-2.5" />,
+  email: <Mail className="h-2.5 w-2.5" />,
+  reuniao: <Video className="h-2.5 w-2.5" />,
+};
 
 // Helper para calcular badge de prioridade de atividade
 const getActivityPriorityBadge = (totalActivities: number) => {
@@ -391,6 +402,25 @@ export const DealKanbanCard = ({
             </Tooltip>
           )}
         </div>
+
+        {/* Badge de Próxima Ação */}
+        {deal.next_action_type && deal.next_action_date && (() => {
+          const nextDate = new Date(deal.next_action_date);
+          const isActionOverdue = nextDate < new Date();
+          const formattedNextDate = format(nextDate, "dd/MM HH:mm", { locale: ptBR });
+          return (
+            <div className={cn(
+              "flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md font-medium",
+              isActionOverdue
+                ? "bg-destructive/15 text-destructive border border-destructive/30 animate-pulse"
+                : "bg-primary/10 text-primary border border-primary/20"
+            )}>
+              {NEXT_ACTION_ICONS[deal.next_action_type] || <Phone className="h-2.5 w-2.5" />}
+              <span>{formattedNextDate}</span>
+              {isActionOverdue && <AlertCircle className="h-2.5 w-2.5" />}
+            </div>
+          );
+        })()}
 
         {/* Linha 2: Nome do Lead + tempo na stage */}
         <div className="flex items-center justify-between gap-1">
