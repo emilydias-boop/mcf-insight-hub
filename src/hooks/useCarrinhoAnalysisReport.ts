@@ -220,7 +220,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         // A010 purchases (retroactive)
         supabase.from('hubla_transactions')
           .select('customer_email, sale_date')
-          .in('product_category', ['a010'])
+          .or('product_category.eq.a010,product_name.ilike.%a010%')
           .in('customer_email', emails)
           .order('sale_date', { ascending: true }),
         // CRM contacts
