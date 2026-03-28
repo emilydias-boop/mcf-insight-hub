@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { getUFFromPhone, getClusterFromUF } from '@/lib/dddToUF';
+import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
 const VALID_CHANNELS = new Set(['A010', 'LIVE', 'ANAMNESE', 'ANAMNESE-INSTA', 'OUTSIDE', 'LANÇAMENTO']);
 
@@ -419,7 +420,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           .eq('sale_status', 'refunded'),
         // Parcerias
         supabase.from('hubla_transactions')
-          .select('customer_email, sale_date, product_name, product_price, net_value')
+          .select('id, customer_email, sale_date, product_name, product_price, net_value, reference_price, gross_override, installment_number')
           .eq('product_category', 'parceria')
           .in('sale_status', ['completed', 'paid'])
           .in('customer_email', emails),
@@ -450,7 +451,16 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const parceriaMap = new Map<string, { date: string; product: string; grossValue: number | null; netValue: number | null }>();
       for (const p of parceriasResult.data || []) {
         const e = (p.customer_email || '').toLowerCase().trim();
-        if (e && !parceriaMap.has(e)) parceriaMap.set(e, { date: p.sale_date || '', product: p.product_name || '', grossValue: (p as any).product_price ?? null, netValue: (p as any).net_value ?? null });
+        if (e && !parceriaMap.has(e)) {
+          const grossValue = getDeduplicatedGross({
+            product_name: p.product_name,
+            product_price: p.product_price,
+            installment_number: (p as any).installment_number,
+            gross_override: (p as any).gross_override,
+            reference_price: (p as any).reference_price,
+          }, true);
+          parceriaMap.set(e, { date: p.sale_date || '', product: p.product_name || '', grossValue, netValue: (p as any).net_value ?? null });
+        }
       }
 
       const statusNameMap = new Map<string, string>();
