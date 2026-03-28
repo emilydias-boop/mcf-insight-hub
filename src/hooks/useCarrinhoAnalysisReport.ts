@@ -246,6 +246,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         }
       }
 
+
       // Build R1 map: contact_id → best R1
       const r1Map = new Map<string, { date: string; realized: boolean; closerName: string | null }>();
       for (const a of r1Result.data || []) {
@@ -277,6 +278,116 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
             statusId: (a as any).r2_status_id || null,
             slotStatus: slot.status || '',
           });
+        }
+      }
+
+      // === PHONE FALLBACK: Find contacts by phone when email-based contact has no deals ===
+      const phoneSuffixesForLookup: string[] = [];
+      const suffixToEmail = new Map<string, string[]>();
+      for (const tx of uniqueContracts) {
+        const email = (tx.customer_email || '').toLowerCase().trim();
+        const contact = contactMap.get(email);
+        const contactId = contact?.id;
+        if (!contactId || !dealMap.has(contactId)) {
+          const suffix = normalizePhoneSuffix(tx.customer_phone);
+          if (suffix) {
+            phoneSuffixesForLookup.push(suffix);
+            if (!suffixToEmail.has(suffix)) suffixToEmail.set(suffix, []);
+            suffixToEmail.get(suffix)!.push(email);
+          }
+        }
+      }
+
+      if (phoneSuffixesForLookup.length > 0) {
+        const uniqueSuffixes = [...new Set(phoneSuffixesForLookup)];
+        const phoneQueries = uniqueSuffixes.map(suffix =>
+          supabase.from('crm_contacts')
+            .select('id, email, phone')
+            .ilike('phone', `%${suffix}`)
+        );
+        const phoneResults = await Promise.all(phoneQueries);
+
+        const suffixToContacts = new Map<string, { id: string; phone: string | null }[]>();
+        for (let i = 0; i < uniqueSuffixes.length; i++) {
+          const suffix = uniqueSuffixes[i];
+          const contacts = (phoneResults[i].data || [])
+            .filter(c => normalizePhoneSuffix(c.phone) === suffix);
+          if (contacts.length > 0) {
+            suffixToContacts.set(suffix, contacts.map(c => ({ id: c.id, phone: c.phone })));
+          }
+        }
+
+        // Replace contactMap entries with phone-matched contacts that have deals
+        for (const tx of uniqueContracts) {
+          const email = (tx.customer_email || '').toLowerCase().trim();
+          const currentContact = contactMap.get(email);
+          if (currentContact && dealMap.has(currentContact.id)) continue;
+
+          const suffix = normalizePhoneSuffix(tx.customer_phone);
+          if (!suffix) continue;
+          const phoneContacts = suffixToContacts.get(suffix);
+          if (!phoneContacts) continue;
+
+          for (const pc of phoneContacts) {
+            if (dealMap.has(pc.id)) {
+              contactMap.set(email, { id: pc.id, phone: pc.phone });
+              break;
+            }
+          }
+          // Even if no deal, use phone contact if we had none
+          if (!contactMap.get(email) && phoneContacts.length > 0) {
+            contactMap.set(email, { id: phoneContacts[0].id, phone: phoneContacts[0].phone });
+          }
+        }
+
+        // Re-fetch deals/R1/R2 for new contact IDs
+        const newContactIds = Array.from(new Set(
+          Array.from(contactMap.values()).map(c => c.id)
+        )).filter(id => !contactIds.includes(id));
+
+        if (newContactIds.length > 0) {
+          const [newDeals, newR1, newR2] = await Promise.all([
+            supabase.from('crm_deals')
+              .select('id, contact_id, owner_profile_id, owner:profiles!crm_deals_owner_profile_id_fkey(name)')
+              .in('contact_id', newContactIds),
+            supabase.from('meeting_slot_attendees')
+              .select('contact_id, status, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, closer:closers(name))')
+              .in('contact_id', newContactIds)
+              .eq('meeting_slots.meeting_type', 'r1'),
+            supabase.from('meeting_slot_attendees')
+              .select('id, contact_id, status, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status, closer:closers(name))')
+              .in('contact_id', newContactIds)
+              .eq('meeting_slots.meeting_type', 'r2'),
+          ]);
+
+          for (const d of newDeals.data || []) {
+            if (d.contact_id && !dealMap.has(d.contact_id)) {
+              dealMap.set(d.contact_id, { id: d.id, sdrName: (d as any).owner?.name || null });
+            }
+          }
+          for (const a of newR1.data || []) {
+            const cid = (a as any).contact_id;
+            const slot = a.meeting_slot as any;
+            if (!cid || !slot?.scheduled_at) continue;
+            if (!r1Map.has(cid) || slot.scheduled_at < r1Map.get(cid)!.date) {
+              const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
+              r1Map.set(cid, { date: slot.scheduled_at, realized, closerName: slot.closer?.name || null });
+            }
+          }
+          for (const a of newR2.data || []) {
+            const cid = (a as any).contact_id;
+            const slot = a.meeting_slot as any;
+            if (!cid || !slot?.scheduled_at) continue;
+            if (!r2Map.has(cid) || slot.scheduled_at > r2Map.get(cid)!.date) {
+              const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
+              r2Map.set(cid, {
+                id: a.id, date: slot.scheduled_at, realized,
+                closerName: slot.closer?.name || null,
+                statusId: (a as any).r2_status_id || null,
+                slotStatus: slot.status || '',
+              });
+            }
+          }
         }
       }
 
