@@ -215,7 +215,7 @@ function mergeDealsIntoMap(rows: any[] | null | undefined, dealMap: Map<string, 
   for (const d of rows || []) {
     if (!d.contact_id) continue;
 
-    const sdrName = (d as any).owner?.name || null;
+    const sdrName = (d as any).owner?.full_name || null;
     const dataSource = (d as any).data_source || null;
     const tags: string[] = ((d as any).tags || []).map((t: any) => typeof t === 'string' ? t : t?.name || '');
     const originName = (d as any).origin?.name || null;
@@ -448,7 +448,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const [dealsResult, r1Result, r2Result] = await Promise.all([
         contactIds.length > 0
           ? supabase.from('crm_deals')
-              .select('id, contact_id, owner_profile_id, custom_fields, data_source, tags, origin:crm_origins(name), owner:profiles!crm_deals_owner_profile_id_fkey(name)')
+              .select('id, contact_id, owner_profile_id, custom_fields, data_source, tags, origin:crm_origins(name), owner:profiles!crm_deals_owner_profile_id_fkey(full_name)')
               .in('contact_id', contactIds)
           : Promise.resolve({ data: [] }),
         contactIds.length > 0
@@ -577,7 +577,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         if (newContactIds.length > 0) {
           const [newDeals, newR1, newR2] = await Promise.all([
             supabase.from('crm_deals')
-              .select('id, contact_id, owner_profile_id, custom_fields, data_source, tags, origin:crm_origins(name), owner:profiles!crm_deals_owner_profile_id_fkey(name)')
+              .select('id, contact_id, owner_profile_id, custom_fields, data_source, tags, origin:crm_origins(name), owner:profiles!crm_deals_owner_profile_id_fkey(full_name)')
               .in('contact_id', newContactIds),
             supabase.from('meeting_slot_attendees')
               .select('contact_id, status, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, closer:closers(name))')
