@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-const BEEP_FREQUENCY = 800;
-const BEEP_DURATION = 0.15;
-const BEEP_GAP = 0.1;
-const BEEP_COUNT = 3;
+const BEEP_DURATION = 0.3;
+const BEEP_GAP = 0.08;
+const BEEP_COUNT = 5;
 const ALERT_INTERVAL_MS = 30_000;
 const MUTE_DURATION_MS = 5 * 60 * 1000;
+
+const makeDistortionCurve = (amount: number): Float32Array => {
+  const samples = 44100;
+  const curve = new Float32Array(samples);
+  for (let i = 0; i < samples; i++) {
+    const x = (i * 2) / samples - 1;
+    curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
+  }
+  return curve;
+};
 
 export const useOverdueAlertSound = (overdueCount: number) => {
   const [isMuted, setIsMuted] = useState(false);
@@ -20,16 +29,29 @@ export const useOverdueAlertSound = (overdueCount: number) => {
       audioCtxRef.current = ctx;
       if (ctx.state === 'suspended') ctx.resume();
 
+      const distortion = ctx.createWaveShaper();
+      (distortion as any).curve = makeDistortionCurve(50);
+      distortion.oversample = '4x';
+
       for (let i = 0; i < BEEP_COUNT; i++) {
         const startTime = ctx.currentTime + i * (BEEP_DURATION + BEEP_GAP);
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
+
         osc.type = 'square';
-        osc.frequency.setValueAtTime(BEEP_FREQUENCY, startTime);
+        // Siren: alternate between 600Hz→1200Hz and 1200Hz→600Hz
+        const freqStart = i % 2 === 0 ? 600 : 1200;
+        const freqEnd = i % 2 === 0 ? 1200 : 600;
+        osc.frequency.setValueAtTime(freqStart, startTime);
+        osc.frequency.linearRampToValueAtTime(freqEnd, startTime + BEEP_DURATION);
+
         gain.gain.setValueAtTime(0, startTime);
-        gain.gain.linearRampToValueAtTime(0.3, startTime + 0.02);
+        gain.gain.linearRampToValueAtTime(0.8, startTime + 0.02);
+        gain.gain.setValueAtTime(0.8, startTime + BEEP_DURATION - 0.02);
         gain.gain.linearRampToValueAtTime(0, startTime + BEEP_DURATION);
-        osc.connect(gain);
+
+        osc.connect(distortion);
+        distortion.connect(gain);
         gain.connect(ctx.destination);
         osc.start(startTime);
         osc.stop(startTime + BEEP_DURATION);
@@ -52,9 +74,7 @@ export const useOverdueAlertSound = (overdueCount: number) => {
     }
 
     if (overdueCount > 0 && !isMuted) {
-      // Play immediately
       const timer = setTimeout(() => playAlertBeep(), 1000);
-      // Then every 30s
       intervalRef.current = setInterval(() => playAlertBeep(), ALERT_INTERVAL_MS);
       return () => {
         clearTimeout(timer);
