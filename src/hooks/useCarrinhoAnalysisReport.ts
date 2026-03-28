@@ -109,6 +109,8 @@ export interface LeadCarrinhoCompleto {
   // Desfecho
   comprouParceria: boolean;
   dataParceria: string | null;
+  parceriaBruto: number | null;
+  parceriaLiquido: number | null;
   reembolso: boolean;
   isOutside: boolean;
   canalEntrada: string | null;
@@ -417,7 +419,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           .eq('sale_status', 'refunded'),
         // Parcerias
         supabase.from('hubla_transactions')
-          .select('customer_email, sale_date, product_name')
+          .select('customer_email, sale_date, product_name, product_price, net_value')
           .eq('product_category', 'parceria')
           .in('sale_status', ['completed', 'paid'])
           .in('customer_email', emails),
@@ -445,10 +447,10 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
       const refundEmails = new Set((refundsResult.data || []).map(r => (r.customer_email || '').toLowerCase().trim()));
 
-      const parceriaMap = new Map<string, { date: string; product: string }>();
+      const parceriaMap = new Map<string, { date: string; product: string; grossValue: number | null; netValue: number | null }>();
       for (const p of parceriasResult.data || []) {
         const e = (p.customer_email || '').toLowerCase().trim();
-        if (e && !parceriaMap.has(e)) parceriaMap.set(e, { date: p.sale_date || '', product: p.product_name || '' });
+        if (e && !parceriaMap.has(e)) parceriaMap.set(e, { date: p.sale_date || '', product: p.product_name || '', grossValue: (p as any).product_price ?? null, netValue: (p as any).net_value ?? null });
       }
 
       const statusNameMap = new Map<string, string>();
@@ -862,6 +864,8 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           statusR2: r2StatusName || null,
           comprouParceria: !!parceria,
           dataParceria: parceria?.date || null,
+          parceriaBruto: parceria?.grossValue ?? null,
+          parceriaLiquido: parceria?.netValue ?? null,
           reembolso: hasRefund,
           isOutside,
           canalEntrada: normalizeChannel((() => {
