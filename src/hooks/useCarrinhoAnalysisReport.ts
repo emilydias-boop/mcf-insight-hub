@@ -3,6 +3,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { getUFFromPhone, getClusterFromUF } from '@/lib/dddToUF';
 
+const VALID_CHANNELS = new Set(['A010', 'LIVE', 'ANAMNESE', 'ANAMNESE-INSTA', 'OUTSIDE', 'LANÇAMENTO']);
+
+function normalizeChannel(raw: string): string {
+  if (VALID_CHANNELS.has(raw)) return raw;
+  const upper = raw.toUpperCase();
+  if (upper.includes('ANAMNESE-INSTA') || upper.includes('ANAMNESE INSTA')) return 'ANAMNESE-INSTA';
+  if (upper.includes('ANAMNESE')) return 'ANAMNESE';
+  if (upper.includes('A010')) return 'A010';
+  if (upper.includes('LANÇAMENTO') || upper.includes('LANCAMENTO')) return 'LANÇAMENTO';
+  if (upper.includes('OUTSIDE')) return 'OUTSIDE';
+  return 'LIVE';
+}
+
 function classifyChannel(opts: {
   tags: string[];
   originName: string | null;
@@ -774,7 +787,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           dataParceria: parceria?.date || null,
           reembolso: hasRefund,
           isOutside,
-          canalEntrada: (() => {
+          canalEntrada: normalizeChannel((() => {
             const prodLower = (tx.product_name || '').toLowerCase();
             const saleOrigin = (tx as any).sale_origin;
             const dealTags = deal?.tags || [];
@@ -807,7 +820,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
             // 5. Default: LIVE
             return 'LIVE';
-          })(),
+          })()),
           _audit: (() => {
             const dealTags = deal?.tags || [];
             const saleOrigin = (tx as any).sale_origin;
