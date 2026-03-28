@@ -102,7 +102,6 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
       Telefone: l.telefone,
       Estado: l.estado,
       Cluster: l.cluster,
-      'Data A010': l.dataA010 ? format(new Date(l.dataA010), 'dd/MM/yyyy') : '—',
       Canal: l.canalEntrada || '—',
       SDR: l.sdrName || '—',
       'Classificado': l.classificado ? 'Sim' : 'Não',
@@ -468,7 +467,6 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                       <TableHead>Tel</TableHead>
                       <TableHead>UF</TableHead>
                       <TableHead>Cluster</TableHead>
-                      <TableHead>A010</TableHead>
                       <TableHead>Canal</TableHead>
                       <TableHead>SDR</TableHead>
                       <TableHead>Class.</TableHead>
@@ -498,7 +496,6 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                             l.cluster === 'Médio' ? 'border-amber-500 text-amber-700' : 'border-slate-400 text-slate-500'
                           )}>{l.cluster}</Badge>
                         </TableCell>
-                        <TableCell className="text-xs">{l.dataA010 ? format(new Date(l.dataA010), 'dd/MM/yy') : '—'}</TableCell>
                         <TableCell>
                           {l.canalEntrada ? (
                             <Badge variant="outline" className={cn('text-[10px] whitespace-nowrap',
