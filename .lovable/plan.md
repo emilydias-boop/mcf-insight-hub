@@ -1,68 +1,76 @@
 
+Objetivo: corrigir o relatório para que ANAMNESE apareça de forma confiável no campo Canal.
 
-## Fix: Canal de Entrada não detecta ANAMNESE e outros canais corretamente
+O que confirmei
+- No banco, a Thalita de Miranda existe com:
+  - contrato A000 na Hubla em 24/03
+  - R1 e R2 vinculadas
+  - deals no CRM no mesmo contato `ad9a9a18-...`
+  - tags `[ANAMNESE]`
+- Ou seja: o dado de origem existe. O problema não é falta de informação no CRM.
 
-### Causa raiz
+Causa mais provável
+- A lógica atual já tenta classificar por tags, mas ainda depende de um mapeamento `email -> contato -> deal`.
+- Quando o relatório não “sobe” ANAMNESE mesmo com a tag presente, o ponto frágil tende a ser:
+  1. resolução do contato usado para o lead do contrato;
+  2. escolha/mescla do deal desse contato;
+  3. ausência de fallback explícito para origem webhook/origin_name quando a tag não vem no formato esperado;
+  4. cache antigo da query mascarando a correção visual.
 
-1. **`lead_channel` está NULL para quase todos os leads** — apenas 5 de ~100 deals têm `lead_channel` preenchido. O campo não é confiável.
-2. **Tags são a fonte real**: `[ANAMNESE]`, `[A010]`, `[A010 Make]`, `[BIO-Instagram]`, `[ob-construir-alugar Hubla]`, `[base clint]`.
-3. **Múltiplos deals por contato**: O código faz `dealMap.set(contact_id, ...)` e sobrescreve — se o primeiro deal não tem tags mas o segundo tem `[ANAMNESE]`, perde a informação.
-4. Quando lead_channel existe, tem valor errado (`CLIENTDATA-INSIDE` para leads que são `ANAMNESE`).
+Plano de ajuste
+1. Fortalecer a resolução do canal no hook `src/hooks/useCarrinhoAnalysisReport.ts`
+- Extrair a lógica de canal para uma função mais robusta.
+- Prioridade:
+  - tags normalizadas
+  - nome da origem (`crm_origins.name`)
+  - `custom_fields->>lead_channel`
+  - `data_source`
+  - compra A010/Hubla como último fallback
+- Tratar explicitamente padrões como:
+  - `ANAMNESE`
+  - `ANAMNESE-INSTA`
+  - origem contendo “anamnese”
+  - webhook de anamnese mesmo quando `lead_channel` vier nulo ou genérico
 
-### Solução
+2. Enriquecer a query de `crm_deals`
+- Incluir `origin_id`/`crm_origins(name)` junto com `tags`, `custom_fields` e `data_source`.
+- Isso dá uma segunda fonte de verdade para casos em que a tag veio incompleta, foi sobrescrita ou não foi persistida do jeito esperado.
 
-**`src/hooks/useCarrinhoAnalysisReport.ts`**:
+3. Melhorar a seleção/mescla de deals por contato
+- Em vez de apenas acumular tags, calcular um “peso informativo” por deal.
+- Se houver deal com sinal claro de ANAMNESE, ele deve prevalecer sobre deals genéricos como `csv`, `replication`, `CLIENTDATA-INSIDE`, `base clint`.
+- Continuar mesclando tags, mas também preservar:
+  - melhor origem
+  - melhor lead_channel
+  - melhor data_source para classificação
 
-1. **Ao popular o `dealMap`, preferir o deal com tags mais informativas**. Se já existe um deal mapeado, só substituir se o novo tiver tags melhores (ANAMNESE, A010, etc.)
+4. Aplicar a mesma robustez no fallback por telefone
+- Hoje o fallback por telefone reaproveita deals, R1 e R2.
+- Vou espelhar a mesma regra de classificação rica também nesse bloco, para não perder ANAMNESE quando o contato certo só é encontrado por telefone.
 
-2. **Reescrever `classifyChannel` para priorizar tags completamente** e ignorar `lead_channel`:
+5. Ajustar cache/reatividade da query
+- Revisar a `queryKey`/estratégia da query para evitar a sensação de que “ainda não subiu”.
+- Garantir que qualquer alteração de período dispare recomputação limpa e que o valor de `canalEntrada` venha já resolvido no payload.
 
-```typescript
-function classifyChannel(tags: string[], dataSource: string | null, hasA010: boolean): string {
-  const allTags = tags.map(t => t.toUpperCase());
-  
-  // ANAMNESE-INSTA primeiro (mais específico)
-  if (allTags.some(t => t.includes('ANAMNESE-INSTA') || t.includes('ANAMNESE INSTA'))) return 'ANAMNESE-INSTA';
-  if (allTags.some(t => t.includes('ANAMNESE'))) return 'ANAMNESE';
-  if (allTags.some(t => t.includes('BIO-INSTAGRAM') || t.includes('BIO INSTAGRAM'))) return 'BIO-INSTAGRAM';
-  if (allTags.some(t => t.includes('LEAD-LIVE') || t.includes('LIVE'))) return 'LIVE';
-  if (allTags.some(t => t.includes('LEAD-FORM') || t.includes('LEAD FORM'))) return 'LEAD-FORM';
-  if (allTags.some(t => t.includes('A010') && t.includes('MAKE'))) return 'A010 (MAKE)';
-  if (allTags.some(t => t === 'A010' || t.startsWith('A010 '))) return 'A010';
-  if (allTags.some(t => t.includes('HUBLA'))) return 'HUBLA';
-  if (allTags.some(t => t.includes('BASE CLINT'))) return 'BASE CLINT';
-  
-  // Fallback para data_source
-  if (dataSource === 'csv') return 'CSV';
-  if (hasA010) return 'HUBLA (A010)';
-  if (dataSource === 'webhook') return 'WEBHOOK';
-  return '';
-}
-```
+Resultado esperado
+- Leads como Thalita passam a aparecer com `Canal = ANAMNESE`.
+- Casos de webhook de anamnese deixam de cair em vazio, WEBHOOK genérico ou HUBLA (A010) quando houver evidência melhor.
+- O canal fica consistente mesmo com múltiplos deals por contato.
 
-3. **Ao popular `dealMap`**: agregar tags de TODOS os deals do mesmo contato, em vez de sobrescrever:
-
-```typescript
-// Se já existe, mesclar tags
-if (dealMap.has(d.contact_id)) {
-  const existing = dealMap.get(d.contact_id)!;
-  const mergedTags = [...new Set([...existing.tags, ...(d.tags || [])])];
-  existing.tags = mergedTags;
-  if (!existing.sdrName && sdrName) existing.sdrName = sdrName;
-} else {
-  dealMap.set(d.contact_id, { id: d.id, sdrName, tags });
-}
-```
-
-4. Remover `leadChannel` e `dataSource` como campos separados do dealMap — simplificar para `tags` + `dataSource` (manter data_source apenas como fallback).
-
-5. Mesmo tratamento no bloco de fallback por telefone (linhas ~380-400).
-
-**`src/components/relatorios/CarrinhoAnalysisReportPanel.tsx`**:
-- Adicionar cores para novos canais: `A010` → amber, `A010 (MAKE)` → amber, `BASE CLINT` → slate, `BIO-INSTAGRAM` → pink, `WEBHOOK` → gray
-- Atualizar filtro de Canal para incluir os novos valores
-
-### Arquivos alterados
+Arquivos a alterar
 - `src/hooks/useCarrinhoAnalysisReport.ts`
-- `src/components/relatorios/CarrinhoAnalysisReportPanel.tsx`
+- possivelmente `src/components/relatorios/CarrinhoAnalysisReportPanel.tsx` apenas se eu precisar ajustar cores/rótulos, mas a correção principal é no hook
 
+Detalhe técnico
+- Hoje a classificação usa `classifyChannel(tags, dataSource, hasA010)`.
+- A correção ideal é evoluir para algo como:
+```ts
+classifyChannel({
+  tags,
+  originName,
+  leadChannel,
+  dataSource,
+  hasA010
+})
+```
+- Assim ANAMNESE pode ser detectada não só por tag, mas também por origem webhook/origem CRM, reduzindo falsos vazios.
