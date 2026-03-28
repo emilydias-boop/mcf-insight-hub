@@ -1,51 +1,45 @@
 
 
-## Fix: Leads com contato duplicado no CRM aparecem como "Sem contato"
+## Adicionar coluna "Canal de Entrada" no Relatório de Análise de Carrinho
 
-### Causa raiz
+### O que será feito
 
-O caso do Juan Felipe ilustra um problema sistêmico: existem **contatos duplicados no CRM** — um com email (sem deals) e outro sem email mas com deals e reuniões. O hook busca contatos **apenas por email**, encontra o contato errado (sem deals), e classifica como "Cadastro incompleto" ou "Sem contato no CRM".
+Adicionar uma coluna **"Canal"** na tabela detalhada que mostra como o lead chegou — se foi por A010, Anamnese, Live, ClientData, etc. A informação vem do `crm_deals.custom_fields->>'lead_channel'` e `crm_deals.data_source`.
 
-Dados reais:
-- Contato `ebb6d3f3` — telefone `+5511994477764`, email NULL → **tem deals e reuniões**
-- Contato `22d08ad8` — telefone `11994477764`, email `jcfalonso@hotmail.com` → **sem deals**
-- Transação Hubla: email `jcfalonso@hotmail.com`, telefone `+5511994477764`
+### Dados disponíveis
 
-O hook encontra o contato #2 por email, vê que não tem deals, e marca como gap operacional.
+Na tabela `crm_deals`:
+- `custom_fields->>'lead_channel'`: ANAMNESE-INSTA-MCF, CLIENTDATA-INSIDE, LIVE, LEAD-FORM-50K, etc.
+- `data_source`: webhook, csv, bubble, replication
+- `tags`: array com tags como "A010 - Construa para Vend", "ANAMNESE", "base clint", etc.
 
-### Solução
+A prioridade será: `lead_channel` (mais preciso) → fallback para `data_source`.
 
-**Arquivo: `src/hooks/useCarrinhoAnalysisReport.ts`**
+### Alterações
 
-1. **Busca de contatos por email E por telefone** — Na query de `crm_contacts` (linha 161), adicionar uma segunda query em paralelo buscando contatos pelo sufixo de 9 dígitos do telefone (normalizado). Usar os phones extraídos das transações.
+**`src/hooks/useCarrinhoAnalysisReport.ts`**:
+1. Na interface `LeadCarrinhoCompleto`, adicionar `canalEntrada: string | null`
+2. Na query de deals (linha 210), adicionar `custom_fields, data_source` ao select
+3. No `dealMap`, guardar `leadChannel` e `dataSource` extraídos do deal
+4. No loop de montagem dos leads (linha 470+), popular `canalEntrada` com `deal.leadChannel || deal.dataSource || null`
 
-2. **Merge de contatos** — Ao construir o `contactMap`, priorizar o contato que tem deals. Após a query de deals, verificar se o contato encontrado por email tem deal; se não, tentar o contato encontrado por telefone.
+**`src/components/relatorios/CarrinhoAnalysisReportPanel.tsx`**:
+1. Adicionar coluna "Canal" na tabela, entre "SDR" e "Class."
+2. Renderizar com badge colorida (ex: ANAMNESE = roxo, A010 = verde, LIVE = azul, CLIENTDATA = cinza)
+3. Adicionar filtro dropdown "Canal: Todos" na barra de filtros
 
-3. **Lógica de merge no contactMap**:
-   - Buscar contatos por email (atual)
-   - Buscar contatos por telefone (novo) — normalizar para 9 últimos dígitos
-   - Para cada transação, se o contato por email não tem deal mas o contato por telefone tem, usar o por telefone
+### Detalhes técnicos
 
-**Implementação concreta**:
+```typescript
+// No dealMap, guardar canal
+dealMap.set(d.contact_id, {
+  id: d.id,
+  sdrName: (d as any).owner?.name || null,
+  leadChannel: (d as any).custom_fields?.lead_channel || null,
+  dataSource: d.data_source || null,
+});
 
-```text
-Queries paralelas (já existem 5, adicionar 1):
-  - crm_contacts por email (existente)
-  - crm_contacts por phone (NOVO) — buscar todos contatos, depois filtrar em JS pelo sufixo de 9 dígitos
-
-Após a query de deals:
-  - Para cada email sem deal no dealMap, verificar se existe contato alternativo por phone com deal
-  - Se sim, substituir o contactId no contactMap
+// No lead
+canalEntrada: deal?.leadChannel || deal?.dataSource || null
 ```
-
-4. **Busca de contatos por phone**: Extrair sufixos de 9 dígitos dos phones das transações, buscar contatos com `phone` LIKE esses sufixos. Isso é complexo via Supabase — alternativa mais prática: buscar todos os `contact_id` que têm deals e reuniões, e cruzar por phone no JS.
-
-**Abordagem simplificada** (mais eficiente):
-- Após ter o `contactMap` por email e o `dealMap`, identificar emails cujo contactId não tem deal
-- Para esses, buscar na tabela `crm_contacts` por phone (normalizado 9 dígitos) usando uma query adicional
-- Se encontrar contato com deal, substituir no contactMap
-
-### Resultado esperado
-- Juan Felipe (e outros leads com contatos duplicados) aparece corretamente com SDR, R1, R2
-- Redução de falsos "Sem contato no CRM" e "Cadastro incompleto"
 
