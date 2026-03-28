@@ -421,6 +421,7 @@ export default function MinhasReunioes() {
         onOpenChange={setReviewModalOpen}
         defaultPeriod={selectedMonth}
       />
+      <OverdueAlertOverlay />
     </div>
   );
 }
