@@ -27,6 +27,7 @@ import { ReviewRequestModal } from "@/components/sdr/ReviewRequestModal";
 import { CallMetricsCards } from "@/components/sdr/CallMetricsCards";
 import { SdrR2ConversionCard } from "@/components/sdr/SdrR2ConversionCard";
 import { PendingActionsPanel } from "@/components/sdr/PendingActionsPanel";
+import { OverdueAlertOverlay } from "@/components/sdr/OverdueAlertOverlay";
 import { useSdrCallMetrics } from "@/hooks/useSdrCallMetrics";
 import { useSDRR2Metrics } from "@/hooks/useSDRR2Metrics";
 import { useAuth } from "@/contexts/AuthContext";
