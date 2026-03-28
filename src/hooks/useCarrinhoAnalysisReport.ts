@@ -301,7 +301,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       // 1. Anchor: Contratos pagos na semana
       const { data: transactions } = await supabase
         .from('hubla_transactions')
-        .select('id, hubla_id, source, customer_name, customer_email, customer_phone, product_name, product_category, sale_date, net_value, sale_status, linked_attendee_id, installment_number')
+        .select('id, hubla_id, source, customer_name, customer_email, customer_phone, product_name, product_category, sale_date, net_value, sale_status, linked_attendee_id, installment_number, sale_origin')
         .eq('product_name', 'A000 - Contrato')
         .in('sale_status', ['completed', 'refunded'])
         .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
@@ -527,6 +527,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         }
 
         // Choose the best contact candidate using deals/R1/R2 evidence from phone matches
+        // AND merge tags from ALL phone-matched contacts into the best contact's deal entry
         for (const tx of uniqueContracts) {
           const email = (tx.customer_email || '').toLowerCase().trim();
           const suffix = normalizePhoneSuffix(tx.customer_phone);
@@ -538,6 +539,67 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
           if (bestContact) {
             contactMap.set(email, bestContact);
+
+            // Merge tags/data from ALL phone-matched contacts into bestContact's deal entry
+            const allCandidates = [
+              ...(currentContact ? [currentContact] : []),
+              ...phoneContacts,
+            ];
+            for (const candidate of allCandidates) {
+              if (candidate.id === bestContact.id) continue;
+              const otherDeal = dealMap.get(candidate.id);
+              if (!otherDeal) continue;
+              const bestDeal = dealMap.get(bestContact.id);
+              if (bestDeal) {
+                bestDeal.tags = [...new Set([...bestDeal.tags, ...otherDeal.tags])];
+                if (!bestDeal.sdrName && otherDeal.sdrName) bestDeal.sdrName = otherDeal.sdrName;
+                if (!bestDeal.originName && otherDeal.originName) bestDeal.originName = otherDeal.originName;
+                if (!bestDeal.leadChannel && otherDeal.leadChannel) bestDeal.leadChannel = otherDeal.leadChannel;
+              } else {
+                // Copy the other deal as the best contact's deal
+                dealMap.set(bestContact.id, { ...otherDeal });
+              }
+              // Also merge R1 from other contacts
+              const otherR1 = r1Map.get(candidate.id);
+              const bestR1 = r1Map.get(bestContact.id);
+              if (otherR1 && (!bestR1 || otherR1.date < bestR1.date)) {
+                r1Map.set(bestContact.id, otherR1);
+              }
+            }
+          }
+        }
+      }
+
+      // === R1 EMAIL FALLBACK: For emails without R1, search R1 across all contacts with same email ===
+      const emailsWithoutR1: string[] = [];
+      for (const tx of uniqueContracts) {
+        const email = (tx.customer_email || '').toLowerCase().trim();
+        const contact = contactMap.get(email);
+        if (contact && !r1Map.has(contact.id)) {
+          emailsWithoutR1.push(email);
+        } else if (!contact) {
+          emailsWithoutR1.push(email);
+        }
+      }
+
+      if (emailsWithoutR1.length > 0) {
+        const uniqueR1Emails = [...new Set(emailsWithoutR1)];
+        const { data: r1ByEmail } = await supabase
+          .from('meeting_slot_attendees')
+          .select('contact_id, status, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, closer:closers(name)), contact:crm_contacts!inner(email)')
+          .eq('meeting_slots.meeting_type', 'r1')
+          .in('crm_contacts.email', uniqueR1Emails);
+
+        for (const a of r1ByEmail || []) {
+          const contactEmail = ((a as any).contact?.email || '').toLowerCase().trim();
+          const contact = contactMap.get(contactEmail);
+          if (!contact) continue;
+          const slot = (a as any).meeting_slot;
+          if (!slot?.scheduled_at) continue;
+          const existing = r1Map.get(contact.id);
+          if (!existing || slot.scheduled_at < existing.date) {
+            const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
+            r1Map.set(contact.id, { date: slot.scheduled_at, realized, closerName: slot.closer?.name || null });
           }
         }
       }
@@ -558,7 +620,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         const hasRefund = refundEmails.has(email);
         const a010Date = a010Map.get(email) || null;
         const deal = contactId ? dealMap.get(contactId) : null;
-        const r1 = contactId ? r1Map.get(contactId) : null;
+        // r1 will be re-read after email fallback enrichment (see r1Fresh below)
 
         // R2: try linked first, then by contact
         let r2 = tx.linked_attendee_id ? linkedR2Map.get(tx.linked_attendee_id) : null;
@@ -580,7 +642,9 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         const r2StatusName = r2Data?.statusId ? statusNameMap.get(r2Data.statusId) || null : null;
         const r2StatusLower = r2StatusName?.toLowerCase() || null;
 
-        const isOutside = r1?.date ? new Date(tx.sale_date) < new Date(r1.date) : false;
+        // Re-read r1 after email fallback
+        const r1Fresh = contactId ? r1Map.get(contactId) : null;
+        const isOutside = r1Fresh?.date ? new Date(tx.sale_date) < new Date(r1Fresh.date) : false;
         const isR2Agendada = !!r2Data;
         const isR2Realizada = r2Data?.realized || false;
 
@@ -627,10 +691,10 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           dataA010: a010Date,
           classificado: !!deal,
           sdrName: deal?.sdrName || null,
-          r1Agendada: !!r1,
-          dataR1: r1?.date || null,
-          r1Realizada: r1?.realized || false,
-          closerR1: r1?.closerName || null,
+          r1Agendada: !!r1Fresh,
+          dataR1: r1Fresh?.date || null,
+          r1Realizada: r1Fresh?.realized || false,
+          closerR1: r1Fresh?.closerName || null,
           dataContrato: tx.sale_date,
           valorContrato: tx.net_value || 0,
           r2Agendada: isR2Agendada,
@@ -643,10 +707,11 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           reembolso: hasRefund,
           isOutside,
           canalEntrada: (() => {
-            // Lançamento: produto "contrato mcf"
+            // 1. Lançamento: sale_origin ou produto "contrato mcf"
             const prodLower = (tx.product_name || '').toLowerCase();
-            if (prodLower.includes('contrato mcf')) return 'LANÇAMENTO';
+            if ((tx as any).sale_origin === 'launch' || prodLower.includes('contrato mcf')) return 'LANÇAMENTO';
 
+            // 2. Tags / origin / channel from CRM deal
             const dealTags = deal?.tags || [];
             const classified = classifyChannel({
               tags: dealTags,
@@ -664,13 +729,13 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
             // Fallback: lead channel
             if (deal?.leadChannel) return deal.leadChannel.toUpperCase();
 
-            // Outside = comprou antes da R1
+            // 3. Outside = comprou antes da R1
             if (isOutside) return 'OUTSIDE';
 
-            // A010
+            // 4. A010
             if (a010Date) return 'A010';
 
-            // Default: LIVE (lead pagou contrato sem outra classificação)
+            // 5. Default: LIVE (lead pagou contrato sem outra classificação)
             return 'LIVE';
           })(),
           motivoGap,
