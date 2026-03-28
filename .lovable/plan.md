@@ -1,28 +1,34 @@
 
 
-## Fix: Enriquecimento de "Parceria" genérica está pegando "A000 - Contrato"
+## Fix: Fronteiras da semana do carrinho devem usar meia-noite de sábado
 
-### Causa raiz
+### Problema
 
-O enriquecimento de transações genéricas "Parceria" (linhas 306-311) busca transações do mesmo email no Hubla com `product_category IN ('incorporador', 'parceria', 'ob_vitalicio')`. Como "A000 - Contrato" tem category `incorporador`, ele é selecionado como candidato. Na prioridade (linhas 323-328), A000 cai no bucket 5 (outros), mas se não existir A001/A009/etc para aquele email, o A000 é usado — substituindo o nome "Parceria" por "A000 - Contrato".
+A função `getCarrinhoWeekBoundaries` usa o `horario_corte` (12:00) para definir quando a semana começa e termina. Isso faz vendas de sexta após 12:00 caírem na semana seguinte. 
+
+O correto segundo a regra de negócio:
+- Vendas de sexta (mesmo após 12:00) pertencem à semana **atual**
+- A semana só muda à **meia-noite de sábado** (00:00)
+- O `horario_corte` define apenas quando acontece a reunião do carrinho, **não** a fronteira da semana
 
 ### Correção
 
-**`src/hooks/useR2CarrinhoVendas.ts`** — 2 pontos:
+**`src/lib/carrinhoWeekBoundaries.ts`**:
 
-1. **Filtrar A000/Contrato dos candidatos de enriquecimento** (após linha 318): antes de ordenar, excluir transações cujo nome contém "A000" ou "Contrato" (case-insensitive), pois são pagamentos de contrato e não produtos de parceria.
+Alterar a lógica para usar o início do sábado (weekStart) como `effectiveStart` e o início do próximo sábado como `effectiveEnd`:
 
 ```typescript
-const filteredMatches = (hublaMatches || []).filter(match => {
-  const name = match.product_name?.toUpperCase() || '';
-  return !name.includes('A000') && !name.includes('CONTRATO');
-});
+// effectiveStart = weekStart (sábado) à 00:00
+const effectiveStart = new Date(weekStart);
+effectiveStart.setHours(0, 0, 0, 0);
+
+// effectiveEnd = próximo sábado à 00:00 (weekEnd + 1 dia)
+const effectiveEnd = addDays(new Date(weekEnd), 1);
+effectiveEnd.setHours(0, 0, 0, 0);
 ```
 
-2. **Usar `filteredMatches` no sort** em vez de `hublaMatches` (linha 319).
-
-Isso garante que apenas produtos de parceria reais (A001, A009, A003, A004, etc.) sejam usados para enriquecer transações genéricas.
+Atualizar imports (`addDays` em vez de `subDays`) e o JSDoc.
 
 ### Arquivo alterado
-- `src/hooks/useR2CarrinhoVendas.ts`
+- `src/lib/carrinhoWeekBoundaries.ts`
 
