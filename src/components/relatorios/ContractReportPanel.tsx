@@ -278,7 +278,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
     }
     
     // Sort by date DESC
-    return filtered.sort((a, b) => b.date.localeCompare(a.date));
+    return filtered.sort((a, b) => (b.contractPaidAt || '').localeCompare(a.contractPaidAt || ''));
   }, [agendaData, hublaData, hublaPending, selectedSource, selectedChannel, searchTerm]);
   
   // Calculate stats from filtered data
@@ -297,18 +297,19 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
   const handleExportExcel = () => {
     const exportData = unifiedData.map(row => ({
       'Fonte': row.source === 'agenda' ? 'Agenda' : row.source === 'pending' ? 'Pendente' : 'Hubla',
-      'Closer': row.closerName,
-      'Data': row.date ? format(parseISO(row.date), 'dd/MM/yyyy', { locale: ptBR }) : '',
+      'Data Entrada': row.dealCreatedAt ? format(parseISO(row.dealCreatedAt), 'dd/MM/yyyy', { locale: ptBR }) : '',
+      'SDR': row.sdrName,
+      'Data R1': row.meetingDate ? format(parseISO(row.meetingDate), 'dd/MM/yyyy', { locale: ptBR }) : '',
       'Lead/Cliente': row.leadName,
       'Telefone': row.leadPhone,
       'Email': row.leadEmail,
-      'SDR': row.sdrName,
-      'Pipeline': row.originName,
       'Canal': row.salesChannel,
+      'Pipeline': row.originName,
       'Estágio': row.currentStage,
-      'Reembolsado': row.isRefunded ? 'Sim' : 'Não',
-      'Produto': row.productName,
+      'Contrato': row.contractPaidAt ? format(parseISO(row.contractPaidAt), 'dd/MM/yyyy', { locale: ptBR }) : '',
       'Valor': row.netValue ? `R$ ${row.netValue.toFixed(2)}` : '',
+      'Reembolso': row.isRefunded ? 'Sim' : 'Não',
+      'Closer': row.closerName,
       'Profissão': (row.customFields as any)?.profissao || '',
       'Estado': (row.customFields as any)?.estado || '',
     }));
@@ -507,57 +508,53 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Fonte</TableHead>
-                    <TableHead>Closer</TableHead>
-                    <TableHead>Data</TableHead>
+                    <TableHead>Data Entrada</TableHead>
+                    <TableHead>SDR</TableHead>
+                    <TableHead>Data R1</TableHead>
                     <TableHead>Lead</TableHead>
                     <TableHead>Telefone</TableHead>
-                    <TableHead>SDR</TableHead>
-                    <TableHead>Pipeline</TableHead>
+                    <TableHead>Email</TableHead>
                     <TableHead>Canal</TableHead>
                     <TableHead>Estágio</TableHead>
+                    <TableHead>Contrato</TableHead>
+                    <TableHead>Valor</TableHead>
+                    <TableHead>Reembolso</TableHead>
+                    <TableHead>Closer</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {unifiedData.map(row => (
                     <TableRow key={row.id}>
                       <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          <Badge 
-                            variant={row.source === 'agenda' ? 'default' : row.source === 'pending' ? 'destructive' : 'secondary'}
-                            className={
-                              row.source === 'agenda' 
-                                ? 'bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30'
-                                : row.source === 'pending'
-                                  ? 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/30'
-                                  : ''
-                            }
-                          >
-                            {row.source === 'agenda' ? 'Agenda' : row.source === 'pending' ? 'Pendente' : 'Hubla'}
-                          </Badge>
-                          {row.isRefunded && (
-                            <Badge variant="destructive" className="bg-destructive/20 text-destructive border-destructive/30 text-[10px] px-1.5">
-                              Reembolsado
-                            </Badge>
-                          )}
-                        </div>
+                        <Badge 
+                          variant={row.source === 'agenda' ? 'default' : row.source === 'pending' ? 'destructive' : 'secondary'}
+                          className={
+                            row.source === 'agenda' 
+                              ? 'bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30'
+                              : row.source === 'pending'
+                                ? 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/30'
+                                : ''
+                          }
+                        >
+                          {row.source === 'agenda' ? 'Agenda' : row.source === 'pending' ? 'Pendente' : 'Hubla'}
+                        </Badge>
                       </TableCell>
-                      <TableCell className="font-medium">{row.closerName}</TableCell>
-                      <TableCell>
-                        {row.date 
-                          ? format(parseISO(row.date), 'dd/MM/yyyy', { locale: ptBR })
-                          : '-'
+                      <TableCell className="text-sm">
+                        {row.dealCreatedAt 
+                          ? format(parseISO(row.dealCreatedAt), 'dd/MM/yyyy', { locale: ptBR })
+                          : '—'
                         }
                       </TableCell>
-                      <TableCell>{row.leadName}</TableCell>
-                      <TableCell className="font-mono text-sm">{row.leadPhone || '-'}</TableCell>
                       <TableCell>{row.sdrName}</TableCell>
-                      <TableCell>
-                        {row.originName !== '—' ? (
-                          <Badge variant="outline">{row.originName}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                      <TableCell className="text-sm">
+                        {row.meetingDate 
+                          ? format(parseISO(row.meetingDate), 'dd/MM/yyyy', { locale: ptBR })
+                          : '—'
+                        }
                       </TableCell>
+                      <TableCell className="font-medium">{row.leadName}</TableCell>
+                      <TableCell className="font-mono text-sm">{row.leadPhone || '—'}</TableCell>
+                      <TableCell className="text-sm">{row.leadEmail || '—'}</TableCell>
                       <TableCell>
                         {row.salesChannel !== '—' ? (
                           <Badge 
@@ -583,6 +580,25 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
+                      <TableCell className="text-sm">
+                        {row.contractPaidAt 
+                          ? format(parseISO(row.contractPaidAt), 'dd/MM/yyyy', { locale: ptBR })
+                          : '—'
+                        }
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {row.netValue != null ? `R$ ${row.netValue.toFixed(2)}` : '—'}
+                      </TableCell>
+                      <TableCell>
+                        {row.isRefunded ? (
+                          <Badge variant="destructive" className="bg-destructive/20 text-destructive border-destructive/30">
+                            Sim
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Não</span>
+                        )}
+                      </TableCell>
+                      <TableCell>{row.closerName}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
