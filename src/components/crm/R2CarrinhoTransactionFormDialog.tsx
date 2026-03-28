@@ -38,14 +38,7 @@ import { cn } from '@/lib/utils';
 import { useAllApprovedAttendees, ApprovedAttendeeWithWeek } from '@/hooks/useAllApprovedAttendees';
 import { useCreateCarrinhoTransaction } from '@/hooks/useCreateCarrinhoTransaction';
 import { useUpdateCarrinhoTransaction } from '@/hooks/useUpdateCarrinhoTransaction';
-
-// Produtos de parceria disponíveis
-const PARCERIA_PRODUCTS = [
-  { name: 'A009 - MCF INCORPORADOR COMPLETO + THE CLUB', price: 19500 },
-  { name: 'A001 - MCF INCORPORADOR COMPLETO', price: 14500 },
-  { name: 'A003 - INCORPORADOR ESSENCIAL', price: 7500 },
-  { name: 'A004 - INCORPORADOR START', price: 5500 },
-];
+import { useProductConfigurations } from '@/hooks/useProductConfigurations';
 
 // Transaction data for edit mode
 export interface TransactionToEdit {
@@ -76,6 +69,17 @@ export function R2CarrinhoTransactionFormDialog({
   editMode = false,
   transactionToEdit,
 }: R2CarrinhoTransactionFormDialogProps) {
+  const { data: allProductConfigs = [] } = useProductConfigurations();
+  
+  // Produtos de parceria dinâmicos (categorias: incorporador, parceria, ob_vitalicio)
+  const parceriaProducts = useMemo(() => {
+    const validCategories = ['incorporador', 'parceria', 'ob_vitalicio'];
+    return allProductConfigs
+      .filter(p => p.is_active && validCategories.includes(p.product_category))
+      .map(p => ({ name: p.product_name, price: p.reference_price }))
+      .sort((a, b) => b.price - a.price);
+  }, [allProductConfigs]);
+
   const { data: allApprovedAttendees = [], isLoading: isLoadingAttendees } = useAllApprovedAttendees();
   const createTransaction = useCreateCarrinhoTransaction();
   const updateTransaction = useUpdateCarrinhoTransaction();
@@ -147,7 +151,7 @@ export function R2CarrinhoTransactionFormDialog({
   // Quando selecionar produto, preencher preço
   const handleProductChange = (productName: string) => {
     setSelectedProduct(productName);
-    const product = PARCERIA_PRODUCTS.find(p => p.name === productName);
+    const product = parceriaProducts.find(p => p.name === productName);
     if (product) {
       setProductPrice(product.price);
       // Estimar líquido como ~67% do bruto (aproximação)
@@ -328,7 +332,7 @@ export function R2CarrinhoTransactionFormDialog({
                 <SelectValue placeholder="Selecione o produto" />
               </SelectTrigger>
               <SelectContent>
-                {PARCERIA_PRODUCTS.map((product) => (
+                {parceriaProducts.map((product) => (
                   <SelectItem key={product.name} value={product.name}>
                     <div className="flex justify-between items-center gap-4">
                       <span>{product.name}</span>
