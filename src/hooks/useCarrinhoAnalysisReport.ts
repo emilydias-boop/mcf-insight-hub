@@ -490,7 +490,56 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const r2Map = new Map<string, R2Lookup>();
       mergeR2IntoMap(r2Result.data, r2Map);
 
-      // === PHONE FALLBACK: Find contacts by phone when email-based contact has no deals ===
+      // === RE-PICK BEST CONTACT PER EMAIL after deals/R1/R2 are loaded ===
+      for (const [email, contacts] of allContactsByEmail.entries()) {
+        if (contacts.length <= 1) continue;
+        const current = contactMap.get(email);
+        let bestContact = current || contacts[0];
+        let bestScore = scoreContact(bestContact.id, dealMap, r1Map, r2Map);
+
+        for (const candidate of contacts) {
+          if (candidate.id === bestContact.id) continue;
+          const score = scoreContact(candidate.id, dealMap, r1Map, r2Map);
+          if (score > bestScore) {
+            bestContact = candidate;
+            bestScore = score;
+          }
+        }
+
+        // Update contactMap to point to the best contact
+        contactMap.set(email, bestContact);
+
+        // Merge tags from ALL contacts' deals into the best contact's deal entry
+        for (const candidate of contacts) {
+          if (candidate.id === bestContact.id) continue;
+          const otherDeal = dealMap.get(candidate.id);
+          if (!otherDeal) continue;
+          const bestDeal = dealMap.get(bestContact.id);
+          if (bestDeal) {
+            bestDeal.tags = [...new Set([...bestDeal.tags, ...otherDeal.tags])];
+            if (!bestDeal.sdrName && otherDeal.sdrName) bestDeal.sdrName = otherDeal.sdrName;
+            if (!bestDeal.originName && otherDeal.originName) bestDeal.originName = otherDeal.originName;
+            if (!bestDeal.leadChannel && otherDeal.leadChannel) bestDeal.leadChannel = otherDeal.leadChannel;
+            if (!bestDeal.saleOrigin && otherDeal.saleOrigin) bestDeal.saleOrigin = otherDeal.saleOrigin;
+            if (!bestDeal.dataSource && otherDeal.dataSource) bestDeal.dataSource = otherDeal.dataSource;
+          } else {
+            dealMap.set(bestContact.id, { ...otherDeal });
+          }
+          // Merge R1
+          const otherR1 = r1Map.get(candidate.id);
+          const bestR1 = r1Map.get(bestContact.id);
+          if (otherR1 && (!bestR1 || otherR1.date < bestR1.date)) {
+            r1Map.set(bestContact.id, otherR1);
+          }
+          // Merge R2
+          const otherR2 = r2Map.get(candidate.id);
+          const bestR2 = r2Map.get(bestContact.id);
+          if (otherR2 && !bestR2) {
+            r2Map.set(bestContact.id, otherR2);
+          }
+        }
+      }
+
       const phoneSuffixesForLookup: string[] = [];
       for (const tx of uniqueContracts) {
         const email = (tx.customer_email || '').toLowerCase().trim();
