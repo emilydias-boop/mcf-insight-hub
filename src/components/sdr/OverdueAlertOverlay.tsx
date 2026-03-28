@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePendingNextActions } from '@/hooks/usePendingNextActions';
-import { useOverdueAlertSound } from '@/hooks/useOverdueAlertSound';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { AlertTriangle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -16,9 +16,6 @@ export const OverdueAlertOverlay = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Sound alert (respects dismiss)
-  const effectiveOverdue = isDismissed ? 0 : overdueCount;
-  useOverdueAlertSound(effectiveOverdue);
 
   // Auto-restore after snooze
   useEffect(() => {
