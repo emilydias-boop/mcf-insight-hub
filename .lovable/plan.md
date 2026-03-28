@@ -1,34 +1,33 @@
 
 
-## Corrigir valor bruto da Parceria usando lógica de preço de referência
+## Fix: Valor bruto da parceria usando `reference_price` do banco
 
 ### Problema
 
-A query de parcerias (linha 422) busca apenas `product_price` e `net_value`. O `product_price` no `hubla_transactions` pode ser o valor da parcela (não o bruto total). O correto é usar a mesma lógica de `getDeduplicatedGross()` que considera `reference_price`, `gross_override` e `installment_number`.
+A query de parcerias (linha 422) **não busca `reference_price`** da tabela `hubla_transactions`. A função `getDeduplicatedGross()` então cai no fallback hardcoded (`getFixedGrossPrice`), que pode retornar valores desatualizados ou incorretos — ignorando o que foi configurado na aba Produtos.
 
 ### Correção
 
-**`src/hooks/useCarrinhoAnalysisReport.ts`**:
+**`src/hooks/useCarrinhoAnalysisReport.ts`** — 2 pontos:
 
-1. **Expandir select da query de parcerias** (linha 422): adicionar `reference_price, gross_override, installment_number, id`
+1. **Expandir select** (linha 423): adicionar `reference_price`
 ```typescript
-.select('id, customer_email, sale_date, product_name, product_price, net_value, reference_price, gross_override, installment_number')
+.select('id, customer_email, sale_date, product_name, product_price, net_value, gross_override, installment_number, reference_price')
 ```
 
-2. **Calcular bruto correto no parceriaMap** (linhas 450-454): usar `getDeduplicatedGross()` (importado de `incorporadorPricing`) em vez de `product_price` direto
+2. **Passar `reference_price` para `getDeduplicatedGross`** (linhas 455-460):
 ```typescript
-import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
-
-// Ao montar o map:
 const grossValue = getDeduplicatedGross({
   product_name: p.product_name,
   product_price: p.product_price,
   installment_number: p.installment_number,
   gross_override: p.gross_override,
-  reference_price: p.reference_price,
-}, true); // isFirstOfGroup = true pois pegamos 1 por email
+  reference_price: p.reference_price,  // ← ADICIONADO
+}, true);
 ```
 
+Isso faz a Regra 5 (`reference_price`) ser aplicada antes do fallback hardcoded (Regra 6), respeitando o valor configurado na aba Produtos.
+
 ### Arquivo alterado
-- `src/hooks/useCarrinhoAnalysisReport.ts` (2 pontos: query select + cálculo do grossValue)
+- `src/hooks/useCarrinhoAnalysisReport.ts` (2 pontos)
 
