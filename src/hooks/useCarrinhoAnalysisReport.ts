@@ -727,7 +727,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         const uniqueR1Emails = [...new Set(emailsWithoutR1)];
         const { data: r1ByEmail } = await supabase
           .from('meeting_slot_attendees')
-          .select('contact_id, status, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, closer:closers(name)), contact:crm_contacts!inner(email)')
+          .select('contact_id, status, booked_by, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, closer:closers(name)), contact:crm_contacts!inner(email)')
           .eq('meeting_slots.meeting_type', 'r1')
           .in('crm_contacts.email', uniqueR1Emails);
 
@@ -741,6 +741,23 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           if (!existing || slot.scheduled_at < existing.date) {
             const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
             r1Map.set(contact.id, { date: slot.scheduled_at, realized, closerName: slot.closer?.name || null, bookedByName: null, bookedById: (a as any).booked_by || null });
+          }
+        }
+
+        // Second pass: resolve booked_by names for fallback R1 entries
+        const newBookedByIds = new Set<string>();
+        for (const r1 of r1Map.values()) {
+          if (r1.bookedById && !r1.bookedByName) newBookedByIds.add(r1.bookedById);
+        }
+        if (newBookedByIds.size > 0) {
+          const { data: newProfiles } = await supabase
+            .from('profiles').select('id, full_name')
+            .in('id', Array.from(newBookedByIds));
+          for (const p of newProfiles || []) {
+            if (!p.full_name) continue;
+            for (const r1 of r1Map.values()) {
+              if (r1.bookedById === p.id) r1.bookedByName = p.full_name;
+            }
           }
         }
       }
