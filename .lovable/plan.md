@@ -1,57 +1,46 @@
 
 
-## Melhorar coluna "Canal" — distinguir ANAMNESE / ANAMNESE-INSTA / HUBLA (A010)
+## Remover coluna A010 e corrigir classificação de Canal (ANAMNESE vs LIVE)
 
-### Problema atual
+### Problema
 
-A coluna "Canal" mostra `lead_channel` bruto (ex: `ANAMNESE-INSTA-MCF`, `CLIENTDATA-INSIDE`) ou `data_source` (`webhook`, `csv`). Isso não é claro o suficiente — o usuário quer saber de forma simples:
-- **ANAMNESE** — lead entrou pelo webhook de anamnese
-- **ANAMNESE-INSTA** — lead entrou pelo webhook de anamnese Instagram
-- **HUBLA / A010** — lead entrou pela compra direta do A010 na Hubla
-- **LIVE** — lead veio de live
-- **CLIENTDATA** — base de clientes
-- **LEAD-FORM** — formulário de captação
+1. **Coluna A010 redundante** — o canal já indica se veio pela Hubla (A010) ou por ANAMNESE.
+2. **Classificação errada de canal** — Leads como Thalita que têm tag ANAMNESE no CRM mas `lead_channel = LIVE` aparecem como "LIVE" em vez de "ANAMNESE". A função `classifyChannel` prioriza `lead_channel` sobre tags, mas a tag ANAMNESE é mais relevante para o operacional.
 
 ### Solução
 
-**`src/hooks/useCarrinhoAnalysisReport.ts`** — Criar função `classifyChannel` que normaliza o canal:
+**`src/hooks/useCarrinhoAnalysisReport.ts`** — Inverter prioridade no `classifyChannel`: checar tags ANAMNESE **antes** de `lead_channel`:
 
 ```typescript
-function classifyChannel(leadChannel: string | null, dataSource: string | null, tags: string[]): string | null {
-  const lc = (leadChannel || '').toUpperCase();
+function classifyChannel(leadChannel, dataSource, tags, hasA010) {
+  // Tags têm prioridade para ANAMNESE (mais confiável)
+  if (tags.some(t => t.toUpperCase().includes('ANAMNESE-INSTA'))) return 'ANAMNESE-INSTA';
+  if (tags.some(t => t.toUpperCase().includes('ANAMNESE'))) return 'ANAMNESE';
   
+  // Depois checar lead_channel
+  const lc = (leadChannel || '').toUpperCase();
   if (lc.includes('ANAMNESE-INSTA')) return 'ANAMNESE-INSTA';
   if (lc.includes('ANAMNESE')) return 'ANAMNESE';
   if (lc.includes('LIVE')) return 'LIVE';
-  if (lc.includes('LEAD-FORM') || lc.includes('LEADFORM')) return 'LEAD-FORM';
+  if (lc.includes('LEAD-FORM')) return 'LEAD-FORM';
   if (lc.includes('CLIENTDATA')) return 'CLIENTDATA';
-  if (lc) return lc; // outro lead_channel específico
+  if (lc) return lc;
   
-  // Fallback: sem lead_channel, checar data_source
   if (dataSource === 'webhook') return 'WEBHOOK';
   if (dataSource === 'csv') return 'CSV';
-  
-  // Fallback: checar tags
-  if (tags.some(t => t.toUpperCase().includes('ANAMNESE'))) return 'ANAMNESE';
-  
-  // Se tem compra A010 na Hubla mas sem deal/webhook → veio direto pela Hubla
-  return null;
+  if (hasA010) return 'HUBLA (A010)';
+  return '';
 }
 ```
 
-- Adicionar `tags` ao select de `crm_deals` (linha 212)
-- Guardar `tags` no `dealMap`
-- Na montagem do lead: `canalEntrada: classifyChannel(deal?.leadChannel, deal?.dataSource, deal?.tags || [])`
-- Se `canalEntrada` ficar null mas o lead tem `dataA010` (compra Hubla), marcar como `'HUBLA (A010)'`
+**`src/components/relatorios/CarrinhoAnalysisReportPanel.tsx`**:
+- Remover coluna "A010" (header + cell) da tabela e do export Excel
+- Manter apenas a coluna "Canal"
 
-**`src/components/relatorios/CarrinhoAnalysisReportPanel.tsx`** — Atualizar as cores dos badges:
-- ANAMNESE → roxo
-- ANAMNESE-INSTA → rosa/pink
-- HUBLA (A010) → verde
-- LIVE → azul
-- CLIENTDATA → cinza
-- LEAD-FORM → amarelo
-- WEBHOOK/CSV → slate
+### Resultado
+- Thalita (LIVE + ANAMNESE tag) aparece como **ANAMNESE** em vez de LIVE
+- Coluna A010 removida, canal centraliza a informação de origem
+- Leads sem tag ANAMNESE mas com `lead_channel=LIVE` continuam como LIVE
 
 ### Arquivos alterados
 - `src/hooks/useCarrinhoAnalysisReport.ts`
