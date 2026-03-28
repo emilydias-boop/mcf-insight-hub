@@ -316,7 +316,11 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
           const hublaProductMap = new Map<string, { product_name: string; reference_price: number }>();
           
           // Ordenar para priorizar produtos com código identificável
-          const sortedMatches = (hublaMatches || []).sort((a, b) => {
+          const filteredMatches = (hublaMatches || []).filter(match => {
+            const name = match.product_name?.toUpperCase() || '';
+            return !name.includes('A000') && !name.includes('CONTRATO');
+          });
+          const sortedMatches = filteredMatches.sort((a, b) => {
             const aName = a.product_name?.toUpperCase() || '';
             const bName = b.product_name?.toUpperCase() || '';
             // Priorizar A009 > A001 > A004 > A003 > outros
