@@ -30,7 +30,7 @@ export const useOverdueAlertSound = (overdueCount: number) => {
       if (ctx.state === 'suspended') ctx.resume();
 
       const distortion = ctx.createWaveShaper();
-      distortion.curve = makeDistortionCurve(50) as unknown as Float32Array;
+      (distortion as any).curve = makeDistortionCurve(50);
       distortion.oversample = '4x';
 
       for (let i = 0; i < BEEP_COUNT; i++) {
