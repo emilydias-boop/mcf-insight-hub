@@ -1,60 +1,42 @@
 
 
-## Fix: Canal classification fails because duplicate contacts are ignored
+## Fix: Toda a classificação de Canal falha porque a query de deals retorna erro 400
 
-### Root cause (confirmed by tooltip audit)
+### Causa raiz
 
-The tooltip shows `HasDeal: false, HasContact: true, Tags: []` for Jader (ANAMNESE). This means:
+A query de deals (linha 451) usa:
+```
+owner:profiles!crm_deals_owner_profile_id_fkey(name)
+```
+Mas a tabela `profiles` tem `full_name`, não `name`. Isso causa **HTTP 400** em TODAS as execuções, fazendo `dealsResult.data` retornar `null`. O `dealMap` fica vazio. Resultado: TODA classificação de canal (ANAMNESE, LANÇAMENTO, OUTSIDE, etc.) falha porque depende de dados do deal.
 
-1. **Line 384**: `contactMap.set(email, ...)` — keeps only the **last** contact per email. If Jader has 2 contacts with the same email, one with deals (ANAMNESE tags) and one without, the wrong one may be kept.
-2. **Line 437**: `contactIds` is built from `contactMap` values — only one contact_id per email.
-3. **Line 442-460**: Deals, R1, R2 are queried only for those contact_ids — the contact with the actual ANAMNESE deal is never queried.
+O mesmo erro aparece na segunda query de deals para phone fallback (linha 579-580).
 
-This affects ALL leads with duplicate contacts: ANAMNESE, OUTSIDE, LIVE — any lead where the "wrong" contact was kept.
+### Correção
 
-### Fix
+**`src/hooks/useCarrinhoAnalysisReport.ts`** — 2 linhas:
 
-**`src/hooks/useCarrinhoAnalysisReport.ts`**:
+1. **Linha 451**: Trocar `(name)` por `(full_name)` no select da query de deals
+2. **Linha 580**: Mesma correção na query de deals do phone fallback
 
-1. **Collect ALL contact IDs from the email query**, not just one per email:
 ```typescript
-// Keep contactMap as-is (one per email for later lookup)
-// But build contactIds from ALL contacts returned
-const allContactIds = Array.from(new Set(
-  (contactsResult.data || []).map(c => c.id)
-));
+// De:
+owner:profiles!crm_deals_owner_profile_id_fkey(name)
+// Para:
+owner:profiles!crm_deals_owner_profile_id_fkey(full_name)
 ```
 
-2. **Use `allContactIds` for deals/R1/R2 queries** (lines 442-460) instead of `contactIds`.
-
-3. **After deals are loaded, pick the best contact per email** — the one with the most data (deals, R1, R2):
+E ajustar `mergeDealsIntoMap` (linha 218) que lê `d.owner?.name`:
 ```typescript
-// For each email with multiple contacts, pick the one with deals
-for (const c of contactsResult.data || []) {
-  const email = (c.email || '').toLowerCase().trim();
-  if (!email) continue;
-  const current = contactMap.get(email);
-  if (!current) {
-    contactMap.set(email, { id: c.id, phone: c.phone });
-  } else if (!dealMap.has(current.id) && dealMap.has(c.id)) {
-    // Swap to the contact that actually has deals
-    contactMap.set(email, { id: c.id, phone: c.phone });
-  } else if (dealMap.has(current.id) && dealMap.has(c.id)) {
-    // Both have deals — merge tags
-    mergeDealsIntoMap(/* already done */);
-  }
-}
+// De:
+const sdrName = (d as any).owner?.name || null;
+// Para:
+const sdrName = (d as any).owner?.full_name || null;
 ```
 
-4. **Merge deal tags across ALL contacts for the same email** so that even if we pick one contact, the ANAMNESE tag from another contact's deal is preserved.
+### Impacto
+Corrige de uma vez: ANAMNESE, OUTSIDE, LANÇAMENTO, A010, BASE CLINT — tudo que depende de tags/origin/channel do deal.
 
-### Changes summary
-
-- Store all contact IDs for querying, not just one per email
-- After loading deals/R1/R2, re-evaluate which contact per email is best
-- Merge tags from all duplicate contacts' deals into the chosen contact's deal entry
-- This fixes ANAMNESE, OUTSIDE, and any classification that depends on deal data
-
-### File changed
-- `src/hooks/useCarrinhoAnalysisReport.ts`
+### Arquivo alterado
+- `src/hooks/useCarrinhoAnalysisReport.ts` (3 pontos)
 
