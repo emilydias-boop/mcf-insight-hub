@@ -1,53 +1,48 @@
 
 
-## Aprimorar "Próxima Ação" — alerta no card + painel no SDR
+## Alerta sonoro agressivo para Próximas Ações atrasadas
 
-### Visão geral
+### Objetivo
+Fazer o sistema "irritar" o SDR com som e alertas visuais impossíveis de ignorar quando há ações atrasadas.
 
-Três mudanças principais:
+### Mudanças
 
-1. **Alerta visual no DealKanbanCard** — badge pulsante mostrando a próxima ação (tipo + data). Se atrasada, fica vermelho com animação. Visível para todos os roles.
+#### 1. `src/hooks/useOverdueAlertSound.ts` (novo)
+Hook que:
+- Usa Web Audio API para gerar um beep de alerta (sem precisar de arquivo .mp3)
+- Toca som a cada 30 segundos enquanto houver ações atrasadas
+- Toca som imediatamente ao detectar novas ações atrasadas
+- Usa `useRef` para controlar intervalo e evitar tocar quando tab está inativa (`document.hidden`)
+- Função `playAlertBeep()` gera tom de 800Hz por 200ms, pausa, repete 3x (padrão urgente)
+- Respeita um estado `muted` (botão para silenciar temporariamente por 5 min)
 
-2. **Painel "Minhas Próximas Ações" na página Minhas Reuniões** — lista dedicada com as ações pendentes do SDR, ordenadas por urgência (atrasadas primeiro). Com botões para executar a ação (ligar/whatsapp/email). Apenas para o SDR dono.
+#### 2. `src/components/sdr/PendingActionsPanel.tsx` (atualizar)
+- Integrar `useOverdueAlertSound` passando `overdueCount`
+- Adicionar botão "Silenciar 5min" (ícone Volume/VolumeX) no header quando há atrasadas
+- Modal/toast fullscreen bloqueante quando há 3+ ações atrasadas: overlay vermelho com "Você tem X ações atrasadas!" e botão "Ver ações" que abre o painel
+- Animação mais agressiva: `animate-bounce` no header + borda vermelha grossa pulsante
 
-3. **Hook `usePendingNextActions`** — busca deals do SDR logado que tenham `next_action_date` preenchido, ordenados por data.
+#### 3. `src/components/sdr/OverdueAlertOverlay.tsx` (novo)
+Overlay vermelho semi-transparente que aparece quando há ações atrasadas:
+- Fixo no canto inferior direito (não bloqueia uso, mas incomoda)
+- Mostra contagem de atrasadas com ícone pulsante
+- Som de alerta ao aparecer
+- Botão "Resolver agora" que scrolla até o painel
+- Aparece apenas na rota do SDR (MinhasReunioes e Negocios)
 
-### Detalhes técnicos
+#### 4. `src/pages/sdr/MinhasReunioes.tsx` (atualizar)
+- Importar e renderizar `<OverdueAlertOverlay />`
 
-#### 1. `src/hooks/usePendingNextActions.ts` (novo)
+### Comportamento do som
+- Beep triplo usando Web Audio API (oscilador 800Hz, gain ramp)
+- Toca ao carregar a página se há atrasadas
+- Repete a cada 30s enquanto houver atrasadas
+- Para quando todas as ações são concluídas ou silenciadas
+- Silenciar temporário: 5 minutos, depois volta
 
-Query que busca `crm_deals` do usuário logado com `next_action_type IS NOT NULL`, join com `crm_contacts` para nome/telefone/email. Retorna lista ordenada por `next_action_date ASC` (atrasadas primeiro). Campos: `dealId`, `dealName`, `contactPhone`, `actionType`, `actionDate`, `actionNote`, `isOverdue`.
-
-#### 2. `src/components/crm/DealKanbanCard.tsx`
-
-Adicionar na Linha 2 (entre badges e nome do lead) um indicador de próxima ação:
-- Se `deal.next_action_type` existe: badge com icone do tipo + data formatada (ex: "📞 28/03 14:00")
-- Se `deal.next_action_date < now`: badge vermelho pulsante com `animate-pulse` + texto "⚠️ Atrasada"
-- Se não tem próxima ação: nada
-
-#### 3. `src/components/sdr/PendingActionsPanel.tsx` (novo)
-
-Componente que exibe lista de ações pendentes do SDR:
-- Header com contagem total + atrasadas (badge vermelho pulsante)
-- Cada item mostra: tipo (icone), nome do lead, data/hora, nota, status (atrasada/hoje/futura)
-- Botão de ação rápida (ligar via Twilio, abrir WhatsApp, email)
-- Botão "Concluir" que limpa a próxima ação do deal
-- Itens atrasados ficam com borda vermelha e fundo vermelho/5
-- Itens de hoje ficam com borda amarela
-- Sons/animação: atrasadas pulsam, hoje tem destaque amarelo
-
-#### 4. `src/pages/sdr/MinhasReunioes.tsx`
-
-Inserir `<PendingActionsPanel />` logo após o header (antes dos Summary Cards, ~linha 229). Fica no topo para "fazer barulho" — o SDR vê as ações pendentes assim que abre a página.
-
-### Regras de visibilidade
-
-- **Card Kanban (todos os roles)**: badge visual de próxima ação + indicador de atraso
-- **Painel de ações (apenas SDR)**: lista interativa com botões de execução na página "Minhas Reuniões"
-
-### Arquivos alterados/criados
-- `src/hooks/usePendingNextActions.ts` (novo)
-- `src/components/sdr/PendingActionsPanel.tsx` (novo)
-- `src/components/crm/DealKanbanCard.tsx` (adicionar badge de próxima ação)
-- `src/pages/sdr/MinhasReunioes.tsx` (inserir PendingActionsPanel)
+### Arquivos
+- `src/hooks/useOverdueAlertSound.ts` (novo)
+- `src/components/sdr/OverdueAlertOverlay.tsx` (novo)
+- `src/components/sdr/PendingActionsPanel.tsx` (atualizar)
+- `src/pages/sdr/MinhasReunioes.tsx` (atualizar)
 
