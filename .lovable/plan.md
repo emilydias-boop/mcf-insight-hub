@@ -1,23 +1,28 @@
 
 
-## Fix: Preços dos produtos de parceria hardcoded no dialog de edição
+## Fix: Enriquecimento de "Parceria" genérica está pegando "A000 - Contrato"
 
-### Problema
+### Causa raiz
 
-O `R2CarrinhoTransactionFormDialog.tsx` usa uma lista `PARCERIA_PRODUCTS` hardcoded (linhas 43-48) com preços antigos (ex: A001 = R$ 14.500). Quando o usuário seleciona um produto ou edita uma venda, o "Valor Bruto" vem dessa lista ao invés dos preços configurados na aba Produtos (`product_configurations`).
+O enriquecimento de transações genéricas "Parceria" (linhas 306-311) busca transações do mesmo email no Hubla com `product_category IN ('incorporador', 'parceria', 'ob_vitalicio')`. Como "A000 - Contrato" tem category `incorporador`, ele é selecionado como candidato. Na prioridade (linhas 323-328), A000 cai no bucket 5 (outros), mas se não existir A001/A009/etc para aquele email, o A000 é usado — substituindo o nome "Parceria" por "A000 - Contrato".
 
 ### Correção
 
-**`src/components/crm/R2CarrinhoTransactionFormDialog.tsx`**:
+**`src/hooks/useR2CarrinhoVendas.ts`** — 2 pontos:
 
-1. **Remover `PARCERIA_PRODUCTS` hardcoded** (linhas 43-48)
-2. **Importar `useProductConfigurations`** e buscar produtos com `product_category = 'parceria'` (ou categorias relevantes como `incorporador`, `parceria`, `ob_vitalicio`)
-3. **Construir lista dinâmica** a partir de `product_configurations`, usando `reference_price` como preço exibido no dropdown
-4. **Atualizar `handleProductChange`** (linhas 148-156) para usar o `reference_price` da configuração ao invés do preço hardcoded
-5. **Atualizar o dropdown** (renderização dos `SelectItem`) para mostrar o preço dinâmico
+1. **Filtrar A000/Contrato dos candidatos de enriquecimento** (após linha 318): antes de ordenar, excluir transações cujo nome contém "A000" ou "Contrato" (case-insensitive), pois são pagamentos de contrato e não produtos de parceria.
 
-Resultado: quando o preço é alterado na aba Produtos, o dropdown e o auto-preenchimento do dialog refletem imediatamente.
+```typescript
+const filteredMatches = (hublaMatches || []).filter(match => {
+  const name = match.product_name?.toUpperCase() || '';
+  return !name.includes('A000') && !name.includes('CONTRATO');
+});
+```
+
+2. **Usar `filteredMatches` no sort** em vez de `hublaMatches` (linha 319).
+
+Isso garante que apenas produtos de parceria reais (A001, A009, A003, A004, etc.) sejam usados para enriquecer transações genéricas.
 
 ### Arquivo alterado
-- `src/components/crm/R2CarrinhoTransactionFormDialog.tsx`
+- `src/hooks/useR2CarrinhoVendas.ts`
 
