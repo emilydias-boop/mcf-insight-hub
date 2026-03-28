@@ -584,13 +584,29 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           dataParceria: parceria?.date || null,
           reembolso: hasRefund,
           isOutside,
-          canalEntrada: classifyChannel({
-            tags: deal?.tags || [],
-            originName: deal?.originName || null,
-            leadChannel: deal?.leadChannel || null,
-            dataSource: deal?.dataSource || null,
-            hasA010: !!a010Date,
-          }) || null,
+          canalEntrada: (() => {
+            const dealTags = deal?.tags || [];
+            const classified = classifyChannel({
+              tags: dealTags,
+              originName: deal?.originName || null,
+              leadChannel: deal?.leadChannel || null,
+              dataSource: deal?.dataSource || null,
+              hasA010: !!a010Date,
+            });
+            if (classified) return classified;
+            // Fallback: best raw tag
+            const rawTag = getBestRawTag(dealTags);
+            if (rawTag) return rawTag;
+            // Fallback: origin name
+            if (deal?.originName) return deal.originName.toUpperCase();
+            // Fallback: lead channel
+            if (deal?.leadChannel) return deal.leadChannel.toUpperCase();
+            // Fallback: data source
+            if (deal?.dataSource && deal.dataSource !== 'csv' && deal.dataSource !== 'webhook') return deal.dataSource.toUpperCase();
+            // Fallback: A010
+            if (a010Date) return 'HUBLA (A010)';
+            return null;
+          })(),
           motivoGap,
           tipoGap,
           observacao: null,
