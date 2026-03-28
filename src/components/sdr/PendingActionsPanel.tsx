@@ -8,7 +8,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Phone, MessageCircle, Mail, Video, CheckCircle2,
-  ChevronDown, AlertTriangle, Bell, Loader2, Volume2, VolumeX
+  ChevronDown, AlertTriangle, Bell, Loader2
 } from 'lucide-react';
 import { usePendingNextActions, useCompleteNextAction, PendingAction } from '@/hooks/usePendingNextActions';
 import { useTwilio } from '@/contexts/TwilioContext';
