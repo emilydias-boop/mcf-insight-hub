@@ -13,7 +13,7 @@ import { BusinessUnit } from '@/hooks/useMyBU';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { DateRange } from 'react-day-picker';
-import { BrazilMap } from './BrazilMap';
+import { BrazilMap, BrazilMapStateData } from './BrazilMap';
 
 type PeriodType = 'semana' | 'mes' | 'personalizado';
 
