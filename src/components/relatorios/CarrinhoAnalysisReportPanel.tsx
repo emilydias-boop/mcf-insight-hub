@@ -116,6 +116,8 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
       'R2 Realizada': l.r2Realizada ? 'Sim' : 'Não',
       'Status R2': l.statusR2 || '—',
       'Parceria': l.comprouParceria ? 'Sim' : 'Não',
+      'Parceria Bruto': l.parceriaBruto != null ? l.parceriaBruto : '',
+      'Parceria Líquido': l.parceriaLiquido != null ? l.parceriaLiquido : '',
       'Reembolso': l.reembolso ? 'Sim' : 'Não',
       'Motivo Gap': l.motivoGap || '—',
       'Tipo Gap': l.tipoGap === 'operacional' ? 'Operacional' : l.tipoGap === 'legitima' ? 'Legítima' : '—',
@@ -527,10 +529,18 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
                         <TableCell>{l.r2Realizada ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> : l.r2Agendada ? <Calendar className="h-3.5 w-3.5 text-amber-500" /> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
                         <TableCell className="text-xs">{l.statusR2 || '—'}</TableCell>
                         <TableCell>
-                          {l.comprouParceria ? (
-                            <Badge className="bg-green-100 text-green-800 text-[10px]">
-                              Sim {l.dataParceria ? format(new Date(l.dataParceria), 'dd/MM') : ''}
-                            </Badge>
+                        {l.comprouParceria ? (
+                            <div className="flex flex-col gap-0.5">
+                              <Badge className="bg-green-100 text-green-800 text-[10px]">
+                                Sim {l.dataParceria ? format(new Date(l.dataParceria), 'dd/MM') : ''}
+                              </Badge>
+                              {(l.parceriaBruto != null || l.parceriaLiquido != null) && (
+                                <div className="text-[9px] text-muted-foreground leading-tight">
+                                  {l.parceriaBruto != null && <div>B: R$ {l.parceriaBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>}
+                                  {l.parceriaLiquido != null && <div>L: R$ {l.parceriaLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>}
+                                </div>
+                              )}
+                            </div>
                           ) : <span className="text-muted-foreground text-xs">—</span>}
                         </TableCell>
                         <TableCell>
