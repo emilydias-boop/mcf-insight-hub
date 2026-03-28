@@ -1,42 +1,40 @@
 
 
-## Fix: Toda a classificação de Canal falha porque a query de deals retorna erro 400
+## Normalizar Canal para apenas os 6 valores válidos
 
-### Causa raiz
-
-A query de deals (linha 451) usa:
-```
-owner:profiles!crm_deals_owner_profile_id_fkey(name)
-```
-Mas a tabela `profiles` tem `full_name`, não `name`. Isso causa **HTTP 400** em TODAS as execuções, fazendo `dealsResult.data` retornar `null`. O `dealMap` fica vazio. Resultado: TODA classificação de canal (ANAMNESE, LANÇAMENTO, OUTSIDE, etc.) falha porque depende de dados do deal.
-
-O mesmo erro aparece na segunda query de deals para phone fallback (linha 579-580).
+### Problema
+O `classifyChannel` retorna muitos valores intermediários (BASE CLINT, HUBLA, BIO-INSTAGRAM, DUPLICADO-LIMBO, CSV, WEBHOOK, LEAD-FORM, A010 (MAKE), etc.) que não deveriam aparecer no relatório. O usuário quer apenas: **A010, LIVE, ANAMNESE, ANAMNESE-INSTA, OUTSIDE, LANÇAMENTO**.
 
 ### Correção
 
-**`src/hooks/useCarrinhoAnalysisReport.ts`** — 2 linhas:
-
-1. **Linha 451**: Trocar `(name)` por `(full_name)` no select da query de deals
-2. **Linha 580**: Mesma correção na query de deals do phone fallback
+**`src/hooks/useCarrinhoAnalysisReport.ts`** — Adicionar uma função de normalização e aplicá-la ao resultado do `canalEntrada`:
 
 ```typescript
-// De:
-owner:profiles!crm_deals_owner_profile_id_fkey(name)
-// Para:
-owner:profiles!crm_deals_owner_profile_id_fkey(full_name)
+const VALID_CHANNELS = new Set(['A010', 'LIVE', 'ANAMNESE', 'ANAMNESE-INSTA', 'OUTSIDE', 'LANÇAMENTO']);
+
+function normalizeChannel(raw: string): string {
+  if (VALID_CHANNELS.has(raw)) return raw;
+  // Map known variants to valid channels
+  const upper = raw.toUpperCase();
+  if (upper.includes('ANAMNESE-INSTA') || upper.includes('ANAMNESE INSTA')) return 'ANAMNESE-INSTA';
+  if (upper.includes('ANAMNESE')) return 'ANAMNESE';
+  if (upper.includes('A010')) return 'A010';  // covers "A010 (MAKE)", "HUBLA (A010)", etc.
+  if (upper.includes('LANÇAMENTO') || upper.includes('LANCAMENTO')) return 'LANÇAMENTO';
+  // Everything else (BASE CLINT, HUBLA, BIO-INSTAGRAM, DUPLICADO-LIMBO, CSV, WEBHOOK, LEAD-FORM, etc.) → LIVE
+  return 'LIVE';
+}
 ```
 
-E ajustar `mergeDealsIntoMap` (linha 218) que lê `d.owner?.name`:
+Aplicar no IIFE do `canalEntrada` (linha ~810), envolvendo o resultado:
 ```typescript
-// De:
-const sdrName = (d as any).owner?.name || null;
-// Para:
-const sdrName = (d as any).owner?.full_name || null;
+canalEntrada: normalizeChannel((() => {
+  // ... lógica existente ...
+})()),
 ```
 
-### Impacto
-Corrige de uma vez: ANAMNESE, OUTSIDE, LANÇAMENTO, A010, BASE CLINT — tudo que depende de tags/origin/channel do deal.
+Também atualizar o filtro de Canal no painel (`CarrinhoAnalysisReportPanel.tsx`) para listar apenas esses 6 valores.
 
-### Arquivo alterado
-- `src/hooks/useCarrinhoAnalysisReport.ts` (3 pontos)
+### Arquivos alterados
+- `src/hooks/useCarrinhoAnalysisReport.ts` (adicionar `normalizeChannel`, aplicar no IIFE)
+- `src/components/relatorios/CarrinhoAnalysisReportPanel.tsx` (filtro de Canal com valores fixos)
 
