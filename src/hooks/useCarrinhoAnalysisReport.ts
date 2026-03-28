@@ -420,7 +420,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           .eq('sale_status', 'refunded'),
         // Parcerias
         supabase.from('hubla_transactions')
-          .select('id, customer_email, sale_date, product_name, product_price, net_value, gross_override, installment_number')
+          .select('id, customer_email, sale_date, product_name, product_price, net_value, gross_override, installment_number, reference_price')
           .eq('product_category', 'parceria')
           .in('sale_status', ['completed', 'paid'])
           .in('customer_email', emails),
@@ -457,6 +457,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
             product_price: p.product_price,
             installment_number: p.installment_number,
             gross_override: p.gross_override,
+            reference_price: p.reference_price,
           }, true);
           parceriaMap.set(e, { date: p.sale_date || '', product: p.product_name || '', grossValue, netValue: p.net_value ?? null });
         }
