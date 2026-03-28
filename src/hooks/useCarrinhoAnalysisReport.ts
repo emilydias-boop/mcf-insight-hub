@@ -4,18 +4,18 @@ import { format } from 'date-fns';
 import { getUFFromPhone, getClusterFromUF } from '@/lib/dddToUF';
 
 function classifyChannel(leadChannel: string | null, dataSource: string | null, tags: string[], hasA010: boolean): string {
-  const lc = (leadChannel || '').toUpperCase();
+  // Tags têm prioridade para ANAMNESE (mais confiável que lead_channel)
+  if (tags.some(t => t.toUpperCase().includes('ANAMNESE-INSTA'))) return 'ANAMNESE-INSTA';
+  if (tags.some(t => t.toUpperCase().includes('ANAMNESE'))) return 'ANAMNESE';
   
+  // Depois checar lead_channel
+  const lc = (leadChannel || '').toUpperCase();
   if (lc.includes('ANAMNESE-INSTA')) return 'ANAMNESE-INSTA';
   if (lc.includes('ANAMNESE')) return 'ANAMNESE';
   if (lc.includes('LIVE')) return 'LIVE';
   if (lc.includes('LEAD-FORM') || lc.includes('LEADFORM')) return 'LEAD-FORM';
   if (lc.includes('CLIENTDATA')) return 'CLIENTDATA';
   if (lc) return lc;
-  
-  // Fallback: check tags
-  if (tags.some(t => t.toUpperCase().includes('ANAMNESE-INSTA'))) return 'ANAMNESE-INSTA';
-  if (tags.some(t => t.toUpperCase().includes('ANAMNESE'))) return 'ANAMNESE';
   
   // Fallback: data_source
   if (dataSource === 'webhook') return 'WEBHOOK';
