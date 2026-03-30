@@ -66,7 +66,7 @@ export interface CarrinhoMetricBoundaries {
 export function getCarrinhoMetricBoundaries(
   weekStart: Date,
   weekEnd: Date,
-  _config?: CarrinhoConfig
+  config?: CarrinhoConfig
 ): CarrinhoMetricBoundaries {
   // weekStart = Quinta, weekEnd = Quarta
   const thuStart = startOfDay(new Date(weekStart));
@@ -77,13 +77,22 @@ export function getCarrinhoMetricBoundaries(
   // Sexta do carrinho atual = wedEnd + 2 dias (Qua+2 = Sex)
   const friCurrentCart = endOfDay(addDays(new Date(weekEnd), 2));
 
-  // Vendas parceria: Sex do carrinho → Seg (Sex+3)
-  const friCartStart = startOfDay(addDays(new Date(weekEnd), 2));
-  const monAfterCart = endOfDay(addDays(friCartStart, 3));
+  // Horário de corte da sexta (default 12:00)
+  const horarioCorte = config?.carrinhos?.[0]?.horario_corte || '12:00';
+  const [cutHour, cutMinute] = horarioCorte.split(':').map(Number);
+
+  // Sexta do carrinho atual com corte de horário
+  const friCartCutoff = new Date(addDays(new Date(weekEnd), 2));
+  friCartCutoff.setHours(cutHour, cutMinute || 0, 0, 0);
+
+  // Vendas parceria: Sex do carrinho (após corte) → Seg 23:59
+  const friCartStart = new Date(friCartCutoff);
+  const monAfterCart = endOfDay(addDays(startOfDay(addDays(new Date(weekEnd), 2)), 3));
 
   return {
     contratos: { start: thuStart, end: wedEnd },
     r2Meetings: { start: friAfterPrevCart, end: friCurrentCart },
+    aprovados: { start: friAfterPrevCart, end: friCartCutoff },
     vendasParceria: { start: friCartStart, end: monAfterCart },
     r1Meetings: { start: thuStart, end: wedEnd },
   };
