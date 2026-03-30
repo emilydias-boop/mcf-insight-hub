@@ -45,6 +45,11 @@ export function useCalculatedVariavel({
       return { total: 0, indicators: [] };
     }
 
+    // Pro-rata ratio: if dias_uteis_trabalhados is set and less than full month
+    const proRataRatio = (diasUteisTrabalhados != null && diasUteisTrabalhados < diasUteisMes && diasUteisMes > 0)
+      ? diasUteisTrabalhados / diasUteisMes
+      : 1;
+
     const indicators: IndicatorValue[] = [];
     let total = 0;
 
