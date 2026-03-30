@@ -13,12 +13,44 @@ const phoneSuffix = (phone: string | null | undefined): string => {
   return digits.length >= 9 ? digits.slice(-9) : digits;
 };
 
-const detectChannel = (productName: string | null): string => {
-  const n = (productName || '').toLowerCase();
-  if (n.includes('a010')) return 'A010';
-  if (n.includes('bio') || n.includes('instagram')) return 'BIO';
+const VALID_CHANNELS = new Set(['A010', 'LIVE', 'ANAMNESE', 'ANAMNESE-INSTA', 'OUTSIDE', 'LANÇAMENTO']);
+
+function detectChannel(opts: {
+  productName: string | null;
+  saleOrigin: string | null;
+  tags: string[];
+  isOutside: boolean;
+  productCategory: string | null;
+}): string {
+  const { productName, saleOrigin, tags, isOutside, productCategory } = opts;
+  const pn = (productName || '').toLowerCase();
+  const cat = (productCategory || '').toLowerCase();
+
+  // 1. LANÇAMENTO
+  if (saleOrigin === 'launch' || pn.includes('contrato mcf')) return 'LANÇAMENTO';
+
+  // 2. A010
+  if (cat === 'a010' || pn.includes('a010')) return 'A010';
+
+  // 3. Tags-based (ANAMNESE-INSTA / ANAMNESE)
+  const upperTags = tags.map(t => {
+    if (typeof t === 'string') {
+      if (t.startsWith('{')) {
+        try { const p = JSON.parse(t); return (p?.name || t).toUpperCase(); } catch { return t.toUpperCase(); }
+      }
+      return t.toUpperCase();
+    }
+    return (t as any)?.name?.toUpperCase() || '';
+  });
+  if (upperTags.some(t => t.includes('ANAMNESE-INSTA') || t.includes('ANAMNESE INSTA'))) return 'ANAMNESE-INSTA';
+  if (upperTags.some(t => t.includes('ANAMNESE'))) return 'ANAMNESE';
+
+  // 4. OUTSIDE
+  if (isOutside) return 'OUTSIDE';
+
+  // 5. Fallback
   return 'LIVE';
-};
+}
 
 const classifyOrigin = (tx: HublaTransaction): string => {
   if (tx.sale_origin === 'launch' || (tx.product_name || '').toLowerCase().includes('contrato mcf'))
