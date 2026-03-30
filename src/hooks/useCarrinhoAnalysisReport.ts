@@ -385,7 +385,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         .in('sale_status', ['completed', 'refunded'])
         .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
         .gte('sale_date', effectiveStart.toISOString())
-        .lt('sale_date', effectiveEnd.toISOString())
+        .lte('sale_date', effectiveEnd.toISOString())
         .order('sale_date', { ascending: true });
 
       const validTx = (transactions || []).filter(t => {
