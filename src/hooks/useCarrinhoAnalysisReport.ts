@@ -150,6 +150,11 @@ export interface CarrinhoAnalysisKPIs {
   proximaSemana: number;
   reembolsos: number;
   parceriasVendidas: number;
+  // New cross-metrics
+  totalR1RealizadasSemana: number;
+  taxaContratoR1: number;
+  aprovadosComParceria: number;
+  aprovadosSemParceria: number;
 }
 
 export interface FunnelStep {
