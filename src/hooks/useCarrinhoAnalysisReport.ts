@@ -308,25 +308,50 @@ function mergeR1IntoMap(rows: any[] | null | undefined, r1Map: Map<string, R1Loo
   }
 }
 
-function mergeR2IntoMap(rows: any[] | null | undefined, r2Map: Map<string, R2Lookup>) {
+function mergeR2IntoMap(rows: any[] | null | undefined, r2Map: Map<string, R2Lookup[]>) {
   for (const a of rows || []) {
     const cid = (a as any).contact_id;
     const slot = a.meeting_slot as any;
     if (!cid || !slot?.scheduled_at) continue;
 
-    const existing = r2Map.get(cid);
-    if (!existing || slot.scheduled_at > existing.date) {
-      const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
-      r2Map.set(cid, {
-        id: a.id,
-        date: slot.scheduled_at,
-        realized,
-        closerName: slot.closer?.name || null,
-        statusId: (a as any).r2_status_id || null,
-        slotStatus: slot.status || '',
-      });
+    const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
+    const entry: R2Lookup = {
+      id: a.id,
+      date: slot.scheduled_at,
+      realized,
+      closerName: slot.closer?.name || null,
+      statusId: (a as any).r2_status_id || null,
+      slotStatus: slot.status || '',
+    };
+
+    if (!r2Map.has(cid)) {
+      r2Map.set(cid, [entry]);
+    } else {
+      r2Map.get(cid)!.push(entry);
     }
   }
+}
+
+/** Pick the first R2 scheduled after the contract sale_date, classify it */
+function pickFirstR2AfterContract(
+  allR2s: R2Lookup[] | undefined,
+  saleDate: string,
+  r2Window: { start: Date; end: Date },
+): { r2: R2Lookup | null; classificacao: R2Classificacao } {
+  if (!allR2s || allR2s.length === 0) return { r2: null, classificacao: 'sem_r2' };
+
+  const saleDateMs = new Date(saleDate).getTime();
+  const validR2s = allR2s
+    .filter(r => new Date(r.date).getTime() > saleDateMs)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  if (validR2s.length === 0) return { r2: null, classificacao: 'sem_r2' };
+
+  const firstR2 = validR2s[0];
+  const r2DateMs = new Date(firstR2.date).getTime();
+  const inWindow = r2DateMs >= r2Window.start.getTime() && r2DateMs <= r2Window.end.getTime();
+
+  return { r2: firstR2, classificacao: inWindow ? 'na_janela' : 'tardia' };
 }
 
 function getContactScore(contactId: string, dealMap: Map<string, DealLookup>, r1Map: Map<string, R1Lookup>, r2Map: Map<string, R2Lookup>) {
