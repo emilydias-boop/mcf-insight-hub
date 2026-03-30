@@ -624,13 +624,53 @@ serve(async (req) => {
           console.log(`   ⚠️ ${isCloser ? 'Closer' : 'SDR'} ${sdr.name} não tem email configurado`);
         }
 
-        // ===== BUSCAR EMPLOYEE PRIMEIRO (necessário para fallback e elegibilidade ultrameta) =====
+        // ===== BUSCAR EMPLOYEE (ativo OU desligado no mês) =====
         const { data: employeeData } = await supabase
           .from('employees')
-          .select('cargo_catalogo_id, data_admissao, fechamento_manual')
+          .select('cargo_catalogo_id, data_admissao, data_demissao, fechamento_manual, status')
           .eq('sdr_id', sdr.id)
-          .eq('status', 'ativo')
+          .order('created_at', { ascending: false })
+          .limit(1)
           .maybeSingle();
+
+        // ===== CALCULAR PRO-RATA POR DIAS ÚTEIS TRABALHADOS =====
+        const dataAdmissaoDate = employeeData?.data_admissao 
+          ? new Date(employeeData.data_admissao) 
+          : null;
+        const dataDemissaoDate = employeeData?.data_demissao 
+          ? new Date(employeeData.data_demissao) 
+          : null;
+        
+        const inicioMesDate = new Date(year, month - 1, 1);
+        const fimMesDate = new Date(year, month, 0); // last day of month
+        
+        // Período efetivo: max(início mês, admissão) até min(fim mês, demissão)
+        const dataInicioEfetiva = dataAdmissaoDate && dataAdmissaoDate > inicioMesDate 
+          ? dataAdmissaoDate : inicioMesDate;
+        const dataFimEfetiva = dataDemissaoDate && dataDemissaoDate < fimMesDate 
+          ? dataDemissaoDate : fimMesDate;
+        
+        // Contar dias úteis (simples: excluir sáb/dom)
+        const countBusinessDays = (start: Date, end: Date): number => {
+          let count = 0;
+          const cur = new Date(start);
+          while (cur <= end) {
+            const dow = cur.getDay();
+            if (dow !== 0 && dow !== 6) count++;
+            cur.setDate(cur.getDate() + 1);
+          }
+          return count;
+        };
+        
+        const diasUteisMesTotal = countBusinessDays(inicioMesDate, fimMesDate);
+        const diasUteisTrabalhados = countBusinessDays(dataInicioEfetiva, dataFimEfetiva);
+        const isProporcional = diasUteisTrabalhados < diasUteisMesTotal;
+        const ratioProRata = diasUteisMesTotal > 0 ? diasUteisTrabalhados / diasUteisMesTotal : 1;
+        
+        if (isProporcional) {
+          console.log(`   📊 PRO-RATA: ${sdr.name} trabalhou ${diasUteisTrabalhados}/${diasUteisMesTotal} dias úteis (${(ratioProRata * 100).toFixed(1)}%)`);
+          console.log(`   📊 Período efetivo: ${dataInicioEfetiva.toISOString().split('T')[0]} a ${dataFimEfetiva.toISOString().split('T')[0]}`);
+        }
 
         // ===== FECHAMENTO MANUAL: pular cálculo automático =====
         if (employeeData?.fechamento_manual === true) {
