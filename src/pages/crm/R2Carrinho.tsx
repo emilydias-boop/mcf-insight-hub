@@ -32,6 +32,7 @@ export default function R2Carrinho() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [selectedCarrinhoId, setSelectedCarrinhoId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState('agendadas');
   const queryClient = useQueryClient();
 
   const weekStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
