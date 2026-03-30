@@ -68,26 +68,37 @@ export function getCarrinhoMetricBoundaries(
   weekEnd: Date,
   config?: CarrinhoConfig
 ): CarrinhoMetricBoundaries {
+  // Helper: meia-noite UTC para uma data (evita fuso local do startOfDay)
+  const utcStartOfDay = (d: Date) =>
+    new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0));
+  // Helper: 23:59:59.999 UTC para uma data (evita fuso local do endOfDay)
+  const utcEndOfDay = (d: Date) =>
+    new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999));
+
   // weekStart = Quinta, weekEnd = Quarta
-  const thuStart = startOfDay(new Date(weekStart));
-  const wedEnd = endOfDay(new Date(weekEnd));
+  const thuStart = utcStartOfDay(new Date(weekStart));
+  const wedEnd = utcEndOfDay(new Date(weekEnd));
 
   // Sexta após o carrinho anterior = dia seguinte ao thuStart (Qui+1 = Sex)
-  const friAfterPrevCart = startOfDay(addDays(thuStart, 1));
+  const friAfterPrevCart = utcStartOfDay(addDays(new Date(weekStart), 1));
   // Sexta do carrinho atual = wedEnd + 2 dias (Qua+2 = Sex)
-  const friCurrentCart = endOfDay(addDays(new Date(weekEnd), 2));
+  const friCurrentCart = utcEndOfDay(addDays(new Date(weekEnd), 2));
 
   // Horário de corte da sexta (default 12:00)
   const horarioCorte = config?.carrinhos?.[0]?.horario_corte || '12:00';
   const [cutHour, cutMinute] = horarioCorte.split(':').map(Number);
 
-  // Sexta do carrinho atual com corte de horário
-  const friCartCutoff = new Date(addDays(new Date(weekEnd), 2));
-  friCartCutoff.setHours(cutHour, cutMinute || 0, 0, 0);
+  // Sexta do carrinho atual com corte de horário (UTC)
+  const friCartCutoffDate = addDays(new Date(weekEnd), 2);
+  const friCartCutoff = new Date(Date.UTC(
+    friCartCutoffDate.getFullYear(), friCartCutoffDate.getMonth(), friCartCutoffDate.getDate(),
+    cutHour, cutMinute || 0, 0, 0
+  ));
 
-  // Vendas parceria: Sex do carrinho (após corte) → Seg 23:59
-  const friCartStart = startOfDay(addDays(new Date(weekEnd), 2));
-  const monAfterCart = endOfDay(addDays(startOfDay(addDays(new Date(weekEnd), 2)), 3));
+  // Vendas parceria: Sex do carrinho 00:00 UTC → Seg 23:59:59 UTC
+  const friDate = addDays(new Date(weekEnd), 2);
+  const friCartStart = utcStartOfDay(friDate);
+  const monAfterCart = utcEndOfDay(addDays(friDate, 3));
 
   return {
     contratos: { start: thuStart, end: wedEnd },
