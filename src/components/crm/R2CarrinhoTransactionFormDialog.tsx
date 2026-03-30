@@ -185,6 +185,14 @@ export function R2CarrinhoTransactionFormDialog({
 
     if (editMode && transactionToEdit) {
       // Update existing transaction
+      // Preserve original timestamp when date unchanged, use noon fallback otherwise
+      const originalDateStr = transactionToEdit.sale_date
+        ? format(new Date(transactionToEdit.sale_date), 'yyyy-MM-dd')
+        : '';
+      const finalSaleDate = saleDate === originalDateStr
+        ? transactionToEdit.sale_date
+        : `${saleDate}T12:00:00-03:00`;
+
       await updateTransaction.mutateAsync({
         id: transactionToEdit.id,
         product_name: selectedProduct,
@@ -193,7 +201,7 @@ export function R2CarrinhoTransactionFormDialog({
         customer_name: customerName,
         customer_email: customerEmail,
         customer_phone: customerPhone,
-        sale_date: new Date(saleDate).toISOString(),
+        sale_date: finalSaleDate,
       });
     } else if (selectedAttendee) {
       // Create new transaction
