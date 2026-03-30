@@ -1,29 +1,27 @@
 
 
-## PDF — Lista Completa dos 124 Leads ANAMNESE Completa
+## Regenerar PDF — Excluir leads que compraram A010 antes da tag ANAMNESE
 
-### O que será gerado
-PDF em `/mnt/documents/relatorio-leads-anamnese-completa.pdf` com:
+### Lógica de exclusão
+Para cada lead com tag "ANAMNESE" na BU Incorporador:
+1. Buscar compras A010 em `hubla_transactions` (por email ou telefone) com `product_category = 'a010'` e `sale_status = 'completed'`
+2. Comparar a `sale_date` da compra A010 com o `created_at` do deal com tag ANAMNESE
+3. Se a compra A010 ocorreu **antes** do deal ANAMNESE ser criado → **excluir** esse lead do relatório
 
-1. **Capa** — Título, data de geração
-2. **Resumo** — Total: 124 leads | Duplicados cross-base: 98 | Exclusivos: 26
-3. **Distribuição por Estágio** — Tabela com contagem por stage
-4. **Lista Completa (124 leads)** — Tabela com: Nome, Telefone, Email, Estágio, Status (Duplicado/Exclusivo), Tags
-5. **Lista Exclusivos (26 leads)** — Apenas os que não existem fora do canal ANAMNESE
+### Impacto esperado
+- Dos 97 leads atuais, serão removidos os que já eram compradores A010 antes de entrar pelo funil ANAMNESE
+- O relatório mostrará apenas leads que chegaram "puros" pelo canal ANAMNESE (sem histórico A010 prévio)
 
-### Lógica de dados
-- Query `crm_deals` com `tags ILIKE '%ANAMNESE%'`
-- Excluir stage "ANAMNESE INCOMPLETA"
-- Excluir nomes com "teste"
-- Cross-check por nome contra deals sem tag ANAMNESE para marcar duplicados
-- Join com `crm_contacts` para telefone/email e `crm_stages` para nome do estágio
-
-### Implementação
-- Script Python com `reportlab` + queries via `psql`
-- Output: `/mnt/documents/relatorio-leads-anamnese-completa.pdf`
+### Output
+- Script Python em `/tmp/` que:
+  1. Puxa os 97 leads ANAMNESE da BU Incorporador
+  2. Cruza com `hubla_transactions` por email/telefone
+  3. Remove quem tinha A010 antes do deal ANAMNESE
+  4. Regenera o PDF com as mesmas seções (KPIs, estágios, lista completa, exclusivos, origem dos duplicados)
+- PDF: `/mnt/documents/relatorio-leads-anamnese-incorporador-v3.pdf`
 - QA visual obrigatória
 
 ### Arquivos
-- `/tmp/gen_anamnese_completa.py` (temporário)
-- `/mnt/documents/relatorio-leads-anamnese-completa.pdf` (entregável)
+- `/tmp/gen_anamnese_v3.py` (temporário)
+- `/mnt/documents/relatorio-leads-anamnese-incorporador-v3.pdf` (entregável)
 
