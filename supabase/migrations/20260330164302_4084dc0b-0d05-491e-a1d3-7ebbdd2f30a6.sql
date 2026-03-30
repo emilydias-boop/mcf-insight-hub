@@ -1,0 +1,1 @@
+ALTER TABLE public.sdr_month_payout ADD COLUMN IF NOT EXISTS dias_uteis_trabalhados integer;

@@ -344,7 +344,14 @@ const FechamentoSDRDetail = () => {
                 </Badge>
               )}
             </h1>
-            <p className="text-sm text-muted-foreground">Fechamento de {payout.ano_mes}</p>
+            <p className="text-sm text-muted-foreground">
+              Fechamento de {payout.ano_mes}
+              {payout.dias_uteis_trabalhados != null && payout.dias_uteis_trabalhados < (payout.dias_uteis_mes || 22) && (
+                <span className="ml-2 text-yellow-500 font-medium">
+                  • Proporcional: {payout.dias_uteis_trabalhados}/{payout.dias_uteis_mes || 22} dias úteis
+                </span>
+              )}
+            </p>
           </div>
         </div>
 

@@ -446,12 +446,42 @@ serve(async (req) => {
     }> = [];
 
     // Get SDRs to process (with email and role_type for RPC call)
+    // Include active SDRs AND terminated SDRs whose termination date falls within the current month
     let sdrsQuery = supabase.from('sdr').select('id, name, email, meta_diaria, role_type, squad, nivel').eq('active', true);
     if (sdr_id) {
       sdrsQuery = sdrsQuery.eq('id', sdr_id);
     }
     
-    const { data: sdrs, error: sdrsError } = await sdrsQuery;
+    const { data: activeSdrs, error: sdrsError } = await sdrsQuery;
+    
+    // Also fetch terminated SDRs with data_demissao in this month
+    let terminatedSdrs: typeof activeSdrs = [];
+    if (!sdr_id) {
+      const { data: termEmployees } = await supabase
+        .from('employees')
+        .select('sdr_id, data_demissao')
+        .eq('status', 'desligado')
+        .gte('data_demissao', monthStart)
+        .lte('data_demissao', monthEnd)
+        .not('sdr_id', 'is', null);
+      
+      if (termEmployees && termEmployees.length > 0) {
+        const termSdrIds = termEmployees.map(e => e.sdr_id).filter(Boolean);
+        if (termSdrIds.length > 0) {
+          const { data: termSdrsData } = await supabase
+            .from('sdr')
+            .select('id, name, email, meta_diaria, role_type, squad, nivel')
+            .in('id', termSdrIds);
+          terminatedSdrs = termSdrsData || [];
+          console.log(`   👋 Desligados no mês: ${terminatedSdrs.map(s => s.name).join(', ')}`);
+        }
+      }
+    }
+    
+    // Merge active + terminated (dedup by id)
+    const activeIds = new Set((activeSdrs || []).map(s => s.id));
+    const mergedTerminated = (terminatedSdrs || []).filter(s => !activeIds.has(s.id));
+    const sdrs = [...(activeSdrs || []), ...mergedTerminated];
     if (sdrsError) throw sdrsError;
 
     if (!sdrs || sdrs.length === 0) {
@@ -594,13 +624,53 @@ serve(async (req) => {
           console.log(`   ⚠️ ${isCloser ? 'Closer' : 'SDR'} ${sdr.name} não tem email configurado`);
         }
 
-        // ===== BUSCAR EMPLOYEE PRIMEIRO (necessário para fallback e elegibilidade ultrameta) =====
+        // ===== BUSCAR EMPLOYEE (ativo OU desligado no mês) =====
         const { data: employeeData } = await supabase
           .from('employees')
-          .select('cargo_catalogo_id, data_admissao, fechamento_manual')
+          .select('cargo_catalogo_id, data_admissao, data_demissao, fechamento_manual, status')
           .eq('sdr_id', sdr.id)
-          .eq('status', 'ativo')
+          .order('created_at', { ascending: false })
+          .limit(1)
           .maybeSingle();
+
+        // ===== CALCULAR PRO-RATA POR DIAS ÚTEIS TRABALHADOS =====
+        const dataAdmissaoDate = employeeData?.data_admissao 
+          ? new Date(employeeData.data_admissao) 
+          : null;
+        const dataDemissaoDate = employeeData?.data_demissao 
+          ? new Date(employeeData.data_demissao) 
+          : null;
+        
+        const inicioMesDate = new Date(year, month - 1, 1);
+        const fimMesDate = new Date(year, month, 0); // last day of month
+        
+        // Período efetivo: max(início mês, admissão) até min(fim mês, demissão)
+        const dataInicioEfetiva = dataAdmissaoDate && dataAdmissaoDate > inicioMesDate 
+          ? dataAdmissaoDate : inicioMesDate;
+        const dataFimEfetiva = dataDemissaoDate && dataDemissaoDate < fimMesDate 
+          ? dataDemissaoDate : fimMesDate;
+        
+        // Contar dias úteis (simples: excluir sáb/dom)
+        const countBusinessDays = (start: Date, end: Date): number => {
+          let count = 0;
+          const cur = new Date(start);
+          while (cur <= end) {
+            const dow = cur.getDay();
+            if (dow !== 0 && dow !== 6) count++;
+            cur.setDate(cur.getDate() + 1);
+          }
+          return count;
+        };
+        
+        const diasUteisMesTotal = countBusinessDays(inicioMesDate, fimMesDate);
+        const diasUteisTrabalhados = countBusinessDays(dataInicioEfetiva, dataFimEfetiva);
+        const isProporcional = diasUteisTrabalhados < diasUteisMesTotal;
+        const ratioProRata = diasUteisMesTotal > 0 ? diasUteisTrabalhados / diasUteisMesTotal : 1;
+        
+        if (isProporcional) {
+          console.log(`   📊 PRO-RATA: ${sdr.name} trabalhou ${diasUteisTrabalhados}/${diasUteisMesTotal} dias úteis (${(ratioProRata * 100).toFixed(1)}%)`);
+          console.log(`   📊 Período efetivo: ${dataInicioEfetiva.toISOString().split('T')[0]} a ${dataFimEfetiva.toISOString().split('T')[0]}`);
+        }
 
         // ===== FECHAMENTO MANUAL: pular cálculo automático =====
         if (employeeData?.fechamento_manual === true) {
@@ -611,17 +681,14 @@ serve(async (req) => {
         }
 
         // ===== VERIFICAR ELEGIBILIDADE PARA ULTRAMETA (precisa estar desde o início do mês) =====
-        const dataAdmissao = employeeData?.data_admissao 
-          ? new Date(employeeData.data_admissao) 
-          : null;
-        const inicioMes = new Date(year, month - 1, 1);
+        // Reuse dataAdmissaoDate already calculated above
         // Elegível se entrou antes do início do mês OU se data_admissao é null
-        const elegivelUltrameta = !dataAdmissao || dataAdmissao < inicioMes;
+        const elegivelUltrameta = !dataAdmissaoDate || dataAdmissaoDate < inicioMesDate;
         
         if (!elegivelUltrameta) {
-          console.log(`   ⏭️ ${sdr.name} NÃO elegível para Ultrameta (admissão em ${dataAdmissao?.toISOString().split('T')[0]})`);
+          console.log(`   ⏭️ ${sdr.name} NÃO elegível para Ultrameta (admissão em ${dataAdmissaoDate?.toISOString().split('T')[0]})`);
         } else {
-          console.log(`   ✅ ${sdr.name} elegível para Ultrameta (admissão: ${dataAdmissao?.toISOString().split('T')[0] || 'antes do período'})`);
+          console.log(`   ✅ ${sdr.name} elegível para Ultrameta (admissão: ${dataAdmissaoDate?.toISOString().split('T')[0] || 'antes do período'})`);
         }
 
         // ===== BUSCAR CARGO_CATALOGO PARA CLOSERS =====
@@ -1165,6 +1232,20 @@ serve(async (req) => {
         // Remove campos que não existem na tabela sdr_month_payout
         const { pct_no_show, mult_no_show, ...payoutFields } = calculatedValues;
 
+        // ===== APLICAR PRO-RATA SE PROPORCIONAL =====
+        if (isProporcional) {
+          // Pro-rata no fixo
+          payoutFields.valor_fixo = Math.round(payoutFields.valor_fixo * ratioProRata);
+          // Pro-rata no iFood mensal
+          payoutFields.ifood_mensal = Math.round(payoutFields.ifood_mensal * ratioProRata);
+          // Recalcular total_ifood
+          payoutFields.total_ifood = payoutFields.ifood_mensal + payoutFields.ifood_ultrameta;
+          // Recalcular total_conta com fixo pro-rata
+          payoutFields.total_conta = payoutFields.valor_fixo + payoutFields.valor_variavel_total;
+          
+          console.log(`   💰 PRO-RATA aplicado para ${sdr.name}: Fixo=R$ ${payoutFields.valor_fixo}, iFood=R$ ${payoutFields.ifood_mensal}, Total=R$ ${payoutFields.total_conta}`);
+        }
+
         // Upsert payout
         const { data: payout, error: payoutError } = await supabase
           .from('sdr_month_payout')
@@ -1172,6 +1253,7 @@ serve(async (req) => {
             sdr_id: sdr.id,
             ano_mes: ano_mes,
             ...payoutFields,
+            dias_uteis_trabalhados: isProporcional ? diasUteisTrabalhados : null,
             nivel_vigente: cargoHistoricoNivel ?? cargoInfo?.nivel ?? sdr.nivel ?? null,
             cargo_vigente: cargoHistoricoNome ?? cargoInfo?.nome_exibicao ?? null,
             status: existingPayout?.status || 'DRAFT',

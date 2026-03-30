@@ -77,9 +77,21 @@ export function PayoutTableRow({
   const displayTotalConta = metricas.length > 0 ? calculatedTotalConta : (payout.total_conta || 0);
 
 
+  const isProporcional = payout.dias_uteis_trabalhados != null && 
+    payout.dias_uteis_trabalhados < (payout.dias_uteis_mes || 22);
+
   return (
     <TableRow>
-      <TableCell className="font-medium">{payout.sdr?.name || 'SDR'}</TableCell>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-1.5">
+          {payout.sdr?.name || 'SDR'}
+          {isProporcional && (
+            <Badge variant="outline" className="text-[9px] h-4 border-yellow-500 text-yellow-500">
+              {payout.dias_uteis_trabalhados}d
+            </Badge>
+          )}
+        </div>
+      </TableCell>
       <TableCell className="text-center">
         <Badge variant={roleType === 'closer' ? 'secondary' : 'outline'} className="font-normal">
           {roleLabel}
