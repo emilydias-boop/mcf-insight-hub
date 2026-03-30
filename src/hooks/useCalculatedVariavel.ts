@@ -162,5 +162,5 @@ export function useCalculatedVariavel({
     }
 
     return { total, indicators };
-  }, [metricas, kpi, payout, compPlan, diasUteisMes, sdrMetaDiaria, variavelTotal]);
+  }, [metricas, kpi, payout, compPlan, diasUteisMes, sdrMetaDiaria, variavelTotal, diasUteisTrabalhados]);
 }
