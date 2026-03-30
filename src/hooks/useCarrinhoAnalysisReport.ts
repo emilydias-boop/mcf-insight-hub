@@ -975,6 +975,19 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         });
       }
 
+      // Total R1 Realizadas na semana (ALL R1s, not just from contract buyers)
+      const { data: totalR1Data } = await supabase
+        .from('meeting_slot_attendees')
+        .select('id, is_partner, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status)')
+        .eq('meeting_slots.meeting_type', 'r1')
+        .gte('meeting_slots.scheduled_at', effectiveStart.toISOString())
+        .lt('meeting_slots.scheduled_at', effectiveEnd.toISOString());
+
+      const totalR1RealizadasSemana = (totalR1Data || []).filter(a => 
+        !a.is_partner && 
+        (a.status === 'completed' || (a.meeting_slot as any)?.status === 'completed')
+      ).length;
+
       // KPIs
       const contratosPagos = leads.length;
       const entradasA010 = leads.filter(l => l.dataA010).length;
@@ -991,6 +1004,9 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       }).length;
       const reembolsos = leads.filter(l => l.reembolso).length;
       const parceriasVendidas = leads.filter(l => l.comprouParceria).length;
+      const taxaContratoR1 = totalR1RealizadasSemana > 0 ? (contratosPagos / totalR1RealizadasSemana) * 100 : 0;
+      const aprovadosComParceria = leads.filter(l => l.statusR2?.toLowerCase().includes('aprov') && l.comprouParceria).length;
+      const aprovadosSemParceria = aprovados - aprovadosComParceria;
 
       const kpis: CarrinhoAnalysisKPIs = {
         entradasA010,
@@ -1006,6 +1022,10 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         proximaSemana,
         reembolsos,
         parceriasVendidas,
+        totalR1RealizadasSemana,
+        taxaContratoR1,
+        aprovadosComParceria,
+        aprovadosSemParceria,
       };
 
       const funnelSteps: FunnelStep[] = [
