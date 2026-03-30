@@ -29,8 +29,8 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
         .eq('product_name', 'A000 - Contrato')
         .in('sale_status', ['completed', 'refunded'])
         .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
-        .gte('sale_date', effectiveStart.toISOString())
-        .lt('sale_date', effectiveEnd.toISOString());
+        .gte('sale_date', boundaries.contratos.start.toISOString())
+        .lte('sale_date', boundaries.contratos.end.toISOString());
 
       // Filter out newsale- duplicates, make "contrato" entries, and installments > 1
       const validTx = (contratosTx || []).filter(t => {
