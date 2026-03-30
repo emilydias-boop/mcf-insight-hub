@@ -31,6 +31,7 @@ import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
 interface R2MetricsPanelProps {
   weekStart: Date;
   weekEnd: Date;
+  carrinhoConfig?: CarrinhoConfig;
 }
 
 interface MetricCardProps {
