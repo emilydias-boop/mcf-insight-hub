@@ -36,6 +36,7 @@ export interface SdrDetailData {
   meetings: MeetingV2[];
   allSdrs: SdrSummaryRow[];
   metaDiaria: number;
+  dataAdmissao: string | null;
   isLoading: boolean;
   error: Error | null;
   refetch: () => void;
