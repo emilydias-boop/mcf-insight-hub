@@ -1059,6 +1059,9 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const taxaContratoR1 = totalR1RealizadasSemana > 0 ? (contratosPagos / totalR1RealizadasSemana) * 100 : 0;
       const aprovadosComParceria = leads.filter(l => l.statusR2?.toLowerCase().includes('aprov') && l.comprouParceria).length;
       const aprovadosSemParceria = aprovados - aprovadosComParceria;
+      const r2NaJanela = leads.filter(l => l.r2Classificacao === 'na_janela').length;
+      const r2Tardia = leads.filter(l => l.r2Classificacao === 'tardia').length;
+      const r2SemR2 = leads.filter(l => l.r2Classificacao === 'sem_r2').length;
 
       const kpis: CarrinhoAnalysisKPIs = {
         entradasA010,
@@ -1078,6 +1081,9 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         taxaContratoR1,
         aprovadosComParceria,
         aprovadosSemParceria,
+        r2NaJanela,
+        r2Tardia,
+        r2SemR2,
       };
 
       const funnelSteps: FunnelStep[] = [
