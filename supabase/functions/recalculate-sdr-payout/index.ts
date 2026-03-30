@@ -461,8 +461,8 @@ serve(async (req) => {
         .from('employees')
         .select('sdr_id, data_demissao')
         .eq('status', 'desligado')
-        .gte('data_demissao', monthStart)
-        .lte('data_demissao', monthEnd)
+        .gte('data_demissao', monthStartStr)
+        .lte('data_demissao', monthEndStr)
         .not('sdr_id', 'is', null);
       
       if (termEmployees && termEmployees.length > 0) {
