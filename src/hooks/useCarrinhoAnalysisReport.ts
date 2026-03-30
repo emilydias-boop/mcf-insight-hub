@@ -354,7 +354,7 @@ function pickFirstR2AfterContract(
   return { r2: firstR2, classificacao: inWindow ? 'na_janela' : 'tardia' };
 }
 
-function getContactScore(contactId: string, dealMap: Map<string, DealLookup>, r1Map: Map<string, R1Lookup>, r2Map: Map<string, R2Lookup>) {
+function getContactScore(contactId: string, dealMap: Map<string, DealLookup>, r1Map: Map<string, R1Lookup>, r2Map: Map<string, R2Lookup[]>) {
   return (dealMap.has(contactId) ? 4 : 0) + (r2Map.has(contactId) ? 2 : 0) + (r1Map.has(contactId) ? 1 : 0);
 }
 
