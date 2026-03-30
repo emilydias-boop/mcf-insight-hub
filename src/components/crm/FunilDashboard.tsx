@@ -4,10 +4,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/formatters';
-import { Users, CalendarCheck, FileCheck, TrendingUp, TrendingDown, ArrowRight, Calendar } from 'lucide-react';
+import { Users, CalendarCheck, FileCheck, TrendingUp, TrendingDown, ArrowRight, Calendar, Filter } from 'lucide-react';
 import { useClintFunnel } from '@/hooks/useClintFunnel';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { classifyChannel } from '@/lib/channelClassifier';
 
 import {
   getCustomWeekStart,
