@@ -404,7 +404,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
       if (emails.length === 0) {
         return {
-          kpis: { entradasA010: 0, classificados: 0, r1Agendadas: 0, r1Realizadas: 0, contratosPagos: 0, r2Agendadas: 0, gapContratoR2: 0, r2Realizadas: 0, aprovados: 0, reprovados: 0, proximaSemana: 0, reembolsos: 0, parceriasVendidas: 0 },
+          kpis: { entradasA010: 0, classificados: 0, r1Agendadas: 0, r1Realizadas: 0, contratosPagos: 0, r2Agendadas: 0, gapContratoR2: 0, r2Realizadas: 0, aprovados: 0, reprovados: 0, proximaSemana: 0, reembolsos: 0, parceriasVendidas: 0, totalR1RealizadasSemana: 0, taxaContratoR1: 0, aprovadosComParceria: 0, aprovadosSemParceria: 0 },
           funnelSteps: [], motivosPerda: [], analysisByState: [], leads: [],
         };
       }
