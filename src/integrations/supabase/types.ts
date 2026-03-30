@@ -8718,6 +8718,7 @@ export type Database = {
           created_at: string | null
           departamento_vigente: string | null
           dias_uteis_mes: number | null
+          dias_uteis_trabalhados: number | null
           id: string
           ifood_mensal: number | null
           ifood_ultrameta: number | null
@@ -8758,6 +8759,7 @@ export type Database = {
           created_at?: string | null
           departamento_vigente?: string | null
           dias_uteis_mes?: number | null
+          dias_uteis_trabalhados?: number | null
           id?: string
           ifood_mensal?: number | null
           ifood_ultrameta?: number | null
@@ -8798,6 +8800,7 @@ export type Database = {
           created_at?: string | null
           departamento_vigente?: string | null
           dias_uteis_mes?: number | null
+          dias_uteis_trabalhados?: number | null
           id?: string
           ifood_mensal?: number | null
           ifood_ultrameta?: number | null
