@@ -17,6 +17,9 @@ import { R2MetricsPanel } from '@/components/crm/R2MetricsPanel';
 import { R2VendasList } from '@/components/crm/R2VendasList';
 import { useR2CarrinhoVendas } from '@/hooks/useR2CarrinhoVendas';
 import { useR2MeetingsExtended } from '@/hooks/useR2MeetingsExtended';
+import { useR2AccumulatedLeads } from '@/hooks/useR2AccumulatedLeads';
+import { R2AccumulatedList } from '@/components/crm/R2AccumulatedList';
+import { R2AccumulatedAlert } from '@/components/crm/R2AccumulatedAlert';
 import { R2MeetingDetailDrawer } from '@/components/crm/R2MeetingDetailDrawer';
 import { useQueryClient } from '@tanstack/react-query';
 import { useActiveBU } from '@/hooks/useActiveBU';
@@ -29,6 +32,7 @@ export default function R2Carrinho() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [selectedCarrinhoId, setSelectedCarrinhoId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState('agendadas');
   const queryClient = useQueryClient();
 
   const weekStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
@@ -82,6 +86,11 @@ export default function R2Carrinho() {
   // Fetch extended meeting data for the drawer
   const { data: meetingsExtended = [] } = useR2MeetingsExtended(weekStart, weekEnd);
 
+  // Fetch accumulated leads from previous weeks
+  const { data: accumulatedLeads = [], isLoading: accumulatedLoading } = useR2AccumulatedLeads(weekStart, weekEnd);
+  const accProximaSemanaCount = accumulatedLeads.filter(l => l.origin_type === 'proxima_semana').length;
+  const accSemR2Count = accumulatedLeads.filter(l => l.origin_type === 'sem_r2').length;
+
   // Find the selected meeting for the drawer
   const selectedMeeting = useMemo(() => {
     if (!selectedMeetingId) return null;
@@ -99,6 +108,7 @@ export default function R2Carrinho() {
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-vendas'] });
     queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
     queryClient.invalidateQueries({ queryKey: ['carrinho-config'] });
+    queryClient.invalidateQueries({ queryKey: ['r2-accumulated-leads'] });
   };
 
   const handleReschedule = (meetingId: string) => {
@@ -232,8 +242,16 @@ export default function R2Carrinho() {
         ))}
       </div>
 
+      {/* Accumulated Alert */}
+      <R2AccumulatedAlert
+        totalCount={accumulatedLeads.length}
+        proximaSemanaCount={accProximaSemanaCount}
+        semR2Count={accSemR2Count}
+        onGoToTab={() => setActiveTab('acumulados')}
+      />
+
       {/* Tabs */}
-      <Tabs defaultValue="agendadas" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="w-full">
           <TabsTrigger value="agendadas" className="flex items-center gap-2">
             📋 Todas R2s
@@ -247,6 +265,14 @@ export default function R2Carrinho() {
               {foraCarrinhoData.length}
             </span>
           </TabsTrigger>
+          {accumulatedLeads.length > 0 && (
+            <TabsTrigger value="acumulados" className="flex items-center gap-2">
+              ⚠️ Acumulados
+              <span className="text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 px-2 py-0.5 rounded-full">
+                {accumulatedLeads.length}
+              </span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="aprovados" className="flex items-center gap-2">
             ✓ Aprovados
             <span className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 px-2 py-0.5 rounded-full">
@@ -276,6 +302,13 @@ export default function R2Carrinho() {
           <R2ForaDoCarrinhoList 
             attendees={foraCarrinhoData} 
             isLoading={foraCarrinhoLoading}
+          />
+        </TabsContent>
+
+        <TabsContent value="acumulados">
+          <R2AccumulatedList
+            leads={accumulatedLeads}
+            isLoading={accumulatedLoading}
           />
         </TabsContent>
 
