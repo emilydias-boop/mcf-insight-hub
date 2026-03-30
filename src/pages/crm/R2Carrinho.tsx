@@ -152,7 +152,7 @@ export default function R2Carrinho() {
             )}
           </h1>
           <p className="text-muted-foreground">
-            Gestão semanal do funil de R2
+            Safra: Contratos de {format(weekStart, 'dd/MM', { locale: ptBR })} a {format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}
           </p>
         </div>
 
@@ -233,7 +233,7 @@ export default function R2Carrinho() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="metricas" className="space-y-4">
+      <Tabs defaultValue="agendadas" className="space-y-4">
         <TabsList className="w-full">
           <TabsTrigger value="agendadas" className="flex items-center gap-2">
             📋 Todas R2s
@@ -298,7 +298,7 @@ export default function R2Carrinho() {
         </TabsContent>
 
         <TabsContent value="metricas">
-          <R2MetricsPanel weekStart={weekStart} weekEnd={weekEnd} />
+          <R2MetricsPanel weekStart={weekStart} weekEnd={weekEnd} carrinhoConfig={config} />
         </TabsContent>
       </Tabs>
 

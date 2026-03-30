@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useR2MetricsData } from '@/hooks/useR2MetricsData';
+import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
 import { useSDRCarrinhoMetrics } from '@/hooks/useSDRCarrinhoMetrics';
 import { useCloserCarrinhoMetrics } from '@/hooks/useCloserCarrinhoMetrics';
 import { SemiCircleGauge } from './SemiCircleGauge';
@@ -30,6 +31,7 @@ import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
 interface R2MetricsPanelProps {
   weekStart: Date;
   weekEnd: Date;
+  carrinhoConfig?: CarrinhoConfig;
 }
 
 interface MetricCardProps {
@@ -70,8 +72,8 @@ function MetricCard({ icon, label, value, color, badge, onClick }: MetricCardPro
   );
 }
 
-export function R2MetricsPanel({ weekStart, weekEnd }: R2MetricsPanelProps) {
-  const { data: metrics, isLoading } = useR2MetricsData(weekStart, weekEnd);
+export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig }: R2MetricsPanelProps) {
+  const { data: metrics, isLoading } = useR2MetricsData(weekStart, weekEnd, carrinhoConfig);
   const { data: sdrCarrinhoMetrics, isLoading: sdrLoading } = useSDRCarrinhoMetrics(weekStart, weekEnd);
   const { data: closerCarrinhoMetrics, isLoading: closerLoading } = useCloserCarrinhoMetrics(weekStart, weekEnd);
 
