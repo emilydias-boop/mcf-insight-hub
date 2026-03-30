@@ -1,40 +1,35 @@
 
 
-## Vendas desaparecem — timezone gap entre startOfDay (BRT) e sale_date (UTC)
+## Corrigir Jean Carlos aparecendo como SDR no Consórcio
 
 ### Causa raiz
 
-As transações do Make são gravadas com `sale_date = 2026-03-27T00:00:00.000Z` (meia-noite **UTC**).
+Jean Carlos tem `role = 'closer'` na tabela `user_roles`, mas o hook `useSdrsFromSquad` só exclui roles `admin`, `manager`, `coordenador` e `assistente_administrativo`. O role `closer` não está na lista de exclusão, então ele passa no filtro e aparece como SDR disponível para distribuição.
 
-A janela `vendasParceria.start` usa `startOfDay()` do date-fns, que cria meia-noite no fuso **local** (BRT = UTC-3). Convertido para ISO, isso vira `2026-03-27T03:00:00.000Z`.
+### Solução (duas ações)
 
-```text
-Transação Make:   2026-03-27T00:00:00Z  (meia-noite UTC)
-Janela vendas:    2026-03-27T03:00:00Z  → 2026-03-31T02:59:59Z
-                  ↑ 3 horas depois!
-```
+#### 1. Desativar Jean na tabela `sdr` (dados)
+UPDATE na tabela `sdr` para marcar `active = false` no registro do Jean Carlos (`id = f574bca6-7669-4a91-bea3-ff46bac848ed`).
 
-Resultado: todas as transações com `sale_date` entre 00:00 e 02:59 UTC (= 21:00-23:59 BRT do dia anterior) ficam fora da janela. As vendas editadas pelo usuário mantiveram o `sale_date = 00:00:00Z` original do Make, caindo nesse buraco.
+#### 2. Adicionar `closer` à lista de exclusão no código
+**Arquivo:** `src/hooks/useSdrsFromSquad.ts`
 
-### Solução
-
-No `carrinhoWeekBoundaries.ts`, criar a data de início da janela de vendas usando **UTC explícito** em vez de `startOfDay` (que usa fuso local):
+Adicionar `'closer'` e `'closer_sombra'` ao filtro `.in('role', [...])` na linha 52:
 
 ```typescript
-// Antes (cria meia-noite BRT = 03:00 UTC):
-const friCartStart = startOfDay(addDays(new Date(weekEnd), 2));
+// Antes:
+.in('role', ['admin', 'manager', 'coordenador', 'assistente_administrativo']);
 
-// Depois (cria meia-noite UTC = 00:00 UTC):
-const friDate = addDays(new Date(weekEnd), 2);
-const friCartStartUTC = new Date(Date.UTC(friDate.getFullYear(), friDate.getMonth(), friDate.getDate(), 0, 0, 0, 0));
+// Depois:
+.in('role', ['admin', 'manager', 'coordenador', 'assistente_administrativo', 'closer', 'closer_sombra']);
 ```
 
-Mesma correção para `monAfterCart` (fim da janela), e para outras boundaries que usam `startOfDay`/`endOfDay` com datas que serão comparadas com timestamps UTC do banco.
+### Resultado
+- Jean Carlos deixa de aparecer imediatamente (registro desativado)
+- Qualquer futuro closer que tenha registro legado na tabela `sdr` também será excluído automaticamente pelo filtro de roles
+- Nenhum SDR legítimo é afetado
 
-### Impacto
-
-Todas as 11+ transações do Make com `sale_date` à meia-noite UTC voltam a aparecer na aba Vendas. Vendas editadas não desaparecem mais.
-
-### Arquivo alterado
-1. `src/lib/carrinhoWeekBoundaries.ts` — usar Date.UTC para todas as boundaries
+### Arquivos alterados
+1. `src/hooks/useSdrsFromSquad.ts` — adicionar `closer`/`closer_sombra` à exclusão
+2. Tabela `sdr` — UPDATE `active = false` para Jean Carlos
 
