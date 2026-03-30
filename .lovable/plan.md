@@ -1,42 +1,37 @@
 
 
-## Corrigir exibição de desligados e cálculo proporcional no fechamento
+## Corrigir RPC ambígua que impede carga de métricas no fechamento
 
-### Problemas identificados
+### Causa raiz
 
-**1. Evellyn e Hellen não aparecem na listagem**
-- `useSdrFechamento.ts` linha 278: `result.filter(p => p.sdr?.active !== false)` — remove SDRs inativos da listagem
-- `useSdrFechamento.ts` linha 226: `.eq('status', 'ativo')` — busca apenas employees ativos, então desligados não têm dados de cargo/departamento
+O erro nos logs é claro:
 
-**2. Evellyn com data_admissao errada**
-- No banco: `data_admissao = 22026-02-02` (ano 22026 em vez de 2026)
-- Isso faz `dataInicioEfetiva` ser no futuro, resultando em `dias_uteis_trabalhados = 0` e todos valores zerados
-- Precisa corrigir no banco para `2026-02-02`
+```text
+PGRST203: Could not choose the best candidate function between:
+  public.get_sdr_metrics_from_agenda(start_date, end_date, sdr_email_filter)
+  public.get_sdr_metrics_from_agenda(start_date, end_date, sdr_email_filter, bu_filter)
+```
 
-**3. Individual não calcula variável proporcional**
-- A Edge Function aplica pro-rata apenas no `valor_fixo` e `ifood_mensal`
-- As metas (agendamentos, tentativas etc.) não são ajustadas proporcionalmente
-- O `useCalculatedVariavel` no frontend também não considera `dias_uteis_trabalhados` para ajustar metas
+Existem **duas versões** da função `get_sdr_metrics_from_agenda` no banco — uma com 3 parâmetros e outra com 4. Quando o `useSdrAgendaMetricsBySdrId` chama a RPC sem `bu_filter`, o PostgREST não consegue escolher qual usar e retorna erro. Isso faz:
 
-### Mudanças
+1. **KPI Edit Form**: mostra "Agenda: 0" para todos os SDRs
+2. **Edge Function**: também pode ser afetada (embora use `supabase-js` server-side que tem comportamento diferente)
+3. **Indicador cards**: mostram valores antigos do KPI persistido, que não é atualizado porque o RPC falha
 
-#### 1. `src/hooks/useSdrFechamento.ts` — Incluir desligados na listagem
-- Linha 226: Remover `.eq('status', 'ativo')` e buscar também employees desligados com `data_demissao` no mês selecionado (ou simplesmente remover o filtro de status)
-- Linha 278: Mudar filtro para permitir SDRs inativos que tenham payout no mês (se o payout existe, deve aparecer)
+### Solução
 
-#### 2. Corrigir `data_admissao` da Evellyn no banco
-- Migration: `UPDATE employees SET data_admissao = '2026-02-02' WHERE data_admissao = '22026-02-02'`
+Passar `bu_filter: null` explicitamente em todas as chamadas que não enviam esse parâmetro, para que o PostgREST resolva a ambiguidade.
 
-#### 3. Edge Function `recalculate-sdr-payout` — Pro-rata nas metas
-- Após calcular `ratioProRata`, aplicar proporcionalmente em `meta_agendadas_ajustada` e `meta_tentativas_ajustada`
-- Isso faz o cálculo de variável usar metas proporcionais (ex: meta 154 × 16/22 = 112)
+#### Arquivo 1: `src/hooks/useSdrAgendaMetricsBySdrId.ts`
+- Linha 42-46: Adicionar `bu_filter: null` na chamada RPC
 
-#### 4. `src/hooks/useCalculatedVariavel.ts` — Considerar pro-rata
-- Quando `payout.dias_uteis_trabalhados` existe e é menor que `diasUteisMes`, ajustar metas fixas (agendamentos, tentativas) proporcionalmente no cálculo local
+#### Arquivo 2: `supabase/functions/recalculate-sdr-payout/index.ts`
+- Linha 598-602: Adicionar `bu_filter: null` na chamada RPC (mesmo padrão)
+
+### Resultado
+Todas as chamadas à RPC resolvem corretamente para a versão de 4 parâmetros. Os KPIs são preenchidos com dados reais da agenda, e o "Recalcular Todos" salva os valores corretos no banco.
 
 ### Arquivos alterados
-1. `src/hooks/useSdrFechamento.ts` — incluir desligados na listagem e busca de employees
-2. `supabase/migrations/XXXX_fix_evellyn_admissao.sql` — corrigir data errada
-3. `supabase/functions/recalculate-sdr-payout/index.ts` — pro-rata nas metas
-4. `src/hooks/useCalculatedVariavel.ts` — cálculo local com pro-rata
+1. `src/hooks/useSdrAgendaMetricsBySdrId.ts`
+2. `supabase/functions/recalculate-sdr-payout/index.ts`
 
