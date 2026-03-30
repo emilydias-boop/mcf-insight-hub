@@ -24,6 +24,7 @@ export function ConsorcioSdrSummaryTable({
   disableNavigation = false,
   sdrMetaMap,
   diasUteisNoPeriodo,
+  sdrDiasUteisMap,
   propostasEnviadasBySdr,
   propostasFechadasBySdr,
 }: ConsorcioSdrSummaryTableProps) {
