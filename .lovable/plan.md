@@ -1,49 +1,40 @@
 
 
-## Vendas do Make desaparecem — janela de vendas ignora sexta antes das 12h
+## Vendas desaparecem — timezone gap entre startOfDay (BRT) e sale_date (UTC)
 
 ### Causa raiz
 
-A janela `vendasParceria` em `carrinhoWeekBoundaries.ts` começa no **horário de corte** (sexta 12:00). Porém, transações vindas do Make são gravadas com `sale_date` à meia-noite (`00:00:00Z`) porque o webhook não envia horário.
+As transações do Make são gravadas com `sale_date = 2026-03-27T00:00:00.000Z` (meia-noite **UTC**).
 
-Resultado: 11 vendas de parceria no dia 27/03 (todas `source = 'make'`) têm `sale_date = 2026-03-27T00:00:00Z`, que é **antes** do corte de 12:00, caindo fora da janela de vendas de qualquer semana.
-
-### Dados confirmados no banco
+A janela `vendasParceria.start` usa `startOfDay()` do date-fns, que cria meia-noite no fuso **local** (BRT = UTC-3). Convertido para ISO, isso vira `2026-03-27T03:00:00.000Z`.
 
 ```text
-11 transações parceria em 2026-03-27 com time=00:00:00, todas source=make
-Nomes: Samuel Figueiredo, Diogo Campinho, Lucas Travassos, Gabriel Ramos, 
-       Jessica Almeida, Guilherme Almeida, Thalita Miranda, Leandro Oliveira,
-       Breno Dias, Claudiane Carraro, Gilberto Machado
+Transação Make:   2026-03-27T00:00:00Z  (meia-noite UTC)
+Janela vendas:    2026-03-27T03:00:00Z  → 2026-03-31T02:59:59Z
+                  ↑ 3 horas depois!
 ```
+
+Resultado: todas as transações com `sale_date` entre 00:00 e 02:59 UTC (= 21:00-23:59 BRT do dia anterior) ficam fora da janela. As vendas editadas pelo usuário mantiveram o `sale_date = 00:00:00Z` original do Make, caindo nesse buraco.
 
 ### Solução
 
-Separar o conceito: o **corte de horário** define quais R2s pertencem a esta semana (aprovados), mas a **janela de vendas** deve capturar **toda a sexta-feira** desde 00:00.
+No `carrinhoWeekBoundaries.ts`, criar a data de início da janela de vendas usando **UTC explícito** em vez de `startOfDay` (que usa fuso local):
 
-### Mudança
+```typescript
+// Antes (cria meia-noite BRT = 03:00 UTC):
+const friCartStart = startOfDay(addDays(new Date(weekEnd), 2));
 
-#### `src/lib/carrinhoWeekBoundaries.ts` — linha 89
-
-Trocar o início de `vendasParceria` de `friCartCutoff` para `startOfDay(friday)`:
-
-```text
-Antes:  vendasParceria.start = Sex 12:00 (cutoff)
-Depois: vendasParceria.start = Sex 00:00 (startOfDay)
+// Depois (cria meia-noite UTC = 00:00 UTC):
+const friDate = addDays(new Date(weekEnd), 2);
+const friCartStartUTC = new Date(Date.UTC(friDate.getFullYear(), friDate.getMonth(), friDate.getDate(), 0, 0, 0, 0));
 ```
 
-Isso é seguro porque:
-- A janela de aprovados continua usando o cutoff (controla quais R2s contam)
-- Vendas não dependem do cutoff — são matchadas contra os leads aprovados
-- Não há sobreposição entre semanas (cada sexta-segunda é única)
+Mesma correção para `monAfterCart` (fim da janela), e para outras boundaries que usam `startOfDay`/`endOfDay` com datas que serão comparadas com timestamps UTC do banco.
 
-### Resultado
+### Impacto
 
-- As 11 vendas do Make voltam a aparecer na aba Vendas
-- Vendas criadas/editadas com horário 00:00 não desaparecem mais
-- O corte de 12:00 continua funcionando normalmente para R2s aprovados
-- Sem mudança no backend
+Todas as 11+ transações do Make com `sale_date` à meia-noite UTC voltam a aparecer na aba Vendas. Vendas editadas não desaparecem mais.
 
 ### Arquivo alterado
-1. `src/lib/carrinhoWeekBoundaries.ts` — vendasParceria.start usa startOfDay
+1. `src/lib/carrinhoWeekBoundaries.ts` — usar Date.UTC para todas as boundaries
 
