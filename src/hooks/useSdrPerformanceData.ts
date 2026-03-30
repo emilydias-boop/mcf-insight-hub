@@ -155,16 +155,28 @@ export function useSdrPerformanceData({
     avgDurationSeconds: 0,
   };
 
+  // Calculate effective start date based on data_admissao
+  const effectiveStartDate = useMemo(() => {
+    if (detail.dataAdmissao) {
+      const admissao = parseISO(detail.dataAdmissao);
+      if (isAfter(admissao, startDate)) {
+        return admissao;
+      }
+    }
+    return startDate;
+  }, [detail.dataAdmissao, startDate]);
+
+  const isProporcional = effectiveStartDate > startDate;
+
   // Compute meta for the period
   const metaPeriodo = useMemo(() => {
     const md = detail.metaDiaria;
     if (metaMode === "custom" && customMeta !== undefined) return customMeta;
-    if (metaMode === "per_business_day") return md; // per day, total computed elsewhere
-    const businessDays = contarDiasUteis(startDate, endDate);
-    if (metaMode === "weekly") return md * 5; // weekly = 5 business days
-    // default: monthly_prorated
+    if (metaMode === "per_business_day") return md;
+    const businessDays = contarDiasUteis(effectiveStartDate, endDate);
+    if (metaMode === "weekly") return md * 5;
     return md * businessDays;
-  }, [detail.metaDiaria, metaMode, customMeta, startDate, endDate]);
+  }, [detail.metaDiaria, metaMode, customMeta, effectiveStartDate, endDate]);
 
   // Comparative SDR metrics
   const compSdrMetrics = useMemo(() => {
