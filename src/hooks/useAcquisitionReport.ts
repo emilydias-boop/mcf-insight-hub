@@ -13,12 +13,44 @@ const phoneSuffix = (phone: string | null | undefined): string => {
   return digits.length >= 9 ? digits.slice(-9) : digits;
 };
 
-const detectChannel = (productName: string | null): string => {
-  const n = (productName || '').toLowerCase();
-  if (n.includes('a010')) return 'A010';
-  if (n.includes('bio') || n.includes('instagram')) return 'BIO';
+const VALID_CHANNELS = new Set(['A010', 'LIVE', 'ANAMNESE', 'ANAMNESE-INSTA', 'OUTSIDE', 'LANÇAMENTO']);
+
+function detectChannel(opts: {
+  productName: string | null;
+  saleOrigin: string | null;
+  tags: string[];
+  isOutside: boolean;
+  productCategory: string | null;
+}): string {
+  const { productName, saleOrigin, tags, isOutside, productCategory } = opts;
+  const pn = (productName || '').toLowerCase();
+  const cat = (productCategory || '').toLowerCase();
+
+  // 1. LANÇAMENTO
+  if (saleOrigin === 'launch' || pn.includes('contrato mcf')) return 'LANÇAMENTO';
+
+  // 2. A010
+  if (cat === 'a010' || pn.includes('a010')) return 'A010';
+
+  // 3. Tags-based (ANAMNESE-INSTA / ANAMNESE)
+  const upperTags = tags.map(t => {
+    if (typeof t === 'string') {
+      if (t.startsWith('{')) {
+        try { const p = JSON.parse(t); return (p?.name || t).toUpperCase(); } catch { return t.toUpperCase(); }
+      }
+      return t.toUpperCase();
+    }
+    return (t as any)?.name?.toUpperCase() || '';
+  });
+  if (upperTags.some(t => t.includes('ANAMNESE-INSTA') || t.includes('ANAMNESE INSTA'))) return 'ANAMNESE-INSTA';
+  if (upperTags.some(t => t.includes('ANAMNESE'))) return 'ANAMNESE';
+
+  // 4. OUTSIDE
+  if (isOutside) return 'OUTSIDE';
+
+  // 5. Fallback
   return 'LIVE';
-};
+}
 
 const classifyOrigin = (tx: HublaTransaction): string => {
   if (tx.sale_origin === 'launch' || (tx.product_name || '').toLowerCase().includes('contrato mcf'))
@@ -47,6 +79,7 @@ interface AttendeeWithSDR {
   crm_deals: {
     owner_id: string | null;
     owner_profile_id: string | null;
+    tags: any[] | null;
     crm_contacts: { email: string | null; phone: string | null } | null;
   } | null;
 }
@@ -206,7 +239,7 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
           .select(`
             id, attendee_phone, deal_id,
             meeting_slots!inner(closer_id, scheduled_at, booked_by),
-            crm_deals!deal_id(owner_id, owner_profile_id, crm_contacts!contact_id(email, phone))
+            crm_deals!deal_id(owner_id, owner_profile_id, tags, crm_contacts!contact_id(email, phone))
           `)
           .eq('meeting_slots.meeting_type', 'r1')
           .gte('meeting_slots.scheduled_at', startDate)
@@ -332,7 +365,14 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
       const sdrName = sdrId
         ? (sdrProfileMap.get(sdrId) || sdrNameMap.get(sdrId) || 'SDR Desconhecido')
         : (isAutomatic ? origin : 'Sem SDR');
-      const channel = detectChannel(tx.product_name);
+      const dealTags: string[] = (matchedAttendee?.crm_deals?.tags as any[] || []);
+      const channel = detectChannel({
+        productName: tx.product_name,
+        saleOrigin: tx.sale_origin,
+        tags: dealTags,
+        isOutside,
+        productCategory: tx.product_category,
+      });
       const isFirst = globalFirstIds.has(tx.id);
       const gross = shouldUseBUFilter ? (tx.product_price || tx.net_value || 0) : getDeduplicatedGross(tx, isFirst);
       const net = tx.net_value || 0;
