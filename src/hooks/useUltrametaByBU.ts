@@ -48,12 +48,12 @@ export function useUltrametaByBU() {
         teamGoalsResult,
       ] = await Promise.all([
         // Incorporador: use RPC with monthly period
-        supabase.rpc('get_all_hubla_transactions', {
+        supabase.rpc('get_hubla_transactions_by_bu', {
+          p_bu: 'incorporador',
           p_start_date: formatDateForQuery(monthStart),
           p_end_date: formatDateForQuery(monthEnd, true),
           p_limit: 10000,
           p_search: null,
-          p_products: null,
         }),
 
         // Consórcio: consortium_cards valor_credito (NOT valor_comissao)
