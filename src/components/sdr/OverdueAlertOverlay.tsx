@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { usePendingNextActions } from '@/hooks/usePendingNextActions';
 
 import { useAuth } from '@/contexts/AuthContext';
