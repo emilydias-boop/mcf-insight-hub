@@ -112,8 +112,10 @@ export function SdrSummaryTable({
           <TableBody>
             {data.map((row) => {
               const metaDiaria = sdrMetaMap?.get(row.sdrEmail.toLowerCase()) || 10;
-              const metaPeriodo = metaDiaria * (diasUteisNoPeriodo || 1);
+              const diasEfetivos = sdrDiasUteisMap?.get(row.sdrEmail.toLowerCase()) || diasUteisNoPeriodo || 1;
+              const metaPeriodo = metaDiaria * diasEfetivos;
               const bateuMeta = row.agendamentos >= metaPeriodo;
+              const isProporcional = sdrDiasUteisMap?.has(row.sdrEmail.toLowerCase()) && diasEfetivos < (diasUteisNoPeriodo || 1);
 
               const taxaContrato = row.r1Realizada > 0 
                 ? ((row.contratos / row.r1Realizada) * 100)
