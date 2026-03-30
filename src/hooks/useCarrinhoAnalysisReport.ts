@@ -363,7 +363,7 @@ function pickBestPhoneMatchedContact(
   phoneContacts: ContactLookup[],
   dealMap: Map<string, DealLookup>,
   r1Map: Map<string, R1Lookup>,
-  r2Map: Map<string, R2Lookup>,
+  r2Map: Map<string, R2Lookup[]>,
 ): ContactLookup | undefined {
   const candidates = [
     ...(currentContact ? [currentContact] : []),
