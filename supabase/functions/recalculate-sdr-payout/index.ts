@@ -446,12 +446,42 @@ serve(async (req) => {
     }> = [];
 
     // Get SDRs to process (with email and role_type for RPC call)
+    // Include active SDRs AND terminated SDRs whose termination date falls within the current month
     let sdrsQuery = supabase.from('sdr').select('id, name, email, meta_diaria, role_type, squad, nivel').eq('active', true);
     if (sdr_id) {
       sdrsQuery = sdrsQuery.eq('id', sdr_id);
     }
     
-    const { data: sdrs, error: sdrsError } = await sdrsQuery;
+    const { data: activeSdrs, error: sdrsError } = await sdrsQuery;
+    
+    // Also fetch terminated SDRs with data_demissao in this month
+    let terminatedSdrs: typeof activeSdrs = [];
+    if (!sdr_id) {
+      const { data: termEmployees } = await supabase
+        .from('employees')
+        .select('sdr_id, data_demissao')
+        .eq('status', 'desligado')
+        .gte('data_demissao', monthStart)
+        .lte('data_demissao', monthEnd)
+        .not('sdr_id', 'is', null);
+      
+      if (termEmployees && termEmployees.length > 0) {
+        const termSdrIds = termEmployees.map(e => e.sdr_id).filter(Boolean);
+        if (termSdrIds.length > 0) {
+          const { data: termSdrsData } = await supabase
+            .from('sdr')
+            .select('id, name, email, meta_diaria, role_type, squad, nivel')
+            .in('id', termSdrIds);
+          terminatedSdrs = termSdrsData || [];
+          console.log(`   👋 Desligados no mês: ${terminatedSdrs.map(s => s.name).join(', ')}`);
+        }
+      }
+    }
+    
+    // Merge active + terminated (dedup by id)
+    const activeIds = new Set((activeSdrs || []).map(s => s.id));
+    const mergedTerminated = (terminatedSdrs || []).filter(s => !activeIds.has(s.id));
+    const sdrs = [...(activeSdrs || []), ...mergedTerminated];
     if (sdrsError) throw sdrsError;
 
     if (!sdrs || sdrs.length === 0) {
