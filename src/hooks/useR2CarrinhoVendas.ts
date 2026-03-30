@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
+import { getCartWeekStart } from '@/lib/carrinhoWeekBoundaries';
 import { endOfDay, format, subDays } from 'date-fns';
 import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
-import { getCarrinhoWeekBoundaries } from '@/lib/carrinhoWeekBoundaries';
+import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
 import { getCachedPrecoReferencia } from './useProductPricesCache';
 
 // Helper para normalização consistente (apenas dígitos, últimos 9 — número local sem DDD variável)
