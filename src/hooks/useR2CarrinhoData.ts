@@ -34,7 +34,7 @@ export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agen
   return useQuery({
     queryKey: ['r2-carrinho-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), filter],
     queryFn: async (): Promise<R2CarrinhoAttendee[]> => {
-      const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig);
+      const { r2Meetings: { start: effectiveStart, end: effectiveEnd } } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig);
       // Get R2 status options (all, including inactive, for proper name mapping)
       const { data: statusOptions } = await supabase
         .from('r2_status_options')
