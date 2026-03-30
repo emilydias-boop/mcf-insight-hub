@@ -52,19 +52,36 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
   const teamData = useTeamMeetingsData({ startDate, endDate });
   const sdrsQuery = useSdrsFromSquad("inside_sales");
 
-  // Fetch meta_diaria from sdr table
+  // Fetch meta_diaria and employee_id from sdr table
   const metaDiariaQuery = useQuery({
     queryKey: ['sdr-meta-diaria-detail', sdrEmail],
     queryFn: async () => {
       const { data } = await supabase
         .from('sdr')
-        .select('meta_diaria')
+        .select('meta_diaria, employee_id')
         .eq('email', sdrEmail.toLowerCase())
         .eq('active', true)
         .maybeSingle();
-      return data?.meta_diaria ?? 10;
+      return { metaDiaria: data?.meta_diaria ?? 10, employeeId: data?.employee_id ?? null };
     },
     enabled: !!sdrEmail,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Fetch data_admissao from employees table
+  const dataAdmissaoQuery = useQuery({
+    queryKey: ['sdr-data-admissao-detail', metaDiariaQuery.data?.employeeId],
+    queryFn: async () => {
+      const employeeId = metaDiariaQuery.data?.employeeId;
+      if (!employeeId) return null;
+      const { data } = await supabase
+        .from('employees')
+        .select('data_admissao')
+        .eq('id', employeeId)
+        .maybeSingle();
+      return data?.data_admissao ?? null;
+    },
+    enabled: !!metaDiariaQuery.data?.employeeId,
     staleTime: 1000 * 60 * 5,
   });
 
