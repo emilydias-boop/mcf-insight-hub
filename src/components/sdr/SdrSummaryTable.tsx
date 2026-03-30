@@ -19,6 +19,7 @@ interface SdrSummaryTableProps {
   disableNavigation?: boolean;
   sdrMetaMap?: Map<string, number>;
   diasUteisNoPeriodo?: number;
+  sdrDiasUteisMap?: Map<string, number>;
 }
 
 export function SdrSummaryTable({ 
