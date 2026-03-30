@@ -1,63 +1,59 @@
 
 
-## Aplicar corte de horário nas janelas de Aprovados e Vendas
+## Fechamento pro-rata para desligados e novos colaboradores
 
-### Contexto
+### Problema
+O sistema calcula o fechamento usando o mês inteiro (dia 1 ao último dia) para todos os colaboradores, sem considerar:
+- **Desligados** (Evellyn, Juliana, Hellen): devem ter métricas e remuneração calculadas apenas do dia 1 até a `data_demissao`
+- **Novos**: devem ter métricas e remuneração calculadas apenas da `data_admissao` até o fim do mês
 
-A separação conceitual ja esta correta: aprovados e vendas usam a janela operacional (Sex-Sex), nao a safra de contratos. O ponto pendente e que a sexta-feira do carrinho atual tem um **corte de horario** — aprovados sao apenas os que foram definidos **antes** do pitch/venda (tipicamente meio-dia), e vendas comecam **apos** esse horario.
+Hoje não existe nenhuma lógica de pro-rata no sistema — nem na Edge Function (`recalculate-sdr-payout`) nem no cálculo local (`useCalculatedVariavel`).
 
-O `CarrinhoConfig` ja possui o campo `horario_corte` (default `"12:00"`), que e exatamente esse corte.
+### Solução
 
-### Mudancas
+Adicionar lógica de **pro-rata por dias úteis trabalhados** na Edge Function e no frontend.
 
-#### 1. `src/lib/carrinhoWeekBoundaries.ts`
+#### 1. Edge Function `supabase/functions/recalculate-sdr-payout/index.ts`
 
-Adicionar duas novas janelas ao `CarrinhoMetricBoundaries`:
+Após buscar o `employeeData` (linha ~598), adicionar:
+- Buscar `data_admissao` e `data_demissao` do employee
+- Calcular `data_inicio_efetiva` = max(início do mês, `data_admissao`)
+- Calcular `data_fim_efetiva` = min(fim do mês, `data_demissao` ou fim do mês)
+- Calcular `dias_uteis_trabalhados` vs `dias_uteis_mes` total
+- Usar `data_inicio_efetiva` e `data_fim_efetiva` como range para buscar métricas (RPC e slots de Closer)
+- Aplicar pro-rata no **fixo**: `fixo_valor * (dias_uteis_trabalhados / dias_uteis_mes)`
+- Aplicar pro-rata no **iFood mensal**: `ifood * (dias_uteis_trabalhados / dias_uteis_mes)`
+- Ajustar **metas** proporcionalmente: `meta * (dias_uteis_trabalhados / dias_uteis_mes)`
+- Persistir `dias_uteis_trabalhados` no payout para auditoria
 
-```text
-aprovados: {
-  start: Sex pos-carrinho anterior 00:00,
-  end: Sex do carrinho atual HH:mm (horario_corte do config)
-}
+Também buscar employees com `status = 'desligado'` e `data_demissao` dentro do mês (atualmente a query filtra `status = 'ativo'`, linha 602).
 
-vendasParceria: {
-  start: Sex do carrinho atual HH:mm (horario_corte),
-  end: Seg 23:59
-}
-```
+#### 2. Tabela `sdr_month_payout` — nova coluna
+- Adicionar `dias_uteis_trabalhados` (integer, nullable) para registrar quantos dias úteis o colaborador efetivamente trabalhou
+- Migration SQL simples
 
-Usar o `horario_corte` do `CarrinhoConfig` (default `12:00`) para definir o corte da sexta:
-- Aprovados: Sex anterior 00:00 ate Sex atual 12:00 (ou config)
-- Vendas: Sex atual 12:00 ate Seg 23:59
+#### 3. Frontend — `src/components/fechamento/PayoutTableRow.tsx`
+- Mostrar indicador visual quando `dias_uteis_trabalhados < dias_uteis_mes` (badge "Proporcional" ou tooltip)
 
-A janela `r2Meetings` existente (Sex 00:00 a Sex 23:59) permanece para uso geral (aba "Todas R2s").
+#### 4. Frontend — `src/pages/fechamento-sdr/Detail.tsx`
+- Exibir info de pro-rata no cabeçalho: "Período efetivo: 01/03 a 15/03 (X dias úteis de Y)"
 
-#### 2. `src/hooks/useR2CarrinhoKPIs.ts`
+#### 5. Frontend — `src/hooks/useCalculatedVariavel.ts`
+- Considerar pro-rata quando `dias_uteis_trabalhados` estiver preenchido no payout
+- Ajustar fixo e metas proporcionalmente
 
-KPI "Aprovados" usa `boundaries.aprovados` (com corte) em vez de `boundaries.r2Meetings` (sem corte).
+#### 6. Edge Function — buscar desligados
+- Na query de SDRs (linha 449), o filtro `active = true` pode excluir desligados
+- Adicionar lógica: buscar também SDRs com employee desligado no mês corrente (`data_demissao` entre monthStart e monthEnd), mesmo que `sdr.active = false`
 
-#### 3. `src/hooks/useR2CarrinhoData.ts`
-
-Quando `filter === 'aprovados'`: usar `boundaries.aprovados` (com corte na sexta).
-
-#### 4. `src/hooks/useR2CarrinhoVendas.ts`
-
-Usar `boundaries.vendasParceria` atualizado (que agora comeca no horario de corte da sexta, nao meia-noite).
-
-### Resultado
-
-```text
-Exemplo: carrinho sexta 28/03, horario_corte = 12:00
-
-Aprovados:  Sex 21/03 00:00 → Sex 28/03 12:00
-Vendas:     Sex 28/03 12:00 → Seg 31/03 23:59
-```
-
-Aprovados capturados antes do pitch. Vendas capturadas apos o pitch. Sem sobreposicao.
+### Prioridade (urgência)
+A implementação começa pela Edge Function, que é o que gera os números do fechamento ao clicar "Recalcular Todos".
 
 ### Arquivos alterados
-1. `src/lib/carrinhoWeekBoundaries.ts` — novas janelas com corte de horario
-2. `src/hooks/useR2CarrinhoKPIs.ts` — usar janela `aprovados`
-3. `src/hooks/useR2CarrinhoData.ts` — usar janela `aprovados` no filtro
-4. `src/hooks/useR2CarrinhoVendas.ts` — usar janela `vendasParceria` atualizada
+1. `supabase/functions/recalculate-sdr-payout/index.ts` — pro-rata + buscar desligados
+2. `supabase/migrations/XXXX_add_dias_uteis_trabalhados.sql` — nova coluna
+3. `src/types/sdr-fechamento.ts` — adicionar campo ao tipo
+4. `src/hooks/useCalculatedVariavel.ts` — pro-rata no cálculo local
+5. `src/components/fechamento/PayoutTableRow.tsx` — badge proporcional
+6. `src/pages/fechamento-sdr/Detail.tsx` — exibir período efetivo
 
