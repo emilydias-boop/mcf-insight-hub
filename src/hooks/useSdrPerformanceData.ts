@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { subMonths, subYears, differenceInDays, eachDayOfInterval, format, min, startOfDay } from "date-fns";
+import { subMonths, subYears, differenceInDays, eachDayOfInterval, format, min, max, startOfDay, isAfter, parseISO } from "date-fns";
 import { useSdrDetailData, TeamAverages, SdrRanking } from "./useSdrDetailData";
 import { useSdrCallMetrics, SdrCallMetrics } from "./useSdrCallMetrics";
 import { useTeamMeetingsData, SdrSummaryRow } from "./useTeamMeetingsData";
@@ -155,16 +155,28 @@ export function useSdrPerformanceData({
     avgDurationSeconds: 0,
   };
 
+  // Calculate effective start date based on data_admissao
+  const effectiveStartDate = useMemo(() => {
+    if (detail.dataAdmissao) {
+      const admissao = parseISO(detail.dataAdmissao);
+      if (isAfter(admissao, startDate)) {
+        return admissao;
+      }
+    }
+    return startDate;
+  }, [detail.dataAdmissao, startDate]);
+
+  const isProporcional = effectiveStartDate > startDate;
+
   // Compute meta for the period
   const metaPeriodo = useMemo(() => {
     const md = detail.metaDiaria;
     if (metaMode === "custom" && customMeta !== undefined) return customMeta;
-    if (metaMode === "per_business_day") return md; // per day, total computed elsewhere
-    const businessDays = contarDiasUteis(startDate, endDate);
-    if (metaMode === "weekly") return md * 5; // weekly = 5 business days
-    // default: monthly_prorated
+    if (metaMode === "per_business_day") return md;
+    const businessDays = contarDiasUteis(effectiveStartDate, endDate);
+    if (metaMode === "weekly") return md * 5;
     return md * businessDays;
-  }, [detail.metaDiaria, metaMode, customMeta, startDate, endDate]);
+  }, [detail.metaDiaria, metaMode, customMeta, effectiveStartDate, endDate]);
 
   // Comparative SDR metrics
   const compSdrMetrics = useMemo(() => {
@@ -174,13 +186,13 @@ export function useSdrPerformanceData({
     ) || null;
   }, [compData.bySDR, sdrEmail, compStartDate, compEndDate]);
 
-  // Business days calculations
-  const businessDaysTotal = useMemo(() => contarDiasUteis(startDate, endDate), [startDate, endDate]);
+  // Business days calculations (using effective start for proportional)
+  const businessDaysTotal = useMemo(() => contarDiasUteis(effectiveStartDate, endDate), [effectiveStartDate, endDate]);
   const today = startOfDay(new Date());
   const effectiveToday = useMemo(() => min([today, endDate]), [today, endDate]);
   const businessDaysPassed = useMemo(
-    () => contarDiasUteis(startDate, effectiveToday),
-    [startDate, effectiveToday]
+    () => contarDiasUteis(effectiveStartDate, effectiveToday),
+    [effectiveStartDate, effectiveToday]
   );
   const businessDaysRemaining = useMemo(
     () => Math.max(0, businessDaysTotal - businessDaysPassed),
@@ -379,7 +391,8 @@ export function useSdrPerformanceData({
         : null
       : null;
 
-    let text = `Neste período, ${name} realizou ${agend} agendamentos de ${meta} previstos, atingindo ${att}% da meta.`;
+    const propLabel = isProporcional ? ` (meta proporcional — ${businessDaysTotal} dias úteis)` : '';
+    let text = `Neste período, ${name} realizou ${agend} agendamentos de ${meta} previstos${propLabel}, atingindo ${att}% da meta.`;
 
     if (compVar !== null) {
       const prefix = Number(compVar) >= 0 ? "+" : "";

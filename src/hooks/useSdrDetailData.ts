@@ -36,6 +36,7 @@ export interface SdrDetailData {
   meetings: MeetingV2[];
   allSdrs: SdrSummaryRow[];
   metaDiaria: number;
+  dataAdmissao: string | null;
   isLoading: boolean;
   error: Error | null;
   refetch: () => void;
@@ -57,13 +58,30 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
     queryFn: async () => {
       const { data } = await supabase
         .from('sdr')
-        .select('meta_diaria')
+        .select('id, meta_diaria')
         .eq('email', sdrEmail.toLowerCase())
         .eq('active', true)
         .maybeSingle();
-      return data?.meta_diaria ?? 10;
+      return { metaDiaria: data?.meta_diaria ?? 10, sdrId: data?.id ?? null };
     },
     enabled: !!sdrEmail,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Fetch data_admissao from employees table using sdr_id
+  const dataAdmissaoQuery = useQuery({
+    queryKey: ['sdr-data-admissao-detail', metaDiariaQuery.data?.sdrId],
+    queryFn: async () => {
+      const sdrId = metaDiariaQuery.data?.sdrId;
+      if (!sdrId) return null;
+      const { data } = await supabase
+        .from('employees')
+        .select('data_admissao')
+        .eq('sdr_id', sdrId)
+        .maybeSingle();
+      return data?.data_admissao ?? null;
+    },
+    enabled: !!metaDiariaQuery.data?.sdrId,
     staleTime: 1000 * 60 * 5,
   });
 
@@ -177,7 +195,8 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
     ranking,
     meetings,
     allSdrs: teamData.bySDR,
-    metaDiaria: metaDiariaQuery.data ?? 10,
+    metaDiaria: metaDiariaQuery.data?.metaDiaria ?? 10,
+    dataAdmissao: dataAdmissaoQuery.data ?? null,
     isLoading: teamData.isLoading || sdrsQuery.isLoading,
     error: teamData.error || sdrsQuery.error || null,
     refetch: teamData.refetch,
