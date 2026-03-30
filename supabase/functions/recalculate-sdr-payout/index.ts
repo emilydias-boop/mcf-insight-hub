@@ -681,12 +681,9 @@ serve(async (req) => {
         }
 
         // ===== VERIFICAR ELEGIBILIDADE PARA ULTRAMETA (precisa estar desde o início do mês) =====
-        const dataAdmissao = employeeData?.data_admissao 
-          ? new Date(employeeData.data_admissao) 
-          : null;
-        const inicioMes = new Date(year, month - 1, 1);
+        // Reuse dataAdmissaoDate already calculated above
         // Elegível se entrou antes do início do mês OU se data_admissao é null
-        const elegivelUltrameta = !dataAdmissao || dataAdmissao < inicioMes;
+        const elegivelUltrameta = !dataAdmissaoDate || dataAdmissaoDate < inicioMesDate;
         
         if (!elegivelUltrameta) {
           console.log(`   ⏭️ ${sdr.name} NÃO elegível para Ultrameta (admissão em ${dataAdmissao?.toISOString().split('T')[0]})`);
