@@ -186,8 +186,8 @@ export function useSdrPerformanceData({
     ) || null;
   }, [compData.bySDR, sdrEmail, compStartDate, compEndDate]);
 
-  // Business days calculations
-  const businessDaysTotal = useMemo(() => contarDiasUteis(startDate, endDate), [startDate, endDate]);
+  // Business days calculations (using effective start for proportional)
+  const businessDaysTotal = useMemo(() => contarDiasUteis(effectiveStartDate, endDate), [effectiveStartDate, endDate]);
   const today = startOfDay(new Date());
   const effectiveToday = useMemo(() => min([today, endDate]), [today, endDate]);
   const businessDaysPassed = useMemo(
