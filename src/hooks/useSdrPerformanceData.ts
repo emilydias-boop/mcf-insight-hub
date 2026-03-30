@@ -391,7 +391,8 @@ export function useSdrPerformanceData({
         : null
       : null;
 
-    let text = `Neste período, ${name} realizou ${agend} agendamentos de ${meta} previstos, atingindo ${att}% da meta.`;
+    const propLabel = isProporcional ? ` (meta proporcional — ${businessDaysTotal} dias úteis)` : '';
+    let text = `Neste período, ${name} realizou ${agend} agendamentos de ${meta} previstos${propLabel}, atingindo ${att}% da meta.`;
 
     if (compVar !== null) {
       const prefix = Number(compVar) >= 0 ? "+" : "";
