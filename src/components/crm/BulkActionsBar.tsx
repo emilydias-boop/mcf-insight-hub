@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, UserPlus, X, Loader2, Copy, Trash2 } from 'lucide-react';
+import { CheckCircle2, UserPlus, X, Loader2, Copy, Trash2, ArrowRightLeft } from 'lucide-react';
 
 interface BulkActionsBarProps {
   selectedCount: number;
