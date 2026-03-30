@@ -31,8 +31,8 @@ export default function R2Carrinho() {
   const [selectedCarrinhoId, setSelectedCarrinhoId] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
-  const weekStart = useMemo(() => getCustomWeekStart(weekDate), [weekDate]);
-  const weekEnd = useMemo(() => getCustomWeekEnd(weekDate), [weekDate]);
+  const weekStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
+  const weekEnd = useMemo(() => getCartWeekEnd(weekDate), [weekDate]);
 
   const { config, saveConfig, copyFromPreviousWeek } = useCarrinhoConfig(weekStart);
 
