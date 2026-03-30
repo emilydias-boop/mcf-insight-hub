@@ -28,6 +28,8 @@ export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
 export type ActivityPriorityFilter = 'all' | 'high' | 'medium' | 'low';
 export type OutsideFilter = 'all' | 'outside_only' | 'outside_worked' | 'outside_not_worked' | 'not_outside';
 
+import type { TagFilterRule, TagOperator } from './TagFilterPopover';
+
 export interface DealFiltersState {
   search: string;
   dateRange: DateRange | undefined;
@@ -37,6 +39,8 @@ export interface DealFiltersState {
   salesChannel: SalesChannelFilter;
   attemptsRange: { min: number; max: number } | null;
   selectedTags: string[];
+  tagFilters: TagFilterRule[];
+  tagOperator: TagOperator;
   activityPriority: ActivityPriorityFilter;
   outsideFilter: OutsideFilter;
 }
@@ -133,7 +137,7 @@ export const DealFilters = ({
     filters.inactivityDays !== null,
     filters.salesChannel !== 'all',
     filters.attemptsRange !== null,
-    filters.selectedTags.length > 0,
+    filters.tagFilters.length > 0,
     filters.activityPriority !== 'all',
     filters.outsideFilter !== 'all',
   ].filter(Boolean).length;
@@ -364,11 +368,12 @@ export const DealFilters = ({
         </PopoverContent>
       </Popover>
       
-      {/* Filtro de Tags */}
+      {/* Filtro de Tags (Avançado) */}
       <TagFilterPopover
         availableTags={availableTags}
-        selectedTags={filters.selectedTags}
-        onChange={(tags) => onChange({ ...filters, selectedTags: tags })}
+        tagFilters={filters.tagFilters}
+        tagOperator={filters.tagOperator}
+        onChangeFilters={(tagFilters, tagOperator) => onChange({ ...filters, tagFilters, tagOperator })}
         isLoading={isLoadingTags}
       />
       

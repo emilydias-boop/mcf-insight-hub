@@ -69,6 +69,8 @@ const Negocios = () => {
     salesChannel: 'all',
     attemptsRange: null,
     selectedTags: [],
+    tagFilters: [],
+    tagOperator: 'and',
     activityPriority: 'all',
     outsideFilter: 'all',
   });
@@ -498,26 +500,49 @@ const Negocios = () => {
         }
       }
       
-      // Filtro por tags selecionadas
-      if (filters.selectedTags.length > 0) {
-        // Garantir que tags é um array válido
+      // Filtro avançado por tags (AND/OR com has/not_has)
+      if (filters.tagFilters.length > 0) {
         const dealTags = Array.isArray(deal.tags) ? deal.tags : [];
         
-        // Normalização avançada: remove acentos, padroniza separadores (com validação de tipo)
         const normalizeTag = (t: unknown): string => {
           if (typeof t !== 'string') return '';
           return t
-            .normalize('NFD')                    // Decompose para separar acentos
-           .replace(/[\u0300-\u036f]/g, '')     // Remove diacríticos (acentos)
-           .replace(/\s+/g, '-')                // Espaços → hífens
-           .trim()
-           .toLowerCase();
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, '-')
+            .trim()
+            .toLowerCase();
         };
         
-        const normalizedSelectedTags = filters.selectedTags.map(normalizeTag).filter(Boolean);
         const normalizedDealTags = dealTags.map(normalizeTag).filter(Boolean);
         
-        // Se nenhuma tag selecionada é válida, não filtrar
+        const evaluateRule = (rule: { tag: string; mode: 'has' | 'not_has' }) => {
+          const normalizedRuleTag = normalizeTag(rule.tag);
+          const hasTag = normalizedDealTags.includes(normalizedRuleTag);
+          return rule.mode === 'has' ? hasTag : !hasTag;
+        };
+        
+        if (filters.tagOperator === 'and') {
+          if (!filters.tagFilters.every(evaluateRule)) return false;
+        } else {
+          if (!filters.tagFilters.some(evaluateRule)) return false;
+        }
+      }
+      
+      // Legacy: filtro por tags simples (backward compat)
+      if (filters.tagFilters.length === 0 && filters.selectedTags.length > 0) {
+        const dealTags = Array.isArray(deal.tags) ? deal.tags : [];
+        const normalizeTag = (t: unknown): string => {
+          if (typeof t !== 'string') return '';
+          return t
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, '-')
+            .trim()
+            .toLowerCase();
+        };
+        const normalizedSelectedTags = filters.selectedTags.map(normalizeTag).filter(Boolean);
+        const normalizedDealTags = dealTags.map(normalizeTag).filter(Boolean);
         if (normalizedSelectedTags.length > 0) {
           const hasMatchingTag = normalizedSelectedTags.some(selectedTag => 
             normalizedDealTags.includes(selectedTag)
@@ -604,6 +629,8 @@ const Negocios = () => {
       salesChannel: 'all',
       attemptsRange: null,
       selectedTags: [],
+      tagFilters: [],
+      tagOperator: 'and',
       activityPriority: 'all',
       outsideFilter: 'all',
     });
