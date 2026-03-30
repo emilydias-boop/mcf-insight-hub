@@ -86,7 +86,7 @@ export function getCarrinhoMetricBoundaries(
   friCartCutoff.setHours(cutHour, cutMinute || 0, 0, 0);
 
   // Vendas parceria: Sex do carrinho (após corte) → Seg 23:59
-  const friCartStart = new Date(friCartCutoff);
+  const friCartStart = startOfDay(addDays(new Date(weekEnd), 2));
   const monAfterCart = endOfDay(addDays(startOfDay(addDays(new Date(weekEnd), 2)), 3));
 
   return {
