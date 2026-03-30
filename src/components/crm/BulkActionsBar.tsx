@@ -23,6 +23,8 @@ export const BulkActionsBar = ({
   isDuplicating = false,
   onDelete,
   isDeleting = false,
+  onMoveStage,
+  isMovingStage = false,
 }: BulkActionsBarProps) => {
   if (selectedCount === 0) return null;
 
