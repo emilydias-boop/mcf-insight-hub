@@ -365,7 +365,14 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
       const sdrName = sdrId
         ? (sdrProfileMap.get(sdrId) || sdrNameMap.get(sdrId) || 'SDR Desconhecido')
         : (isAutomatic ? origin : 'Sem SDR');
-      const channel = detectChannel(tx.product_name);
+      const dealTags: string[] = (matchedAttendee?.crm_deals?.tags as any[] || []);
+      const channel = detectChannel({
+        productName: tx.product_name,
+        saleOrigin: tx.sale_origin,
+        tags: dealTags,
+        isOutside,
+        productCategory: tx.product_category,
+      });
       const isFirst = globalFirstIds.has(tx.id);
       const gross = shouldUseBUFilter ? (tx.product_price || tx.net_value || 0) : getDeduplicatedGross(tx, isFirst);
       const net = tx.net_value || 0;
