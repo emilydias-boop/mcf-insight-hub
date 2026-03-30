@@ -1,0 +1,1 @@
+UPDATE sdr SET active = false WHERE id = 'f574bca6-7669-4a91-bea3-ff46bac848ed';
