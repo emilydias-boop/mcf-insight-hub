@@ -223,7 +223,7 @@ export const useSdrPayouts = (anoMes: string, filters?: {
           )
         `)
         .not('sdr_id', 'is', null)
-        .eq('status', 'ativo')
+        .in('status', ['ativo', 'desligado'])
         .order('updated_at', { ascending: false });
       
       if (empError) throw empError;
