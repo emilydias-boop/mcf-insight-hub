@@ -627,8 +627,8 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         }
       }
 
-      // Build R2 map: contact_id → best R2
-      const r2Map = new Map<string, R2Lookup>();
+      // Build R2 map: contact_id → ALL R2s (for safra selection)
+      const r2Map = new Map<string, R2Lookup[]>();
       mergeR2IntoMap(r2Result.data, r2Map);
 
       // === RE-PICK BEST CONTACT PER EMAIL after deals/R1/R2 are loaded ===
