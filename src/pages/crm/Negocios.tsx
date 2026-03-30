@@ -69,6 +69,8 @@ const Negocios = () => {
     salesChannel: 'all',
     attemptsRange: null,
     selectedTags: [],
+    tagFilters: [],
+    tagOperator: 'and',
     activityPriority: 'all',
     outsideFilter: 'all',
   });
