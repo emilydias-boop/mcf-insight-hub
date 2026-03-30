@@ -201,11 +201,11 @@ export function FunilDashboard() {
 
   // Stage distribution (current snapshot)
   const { data: stageDistribution, isLoading: loadingStages } = useQuery({
-    queryKey: ['funnel-stage-distribution'],
+    queryKey: ['funnel-stage-distribution', channelFilter],
     queryFn: async () => {
       const { data } = await supabase
         .from('crm_deals')
-        .select('stage_id, stage:crm_stages!inner(stage_name, stage_order)')
+        .select('stage_id, tags, custom_fields, data_source, origin:crm_origins(name), stage:crm_stages!inner(stage_name, stage_order)')
         .eq('origin_id', PIPELINE_ORIGIN_ID)
         .not('stage_id', 'is', null);
 
@@ -213,6 +213,17 @@ export function FunilDashboard() {
 
       const counts: Record<string, { name: string; count: number; order: number }> = {};
       data.forEach((deal: any) => {
+        if (channelFilter) {
+          const tags: string[] = ((deal as any).tags || []).map((t: any) => typeof t === 'string' ? t : t?.name || '');
+          const ch = classifyChannel({
+            tags,
+            originName: (deal as any).origin?.name || null,
+            leadChannel: (deal as any).custom_fields?.lead_channel || null,
+            dataSource: (deal as any).data_source || null,
+            hasA010: false,
+          });
+          if (ch !== channelFilter) return;
+        }
         const name = deal.stage?.stage_name || 'Sem etapa';
         const order = deal.stage?.stage_order || 999;
         if (!counts[name]) counts[name] = { name, count: 0, order };
