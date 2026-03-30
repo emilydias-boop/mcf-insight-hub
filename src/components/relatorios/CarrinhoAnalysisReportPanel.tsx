@@ -200,12 +200,15 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
       {data && (
         <>
           {/* KPI Cards */}
-          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-9 gap-2">
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-2">
             {[
               { label: 'R1 Realiz. (Total)', value: data.kpis.totalR1RealizadasSemana, color: 'text-cyan-700' },
               { label: 'Contratos', value: data.kpis.contratosPagos, color: 'text-blue-700' },
               { label: 'Taxa C/R1', value: `${data.kpis.taxaContratoR1.toFixed(0)}%`, color: 'text-purple-600' },
               { label: 'R2 Agend.', value: data.kpis.r2Agendadas, color: 'text-amber-600' },
+              { label: 'R2 Na Janela', value: data.kpis.r2NaJanela, color: 'text-teal-600' },
+              { label: 'R2 Tardia', value: data.kpis.r2Tardia, color: 'text-orange-500' },
+              { label: 'Sem R2', value: data.kpis.r2SemR2, color: 'text-red-500' },
               { label: 'Gap C→R2', value: data.kpis.gapContratoR2, color: 'text-orange-600' },
               { label: 'R2 Realiz.', value: data.kpis.r2Realizadas, color: 'text-green-600' },
               { label: 'Aprovados', value: data.kpis.aprovados, color: 'text-green-700' },

@@ -83,6 +83,8 @@ function getBestRawTag(tags: string[]): string | null {
   return null;
 }
 
+export type R2Classificacao = 'na_janela' | 'tardia' | 'sem_r2';
+
 export interface LeadCarrinhoCompleto {
   nome: string;
   telefone: string;
@@ -108,6 +110,7 @@ export interface LeadCarrinhoCompleto {
   r2Realizada: boolean;
   closerR2: string | null;
   statusR2: string | null;
+  r2Classificacao: R2Classificacao;
   // Desfecho
   comprouParceria: boolean;
   dataParceria: string | null;
@@ -155,6 +158,10 @@ export interface CarrinhoAnalysisKPIs {
   taxaContratoR1: number;
   aprovadosComParceria: number;
   aprovadosSemParceria: number;
+  // Safra R2 classification
+  r2NaJanela: number;
+  r2Tardia: number;
+  r2SemR2: number;
 }
 
 export interface FunnelStep {
@@ -301,28 +308,53 @@ function mergeR1IntoMap(rows: any[] | null | undefined, r1Map: Map<string, R1Loo
   }
 }
 
-function mergeR2IntoMap(rows: any[] | null | undefined, r2Map: Map<string, R2Lookup>) {
+function mergeR2IntoMap(rows: any[] | null | undefined, r2Map: Map<string, R2Lookup[]>) {
   for (const a of rows || []) {
     const cid = (a as any).contact_id;
     const slot = a.meeting_slot as any;
     if (!cid || !slot?.scheduled_at) continue;
 
-    const existing = r2Map.get(cid);
-    if (!existing || slot.scheduled_at > existing.date) {
-      const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
-      r2Map.set(cid, {
-        id: a.id,
-        date: slot.scheduled_at,
-        realized,
-        closerName: slot.closer?.name || null,
-        statusId: (a as any).r2_status_id || null,
-        slotStatus: slot.status || '',
-      });
+    const realized = a.status === 'completed' || a.status === 'presente' || slot.status === 'completed';
+    const entry: R2Lookup = {
+      id: a.id,
+      date: slot.scheduled_at,
+      realized,
+      closerName: slot.closer?.name || null,
+      statusId: (a as any).r2_status_id || null,
+      slotStatus: slot.status || '',
+    };
+
+    if (!r2Map.has(cid)) {
+      r2Map.set(cid, [entry]);
+    } else {
+      r2Map.get(cid)!.push(entry);
     }
   }
 }
 
-function getContactScore(contactId: string, dealMap: Map<string, DealLookup>, r1Map: Map<string, R1Lookup>, r2Map: Map<string, R2Lookup>) {
+/** Pick the first R2 scheduled after the contract sale_date, classify it */
+function pickFirstR2AfterContract(
+  allR2s: R2Lookup[] | undefined,
+  saleDate: string,
+  r2Window: { start: Date; end: Date },
+): { r2: R2Lookup | null; classificacao: R2Classificacao } {
+  if (!allR2s || allR2s.length === 0) return { r2: null, classificacao: 'sem_r2' };
+
+  const saleDateMs = new Date(saleDate).getTime();
+  const validR2s = allR2s
+    .filter(r => new Date(r.date).getTime() > saleDateMs)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  if (validR2s.length === 0) return { r2: null, classificacao: 'sem_r2' };
+
+  const firstR2 = validR2s[0];
+  const r2DateMs = new Date(firstR2.date).getTime();
+  const inWindow = r2DateMs >= r2Window.start.getTime() && r2DateMs <= r2Window.end.getTime();
+
+  return { r2: firstR2, classificacao: inWindow ? 'na_janela' : 'tardia' };
+}
+
+function getContactScore(contactId: string, dealMap: Map<string, DealLookup>, r1Map: Map<string, R1Lookup>, r2Map: Map<string, R2Lookup[]>) {
   return (dealMap.has(contactId) ? 4 : 0) + (r2Map.has(contactId) ? 2 : 0) + (r1Map.has(contactId) ? 1 : 0);
 }
 
@@ -331,7 +363,7 @@ function pickBestPhoneMatchedContact(
   phoneContacts: ContactLookup[],
   dealMap: Map<string, DealLookup>,
   r1Map: Map<string, R1Lookup>,
-  r2Map: Map<string, R2Lookup>,
+  r2Map: Map<string, R2Lookup[]>,
 ): ContactLookup | undefined {
   const candidates = [
     ...(currentContact ? [currentContact] : []),
@@ -406,7 +438,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
       if (emails.length === 0) {
         return {
-          kpis: { entradasA010: 0, classificados: 0, r1Agendadas: 0, r1Realizadas: 0, contratosPagos: 0, r2Agendadas: 0, gapContratoR2: 0, r2Realizadas: 0, aprovados: 0, reprovados: 0, proximaSemana: 0, reembolsos: 0, parceriasVendidas: 0, totalR1RealizadasSemana: 0, taxaContratoR1: 0, aprovadosComParceria: 0, aprovadosSemParceria: 0 },
+          kpis: { entradasA010: 0, classificados: 0, r1Agendadas: 0, r1Realizadas: 0, contratosPagos: 0, r2Agendadas: 0, gapContratoR2: 0, r2Realizadas: 0, aprovados: 0, reprovados: 0, proximaSemana: 0, reembolsos: 0, parceriasVendidas: 0, totalR1RealizadasSemana: 0, taxaContratoR1: 0, aprovadosComParceria: 0, aprovadosSemParceria: 0, r2NaJanela: 0, r2Tardia: 0, r2SemR2: 0 },
           funnelSteps: [], motivosPerda: [], analysisByState: [], leads: [],
         };
       }
@@ -550,8 +582,6 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
               .select('id, contact_id, status, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status, closer:closers(name))')
               .in('contact_id', contactIds)
               .eq('meeting_slots.meeting_type', 'r2')
-              .gte('meeting_slots.scheduled_at', boundaries.r2Meetings.start.toISOString())
-              .lte('meeting_slots.scheduled_at', boundaries.r2Meetings.end.toISOString())
           : Promise.resolve({ data: [] }),
       ]);
 
@@ -597,8 +627,8 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         }
       }
 
-      // Build R2 map: contact_id → best R2
-      const r2Map = new Map<string, R2Lookup>();
+      // Build R2 map: contact_id → ALL R2s (for safra selection)
+      const r2Map = new Map<string, R2Lookup[]>();
       mergeR2IntoMap(r2Result.data, r2Map);
 
       // === RE-PICK BEST CONTACT PER EMAIL after deals/R1/R2 are loaded ===
@@ -641,11 +671,15 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           if (otherR1 && (!bestR1 || otherR1.date < bestR1.date)) {
             r1Map.set(bestContact.id, otherR1);
           }
-          // Merge R2
+          // Merge R2 (combine all R2 arrays)
           const otherR2 = r2Map.get(candidate.id);
           const bestR2 = r2Map.get(bestContact.id);
-          if (otherR2 && !bestR2) {
-            r2Map.set(bestContact.id, otherR2);
+          if (otherR2) {
+            if (bestR2) {
+              bestR2.push(...otherR2);
+            } else {
+              r2Map.set(bestContact.id, [...otherR2]);
+            }
           }
         }
       }
@@ -818,22 +852,37 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         const deal = contactId ? dealMap.get(contactId) : null;
         // r1 will be re-read after email fallback enrichment (see r1Fresh below)
 
-        // R2: try linked first, then by contact
-        let r2 = tx.linked_attendee_id ? linkedR2Map.get(tx.linked_attendee_id) : null;
-         let r2Data: R2Lookup | null = null;
-        if (r2) {
-          const slot = r2.meeting_slot as any;
-          r2Data = {
-            id: r2.id,
-            date: slot?.scheduled_at || '',
-            realized: r2.status === 'completed' || r2.status === 'presente' || slot?.status === 'completed',
-            closerName: slot?.closer?.name || null,
-            statusId: r2.r2_status_id || null,
-            slotStatus: slot?.status || '',
-          };
-        } else if (contactId) {
-          r2Data = r2Map.get(contactId) || null;
+        // R2: SAFRA LOGIC — pick first R2 after contract sale_date
+        let allR2sForContact: R2Lookup[] = [];
+        
+        // Try linked attendee first
+        if (tx.linked_attendee_id) {
+          const linkedR2 = linkedR2Map.get(tx.linked_attendee_id);
+          if (linkedR2) {
+            const slot = linkedR2.meeting_slot as any;
+            allR2sForContact.push({
+              id: linkedR2.id,
+              date: slot?.scheduled_at || '',
+              realized: linkedR2.status === 'completed' || linkedR2.status === 'presente' || slot?.status === 'completed',
+              closerName: slot?.closer?.name || null,
+              statusId: linkedR2.r2_status_id || null,
+              slotStatus: slot?.status || '',
+            });
+          }
         }
+        
+        // Add all R2s from contact map
+        if (contactId) {
+          const contactR2s = r2Map.get(contactId) || [];
+          allR2sForContact = [...allR2sForContact, ...contactR2s];
+        }
+        
+        // Pick first R2 after contract and classify
+        const { r2: r2Data, classificacao: r2Classificacao } = pickFirstR2AfterContract(
+          allR2sForContact,
+          tx.sale_date,
+          boundaries.r2Meetings,
+        );
 
         const r2StatusName = r2Data?.statusId ? statusNameMap.get(r2Data.statusId) || null : null;
         const r2StatusLower = r2StatusName?.toLowerCase() || null;
@@ -894,6 +943,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           dataContrato: tx.sale_date,
           valorContrato: tx.net_value || 0,
           r2Agendada: isR2Agendada,
+          r2Classificacao,
           dataR2: r2Data?.date || null,
           r2Realizada: isR2Realizada,
           closerR2: r2Data?.closerName || null,
@@ -1009,6 +1059,9 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       const taxaContratoR1 = totalR1RealizadasSemana > 0 ? (contratosPagos / totalR1RealizadasSemana) * 100 : 0;
       const aprovadosComParceria = leads.filter(l => l.statusR2?.toLowerCase().includes('aprov') && l.comprouParceria).length;
       const aprovadosSemParceria = aprovados - aprovadosComParceria;
+      const r2NaJanela = leads.filter(l => l.r2Classificacao === 'na_janela').length;
+      const r2Tardia = leads.filter(l => l.r2Classificacao === 'tardia').length;
+      const r2SemR2 = leads.filter(l => l.r2Classificacao === 'sem_r2').length;
 
       const kpis: CarrinhoAnalysisKPIs = {
         entradasA010,
@@ -1028,6 +1081,9 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         taxaContratoR1,
         aprovadosComParceria,
         aprovadosSemParceria,
+        r2NaJanela,
+        r2Tardia,
+        r2SemR2,
       };
 
       const funnelSteps: FunnelStep[] = [
