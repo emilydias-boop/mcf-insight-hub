@@ -1,0 +1,1 @@
+UPDATE employees SET data_admissao = '2026-02-02' WHERE data_admissao = '22026-02-02';

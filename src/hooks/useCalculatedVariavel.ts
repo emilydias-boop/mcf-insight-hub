@@ -10,6 +10,7 @@ interface CalculatedVariavelParams {
   diasUteisMes: number;
   sdrMetaDiaria: number;
   variavelTotal: number;
+  diasUteisTrabalhados?: number | null;
 }
 
 interface IndicatorValue {
