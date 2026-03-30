@@ -861,6 +861,15 @@ const Negocios = () => {
         onSuccess={handleClearSelection}
       />
       
+      {/* Dialog de mover estágio em massa */}
+      <BulkMoveStageDialog
+        open={moveStageDialogOpen}
+        onOpenChange={setMoveStageDialogOpen}
+        selectedDealIds={Array.from(selectedDealIds)}
+        originId={effectiveOriginId}
+        onSuccess={handleClearSelection}
+      />
+      
       {/* Modal de configuração inline para single pipeline */}
       {hasSinglePipeline && (buAllowedGroups[0] || buMapping?.origins?.[0]) && (
         <PipelineConfigModal
