@@ -191,8 +191,8 @@ export function useSdrPerformanceData({
   const today = startOfDay(new Date());
   const effectiveToday = useMemo(() => min([today, endDate]), [today, endDate]);
   const businessDaysPassed = useMemo(
-    () => contarDiasUteis(startDate, effectiveToday),
-    [startDate, effectiveToday]
+    () => contarDiasUteis(effectiveStartDate, effectiveToday),
+    [effectiveStartDate, effectiveToday]
   );
   const businessDaysRemaining = useMemo(
     () => Math.max(0, businessDaysTotal - businessDaysPassed),
