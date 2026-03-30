@@ -421,8 +421,13 @@ const FechamentoSDRDetail = () => {
                       RH
                     </Badge>
                   )}
+                  {isProporcional && (
+                    <Badge variant="outline" className="text-[9px] h-4 ml-1 border-yellow-500 text-yellow-500">
+                      {payout.dias_uteis_trabalhados}/{payout.dias_uteis_mes || diasUteisMes}d
+                    </Badge>
+                  )}
                 </div>
-                <div className="text-xl font-bold mt-1">{formatCurrency(effectiveFixo)}</div>
+                <div className="text-xl font-bold mt-1">{formatCurrency(effectiveFixoDisplay)}</div>
               </CardContent>
             </Card>
 
