@@ -47,6 +47,8 @@ import { useCRMOriginsByPipeline } from "@/hooks/useCRMOriginsByPipeline";
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSdrsFromSquad } from "@/hooks/useSdrsFromSquad";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTable";
 import { BURevenueGoalsEditModal } from "@/components/sdr/BURevenueGoalsEditModal";
 import { useConsorcioSummary } from "@/hooks/useConsorcio";
@@ -267,6 +269,48 @@ export default function ConsorcioPainelEquipe() {
   }, [allSdrsData]);
 
   const diasUteisNoPeriodo = useMemo(() => contarDiasUteis(start, end), [start, end]);
+
+  // Fetch data_admissao from employees linked to active SDRs
+  const consorcioSdrIds = useMemo(() => (activeSdrsList || []).map(s => s.id), [activeSdrsList]);
+  const { data: consorcioEmployeeAdmissaoData } = useQuery({
+    queryKey: ['employee-admissao-for-sdrs', consorcioSdrIds],
+    queryFn: async () => {
+      if (consorcioSdrIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('employees')
+        .select('sdr_id, data_admissao')
+        .in('sdr_id', consorcioSdrIds)
+        .not('data_admissao', 'is', null);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: consorcioSdrIds.length > 0,
+    staleTime: 60000,
+  });
+
+  const sdrDiasUteisMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!consorcioEmployeeAdmissaoData || !activeSdrsList) return map;
+    
+    const sdrIdToEmail = new Map<string, string>();
+    activeSdrsList.forEach(s => {
+      if (s.email) sdrIdToEmail.set(s.id, s.email.toLowerCase());
+    });
+
+    consorcioEmployeeAdmissaoData.forEach(emp => {
+      if (!emp.sdr_id || !emp.data_admissao) return;
+      const email = sdrIdToEmail.get(emp.sdr_id);
+      if (!email) return;
+      
+      const admissao = new Date(emp.data_admissao);
+      if (admissao <= start) return;
+      
+      const inicioEfetivo = admissao > start ? admissao : start;
+      const dias = contarDiasUteis(inicioEfetivo, end);
+      map.set(email, dias);
+    });
+    return map;
+  }, [consorcioEmployeeAdmissaoData, activeSdrsList, start, end]);
 
   const { data: dayR2AgendaKPIs } = useR2MeetingSlotsKPIs(dayStart, dayEnd);
   const { data: weekR2AgendaKPIs } = useR2MeetingSlotsKPIs(weekStartDate, weekEndDate);
@@ -707,6 +751,7 @@ export default function ConsorcioPainelEquipe() {
                 disableNavigation={isRestrictedRole}
                 sdrMetaMap={sdrMetaMap}
                 diasUteisNoPeriodo={diasUteisNoPeriodo}
+                sdrDiasUteisMap={sdrDiasUteisMap}
                 propostasEnviadasBySdr={propostasData}
                 propostasFechadasBySdr={produtosFechadosBySdr}
               />

@@ -13,6 +13,7 @@ interface ConsorcioSdrSummaryTableProps {
   disableNavigation?: boolean;
   sdrMetaMap?: Map<string, number>;
   diasUteisNoPeriodo?: number;
+  sdrDiasUteisMap?: Map<string, number>;
   propostasEnviadasBySdr?: Map<string, number>;
   propostasFechadasBySdr?: Map<string, number>;
 }
@@ -23,6 +24,7 @@ export function ConsorcioSdrSummaryTable({
   disableNavigation = false,
   sdrMetaMap,
   diasUteisNoPeriodo,
+  sdrDiasUteisMap,
   propostasEnviadasBySdr,
   propostasFechadasBySdr,
 }: ConsorcioSdrSummaryTableProps) {
@@ -78,8 +80,10 @@ export function ConsorcioSdrSummaryTable({
           <TableBody>
             {data.map((row) => {
               const metaDiaria = sdrMetaMap?.get(row.sdrEmail.toLowerCase()) || 10;
-              const metaPeriodo = metaDiaria * (diasUteisNoPeriodo || 1);
+              const diasEfetivos = sdrDiasUteisMap?.get(row.sdrEmail.toLowerCase()) || diasUteisNoPeriodo || 1;
+              const metaPeriodo = metaDiaria * diasEfetivos;
               const bateuMeta = row.agendamentos >= metaPeriodo;
+              const isProporcional = sdrDiasUteisMap?.has(row.sdrEmail.toLowerCase()) && diasEfetivos < (diasUteisNoPeriodo || 1);
 
               const propostas = propostasEnviadasBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
               const fechadas = propostasFechadasBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
@@ -118,9 +122,16 @@ export function ConsorcioSdrSummaryTable({
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
-                    <span className={`font-medium ${bateuMeta ? 'text-green-400' : 'text-amber-400'}`}>
-                      {metaPeriodo}
-                    </span>
+                    <div className="flex flex-col items-center">
+                      <span className={`font-medium ${bateuMeta ? 'text-green-400' : 'text-amber-400'}`}>
+                        {metaPeriodo}
+                      </span>
+                      {isProporcional && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {diasEfetivos}/{diasUteisNoPeriodo}d
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
