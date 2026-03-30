@@ -598,7 +598,8 @@ serve(async (req) => {
             const { data: metricsData, error: metricsError } = await supabase.rpc('get_sdr_metrics_from_agenda', {
               start_date: monthStart,
               end_date: monthEnd,
-              sdr_email_filter: sdr.email
+              sdr_email_filter: sdr.email,
+              bu_filter: null
             });
 
             if (metricsError) {
