@@ -548,6 +548,8 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
               .select('id, contact_id, status, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status, closer:closers(name))')
               .in('contact_id', contactIds)
               .eq('meeting_slots.meeting_type', 'r2')
+              .gte('meeting_slots.scheduled_at', effectiveStart.toISOString())
+              .lt('meeting_slots.scheduled_at', effectiveEnd.toISOString())
           : Promise.resolve({ data: [] }),
       ]);
 
