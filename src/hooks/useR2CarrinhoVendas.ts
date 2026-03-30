@@ -69,7 +69,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
   return useQuery({
     queryKey: ['r2-carrinho-vendas', weekStart.toISOString(), weekEnd.toISOString()],
     queryFn: async () => {
-      const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig);
+      const { vendasParceria: { start: effectiveStart, end: effectiveEnd } } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig);
       // 1. Buscar attendees aprovados dos últimos 60 dias (lead pode ter R2 em outra semana mas comprar parceria esta semana)
       const lookbackStart = subDays(weekEnd, 60);
       const { data: approvedAttendees, error: attendeesError } = await supabase
