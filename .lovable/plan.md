@@ -1,50 +1,49 @@
 
 
-## Vendas desaparecem ao editar — `sale_date` perde horário
+## Vendas do Make desaparecem — janela de vendas ignora sexta antes das 12h
 
 ### Causa raiz
 
-A janela de **Vendas de Parceria** do Carrinho começa na **sexta-feira às 12:00** (horário de corte). Para a semana 19/03-25/03, a janela é:
+A janela `vendasParceria` em `carrinhoWeekBoundaries.ts` começa no **horário de corte** (sexta 12:00). Porém, transações vindas do Make são gravadas com `sale_date` à meia-noite (`00:00:00Z`) porque o webhook não envia horário.
+
+Resultado: 11 vendas de parceria no dia 27/03 (todas `source = 'make'`) têm `sale_date = 2026-03-27T00:00:00Z`, que é **antes** do corte de 12:00, caindo fora da janela de vendas de qualquer semana.
+
+### Dados confirmados no banco
 
 ```text
-27/03 12:00 → 30/03 23:59
+11 transações parceria em 2026-03-27 com time=00:00:00, todas source=make
+Nomes: Samuel Figueiredo, Diogo Campinho, Lucas Travassos, Gabriel Ramos, 
+       Jessica Almeida, Guilherme Almeida, Thalita Miranda, Leandro Oliveira,
+       Breno Dias, Claudiane Carraro, Gilberto Machado
 ```
-
-O Samuel Figueiredo tinha `sale_date = "2026-03-27T16:08:00Z"` (16:08 UTC, dentro da janela).
-
-Ao salvar a edição, o código faz:
-```typescript
-sale_date: new Date(saleDate).toISOString()
-// saleDate = "2026-03-27" (só data, sem hora)
-// Resultado: "2026-03-27T00:00:00.000Z" (meia-noite UTC)
-```
-
-**Meia-noite UTC é ANTES das 12:00** → a transação cai fora da janela de vendas e desaparece da listagem.
 
 ### Solução
 
-No `R2CarrinhoTransactionFormDialog`, ao entrar em modo de edição, preservar o horário original do `sale_date`. Ao submeter, mesclar a data selecionada com o horário original (ou usar o horário atual se for uma data diferente).
+Separar o conceito: o **corte de horário** define quais R2s pertencem a esta semana (aprovados), mas a **janela de vendas** deve capturar **toda a sexta-feira** desde 00:00.
 
-### Mudanças
+### Mudança
 
-#### `src/components/crm/R2CarrinhoTransactionFormDialog.tsx`
+#### `src/lib/carrinhoWeekBoundaries.ts` — linha 89
 
-1. Guardar o horário original do `transactionToEdit.sale_date` em um ref/state (ex: `originalSaleTime`)
-2. No `handleSubmit`, ao construir o `sale_date`:
-   - Se a data não mudou: usar o `sale_date` original completo (com horário)
-   - Se a data mudou: usar a nova data + horário atual (`new Date().toTimeString()`)
-   - Isso garante que o timestamp nunca caia em meia-noite
+Trocar o início de `vendasParceria` de `friCartCutoff` para `startOfDay(friday)`:
 
-#### Alternativa mais simples (preferida)
+```text
+Antes:  vendasParceria.start = Sex 12:00 (cutoff)
+Depois: vendasParceria.start = Sex 00:00 (startOfDay)
+```
 
-No `handleSubmit` do modo edit, quando o `saleDate` (yyyy-MM-dd) for igual à data original, enviar o `transactionToEdit.sale_date` original intacto. Caso contrário, usar `new Date(saleDate + 'T12:00:00')` para garantir que fique após o corte.
+Isso é seguro porque:
+- A janela de aprovados continua usando o cutoff (controla quais R2s contam)
+- Vendas não dependem do cutoff — são matchadas contra os leads aprovados
+- Não há sobreposição entre semanas (cada sexta-segunda é única)
 
 ### Resultado
 
-- Editar uma venda preserva o horário original, mantendo-a na janela correta
-- Novas datas usam meio-dia como fallback seguro (sempre após o corte de 12:00)
-- Sem mudanças no backend
+- As 11 vendas do Make voltam a aparecer na aba Vendas
+- Vendas criadas/editadas com horário 00:00 não desaparecem mais
+- O corte de 12:00 continua funcionando normalmente para R2s aprovados
+- Sem mudança no backend
 
 ### Arquivo alterado
-1. `src/components/crm/R2CarrinhoTransactionFormDialog.tsx`
+1. `src/lib/carrinhoWeekBoundaries.ts` — vendasParceria.start usa startOfDay
 
