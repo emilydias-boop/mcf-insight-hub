@@ -131,13 +131,12 @@ export function FunilDashboard() {
   const { data: kpis, isLoading: loadingKpis } = useQuery({
     queryKey: ['funnel-kpis', periodStart.toISOString(), periodEnd.toISOString(), channelFilter],
     queryFn: async () => {
-      // Fetch deals with metadata for channel filtering
-      const { data: allDeals } = await supabase
-        .from('crm_deals')
-        .select('id, tags, custom_fields, data_source, origin:crm_origins(name), created_at')
-        .eq('origin_id', PIPELINE_ORIGIN_ID)
-        .gte('created_at', periodStart.toISOString())
-        .lte('created_at', periodEnd.toISOString());
+      const [dealsResult, rpcResult] = await Promise.all([
+        supabase.from('crm_deals')
+          .select('id, tags, custom_fields, data_source, origin:crm_origins(name)')
+          .eq('origin_id', PIPELINE_ORIGIN_ID)
+          .gte('created_at', periodStart.toISOString())
+          .lte('created_at', periodEnd.toISOString()),
         supabase.rpc('get_sdr_metrics_from_agenda', {
           start_date: format(periodStart, 'yyyy-MM-dd'),
           end_date: format(periodEnd, 'yyyy-MM-dd'),
@@ -145,8 +144,22 @@ export function FunilDashboard() {
         }),
       ]);
 
+      let leadsCount = dealsResult.data?.length || 0;
+      if (channelFilter && dealsResult.data) {
+        leadsCount = dealsResult.data.filter((deal: any) => {
+          const tags: string[] = ((deal as any).tags || []).map((t: any) => typeof t === 'string' ? t : t?.name || '');
+          const ch = classifyChannel({
+            tags,
+            originName: (deal as any).origin?.name || null,
+            leadChannel: (deal as any).custom_fields?.lead_channel || null,
+            dataSource: (deal as any).data_source || null,
+            hasA010: false,
+          });
+          return ch === channelFilter;
+        }).length;
+      }
+
       const rpcData = (rpcResult.data as any)?.metrics || [];
-      const leadsCount = novosLeads || 0;
       const agendadasCount = rpcData.reduce((sum: number, m: any) => sum + (m.r1_agendada || 0), 0);
       const contratosCount = rpcData.reduce((sum: number, m: any) => sum + (m.contratos || 0), 0);
       const taxaConversao = leadsCount > 0 ? ((contratosCount / leadsCount) * 100) : 0;
