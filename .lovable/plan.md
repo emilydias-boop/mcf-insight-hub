@@ -1,27 +1,42 @@
 
 
-## Regenerar PDF — Excluir leads que compraram A010 antes da tag ANAMNESE
+## Correção do Relatório v4 — Excluir TODOS os compradores A010
 
-### Lógica de exclusão
-Para cada lead com tag "ANAMNESE" na BU Incorporador:
-1. Buscar compras A010 em `hubla_transactions` (por email ou telefone) com `product_category = 'a010'` e `sale_status = 'completed'`
-2. Comparar a `sale_date` da compra A010 com o `created_at` do deal com tag ANAMNESE
-3. Se a compra A010 ocorreu **antes** do deal ANAMNESE ser criado → **excluir** esse lead do relatório
+### Problema identificado
+O v3 deveria ter excluído 6 leads (compra A010 antes do deal), mas só excluiu 1 (José Walter). Motivo: vários leads têm `email = NULL` no contato, e o matching por telefone falhou no script Python.
 
-### Impacto esperado
-- Dos 97 leads atuais, serão removidos os que já eram compradores A010 antes de entrar pelo funil ANAMNESE
-- O relatório mostrará apenas leads que chegaram "puros" pelo canal ANAMNESE (sem histórico A010 prévio)
+Além disso, há 8 leads que compraram A010 **depois** de entrar pela ANAMNESE. Estes são tecnicamente compradores A010 também.
 
-### Output
-- Script Python em `/tmp/` que:
-  1. Puxa os 97 leads ANAMNESE da BU Incorporador
-  2. Cruza com `hubla_transactions` por email/telefone
-  3. Remove quem tinha A010 antes do deal ANAMNESE
-  4. Regenera o PDF com as mesmas seções (KPIs, estágios, lista completa, exclusivos, origem dos duplicados)
-- PDF: `/mnt/documents/relatorio-leads-anamnese-incorporador-v3.pdf`
+### Decisão necessária
+Preciso confirmar com o usuário: excluir **todos os 14 leads** que compraram A010 (antes ou depois), ou apenas os 6 que compraram **antes**?
+
+### Ação proposta
+Regenerar o PDF v4 com:
+1. **Matching robusto**: usar phone suffix matching correto mesmo quando email é nulo
+2. **Excluir todos os 14 compradores A010** (ou apenas os 6 "before", conforme decisão)
+3. **Seção nova**: lista dos leads excluídos por compra A010 com detalhes (nome, data compra, data deal, timing)
+4. **Total esperado**: 96 - 14 = **82 leads** (se excluir todos) ou 96 - 6 = **90 leads** (se só before)
+
+### Dados dos 14 leads A010
+**BEFORE (compraram antes do deal ANAMNESE)**:
+- Aline Letícia Soares de Melo (8s antes)
+- Felipe Rodrigues - A010 (1m54s antes)
+- José Walter do Nascimento Mota jr (16 dias antes)
+- Júlio Gil Simões Freire (1m08s antes)
+- Luiz Valentin Morello Filho (55 dias antes)
+- Matheus de Lima Silva (52s antes)
+
+**AFTER (compraram depois do deal ANAMNESE)**:
+- Alexandre Bonetto de Almeida (+2 dias)
+- Andresa Vaz (+7 min)
+- Caio (+10 min)
+- HENRIQUE FARIA (+37 min)
+- Lucne Serina Ferrari Miyamoto (+7 min)
+- Renato Amante Chidiquimo (+4 min)
+- Victor farias marques (+49 min)
+- Vinícius Carvalho dos Santos (+2 dias)
+
+### Implementação
+- Script Python em `/tmp/`, output em `/mnt/documents/relatorio-leads-anamnese-incorporador-v4.pdf`
 - QA visual obrigatória
-
-### Arquivos
-- `/tmp/gen_anamnese_v3.py` (temporário)
-- `/mnt/documents/relatorio-leads-anamnese-incorporador-v3.pdf` (entregável)
 
