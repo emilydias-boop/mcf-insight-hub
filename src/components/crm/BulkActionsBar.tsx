@@ -10,6 +10,8 @@ interface BulkActionsBarProps {
   isDuplicating?: boolean;
   onDelete?: () => void;
   isDeleting?: boolean;
+  onMoveStage?: () => void;
+  isMovingStage?: boolean;
 }
 
 export const BulkActionsBar = ({
