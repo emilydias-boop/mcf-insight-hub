@@ -108,6 +108,7 @@ export default function R2Carrinho() {
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-vendas'] });
     queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
     queryClient.invalidateQueries({ queryKey: ['carrinho-config'] });
+    queryClient.invalidateQueries({ queryKey: ['r2-accumulated-leads'] });
   };
 
   const handleReschedule = (meetingId: string) => {
