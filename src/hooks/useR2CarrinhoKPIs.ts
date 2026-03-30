@@ -21,19 +21,28 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig);
 
       // ===== CONTRATOS PAGOS =====
-      // Count unique contracts (A000) paid in the week from hubla_transactions
-      // Uses carrinho boundaries (previous Friday corte → current Friday corte)
+      // Count unique contracts (A000 - Contrato) paid in the week from hubla_transactions
+      // Aligned with CarrinhoAnalysisReport filters for consistency
       const { data: contratosTx } = await supabase
         .from('hubla_transactions')
-        .select('customer_email')
-        .ilike('product_name', '%A000%')
-        .eq('product_category', 'incorporador')
+        .select('customer_email, hubla_id, source, product_name, installment_number, sale_status')
+        .eq('product_name', 'A000 - Contrato')
+        .in('sale_status', ['completed', 'refunded'])
+        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
         .gte('sale_date', effectiveStart.toISOString())
         .lt('sale_date', effectiveEnd.toISOString());
 
+      // Filter out newsale- duplicates, make "contrato" entries, and installments > 1
+      const validTx = (contratosTx || []).filter(t => {
+        if (t.hubla_id?.startsWith('newsale-')) return false;
+        if (t.source === 'make' && t.product_name?.toLowerCase() === 'contrato') return false;
+        if (t.installment_number && t.installment_number > 1) return false;
+        return true;
+      });
+
       // Deduplicate by email (one contract per customer)
       const uniqueContracts = new Set(
-        (contratosTx || [])
+        validTx
           .map(tx => tx.customer_email?.toLowerCase())
           .filter(Boolean)
       );

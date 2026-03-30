@@ -200,20 +200,16 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
       {data && (
         <>
           {/* KPI Cards */}
-          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 xl:grid-cols-13 gap-2">
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-9 gap-2">
             {[
-              { label: 'A010', value: data.kpis.entradasA010, color: 'text-slate-600' },
-              { label: 'Classificados', value: data.kpis.classificados, color: 'text-blue-600' },
-              { label: 'R1 Agend.', value: data.kpis.r1Agendadas, color: 'text-indigo-600' },
-              { label: 'R1 Realiz.', value: data.kpis.r1Realizadas, color: 'text-cyan-600' },
+              { label: 'R1 Realiz. (Total)', value: data.kpis.totalR1RealizadasSemana, color: 'text-cyan-700' },
               { label: 'Contratos', value: data.kpis.contratosPagos, color: 'text-blue-700' },
+              { label: 'Taxa C/R1', value: `${data.kpis.taxaContratoR1.toFixed(0)}%`, color: 'text-purple-600' },
               { label: 'R2 Agend.', value: data.kpis.r2Agendadas, color: 'text-amber-600' },
               { label: 'Gap C→R2', value: data.kpis.gapContratoR2, color: 'text-orange-600' },
               { label: 'R2 Realiz.', value: data.kpis.r2Realizadas, color: 'text-green-600' },
               { label: 'Aprovados', value: data.kpis.aprovados, color: 'text-green-700' },
               { label: 'Reprovados', value: data.kpis.reprovados, color: 'text-red-600' },
-              { label: 'Próx. Sem.', value: data.kpis.proximaSemana, color: 'text-yellow-600' },
-              { label: 'Reembolsos', value: data.kpis.reembolsos, color: 'text-red-500' },
               { label: 'Parcerias', value: data.kpis.parceriasVendidas, color: 'text-emerald-600' },
             ].map((kpi, i) => (
               <Card key={i}>
@@ -224,6 +220,36 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
               </Card>
             ))}
           </div>
+
+          {/* Breakdown Aprovados */}
+          {data.kpis.aprovados > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <Card className="border-green-200 dark:border-green-900">
+                <CardContent className="pt-3 pb-2 px-3 text-center">
+                  <div className="text-lg font-bold text-green-700">{data.kpis.aprovadosComParceria}</div>
+                  <div className="text-[10px] text-muted-foreground">Aprovados c/ Parceria</div>
+                </CardContent>
+              </Card>
+              <Card className="border-amber-200 dark:border-amber-900">
+                <CardContent className="pt-3 pb-2 px-3 text-center">
+                  <div className="text-lg font-bold text-amber-700">{data.kpis.aprovadosSemParceria}</div>
+                  <div className="text-[10px] text-muted-foreground">Aprovados s/ Parceria</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-3 pb-2 px-3 text-center">
+                  <div className="text-lg font-bold text-red-500">{data.kpis.reembolsos}</div>
+                  <div className="text-[10px] text-muted-foreground">Reembolsos</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-3 pb-2 px-3 text-center">
+                  <div className="text-lg font-bold text-yellow-600">{data.kpis.proximaSemana}</div>
+                  <div className="text-[10px] text-muted-foreground">Próx. Semana</div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Auditoria Contrato → R2 */}
           {auditData && (

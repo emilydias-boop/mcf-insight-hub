@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { getCarrinhoWeekBoundaries } from '@/lib/carrinhoWeekBoundaries';
 import { getUFFromPhone, getClusterFromUF } from '@/lib/dddToUF';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
@@ -149,6 +150,11 @@ export interface CarrinhoAnalysisKPIs {
   proximaSemana: number;
   reembolsos: number;
   parceriasVendidas: number;
+  // New cross-metrics
+  totalR1RealizadasSemana: number;
+  taxaContratoR1: number;
+  aprovadosComParceria: number;
+  aprovadosSemParceria: number;
 }
 
 export interface FunnelStep {
@@ -348,6 +354,8 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
     queryFn: async (): Promise<CarrinhoAnalysisData> => {
       if (!startDate || !endDate) throw new Error('Datas não definidas');
 
+      // Use unified week boundaries (Sat→Sat) for consistency with Carrinho R2
+      const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(startDate, endDate);
       const startStr = format(startDate, 'yyyy-MM-dd');
       const endStr = format(endDate, 'yyyy-MM-dd');
 
@@ -374,8 +382,8 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         .eq('product_name', 'A000 - Contrato')
         .in('sale_status', ['completed', 'refunded'])
         .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
-        .gte('sale_date', startStr)
-        .lte('sale_date', endStr + 'T23:59:59')
+        .gte('sale_date', effectiveStart.toISOString())
+        .lt('sale_date', effectiveEnd.toISOString())
         .order('sale_date', { ascending: true });
 
       const validTx = (transactions || []).filter(t => {
@@ -396,7 +404,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
       if (emails.length === 0) {
         return {
-          kpis: { entradasA010: 0, classificados: 0, r1Agendadas: 0, r1Realizadas: 0, contratosPagos: 0, r2Agendadas: 0, gapContratoR2: 0, r2Realizadas: 0, aprovados: 0, reprovados: 0, proximaSemana: 0, reembolsos: 0, parceriasVendidas: 0 },
+          kpis: { entradasA010: 0, classificados: 0, r1Agendadas: 0, r1Realizadas: 0, contratosPagos: 0, r2Agendadas: 0, gapContratoR2: 0, r2Realizadas: 0, aprovados: 0, reprovados: 0, proximaSemana: 0, reembolsos: 0, parceriasVendidas: 0, totalR1RealizadasSemana: 0, taxaContratoR1: 0, aprovadosComParceria: 0, aprovadosSemParceria: 0 },
           funnelSteps: [], motivosPerda: [], analysisByState: [], leads: [],
         };
       }
@@ -540,6 +548,8 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
               .select('id, contact_id, status, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status, closer:closers(name))')
               .in('contact_id', contactIds)
               .eq('meeting_slots.meeting_type', 'r2')
+              .gte('meeting_slots.scheduled_at', effectiveStart.toISOString())
+              .lt('meeting_slots.scheduled_at', effectiveEnd.toISOString())
           : Promise.resolve({ data: [] }),
       ]);
 
@@ -965,6 +975,19 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         });
       }
 
+      // Total R1 Realizadas na semana (ALL R1s, not just from contract buyers)
+      const { data: totalR1Data } = await supabase
+        .from('meeting_slot_attendees')
+        .select('id, is_partner, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status)')
+        .eq('meeting_slots.meeting_type', 'r1')
+        .gte('meeting_slots.scheduled_at', effectiveStart.toISOString())
+        .lt('meeting_slots.scheduled_at', effectiveEnd.toISOString());
+
+      const totalR1RealizadasSemana = (totalR1Data || []).filter(a => 
+        !a.is_partner && 
+        (a.meeting_slot as any)?.status === 'completed'
+      ).length;
+
       // KPIs
       const contratosPagos = leads.length;
       const entradasA010 = leads.filter(l => l.dataA010).length;
@@ -981,6 +1004,9 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
       }).length;
       const reembolsos = leads.filter(l => l.reembolso).length;
       const parceriasVendidas = leads.filter(l => l.comprouParceria).length;
+      const taxaContratoR1 = totalR1RealizadasSemana > 0 ? (contratosPagos / totalR1RealizadasSemana) * 100 : 0;
+      const aprovadosComParceria = leads.filter(l => l.statusR2?.toLowerCase().includes('aprov') && l.comprouParceria).length;
+      const aprovadosSemParceria = aprovados - aprovadosComParceria;
 
       const kpis: CarrinhoAnalysisKPIs = {
         entradasA010,
@@ -996,6 +1022,10 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         proximaSemana,
         reembolsos,
         parceriasVendidas,
+        totalR1RealizadasSemana,
+        taxaContratoR1,
+        aprovadosComParceria,
+        aprovadosSemParceria,
       };
 
       const funnelSteps: FunnelStep[] = [
