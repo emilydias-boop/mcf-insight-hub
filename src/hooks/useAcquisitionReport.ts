@@ -239,7 +239,7 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
           .select(`
             id, attendee_phone, deal_id,
             meeting_slots!inner(closer_id, scheduled_at, booked_by),
-            crm_deals!deal_id(owner_id, owner_profile_id, crm_contacts!contact_id(email, phone))
+            crm_deals!deal_id(owner_id, owner_profile_id, tags, crm_contacts!contact_id(email, phone))
           `)
           .eq('meeting_slots.meeting_type', 'r1')
           .gte('meeting_slots.scheduled_at', startDate)
