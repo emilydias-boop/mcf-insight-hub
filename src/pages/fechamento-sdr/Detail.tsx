@@ -311,6 +311,13 @@ const FechamentoSDRDetail = () => {
   const oteSource = compPlan?.ote_total ? "plano" : employee?.cargo_catalogo?.ote_total ? "RH" : "fallback";
   const effectiveKpi = effectiveKpiEarly;
 
+  // Pro-rata display
+  const isProporcional = payout.dias_uteis_trabalhados != null 
+    && payout.dias_uteis_trabalhados < (payout.dias_uteis_mes || diasUteisMes);
+  const effectiveFixoDisplay = isProporcional
+    ? Math.round(effectiveFixo * (payout.dias_uteis_trabalhados! / (payout.dias_uteis_mes || diasUteisMes)))
+    : effectiveFixo;
+
   // Closer-specific intermediações count (use agenda data for Closers)
   const effectiveIntermediacao = isCloser && closerMetrics.data 
     ? closerMetrics.data.contratos_pagos 
@@ -421,8 +428,13 @@ const FechamentoSDRDetail = () => {
                       RH
                     </Badge>
                   )}
+                  {isProporcional && (
+                    <Badge variant="outline" className="text-[9px] h-4 ml-1 border-yellow-500 text-yellow-500">
+                      {payout.dias_uteis_trabalhados}/{payout.dias_uteis_mes || diasUteisMes}d
+                    </Badge>
+                  )}
                 </div>
-                <div className="text-xl font-bold mt-1">{formatCurrency(effectiveFixo)}</div>
+                <div className="text-xl font-bold mt-1">{formatCurrency(effectiveFixoDisplay)}</div>
               </CardContent>
             </Card>
 
@@ -453,14 +465,14 @@ const FechamentoSDRDetail = () => {
                 <div className="flex items-center gap-1.5 text-primary text-xs">
                   <CreditCard className="h-3.5 w-3.5" />
                   Total Conta
-                  {!employee?.fechamento_manual && Math.abs((effectiveFixo + calculatedVariavel.total) - (payout.total_conta || 0)) > 1 && (
+                  {!employee?.fechamento_manual && Math.abs((effectiveFixoDisplay + calculatedVariavel.total) - (payout.total_conta || 0)) > 1 && (
                     <Badge variant="destructive" className="text-[9px] h-4 ml-1">
                       Recalcular
                     </Badge>
                   )}
                 </div>
                 <div className="text-xl font-bold mt-1 text-primary">
-                  {formatCurrency(employee?.fechamento_manual ? (payout.total_conta || 0) : (effectiveFixo + calculatedVariavel.total))}
+                  {formatCurrency(employee?.fechamento_manual ? (payout.total_conta || 0) : (effectiveFixoDisplay + calculatedVariavel.total))}
                 </div>
               </CardContent>
             </Card>
@@ -527,7 +539,7 @@ const FechamentoSDRDetail = () => {
               isSaving={recalculateWithKpi.isPending}
               intermediacoes={effectiveIntermediacao}
               sdrMetaDiaria={(payout.sdr as any)?.meta_diaria || 10}
-              diasUteisMes={payout.dias_uteis_mes || 19}
+              diasUteisMes={isProporcional ? payout.dias_uteis_trabalhados! : (payout.dias_uteis_mes || 19)}
               roleType={(payout.sdr as any)?.role_type || "sdr"}
               vendasParceria={vendasParceria}
               metaContratosPercentual={metaContratosPercentual}
