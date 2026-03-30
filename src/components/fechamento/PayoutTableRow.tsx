@@ -55,6 +55,7 @@ export function PayoutTableRow({
     diasUteisMes,
     sdrMetaDiaria,
     variavelTotal,
+    diasUteisTrabalhados: payout.dias_uteis_trabalhados,
   });
 
   const fixo = payout.valor_fixo || 0;
