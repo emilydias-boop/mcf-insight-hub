@@ -221,6 +221,49 @@ export default function ReunioesEquipe() {
     return contarDiasUteis(start, end);
   }, [start, end]);
 
+  // Fetch data_admissao from employees linked to active SDRs
+  const sdrIds = useMemo(() => (activeSdrsList || []).map(s => s.id), [activeSdrsList]);
+  const { data: employeeAdmissaoData } = useQuery({
+    queryKey: ['employee-admissao-for-sdrs', sdrIds],
+    queryFn: async () => {
+      if (sdrIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('employees')
+        .select('sdr_id, data_admissao')
+        .in('sdr_id', sdrIds)
+        .not('data_admissao', 'is', null);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: sdrIds.length > 0,
+    staleTime: 60000,
+  });
+
+  // Build sdrDiasUteisMap: email -> effective business days in period
+  const sdrDiasUteisMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!employeeAdmissaoData || !activeSdrsList) return map;
+    
+    const sdrIdToEmail = new Map<string, string>();
+    activeSdrsList.forEach(s => {
+      if (s.email) sdrIdToEmail.set(s.id, s.email.toLowerCase());
+    });
+
+    employeeAdmissaoData.forEach(emp => {
+      if (!emp.sdr_id || !emp.data_admissao) return;
+      const email = sdrIdToEmail.get(emp.sdr_id);
+      if (!email) return;
+      
+      const admissao = new Date(emp.data_admissao);
+      if (admissao <= start) return; // Started before period, full days
+      
+      const inicioEfetivo = admissao > start ? admissao : start;
+      const dias = contarDiasUteis(inicioEfetivo, end);
+      map.set(email, dias);
+    });
+    return map;
+  }, [employeeAdmissaoData, activeSdrsList, start, end]);
+
   // Fetch R2 agenda KPIs for today (from meeting_slots where meeting_type='r2')
   const { data: dayR2AgendaKPIs } = useR2MeetingSlotsKPIs(dayStart, dayEnd);
 
