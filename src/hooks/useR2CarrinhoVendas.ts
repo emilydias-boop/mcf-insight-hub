@@ -250,7 +250,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
           let originalScheduledAt: string | undefined;
 
           if (linkedScheduledAt) {
-            const linkedWeekStart = getCustomWeekStart(new Date(linkedScheduledAt));
+            const linkedWeekStart = getCartWeekStart(new Date(linkedScheduledAt));
             if (linkedWeekStart.getTime() !== weekStart.getTime()) {
               isExtra = true;
               originalWeekStart = format(linkedWeekStart, 'yyyy-MM-dd');
