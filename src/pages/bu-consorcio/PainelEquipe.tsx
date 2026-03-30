@@ -751,6 +751,7 @@ export default function ConsorcioPainelEquipe() {
                 disableNavigation={isRestrictedRole}
                 sdrMetaMap={sdrMetaMap}
                 diasUteisNoPeriodo={diasUteisNoPeriodo}
+                sdrDiasUteisMap={sdrDiasUteisMap}
                 propostasEnviadasBySdr={propostasData}
                 propostasFechadasBySdr={produtosFechadosBySdr}
               />

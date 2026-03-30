@@ -141,9 +141,16 @@ export function SdrSummaryTable({
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
-                    <span className={`font-medium ${bateuMeta ? 'text-green-400' : 'text-red-400'}`}>
-                      {metaPeriodo}
-                    </span>
+                    <div className="flex flex-col items-center">
+                      <span className={`font-medium ${bateuMeta ? 'text-green-400' : 'text-red-400'}`}>
+                        {metaPeriodo}
+                      </span>
+                      {isProporcional && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {diasEfetivos}/{diasUteisNoPeriodo}d
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">

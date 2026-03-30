@@ -661,10 +661,10 @@ export default function ReunioesEquipe() {
             <SdrSummaryTable
               data={filteredBySDR}
               isLoading={isLoading}
-              
               disableNavigation={isRestrictedRole}
               sdrMetaMap={sdrMetaMap}
               diasUteisNoPeriodo={diasUteisNoPeriodo}
+              sdrDiasUteisMap={sdrDiasUteisMap}
             />
           ) : (
             <CloserSummaryTable
