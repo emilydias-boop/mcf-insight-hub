@@ -85,7 +85,7 @@ export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agen
         `)
         .eq('meeting_type', 'r2')
         .gte('scheduled_at', effectiveStart.toISOString())
-        .lt('scheduled_at', effectiveEnd.toISOString())
+        .lte('scheduled_at', effectiveEnd.toISOString())
         .order('scheduled_at', { ascending: true });
 
       // Apply meeting status filter

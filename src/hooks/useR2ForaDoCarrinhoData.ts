@@ -66,7 +66,7 @@ export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date, carrinho
         `)
         .eq('meeting_type', 'r2')
         .gte('scheduled_at', effectiveStart.toISOString())
-        .lt('scheduled_at', effectiveEnd.toISOString());
+        .lte('scheduled_at', effectiveEnd.toISOString());
 
       if (!meetings) return [];
 
