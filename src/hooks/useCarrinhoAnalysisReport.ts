@@ -671,11 +671,15 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           if (otherR1 && (!bestR1 || otherR1.date < bestR1.date)) {
             r1Map.set(bestContact.id, otherR1);
           }
-          // Merge R2
+          // Merge R2 (combine all R2 arrays)
           const otherR2 = r2Map.get(candidate.id);
           const bestR2 = r2Map.get(bestContact.id);
-          if (otherR2 && !bestR2) {
-            r2Map.set(bestContact.id, otherR2);
+          if (otherR2) {
+            if (bestR2) {
+              bestR2.push(...otherR2);
+            } else {
+              r2Map.set(bestContact.id, [...otherR2]);
+            }
           }
         }
       }
