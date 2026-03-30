@@ -241,8 +241,16 @@ export default function R2Carrinho() {
         ))}
       </div>
 
+      {/* Accumulated Alert */}
+      <R2AccumulatedAlert
+        totalCount={accumulatedLeads.length}
+        proximaSemanaCount={accProximaSemanaCount}
+        semR2Count={accSemR2Count}
+        onGoToTab={() => setActiveTab('acumulados')}
+      />
+
       {/* Tabs */}
-      <Tabs defaultValue="agendadas" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="w-full">
           <TabsTrigger value="agendadas" className="flex items-center gap-2">
             📋 Todas R2s
@@ -256,6 +264,14 @@ export default function R2Carrinho() {
               {foraCarrinhoData.length}
             </span>
           </TabsTrigger>
+          {accumulatedLeads.length > 0 && (
+            <TabsTrigger value="acumulados" className="flex items-center gap-2">
+              ⚠️ Acumulados
+              <span className="text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 px-2 py-0.5 rounded-full">
+                {accumulatedLeads.length}
+              </span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="aprovados" className="flex items-center gap-2">
             ✓ Aprovados
             <span className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 px-2 py-0.5 rounded-full">
@@ -285,6 +301,13 @@ export default function R2Carrinho() {
           <R2ForaDoCarrinhoList 
             attendees={foraCarrinhoData} 
             isLoading={foraCarrinhoLoading}
+          />
+        </TabsContent>
+
+        <TabsContent value="acumulados">
+          <R2AccumulatedList
+            leads={accumulatedLeads}
+            isLoading={accumulatedLoading}
           />
         </TabsContent>
 
