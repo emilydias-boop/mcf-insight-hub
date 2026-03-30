@@ -1,36 +1,50 @@
 
 
-## Metas proporcionais no dashboard individual do SDR
+## Vendas desaparecem ao editar — `sale_date` perde horário
 
-### Problema
+### Causa raiz
 
-No dashboard individual (`/crm/reunioes-equipe/:sdrEmail`), a meta de Agendamentos usa `metaDiaria × diasUteisNoPeriodo` com os dias úteis cheios do período. Para SDRs que entraram no meio do mês (ex: Mayara com meta 110 quando deveria ser proporcional), a meta deveria considerar apenas os dias a partir da `data_admissao`.
+A janela de **Vendas de Parceria** do Carrinho começa na **sexta-feira às 12:00** (horário de corte). Para a semana 19/03-25/03, a janela é:
+
+```text
+27/03 12:00 → 30/03 23:59
+```
+
+O Samuel Figueiredo tinha `sale_date = "2026-03-27T16:08:00Z"` (16:08 UTC, dentro da janela).
+
+Ao salvar a edição, o código faz:
+```typescript
+sale_date: new Date(saleDate).toISOString()
+// saleDate = "2026-03-27" (só data, sem hora)
+// Resultado: "2026-03-27T00:00:00.000Z" (meia-noite UTC)
+```
+
+**Meia-noite UTC é ANTES das 12:00** → a transação cai fora da janela de vendas e desaparece da listagem.
 
 ### Solução
 
-Buscar `data_admissao` do employee vinculado ao SDR e ajustar `businessDaysTotal` para contar apenas dias úteis a partir da admissão (quando posterior ao início do período).
+No `R2CarrinhoTransactionFormDialog`, ao entrar em modo de edição, preservar o horário original do `sale_date`. Ao submeter, mesclar a data selecionada com o horário original (ou usar o horário atual se for uma data diferente).
 
 ### Mudanças
 
-#### 1. `src/hooks/useSdrDetailData.ts` — Expor `data_admissao`
+#### `src/components/crm/R2CarrinhoTransactionFormDialog.tsx`
 
-- Na query `metaDiariaQuery`, buscar também o `employee_id` do SDR e depois a `data_admissao` do employee vinculado (ou adicionar uma query separada)
-- Expor `dataAdmissao: string | null` no retorno de `SdrDetailData`
+1. Guardar o horário original do `transactionToEdit.sale_date` em um ref/state (ex: `originalSaleTime`)
+2. No `handleSubmit`, ao construir o `sale_date`:
+   - Se a data não mudou: usar o `sale_date` original completo (com horário)
+   - Se a data mudou: usar a nova data + horário atual (`new Date().toTimeString()`)
+   - Isso garante que o timestamp nunca caia em meia-noite
 
-#### 2. `src/hooks/useSdrPerformanceData.ts` — Ajustar `businessDaysTotal` e `metaPeriodo`
+#### Alternativa mais simples (preferida)
 
-- Usar `detail.dataAdmissao` para calcular `inicioEfetivo = max(startDate, dataAdmissao)`
-- Recalcular `businessDaysTotal` como `contarDiasUteis(inicioEfetivo, endDate)` quando admissão é posterior ao início do período
-- Isso automaticamente propaga para: `metaPeriodo`, `metas.ligacoesMeta`, `projection`, `dailyRows` e `summaryText`
-- Adicionar indicador no summaryText quando proporcional (ex: "meta proporcional de X agendamentos (Y dias úteis)")
+No `handleSubmit` do modo edit, quando o `saleDate` (yyyy-MM-dd) for igual à data original, enviar o `transactionToEdit.sale_date` original intacto. Caso contrário, usar `new Date(saleDate + 'T12:00:00')` para garantir que fique após o corte.
 
 ### Resultado
 
-- Meta de Mayara: `5/dia × 16 dias = 80` em vez de `5/dia × 22 dias = 110`
-- Projeção, ligações e todos os KPIs derivados acompanham automaticamente
-- Sem mudanças no backend — apenas leitura de `data_admissao` já existente
+- Editar uma venda preserva o horário original, mantendo-a na janela correta
+- Novas datas usam meio-dia como fallback seguro (sempre após o corte de 12:00)
+- Sem mudanças no backend
 
-### Arquivos alterados
-1. `src/hooks/useSdrDetailData.ts` — buscar e expor `dataAdmissao`
-2. `src/hooks/useSdrPerformanceData.ts` — ajustar dias úteis com base na admissão
+### Arquivo alterado
+1. `src/components/crm/R2CarrinhoTransactionFormDialog.tsx`
 
