@@ -44,7 +44,7 @@ export const BulkActionsBar = ({
           variant="secondary"
           size="sm"
           onClick={onTransfer}
-          disabled={isTransferring || isDuplicating}
+          disabled={isTransferring || isDuplicating || isMovingStage}
           className="gap-2"
         >
           {isTransferring ? (
@@ -54,6 +54,23 @@ export const BulkActionsBar = ({
           )}
           Transferir para...
         </Button>
+
+        {onMoveStage && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onMoveStage}
+            disabled={isTransferring || isDuplicating || isMovingStage}
+            className="gap-2"
+          >
+            {isMovingStage ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowRightLeft className="h-4 w-4" />
+            )}
+            Mover Estágio
+          </Button>
+        )}
 
         {onDuplicate && (
           <Button
