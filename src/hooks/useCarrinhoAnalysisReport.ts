@@ -985,7 +985,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
       const totalR1RealizadasSemana = (totalR1Data || []).filter(a => 
         !a.is_partner && 
-        (a.status === 'completed' || (a.meeting_slot as any)?.status === 'completed')
+        (a.meeting_slot as any)?.status === 'completed'
       ).length;
 
       // KPIs
