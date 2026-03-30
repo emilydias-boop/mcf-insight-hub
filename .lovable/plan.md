@@ -1,37 +1,47 @@
 
 
-## Corrigir RPC ambígua que impede carga de métricas no fechamento
+## Corrigir exibição proporcional de Fixo, Metas e Período no detalhe do fechamento
 
-### Causa raiz
+### Problema
 
-O erro nos logs é claro:
+No detalhe individual de colaboradores proporcionais (desligados/novos), dois problemas:
 
-```text
-PGRST203: Could not choose the best candidate function between:
-  public.get_sdr_metrics_from_agenda(start_date, end_date, sdr_email_filter)
-  public.get_sdr_metrics_from_agenda(start_date, end_date, sdr_email_filter, bu_filter)
+1. **Fixo** exibe o valor cheio do plano (ex: R$ 2.800) em vez do proporcional (ex: R$ 2.036 para 16/22 dias)
+2. **Metas** no KpiEditForm usam `diasUteisMes` do mês cheio em vez dos dias efetivos trabalhados
+
+### Mudanças
+
+#### 1. `src/pages/fechamento-sdr/Detail.tsx` — Fixo proporcional + metas proporcionais
+
+**Fixo**: Quando `payout.dias_uteis_trabalhados` existe e é menor que `diasUteisMes`, aplicar o ratio no `effectiveFixo` exibido:
+
+```typescript
+const isProporcional = payout.dias_uteis_trabalhados != null 
+  && payout.dias_uteis_trabalhados < (payout.dias_uteis_mes || diasUteisMes);
+
+const effectiveFixoDisplay = isProporcional
+  ? Math.round(effectiveFixo * (payout.dias_uteis_trabalhados / (payout.dias_uteis_mes || diasUteisMes)))
+  : effectiveFixo;
 ```
 
-Existem **duas versões** da função `get_sdr_metrics_from_agenda` no banco — uma com 3 parâmetros e outra com 4. Quando o `useSdrAgendaMetricsBySdrId` chama a RPC sem `bu_filter`, o PostgREST não consegue escolher qual usar e retorna erro. Isso faz:
+- Usar `effectiveFixoDisplay` nos cards de "Fixo" e "Total Conta"
+- Adicionar badge com período (ex: "16/22 dias") no card de Fixo quando proporcional
 
-1. **KPI Edit Form**: mostra "Agenda: 0" para todos os SDRs
-2. **Edge Function**: também pode ser afetada (embora use `supabase-js` server-side que tem comportamento diferente)
-3. **Indicador cards**: mostram valores antigos do KPI persistido, que não é atualizado porque o RPC falha
+**Metas no KpiEditForm**: Passar dias efetivos ao formulário:
 
-### Solução
+```typescript
+diasUteisMes={isProporcional ? payout.dias_uteis_trabalhados : (payout.dias_uteis_mes || 19)}
+```
 
-Passar `bu_filter: null` explicitamente em todas as chamadas que não enviam esse parâmetro, para que o PostgREST resolva a ambiguidade.
-
-#### Arquivo 1: `src/hooks/useSdrAgendaMetricsBySdrId.ts`
-- Linha 42-46: Adicionar `bu_filter: null` na chamada RPC
-
-#### Arquivo 2: `supabase/functions/recalculate-sdr-payout/index.ts`
-- Linha 598-602: Adicionar `bu_filter: null` na chamada RPC (mesmo padrão)
+Isso faz com que metas como `7/dia × 16 dias = 112` apareçam corretamente em vez de `7/dia × 22 dias = 154`.
 
 ### Resultado
-Todas as chamadas à RPC resolvem corretamente para a versão de 4 parâmetros. Os KPIs são preenchidos com dados reais da agenda, e o "Recalcular Todos" salva os valores corretos no banco.
+
+- Card "Fixo" mostra valor proporcional com badge de período
+- Card "Total Conta" soma fixo proporcional + variável proporcional
+- KpiEditForm exibe metas ajustadas ao período efetivo
+- Sem mudanças no backend (Edge Function já calcula pro-rata corretamente)
 
 ### Arquivos alterados
-1. `src/hooks/useSdrAgendaMetricsBySdrId.ts`
-2. `supabase/functions/recalculate-sdr-payout/index.ts`
+1. `src/pages/fechamento-sdr/Detail.tsx` — fixo proporcional + dias efetivos no KpiEditForm
 
