@@ -27,7 +27,8 @@ export function SdrSummaryTable({
   isLoading, 
   disableNavigation = false,
   sdrMetaMap,
-  diasUteisNoPeriodo 
+  diasUteisNoPeriodo,
+  sdrDiasUteisMap,
 }: SdrSummaryTableProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
