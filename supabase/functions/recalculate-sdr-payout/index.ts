@@ -1232,6 +1232,20 @@ serve(async (req) => {
         // Remove campos que não existem na tabela sdr_month_payout
         const { pct_no_show, mult_no_show, ...payoutFields } = calculatedValues;
 
+        // ===== APLICAR PRO-RATA SE PROPORCIONAL =====
+        if (isProporcional) {
+          // Pro-rata no fixo
+          payoutFields.valor_fixo = Math.round(payoutFields.valor_fixo * ratioProRata);
+          // Pro-rata no iFood mensal
+          payoutFields.ifood_mensal = Math.round(payoutFields.ifood_mensal * ratioProRata);
+          // Recalcular total_ifood
+          payoutFields.total_ifood = payoutFields.ifood_mensal + payoutFields.ifood_ultrameta;
+          // Recalcular total_conta com fixo pro-rata
+          payoutFields.total_conta = payoutFields.valor_fixo + payoutFields.valor_variavel_total;
+          
+          console.log(`   💰 PRO-RATA aplicado para ${sdr.name}: Fixo=R$ ${payoutFields.valor_fixo}, iFood=R$ ${payoutFields.ifood_mensal}, Total=R$ ${payoutFields.total_conta}`);
+        }
+
         // Upsert payout
         const { data: payout, error: payoutError } = await supabase
           .from('sdr_month_payout')
@@ -1239,6 +1253,7 @@ serve(async (req) => {
             sdr_id: sdr.id,
             ano_mes: ano_mes,
             ...payoutFields,
+            dias_uteis_trabalhados: isProporcional ? diasUteisTrabalhados : null,
             nivel_vigente: cargoHistoricoNivel ?? cargoInfo?.nivel ?? sdr.nivel ?? null,
             cargo_vigente: cargoHistoricoNome ?? cargoInfo?.nome_exibicao ?? null,
             status: existingPayout?.status || 'DRAFT',
