@@ -1,25 +1,40 @@
 
 
-## Gerar PDF — Relatório Detalhado Webhook ClientData Inside
+## Adicionar Filtro de Canal ao Funil Comercial
 
 ### O que será feito
-Gerar um PDF profissional com o relatório completo dos 100+ leads do webhook `clientdata-inside`, contendo:
+Adicionar um seletor de **Canal** ao lado do seletor de período no "Funil Comercial" da Overview, permitindo filtrar os dados do funil por canal de origem do lead (A010, LIVE, ANAMNESE, ANAMNESE-INSTA, BIO-INSTAGRAM, LEAD-FORM, etc.) — usando a mesma lógica de classificação já existente nos relatórios de análise e vendas.
 
-1. **Capa** com título, período (17/03 a 30/03/2026), e data de geração
-2. **KPIs Resumo** — total de leads, taxa de agendamento R1 (43%), taxa de R1 realizada (31%), conversão em contrato (~10%), venda realizada (1%)
-3. **Funil por Estágio** — tabela com contagem por estágio (Lead Gratuito: 35, R1 Agendada: 12, R1 Realizada: 23, etc.)
-4. **Distribuição por SDR** — tabela com nome, total de leads, R1 agendadas, R1 realizadas, contratos
-5. **Atividades Registradas** — resumo (101 mudanças de estágio, 34 ligações, 9 vídeos enviados, 7 perdas)
-6. **Compras Identificadas** — tabela com nome do cliente, produto, valor, data, status
-7. **Lista Completa de Leads** — tabela com nome, telefone, email, estágio atual, SDR responsável, data de entrada
+### Como funciona hoje
+- O `useClintFunnel` busca todos os `crm_deals` da pipeline (`origin_id`) e conta por `stage_id`
+- Não há nenhum filtro por canal/tag — mostra tudo junto
+- A classificação de canal já existe na função `classifyDealChannel()` em `useCarrinhoAnalysisReport.ts`
 
 ### Implementação
-- Script Python usando `reportlab` para gerar o PDF
-- Dados já coletados via queries ao Supabase
-- Output em `/mnt/documents/relatorio-clientdata-inside.pdf`
-- QA visual obrigatória após geração
+
+#### 1. Extrair `classifyDealChannel` para utilitário compartilhado
+- Mover a função de `useCarrinhoAnalysisReport.ts` para `src/lib/channelClassifier.ts`
+- Reexportar nos hooks existentes para não quebrar nada
+
+#### 2. Atualizar `useClintFunnel.ts` — aceitar filtro de canal
+- Adicionar parâmetro `channelFilter?: string` ao hook
+- Na query, buscar também `tags, custom_fields, data_source, origin:crm_origins(name)` (campos necessários para classificar)
+- Após buscar os deals, aplicar `classifyDealChannel()` em cada um e filtrar apenas os que correspondem ao canal selecionado (ou todos se `channelFilter` for vazio)
+- Manter o mesmo fluxo de contagem por stage após o filtro
+
+#### 3. Atualizar `FunilDashboard.tsx` — adicionar UI do filtro
+- Adicionar state `channelFilter` (string, default `''` = Todos)
+- Buscar lista de canais disponíveis dinamicamente dos deals da pipeline (query leve)
+- Renderizar `<Select>` ao lado do seletor de período com opções: "Todos os Canais", "A010", "LIVE", "ANAMNESE", "ANAMNESE-INSTA", etc.
+- Passar `channelFilter` para `useClintFunnel` e para as queries de KPI
+- KPIs também filtram por canal quando selecionado
+
+#### 4. Atualizar queries de KPI no `FunilDashboard`
+- Na query de "Novos Leads" e "Stage Distribution", aplicar o mesmo filtro de canal (buscar tags/custom_fields, classificar, filtrar client-side)
 
 ### Arquivos
-- `/tmp/gen_report.py` — script de geração (temporário)
-- `/mnt/documents/relatorio-clientdata-inside.pdf` — relatório final
+1. `src/lib/channelClassifier.ts` — novo, função extraída
+2. `src/hooks/useClintFunnel.ts` — aceitar `channelFilter`
+3. `src/hooks/useCarrinhoAnalysisReport.ts` — importar de `channelClassifier`
+4. `src/components/crm/FunilDashboard.tsx` — adicionar Select de canal + passar filtro
 
