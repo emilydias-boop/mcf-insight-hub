@@ -1,32 +1,50 @@
 
 
-## Botão "Mover Estágio" em massa na barra de ações
+## Aba "Acumulados" + Alerta no Carrinho R2
+
+### Contexto
+Leads marcados como "Próxima Semana" ficam na aba "Fora do Carrinho" da semana anterior e não há mecanismo para localizá-los na semana seguinte. O mesmo ocorre com contratos acumulados de semanas anteriores que não entraram no carrinho.
 
 ### O que será feito
-Adicionar um botão **"Mover Estágio"** na `BulkActionsBar` que permite mover todos os leads selecionados para um estágio destino dentro da mesma pipeline, de uma só vez.
 
-> O drag-and-drop individual entre estágios já funciona. Este botão resolve o caso de mover **múltiplos leads** de uma vez, sem precisar arrastar um por um.
+#### 1. Nova aba "Acumulados" no Carrinho R2
+Uma aba entre "Fora do Carrinho" e "Aprovados" que lista automaticamente:
+- **Leads "Próxima Semana"** de semanas anteriores (busca nas safras anteriores leads com status R2 "Próxima Semana" que ainda não foram reagendados)
+- **Contratos pendentes** de semanas anteriores que não tiveram R2 agendada/aprovada (acúmulo)
+
+A aba terá um badge com a contagem total para chamar atenção.
+
+#### 2. Alerta visual no topo
+Um banner/card de alerta amarelo no topo da página (abaixo dos KPIs) que aparece quando existem acumulados, com texto como:
+> "⚠️ X leads acumulados de semanas anteriores precisam de atenção (Y próxima semana + Z sem R2)"
+
+Com link direto para a aba Acumulados.
 
 ### Implementação
 
-#### 1. Novo componente: `BulkMoveStageDialog.tsx`
-- Modal simples com um **Select de estágio destino** (usa `useCRMStages(originId)` para listar os estágios da pipeline atual)
-- Ao confirmar, faz update em massa de `stage_id` para todos os deals selecionados via `supabase.from('crm_deals').update({ stage_id }).in('id', dealIds)`
-- Registra atividade `stage_change` para cada deal movido
-- Mostra toast de sucesso/erro e invalida queries
+#### Hook: `useR2AccumulatedLeads.ts` (novo)
+- Busca contratos das últimas 4 safras anteriores à atual
+- Para cada contrato, verifica se o lead:
+  - Tem status R2 "Próxima Semana" (fonte: `r2_status_options`)
+  - Ou não tem nenhuma R2 aprovada/agendada após o contrato
+- Retorna lista tipada com origem (`proxima_semana` ou `sem_r2`) e dados do lead
 
-#### 2. Atualizar `BulkActionsBar.tsx`
-- Adicionar props `onMoveStage` e `isMovingStage`
-- Renderizar botão com ícone `ArrowRightLeft` e texto **"Mover Estágio"**
+#### Componente: `R2AccumulatedList.tsx` (novo)
+- Tabela similar à R2ForaDoCarrinhoList
+- Filtro por tipo (Próxima Semana / Sem R2)
+- Colunas: Nome, Telefone, Semana Original, Closer R1, Tipo, Ações
 
-#### 3. Atualizar `Negocios.tsx`
-- Adicionar state `moveStageDialogOpen`
-- Passar `effectiveOriginId` ao dialog para carregar os estágios corretos
-- Conectar o dialog passando os `selectedDealIds`
-- Limpar seleção após sucesso
+#### Componente: `R2AccumulatedAlert.tsx` (novo)
+- Banner amarelo/laranja com contagem e botão para ir à aba
+
+#### Atualizar: `R2Carrinho.tsx`
+- Adicionar nova aba "Acumulados" com badge de contagem
+- Adicionar alerta condicional acima das tabs
+- Integrar o novo hook
 
 ### Arquivos
-1. `src/components/crm/BulkMoveStageDialog.tsx` — **novo**
-2. `src/components/crm/BulkActionsBar.tsx` — adicionar botão
-3. `src/pages/crm/Negocios.tsx` — integrar dialog
+1. `src/hooks/useR2AccumulatedLeads.ts` — novo hook
+2. `src/components/crm/R2AccumulatedList.tsx` — nova lista
+3. `src/components/crm/R2AccumulatedAlert.tsx` — alerta visual
+4. `src/pages/crm/R2Carrinho.tsx` — integrar aba + alerta
 
