@@ -13,6 +13,7 @@ interface ConsorcioSdrSummaryTableProps {
   disableNavigation?: boolean;
   sdrMetaMap?: Map<string, number>;
   diasUteisNoPeriodo?: number;
+  sdrDiasUteisMap?: Map<string, number>;
   propostasEnviadasBySdr?: Map<string, number>;
   propostasFechadasBySdr?: Map<string, number>;
 }
