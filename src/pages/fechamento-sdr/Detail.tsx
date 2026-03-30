@@ -458,7 +458,7 @@ const FechamentoSDRDetail = () => {
                 <div className="flex items-center gap-1.5 text-primary text-xs">
                   <CreditCard className="h-3.5 w-3.5" />
                   Total Conta
-                  {!employee?.fechamento_manual && Math.abs((effectiveFixo + calculatedVariavel.total) - (payout.total_conta || 0)) > 1 && (
+                  {!employee?.fechamento_manual && Math.abs((effectiveFixoDisplay + calculatedVariavel.total) - (payout.total_conta || 0)) > 1 && (
                     <Badge variant="destructive" className="text-[9px] h-4 ml-1">
                       Recalcular
                     </Badge>
