@@ -38,6 +38,7 @@ export function useCalculatedVariavel({
   diasUteisMes,
   sdrMetaDiaria,
   variavelTotal,
+  diasUteisTrabalhados,
 }: CalculatedVariavelParams): CalculatedVariavelResult {
   return useMemo(() => {
     if (!metricas || metricas.length === 0 || !payout) {
