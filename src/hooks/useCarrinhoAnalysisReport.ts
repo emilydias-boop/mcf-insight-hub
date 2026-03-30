@@ -982,8 +982,8 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         .from('meeting_slot_attendees')
         .select('id, is_partner, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status)')
         .eq('meeting_slots.meeting_type', 'r1')
-        .gte('meeting_slots.scheduled_at', effectiveStart.toISOString())
-        .lt('meeting_slots.scheduled_at', effectiveEnd.toISOString());
+        .gte('meeting_slots.scheduled_at', boundaries.r1Meetings.start.toISOString())
+        .lte('meeting_slots.scheduled_at', boundaries.r1Meetings.end.toISOString());
 
       const totalR1RealizadasSemana = (totalR1Data || []).filter(a => 
         !a.is_partner && 
