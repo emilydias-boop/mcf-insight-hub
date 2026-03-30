@@ -852,22 +852,37 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         const deal = contactId ? dealMap.get(contactId) : null;
         // r1 will be re-read after email fallback enrichment (see r1Fresh below)
 
-        // R2: try linked first, then by contact
-        let r2 = tx.linked_attendee_id ? linkedR2Map.get(tx.linked_attendee_id) : null;
-         let r2Data: R2Lookup | null = null;
-        if (r2) {
-          const slot = r2.meeting_slot as any;
-          r2Data = {
-            id: r2.id,
-            date: slot?.scheduled_at || '',
-            realized: r2.status === 'completed' || r2.status === 'presente' || slot?.status === 'completed',
-            closerName: slot?.closer?.name || null,
-            statusId: r2.r2_status_id || null,
-            slotStatus: slot?.status || '',
-          };
-        } else if (contactId) {
-          r2Data = r2Map.get(contactId) || null;
+        // R2: SAFRA LOGIC — pick first R2 after contract sale_date
+        let allR2sForContact: R2Lookup[] = [];
+        
+        // Try linked attendee first
+        if (tx.linked_attendee_id) {
+          const linkedR2 = linkedR2Map.get(tx.linked_attendee_id);
+          if (linkedR2) {
+            const slot = linkedR2.meeting_slot as any;
+            allR2sForContact.push({
+              id: linkedR2.id,
+              date: slot?.scheduled_at || '',
+              realized: linkedR2.status === 'completed' || linkedR2.status === 'presente' || slot?.status === 'completed',
+              closerName: slot?.closer?.name || null,
+              statusId: linkedR2.r2_status_id || null,
+              slotStatus: slot?.status || '',
+            });
+          }
         }
+        
+        // Add all R2s from contact map
+        if (contactId) {
+          const contactR2s = r2Map.get(contactId) || [];
+          allR2sForContact = [...allR2sForContact, ...contactR2s];
+        }
+        
+        // Pick first R2 after contract and classify
+        const { r2: r2Data, classificacao: r2Classificacao } = pickFirstR2AfterContract(
+          allR2sForContact,
+          tx.sale_date,
+          boundaries.r2Meetings,
+        );
 
         const r2StatusName = r2Data?.statusId ? statusNameMap.get(r2Data.statusId) || null : null;
         const r2StatusLower = r2StatusName?.toLowerCase() || null;
