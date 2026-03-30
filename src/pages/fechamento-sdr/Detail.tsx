@@ -311,6 +311,13 @@ const FechamentoSDRDetail = () => {
   const oteSource = compPlan?.ote_total ? "plano" : employee?.cargo_catalogo?.ote_total ? "RH" : "fallback";
   const effectiveKpi = effectiveKpiEarly;
 
+  // Pro-rata display
+  const isProporcional = payout.dias_uteis_trabalhados != null 
+    && payout.dias_uteis_trabalhados < (payout.dias_uteis_mes || diasUteisMes);
+  const effectiveFixoDisplay = isProporcional
+    ? Math.round(effectiveFixo * (payout.dias_uteis_trabalhados! / (payout.dias_uteis_mes || diasUteisMes)))
+    : effectiveFixo;
+
   // Closer-specific intermediações count (use agenda data for Closers)
   const effectiveIntermediacao = isCloser && closerMetrics.data 
     ? closerMetrics.data.contratos_pagos 
