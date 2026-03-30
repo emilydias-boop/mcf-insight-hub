@@ -152,7 +152,7 @@ export default function R2Carrinho() {
             )}
           </h1>
           <p className="text-muted-foreground">
-            Gestão semanal do funil de R2
+            Safra: Contratos de {format(weekStart, 'dd/MM', { locale: ptBR })} a {format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}
           </p>
         </div>
 
