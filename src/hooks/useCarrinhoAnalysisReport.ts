@@ -354,8 +354,10 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
     queryFn: async (): Promise<CarrinhoAnalysisData> => {
       if (!startDate || !endDate) throw new Error('Datas não definidas');
 
-      // Use unified week boundaries (Sat→Sat) for consistency with Carrinho R2
-      const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(startDate, endDate);
+      // Use metric-specific boundaries for consistency with Carrinho R2
+      const boundaries = getCarrinhoMetricBoundaries(startDate, endDate);
+      const effectiveStart = boundaries.contratos.start;
+      const effectiveEnd = boundaries.contratos.end;
       const startStr = format(startDate, 'yyyy-MM-dd');
       const endStr = format(endDate, 'yyyy-MM-dd');
 
