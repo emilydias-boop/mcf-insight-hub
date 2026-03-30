@@ -158,6 +158,10 @@ export interface CarrinhoAnalysisKPIs {
   taxaContratoR1: number;
   aprovadosComParceria: number;
   aprovadosSemParceria: number;
+  // Safra R2 classification
+  r2NaJanela: number;
+  r2Tardia: number;
+  r2SemR2: number;
 }
 
 export interface FunnelStep {
