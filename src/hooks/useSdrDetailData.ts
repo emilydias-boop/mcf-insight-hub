@@ -52,36 +52,36 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
   const teamData = useTeamMeetingsData({ startDate, endDate });
   const sdrsQuery = useSdrsFromSquad("inside_sales");
 
-  // Fetch meta_diaria and employee_id from sdr table
+  // Fetch meta_diaria from sdr table
   const metaDiariaQuery = useQuery({
     queryKey: ['sdr-meta-diaria-detail', sdrEmail],
     queryFn: async () => {
       const { data } = await supabase
         .from('sdr')
-        .select('meta_diaria, employee_id')
+        .select('id, meta_diaria')
         .eq('email', sdrEmail.toLowerCase())
         .eq('active', true)
         .maybeSingle();
-      return { metaDiaria: data?.meta_diaria ?? 10, employeeId: data?.employee_id ?? null };
+      return { metaDiaria: data?.meta_diaria ?? 10, sdrId: data?.id ?? null };
     },
     enabled: !!sdrEmail,
     staleTime: 1000 * 60 * 5,
   });
 
-  // Fetch data_admissao from employees table
+  // Fetch data_admissao from employees table using sdr_id
   const dataAdmissaoQuery = useQuery({
-    queryKey: ['sdr-data-admissao-detail', metaDiariaQuery.data?.employeeId],
+    queryKey: ['sdr-data-admissao-detail', metaDiariaQuery.data?.sdrId],
     queryFn: async () => {
-      const employeeId = metaDiariaQuery.data?.employeeId;
-      if (!employeeId) return null;
+      const sdrId = metaDiariaQuery.data?.sdrId;
+      if (!sdrId) return null;
       const { data } = await supabase
         .from('employees')
         .select('data_admissao')
-        .eq('id', employeeId)
+        .eq('sdr_id', sdrId)
         .maybeSingle();
       return data?.data_admissao ?? null;
     },
-    enabled: !!metaDiariaQuery.data?.employeeId,
+    enabled: !!metaDiariaQuery.data?.sdrId,
     staleTime: 1000 * 60 * 5,
   });
 
