@@ -532,7 +532,7 @@ const FechamentoSDRDetail = () => {
               isSaving={recalculateWithKpi.isPending}
               intermediacoes={effectiveIntermediacao}
               sdrMetaDiaria={(payout.sdr as any)?.meta_diaria || 10}
-              diasUteisMes={payout.dias_uteis_mes || 19}
+              diasUteisMes={isProporcional ? payout.dias_uteis_trabalhados! : (payout.dias_uteis_mes || 19)}
               roleType={(payout.sdr as any)?.role_type || "sdr"}
               vendasParceria={vendasParceria}
               metaContratosPercentual={metaContratosPercentual}
