@@ -83,6 +83,8 @@ function getBestRawTag(tags: string[]): string | null {
   return null;
 }
 
+export type R2Classificacao = 'na_janela' | 'tardia' | 'sem_r2';
+
 export interface LeadCarrinhoCompleto {
   nome: string;
   telefone: string;
@@ -108,6 +110,7 @@ export interface LeadCarrinhoCompleto {
   r2Realizada: boolean;
   closerR2: string | null;
   statusR2: string | null;
+  r2Classificacao: R2Classificacao;
   // Desfecho
   comprouParceria: boolean;
   dataParceria: string | null;
