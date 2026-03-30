@@ -86,6 +86,11 @@ export default function R2Carrinho() {
   // Fetch extended meeting data for the drawer
   const { data: meetingsExtended = [] } = useR2MeetingsExtended(weekStart, weekEnd);
 
+  // Fetch accumulated leads from previous weeks
+  const { data: accumulatedLeads = [], isLoading: accumulatedLoading } = useR2AccumulatedLeads(weekStart, weekEnd);
+  const accProximaSemanaCount = accumulatedLeads.filter(l => l.origin_type === 'proxima_semana').length;
+  const accSemR2Count = accumulatedLeads.filter(l => l.origin_type === 'sem_r2').length;
+
   // Find the selected meeting for the drawer
   const selectedMeeting = useMemo(() => {
     if (!selectedMeetingId) return null;
