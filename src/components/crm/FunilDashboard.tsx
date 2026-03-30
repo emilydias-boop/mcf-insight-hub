@@ -300,10 +300,26 @@ export function FunilDashboard() {
     <div className="space-y-6">
       {/* Global Period Selector */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-foreground">Período:</span>
-          <span className="text-sm text-muted-foreground">{periodLabel}</span>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">Período:</span>
+            <span className="text-sm text-muted-foreground">{periodLabel}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Select value={channelFilter || '_all'} onValueChange={(v) => setChannelFilter(v === '_all' ? '' : v)}>
+              <SelectTrigger className="w-[180px] h-8 text-sm">
+                <SelectValue placeholder="Todos os Canais" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">Todos os Canais</SelectItem>
+                {availableChannels?.map((ch) => (
+                  <SelectItem key={ch} value={ch}>{ch}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div className="flex items-center bg-muted rounded-lg p-1 gap-0.5">
           {PERIOD_OPTIONS.map((opt) => (
