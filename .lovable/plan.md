@@ -1,29 +1,17 @@
 
 
-## Adicionar filtro de período na lista de Próximas Ações
+## Limpeza: remover imports não utilizados
 
-### Problema
-Todas as ações pendentes aparecem acumuladas sem filtro. Com o tempo, a lista fica poluída com ações futuras que não são relevantes agora.
+### Problema encontrado
+Após as alterações recentes, sobrou um import não utilizado:
 
-### Solução
+- **`src/components/sdr/OverdueAlertOverlay.tsx`** — `useCallback` é importado mas nunca usado (foi removido junto com a lógica de áudio)
 
-#### 1. `src/components/sdr/PendingActionsPanel.tsx`
-- Adicionar estado `dateFilter` com opções: `'hoje'` (default), `'semana'`, `'mes'`, `'todas'`
-- Renderizar botões de filtro (estilo toggle, como já existe em `DealTasksSection`) abaixo do header
-- Filtrar `actions` no client-side antes de renderizar:
-  - **Hoje**: `isToday || isOverdue` (atrasadas sempre aparecem)
-  - **Semana**: ação dentro dos próximos 7 dias + atrasadas
-  - **Mês**: ação dentro dos próximos 30 dias + atrasadas
-  - **Todas**: sem filtro
-- Atualizar contadores (total badge) para refletir o filtro ativo
-- Atrasadas (`isOverdue`) sempre visíveis em qualquer filtro — nunca escondidas
-- Default "Hoje" mantém a tela limpa e focada
+O arquivo `useOverdueAlertSound.ts` já foi deletado e não há mais referências a ele no projeto — está limpo.
 
-#### 2. Layout dos filtros
-- 4 botões pequenos em linha: `Hoje | Semana | Mês | Todas`
-- Usar `Button variant="secondary"` para ativo e `variant="ghost"` para inativo (mesmo padrão do DealTasksSection)
-- Posicionados entre o header e a lista de ações
+### Correção
+- Remover `useCallback` do import do React em `OverdueAlertOverlay.tsx`
 
 ### Arquivo alterado
-- `src/components/sdr/PendingActionsPanel.tsx`
+- `src/components/sdr/OverdueAlertOverlay.tsx` (1 linha)
 
