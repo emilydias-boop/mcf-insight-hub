@@ -46,6 +46,7 @@ import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDia
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import { ExportDealsDialog } from '@/components/crm/ExportDealsDialog';
 import { DeleteDealsConfirmDialog } from '@/components/crm/DeleteDealsConfirmDialog';
+import { BulkMoveStageDialog } from '@/components/crm/BulkMoveStageDialog';
 import { useBulkDeleteDeals } from '@/hooks/useDeleteDeals';
 import { Download } from 'lucide-react';
 
