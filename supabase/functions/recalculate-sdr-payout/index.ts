@@ -491,9 +491,9 @@ serve(async (req) => {
       );
     }
 
-    // Calculate date range for the month (reusing year/month from above)
-    const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
-    const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    // Calculate date range for the month (reusing monthStartStr/monthEndStr from above)
+    const monthStart = monthStartStr;
+    const monthEnd = monthEndStr;
 
     console.log(`📅 Período: ${monthStart} até ${monthEnd}`);
 
