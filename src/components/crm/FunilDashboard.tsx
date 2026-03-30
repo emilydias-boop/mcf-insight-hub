@@ -4,10 +4,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/formatters';
-import { Users, CalendarCheck, FileCheck, TrendingUp, TrendingDown, ArrowRight, Calendar } from 'lucide-react';
+import { Users, CalendarCheck, FileCheck, TrendingUp, TrendingDown, ArrowRight, Calendar, Filter } from 'lucide-react';
 import { useClintFunnel } from '@/hooks/useClintFunnel';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { classifyChannel } from '@/lib/channelClassifier';
 
 import {
   getCustomWeekStart,
@@ -81,30 +83,57 @@ const PERIOD_OPTIONS: { value: PeriodType; label: string }[] = [
 
 export function FunilDashboard() {
   const [period, setPeriod] = useState<PeriodType>('week');
+  const [channelFilter, setChannelFilter] = useState<string>('');
 
   const { start: periodStart, end: periodEnd, label: periodLabel } = useMemo(() => getPeriodRange(period), [period]);
   const { start: prevStart, end: prevEnd } = useMemo(() => getPrevPeriodRange(period), [period]);
 
   const prevLabel = period === 'today' ? 'vs ontem' : period === 'week' ? 'vs semana anterior' : 'vs mês anterior';
 
-  // Funnel data (unified, no Lead A/B split)
+  // Available channels query
+  const { data: availableChannels } = useQuery({
+    queryKey: ['funnel-available-channels', PIPELINE_ORIGIN_ID],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('crm_deals')
+        .select('tags, custom_fields, data_source, origin:crm_origins(name)')
+        .eq('origin_id', PIPELINE_ORIGIN_ID)
+        .limit(1000);
+
+      if (!data) return [];
+      const channelSet = new Set<string>();
+      data.forEach((deal: any) => {
+        const tags: string[] = ((deal as any).tags || []).map((t: any) => typeof t === 'string' ? t : t?.name || '');
+        const ch = classifyChannel({
+          tags,
+          originName: (deal as any).origin?.name || null,
+          leadChannel: (deal as any).custom_fields?.lead_channel || null,
+          dataSource: (deal as any).data_source || null,
+          hasA010: false,
+        });
+        if (ch) channelSet.add(ch);
+      });
+      return Array.from(channelSet).sort();
+    },
+    staleTime: 300000,
+  });
+
+  // Funnel data
   const { data: funnelData, isLoading: loadingFunnel } = useClintFunnel(
     PIPELINE_ORIGIN_ID,
     periodStart,
     periodEnd,
-    false
+    false,
+    channelFilter
   );
 
   // KPIs: current period
   const { data: kpis, isLoading: loadingKpis } = useQuery({
-    queryKey: ['funnel-kpis', periodStart.toISOString(), periodEnd.toISOString()],
+    queryKey: ['funnel-kpis', periodStart.toISOString(), periodEnd.toISOString(), channelFilter],
     queryFn: async () => {
-      const [
-        { count: novosLeads },
-        rpcResult,
-      ] = await Promise.all([
+      const [dealsResult, rpcResult] = await Promise.all([
         supabase.from('crm_deals')
-          .select('*', { count: 'exact', head: true })
+          .select('id, tags, custom_fields, data_source, origin:crm_origins(name)')
           .eq('origin_id', PIPELINE_ORIGIN_ID)
           .gte('created_at', periodStart.toISOString())
           .lte('created_at', periodEnd.toISOString()),
@@ -115,8 +144,22 @@ export function FunilDashboard() {
         }),
       ]);
 
+      let leadsCount = dealsResult.data?.length || 0;
+      if (channelFilter && dealsResult.data) {
+        leadsCount = dealsResult.data.filter((deal: any) => {
+          const tags: string[] = ((deal as any).tags || []).map((t: any) => typeof t === 'string' ? t : t?.name || '');
+          const ch = classifyChannel({
+            tags,
+            originName: (deal as any).origin?.name || null,
+            leadChannel: (deal as any).custom_fields?.lead_channel || null,
+            dataSource: (deal as any).data_source || null,
+            hasA010: false,
+          });
+          return ch === channelFilter;
+        }).length;
+      }
+
       const rpcData = (rpcResult.data as any)?.metrics || [];
-      const leadsCount = novosLeads || 0;
       const agendadasCount = rpcData.reduce((sum: number, m: any) => sum + (m.r1_agendada || 0), 0);
       const contratosCount = rpcData.reduce((sum: number, m: any) => sum + (m.contratos || 0), 0);
       const taxaConversao = leadsCount > 0 ? ((contratosCount / leadsCount) * 100) : 0;
@@ -158,11 +201,11 @@ export function FunilDashboard() {
 
   // Stage distribution (current snapshot)
   const { data: stageDistribution, isLoading: loadingStages } = useQuery({
-    queryKey: ['funnel-stage-distribution'],
+    queryKey: ['funnel-stage-distribution', channelFilter],
     queryFn: async () => {
       const { data } = await supabase
         .from('crm_deals')
-        .select('stage_id, stage:crm_stages!inner(stage_name, stage_order)')
+        .select('stage_id, tags, custom_fields, data_source, origin:crm_origins(name), stage:crm_stages!inner(stage_name, stage_order)')
         .eq('origin_id', PIPELINE_ORIGIN_ID)
         .not('stage_id', 'is', null);
 
@@ -170,6 +213,17 @@ export function FunilDashboard() {
 
       const counts: Record<string, { name: string; count: number; order: number }> = {};
       data.forEach((deal: any) => {
+        if (channelFilter) {
+          const tags: string[] = ((deal as any).tags || []).map((t: any) => typeof t === 'string' ? t : t?.name || '');
+          const ch = classifyChannel({
+            tags,
+            originName: (deal as any).origin?.name || null,
+            leadChannel: (deal as any).custom_fields?.lead_channel || null,
+            dataSource: (deal as any).data_source || null,
+            hasA010: false,
+          });
+          if (ch !== channelFilter) return;
+        }
         const name = deal.stage?.stage_name || 'Sem etapa';
         const order = deal.stage?.stage_order || 999;
         if (!counts[name]) counts[name] = { name, count: 0, order };
@@ -257,10 +311,26 @@ export function FunilDashboard() {
     <div className="space-y-6">
       {/* Global Period Selector */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-foreground">Período:</span>
-          <span className="text-sm text-muted-foreground">{periodLabel}</span>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">Período:</span>
+            <span className="text-sm text-muted-foreground">{periodLabel}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Select value={channelFilter || '_all'} onValueChange={(v) => setChannelFilter(v === '_all' ? '' : v)}>
+              <SelectTrigger className="w-[180px] h-8 text-sm">
+                <SelectValue placeholder="Todos os Canais" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">Todos os Canais</SelectItem>
+                {availableChannels?.map((ch) => (
+                  <SelectItem key={ch} value={ch}>{ch}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div className="flex items-center bg-muted rounded-lg p-1 gap-0.5">
           {PERIOD_OPTIONS.map((opt) => (
