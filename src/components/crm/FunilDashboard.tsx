@@ -83,18 +83,48 @@ const PERIOD_OPTIONS: { value: PeriodType; label: string }[] = [
 
 export function FunilDashboard() {
   const [period, setPeriod] = useState<PeriodType>('week');
+  const [channelFilter, setChannelFilter] = useState<string>('');
 
   const { start: periodStart, end: periodEnd, label: periodLabel } = useMemo(() => getPeriodRange(period), [period]);
   const { start: prevStart, end: prevEnd } = useMemo(() => getPrevPeriodRange(period), [period]);
 
   const prevLabel = period === 'today' ? 'vs ontem' : period === 'week' ? 'vs semana anterior' : 'vs mês anterior';
 
-  // Funnel data (unified, no Lead A/B split)
+  // Available channels query
+  const { data: availableChannels } = useQuery({
+    queryKey: ['funnel-available-channels', PIPELINE_ORIGIN_ID],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('crm_deals')
+        .select('tags, custom_fields, data_source, origin:crm_origins(name)')
+        .eq('origin_id', PIPELINE_ORIGIN_ID)
+        .limit(1000);
+
+      if (!data) return [];
+      const channelSet = new Set<string>();
+      data.forEach((deal: any) => {
+        const tags: string[] = ((deal as any).tags || []).map((t: any) => typeof t === 'string' ? t : t?.name || '');
+        const ch = classifyChannel({
+          tags,
+          originName: (deal as any).origin?.name || null,
+          leadChannel: (deal as any).custom_fields?.lead_channel || null,
+          dataSource: (deal as any).data_source || null,
+          hasA010: false,
+        });
+        if (ch) channelSet.add(ch);
+      });
+      return Array.from(channelSet).sort();
+    },
+    staleTime: 300000,
+  });
+
+  // Funnel data
   const { data: funnelData, isLoading: loadingFunnel } = useClintFunnel(
     PIPELINE_ORIGIN_ID,
     periodStart,
     periodEnd,
-    false
+    false,
+    channelFilter
   );
 
   // KPIs: current period
