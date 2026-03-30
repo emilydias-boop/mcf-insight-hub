@@ -1,59 +1,42 @@
 
 
-## Fechamento pro-rata para desligados e novos colaboradores
+## Corrigir exibição de desligados e cálculo proporcional no fechamento
 
-### Problema
-O sistema calcula o fechamento usando o mês inteiro (dia 1 ao último dia) para todos os colaboradores, sem considerar:
-- **Desligados** (Evellyn, Juliana, Hellen): devem ter métricas e remuneração calculadas apenas do dia 1 até a `data_demissao`
-- **Novos**: devem ter métricas e remuneração calculadas apenas da `data_admissao` até o fim do mês
+### Problemas identificados
 
-Hoje não existe nenhuma lógica de pro-rata no sistema — nem na Edge Function (`recalculate-sdr-payout`) nem no cálculo local (`useCalculatedVariavel`).
+**1. Evellyn e Hellen não aparecem na listagem**
+- `useSdrFechamento.ts` linha 278: `result.filter(p => p.sdr?.active !== false)` — remove SDRs inativos da listagem
+- `useSdrFechamento.ts` linha 226: `.eq('status', 'ativo')` — busca apenas employees ativos, então desligados não têm dados de cargo/departamento
 
-### Solução
+**2. Evellyn com data_admissao errada**
+- No banco: `data_admissao = 22026-02-02` (ano 22026 em vez de 2026)
+- Isso faz `dataInicioEfetiva` ser no futuro, resultando em `dias_uteis_trabalhados = 0` e todos valores zerados
+- Precisa corrigir no banco para `2026-02-02`
 
-Adicionar lógica de **pro-rata por dias úteis trabalhados** na Edge Function e no frontend.
+**3. Individual não calcula variável proporcional**
+- A Edge Function aplica pro-rata apenas no `valor_fixo` e `ifood_mensal`
+- As metas (agendamentos, tentativas etc.) não são ajustadas proporcionalmente
+- O `useCalculatedVariavel` no frontend também não considera `dias_uteis_trabalhados` para ajustar metas
 
-#### 1. Edge Function `supabase/functions/recalculate-sdr-payout/index.ts`
+### Mudanças
 
-Após buscar o `employeeData` (linha ~598), adicionar:
-- Buscar `data_admissao` e `data_demissao` do employee
-- Calcular `data_inicio_efetiva` = max(início do mês, `data_admissao`)
-- Calcular `data_fim_efetiva` = min(fim do mês, `data_demissao` ou fim do mês)
-- Calcular `dias_uteis_trabalhados` vs `dias_uteis_mes` total
-- Usar `data_inicio_efetiva` e `data_fim_efetiva` como range para buscar métricas (RPC e slots de Closer)
-- Aplicar pro-rata no **fixo**: `fixo_valor * (dias_uteis_trabalhados / dias_uteis_mes)`
-- Aplicar pro-rata no **iFood mensal**: `ifood * (dias_uteis_trabalhados / dias_uteis_mes)`
-- Ajustar **metas** proporcionalmente: `meta * (dias_uteis_trabalhados / dias_uteis_mes)`
-- Persistir `dias_uteis_trabalhados` no payout para auditoria
+#### 1. `src/hooks/useSdrFechamento.ts` — Incluir desligados na listagem
+- Linha 226: Remover `.eq('status', 'ativo')` e buscar também employees desligados com `data_demissao` no mês selecionado (ou simplesmente remover o filtro de status)
+- Linha 278: Mudar filtro para permitir SDRs inativos que tenham payout no mês (se o payout existe, deve aparecer)
 
-Também buscar employees com `status = 'desligado'` e `data_demissao` dentro do mês (atualmente a query filtra `status = 'ativo'`, linha 602).
+#### 2. Corrigir `data_admissao` da Evellyn no banco
+- Migration: `UPDATE employees SET data_admissao = '2026-02-02' WHERE data_admissao = '22026-02-02'`
 
-#### 2. Tabela `sdr_month_payout` — nova coluna
-- Adicionar `dias_uteis_trabalhados` (integer, nullable) para registrar quantos dias úteis o colaborador efetivamente trabalhou
-- Migration SQL simples
+#### 3. Edge Function `recalculate-sdr-payout` — Pro-rata nas metas
+- Após calcular `ratioProRata`, aplicar proporcionalmente em `meta_agendadas_ajustada` e `meta_tentativas_ajustada`
+- Isso faz o cálculo de variável usar metas proporcionais (ex: meta 154 × 16/22 = 112)
 
-#### 3. Frontend — `src/components/fechamento/PayoutTableRow.tsx`
-- Mostrar indicador visual quando `dias_uteis_trabalhados < dias_uteis_mes` (badge "Proporcional" ou tooltip)
-
-#### 4. Frontend — `src/pages/fechamento-sdr/Detail.tsx`
-- Exibir info de pro-rata no cabeçalho: "Período efetivo: 01/03 a 15/03 (X dias úteis de Y)"
-
-#### 5. Frontend — `src/hooks/useCalculatedVariavel.ts`
-- Considerar pro-rata quando `dias_uteis_trabalhados` estiver preenchido no payout
-- Ajustar fixo e metas proporcionalmente
-
-#### 6. Edge Function — buscar desligados
-- Na query de SDRs (linha 449), o filtro `active = true` pode excluir desligados
-- Adicionar lógica: buscar também SDRs com employee desligado no mês corrente (`data_demissao` entre monthStart e monthEnd), mesmo que `sdr.active = false`
-
-### Prioridade (urgência)
-A implementação começa pela Edge Function, que é o que gera os números do fechamento ao clicar "Recalcular Todos".
+#### 4. `src/hooks/useCalculatedVariavel.ts` — Considerar pro-rata
+- Quando `payout.dias_uteis_trabalhados` existe e é menor que `diasUteisMes`, ajustar metas fixas (agendamentos, tentativas) proporcionalmente no cálculo local
 
 ### Arquivos alterados
-1. `supabase/functions/recalculate-sdr-payout/index.ts` — pro-rata + buscar desligados
-2. `supabase/migrations/XXXX_add_dias_uteis_trabalhados.sql` — nova coluna
-3. `src/types/sdr-fechamento.ts` — adicionar campo ao tipo
-4. `src/hooks/useCalculatedVariavel.ts` — pro-rata no cálculo local
-5. `src/components/fechamento/PayoutTableRow.tsx` — badge proporcional
-6. `src/pages/fechamento-sdr/Detail.tsx` — exibir período efetivo
+1. `src/hooks/useSdrFechamento.ts` — incluir desligados na listagem e busca de employees
+2. `supabase/migrations/XXXX_fix_evellyn_admissao.sql` — corrigir data errada
+3. `supabase/functions/recalculate-sdr-payout/index.ts` — pro-rata nas metas
+4. `src/hooks/useCalculatedVariavel.ts` — cálculo local com pro-rata
 
