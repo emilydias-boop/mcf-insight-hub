@@ -28,6 +28,8 @@ export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
 export type ActivityPriorityFilter = 'all' | 'high' | 'medium' | 'low';
 export type OutsideFilter = 'all' | 'outside_only' | 'outside_worked' | 'outside_not_worked' | 'not_outside';
 
+import type { TagFilterRule, TagOperator } from './TagFilterPopover';
+
 export interface DealFiltersState {
   search: string;
   dateRange: DateRange | undefined;
@@ -37,6 +39,8 @@ export interface DealFiltersState {
   salesChannel: SalesChannelFilter;
   attemptsRange: { min: number; max: number } | null;
   selectedTags: string[];
+  tagFilters: TagFilterRule[];
+  tagOperator: TagOperator;
   activityPriority: ActivityPriorityFilter;
   outsideFilter: OutsideFilter;
 }
