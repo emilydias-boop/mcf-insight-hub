@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useR2MetricsData } from '@/hooks/useR2MetricsData';
+import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
 import { useSDRCarrinhoMetrics } from '@/hooks/useSDRCarrinhoMetrics';
 import { useCloserCarrinhoMetrics } from '@/hooks/useCloserCarrinhoMetrics';
 import { SemiCircleGauge } from './SemiCircleGauge';
