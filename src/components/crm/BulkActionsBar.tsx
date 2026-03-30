@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, UserPlus, X, Loader2, Copy, Trash2 } from 'lucide-react';
+import { CheckCircle2, UserPlus, X, Loader2, Copy, Trash2, ArrowRightLeft } from 'lucide-react';
 
 interface BulkActionsBarProps {
   selectedCount: number;
@@ -10,6 +10,8 @@ interface BulkActionsBarProps {
   isDuplicating?: boolean;
   onDelete?: () => void;
   isDeleting?: boolean;
+  onMoveStage?: () => void;
+  isMovingStage?: boolean;
 }
 
 export const BulkActionsBar = ({
@@ -21,6 +23,8 @@ export const BulkActionsBar = ({
   isDuplicating = false,
   onDelete,
   isDeleting = false,
+  onMoveStage,
+  isMovingStage = false,
 }: BulkActionsBarProps) => {
   if (selectedCount === 0) return null;
 
@@ -40,7 +44,7 @@ export const BulkActionsBar = ({
           variant="secondary"
           size="sm"
           onClick={onTransfer}
-          disabled={isTransferring || isDuplicating}
+          disabled={isTransferring || isDuplicating || isMovingStage}
           className="gap-2"
         >
           {isTransferring ? (
@@ -50,6 +54,23 @@ export const BulkActionsBar = ({
           )}
           Transferir para...
         </Button>
+
+        {onMoveStage && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onMoveStage}
+            disabled={isTransferring || isDuplicating || isMovingStage}
+            className="gap-2"
+          >
+            {isMovingStage ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowRightLeft className="h-4 w-4" />
+            )}
+            Mover Estágio
+          </Button>
+        )}
 
         {onDuplicate && (
           <Button
