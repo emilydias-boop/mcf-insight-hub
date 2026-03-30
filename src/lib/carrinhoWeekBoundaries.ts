@@ -43,7 +43,9 @@ export interface CarrinhoMetricBoundaries {
   contratos: { start: Date; end: Date };
   /** R2 meetings: Sex 00:00 (pós-carrinho anterior) → Sex 23:59 (dia do carrinho atual) */
   r2Meetings: { start: Date; end: Date };
-  /** Vendas parceria: Sex (dia do carrinho) 00:00 → Seg 23:59 */
+  /** Aprovados: Sex pós-carrinho anterior 00:00 → Sex do carrinho atual HH:mm (corte) */
+  aprovados: { start: Date; end: Date };
+  /** Vendas parceria: Sex do carrinho HH:mm (corte) → Seg 23:59 */
   vendasParceria: { start: Date; end: Date };
   /** R1 realizadas: mesma janela dos contratos */
   r1Meetings: { start: Date; end: Date };
