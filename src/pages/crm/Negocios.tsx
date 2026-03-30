@@ -79,6 +79,7 @@ const Negocios = () => {
   const [spreadsheetDialogOpen, setSpreadsheetDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [moveStageDialogOpen, setMoveStageDialogOpen] = useState(false);
   const bulkTransfer = useBulkTransfer();
   const bulkDelete = useBulkDeleteDeals();
   const canDelete = ['admin', 'manager', 'coordenador'].includes(role || '');
