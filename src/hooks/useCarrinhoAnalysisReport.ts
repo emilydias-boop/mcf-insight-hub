@@ -943,6 +943,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           dataContrato: tx.sale_date,
           valorContrato: tx.net_value || 0,
           r2Agendada: isR2Agendada,
+          r2Classificacao,
           dataR2: r2Data?.date || null,
           r2Realizada: isR2Realizada,
           closerR2: r2Data?.closerName || null,
