@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { format } from 'date-fns';
 import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
-import { getCarrinhoWeekBoundaries } from '@/lib/carrinhoWeekBoundaries';
+import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
 
 export interface R2CarrinhoKPIs {
   contratosPagos: number;
@@ -18,7 +18,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
   return useQuery({
     queryKey: ['r2-carrinho-kpis', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
     queryFn: async (): Promise<R2CarrinhoKPIs> => {
-      const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig);
+      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig);
 
       // ===== CONTRATOS PAGOS =====
       // Count unique contracts (A000 - Contrato) paid in the week from hubla_transactions
@@ -29,8 +29,8 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
         .eq('product_name', 'A000 - Contrato')
         .in('sale_status', ['completed', 'refunded'])
         .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
-        .gte('sale_date', effectiveStart.toISOString())
-        .lt('sale_date', effectiveEnd.toISOString());
+        .gte('sale_date', boundaries.contratos.start.toISOString())
+        .lte('sale_date', boundaries.contratos.end.toISOString());
 
       // Filter out newsale- duplicates, make "contrato" entries, and installments > 1
       const validTx = (contratosTx || []).filter(t => {
@@ -64,8 +64,8 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
           )
         `)
         .eq('meeting_type', 'r2')
-        .gte('scheduled_at', effectiveStart.toISOString())
-        .lt('scheduled_at', effectiveEnd.toISOString());
+        .gte('scheduled_at', boundaries.r2Meetings.start.toISOString())
+        .lte('scheduled_at', boundaries.r2Meetings.end.toISOString());
 
       // ===== R2 AGENDADAS =====
       // Count ATTENDEES (not slots) in scheduled/invited/pending meetings

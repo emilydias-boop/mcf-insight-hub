@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
-import { getCarrinhoWeekBoundaries } from '@/lib/carrinhoWeekBoundaries';
+import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
 import { getUFFromPhone, getClusterFromUF } from '@/lib/dddToUF';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
@@ -354,8 +354,10 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
     queryFn: async (): Promise<CarrinhoAnalysisData> => {
       if (!startDate || !endDate) throw new Error('Datas não definidas');
 
-      // Use unified week boundaries (Sat→Sat) for consistency with Carrinho R2
-      const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(startDate, endDate);
+      // Use metric-specific boundaries for consistency with Carrinho R2
+      const boundaries = getCarrinhoMetricBoundaries(startDate, endDate);
+      const effectiveStart = boundaries.contratos.start;
+      const effectiveEnd = boundaries.contratos.end;
       const startStr = format(startDate, 'yyyy-MM-dd');
       const endStr = format(endDate, 'yyyy-MM-dd');
 
@@ -383,7 +385,7 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         .in('sale_status', ['completed', 'refunded'])
         .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
         .gte('sale_date', effectiveStart.toISOString())
-        .lt('sale_date', effectiveEnd.toISOString())
+        .lte('sale_date', effectiveEnd.toISOString())
         .order('sale_date', { ascending: true });
 
       const validTx = (transactions || []).filter(t => {
@@ -548,8 +550,8 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
               .select('id, contact_id, status, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status, closer:closers(name))')
               .in('contact_id', contactIds)
               .eq('meeting_slots.meeting_type', 'r2')
-              .gte('meeting_slots.scheduled_at', effectiveStart.toISOString())
-              .lt('meeting_slots.scheduled_at', effectiveEnd.toISOString())
+              .gte('meeting_slots.scheduled_at', boundaries.r2Meetings.start.toISOString())
+              .lte('meeting_slots.scheduled_at', boundaries.r2Meetings.end.toISOString())
           : Promise.resolve({ data: [] }),
       ]);
 
@@ -980,8 +982,8 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         .from('meeting_slot_attendees')
         .select('id, is_partner, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status)')
         .eq('meeting_slots.meeting_type', 'r1')
-        .gte('meeting_slots.scheduled_at', effectiveStart.toISOString())
-        .lt('meeting_slots.scheduled_at', effectiveEnd.toISOString());
+        .gte('meeting_slots.scheduled_at', boundaries.r1Meetings.start.toISOString())
+        .lte('meeting_slots.scheduled_at', boundaries.r1Meetings.end.toISOString());
 
       const totalR1RealizadasSemana = (totalR1Data || []).filter(a => 
         !a.is_partner && 

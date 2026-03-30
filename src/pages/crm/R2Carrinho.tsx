@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useR2CarrinhoKPIs } from '@/hooks/useR2CarrinhoKPIs';
 import { useR2CarrinhoData, R2CarrinhoAttendee } from '@/hooks/useR2CarrinhoData';
 import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
-import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
+import { getCartWeekStart, getCartWeekEnd } from '@/lib/carrinhoWeekBoundaries';
 import { R2AprovadosList } from '@/components/crm/R2AprovadosList';
 import { R2ForaDoCarrinhoList } from '@/components/crm/R2ForaDoCarrinhoList';
 import { useR2ForaDoCarrinhoData } from '@/hooks/useR2ForaDoCarrinhoData';
@@ -31,8 +31,8 @@ export default function R2Carrinho() {
   const [selectedCarrinhoId, setSelectedCarrinhoId] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
-  const weekStart = useMemo(() => getCustomWeekStart(weekDate), [weekDate]);
-  const weekEnd = useMemo(() => getCustomWeekEnd(weekDate), [weekDate]);
+  const weekStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
+  const weekEnd = useMemo(() => getCartWeekEnd(weekDate), [weekDate]);
 
   const { config, saveConfig, copyFromPreviousWeek } = useCarrinhoConfig(weekStart);
 

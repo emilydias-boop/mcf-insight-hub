@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
+import { getCartWeekStart } from '@/lib/carrinhoWeekBoundaries';
 import { endOfDay, format, subDays } from 'date-fns';
 import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
-import { getCarrinhoWeekBoundaries } from '@/lib/carrinhoWeekBoundaries';
+import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
 import { getCachedPrecoReferencia } from './useProductPricesCache';
 
 // Helper para normalização consistente (apenas dígitos, últimos 9 — número local sem DDD variável)
@@ -69,7 +69,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
   return useQuery({
     queryKey: ['r2-carrinho-vendas', weekStart.toISOString(), weekEnd.toISOString()],
     queryFn: async () => {
-      const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig);
+      const { vendasParceria: { start: effectiveStart, end: effectiveEnd } } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig);
       // 1. Buscar attendees aprovados dos últimos 60 dias (lead pode ter R2 em outra semana mas comprar parceria esta semana)
       const lookbackStart = subDays(weekEnd, 60);
       const { data: approvedAttendees, error: attendeesError } = await supabase
@@ -145,7 +145,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
         .select('*')
         .eq('product_category', 'parceria')
         .gte('sale_date', effectiveStart.toISOString())
-        .lte('sale_date', endOfDay(weekEnd).toISOString())
+        .lte('sale_date', effectiveEnd.toISOString())
         .order('sale_date', { ascending: false });
 
       // Construir filtro OR para emails e telefones
@@ -250,7 +250,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
           let originalScheduledAt: string | undefined;
 
           if (linkedScheduledAt) {
-            const linkedWeekStart = getCustomWeekStart(new Date(linkedScheduledAt));
+            const linkedWeekStart = getCartWeekStart(new Date(linkedScheduledAt));
             if (linkedWeekStart.getTime() !== weekStart.getTime()) {
               isExtra = true;
               originalWeekStart = format(linkedWeekStart, 'yyyy-MM-dd');

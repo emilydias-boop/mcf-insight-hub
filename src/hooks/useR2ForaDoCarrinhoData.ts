@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { format } from 'date-fns';
 import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
-import { getCarrinhoWeekBoundaries } from '@/lib/carrinhoWeekBoundaries';
+import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
 
 export interface R2ForaDoCarrinhoAttendee {
   id: string;
@@ -26,7 +26,7 @@ export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date, carrinho
   return useQuery({
     queryKey: ['r2-fora-carrinho-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
     queryFn: async (): Promise<R2ForaDoCarrinhoAttendee[]> => {
-      const { effectiveStart, effectiveEnd } = getCarrinhoWeekBoundaries(weekStart, weekEnd, carrinhoConfig);
+      const { r2Meetings: { start: effectiveStart, end: effectiveEnd } } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig);
 
       // First get the status options to map IDs to names/colors
       const { data: statusOptions } = await supabase
@@ -66,7 +66,7 @@ export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date, carrinho
         `)
         .eq('meeting_type', 'r2')
         .gte('scheduled_at', effectiveStart.toISOString())
-        .lt('scheduled_at', effectiveEnd.toISOString());
+        .lte('scheduled_at', effectiveEnd.toISOString());
 
       if (!meetings) return [];
 
