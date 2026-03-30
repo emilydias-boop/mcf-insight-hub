@@ -129,17 +129,15 @@ export function FunilDashboard() {
 
   // KPIs: current period
   const { data: kpis, isLoading: loadingKpis } = useQuery({
-    queryKey: ['funnel-kpis', periodStart.toISOString(), periodEnd.toISOString()],
+    queryKey: ['funnel-kpis', periodStart.toISOString(), periodEnd.toISOString(), channelFilter],
     queryFn: async () => {
-      const [
-        { count: novosLeads },
-        rpcResult,
-      ] = await Promise.all([
-        supabase.from('crm_deals')
-          .select('*', { count: 'exact', head: true })
-          .eq('origin_id', PIPELINE_ORIGIN_ID)
-          .gte('created_at', periodStart.toISOString())
-          .lte('created_at', periodEnd.toISOString()),
+      // Fetch deals with metadata for channel filtering
+      const { data: allDeals } = await supabase
+        .from('crm_deals')
+        .select('id, tags, custom_fields, data_source, origin:crm_origins(name), created_at')
+        .eq('origin_id', PIPELINE_ORIGIN_ID)
+        .gte('created_at', periodStart.toISOString())
+        .lte('created_at', periodEnd.toISOString());
         supabase.rpc('get_sdr_metrics_from_agenda', {
           start_date: format(periodStart, 'yyyy-MM-dd'),
           end_date: format(periodEnd, 'yyyy-MM-dd'),
