@@ -69,9 +69,9 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
   return useQuery({
     queryKey: ['r2-carrinho-vendas', weekStart.toISOString(), weekEnd.toISOString()],
     queryFn: async () => {
-      const { vendasParceria: { start: effectiveStart, end: effectiveEnd } } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig);
-      // 1. Buscar attendees aprovados dos últimos 60 dias (lead pode ter R2 em outra semana mas comprar parceria esta semana)
-      const lookbackStart = subDays(weekEnd, 60);
+      const { vendasParceria: { start: effectiveStart, end: effectiveEnd }, aprovados: aprovadosWindow } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig);
+      // 1. Buscar attendees aprovados da janela operacional (Sex-Sex com corte)
+      // Isso garante que vendas façam match contra os mesmos leads da aba "Aprovados"
       const { data: approvedAttendees, error: attendeesError } = await supabase
         .from('meeting_slot_attendees')
         .select(`
@@ -96,8 +96,8 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
             )
           )
         `)
-      .gte('meeting_slot.scheduled_at', lookbackStart.toISOString())
-      .lte('meeting_slot.scheduled_at', endOfDay(weekEnd).toISOString())
+      .gte('meeting_slot.scheduled_at', aprovadosWindow.start.toISOString())
+      .lte('meeting_slot.scheduled_at', aprovadosWindow.end.toISOString())
         .eq('meeting_slot.meeting_type', 'r2')
         .eq('r2_status_id', '24d9a326-378b-4191-a4b3-d0ec8b9d23eb');
 

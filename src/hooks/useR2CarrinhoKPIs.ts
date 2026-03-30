@@ -48,7 +48,16 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       const emails = uniqueContracts.map(t => (t.customer_email || '').toLowerCase().trim()).filter(Boolean);
 
       if (emails.length === 0) {
-        return { contratosPagos: 0, r2Agendadas: 0, r2Realizadas: 0, foraDoCarrinho: 0, aprovados: 0, pendentes: 0, emAnalise: 0 };
+        // Still need to fetch aprovados from operational window
+        const { data: opAprovados } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)')
+          .eq('meeting_slot.meeting_type', 'r2')
+          .gte('meeting_slot.scheduled_at', boundaries.aprovados.start.toISOString())
+          .lte('meeting_slot.scheduled_at', boundaries.aprovados.end.toISOString())
+          .eq('r2_status_id', aprovadoStatusIdFallback);
+
+        return { contratosPagos: 0, r2Agendadas: 0, r2Realizadas: 0, foraDoCarrinho: 0, aprovados: opAprovados?.length || 0, pendentes: 0, emAnalise: 0 };
       }
 
       // ===== RESOLVE EMAILS → CONTACTS → R2 ATTENDEES (safra logic) =====
@@ -63,33 +72,39 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       }
 
       const contactIds = Array.from(new Set(Array.from(emailToContactId.values())));
-      if (contactIds.length === 0) {
-        return { contratosPagos, r2Agendadas: 0, r2Realizadas: 0, foraDoCarrinho: 0, aprovados: 0, pendentes: 0, emAnalise: 0 };
-      }
 
-      // Fetch ALL R2 attendees for safra contacts (no date filter — we filter post-contract)
-      const [r2AttendeesResult, statusOptionsResult] = await Promise.all([
-        supabase
-          .from('meeting_slot_attendees')
-          .select(`
-            id,
-            contact_id,
-            status,
-            r2_status_id,
-            meeting_slot:meeting_slots!inner(
-              id,
-              status,
-              scheduled_at,
-              meeting_type
-            )
-          `)
-          .in('contact_id', contactIds)
-          .eq('meeting_slot.meeting_type', 'r2')
-          .not('meeting_slot.status', 'in', '("cancelled")'),
+      // Fetch R2 attendees and status options in parallel, plus operational aprovados
+      const [r2AttendeesResult, statusOptionsResult, opAprovadosResult] = await Promise.all([
+        contactIds.length > 0
+          ? supabase
+              .from('meeting_slot_attendees')
+              .select(`
+                id,
+                contact_id,
+                status,
+                r2_status_id,
+                meeting_slot:meeting_slots!inner(
+                  id,
+                  status,
+                  scheduled_at,
+                  meeting_type
+                )
+              `)
+              .in('contact_id', contactIds)
+              .eq('meeting_slot.meeting_type', 'r2')
+              .not('meeting_slot.status', 'in', '("cancelled")')
+          : Promise.resolve({ data: [] }),
         supabase
           .from('r2_status_options')
           .select('id, name')
           .eq('is_active', true),
+        // Aprovados from operational window (Sex-Sex with cutoff)
+        supabase
+          .from('meeting_slot_attendees')
+          .select('id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)')
+          .eq('meeting_slot.meeting_type', 'r2')
+          .gte('meeting_slot.scheduled_at', boundaries.aprovados.start.toISOString())
+          .lte('meeting_slot.scheduled_at', boundaries.aprovados.end.toISOString()),
       ]);
 
       const statusOptions = statusOptionsResult.data || [];
@@ -106,6 +121,15 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       const foraDoCarrinhoStatusIds = statusOptions
         .filter(s => foraDoCarrinhoNames.some(name => s.name.toLowerCase().includes(name)))
         .map(s => s.id);
+
+      // Count aprovados from operational window
+      const aprovados = aprovadoStatusId
+        ? (opAprovadosResult.data || []).filter((a: any) => a.r2_status_id === aprovadoStatusId).length
+        : 0;
+
+      if (contactIds.length === 0) {
+        return { contratosPagos, r2Agendadas: 0, r2Realizadas: 0, foraDoCarrinho: 0, aprovados, pendentes: 0, emAnalise: 0 };
+      }
 
       // Build map: contactId → all R2 attendees
       const contactR2Map = new Map<string, Array<{
@@ -134,7 +158,6 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       let r2Agendadas = 0;
       let r2Realizadas = 0;
       let foraDoCarrinho = 0;
-      let aprovados = 0;
       let pendentes = 0;
       let emAnalise = 0;
 
@@ -165,9 +188,8 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
           r2Realizadas++;
         }
 
-        // Status counts
-        if (firstR2.r2_status_id === aprovadoStatusId) aprovados++;
-        else if (firstR2.r2_status_id === pendenteStatusId) pendentes++;
+        // Status counts (except aprovados — handled by operational window)
+        if (firstR2.r2_status_id === pendenteStatusId) pendentes++;
         else if (firstR2.r2_status_id === emAnaliseStatusId) emAnalise++;
         else if (firstR2.r2_status_id && foraDoCarrinhoStatusIds.includes(firstR2.r2_status_id)) foraDoCarrinho++;
       }
