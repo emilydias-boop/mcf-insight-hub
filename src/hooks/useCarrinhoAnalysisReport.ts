@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { getCarrinhoWeekBoundaries } from '@/lib/carrinhoWeekBoundaries';
 import { getUFFromPhone, getClusterFromUF } from '@/lib/dddToUF';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
