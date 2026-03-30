@@ -368,11 +368,12 @@ export const DealFilters = ({
         </PopoverContent>
       </Popover>
       
-      {/* Filtro de Tags */}
+      {/* Filtro de Tags (Avançado) */}
       <TagFilterPopover
         availableTags={availableTags}
-        selectedTags={filters.selectedTags}
-        onChange={(tags) => onChange({ ...filters, selectedTags: tags })}
+        tagFilters={filters.tagFilters}
+        tagOperator={filters.tagOperator}
+        onChangeFilters={(tagFilters, tagOperator) => onChange({ ...filters, tagFilters, tagOperator })}
         isLoading={isLoadingTags}
       />
       
