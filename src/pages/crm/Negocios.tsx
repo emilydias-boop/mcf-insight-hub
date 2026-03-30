@@ -834,6 +834,7 @@ const Negocios = () => {
         isTransferring={bulkTransfer.isPending}
         onDelete={canDelete ? () => setDeleteDialogOpen(true) : undefined}
         isDeleting={bulkDelete.isPending}
+        onMoveStage={() => setMoveStageDialogOpen(true)}
       />
       
       {/* Dialog de confirmação de exclusão em massa */}
