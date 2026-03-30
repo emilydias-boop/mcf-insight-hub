@@ -855,9 +855,12 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="a010">A010</SelectItem>
-                <SelectItem value="bio">BIO</SelectItem>
-                <SelectItem value="live">LIVE</SelectItem>
+                <SelectItem value="A010">A010</SelectItem>
+                <SelectItem value="LIVE">LIVE</SelectItem>
+                <SelectItem value="ANAMNESE">ANAMNESE</SelectItem>
+                <SelectItem value="ANAMNESE-INSTA">ANAMNESE-INSTA</SelectItem>
+                <SelectItem value="OUTSIDE">OUTSIDE</SelectItem>
+                <SelectItem value="LANÇAMENTO">LANÇAMENTO</SelectItem>
               </SelectContent>
             </Select>
 

@@ -79,6 +79,7 @@ interface AttendeeWithSDR {
   crm_deals: {
     owner_id: string | null;
     owner_profile_id: string | null;
+    tags: any[] | null;
     crm_contacts: { email: string | null; phone: string | null } | null;
   } | null;
 }
