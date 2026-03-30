@@ -461,8 +461,8 @@ serve(async (req) => {
         .from('employees')
         .select('sdr_id, data_demissao')
         .eq('status', 'desligado')
-        .gte('data_demissao', monthStart)
-        .lte('data_demissao', monthEnd)
+        .gte('data_demissao', monthStartStr)
+        .lte('data_demissao', monthEndStr)
         .not('sdr_id', 'is', null);
       
       if (termEmployees && termEmployees.length > 0) {
@@ -491,9 +491,9 @@ serve(async (req) => {
       );
     }
 
-    // Calculate date range for the month (reusing year/month from above)
-    const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
-    const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    // Calculate date range for the month (reusing monthStartStr/monthEndStr from above)
+    const monthStart = monthStartStr;
+    const monthEnd = monthEndStr;
 
     console.log(`📅 Período: ${monthStart} até ${monthEnd}`);
 
