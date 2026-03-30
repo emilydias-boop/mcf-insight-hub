@@ -1238,12 +1238,19 @@ serve(async (req) => {
           payoutFields.valor_fixo = Math.round(payoutFields.valor_fixo * ratioProRata);
           // Pro-rata no iFood mensal
           payoutFields.ifood_mensal = Math.round(payoutFields.ifood_mensal * ratioProRata);
+          // Pro-rata nas metas ajustadas
+          if (payoutFields.meta_agendadas_ajustada) {
+            payoutFields.meta_agendadas_ajustada = Math.round(payoutFields.meta_agendadas_ajustada * ratioProRata);
+          }
+          if (payoutFields.meta_tentativas_ajustada) {
+            payoutFields.meta_tentativas_ajustada = Math.round(payoutFields.meta_tentativas_ajustada * ratioProRata);
+          }
           // Recalcular total_ifood
           payoutFields.total_ifood = payoutFields.ifood_mensal + payoutFields.ifood_ultrameta;
           // Recalcular total_conta com fixo pro-rata
           payoutFields.total_conta = payoutFields.valor_fixo + payoutFields.valor_variavel_total;
           
-          console.log(`   💰 PRO-RATA aplicado para ${sdr.name}: Fixo=R$ ${payoutFields.valor_fixo}, iFood=R$ ${payoutFields.ifood_mensal}, Total=R$ ${payoutFields.total_conta}`);
+          console.log(`   💰 PRO-RATA aplicado para ${sdr.name}: Fixo=R$ ${payoutFields.valor_fixo}, iFood=R$ ${payoutFields.ifood_mensal}, MetaAgend=${payoutFields.meta_agendadas_ajustada}, MetaTent=${payoutFields.meta_tentativas_ajustada}, Total=R$ ${payoutFields.total_conta}`);
         }
 
         // Upsert payout

@@ -10,6 +10,7 @@ interface CalculatedVariavelParams {
   diasUteisMes: number;
   sdrMetaDiaria: number;
   variavelTotal: number;
+  diasUteisTrabalhados?: number | null;
 }
 
 interface IndicatorValue {
@@ -37,11 +38,17 @@ export function useCalculatedVariavel({
   diasUteisMes,
   sdrMetaDiaria,
   variavelTotal,
+  diasUteisTrabalhados,
 }: CalculatedVariavelParams): CalculatedVariavelResult {
   return useMemo(() => {
     if (!metricas || metricas.length === 0 || !payout) {
       return { total: 0, indicators: [] };
     }
+
+    // Pro-rata ratio: if dias_uteis_trabalhados is set and less than full month
+    const proRataRatio = (diasUteisTrabalhados != null && diasUteisTrabalhados < diasUteisMes && diasUteisMes > 0)
+      ? diasUteisTrabalhados / diasUteisMes
+      : 1;
 
     const indicators: IndicatorValue[] = [];
     let total = 0;
@@ -99,12 +106,20 @@ export function useCalculatedVariavel({
         if (metrica.nome_metrica === 'agendamentos') {
           // Priority: payout.meta_agendadas_ajustada → compPlan.meta_reunioes_agendadas → sdrMetaDiaria * diasUteisMes
           metaAjustada = (payout as any)?.meta_agendadas_ajustada || compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
+          // Apply pro-rata if not already adjusted by edge function
+          if (proRataRatio < 1 && !(payout as any)?.meta_agendadas_ajustada) {
+            metaAjustada = Math.round(metaAjustada * proRataRatio);
+          }
         } else if (metrica.nome_metrica === 'realizadas') {
           // SINCRONIZADO COM Edge Function: Usar 70% das agendadas REAIS
           const agendadasReais = kpi?.reunioes_agendadas || 0;
           metaAjustada = Math.round(agendadasReais * 0.7);
         } else if (metrica.nome_metrica === 'tentativas') {
           metaAjustada = (payout as any).meta_tentativas_ajustada ?? (84 * diasUteisMes);
+          // Apply pro-rata if not already adjusted by edge function
+          if (proRataRatio < 1 && !(payout as any)?.meta_tentativas_ajustada) {
+            metaAjustada = Math.round(metaAjustada * proRataRatio);
+          }
         } else if (metrica.nome_metrica === 'organizacao') {
           metaAjustada = 100;
         }
@@ -147,5 +162,5 @@ export function useCalculatedVariavel({
     }
 
     return { total, indicators };
-  }, [metricas, kpi, payout, compPlan, diasUteisMes, sdrMetaDiaria, variavelTotal]);
+  }, [metricas, kpi, payout, compPlan, diasUteisMes, sdrMetaDiaria, variavelTotal, diasUteisTrabalhados]);
 }

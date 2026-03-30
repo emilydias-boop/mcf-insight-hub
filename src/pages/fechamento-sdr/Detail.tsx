@@ -153,6 +153,7 @@ const FechamentoSDRDetail = () => {
     diasUteisMes: diasUteisMesEarly,
     sdrMetaDiaria: sdrMetaDiariaEarly,
     variavelTotal: effectiveVariavelEarly,
+    diasUteisTrabalhados: payout?.dias_uteis_trabalhados,
   });
 
   const isAdmin = role === "admin";

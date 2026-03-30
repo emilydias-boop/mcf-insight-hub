@@ -223,7 +223,7 @@ export const useSdrPayouts = (anoMes: string, filters?: {
           )
         `)
         .not('sdr_id', 'is', null)
-        .eq('status', 'ativo')
+        .in('status', ['ativo', 'desligado'])
         .order('updated_at', { ascending: false });
       
       if (empError) throw empError;
@@ -274,8 +274,8 @@ export const useSdrPayouts = (anoMes: string, filters?: {
       
       // Apply filters
       if (filters) {
-        // Only show active SDRs
-        result = result.filter(p => p.sdr?.active !== false);
+        // Show active SDRs + inactive SDRs that have a payout (desligados with closing data)
+        result = result.filter(p => p.sdr?.active !== false || p.dias_uteis_trabalhados != null);
         
         // Exclude R2 Partners (sócios) from closing
         result = result.filter(p => {
