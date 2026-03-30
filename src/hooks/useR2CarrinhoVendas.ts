@@ -145,7 +145,7 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
         .select('*')
         .eq('product_category', 'parceria')
         .gte('sale_date', effectiveStart.toISOString())
-        .lte('sale_date', endOfDay(weekEnd).toISOString())
+        .lte('sale_date', effectiveEnd.toISOString())
         .order('sale_date', { ascending: false });
 
       // Construir filtro OR para emails e telefones
