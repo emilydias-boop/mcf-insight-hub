@@ -686,9 +686,9 @@ serve(async (req) => {
         const elegivelUltrameta = !dataAdmissaoDate || dataAdmissaoDate < inicioMesDate;
         
         if (!elegivelUltrameta) {
-          console.log(`   ⏭️ ${sdr.name} NÃO elegível para Ultrameta (admissão em ${dataAdmissao?.toISOString().split('T')[0]})`);
+          console.log(`   ⏭️ ${sdr.name} NÃO elegível para Ultrameta (admissão em ${dataAdmissaoDate?.toISOString().split('T')[0]})`);
         } else {
-          console.log(`   ✅ ${sdr.name} elegível para Ultrameta (admissão: ${dataAdmissao?.toISOString().split('T')[0] || 'antes do período'})`);
+          console.log(`   ✅ ${sdr.name} elegível para Ultrameta (admissão: ${dataAdmissaoDate?.toISOString().split('T')[0] || 'antes do período'})`);
         }
 
         // ===== BUSCAR CARGO_CATALOGO PARA CLOSERS =====
