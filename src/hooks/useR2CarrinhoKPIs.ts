@@ -49,15 +49,21 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
 
       if (emails.length === 0) {
         // Still need to fetch aprovados from operational window
-        const { data: opAprovados } = await supabase
-          .from('meeting_slot_attendees')
-          .select('id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)')
-          .eq('meeting_slot.meeting_type', 'r2')
-          .gte('meeting_slot.scheduled_at', boundaries.aprovados.start.toISOString())
-          .lte('meeting_slot.scheduled_at', boundaries.aprovados.end.toISOString())
-          .eq('r2_status_id', aprovadoStatusIdFallback);
+        const [{ data: statusOpts }, { data: opAprovados }] = await Promise.all([
+          supabase.from('r2_status_options').select('id, name').eq('is_active', true),
+          supabase
+            .from('meeting_slot_attendees')
+            .select('id, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)')
+            .eq('meeting_slot.meeting_type', 'r2')
+            .gte('meeting_slot.scheduled_at', boundaries.aprovados.start.toISOString())
+            .lte('meeting_slot.scheduled_at', boundaries.aprovados.end.toISOString()),
+        ]);
+        const apvId = (statusOpts || []).find(s =>
+          s.name.toLowerCase().includes('aprovado') || s.name.toLowerCase().includes('approved')
+        )?.id;
+        const apvCount = apvId ? (opAprovados || []).filter((a: any) => a.r2_status_id === apvId).length : 0;
 
-        return { contratosPagos: 0, r2Agendadas: 0, r2Realizadas: 0, foraDoCarrinho: 0, aprovados: opAprovados?.length || 0, pendentes: 0, emAnalise: 0 };
+        return { contratosPagos: 0, r2Agendadas: 0, r2Realizadas: 0, foraDoCarrinho: 0, aprovados: apvCount, pendentes: 0, emAnalise: 0 };
       }
 
       // ===== RESOLVE EMAILS → CONTACTS → R2 ATTENDEES (safra logic) =====
