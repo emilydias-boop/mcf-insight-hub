@@ -1,21 +1,27 @@
-import { useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { getWeekStartsOn } from "@/lib/businessDays";
 import { useActiveBU } from "@/hooks/useActiveBU";
-import { RefreshCw } from "lucide-react";
-import { ManualSaleAttributionDialog } from "@/components/closer/ManualSaleAttributionDialog";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CloserDetailHeader } from "@/components/closer/CloserDetailHeader";
-import { CloserDetailKPICards } from "@/components/closer/CloserDetailKPICards";
-import { CloserLeadsTable } from "@/components/closer/CloserLeadsTable";
+import { ManualSaleAttributionDialog } from "@/components/closer/ManualSaleAttributionDialog";
 
-import { CloserRankingBlock } from "@/components/closer/CloserRankingBlock";
+import { CloserDetailHeader } from "@/components/closer/CloserDetailHeader";
+import { CloserLeadsTable } from "@/components/closer/CloserLeadsTable";
 import { CloserRevenueTab } from "@/components/closer/CloserRevenueTab";
-import { useCloserDetailData } from "@/hooks/useCloserDetailData";
+
+import { SdrPerformanceFilters } from "@/components/sdr/SdrPerformanceFilters";
+import { SdrAutoSummary } from "@/components/sdr/SdrAutoSummary";
+import { SdrDetailKPICards } from "@/components/sdr/SdrDetailKPICards";
+import { SdrProjectionCard } from "@/components/sdr/SdrProjectionCard";
+import { SdrFunnelPanel } from "@/components/sdr/SdrFunnelPanel";
+import { SdrCumulativeChart } from "@/components/sdr/SdrCumulativeChart";
+import { SdrTeamComparisonPanel } from "@/components/sdr/SdrTeamComparisonPanel";
+import { SdrDailyBreakdownTable } from "@/components/sdr/SdrDailyBreakdownTable";
+
+import { useCloserPerformanceData } from "@/hooks/useCloserPerformanceData";
+import { ComparisonMode, MetaMode, computeCompDates } from "@/hooks/useSdrPerformanceData";
 
 export default function CloserMeetingsDetailPage() {
   const { closerId } = useParams<{ closerId: string }>();
@@ -24,25 +30,14 @@ export default function CloserMeetingsDetailPage() {
   const activeBU = useActiveBU();
   const wso = getWeekStartsOn(activeBU);
 
-
-
-  // Parse date range from query params
   const preset = searchParams.get("preset") || "month";
   const monthParam = searchParams.get("month");
 
-  // Calculate date range
-  const { startDate, endDate } = useMemo(() => {
+  // Initial dates from URL
+  const initialDates = useMemo(() => {
     const today = new Date();
-
-    if (preset === "today") {
-      return { startDate: startOfDay(today), endDate: endOfDay(today) };
-    }
-    if (preset === "week") {
-      return {
-        startDate: startOfWeek(today, { weekStartsOn: wso }),
-        endDate: endOfWeek(today, { weekStartsOn: wso }),
-      };
-    }
+    if (preset === "today") return { startDate: startOfDay(today), endDate: endOfDay(today) };
+    if (preset === "week") return { startDate: startOfWeek(today, { weekStartsOn: wso }), endDate: endOfWeek(today, { weekStartsOn: wso }) };
     if (preset === "custom") {
       const start = searchParams.get("start");
       const end = searchParams.get("end");
@@ -51,25 +46,47 @@ export default function CloserMeetingsDetailPage() {
         endDate: end ? parseISO(end) : endOfMonth(today),
       };
     }
-    // Default: month
     const baseDate = monthParam ? parseISO(monthParam + "-01") : today;
     return { startDate: startOfMonth(baseDate), endDate: endOfMonth(baseDate) };
-  }, [preset, monthParam, searchParams]);
+  }, [preset, monthParam, searchParams, wso]);
 
-  const {
-    closerInfo,
-    closerMetrics,
-    teamAverages,
-    ranking,
-    leads,
-    noShowLeads,
-    r2Leads,
-    isLoading,
-    refetch,
-  } = useCloserDetailData({
+  // Filters state
+  const [startDate, setStartDate] = useState(initialDates.startDate);
+  const [endDate, setEndDate] = useState(initialDates.endDate);
+  const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("prev_month");
+  const [metaMode, setMetaMode] = useState<MetaMode>("monthly_prorated");
+  const [customMeta, setCustomMeta] = useState<number | undefined>();
+
+  const { compStartDate, compEndDate } = useMemo(
+    () => computeCompDates(startDate, endDate, comparisonMode),
+    [startDate, endDate, comparisonMode]
+  );
+
+  const handleFiltersChange = useCallback(
+    (f: {
+      startDate: Date;
+      endDate: Date;
+      comparisonMode: ComparisonMode;
+      metaMode: MetaMode;
+      customMeta?: number;
+    }) => {
+      setStartDate(f.startDate);
+      setEndDate(f.endDate);
+      setComparisonMode(f.comparisonMode);
+      setMetaMode(f.metaMode);
+      setCustomMeta(f.customMeta);
+    },
+    []
+  );
+
+  const perfData = useCloserPerformanceData({
     closerId: closerId || "",
     startDate,
     endDate,
+    compStartDate,
+    compEndDate,
+    metaMode,
+    customMeta,
   });
 
   const handleBack = () => {
@@ -78,8 +95,6 @@ export default function CloserMeetingsDetailPage() {
     if (monthParam) params.set("month", monthParam);
     navigate(`/crm/reunioes-equipe?${params.toString()}`);
   };
-
-
 
   if (!closerId) {
     return (
@@ -90,64 +105,78 @@ export default function CloserMeetingsDetailPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-5 p-6">
       {/* Header */}
       <CloserDetailHeader
-        name={closerInfo?.name || "Carregando..."}
-        email={closerInfo?.email || ""}
-        color={closerInfo?.color}
-        meetingType={closerInfo?.meetingType}
+        name={perfData.closerInfo?.name || "Carregando..."}
+        email={perfData.closerInfo?.email || ""}
+        color={perfData.closerInfo?.color}
+        meetingType={perfData.closerInfo?.meetingType}
         startDate={startDate}
         endDate={endDate}
         onBack={handleBack}
       />
 
-      {/* Refresh button */}
-      <div className="flex justify-end gap-2">
-        {closerId && closerInfo && (
+      {/* Filters */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <SdrPerformanceFilters
+            startDate={startDate}
+            endDate={endDate}
+            comparisonMode={comparisonMode}
+            metaMode={metaMode}
+            customMeta={customMeta}
+            onFiltersChange={handleFiltersChange}
+            onRefresh={() => perfData.refetch()}
+            isLoading={perfData.isLoading}
+          />
+        </div>
+        {closerId && perfData.closerInfo && (
           <ManualSaleAttributionDialog
             closerId={closerId}
-            closerName={closerInfo.name}
-            onSuccess={() => refetch()}
+            closerName={perfData.closerInfo.name}
+            onSuccess={() => perfData.refetch()}
           />
         )}
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
-          <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? "animate-spin" : ""}`} />
-          Atualizar
-        </Button>
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview" className="space-y-6">
+      <Tabs defaultValue="overview" className="space-y-5">
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-          <TabsTrigger value="leads">Leads Realizados ({leads.length})</TabsTrigger>
-          <TabsTrigger value="noshows">No-Shows ({noShowLeads.length})</TabsTrigger>
-          <TabsTrigger value="r2">R2 Agendadas ({r2Leads.length})</TabsTrigger>
+          <TabsTrigger value="leads">Leads Realizados ({perfData.leads.length})</TabsTrigger>
+          <TabsTrigger value="noshows">No-Shows ({perfData.noShowLeads.length})</TabsTrigger>
+          <TabsTrigger value="r2">R2 Agendadas ({perfData.r2Leads.length})</TabsTrigger>
           <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
-          {/* KPI Cards */}
-          <CloserDetailKPICards
-            metrics={closerMetrics}
-            teamAverages={teamAverages}
-            isLoading={isLoading}
-          />
+        <TabsContent value="overview" className="space-y-5">
+          {/* Auto Summary */}
+          <SdrAutoSummary text={perfData.summaryText} isLoading={perfData.isLoading} />
 
-          {/* Ranking Block */}
-          <CloserRankingBlock
-            closerMetrics={closerMetrics}
-            ranking={ranking}
-            teamAverages={teamAverages}
-            isLoading={isLoading}
-          />
+          {/* KPI Cards + Projection side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
+            <SdrDetailKPICards metrics={perfData.metrics} isLoading={perfData.isLoading} />
+            <SdrProjectionCard data={perfData.projection} isLoading={perfData.isLoading} />
+          </div>
+
+          {/* Funnel + Daily chart side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <SdrFunnelPanel funnel={perfData.funnel} isLoading={perfData.isLoading} />
+            <SdrCumulativeChart dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
+          </div>
+
+          {/* Team Comparison */}
+          <SdrTeamComparisonPanel data={perfData.teamComparison} isLoading={perfData.isLoading} />
+
+          {/* Daily Breakdown Table */}
+          <SdrDailyBreakdownTable dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
         </TabsContent>
 
         <TabsContent value="leads">
           <Card className="bg-card border-border">
             <CardContent className="p-4">
-              <CloserLeadsTable leads={leads} isLoading={isLoading} />
+              <CloserLeadsTable leads={perfData.leads} isLoading={perfData.isLoading} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -155,7 +184,7 @@ export default function CloserMeetingsDetailPage() {
         <TabsContent value="noshows">
           <Card className="bg-card border-border">
             <CardContent className="p-4">
-              <CloserLeadsTable leads={noShowLeads} isLoading={isLoading} />
+              <CloserLeadsTable leads={perfData.noShowLeads} isLoading={perfData.isLoading} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -163,7 +192,7 @@ export default function CloserMeetingsDetailPage() {
         <TabsContent value="r2">
           <Card className="bg-card border-border">
             <CardContent className="p-4">
-              <CloserLeadsTable leads={r2Leads} isLoading={isLoading} showR1Sdr />
+              <CloserLeadsTable leads={perfData.r2Leads} isLoading={perfData.isLoading} showR1Sdr />
             </CardContent>
           </Card>
         </TabsContent>
