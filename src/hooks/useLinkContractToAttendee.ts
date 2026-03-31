@@ -17,6 +17,28 @@ export function useLinkContractToAttendee() {
 
   return useMutation({
     mutationFn: async ({ transactionId, attendeeId, dealId }: LinkContractParams) => {
+      // VERIFICAÇÃO: Bloquear vinculação de contrato para BUs que não utilizam (ex: Consórcio)
+      if (dealId) {
+        const { data: dealData } = await supabase
+          .from('crm_deals')
+          .select('origin_id')
+          .eq('id', dealId)
+          .maybeSingle();
+
+        if (dealData?.origin_id) {
+          const { data: buMapping } = await supabase
+            .from('bu_origin_mapping')
+            .select('bu')
+            .eq('entity_id', dealData.origin_id)
+            .limit(1)
+            .maybeSingle();
+
+          if (buMapping?.bu === 'consorcio') {
+            throw new Error('Consórcio não utiliza vinculação de contrato');
+          }
+        }
+      }
+
       // VERIFICAÇÃO: Evitar duplicatas - se deal_id já tem outro attendee pago, bloquear
       if (dealId) {
         const { data: existingPaid } = await supabase

@@ -1025,8 +1025,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       <span className="text-xs">Mover</span>
                     </Button>
                     
-                    {/* Vincular Contrato - Show for completed status without contract_paid */}
-                    {!isSdr && selectedParticipant.status === 'completed' && (
+                    {/* Vincular Contrato - Show for completed status without contract_paid (not for Consórcio) */}
+                    {!isSdr && activeBU !== 'consorcio' && selectedParticipant.status === 'completed' && (
                       <Button
                         variant="outline"
                         size="sm"
