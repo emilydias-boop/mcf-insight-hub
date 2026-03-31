@@ -21,6 +21,7 @@ interface AgendaMeetingRow {
   meeting_slot_id: string | null;
   attendee_status: string | null;
   sdr_email: string | null;
+  booked_at: string | null;
 }
 
 interface UseSdrMeetingsFromAgendaParams {
