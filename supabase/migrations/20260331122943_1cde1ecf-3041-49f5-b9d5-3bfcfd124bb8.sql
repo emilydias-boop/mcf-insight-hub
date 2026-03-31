@@ -1,0 +1,4 @@
+DELETE FROM deal_activities WHERE deal_id IN ('96a34752-a7f4-446d-85f1-6c4a98f24753', '8ad1887c-fad9-4e59-9911-19d98c721553', 'efa71336-a585-428b-b24e-b995cf4ea8b2');
+DELETE FROM lead_profiles WHERE contact_id IN ('559e6ca1-5549-46d0-b751-32bf59e8454a', '43b8e986-f0a3-4053-b6d3-0e6d23daf6c5', '268a115f-be21-40b9-aaa8-9b07ee8daed9');
+DELETE FROM crm_deals WHERE id IN ('96a34752-a7f4-446d-85f1-6c4a98f24753', '8ad1887c-fad9-4e59-9911-19d98c721553', 'efa71336-a585-428b-b24e-b995cf4ea8b2');
+DELETE FROM crm_contacts WHERE id IN ('559e6ca1-5549-46d0-b751-32bf59e8454a', '43b8e986-f0a3-4053-b6d3-0e6d23daf6c5', '268a115f-be21-40b9-aaa8-9b07ee8daed9');
