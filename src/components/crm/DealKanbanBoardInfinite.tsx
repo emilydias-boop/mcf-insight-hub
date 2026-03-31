@@ -172,7 +172,7 @@ export const DealKanbanBoardInfinite = ({
           
           // Log activity for stage change
           createActivity.mutate({
-            deal_id: (deal as any)?.clint_id || dealId,
+            deal_id: dealId,
             activity_type: 'stage_change',
             description: `Movido de "${oldStage?.stage_name || 'Estágio anterior'}" para "${newStage?.stage_name || 'Novo estágio'}"`,
             from_stage: oldStage?.stage_name || 'Estágio anterior',
