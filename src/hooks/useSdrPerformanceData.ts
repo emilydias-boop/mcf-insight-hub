@@ -143,6 +143,23 @@ export function useSdrPerformanceData({
   const detail = useSdrDetailData({ sdrEmail, startDate, endDate });
   const callMetricsQuery = useSdrCallMetrics(sdrEmail, startDate, endDate);
 
+  // Query for "Novos Leads" — deals created in the period owned by this SDR
+  const novosLeadsQuery = useQuery({
+    queryKey: ["sdr-novos-leads", sdrEmail, startDate.toISOString(), endDate.toISOString()],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("crm_deals")
+        .select("id", { count: "exact", head: true })
+        .ilike("owner_id", sdrEmail)
+        .gte("created_at", startDate.toISOString())
+        .lte("created_at", endDate.toISOString());
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!sdrEmail,
+  });
+  const novosLeads = novosLeadsQuery.data || 0;
+
   // Comparative period data
   const compData = useTeamMeetingsData({
     startDate: compStartDate,
