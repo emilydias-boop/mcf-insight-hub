@@ -1,0 +1,1 @@
+UPDATE meeting_slot_attendees SET status = 'completed', contract_paid_at = NULL WHERE id = '801a0bf4-18ad-4f3a-9023-deda067413c7'; UPDATE hubla_transactions SET linked_attendee_id = NULL WHERE id = '75be8224-c2a2-4c53-8b70-127d8ab68079';
