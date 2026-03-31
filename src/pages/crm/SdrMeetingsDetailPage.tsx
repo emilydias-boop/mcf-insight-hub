@@ -18,7 +18,7 @@ import { SdrCumulativeChart } from "@/components/sdr/SdrCumulativeChart";
 import { SdrTeamComparisonPanel } from "@/components/sdr/SdrTeamComparisonPanel";
 import { SdrDailyBreakdownTable } from "@/components/sdr/SdrDailyBreakdownTable";
 import { SdrLeadsTable } from "@/components/sdr/SdrLeadsTable";
-import { MeetingDetailsDrawer } from "@/components/sdr/MeetingDetailsDrawer";
+import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
 
 import {
   useSdrPerformanceData,
