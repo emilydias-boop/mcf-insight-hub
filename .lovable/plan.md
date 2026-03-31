@@ -1,44 +1,41 @@
 
 
-## Ajuste do Fluxo ANAMNESE-INCOMPLETA → ANAMNESE Completa
+## Bug Fix: Coluna errada na busca do estágio "Lead Gratuito"
 
-### Contexto atual
-- Endpoint `anamnese-incompleta`: SDR fixo = Antony, tag = `ANAMNESE-INCOMPLETA`
-- Endpoint `anamnese-mcf`: distribuição equitativa entre SDRs, tag = `ANAMNESE`
-- **Problema**: Quando o lead entra como incompleta (Antony) e depois preenche tudo (re-submit via `anamnese-mcf`), o código atual apenas faz merge de tags e atualiza `lead_profile`, mas **não muda o estágio** e não preserva o owner Antony (pois o endpoint `anamnese-mcf` usaria distribuição normal se criasse um novo deal)
+### Problema encontrado nos testes
 
-### Regras de negócio
-1. **Entrada incompleta**: Lead entra via `anamnese-incompleta` → estágio inicial da pipeline, tag `ANAMNESE-INCOMPLETA`, owner = Antony (fixo)
-2. **Completou depois**: Lead re-submete via `anamnese-mcf` → deal já existe → **atualizar info + custom_fields**, adicionar tag `ANAMNESE`, mover estágio para "Lead Gratuito", **manter owner Antony**
-3. **Nunca completou**: Permanece em incompleta com Antony até preencher ou ser movido manualmente
-4. **Entrada completa direta**: Lead entra direto via `anamnese-mcf` sem ter passado por incompleta → fluxo normal com distribuição equitativa
+Os 3 fluxos foram testados e 2 de 3 funcionaram corretamente:
 
-### Mudança técnica
+| Fluxo | Resultado | Status |
+|-------|-----------|--------|
+| Incompleto (entrada) | Owner = Antony, tag = ANAMNESE-INCOMPLETA, estágio = ANAMNESE INCOMPLETA | OK |
+| Incompleto → Completo | Owner = Antony (preservado), tags = ANAMNESE-INCOMPLETA + ANAMNESE, **estágio NÃO mudou** | BUG |
+| Completo direto | Owner = Carol (distribuição), tag = ANAMNESE, estágio = Lead Gratuito | OK |
+| Incompleto sem completar | Owner = Antony, tag = ANAMNESE-INCOMPLETA, estágio = ANAMNESE INCOMPLETA | OK |
 
-**Arquivo**: `supabase/functions/webhook-lead-receiver/index.ts`
+### Causa do bug
 
-**No bloco "deal já existe" (linhas ~327-364)**, adicionar lógica específica:
+Na linha 368 do `webhook-lead-receiver/index.ts`, a query busca o estágio usando `.ilike('name', 'Lead Gratuito')`, mas a coluna correta é `stage_name`:
 
 ```
-Se deal existente TEM tag "ANAMNESE-INCOMPLETA" E o endpoint atual é "anamnese-mcf":
-  1. Adicionar tag "ANAMNESE" ao deal
-  2. Atualizar custom_fields com dados completos do payload
-  3. Buscar stage "Lead Gratuito" na mesma origin
-  4. Mover deal para stage "Lead Gratuito"
-  5. Registrar deal_activity (stage_change)
-  6. NÃO alterar owner (permanece Antony)
-  7. Atualizar lead_profile normalmente
-  8. Retornar action: "anamnese_completed"
+// ERRADO (atual)
+.ilike('name', 'Lead Gratuito')
+
+// CORRETO
+.ilike('stage_name', 'Lead Gratuito')
 ```
 
-**Detalhes da implementação**:
-- Buscar `tags` e `stage_id` do deal existente (já busca `id`, adicionar `tags, stage_id, custom_fields, owner_id, owner_profile_id`)
-- Verificar se `currentTags` inclui `ANAMNESE-INCOMPLETA`
-- Buscar stage "Lead Gratuito" via query em `local_pipeline_stages` ou `crm_stages` com `stage_name ILIKE 'Lead Gratuito'` na `origin_id`
-- Fazer `update` no deal com: novo stage_id, tags merged, custom_fields merged, `stage_moved_at`
-- Inserir `deal_activities` com `activity_type: 'stage_change'`
+O `.maybeSingle()` retornou `null` silenciosamente, e o fallback `leadGratuitoStage?.id || existingDeal.stage_id` manteve o estágio original.
 
-### Arquivos afetados
-- `supabase/functions/webhook-lead-receiver/index.ts` — Adicionar lógica de "completar anamnese" no bloco de deal existente
-- Deploy da edge function após alteração
+### Correção
+
+**Arquivo**: `supabase/functions/webhook-lead-receiver/index.ts`, linha 368
+
+Trocar `.ilike('name', 'Lead Gratuito')` por `.ilike('stage_name', 'Lead Gratuito')`
+
+Depois, re-testar o fluxo incompleta → completa para confirmar que o deal move para o estágio correto (`d346320a-00b0-4e9f-89b6-149ad1c34061`).
+
+### Limpeza
+
+Remover os 3 deals de teste criados durante a validação.
 
