@@ -1,87 +1,100 @@
 
 
-## Auditoria do CRM — Inconsistências e Problemas Encontrados
+## Auditoria Completa do Fluxo CRM (Pipeline/Kanban)
 
-### Problemas identificados por análise de código
-
----
-
-### 1. Gráfico "Evolução Diária" mostra dados diários, não acumulados
-**Arquivo**: `src/components/sdr/SdrCumulativeChart.tsx` (linhas 15-21)
-
-O componente se chama "SdrCumulativeChart" e o título diz "Evolução Diária", mas plota `row.realized` (valor do dia) e `row.metaDiaria` (meta do dia) — ambos valores pontuais. O correto seria usar `row.accumulated` e `row.metaAccumulated` para mostrar a evolução acumulada, que é muito mais útil para acompanhar progresso vs meta ao longo do mês.
-
-**Correção**: Usar `accumulated` e `metaAccumulated` no chartData, renomear as labels para "Acumulado" e "Meta Acumulada".
+Após análise detalhada de todo o fluxo principal do CRM — Visão Geral, Negócios (Kanban), Contatos, Drawer de detalhes, criação de deals, drag-and-drop — identifiquei os seguintes problemas e pontos soltos:
 
 ---
 
-### 2. KPI "R1 Agendada" ausente nos cards mas presente no funil
-**Arquivo**: `src/hooks/useSdrPerformanceData.ts` (linhas 268-300)
+### Problema 1: Activity log usa `clint_id` em vez de UUID no `deal_id`
+**Arquivos**: `DealKanbanBoard.tsx` (linha 233), `DealKanbanBoardInfinite.tsx` (linha 175)
 
-O array `metrics` (que alimenta os KPI cards) pula de "Agendamentos" direto para "R1 Realizada", sem mostrar "R1 Agendada". No entanto, o funil (linhas 365-370) tem "R1 Agendada" como step. Isso cria uma desconexão — o gestor vê um número no funil que não aparece como KPI card.
+Ao arrastar um deal entre estágios, o `createActivity.mutate()` usa `deal.clint_id || dealId` como `deal_id`. O `clint_id` é um ID externo do Clint (string numérica), mas a tabela `deal_activities` espera o UUID do deal (`deal.id`). Isso causa:
+- Atividades "soltas" que não linkam ao deal correto
+- Timeline e histórico incompletos para deals que têm `clint_id`
 
-**Correção**: Adicionar KPI card para "R1 Agendada" entre "Agendamentos" e "R1 Realizada".
-
----
-
-### 3. Novos Leads no funil não faz refetch junto com os outros dados
-**Arquivo**: `src/hooks/useSdrPerformanceData.ts` (linhas 448-451)
-
-O `refetch` retornado só chama `detail.refetch()` e `compData.refetch()`, mas não chama `novosLeadsQuery.refetch()`. Quando o usuário clica em atualizar, o número de novos leads pode ficar desatualizado.
-
-**Correção**: Adicionar `novosLeadsQuery.refetch()` ao método refetch.
+**Correção**: Usar `dealId` (que é o UUID do Supabase) diretamente, sem o fallback para `clint_id`.
 
 ---
 
-### 4. Meeting click abre drawer limitado que perde dados do MeetingV2
-**Arquivo**: `src/pages/crm/SdrMeetingsDetailPage.tsx` (linhas 107-131)
+### Problema 2: `DealHistory` e `LeadFullTimeline` também recebem `clint_id`
+**Arquivo**: `DealDetailsDrawer.tsx` (linhas 204, 224)
 
-O `handleSelectMeeting` converte `MeetingV2` para `Meeting` (formato antigo), perdendo campos importantes como `attendee_id`, `meeting_slot_id`, `attendee_status`, `booked_at`, `tipo`. O drawer `MeetingDetailsDrawer` recebe dados incompletos.
+```tsx
+<LeadFullTimeline dealId={deal.clint_id} dealUuid={deal.id} ... />
+<DealHistory dealId={deal.clint_id} dealUuid={deal.id} ... />
+```
 
-**Correção**: Usar o drawer `SdrMeetingActionsDrawer` (já existe no componente `SelectedSdrLeadsPanel`) que aceita `MeetingV2` diretamente, ou atualizar o `MeetingDetailsDrawer` para aceitar `MeetingV2`.
+Esses componentes recebem `clint_id` como `dealId` primário. Se as queries internas filtram por `deal_id = clint_id`, podem não encontrar atividades que foram gravadas com UUID (ou vice-versa). A inconsistência entre os dois formatos de ID é um risco constante de dados "perdidos" no histórico.
 
----
-
-### 5. "Reuniões Equipe" não está na nav do CRM
-**Arquivo**: `src/pages/CRM.tsx` (linhas 21-33)
-
-A rota `/crm/reunioes-equipe` existe no App.tsx (linha 242) como rota top-level, mas NÃO está na navegação lateral do CRM (`CRM.tsx`). Está acessível pela sidebar do app (`AppSidebar.tsx` linha 126) mas não pela nav de tabs do CRM. Isso é intencional (é uma página standalone) mas pode confundir — o usuário na aba CRM não encontra o "Painel Comercial".
-
-**Ação**: Apenas documentar — parece intencional já que está na sidebar global.
+**Correção**: Verificar se `LeadFullTimeline` e `DealHistory` usam `dealUuid` como fallback e unificar para UUID.
 
 ---
 
-### 6. Meta de No-Show invertida no cálculo de gap
-**Arquivo**: `src/hooks/useSdrPerformanceData.ts` (linhas 284-295)
+### Problema 3: Drawer do Kanban não atualiza ao mover deal
+**Arquivo**: `DealKanbanBoard.tsx` (linhas 431-435)
 
-A meta de no-show está hardcoded em 30% e o `invertGap: true` funciona corretamente para mostrar "abaixo é bom". Porém, o `attainment` calcula `(taxaNoShow / 30) * 100`, o que significa que um SDR com 60% de no-show tem 200% de atingimento — confuso. Para métricas invertidas, o attainment deveria ser invertido também (ex: `(30 - taxaNoShow) / 30 * 100` ou similar).
+O `DealDetailsDrawer` recebe `dealId` e `open` mas não recebe callback de `onStageChange`. Se o drawer estiver aberto e o usuário arrastar outro deal (ou o mesmo), o drawer não refaz o fetch. O badge de estágio no header ficará desatualizado.
 
-**Correção**: Ajustar cálculo de attainment para métricas invertidas.
+**Correção**: Passar `key={selectedDealId}` no drawer para forçar remontagem, ou invalidar a query quando `onDragEnd` é chamado.
 
 ---
 
-### 7. Meta de contratos depende de R1 Realizada real, criando dependência circular
-**Arquivo**: `src/hooks/useSdrPerformanceData.ts` (linhas 231-232)
+### Problema 4: Visão Geral hardcoda `PIPELINE_ORIGIN_ID`
+**Arquivo**: `FunilDashboard.tsx` (linha 22)
 
-A meta de contratos é `Math.round(r1Realizada_real * 0.3)` — ou seja, a meta muda conforme o SDR realiza mais reuniões. Se o SDR realizou poucas reuniões, a meta fica baixa e ele "bate" fácil. Isso não é necessariamente um bug, mas a meta de contratos nunca é fixa — pode ser confuso.
+```tsx
+const PIPELINE_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
+```
 
-**Ação**: Documentar ou considerar meta fixa baseada na projeção.
+O Funil Dashboard usa um ID fixo de pipeline, ignorando completamente a BU ativa. Quando acessado via `/consorcio/crm` (BU Consórcio), mostra os dados do Incorporador. Deveria usar o `useActiveBU()` e `useBUPipelineMap()` para resolver a pipeline correta.
+
+**Correção**: Importar `useActiveBU` e `useBUPipelineMap`, resolver a pipeline padrão da BU ativa, e usar como `originId` no `useClintFunnel`.
+
+---
+
+### Problema 5: Contatos não filtra por BU
+**Arquivo**: `Contatos.tsx`
+
+A página de Contatos não aplica filtro de BU — mostra todos os contatos de todas as BUs. O hook `useContactsEnriched` busca contatos globalmente. Enquanto o Kanban (Negócios) filtra por `originId`, a aba de Contatos não tem essa restrição.
+
+**Ação**: Documentar como comportamento intencional (contatos são globais) ou adicionar filtro por pipeline da BU ativa.
+
+---
+
+### Problema 6: Criar deal sem owner em pipelines com distribuição ativa
+**Arquivo**: `DealFormDialog.tsx`
+
+O formulário de "Novo Negócio" permite criar deals sem `owner_id`. Em pipelines com distribuição automática de leads configurada, isso cria um deal "órfão" que não entra no fluxo normal de distribuição.
+
+**Ação**: Documentar — este é provavelmente intencional para admin/managers que criam deals manualmente.
+
+---
+
+### Problema 7: Tooltip do card trava em hover (duplo TooltipProvider)
+**Arquivo**: `DealKanbanCard.tsx` (linhas 292-293, 370-379)
+
+O componente usa um `TooltipProvider` + `Tooltip` envolvendo o card inteiro (para mostrar info do contato), mas também usa tooltips internos para "Outside" e outras badges. Tooltips aninhados podem causar comportamento errático — o tooltip externo pode interferir nos internos.
+
+**Ação**: Menor prioridade — funciona na maioria dos casos mas pode causar problemas pontuais.
 
 ---
 
 ## Plano de Correções (por prioridade)
 
-### Fase 1 — Correções críticas de dados
-1. **Corrigir gráfico Evolução Diária** — Usar `accumulated`/`metaAccumulated` em `SdrCumulativeChart.tsx`
-2. **Adicionar refetch de novosLeads** — Em `useSdrPerformanceData.ts`
-3. **Adicionar KPI "R1 Agendada"** — Em `useSdrPerformanceData.ts` no array metrics
+### Fase 1 — Integridade de dados (crítico)
+1. **Corrigir `deal_id` no log de atividades** — Usar UUID em vez de `clint_id` em `DealKanbanBoard.tsx` e `DealKanbanBoardInfinite.tsx`
+2. **Verificar e corrigir `DealHistory`/`LeadFullTimeline`** — Garantir que queries usam UUID como primário
 
-### Fase 2 — Melhorias de UX
-4. **Corrigir attainment invertido do No-Show** — Em `useSdrPerformanceData.ts`
-5. **Melhorar drawer de meeting** — Usar `SdrMeetingActionsDrawer` em vez de converter para formato antigo
+### Fase 2 — Consistência de BU
+3. **FunilDashboard usar BU ativa** — Substituir `PIPELINE_ORIGIN_ID` hardcoded por pipeline da BU ativa
+
+### Fase 3 — UX (menor)
+4. **Drawer refetch após drag** — Garantir que o drawer atualiza dados após mover um deal
 
 ### Arquivos afetados
-- `src/components/sdr/SdrCumulativeChart.tsx` — Usar dados acumulados
-- `src/hooks/useSdrPerformanceData.ts` — Refetch novos leads, KPI R1 Agendada, attainment No-Show
-- `src/pages/crm/SdrMeetingsDetailPage.tsx` — Drawer de meeting melhorado
+- `src/components/crm/DealKanbanBoard.tsx` — Corrigir `deal_id` no `createActivity`
+- `src/components/crm/DealKanbanBoardInfinite.tsx` — Mesma correção
+- `src/components/crm/DealDetailsDrawer.tsx` — Verificar uso de `clint_id` vs UUID
+- `src/components/crm/FunilDashboard.tsx` — Usar BU ativa em vez de ID hardcoded
 
