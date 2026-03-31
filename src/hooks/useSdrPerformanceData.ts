@@ -286,7 +286,7 @@ export function useSdrPerformanceData({
         key: "taxaNoShow",
         realized: agend > 0 ? (noshows / agend) * 100 : 0,
         meta: 30,
-        attainment: agend > 0 ? ((noshows / agend) * 100 / 30) * 100 : 0,
+        attainment: agend > 0 ? Math.max(0, ((30 - (noshows / agend) * 100) / 30) * 100) : 100,
         gap: agend > 0 ? (noshows / agend) * 100 - 30 : 0,
         compValue: compSdrMetrics ? (compSdrMetrics.agendamentos > 0 ? (compSdrMetrics.noShows / compSdrMetrics.agendamentos) * 100 : 0) : null,
         compVariation: null,
