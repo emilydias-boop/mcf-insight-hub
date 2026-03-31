@@ -1132,7 +1132,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             </AlertDialog>
 
             {/* Delete button - Only visible for coordenador and above */}
-            {(isPending || activeMeeting.status === 'no_show') && canDeleteMeeting && (
+            {canDeleteMeeting && (
               <>
                 <Separator />
                 <AlertDialog>
