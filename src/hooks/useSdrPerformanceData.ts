@@ -267,7 +267,7 @@ export function useSdrPerformanceData({
 
     return [
       makeMetric("Agendamentos", "agendamentos", agend, metas.agendMeta, "agendamentos"),
-      
+      makeMetric("R1 Agendada", "r1Agendada", r1ag, metas.agendMeta, "r1Agendada"),
       makeMetric("R1 Realizada", "r1Realizada", r1re, metas.r1RealizadaMeta, "r1Realizada"),
       makeMetric("Contratos Pagos", "contratos", contr, metas.contratosMeta, "contratos"),
       {
