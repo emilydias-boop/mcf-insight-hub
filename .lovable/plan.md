@@ -1,69 +1,70 @@
 
 
-## Auditoria do Fluxo de Entrada de Leads na Pipeline
+## Replicar Dashboard de Performance Individual do SDR para Closers
 
-Após análise completa do fluxo de entrada de leads (webhook → criação de deal → exibição no Kanban → drawer de detalhes), identifiquei os seguintes problemas:
+### O que muda
 
----
+A página de detalhe do Closer (`CloserMeetingsDetailPage`) passará de ter apenas KPI cards + ranking para ter o mesmo layout completo do SDR:
+- Filtros de período/comparação/meta
+- Resumo automático textual
+- KPI Cards com meta, attainment, barra de progresso e comparação
+- Projeção do Período (card lateral)
+- Funil Individual (R1 Agendada → R1 Realizada → Contratos)
+- Gráfico de Evolução Diária (acumulado vs meta)
+- Comparação com o Time
+- Tabela de Breakdown Diário
 
-### Problema 1 (CRÍTICO): Deduplicação de contrato pago quebrada — coluna errada
-**Arquivo**: `supabase/functions/webhook-lead-receiver/index.ts` (linhas 919-923)
+### Abordagem técnica
 
-A função `getContractPaidStageIds` busca em `crm_stages` usando `.ilike('name', '%contrato%pago%')`, mas a coluna correta é `stage_name`. O campo `name` não existe na tabela `crm_stages`.
+Os componentes visuais do SDR (`SdrProjectionCard`, `SdrFunnelPanel`, `SdrCumulativeChart`, `SdrTeamComparisonPanel`, `SdrDailyBreakdownTable`, `SdrAutoSummary`, `SdrPerformanceFilters`, `SdrDetailKPICards`) já usam interfaces genéricas (`ProjectionData`, `DailyRow`, `MetricWithMeta`). Serão reutilizados diretamente — sem criar componentes duplicados.
 
-Resultado: a query retorna array vazio, e o filtro de deduplicação que deveria bloquear leads que já pagaram contrato **nunca funciona**. Leads com contrato pago podem receber novos deals duplicados via webhook.
+### Arquivos a criar
 
-Todos os outros Edge Functions (hubla-webhook-handler, webhook-make-contrato) usam `stage_name` corretamente.
+**1. `src/hooks/useCloserPerformanceData.ts`** — Hook central que produz o mesmo shape de `SdrPerformanceData`:
+- Consome `useCloserDetailData` (já existente) para métricas base
+- Calcula `MetricWithMeta[]` para: R1 Agendada, R1 Realizada, No-Show, Taxa No-Show, Contrato Pago, Outside, Taxa Conversão, R2 Agendada
+- Calcula `ProjectionData` baseado em R1 Agendada (meta = reuniões alocadas por dia × dias úteis)
+- Calcula `DailyRow[]` agrupando `allLeads` por `scheduled_at` (data da reunião)
+- Calcula `funnel` = R1 Agendada → R1 Realizada → Contratos
+- Calcula `teamComparison` usando `teamAverages` e `ranking` do `useCloserDetailData`
+- Gera `summaryText` automático
+- Aceita `comparisonMode` e `metaMode` como o SDR
+- Meta diária do closer: derivada de configuração ou fallback (ex: 10 reuniões/dia)
 
-**Correção**: Trocar `.ilike('name', '%contrato%pago%')` por `.ilike('stage_name', '%contrato%pago%')` na linha 923.
+### Arquivos a modificar
 
----
+**2. `src/pages/crm/CloserMeetingsDetailPage.tsx`** — Refatorar para espelhar `SdrMeetingsDetailPage`:
+- Adicionar state de filtros (`comparisonMode`, `metaMode`, `customMeta`)
+- Usar `useCloserPerformanceData` em vez de `useCloserDetailData` diretamente
+- Renderizar: `SdrPerformanceFilters`, `SdrAutoSummary`, `SdrDetailKPICards` + `SdrProjectionCard`, `SdrFunnelPanel` + `SdrCumulativeChart`, `SdrTeamComparisonPanel`, `SdrDailyBreakdownTable`
+- Manter tabs de Leads/No-Shows/R2/Faturamento como estão
+- Manter `ManualSaleAttributionDialog`
 
-### Problema 2: Formulário manual não verifica duplicatas
-**Arquivo**: `src/components/crm/DealFormDialog.tsx` (linhas 146-200)
+### Detalhes das métricas do Closer
 
-Ao criar um negócio manualmente via "Novo Negócio", o formulário cria contato + deal sem verificar se já existe um contato com mesmo email/telefone ou um deal na mesma pipeline. Isso pode gerar duplicatas quando o gestor cria um deal para um lead que já entrou via webhook.
+| Métrica | Valor | Meta |
+|---------|-------|------|
+| R1 Agendada | `closerMetrics.r1_agendada` | metaDiária × diasÚteis |
+| R1 Realizada | `closerMetrics.r1_realizada` | 70% do R1 Agendada real |
+| Contratos Pagos | `closerMetrics.contrato_pago` | 30% do R1 Realizada real |
+| Taxa Conversão | contratos/realizadas×100 | 30% |
+| Taxa No-Show | noshow/agendada×100 | máx 30% (invertido) |
+| Outside | `closerMetrics.outside` | sem meta |
+| R2 Agendada | `closerMetrics.r2_agendada` | 100% dos contratos |
 
-**Correção**: Antes de criar, buscar contato existente por email/telefone e verificar se já existe deal na mesma origin. Se existir, reusar o contato e alertar sobre deal duplicado.
+### Projeção
 
----
+Baseada em R1 Agendada — mesmo cálculo do SDR (ritmo × dias úteis totais).
 
-### Problema 3: Notificações de novo lead só para SDRs
-**Arquivo**: `src/hooks/useNewLeadNotifications.ts` (linha 18)
+### Funil
 
-O hook `useNewLeadNotifications` só ativa para `isSdrRole(role)`. Gestores e admins (que estão na tela do Kanban) não recebem notificação em tempo real de novos leads. O Kanban não atualiza automaticamente para eles.
+R1 Agendada → R1 Realizada → Contratos Pagos (3 passos, sem "Novos Leads" pois closer não prospecta).
 
-**Correção**: Remover a restrição de role ou adicionar roles de gestão, e garantir que o `queryClient.invalidateQueries` rode para manter o Kanban atualizado.
+### Evolução Diária
 
----
+Agrupa `allLeads` (reuniões do closer) por data de `scheduled_at`, calcula acumulado vs meta acumulada por dia útil.
 
-### Problema 4: Drawer já corrigido para usar UUID
-O `DealDetailsDrawer` agora passa `deal.id` (UUID) tanto para `LeadFullTimeline` quanto para `DealHistory`. Isso está correto após a correção anterior. Sem ação necessária.
+### Comparação com o Time
 
----
-
-### Problema 5: Webhook não valida stage_id contra crm_stages corretamente
-**Arquivo**: `supabase/functions/webhook-lead-receiver/index.ts` (linhas 106-152)
-
-O webhook primeiro busca em `crm_stages`, depois em `local_pipeline_stages`. Se o `endpoint.stage_id` aponta para `local_pipeline_stages`, o webhook tenta buscar em `crm_stages` primeiro (falha), depois faz fallback para `local_pipeline_stages` buscando pelo `origin_id` (primeira stage ativa) — mas isso pode retornar uma stage diferente da configurada. O stage_id do endpoint pode ser ignorado silenciosamente.
-
-**Ação**: Menor prioridade — funciona na prática porque a maioria dos endpoints usa `crm_stages`.
-
----
-
-## Plano de Correções
-
-### Fase 1 — Bug crítico de dados
-1. **Corrigir coluna na deduplicação** — Trocar `name` por `stage_name` em `getContractPaidStageIds` no `webhook-lead-receiver`
-
-### Fase 2 — Integridade de dados
-2. **Deduplicação no formulário manual** — Verificar contato existente antes de criar novo em `DealFormDialog.tsx`
-
-### Fase 3 — UX
-3. **Notificações para gestores** — Expandir `useNewLeadNotifications` para incluir admin/manager
-
-### Arquivos afetados
-- `supabase/functions/webhook-lead-receiver/index.ts` — Corrigir coluna `name` → `stage_name`
-- `src/components/crm/DealFormDialog.tsx` — Adicionar verificação de duplicatas
-- `src/hooks/useNewLeadNotifications.ts` — Remover restrição de role SDR
+Usa `allClosers` do `useCloserDetailData` para calcular médias e ranking em: R1 Realizada, Contrato Pago, Taxa Conversão, Taxa No-Show.
 
