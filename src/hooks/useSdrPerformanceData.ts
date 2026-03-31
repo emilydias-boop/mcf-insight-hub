@@ -334,7 +334,7 @@ export function useSdrPerformanceData({
       const dateStr = format(date, "yyyy-MM-dd");
       const isBusinessDay = isDiaUtil(date);
       const realized = meetings.filter(
-        (m) => m.data_agendamento?.substring(0, 10) === dateStr
+        (m) => (m.booked_at || m.scheduled_at || m.data_agendamento)?.substring(0, 10) === dateStr
       ).length;
       accumulated += realized;
       if (isBusinessDay) metaAcc += md;
