@@ -1,43 +1,44 @@
 
 
-## Filtro Avançado de Tags — Lógica E/OU com "Possui" e "Não possui"
+## Ajuste do Fluxo ANAMNESE-INCOMPLETA → ANAMNESE Completa
 
-### O que será construído
-Substituir o filtro de tags atual (simples checklist) por um filtro avançado inspirado no Clint CRM, com:
+### Contexto atual
+- Endpoint `anamnese-incompleta`: SDR fixo = Antony, tag = `ANAMNESE-INCOMPLETA`
+- Endpoint `anamnese-mcf`: distribuição equitativa entre SDRs, tag = `ANAMNESE`
+- **Problema**: Quando o lead entra como incompleta (Antony) e depois preenche tudo (re-submit via `anamnese-mcf`), o código atual apenas faz merge de tags e atualiza `lead_profile`, mas **não muda o estágio** e não preserva o owner Antony (pois o endpoint `anamnese-mcf` usaria distribuição normal se criasse um novo deal)
 
-1. **Modo E / OU** — Toggle entre critério AND (todas as condições) e OR (qualquer condição)
-2. **Condições por tag** — Cada tag adicionada pode ser "Possui a tag X" ou "Não possui a tag X"
-3. **Múltiplas condições** — Adicionar várias regras de tag combinadas pelo operador escolhido
-4. **Botão "Limpar filtros"** para resetar
+### Regras de negócio
+1. **Entrada incompleta**: Lead entra via `anamnese-incompleta` → estágio inicial da pipeline, tag `ANAMNESE-INCOMPLETA`, owner = Antony (fixo)
+2. **Completou depois**: Lead re-submete via `anamnese-mcf` → deal já existe → **atualizar info + custom_fields**, adicionar tag `ANAMNESE`, mover estágio para "Lead Gratuito", **manter owner Antony**
+3. **Nunca completou**: Permanece em incompleta com Antony até preencher ou ser movido manualmente
+4. **Entrada completa direta**: Lead entra direto via `anamnese-mcf` sem ter passado por incompleta → fluxo normal com distribuição equitativa
 
-### Exemplo de uso
-- Filtro: `E` → "Possui tag ANAMNESE" + "Não possui tag entrou-grupo" → mostra apenas deals com ANAMNESE que NÃO têm "entrou-grupo"
-- Filtro: `OU` → "Possui tag A010" OU "Possui tag ANAMNESE" → mostra deals com qualquer uma das duas
+### Mudança técnica
 
-### Mudanças técnicas
+**Arquivo**: `supabase/functions/webhook-lead-receiver/index.ts`
 
-**1. Novo tipo de filtro** (`DealFiltersState` em `DealFilters.tsx`)
-- Substituir `selectedTags: string[]` por `tagFilters: TagFilterRule[]`
-- `TagFilterRule = { tag: string; mode: 'has' | 'not_has' }`
-- Adicionar `tagOperator: 'and' | 'or'` (default: `'and'`)
+**No bloco "deal já existe" (linhas ~327-364)**, adicionar lógica específica:
 
-**2. Novo componente `TagFilterPopover.tsx`** — Reescrever com:
-- Toggle E/OU no topo
-- Lista de condições adicionadas (com botão X para remover cada)
-- Seletor de tag (busca + lista) com opção "Possui tag" / "Não possui tag"
-- Botão "Limpar filtros"
+```
+Se deal existente TEM tag "ANAMNESE-INCOMPLETA" E o endpoint atual é "anamnese-mcf":
+  1. Adicionar tag "ANAMNESE" ao deal
+  2. Atualizar custom_fields com dados completos do payload
+  3. Buscar stage "Lead Gratuito" na mesma origin
+  4. Mover deal para stage "Lead Gratuito"
+  5. Registrar deal_activity (stage_change)
+  6. NÃO alterar owner (permanece Antony)
+  7. Atualizar lead_profile normalmente
+  8. Retornar action: "anamnese_completed"
+```
 
-**3. Lógica de filtragem** (`Negocios.tsx`, linhas ~500-527)
-- Se `tagOperator === 'and'`: todas as regras devem ser satisfeitas
-- Se `tagOperator === 'or'`: pelo menos uma regra deve ser satisfeita
-- Regra `has`: deal DEVE ter a tag
-- Regra `not_has`: deal NÃO DEVE ter a tag
-
-**4. Reset** — Atualizar `emptyFilters` para incluir `tagFilters: [], tagOperator: 'and'`
+**Detalhes da implementação**:
+- Buscar `tags` e `stage_id` do deal existente (já busca `id`, adicionar `tags, stage_id, custom_fields, owner_id, owner_profile_id`)
+- Verificar se `currentTags` inclui `ANAMNESE-INCOMPLETA`
+- Buscar stage "Lead Gratuito" via query em `local_pipeline_stages` ou `crm_stages` com `stage_name ILIKE 'Lead Gratuito'` na `origin_id`
+- Fazer `update` no deal com: novo stage_id, tags merged, custom_fields merged, `stage_moved_at`
+- Inserir `deal_activities` com `activity_type: 'stage_change'`
 
 ### Arquivos afetados
-- `src/components/crm/TagFilterPopover.tsx` — Reescrever completamente
-- `src/components/crm/DealFilters.tsx` — Atualizar tipo e props
-- `src/pages/crm/Negocios.tsx` — Atualizar lógica de filtragem e estado inicial
-- `src/components/relatorios/ControleDiegoPanel.tsx` — Adaptar uso do componente (compatibilidade)
+- `supabase/functions/webhook-lead-receiver/index.ts` — Adicionar lógica de "completar anamnese" no bloco de deal existente
+- Deploy da edge function após alteração
 
