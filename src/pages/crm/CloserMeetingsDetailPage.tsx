@@ -16,7 +16,7 @@ import { SdrAutoSummary } from "@/components/sdr/SdrAutoSummary";
 import { SdrDetailKPICards } from "@/components/sdr/SdrDetailKPICards";
 import { SdrProjectionCard } from "@/components/sdr/SdrProjectionCard";
 import { SdrFunnelPanel } from "@/components/sdr/SdrFunnelPanel";
-import { SdrCumulativeChart } from "@/components/sdr/SdrCumulativeChart";
+import { CloserDailyChart } from "@/components/closer/CloserDailyChart";
 import { SdrTeamComparisonPanel } from "@/components/sdr/SdrTeamComparisonPanel";
 import { CloserDailyBreakdownTable } from "@/components/closer/CloserDailyBreakdownTable";
 
