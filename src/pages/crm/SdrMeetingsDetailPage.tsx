@@ -27,7 +27,6 @@ import {
   MetaMode,
 } from "@/hooks/useSdrPerformanceData";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
-import { Meeting } from "@/hooks/useSdrMeetings";
 
 export default function SdrMeetingsDetailPage() {
   const { sdrEmail } = useParams<{ sdrEmail: string }>();
