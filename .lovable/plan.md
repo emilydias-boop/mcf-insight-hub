@@ -1,100 +1,69 @@
 
 
-## Auditoria Completa do Fluxo CRM (Pipeline/Kanban)
+## Auditoria do Fluxo de Entrada de Leads na Pipeline
 
-Após análise detalhada de todo o fluxo principal do CRM — Visão Geral, Negócios (Kanban), Contatos, Drawer de detalhes, criação de deals, drag-and-drop — identifiquei os seguintes problemas e pontos soltos:
-
----
-
-### Problema 1: Activity log usa `clint_id` em vez de UUID no `deal_id`
-**Arquivos**: `DealKanbanBoard.tsx` (linha 233), `DealKanbanBoardInfinite.tsx` (linha 175)
-
-Ao arrastar um deal entre estágios, o `createActivity.mutate()` usa `deal.clint_id || dealId` como `deal_id`. O `clint_id` é um ID externo do Clint (string numérica), mas a tabela `deal_activities` espera o UUID do deal (`deal.id`). Isso causa:
-- Atividades "soltas" que não linkam ao deal correto
-- Timeline e histórico incompletos para deals que têm `clint_id`
-
-**Correção**: Usar `dealId` (que é o UUID do Supabase) diretamente, sem o fallback para `clint_id`.
+Após análise completa do fluxo de entrada de leads (webhook → criação de deal → exibição no Kanban → drawer de detalhes), identifiquei os seguintes problemas:
 
 ---
 
-### Problema 2: `DealHistory` e `LeadFullTimeline` também recebem `clint_id`
-**Arquivo**: `DealDetailsDrawer.tsx` (linhas 204, 224)
+### Problema 1 (CRÍTICO): Deduplicação de contrato pago quebrada — coluna errada
+**Arquivo**: `supabase/functions/webhook-lead-receiver/index.ts` (linhas 919-923)
 
-```tsx
-<LeadFullTimeline dealId={deal.clint_id} dealUuid={deal.id} ... />
-<DealHistory dealId={deal.clint_id} dealUuid={deal.id} ... />
-```
+A função `getContractPaidStageIds` busca em `crm_stages` usando `.ilike('name', '%contrato%pago%')`, mas a coluna correta é `stage_name`. O campo `name` não existe na tabela `crm_stages`.
 
-Esses componentes recebem `clint_id` como `dealId` primário. Se as queries internas filtram por `deal_id = clint_id`, podem não encontrar atividades que foram gravadas com UUID (ou vice-versa). A inconsistência entre os dois formatos de ID é um risco constante de dados "perdidos" no histórico.
+Resultado: a query retorna array vazio, e o filtro de deduplicação que deveria bloquear leads que já pagaram contrato **nunca funciona**. Leads com contrato pago podem receber novos deals duplicados via webhook.
 
-**Correção**: Verificar se `LeadFullTimeline` e `DealHistory` usam `dealUuid` como fallback e unificar para UUID.
+Todos os outros Edge Functions (hubla-webhook-handler, webhook-make-contrato) usam `stage_name` corretamente.
 
----
-
-### Problema 3: Drawer do Kanban não atualiza ao mover deal
-**Arquivo**: `DealKanbanBoard.tsx` (linhas 431-435)
-
-O `DealDetailsDrawer` recebe `dealId` e `open` mas não recebe callback de `onStageChange`. Se o drawer estiver aberto e o usuário arrastar outro deal (ou o mesmo), o drawer não refaz o fetch. O badge de estágio no header ficará desatualizado.
-
-**Correção**: Passar `key={selectedDealId}` no drawer para forçar remontagem, ou invalidar a query quando `onDragEnd` é chamado.
+**Correção**: Trocar `.ilike('name', '%contrato%pago%')` por `.ilike('stage_name', '%contrato%pago%')` na linha 923.
 
 ---
 
-### Problema 4: Visão Geral hardcoda `PIPELINE_ORIGIN_ID`
-**Arquivo**: `FunilDashboard.tsx` (linha 22)
+### Problema 2: Formulário manual não verifica duplicatas
+**Arquivo**: `src/components/crm/DealFormDialog.tsx` (linhas 146-200)
 
-```tsx
-const PIPELINE_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
-```
+Ao criar um negócio manualmente via "Novo Negócio", o formulário cria contato + deal sem verificar se já existe um contato com mesmo email/telefone ou um deal na mesma pipeline. Isso pode gerar duplicatas quando o gestor cria um deal para um lead que já entrou via webhook.
 
-O Funil Dashboard usa um ID fixo de pipeline, ignorando completamente a BU ativa. Quando acessado via `/consorcio/crm` (BU Consórcio), mostra os dados do Incorporador. Deveria usar o `useActiveBU()` e `useBUPipelineMap()` para resolver a pipeline correta.
-
-**Correção**: Importar `useActiveBU` e `useBUPipelineMap`, resolver a pipeline padrão da BU ativa, e usar como `originId` no `useClintFunnel`.
+**Correção**: Antes de criar, buscar contato existente por email/telefone e verificar se já existe deal na mesma origin. Se existir, reusar o contato e alertar sobre deal duplicado.
 
 ---
 
-### Problema 5: Contatos não filtra por BU
-**Arquivo**: `Contatos.tsx`
+### Problema 3: Notificações de novo lead só para SDRs
+**Arquivo**: `src/hooks/useNewLeadNotifications.ts` (linha 18)
 
-A página de Contatos não aplica filtro de BU — mostra todos os contatos de todas as BUs. O hook `useContactsEnriched` busca contatos globalmente. Enquanto o Kanban (Negócios) filtra por `originId`, a aba de Contatos não tem essa restrição.
+O hook `useNewLeadNotifications` só ativa para `isSdrRole(role)`. Gestores e admins (que estão na tela do Kanban) não recebem notificação em tempo real de novos leads. O Kanban não atualiza automaticamente para eles.
 
-**Ação**: Documentar como comportamento intencional (contatos são globais) ou adicionar filtro por pipeline da BU ativa.
-
----
-
-### Problema 6: Criar deal sem owner em pipelines com distribuição ativa
-**Arquivo**: `DealFormDialog.tsx`
-
-O formulário de "Novo Negócio" permite criar deals sem `owner_id`. Em pipelines com distribuição automática de leads configurada, isso cria um deal "órfão" que não entra no fluxo normal de distribuição.
-
-**Ação**: Documentar — este é provavelmente intencional para admin/managers que criam deals manualmente.
+**Correção**: Remover a restrição de role ou adicionar roles de gestão, e garantir que o `queryClient.invalidateQueries` rode para manter o Kanban atualizado.
 
 ---
 
-### Problema 7: Tooltip do card trava em hover (duplo TooltipProvider)
-**Arquivo**: `DealKanbanCard.tsx` (linhas 292-293, 370-379)
-
-O componente usa um `TooltipProvider` + `Tooltip` envolvendo o card inteiro (para mostrar info do contato), mas também usa tooltips internos para "Outside" e outras badges. Tooltips aninhados podem causar comportamento errático — o tooltip externo pode interferir nos internos.
-
-**Ação**: Menor prioridade — funciona na maioria dos casos mas pode causar problemas pontuais.
+### Problema 4: Drawer já corrigido para usar UUID
+O `DealDetailsDrawer` agora passa `deal.id` (UUID) tanto para `LeadFullTimeline` quanto para `DealHistory`. Isso está correto após a correção anterior. Sem ação necessária.
 
 ---
 
-## Plano de Correções (por prioridade)
+### Problema 5: Webhook não valida stage_id contra crm_stages corretamente
+**Arquivo**: `supabase/functions/webhook-lead-receiver/index.ts` (linhas 106-152)
 
-### Fase 1 — Integridade de dados (crítico)
-1. **Corrigir `deal_id` no log de atividades** — Usar UUID em vez de `clint_id` em `DealKanbanBoard.tsx` e `DealKanbanBoardInfinite.tsx`
-2. **Verificar e corrigir `DealHistory`/`LeadFullTimeline`** — Garantir que queries usam UUID como primário
+O webhook primeiro busca em `crm_stages`, depois em `local_pipeline_stages`. Se o `endpoint.stage_id` aponta para `local_pipeline_stages`, o webhook tenta buscar em `crm_stages` primeiro (falha), depois faz fallback para `local_pipeline_stages` buscando pelo `origin_id` (primeira stage ativa) — mas isso pode retornar uma stage diferente da configurada. O stage_id do endpoint pode ser ignorado silenciosamente.
 
-### Fase 2 — Consistência de BU
-3. **FunilDashboard usar BU ativa** — Substituir `PIPELINE_ORIGIN_ID` hardcoded por pipeline da BU ativa
+**Ação**: Menor prioridade — funciona na prática porque a maioria dos endpoints usa `crm_stages`.
 
-### Fase 3 — UX (menor)
-4. **Drawer refetch após drag** — Garantir que o drawer atualiza dados após mover um deal
+---
+
+## Plano de Correções
+
+### Fase 1 — Bug crítico de dados
+1. **Corrigir coluna na deduplicação** — Trocar `name` por `stage_name` em `getContractPaidStageIds` no `webhook-lead-receiver`
+
+### Fase 2 — Integridade de dados
+2. **Deduplicação no formulário manual** — Verificar contato existente antes de criar novo em `DealFormDialog.tsx`
+
+### Fase 3 — UX
+3. **Notificações para gestores** — Expandir `useNewLeadNotifications` para incluir admin/manager
 
 ### Arquivos afetados
-- `src/components/crm/DealKanbanBoard.tsx` — Corrigir `deal_id` no `createActivity`
-- `src/components/crm/DealKanbanBoardInfinite.tsx` — Mesma correção
-- `src/components/crm/DealDetailsDrawer.tsx` — Verificar uso de `clint_id` vs UUID
-- `src/components/crm/FunilDashboard.tsx` — Usar BU ativa em vez de ID hardcoded
+- `supabase/functions/webhook-lead-receiver/index.ts` — Corrigir coluna `name` → `stage_name`
+- `src/components/crm/DealFormDialog.tsx` — Adicionar verificação de duplicatas
+- `src/hooks/useNewLeadNotifications.ts` — Remover restrição de role SDR
 
