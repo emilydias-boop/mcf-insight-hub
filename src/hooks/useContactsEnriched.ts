@@ -53,7 +53,7 @@ interface PaginatedResult {
   totalCount: number;
 }
 
-const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: string): Promise<PaginatedResult> => {
+const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: string, buOriginIds?: string[]): Promise<PaginatedResult> => {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
@@ -139,8 +139,12 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
   const now = new Date();
   const enriched: EnrichedContact[] = contacts.map((contact: any) => {
     const deals = contact.crm_deals || [];
-    const latestDeal = deals.length > 0
-      ? deals.sort((a: any, b: any) =>
+    // Filter deals by BU origin IDs when provided
+    const buDeals = buOriginIds && buOriginIds.length > 0
+      ? deals.filter((d: any) => d.origin_id && buOriginIds.includes(d.origin_id))
+      : deals;
+    const latestDeal = buDeals.length > 0
+      ? buDeals.sort((a: any, b: any) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         )[0]
       : null;
@@ -190,10 +194,10 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
   return { contacts: enriched, totalCount: count || 0 };
 };
 
-export const useContactsEnriched = (searchTerm?: string, page: number = 1, pageSize: number = 50) => {
+export const useContactsEnriched = (searchTerm?: string, page: number = 1, pageSize: number = 50, buOriginIds?: string[]) => {
   return useQuery({
-    queryKey: ['contacts-enriched', searchTerm || '', page, pageSize],
-    queryFn: () => fetchContactsPage(page, pageSize, searchTerm),
+    queryKey: ['contacts-enriched', searchTerm || '', page, pageSize, buOriginIds || []],
+    queryFn: () => fetchContactsPage(page, pageSize, searchTerm, buOriginIds),
     staleTime: 30000,
   });
 };
