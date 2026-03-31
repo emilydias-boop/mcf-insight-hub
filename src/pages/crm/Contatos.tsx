@@ -59,7 +59,9 @@ const Contatos = () => {
     setCurrentPage(1);
   }, [filters]);
 
-  const { data, isLoading } = useContactsEnriched(debouncedSearch, currentPage, pageSize);
+  const activeBU = useActiveBU();
+  const { data: buOriginIds } = useBUOriginIds(activeBU);
+  const { data, isLoading } = useContactsEnriched(debouncedSearch, currentPage, pageSize, buOriginIds && buOriginIds.length > 0 ? buOriginIds : undefined);
   const syncMutation = useSyncClintData();
   const duplicateMutation = useDuplicateToInsideSales();
 

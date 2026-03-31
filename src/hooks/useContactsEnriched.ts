@@ -194,10 +194,10 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
   return { contacts: enriched, totalCount: count || 0 };
 };
 
-export const useContactsEnriched = (searchTerm?: string, page: number = 1, pageSize: number = 50) => {
+export const useContactsEnriched = (searchTerm?: string, page: number = 1, pageSize: number = 50, buOriginIds?: string[]) => {
   return useQuery({
-    queryKey: ['contacts-enriched', searchTerm || '', page, pageSize],
-    queryFn: () => fetchContactsPage(page, pageSize, searchTerm),
+    queryKey: ['contacts-enriched', searchTerm || '', page, pageSize, buOriginIds || []],
+    queryFn: () => fetchContactsPage(page, pageSize, searchTerm, buOriginIds),
     staleTime: 30000,
   });
 };
