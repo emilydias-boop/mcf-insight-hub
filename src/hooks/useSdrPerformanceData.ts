@@ -443,7 +443,7 @@ export function useSdrPerformanceData({
     ranking: detail.ranking,
     teamAverages: detail.teamAverages,
     allSdrs: detail.allSdrs,
-    isLoading: detail.isLoading || callMetricsQuery.isLoading || compData.isLoading,
+    isLoading: detail.isLoading || callMetricsQuery.isLoading || compData.isLoading || novosLeadsQuery.isLoading,
     error: detail.error || compData.error || null,
     refetch: () => {
       detail.refetch();
