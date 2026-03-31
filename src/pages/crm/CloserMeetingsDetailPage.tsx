@@ -170,7 +170,7 @@ export default function CloserMeetingsDetailPage() {
           <SdrTeamComparisonPanel data={perfData.teamComparison} isLoading={perfData.isLoading} />
 
           {/* Daily Breakdown Table */}
-          <SdrDailyBreakdownTable dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
+          <CloserDailyBreakdownTable dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
         </TabsContent>
 
         <TabsContent value="leads">
