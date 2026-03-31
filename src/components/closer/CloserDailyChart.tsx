@@ -5,13 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { TrendingUp } from "lucide-react";
 
-interface CloserDailyRow {
-  date: Date;
-  contratos: number;
-  metaDiaria: number;
-  isBusinessDay: boolean;
-  [key: string]: unknown;
-}
+import { CloserDailyRow } from "@/hooks/useCloserPerformanceData";
 
 interface CloserDailyChartProps {
   dailyRows: CloserDailyRow[];
