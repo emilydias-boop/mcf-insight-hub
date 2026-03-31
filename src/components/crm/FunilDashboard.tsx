@@ -86,6 +86,10 @@ const PERIOD_OPTIONS: { value: PeriodType; label: string }[] = [
 export function FunilDashboard() {
   const [period, setPeriod] = useState<PeriodType>('week');
   const [channelFilter, setChannelFilter] = useState<string>('');
+  
+  const activeBU = useActiveBU();
+  const { data: buMapping } = useBUPipelineMap(activeBU);
+  const PIPELINE_ORIGIN_ID = buMapping?.defaultOrigin || FALLBACK_PIPELINE_ORIGIN_ID;
 
   const { start: periodStart, end: periodEnd, label: periodLabel } = useMemo(() => getPeriodRange(period), [period]);
   const { start: prevStart, end: prevEnd } = useMemo(() => getPrevPeriodRange(period), [period]);
