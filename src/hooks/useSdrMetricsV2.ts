@@ -39,6 +39,7 @@ export interface MeetingV2 {
   attendee_id?: string | null;
   meeting_slot_id?: string | null;
   attendee_status?: string | null;
+  booked_at?: string | null;
 }
 
 export interface MetricsSummary {

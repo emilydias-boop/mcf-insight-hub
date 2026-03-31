@@ -149,10 +149,11 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow>
-                <TableHead className="text-muted-foreground">Data/Hora</TableHead>
+                <TableHead className="text-muted-foreground">Reunião</TableHead>
                 <TableHead className="text-muted-foreground">Lead</TableHead>
                 <TableHead className="text-muted-foreground">Tipo</TableHead>
                 <TableHead className="text-muted-foreground">Status</TableHead>
+                <TableHead className="text-muted-foreground">Agendado em</TableHead>
                 <TableHead className="text-muted-foreground">Closer</TableHead>
                 <TableHead className="text-muted-foreground text-center">Prob.</TableHead>
                 <TableHead className="text-muted-foreground w-10"></TableHead>
@@ -161,7 +162,7 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
             <TableBody>
               {filteredMeetings.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Nenhum lead encontrado para os filtros selecionados.
                   </TableCell>
                 </TableRow>
@@ -173,9 +174,11 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
                     onClick={() => onSelectMeeting(meeting)}
                   >
                     <TableCell className="text-sm">
-                      {meeting.data_agendamento 
-                        ? format(parseISO(meeting.data_agendamento), "dd/MM HH:mm", { locale: ptBR })
-                        : 'N/A'
+                      {meeting.scheduled_at 
+                        ? format(new Date(meeting.scheduled_at), "dd/MM HH:mm", { locale: ptBR })
+                        : meeting.data_agendamento 
+                          ? format(parseISO(meeting.data_agendamento), "dd/MM", { locale: ptBR })
+                          : 'N/A'
                       }
                     </TableCell>
                     <TableCell>
@@ -197,6 +200,12 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
                       >
                         {formatMeetingStatus(meeting.status_atual)}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {meeting.booked_at
+                        ? format(new Date(meeting.booked_at), "dd/MM HH:mm", { locale: ptBR })
+                        : '-'
+                      }
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {meeting.closer || '-'}

@@ -10777,6 +10777,7 @@ export type Database = {
             Returns: {
               attendee_id: string
               attendee_status: string
+              booked_at: string
               closer: string
               contact_email: string
               contact_name: string
@@ -10804,6 +10805,7 @@ export type Database = {
             Returns: {
               attendee_id: string
               attendee_status: string
+              booked_at: string
               closer: string
               contact_email: string
               contact_name: string
