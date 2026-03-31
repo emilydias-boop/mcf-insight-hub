@@ -267,7 +267,7 @@ export function useSdrPerformanceData({
 
     return [
       makeMetric("Agendamentos", "agendamentos", agend, metas.agendMeta, "agendamentos"),
-      
+      makeMetric("R1 Agendada", "r1Agendada", r1ag, metas.agendMeta, "r1Agendada"),
       makeMetric("R1 Realizada", "r1Realizada", r1re, metas.r1RealizadaMeta, "r1Realizada"),
       makeMetric("Contratos Pagos", "contratos", contr, metas.contratosMeta, "contratos"),
       {
@@ -286,7 +286,7 @@ export function useSdrPerformanceData({
         key: "taxaNoShow",
         realized: agend > 0 ? (noshows / agend) * 100 : 0,
         meta: 30,
-        attainment: agend > 0 ? ((noshows / agend) * 100 / 30) * 100 : 0,
+        attainment: agend > 0 ? Math.max(0, ((30 - (noshows / agend) * 100) / 30) * 100) : 100,
         gap: agend > 0 ? (noshows / agend) * 100 - 30 : 0,
         compValue: compSdrMetrics ? (compSdrMetrics.agendamentos > 0 ? (compSdrMetrics.noShows / compSdrMetrics.agendamentos) * 100 : 0) : null,
         compVariation: null,
@@ -448,6 +448,7 @@ export function useSdrPerformanceData({
     refetch: () => {
       detail.refetch();
       compData.refetch();
+      novosLeadsQuery.refetch();
     },
   };
 }

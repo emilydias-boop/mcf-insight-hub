@@ -18,7 +18,7 @@ import { SdrCumulativeChart } from "@/components/sdr/SdrCumulativeChart";
 import { SdrTeamComparisonPanel } from "@/components/sdr/SdrTeamComparisonPanel";
 import { SdrDailyBreakdownTable } from "@/components/sdr/SdrDailyBreakdownTable";
 import { SdrLeadsTable } from "@/components/sdr/SdrLeadsTable";
-import { MeetingDetailsDrawer } from "@/components/sdr/MeetingDetailsDrawer";
+import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
 
 import {
   useSdrPerformanceData,
@@ -27,7 +27,6 @@ import {
   MetaMode,
 } from "@/hooks/useSdrPerformanceData";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
-import { Meeting } from "@/hooks/useSdrMeetings";
 
 export default function SdrMeetingsDetailPage() {
   const { sdrEmail } = useParams<{ sdrEmail: string }>();
@@ -39,7 +38,7 @@ export default function SdrMeetingsDetailPage() {
   const preset = searchParams.get("preset") || "month";
   const monthParam = searchParams.get("month");
 
-  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
+  const [selectedMeeting, setSelectedMeeting] = useState<MeetingV2 | null>(null);
 
   // Initial dates from URL
   const initialDates = useMemo(() => {
@@ -105,30 +104,7 @@ export default function SdrMeetingsDetailPage() {
   };
 
   const handleSelectMeeting = (m: MeetingV2) => {
-    const converted: Meeting = {
-      id: m.deal_id,
-      dealId: m.deal_id,
-      dealName: m.deal_name,
-      contactName: m.contact_name || "",
-      contactEmail: m.contact_email,
-      contactPhone: m.contact_phone,
-      scheduledDate: m.data_agendamento,
-      currentStage: m.status_atual || "",
-      currentStageClassification: m.status_atual?.toLowerCase().includes("realizada")
-        ? "realizada"
-        : m.status_atual?.toLowerCase().includes("no-show")
-          ? "noShow"
-          : m.status_atual?.toLowerCase().includes("contrato")
-            ? "contratoPago"
-            : "agendada",
-      originId: null,
-      originName: m.origin_name || "",
-      probability: m.probability,
-      timeToSchedule: null,
-      timeToContract: null,
-      createdAt: "",
-    };
-    setSelectedMeeting(converted);
+    setSelectedMeeting(m);
   };
 
   if (!sdrEmail) {
@@ -203,7 +179,7 @@ export default function SdrMeetingsDetailPage() {
         </TabsContent>
       </Tabs>
 
-      <MeetingDetailsDrawer meeting={selectedMeeting} onClose={() => setSelectedMeeting(null)} />
+      <SdrMeetingActionsDrawer meeting={selectedMeeting} onClose={() => setSelectedMeeting(null)} onRefresh={() => perfData.refetch()} />
     </div>
   );
 }
