@@ -16,7 +16,7 @@ import { SdrAutoSummary } from "@/components/sdr/SdrAutoSummary";
 import { SdrDetailKPICards } from "@/components/sdr/SdrDetailKPICards";
 import { SdrProjectionCard } from "@/components/sdr/SdrProjectionCard";
 import { SdrFunnelPanel } from "@/components/sdr/SdrFunnelPanel";
-import { SdrCumulativeChart } from "@/components/sdr/SdrCumulativeChart";
+import { CloserDailyChart } from "@/components/closer/CloserDailyChart";
 import { SdrTeamComparisonPanel } from "@/components/sdr/SdrTeamComparisonPanel";
 import { CloserDailyBreakdownTable } from "@/components/closer/CloserDailyBreakdownTable";
 
@@ -163,7 +163,7 @@ export default function CloserMeetingsDetailPage() {
           {/* Funnel + Daily chart side by side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <SdrFunnelPanel funnel={perfData.funnel} isLoading={perfData.isLoading} />
-            <SdrCumulativeChart dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
+            <CloserDailyChart dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
           </div>
 
           {/* Team Comparison */}
