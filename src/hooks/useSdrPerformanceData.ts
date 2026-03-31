@@ -363,8 +363,7 @@ export function useSdrPerformanceData({
   // Funnel
   const funnel = useMemo(() => {
     const steps = [
-      { label: "Ligações", value: callMetrics.totalCalls },
-      { label: "Contatos", value: callMetrics.answered },
+      { label: "Novos Leads", value: novosLeads },
       { label: "R1 Agendada", value: sm?.r1Agendada || 0 },
       { label: "R1 Realizada", value: sm?.r1Realizada || 0 },
       { label: "Contratos", value: sm?.contratos || 0 },
@@ -376,7 +375,7 @@ export function useSdrPerformanceData({
           ? (step.value / steps[i - 1].value) * 100
           : null,
     }));
-  }, [sm, callMetrics]);
+  }, [sm, novosLeads]);
 
   // Team comparison
   const teamComparison = useMemo(() => {
