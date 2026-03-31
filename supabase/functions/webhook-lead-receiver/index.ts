@@ -365,7 +365,7 @@ serve(async (req) => {
           .from('crm_stages')
           .select('id')
           .eq('origin_id', endpoint.origin_id)
-          .ilike('name', 'Lead Gratuito')
+          .ilike('stage_name', 'Lead Gratuito')
           .maybeSingle();
 
         const newStageId = leadGratuitoStage?.id || existingDeal.stage_id;
