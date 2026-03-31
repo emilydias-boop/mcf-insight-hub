@@ -104,30 +104,7 @@ export default function SdrMeetingsDetailPage() {
   };
 
   const handleSelectMeeting = (m: MeetingV2) => {
-    const converted: Meeting = {
-      id: m.deal_id,
-      dealId: m.deal_id,
-      dealName: m.deal_name,
-      contactName: m.contact_name || "",
-      contactEmail: m.contact_email,
-      contactPhone: m.contact_phone,
-      scheduledDate: m.data_agendamento,
-      currentStage: m.status_atual || "",
-      currentStageClassification: m.status_atual?.toLowerCase().includes("realizada")
-        ? "realizada"
-        : m.status_atual?.toLowerCase().includes("no-show")
-          ? "noShow"
-          : m.status_atual?.toLowerCase().includes("contrato")
-            ? "contratoPago"
-            : "agendada",
-      originId: null,
-      originName: m.origin_name || "",
-      probability: m.probability,
-      timeToSchedule: null,
-      timeToContract: null,
-      createdAt: "",
-    };
-    setSelectedMeeting(converted);
+    setSelectedMeeting(m);
   };
 
   if (!sdrEmail) {
