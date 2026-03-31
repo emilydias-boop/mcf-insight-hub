@@ -317,7 +317,7 @@ serve(async (req) => {
     // 8. Check for existing deal (any deal for same contact+origin, respecting UNIQUE constraint)
     const { data: existingDeal } = await supabase
       .from('crm_deals')
-      .select('id')
+      .select('id, tags, stage_id, custom_fields, owner_id, owner_profile_id')
       .eq('contact_id', contactId)
       .eq('origin_id', endpoint.origin_id)
       .order('created_at', { ascending: false })
@@ -325,20 +325,106 @@ serve(async (req) => {
       .maybeSingle();
 
     if (existingDeal) {
+      console.log('[WEBHOOK-RECEIVER] Deal já existe:', existingDeal.id);
+      
+      const currentTags: string[] = (existingDeal.tags as string[]) || [];
+      const isIncompleta = currentTags.some(t => t.toUpperCase() === 'ANAMNESE-INCOMPLETA');
+      const isAnamnaseEndpoint = slug === 'anamnese-mcf';
+
+      // --- FLUXO ESPECIAL: ANAMNESE-INCOMPLETA → ANAMNESE completa ---
+      if (isIncompleta && isAnamnaseEndpoint) {
+        console.log('[WEBHOOK-RECEIVER] 🔄 Fluxo ANAMNESE-INCOMPLETA → ANAMNESE completa detectado');
+
+        // 1. Merge tags: add ANAMNESE + autoTags, keep existing
+        const mergedTags = [...new Set([...currentTags, 'ANAMNESE', ...autoTags])];
+
+        // 2. Merge custom_fields
+        const existingCustomFields = (existingDeal.custom_fields as Record<string, unknown>) || {};
+        const newCustomFields: Record<string, unknown> = {
+          source: payload.source || slug,
+          solucao_busca: payload.objective,
+          profile_type: payload.profileType,
+          faixa_renda: mapMonthlyIncome(payload.monthlyIncome),
+          industry_sector: payload.industrySector,
+          selection_decision: payload.selectionDecision,
+          original_timestamp: payload.timestamp,
+          lead_channel: slug.toUpperCase(),
+          webhook_endpoint: endpoint.name
+        };
+        if (endpoint.field_mapping && typeof endpoint.field_mapping === 'object') {
+          for (const [sourceField, targetField] of Object.entries(endpoint.field_mapping)) {
+            if (payload[sourceField] !== undefined && typeof targetField === 'string') {
+              newCustomFields[targetField] = payload[sourceField];
+            }
+          }
+        }
+        const mergedCustomFields = { ...existingCustomFields, ...newCustomFields };
+
+        // 3. Find "Lead Gratuito" stage in the same origin
+        const { data: leadGratuitoStage } = await supabase
+          .from('crm_stages')
+          .select('id')
+          .eq('origin_id', endpoint.origin_id)
+          .ilike('name', 'Lead Gratuito')
+          .maybeSingle();
+
+        const newStageId = leadGratuitoStage?.id || existingDeal.stage_id;
+        const oldStageId = existingDeal.stage_id;
+
+        // 4. Update deal: new stage, merged tags & custom_fields, KEEP owner
+        await supabase
+          .from('crm_deals')
+          .update({
+            tags: mergedTags,
+            custom_fields: mergedCustomFields,
+            stage_id: newStageId,
+            stage_moved_at: new Date().toISOString(),
+          })
+          .eq('id', existingDeal.id);
+
+        console.log('[WEBHOOK-RECEIVER] ✅ Deal atualizado para ANAMNESE completa, stage:', newStageId, 'owner mantido:', existingDeal.owner_id);
+
+        // 5. Log stage change activity (if stage actually changed)
+        if (newStageId !== oldStageId) {
+          await supabase
+            .from('deal_activities')
+            .insert({
+              deal_id: existingDeal.id,
+              activity_type: 'stage_change',
+              description: 'ANAMNESE-INCOMPLETA → Lead Gratuito (anamnese completada via webhook)',
+              metadata: {
+                from_stage_id: oldStageId,
+                to_stage_id: newStageId,
+                trigger: 'webhook_anamnese_completed'
+              }
+            });
+        }
+
+        // 6. Update lead_profile
+        await upsertLeadProfile(supabase, contactId, existingDeal.id, payload, cpfClean, normalizedPhone);
+        await updateEndpointMetrics(supabase, endpoint.id);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            action: 'anamnese_completed',
+            reason: 'incompleta_to_completa',
+            deal_id: existingDeal.id,
+            contact_id: contactId,
+            new_stage_id: newStageId,
+            owner_preserved: existingDeal.owner_id
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // --- FLUXO PADRÃO: deal já existe (não é transição incompleta→completa) ---
       console.log('[WEBHOOK-RECEIVER] Deal já existe, atualizando lead_profile:', existingDeal.id);
       
-      // Mesmo com deal duplicado, atualiza o lead_profile
       await upsertLeadProfile(supabase, contactId, existingDeal.id, payload, cpfClean, normalizedPhone);
 
       // Adicionar auto_tags ao deal existente (se houver)
       if (autoTags.length > 0) {
-        const { data: currentDeal } = await supabase
-          .from('crm_deals')
-          .select('tags')
-          .eq('id', existingDeal.id)
-          .single();
-        
-        const currentTags: string[] = (currentDeal?.tags as string[]) || [];
         const newTags = [...new Set([...currentTags, ...autoTags])];
         
         if (newTags.length !== currentTags.length) {
