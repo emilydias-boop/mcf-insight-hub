@@ -1,29 +1,34 @@
 
 
-## Substituir "Ligações" por "Novos Leads" no Funil Individual do SDR
+## Correção do Gráfico "Evolução Diária" — Usar data de criação do agendamento
 
-### O que muda
+### Problema identificado
 
-O primeiro passo do funil passará de **Ligações → Contatos** para **Novos Leads → R1 Agendada → R1 Realizada → Contratos**. "Novos Leads" = deals criados no período cujo `owner_id` é o email do SDR, sem histórico anterior de movimentação de estágio (i.e., entrada genuína na pipeline).
+O gráfico conta reuniões por `data_agendamento` (a data PARA quando a reunião foi marcada), não a data EM QUE o SDR fez o agendamento. Isso causa:
+
+1. **Números diferentes da tabela detalhada** — a tabela mostra reuniões agendadas para cada dia, mas o gestor quer ver quantos agendamentos o SDR produziu naquele dia
+2. **Fins de semana vazios** — como nenhuma reunião é agendada PARA sábado/domingo, esses dias aparecem como 0, mas o SDR pode ter criado agendamentos no sábado
+
+### Correção
+
+**Trocar o campo de agrupamento**: Em vez de `m.data_agendamento`, usar `m.booked_at` (ou `m.created_at` como fallback) para contar quantos agendamentos o SDR **fez** em cada dia.
 
 ### Implementação
 
-**1. Criar query para contar novos leads do SDR** — Novo hook ou query inline em `useSdrPerformanceData.ts`:
-- Buscar `crm_deals` onde `owner_id = sdrEmail`, `created_at` dentro do período
-- Para cada deal, verificar se NÃO existe `deal_activities` com `activity_type = 'stage_change'` anterior à `created_at` do deal (garantindo que é entrada nova, sem histórico prévio)
-- Alternativa mais simples: contar deals onde `created_at` está no período e o deal só tem 0-1 registros em `deal_activities` (a entrada inicial), o que indica lead novo
+**1. `src/hooks/useSdrPerformanceData.ts`** — Na construção de `dailyRows` (linhas 336-338), trocar:
+```
+m.data_agendamento?.substring(0, 10) === dateStr
+```
+por:
+```
+(m.booked_at || m.scheduled_at || m.data_agendamento)?.substring(0, 10) === dateStr
+```
+Isso usa a data em que o agendamento foi criado pelo SDR.
 
-**2. Atualizar o funil** em `useSdrPerformanceData.ts` (linhas 345-360):
-- Trocar `{ label: "Ligações", value: callMetrics.totalCalls }` por `{ label: "Novos Leads", value: novosLeads }`
-- Remover `{ label: "Contatos", value: callMetrics.answered }` (não faz mais sentido no funil sem ligações)
-- Funil final: **Novos Leads → R1 Agendada → R1 Realizada → Contratos**
+**2. Fins de semana visíveis** — Manter `metaDiaria: 0` para fins de semana (correto, não há meta), mas o "realizado" agora pode ser > 0 se o SDR agendou no sábado/domingo. O gráfico já renderiza todos os dias, então aparecerá automaticamente.
 
-**3. Atualizar KPI "Total Ligações"** — Manter o KPI card de ligações separado (não está no funil), mas o funil não usará mais esses dados.
+**3. Tabela diária** (`SdrDailyBreakdownTable`) — Aplicar a mesma lógica para consistência: o filtro de rows já inclui `r.realized > 0`, então fins de semana com atividade aparecerão.
 
 ### Arquivos afetados
-- `src/hooks/useSdrPerformanceData.ts` — Nova query de novos leads + atualizar array `funnel`
-- Possivelmente nova query via `useQuery` para buscar count de deals novos do SDR no período
-
-### Abordagem para "sem histórico anterior"
-A forma mais eficiente: contar `crm_deals` com `owner_id = sdrEmail` e `created_at` no período. Deals que entram na pipeline pela primeira vez são automaticamente "novos" — a `created_at` do deal é a data de entrada. Não precisamos verificar `deal_activities` pois a criação do deal já representa a entrada do lead.
+- `src/hooks/useSdrPerformanceData.ts` — Alterar campo de agrupamento no cálculo de `dailyRows`
 
