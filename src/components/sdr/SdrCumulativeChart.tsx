@@ -62,16 +62,16 @@ export function SdrCumulativeChart({ dailyRows, isLoading }: SdrCumulativeChartP
             <Legend wrapperStyle={{ fontSize: "11px" }} />
             <Line
               type="monotone"
-              dataKey="realizado"
-              name="Realizado"
+              dataKey="acumulado"
+              name="Acumulado"
               stroke="hsl(var(--primary))"
               strokeWidth={2}
               dot={false}
             />
             <Line
               type="monotone"
-              dataKey="meta"
-              name="Meta"
+              dataKey="metaAcumulada"
+              name="Meta Acumulada"
               stroke="hsl(var(--destructive))"
               strokeWidth={2}
               strokeDasharray="6 3"

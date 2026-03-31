@@ -448,6 +448,7 @@ export function useSdrPerformanceData({
     refetch: () => {
       detail.refetch();
       compData.refetch();
+      novosLeadsQuery.refetch();
     },
   };
 }

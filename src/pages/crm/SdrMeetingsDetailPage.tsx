@@ -179,7 +179,7 @@ export default function SdrMeetingsDetailPage() {
         </TabsContent>
       </Tabs>
 
-      <MeetingDetailsDrawer meeting={selectedMeeting} onClose={() => setSelectedMeeting(null)} />
+      <SdrMeetingActionsDrawer meeting={selectedMeeting} onClose={() => setSelectedMeeting(null)} onRefresh={() => perfData.refetch()} />
     </div>
   );
 }
