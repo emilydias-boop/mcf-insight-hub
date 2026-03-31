@@ -201,7 +201,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                 
                 <TabsContent value="timeline" className="mt-3 border rounded-lg min-h-[300px] p-2">
                   <LeadFullTimeline
-                    dealId={deal.clint_id}
+                    dealId={deal.id}
                     dealUuid={deal.id}
                     contactEmail={contact?.email}
                     contactId={deal.contact_id}
@@ -221,7 +221,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                 </TabsContent>
                 
                 <TabsContent value="atividades" className="mt-3">
-                  <DealHistory dealId={deal.clint_id} dealUuid={deal.id} contactId={deal.contact_id} limit={5} />
+                  <DealHistory dealId={deal.id} dealUuid={deal.id} contactId={deal.contact_id} limit={5} />
                 </TabsContent>
                 
                 <TabsContent value="ligacoes" className="mt-3">

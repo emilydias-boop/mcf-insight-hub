@@ -230,7 +230,7 @@ export const DealKanbanBoard = ({
           
           // Log activity for stage change
           createActivity.mutate({
-            deal_id: (deal as any)?.clint_id || dealId,
+            deal_id: dealId,
             activity_type: 'stage_change',
             description: `Movido de "${oldStage?.stage_name || 'Estágio anterior'}" para "${newStage?.stage_name || 'Novo estágio'}"`,
             from_stage: oldStage?.stage_name || 'Estágio anterior',
@@ -429,6 +429,7 @@ export const DealKanbanBoard = ({
       </DragDropContext>
       
       <DealDetailsDrawer
+        key={selectedDealId}
         dealId={selectedDealId}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}

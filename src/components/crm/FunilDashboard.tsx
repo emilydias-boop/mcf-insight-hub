@@ -10,6 +10,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { classifyChannel } from '@/lib/channelClassifier';
+import { useActiveBU } from '@/hooks/useActiveBU';
+import { useBUPipelineMap } from '@/hooks/useBUPipelineMap';
 
 import {
   getCustomWeekStart,
@@ -19,7 +21,7 @@ import {
 import { startOfDay, endOfDay, subDays, startOfMonth, endOfMonth, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-const PIPELINE_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
+const FALLBACK_PIPELINE_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
 
 type PeriodType = 'today' | 'week' | 'month';
 
@@ -84,6 +86,10 @@ const PERIOD_OPTIONS: { value: PeriodType; label: string }[] = [
 export function FunilDashboard() {
   const [period, setPeriod] = useState<PeriodType>('week');
   const [channelFilter, setChannelFilter] = useState<string>('');
+  
+  const activeBU = useActiveBU();
+  const { data: buMapping } = useBUPipelineMap(activeBU);
+  const PIPELINE_ORIGIN_ID = buMapping?.defaultOrigin || FALLBACK_PIPELINE_ORIGIN_ID;
 
   const { start: periodStart, end: periodEnd, label: periodLabel } = useMemo(() => getPeriodRange(period), [period]);
   const { start: prevStart, end: prevEnd } = useMemo(() => getPrevPeriodRange(period), [period]);
