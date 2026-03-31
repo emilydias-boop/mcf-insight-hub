@@ -5,6 +5,8 @@ import { useSdrCallMetrics, SdrCallMetrics } from "./useSdrCallMetrics";
 import { useTeamMeetingsData, SdrSummaryRow } from "./useTeamMeetingsData";
 import { contarDiasUteis, isDiaUtil } from "@/lib/businessDays";
 import { MeetingV2 } from "./useSdrMetricsV2";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 export type ComparisonMode = "none" | "prev_month" | "prev_period" | "prev_year" | "custom";
 export type MetaMode = "monthly_prorated" | "weekly" | "per_business_day" | "custom";
