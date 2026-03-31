@@ -139,8 +139,12 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
   const now = new Date();
   const enriched: EnrichedContact[] = contacts.map((contact: any) => {
     const deals = contact.crm_deals || [];
-    const latestDeal = deals.length > 0
-      ? deals.sort((a: any, b: any) =>
+    // Filter deals by BU origin IDs when provided
+    const buDeals = buOriginIds && buOriginIds.length > 0
+      ? deals.filter((d: any) => d.origin_id && buOriginIds.includes(d.origin_id))
+      : deals;
+    const latestDeal = buDeals.length > 0
+      ? buDeals.sort((a: any, b: any) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         )[0]
       : null;
