@@ -149,10 +149,11 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow>
-                <TableHead className="text-muted-foreground">Data/Hora</TableHead>
+                <TableHead className="text-muted-foreground">Reunião</TableHead>
                 <TableHead className="text-muted-foreground">Lead</TableHead>
                 <TableHead className="text-muted-foreground">Tipo</TableHead>
                 <TableHead className="text-muted-foreground">Status</TableHead>
+                <TableHead className="text-muted-foreground">Agendado em</TableHead>
                 <TableHead className="text-muted-foreground">Closer</TableHead>
                 <TableHead className="text-muted-foreground text-center">Prob.</TableHead>
                 <TableHead className="text-muted-foreground w-10"></TableHead>

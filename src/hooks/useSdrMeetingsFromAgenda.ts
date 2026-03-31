@@ -93,6 +93,7 @@ export function useSdrMeetingsFromAgenda({
           attendee_id: row.attendee_id || null,
           meeting_slot_id: row.meeting_slot_id || null,
           attendee_status: row.attendee_status || null,
+          booked_at: row.booked_at || null,
         };
       });
     },
