@@ -1,19 +1,29 @@
 
 
-## Fix: "Agendado em" mostrando "-" para quase todos os registros
+## Substituir "Ligações" por "Novos Leads" no Funil Individual do SDR
 
-### Problema
-A coluna "Agendado em" mostra "-" porque o campo `booked_at` na tabela `meeting_slot_attendees` só está preenchido em 64 de 1786 registros de março. A maioria dos attendees foi criada sem preencher `booked_at`, mas o campo `created_at` (sempre preenchido) representa o momento em que o agendamento foi feito.
+### O que muda
 
-### Correção
+O primeiro passo do funil passará de **Ligações → Contatos** para **Novos Leads → R1 Agendada → R1 Realizada → Contratos**. "Novos Leads" = deals criados no período cujo `owner_id` é o email do SDR, sem histórico anterior de movimentação de estágio (i.e., entrada genuína na pipeline).
 
-**1. Migration SQL** — Alterar ambas as versões da RPC `get_sdr_meetings_from_agenda` para usar `COALESCE(msa.booked_at, msa.created_at)::text` em vez de `msa.booked_at::text`. Isso garante que sempre haverá um valor mostrando quando o agendamento foi criado.
+### Implementação
 
-**2. Backfill (opcional)** — Na mesma migration, preencher `booked_at = created_at` para todos os attendees que têm `booked_at IS NULL`, evitando o problema para futuras queries diretas.
+**1. Criar query para contar novos leads do SDR** — Novo hook ou query inline em `useSdrPerformanceData.ts`:
+- Buscar `crm_deals` onde `owner_id = sdrEmail`, `created_at` dentro do período
+- Para cada deal, verificar se NÃO existe `deal_activities` com `activity_type = 'stage_change'` anterior à `created_at` do deal (garantindo que é entrada nova, sem histórico prévio)
+- Alternativa mais simples: contar deals onde `created_at` está no período e o deal só tem 0-1 registros em `deal_activities` (a entrada inicial), o que indica lead novo
 
-### Resultado esperado
-A coluna "Agendado em" mostrará a data/hora real de quando cada reunião foi agendada pelo SDR, permitindo ao gestor ver claramente quais reuniões de hoje foram agendadas hoje vs. dias anteriores.
+**2. Atualizar o funil** em `useSdrPerformanceData.ts` (linhas 345-360):
+- Trocar `{ label: "Ligações", value: callMetrics.totalCalls }` por `{ label: "Novos Leads", value: novosLeads }`
+- Remover `{ label: "Contatos", value: callMetrics.answered }` (não faz mais sentido no funil sem ligações)
+- Funil final: **Novos Leads → R1 Agendada → R1 Realizada → Contratos**
+
+**3. Atualizar KPI "Total Ligações"** — Manter o KPI card de ligações separado (não está no funil), mas o funil não usará mais esses dados.
 
 ### Arquivos afetados
-- `supabase/migrations/[new].sql` — Recriar RPCs com fallback + backfill de `booked_at`
+- `src/hooks/useSdrPerformanceData.ts` — Nova query de novos leads + atualizar array `funnel`
+- Possivelmente nova query via `useQuery` para buscar count de deals novos do SDR no período
+
+### Abordagem para "sem histórico anterior"
+A forma mais eficiente: contar `crm_deals` com `owner_id = sdrEmail` e `created_at` no período. Deals que entram na pipeline pela primeira vez são automaticamente "novos" — a `created_at` do deal é a data de entrada. Não precisamos verificar `deal_activities` pois a criação do deal já representa a entrada do lead.
 
