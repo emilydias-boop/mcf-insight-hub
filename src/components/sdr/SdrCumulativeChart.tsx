@@ -15,8 +15,8 @@ export function SdrCumulativeChart({ dailyRows, isLoading }: SdrCumulativeChartP
   const chartData = useMemo(() => {
     return dailyRows.map((row) => ({
       date: format(row.date, "dd/MM", { locale: ptBR }),
-      realizado: row.realized,
-      meta: row.metaDiaria,
+      acumulado: row.accumulated,
+      metaAcumulada: row.metaAccumulated,
     }));
   }, [dailyRows]);
 
