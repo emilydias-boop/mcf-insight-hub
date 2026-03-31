@@ -5,6 +5,8 @@ import { useSdrCallMetrics, SdrCallMetrics } from "./useSdrCallMetrics";
 import { useTeamMeetingsData, SdrSummaryRow } from "./useTeamMeetingsData";
 import { contarDiasUteis, isDiaUtil } from "@/lib/businessDays";
 import { MeetingV2 } from "./useSdrMetricsV2";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 export type ComparisonMode = "none" | "prev_month" | "prev_period" | "prev_year" | "custom";
 export type MetaMode = "monthly_prorated" | "weekly" | "per_business_day" | "custom";
@@ -140,6 +142,23 @@ export function useSdrPerformanceData({
 }: UseSdrPerformanceParams): SdrPerformanceData {
   const detail = useSdrDetailData({ sdrEmail, startDate, endDate });
   const callMetricsQuery = useSdrCallMetrics(sdrEmail, startDate, endDate);
+
+  // Query for "Novos Leads" — deals created in the period owned by this SDR
+  const novosLeadsQuery = useQuery({
+    queryKey: ["sdr-novos-leads", sdrEmail, startDate.toISOString(), endDate.toISOString()],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("crm_deals")
+        .select("id", { count: "exact", head: true })
+        .ilike("owner_id", sdrEmail)
+        .gte("created_at", startDate.toISOString())
+        .lte("created_at", endDate.toISOString());
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!sdrEmail,
+  });
+  const novosLeads = novosLeadsQuery.data || 0;
 
   // Comparative period data
   const compData = useTeamMeetingsData({
@@ -344,8 +363,7 @@ export function useSdrPerformanceData({
   // Funnel
   const funnel = useMemo(() => {
     const steps = [
-      { label: "Ligações", value: callMetrics.totalCalls },
-      { label: "Contatos", value: callMetrics.answered },
+      { label: "Novos Leads", value: novosLeads },
       { label: "R1 Agendada", value: sm?.r1Agendada || 0 },
       { label: "R1 Realizada", value: sm?.r1Realizada || 0 },
       { label: "Contratos", value: sm?.contratos || 0 },
@@ -357,7 +375,7 @@ export function useSdrPerformanceData({
           ? (step.value / steps[i - 1].value) * 100
           : null,
     }));
-  }, [sm, callMetrics]);
+  }, [sm, novosLeads]);
 
   // Team comparison
   const teamComparison = useMemo(() => {
@@ -425,7 +443,7 @@ export function useSdrPerformanceData({
     ranking: detail.ranking,
     teamAverages: detail.teamAverages,
     allSdrs: detail.allSdrs,
-    isLoading: detail.isLoading || callMetricsQuery.isLoading || compData.isLoading,
+    isLoading: detail.isLoading || callMetricsQuery.isLoading || compData.isLoading || novosLeadsQuery.isLoading,
     error: detail.error || compData.error || null,
     refetch: () => {
       detail.refetch();
