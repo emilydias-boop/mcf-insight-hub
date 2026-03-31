@@ -1,26 +1,45 @@
 
 
-## Trocar Gráfico de Evolução Diária do Closer para Barras Diárias
+## Problema: Contatos não são filtrados por BU ativa
 
-### O que muda
+### Causa raiz
 
-O gráfico "Evolução Diária" na página do Closer atualmente mostra linhas acumuladas (Acumulado vs Meta Acumulada). O usuário quer ver **contratos vendidos por dia** em formato de barras, com uma linha de referência para a meta diária (4 contratos).
+O hook `useContactsEnriched` e a página `Contatos.tsx` **não filtram por Business Unit**. A query busca **todos os contatos** do banco e usa o `latestDeal` (deal mais recente por `created_at`) para exibir etapa, SDR, pipeline, etc.
+
+No caso do "Felipe Antonio de Souza":
+- Deal 1: Pipeline Inside Sales (Incorporador) — criado 28/03
+- Deal 2: Efeito Alavanca + Clube (Consórcio) — criado 30/03 (mais recente)
+
+Como o `latestDeal` é o mais recente, ao abrir Contatos na BU Incorporador, o contato aparece com dados do Consórcio (pipeline "Efeito Alavanca + Clube", etapa "Parceiros", SDR "Cleiton").
 
 ### Solução
 
-Criar um componente `CloserDailyChart` específico que:
-- Usa `BarChart` (recharts) em vez de `LineChart`
-- Plota `contratos` (valor diário) como barras verdes
-- Desenha uma `ReferenceLine` horizontal em y=4 (meta diária) vermelha tracejada
-- Filtra apenas dias úteis (ou dias com contratos > 0) para não poluir o gráfico
-- Título: "Contratos Diários"
+Filtrar os deals do contato pela BU ativa antes de selecionar o `latestDeal`. Assim, na BU Incorporador, só deals de pipelines mapeadas para Incorporador são considerados.
 
-### Arquivos
+### Implementação
 
-1. **Criar `src/components/closer/CloserDailyChart.tsx`** — Componente de barras diárias com `CloserDailyRow[]`, mostrando contratos/dia + ReferenceLine da meta (4)
-2. **Editar `src/pages/crm/CloserMeetingsDetailPage.tsx`** — Substituir `<SdrCumulativeChart>` por `<CloserDailyChart>`
+**1. `src/hooks/useContactsEnriched.ts`** — Aceitar parâmetro `originIds: string[]` opcional:
+- Na query, manter a busca de todos deals do contato (necessário para cross-pipeline)
+- Na construção do `latestDeal`, filtrar `deals` por `origin_id in originIds` quando fornecido
+- Se nenhum deal pertence à BU, o contato terá `latestDeal: null` e `thermalStatus: 'sem_deal'`
 
-### Detalhes técnicos
+**2. `src/pages/crm/Contatos.tsx`** — Passar os `originIds` da BU ativa:
+- Importar `useActiveBU` e `useBUOriginIds` 
+- Passar os IDs de origem resolvidos para `useContactsEnriched`
+- Contatos sem deals na BU ativa ficam com status "sem_deal" (podem ser filtrados ou exibidos como tal)
 
-O `CloserDailyRow` já tem o campo `contratos` (contratos pagos naquele dia) e `metaDiaria` (4 em dias úteis, 0 em fins de semana). O novo componente simplesmente plota esses valores como barras.
+### Lógica do filtro no enrichment
+
+```text
+// Antes (bug):
+latestDeal = deals.sort(by created_at desc)[0]  // qualquer pipeline
+
+// Depois (fix):
+buDeals = originIds ? deals.filter(d => originIds.includes(d.origin_id)) : deals
+latestDeal = buDeals.sort(by created_at desc)[0]  // só deals da BU
+```
+
+### Arquivos afetados
+- `src/hooks/useContactsEnriched.ts` — Adicionar filtro por `originIds` no `latestDeal`
+- `src/pages/crm/Contatos.tsx` — Passar `originIds` da BU ativa via `useBUOriginIds`
 
