@@ -53,7 +53,7 @@ interface PaginatedResult {
   totalCount: number;
 }
 
-const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: string): Promise<PaginatedResult> => {
+const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: string, buOriginIds?: string[]): Promise<PaginatedResult> => {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
