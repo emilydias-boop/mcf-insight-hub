@@ -14,10 +14,17 @@ import {
 } from "./useSdrPerformanceData";
 import { useR1CloserMetrics } from "./useR1CloserMetrics";
 
+export interface CloserDailyRow extends DailyRow {
+  agendados: number;
+  realizados: number;
+  noShows: number;
+  contratos: number;
+}
+
 export interface CloserPerformanceData {
   metrics: MetricWithMeta[];
   projection: ProjectionData;
-  dailyRows: DailyRow[];
+  dailyRows: CloserDailyRow[];
   funnel: { label: string; value: number; conversionRate: number | null }[];
   teamComparison: {
     label: string;
@@ -34,7 +41,7 @@ export interface CloserPerformanceData {
   noShowLeads: CloserLead[];
   r2Leads: CloserLead[];
   allLeads: CloserLead[];
-  meetings: CloserLead[]; // alias for allLeads, used by tabs
+  meetings: CloserLead[];
   isLoading: boolean;
   error: Error | null;
   refetch: () => void;
@@ -50,7 +57,7 @@ interface UseCloserPerformanceParams {
   customMeta?: number;
 }
 
-const CLOSER_META_DIARIA = 10; // fallback daily target for R1 meetings
+const CLOSER_META_DIARIA_CONTRATOS = 4; // daily target: 4 contracts per business day
 
 export function useCloserPerformanceData({
   closerId,
@@ -80,13 +87,19 @@ export function useCloserPerformanceData({
   const businessDaysPassed = useMemo(() => contarDiasUteis(startDate, effectiveToday), [startDate, effectiveToday]);
   const businessDaysRemaining = useMemo(() => Math.max(0, businessDaysTotal - businessDaysPassed), [businessDaysTotal, businessDaysPassed]);
 
-  // Meta
-  const metaPeriodo = useMemo(() => {
+  // Meta for contracts
+  const metaContratos = useMemo(() => {
     if (metaMode === "custom" && customMeta !== undefined) return customMeta;
-    if (metaMode === "per_business_day") return CLOSER_META_DIARIA;
-    if (metaMode === "weekly") return CLOSER_META_DIARIA * 5;
-    return CLOSER_META_DIARIA * businessDaysTotal;
+    if (metaMode === "per_business_day") return CLOSER_META_DIARIA_CONTRATOS;
+    if (metaMode === "weekly") return CLOSER_META_DIARIA_CONTRATOS * 5;
+    return CLOSER_META_DIARIA_CONTRATOS * businessDaysTotal;
   }, [metaMode, customMeta, businessDaysTotal]);
+
+  // Meta for R1 agendada (keeps previous logic for KPI cards)
+  const metaR1Agendada = useMemo(() => {
+    // R1 agendada doesn't have a fixed daily target — use actual value as reference
+    return 0; // no fixed target for agendada
+  }, []);
 
   const cm = detail.closerMetrics;
 
@@ -95,13 +108,13 @@ export function useCloserPerformanceData({
     const r1AgendadaReal = cm?.r1_agendada || 0;
     const r1RealizadaReal = cm?.r1_realizada || 0;
     return {
-      r1Agendada: metaPeriodo,
+      r1Agendada: r1AgendadaReal, // no fixed target, show actual
       r1Realizada: Math.round(r1AgendadaReal * 0.7),
       noShow: Math.round(r1AgendadaReal * 0.3),
-      contratoPago: Math.round(r1RealizadaReal * 0.3),
+      contratoPago: metaContratos,
       r2Agendada: cm?.contrato_pago || 0, // 100% of contracts
     };
-  }, [metaPeriodo, cm]);
+  }, [metaContratos, cm]);
 
   // Metrics
   const metrics = useMemo((): MetricWithMeta[] => {
@@ -173,10 +186,10 @@ export function useCloserPerformanceData({
     ];
   }, [cm, metas, compMetricForCloser]);
 
-  // Projection based on R1 Agendada
+  // Projection based on CONTRACTS
   const projection = useMemo((): ProjectionData => {
-    const realized = cm?.r1_agendada || 0;
-    const metaFinal = metas.r1Agendada;
+    const realized = cm?.contrato_pago || 0;
+    const metaFinal = metas.contratoPago;
     const avgPerDay = businessDaysPassed > 0 ? realized / businessDaysPassed : 0;
     const proj = Math.round(avgPerDay * businessDaysTotal);
     const gap = metaFinal - realized;
@@ -195,39 +208,70 @@ export function useCloserPerformanceData({
     };
   }, [cm, metas, businessDaysTotal, businessDaysPassed, businessDaysRemaining]);
 
-  // Daily rows
-  const dailyRows = useMemo((): DailyRow[] => {
+  // Daily rows — contract-focused with extra columns
+  const dailyRows = useMemo((): CloserDailyRow[] => {
     const days = eachDayOfInterval({ start: startDate, end: endDate });
     const allLeads = detail.allLeads;
-    let accumulated = 0;
+    let accContratos = 0;
     let metaAcc = 0;
 
     return days.map((date) => {
       const dateStr = format(date, "yyyy-MM-dd");
       const isBusinessDay = isDiaUtil(date);
-      const realized = allLeads.filter(
+
+      // Agendados: leads scheduled on this day
+      const agendados = allLeads.filter(
         (l) => l.scheduled_at?.substring(0, 10) === dateStr
       ).length;
-      accumulated += realized;
-      if (isBusinessDay) metaAcc += CLOSER_META_DIARIA;
-      const gapAcc = accumulated - metaAcc;
-      const percentDay = isBusinessDay && CLOSER_META_DIARIA > 0 ? (realized / CLOSER_META_DIARIA) * 100 : 0;
-      const ratio = metaAcc > 0 ? accumulated / metaAcc : 1;
+
+      // Realizados: completed or contract_paid meetings on this day
+      const realizados = allLeads.filter(
+        (l) =>
+          l.scheduled_at?.substring(0, 10) === dateStr &&
+          (l.status === "completed" || l.status === "contract_paid")
+      ).length;
+
+      // No-shows on this day
+      const noShows = allLeads.filter(
+        (l) =>
+          l.scheduled_at?.substring(0, 10) === dateStr &&
+          l.status === "no_show"
+      ).length;
+
+      // Contracts paid on this day (by contract_paid_at date)
+      const contratos = allLeads.filter(
+        (l) => l.contract_paid_at?.substring(0, 10) === dateStr
+      ).length;
+
+      accContratos += contratos;
+      if (isBusinessDay) metaAcc += CLOSER_META_DIARIA_CONTRATOS;
+
+      const gapAcc = accContratos - metaAcc;
+      const percentDay =
+        isBusinessDay && CLOSER_META_DIARIA_CONTRATOS > 0
+          ? (contratos / CLOSER_META_DIARIA_CONTRATOS) * 100
+          : 0;
+      const ratio = metaAcc > 0 ? accContratos / metaAcc : 1;
       const status: DailyRow["status"] =
         ratio >= 1 ? "above" : ratio >= 0.9 ? "on_track" : "below";
 
       return {
         date,
         dateStr,
-        realized,
-        metaDiaria: isBusinessDay ? CLOSER_META_DIARIA : 0,
+        realized: contratos, // for the cumulative chart
+        metaDiaria: isBusinessDay ? CLOSER_META_DIARIA_CONTRATOS : 0,
         percentDay,
-        accumulated,
+        accumulated: accContratos,
         metaAccumulated: metaAcc,
         gapAccumulated: gapAcc,
         status,
         isWeekend: !isBusinessDay,
         isBusinessDay,
+        // Extra closer columns
+        agendados,
+        realizados,
+        noShows,
+        contratos,
       };
     });
   }, [detail.allLeads, startDate, endDate]);
@@ -266,23 +310,22 @@ export function useCloserPerformanceData({
     ];
   }, [cm, detail.teamAverages, detail.ranking]);
 
-  // Auto summary
+  // Auto summary — focused on contracts
   const summaryText = useMemo(() => {
     if (!cm) return "";
     const name = detail.closerInfo?.name || "Closer";
-    const r1ag = cm.r1_agendada;
-    const meta = metas.r1Agendada;
-    const att = meta > 0 ? ((r1ag / meta) * 100).toFixed(0) : "0";
     const contr = cm.contrato_pago;
+    const meta = metas.contratoPago;
+    const att = meta > 0 ? ((contr / meta) * 100).toFixed(0) : "0";
     const taxaConv = cm.r1_realizada > 0 ? ((contr / cm.r1_realizada) * 100).toFixed(1) : "0";
 
-    let text = `Neste período, ${name} teve ${r1ag} reuniões R1 agendadas de ${meta} previstas, atingindo ${att}% da meta.`;
-    text += ` Realizou ${cm.r1_realizada} reuniões e fechou ${contr} contratos (taxa de conversão: ${taxaConv}%).`;
+    let text = `Neste período, ${name} fechou ${contr} contratos de ${meta} previstos, atingindo ${att}% da meta.`;
+    text += ` Teve ${cm.r1_agendada} reuniões agendadas, realizou ${cm.r1_realizada} (taxa de conversão: ${taxaConv}%).`;
 
     if (projection.gap > 0 && businessDaysRemaining > 0) {
-      text += ` Para bater a meta, precisa de ${projection.requiredPerDay.toFixed(1)} reuniões/dia útil restante.`;
+      text += ` Para bater a meta, precisa de ${projection.requiredPerDay.toFixed(1)} contratos/dia útil restante.`;
     } else if (projection.gap <= 0) {
-      text += ` Já atingiu a meta do período.`;
+      text += ` Já atingiu a meta de contratos do período! 🎉`;
     }
 
     return text;

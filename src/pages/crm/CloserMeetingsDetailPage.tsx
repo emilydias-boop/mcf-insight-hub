@@ -18,7 +18,7 @@ import { SdrProjectionCard } from "@/components/sdr/SdrProjectionCard";
 import { SdrFunnelPanel } from "@/components/sdr/SdrFunnelPanel";
 import { SdrCumulativeChart } from "@/components/sdr/SdrCumulativeChart";
 import { SdrTeamComparisonPanel } from "@/components/sdr/SdrTeamComparisonPanel";
-import { SdrDailyBreakdownTable } from "@/components/sdr/SdrDailyBreakdownTable";
+import { CloserDailyBreakdownTable } from "@/components/closer/CloserDailyBreakdownTable";
 
 import { useCloserPerformanceData } from "@/hooks/useCloserPerformanceData";
 import { ComparisonMode, MetaMode, computeCompDates } from "@/hooks/useSdrPerformanceData";
