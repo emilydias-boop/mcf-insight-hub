@@ -1,31 +1,33 @@
 
 
-## Corrigir Lead "Luiz Guilherme" no Consórcio — Reverter contract_paid
+## Problema: Botão "Excluir" não aparece para reuniões com status "Realizada"
 
-### Dados identificados
+### Causa raiz
 
-| Campo | Valor |
-|---|---|
-| Attendee ID | `801a0bf4-18ad-4f3a-9023-deda067413c7` |
-| Deal ID | `99174ab6-0406-403c-bb4c-e4455db70381` (Efeito Alavanca + Clube / Consórcio) |
-| Hubla Transaction | `75be8224-c2a2-4c53-8b70-127d8ab68079` |
-| Stage atual do deal | R1 Agendada (já correto, não precisa reverter) |
+O botão "Excluir Permanentemente" no drawer da agenda só é exibido quando a reunião está com status `scheduled`, `rescheduled` ou `no_show` (linha 1135 de `AgendaMeetingDrawer.tsx`):
 
-### Ações (2 UPDATEs via insert tool)
-
-**1. Reverter status do attendee**
-```sql
-UPDATE meeting_slot_attendees 
-SET status = 'completed', contract_paid_at = NULL 
-WHERE id = '801a0bf4-18ad-4f3a-9023-deda067413c7';
+```typescript
+{(isPending || activeMeeting.status === 'no_show') && canDeleteMeeting && (
 ```
 
-**2. Desvincular a transação Hubla**
-```sql
-UPDATE hubla_transactions 
-SET linked_attendee_id = NULL 
-WHERE id = '75be8224-c2a2-4c53-8b70-127d8ab68079';
+Como o lead "Luiz" está com status **"Realizada"** (`completed`), o botão não aparece — mesmo para admins.
+
+### Correção
+
+**Arquivo**: `src/components/crm/AgendaMeetingDrawer.tsx` (linha 1135)
+
+Expandir a condição para incluir `completed` (e opcionalmente `contract_paid`), permitindo que coordenadores/admins excluam reuniões em qualquer status:
+
+```typescript
+// Antes:
+{(isPending || activeMeeting.status === 'no_show') && canDeleteMeeting && (
+
+// Depois:
+{canDeleteMeeting && (
 ```
 
-Após essas correções, o lead voltará a aparecer como "Realizada" na agenda do Consórcio, sem a marcação incorreta de contrato pago.
+Remover a restrição de status para quem tem permissão de exclusão (`canDeleteMeeting` já valida que o usuário é admin/manager/coordenador). Isso permite excluir reuniões em qualquer status, o que faz sentido para roles elevados.
+
+### Arquivo afetado
+- `src/components/crm/AgendaMeetingDrawer.tsx` — Remover filtro de status do botão "Excluir"
 
