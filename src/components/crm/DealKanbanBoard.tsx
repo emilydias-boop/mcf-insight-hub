@@ -429,6 +429,7 @@ export const DealKanbanBoard = ({
       </DragDropContext>
       
       <DealDetailsDrawer
+        key={selectedDealId}
         dealId={selectedDealId}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
