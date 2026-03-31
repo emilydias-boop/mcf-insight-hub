@@ -161,6 +161,7 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
             </TableHeader>
             <TableBody>
               {filteredMeetings.length === 0 ? (
+                <TableRow>
                   <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Nenhum lead encontrado para os filtros selecionados.
                   </TableCell>
@@ -173,9 +174,11 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
                     onClick={() => onSelectMeeting(meeting)}
                   >
                     <TableCell className="text-sm">
-                      {meeting.data_agendamento 
-                        ? format(parseISO(meeting.data_agendamento), "dd/MM HH:mm", { locale: ptBR })
-                        : 'N/A'
+                      {meeting.scheduled_at 
+                        ? format(new Date(meeting.scheduled_at), "dd/MM HH:mm", { locale: ptBR })
+                        : meeting.data_agendamento 
+                          ? format(parseISO(meeting.data_agendamento), "dd/MM", { locale: ptBR })
+                          : 'N/A'
                       }
                     </TableCell>
                     <TableCell>
@@ -197,6 +200,12 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
                       >
                         {formatMeetingStatus(meeting.status_atual)}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {meeting.booked_at
+                        ? format(new Date(meeting.booked_at), "dd/MM HH:mm", { locale: ptBR })
+                        : '-'
+                      }
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {meeting.closer || '-'}
