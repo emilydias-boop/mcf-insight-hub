@@ -73,7 +73,7 @@ function MetricCard({ icon, label, value, color, badge, onClick }: MetricCardPro
   );
 }
 
-export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig }: R2MetricsPanelProps) {
+export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig, aprovadosOverride }: R2MetricsPanelProps) {
   const { data: metrics, isLoading } = useR2MetricsData(weekStart, weekEnd, carrinhoConfig);
   const { data: sdrCarrinhoMetrics, isLoading: sdrLoading } = useSDRCarrinhoMetrics(weekStart, weekEnd);
   const { data: closerCarrinhoMetrics, isLoading: closerLoading } = useCloserCarrinhoMetrics(weekStart, weekEnd);
