@@ -31,6 +31,7 @@ import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
 interface R2MetricsPanelProps {
   weekStart: Date;
   weekEnd: Date;
+  aprovadosOverride?: number;
   carrinhoConfig?: CarrinhoConfig;
 }
 
@@ -72,7 +73,7 @@ function MetricCard({ icon, label, value, color, badge, onClick }: MetricCardPro
   );
 }
 
-export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig }: R2MetricsPanelProps) {
+export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig, aprovadosOverride }: R2MetricsPanelProps) {
   const { data: metrics, isLoading } = useR2MetricsData(weekStart, weekEnd, carrinhoConfig);
   const { data: sdrCarrinhoMetrics, isLoading: sdrLoading } = useSDRCarrinhoMetrics(weekStart, weekEnd);
   const { data: closerCarrinhoMetrics, isLoading: closerLoading } = useCloserCarrinhoMetrics(weekStart, weekEnd);
@@ -199,7 +200,7 @@ export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig }: R2Metrics
           <MetricCard
             icon={<CheckCircle className="h-5 w-5" />}
             label="Selecionados"
-            value={metrics.selecionados}
+            value={aprovadosOverride ?? metrics.selecionados}
             color="#10B981"
           />
           <MetricCard
@@ -224,7 +225,7 @@ export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig }: R2Metrics
           <MetricCard
             icon={<Percent className="h-5 w-5" />}
             label="Conversão (Semana)"
-            value={`${(metrics.selecionados > 0 ? ((metrics.vendas - metrics.vendasExtras) / metrics.selecionados) * 100 : 0).toFixed(2)}%`}
+            value={`${((aprovadosOverride ?? metrics.selecionados) > 0 ? ((metrics.vendas - metrics.vendasExtras) / (aprovadosOverride ?? metrics.selecionados)) * 100 : 0).toFixed(2)}%`}
             color={
               (metrics.selecionados > 0 ? ((metrics.vendas - metrics.vendasExtras) / metrics.selecionados) * 100 : 0) >= 60 ? '#10B981' : 
               (metrics.selecionados > 0 ? ((metrics.vendas - metrics.vendasExtras) / metrics.selecionados) * 100 : 0) >= 30 ? '#F59E0B' : '#EF4444'

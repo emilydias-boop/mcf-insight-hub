@@ -331,7 +331,7 @@ export default function R2Carrinho() {
         </TabsContent>
 
         <TabsContent value="metricas">
-          <R2MetricsPanel weekStart={weekStart} weekEnd={weekEnd} carrinhoConfig={config} />
+          <R2MetricsPanel weekStart={weekStart} weekEnd={weekEnd} carrinhoConfig={config} aprovadosOverride={kpis?.aprovados} />
         </TabsContent>
       </Tabs>
 
