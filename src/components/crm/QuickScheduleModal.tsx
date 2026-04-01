@@ -118,6 +118,7 @@ export function QuickScheduleModal({
   const { data: buOriginIds = [] } = useBUOriginIds(activeBU);
   const originIds = buOriginIds.length > 0 ? buOriginIds : undefined;
   const isCoordinatorOrAbove = ['admin', 'manager', 'coordenador'].includes(role || '');
+  const { data: releasedDates = [] } = useAgendaReleasedDates();
   
   // Fetch SDRs filtered by BU
   const { data: buSdrs = [] } = useSdrsByBU(activeBU);
