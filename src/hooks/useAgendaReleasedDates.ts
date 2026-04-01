@@ -54,18 +54,18 @@ export function useToggleReleasedDate() {
         const { error } = await supabase
           .from('automation_settings')
           .update({
-            value: newDates as unknown as Record<string, unknown>,
+            value: newDates as any,
           })
           .eq('key', key);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('automation_settings')
-          .insert({
+          .insert([{
             key,
-            value: newDates as unknown as Record<string, unknown>,
+            value: newDates as any,
             description: `Datas liberadas para agendamento na agenda da BU ${activeBU || 'incorporador'}`,
-          });
+          }]);
         if (error) throw error;
       }
       return { newDates, added: !isReleased, dateStr };
