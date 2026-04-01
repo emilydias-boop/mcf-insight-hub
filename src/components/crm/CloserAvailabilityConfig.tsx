@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Palette, Plus, Trash2, Copy, Loader2, Clock, Users } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Palette, Plus, Trash2, Copy, Loader2, Clock, Users, CalendarDays } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { CloserWithAvailability, useUpdateCloserColor, useUpdateCloserSettings } from '@/hooks/useAgendaData';
 import { BlockedDatesConfig } from './BlockedDatesConfig';
@@ -19,6 +20,10 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useAgendaReleasedDates, useToggleReleasedDate } from '@/hooks/useAgendaReleasedDates';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { format, isBefore, startOfDay } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface CloserAvailabilityConfigProps {
   open: boolean;
@@ -414,6 +419,68 @@ function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) 
   );
 }
 
+function ReleasedDatesConfig() {
+  const { data: releasedDates = [], isLoading } = useAgendaReleasedDates();
+  const toggleDate = useToggleReleasedDate();
+  const today = startOfDay(new Date());
+
+  const selectedDates = releasedDates
+    .map(d => new Date(d + 'T00:00:00'))
+    .filter(d => !isBefore(d, today));
+
+  const handleDayClick = (day: Date) => {
+    if (isBefore(day, today)) return;
+    const dateStr = format(day, 'yyyy-MM-dd');
+    toggleDate.mutate({ dateStr, currentDates: releasedDates });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-muted-foreground">
+        Clique nas datas futuras para liberar/bloquear agendamento pelos SDRs. 
+        Datas liberadas ficam marcadas em <span className="font-semibold text-primary">azul</span>.
+      </div>
+
+      {isLoading ? (
+        <Skeleton className="h-64 w-full" />
+      ) : (
+        <div className="flex justify-center">
+          <CalendarComponent
+            mode="multiple"
+            selected={selectedDates}
+            onDayClick={handleDayClick}
+            locale={ptBR}
+            disabled={(date) => isBefore(date, today)}
+            className="rounded-md border pointer-events-auto"
+            numberOfMonths={1}
+          />
+        </div>
+      )}
+
+      {releasedDates.length > 0 && (
+        <div className="space-y-1">
+          <Label className="text-sm font-medium">Datas liberadas:</Label>
+          <div className="flex flex-wrap gap-1">
+            {releasedDates
+              .filter(d => !isBefore(new Date(d + 'T00:00:00'), today))
+              .sort()
+              .map(d => (
+                <Badge
+                  key={d}
+                  variant="secondary"
+                  className="cursor-pointer hover:bg-destructive/20"
+                  onClick={() => toggleDate.mutate({ dateStr: d, currentDates: releasedDates })}
+                >
+                  {format(new Date(d + 'T00:00:00'), 'dd/MM/yyyy')} ✕
+                </Badge>
+              ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CloserAvailabilityConfig({ open, onOpenChange, closers, isLoading }: CloserAvailabilityConfigProps) {
   const [selectedCloser, setSelectedCloser] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('availability');
@@ -459,6 +526,10 @@ export function CloserAvailabilityConfig({ open, onOpenChange, closers, isLoadin
               <TabsList className="w-full">
                 <TabsTrigger value="availability">Disponibilidade</TabsTrigger>
                 <TabsTrigger value="blocked">Datas Bloqueadas</TabsTrigger>
+                <TabsTrigger value="released">
+                  <CalendarDays className="h-3.5 w-3.5 mr-1" />
+                  Dias Liberados
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="availability" className="mt-4">
@@ -474,6 +545,10 @@ export function CloserAvailabilityConfig({ open, onOpenChange, closers, isLoadin
                 {currentCloserId && (
                   <BlockedDatesConfig closerId={currentCloserId} />
                 )}
+              </TabsContent>
+
+              <TabsContent value="released" className="mt-4">
+                <ReleasedDatesConfig />
               </TabsContent>
             </Tabs>
           </div>

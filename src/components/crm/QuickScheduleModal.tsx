@@ -44,6 +44,7 @@ import { useSdrsByBU } from '@/hooks/useSdrFechamento';
 import { useCloserDaySlots } from '@/hooks/useCloserMeetingLinks';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
+import { useAgendaReleasedDates } from '@/hooks/useAgendaReleasedDates';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -117,6 +118,7 @@ export function QuickScheduleModal({
   const { data: buOriginIds = [] } = useBUOriginIds(activeBU);
   const originIds = buOriginIds.length > 0 ? buOriginIds : undefined;
   const isCoordinatorOrAbove = ['admin', 'manager', 'coordenador'].includes(role || '');
+  const { data: releasedDates = [] } = useAgendaReleasedDates();
   
   // Fetch SDRs filtered by BU
   const { data: buSdrs = [] } = useSdrsByBU(activeBU);
@@ -287,8 +289,16 @@ export function QuickScheduleModal({
       dates.push(new Date(today.getTime() + 86400000)); // Tomorrow
     }
     
+    // Add released dates
+    releasedDates.forEach(dateStr => {
+      const d = new Date(dateStr + 'T00:00:00');
+      if (d >= today && !dates.some(existing => existing.getTime() === d.getTime())) {
+        dates.push(d);
+      }
+    });
+    
     return dates;
-  }, [isCoordinatorOrAbove]);
+  }, [isCoordinatorOrAbove, releasedDates]);
 
   // Fetch slot counts for allowed dates
   const { data: slotsCountByDate } = useAvailableSlotsCountByDate(
@@ -948,6 +958,11 @@ export function QuickScheduleModal({
                       
                       // Não pode agendar no passado
                       if (targetDate < today) return true;
+                      
+                      // Check if date is in released dates list
+                      const targetDateStr = format(targetDate, 'yyyy-MM-dd');
+                      const isReleased = releasedDates.includes(targetDateStr);
+                      if (isReleased) return false;
                       
                       // Se hoje é quinta (4): pode quinta, sexta, sábado
                       if (dayOfWeek === 4) {
