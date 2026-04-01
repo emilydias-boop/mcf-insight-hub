@@ -419,12 +419,12 @@ const Contatos = () => {
       {/* Bulk actions - hidden for read-only roles */}
       {!isReadOnly && (
         <>
-          <BulkActionsBar
+           <BulkActionsBar
             selectedCount={selectedIds.size}
             onTransfer={() => setPipelineModalOpen(true)}
             onClearSelection={() => setSelectedIds(new Set())}
             isTransferring={false}
-            onDuplicate={() => setDuplicateDialogOpen(true)}
+            onDuplicate={activeBU !== 'consorcio' ? () => setDuplicateDialogOpen(true) : undefined}
             isDuplicating={duplicateMutation.isPending}
           />
 
