@@ -44,6 +44,7 @@ import { useSdrsByBU } from '@/hooks/useSdrFechamento';
 import { useCloserDaySlots } from '@/hooks/useCloserMeetingLinks';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
+import { useAgendaReleasedDates } from '@/hooks/useAgendaReleasedDates';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
