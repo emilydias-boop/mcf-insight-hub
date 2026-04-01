@@ -959,6 +959,11 @@ export function QuickScheduleModal({
                       // Não pode agendar no passado
                       if (targetDate < today) return true;
                       
+                      // Check if date is in released dates list
+                      const targetDateStr = format(targetDate, 'yyyy-MM-dd');
+                      const isReleased = releasedDates.includes(targetDateStr);
+                      if (isReleased) return false;
+                      
                       // Se hoje é quinta (4): pode quinta, sexta, sábado
                       if (dayOfWeek === 4) {
                         const friday = new Date(today);
