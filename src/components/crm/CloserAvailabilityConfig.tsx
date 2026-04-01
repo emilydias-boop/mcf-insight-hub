@@ -463,6 +463,10 @@ export function CloserAvailabilityConfig({ open, onOpenChange, closers, isLoadin
               <TabsList className="w-full">
                 <TabsTrigger value="availability">Disponibilidade</TabsTrigger>
                 <TabsTrigger value="blocked">Datas Bloqueadas</TabsTrigger>
+                <TabsTrigger value="released">
+                  <CalendarDays className="h-3.5 w-3.5 mr-1" />
+                  Dias Liberados
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="availability" className="mt-4">
@@ -478,6 +482,10 @@ export function CloserAvailabilityConfig({ open, onOpenChange, closers, isLoadin
                 {currentCloserId && (
                   <BlockedDatesConfig closerId={currentCloserId} />
                 )}
+              </TabsContent>
+
+              <TabsContent value="released" className="mt-4">
+                <ReleasedDatesConfig />
               </TabsContent>
             </Tabs>
           </div>
