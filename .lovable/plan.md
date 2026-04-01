@@ -1,42 +1,27 @@
 
 
-## Liberar Dias Extras na Agenda para SDRs
+## Discrepância: Aprovados 33 vs Selecionados 16
 
-### Problema atual
+### Causa raiz
 
-No `QuickScheduleModal`, SDRs só podem agendar para **hoje e amanhã** (com lógica especial para quinta/sexta/sábado). Essa restrição é hardcoded. Quando um dia enche, coordenadores precisam de uma forma de "liberar" dias adicionais (ex: sexta, segunda) para que os SDRs possam agendar neles.
+Os dois números vêm de **hooks diferentes com lógicas distintas**:
 
-### Solução
+| Métrica | Hook | Lógica |
+|---|---|---|
+| **Aprovados: 33** (KPI topo) | `useR2CarrinhoKPIs` | Conta **todos** os attendees com status "aprovado" na **janela operacional** (Sex-Sex), independente de terem contrato na safra |
+| **Selecionados: 16** (Métricas) | `useR2MetricsData` | Conta apenas aprovados que vieram da **cadeia safra**: contrato pago (Qui-Qua) → contato → primeiro R2 após contrato → status aprovado |
 
-Criar uma configuração de **"Dias Liberados"** na settings do Supabase, editável pelo dialog de "Configurar Closers", que adiciona datas extras às permitidas para SDRs.
+Ou seja, os 33 aprovados incluem leads que foram aprovados no R2 mas cujo contrato **não está na safra atual** (pode ser de semanas anteriores, ou leads sem contrato vinculado). Os 16 selecionados são apenas os que têm contrato **nesta safra** e foram aprovados.
 
-### Como funciona
+### Solução proposta
 
-1. **Nova tab "Dias Liberados"** no dialog `CloserAvailabilityConfig` — um calendário simples onde o coordenador clica nas datas que quer liberar (toggle on/off). As datas ficam salvas na tabela `settings` com key `agenda_released_dates_{bu}`.
+**"Selecionados" deveria refletir o mesmo número de "Aprovados" do topo**, pois a seção "Conversão do Carrinho" deve mostrar a conversão dos leads aprovados em vendas de parceria.
 
-2. **QuickScheduleModal** consulta essas datas e as inclui nas `allowedDates` e no `disabled()` do calendário, permitindo que SDRs agendem nelas.
+**Correção**: No `useR2MetricsData.ts`, o cálculo de `selecionados` (linha 338) deve usar a mesma lógica do KPI de Aprovados — contar attendees aprovados na janela operacional, não apenas os da cadeia safra.
 
-### Arquivos
+Alternativa mais simples: passar o valor de `aprovados` do `useR2CarrinhoKPIs` para o painel de métricas e usá-lo como `selecionados`, garantindo consistência visual.
 
-1. **Criar `src/hooks/useAgendaReleasedDates.ts`** — Hook para ler/salvar datas liberadas na tabela `settings` (key: `agenda_released_dates_{bu}`, value: array de strings `yyyy-MM-dd`)
-
-2. **Editar `src/components/crm/CloserAvailabilityConfig.tsx`** — Adicionar nova tab "Dias Liberados" com calendário multi-select. Coordenador clica em datas futuras para liberar/bloquear. Mostra badge nas datas já liberadas.
-
-3. **Editar `src/components/crm/QuickScheduleModal.tsx`** — Importar o hook, adicionar datas liberadas ao cálculo de `allowedDates` (linha 273) e à lógica de `disabled` (linha 935). Se a data está na lista de liberadas, SDR pode agendar nela.
-
-### Detalhes técnicos
-
-```text
-// settings table
-key: "agenda_released_dates_consorcio"  (ou "agenda_released_dates_incorporador")
-value: ["2026-04-03", "2026-04-06", "2026-04-07"]
-
-// No QuickScheduleModal disabled():
-// Antes: return !(isToday || isTomorrow);
-// Depois: 
-const isReleased = releasedDates.includes(format(targetDate, 'yyyy-MM-dd'));
-return !(isToday || isTomorrow || isReleased);
-```
-
-A tab "Dias Liberados" é global (não por closer), pois libera o dia para agendamento em qualquer closer da BU.
+### Arquivo afetado
+- `src/hooks/useR2MetricsData.ts` — Ajustar cálculo de `selecionados` para usar a mesma janela operacional dos Aprovados do topo
+- Ou `src/components/crm/R2MetricsPanel.tsx` — Receber `aprovados` do KPI e usar como override
 
