@@ -289,8 +289,16 @@ export function QuickScheduleModal({
       dates.push(new Date(today.getTime() + 86400000)); // Tomorrow
     }
     
+    // Add released dates
+    releasedDates.forEach(dateStr => {
+      const d = new Date(dateStr + 'T00:00:00');
+      if (d >= today && !dates.some(existing => existing.getTime() === d.getTime())) {
+        dates.push(d);
+      }
+    });
+    
     return dates;
-  }, [isCoordinatorOrAbove]);
+  }, [isCoordinatorOrAbove, releasedDates]);
 
   // Fetch slot counts for allowed dates
   const { data: slotsCountByDate } = useAvailableSlotsCountByDate(
