@@ -19,6 +19,10 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useAgendaReleasedDates, useToggleReleasedDate } from '@/hooks/useAgendaReleasedDates';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { format, isBefore, startOfDay } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface CloserAvailabilityConfigProps {
   open: boolean;
