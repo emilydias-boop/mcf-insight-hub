@@ -1,33 +1,42 @@
 
 
-## Problema: Botão "Excluir" não aparece para reuniões com status "Realizada"
+## Problema: "Duplicar" só permite Inside Sales
 
 ### Causa raiz
 
-O botão "Excluir Permanentemente" no drawer da agenda só é exibido quando a reunião está com status `scheduled`, `rescheduled` ou `no_show` (linha 1135 de `AgendaMeetingDrawer.tsx`):
+O botão **"Duplicar p/ Inside"** no `BulkActionsBar` é um atalho **hardcoded** exclusivamente para a pipeline Inside Sales. O componente `DuplicateToInsideDialog` busca estágios apenas do `INSIDE_SALES_ORIGIN_ID`.
 
-```typescript
-{(isPending || activeMeeting.status === 'no_show') && canDeleteMeeting && (
-```
+Já o botão **"Transferir para..."** abre o `SendToPipelineModal`, que permite escolher qualquer BU/pipeline. Ou seja, a funcionalidade de enviar para outra pipeline já existe — mas com outro nome.
 
-Como o lead "Luiz" está com status **"Realizada"** (`completed`), o botão não aparece — mesmo para admins.
+### Opções
+
+**Opção A — Tornar o botão "Duplicar" dinâmico por BU**
+- Quando estiver na BU Consórcio, o botão "Duplicar" abre um modal que lista as pipelines do Consórcio (não Inside Sales)
+- Quando estiver na BU Incorporador, mantém o comportamento atual (Inside Sales)
+
+**Opção B — Remover o botão "Duplicar p/ Inside" da BU Consórcio**
+- Ocultar o botão na BU Consórcio, já que "Transferir para..." já cobre essa necessidade
+- Manter apenas na BU Incorporador onde faz sentido
+
+**Opção C — Renomear e unificar**
+- Substituir ambos os botões por um único "Enviar para Pipeline" que funciona para qualquer BU
+- Remove duplicidade de funcionalidade
+
+### Recomendação: Opção B (mais simples)
+
+Ocultar o botão "Duplicar p/ Inside" quando `activeBU === 'consorcio'`, pois o "Transferir para..." já faz o mesmo trabalho. Instruir o usuário a usar "Transferir para..." para enviar contatos a qualquer pipeline.
 
 ### Correção
 
-**Arquivo**: `src/components/crm/AgendaMeetingDrawer.tsx` (linha 1135)
+**Arquivo**: `src/components/crm/BulkActionsBar.tsx`
 
-Expandir a condição para incluir `completed` (e opcionalmente `contract_paid`), permitindo que coordenadores/admins excluam reuniões em qualquer status:
+Adicionar prop `hideDuplicate` ou verificar a BU ativa para ocultar o botão.
 
-```typescript
-// Antes:
-{(isPending || activeMeeting.status === 'no_show') && canDeleteMeeting && (
+**Arquivo**: `src/pages/crm/Contatos.tsx`
 
-// Depois:
-{canDeleteMeeting && (
-```
+Passar flag para ocultar duplicação quando na BU Consórcio, usando `useActiveBU()`.
 
-Remover a restrição de status para quem tem permissão de exclusão (`canDeleteMeeting` já valida que o usuário é admin/manager/coordenador). Isso permite excluir reuniões em qualquer status, o que faz sentido para roles elevados.
-
-### Arquivo afetado
-- `src/components/crm/AgendaMeetingDrawer.tsx` — Remover filtro de status do botão "Excluir"
+### Arquivos afetados
+- `src/pages/crm/Contatos.tsx` — Condicionar exibição do botão duplicar por BU
+- `src/components/crm/BulkActionsBar.tsx` — Suportar ocultação do botão duplicar
 
