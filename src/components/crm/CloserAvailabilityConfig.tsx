@@ -418,6 +418,68 @@ function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) 
   );
 }
 
+function ReleasedDatesConfig() {
+  const { data: releasedDates = [], isLoading } = useAgendaReleasedDates();
+  const toggleDate = useToggleReleasedDate();
+  const today = startOfDay(new Date());
+
+  const selectedDates = releasedDates
+    .map(d => new Date(d + 'T00:00:00'))
+    .filter(d => !isBefore(d, today));
+
+  const handleDayClick = (day: Date) => {
+    if (isBefore(day, today)) return;
+    const dateStr = format(day, 'yyyy-MM-dd');
+    toggleDate.mutate({ dateStr, currentDates: releasedDates });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-muted-foreground">
+        Clique nas datas futuras para liberar/bloquear agendamento pelos SDRs. 
+        Datas liberadas ficam marcadas em <span className="font-semibold text-primary">azul</span>.
+      </div>
+
+      {isLoading ? (
+        <Skeleton className="h-64 w-full" />
+      ) : (
+        <div className="flex justify-center">
+          <CalendarComponent
+            mode="multiple"
+            selected={selectedDates}
+            onDayClick={handleDayClick}
+            locale={ptBR}
+            disabled={(date) => isBefore(date, today)}
+            className="rounded-md border pointer-events-auto"
+            numberOfMonths={1}
+          />
+        </div>
+      )}
+
+      {releasedDates.length > 0 && (
+        <div className="space-y-1">
+          <Label className="text-sm font-medium">Datas liberadas:</Label>
+          <div className="flex flex-wrap gap-1">
+            {releasedDates
+              .filter(d => !isBefore(new Date(d + 'T00:00:00'), today))
+              .sort()
+              .map(d => (
+                <Badge
+                  key={d}
+                  variant="secondary"
+                  className="cursor-pointer hover:bg-destructive/20"
+                  onClick={() => toggleDate.mutate({ dateStr: d, currentDates: releasedDates })}
+                >
+                  {format(new Date(d + 'T00:00:00'), 'dd/MM/yyyy')} ✕
+                </Badge>
+              ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CloserAvailabilityConfig({ open, onOpenChange, closers, isLoading }: CloserAvailabilityConfigProps) {
   const [selectedCloser, setSelectedCloser] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('availability');
