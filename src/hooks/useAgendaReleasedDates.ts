@@ -43,15 +43,31 @@ export function useToggleReleasedDate() {
         ? currentDates.filter(d => d !== dateStr)
         : [...currentDates, dateStr].sort();
 
-      const { error } = await supabase
+      // Check if record exists
+      const { data: existing } = await supabase
         .from('automation_settings')
-        .upsert({
-          key,
-          value: newDates as unknown as Record<string, unknown>,
-          description: `Datas liberadas para agendamento na agenda da BU ${activeBU || 'incorporador'}`,
-        }, { onConflict: 'key' });
+        .select('id')
+        .eq('key', key)
+        .maybeSingle();
 
-      if (error) throw error;
+      if (existing) {
+        const { error } = await supabase
+          .from('automation_settings')
+          .update({
+            value: newDates as unknown as Record<string, unknown>,
+          })
+          .eq('key', key);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('automation_settings')
+          .insert({
+            key,
+            value: newDates as unknown as Record<string, unknown>,
+            description: `Datas liberadas para agendamento na agenda da BU ${activeBU || 'incorporador'}`,
+          });
+        if (error) throw error;
+      }
       return { newDates, added: !isReleased, dateStr };
     },
     onSuccess: ({ added, dateStr }) => {
