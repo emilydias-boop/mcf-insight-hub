@@ -200,7 +200,7 @@ export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig, aprovadosOv
           <MetricCard
             icon={<CheckCircle className="h-5 w-5" />}
             label="Selecionados"
-            value={metrics.selecionados}
+            value={aprovadosOverride ?? metrics.selecionados}
             color="#10B981"
           />
           <MetricCard
