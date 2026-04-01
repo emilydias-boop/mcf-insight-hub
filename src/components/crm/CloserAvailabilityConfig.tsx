@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { Palette, Plus, Trash2, Copy, Loader2, Clock, Users, CalendarDays } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { CloserWithAvailability, useUpdateCloserColor, useUpdateCloserSettings } from '@/hooks/useAgendaData';
