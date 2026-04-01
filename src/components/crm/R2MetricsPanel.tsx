@@ -225,7 +225,7 @@ export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig, aprovadosOv
           <MetricCard
             icon={<Percent className="h-5 w-5" />}
             label="Conversão (Semana)"
-            value={`${(metrics.selecionados > 0 ? ((metrics.vendas - metrics.vendasExtras) / metrics.selecionados) * 100 : 0).toFixed(2)}%`}
+            value={`${((aprovadosOverride ?? metrics.selecionados) > 0 ? ((metrics.vendas - metrics.vendasExtras) / (aprovadosOverride ?? metrics.selecionados)) * 100 : 0).toFixed(2)}%`}
             color={
               (metrics.selecionados > 0 ? ((metrics.vendas - metrics.vendasExtras) / metrics.selecionados) * 100 : 0) >= 60 ? '#10B981' : 
               (metrics.selecionados > 0 ? ((metrics.vendas - metrics.vendasExtras) / metrics.selecionados) * 100 : 0) >= 30 ? '#F59E0B' : '#EF4444'
