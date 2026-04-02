@@ -46,8 +46,39 @@ serve(async (req) => {
     const card = (boleto as any).consortium_cards;
     if (!card) throw new Error('Carta não vinculada ao boleto');
 
-    const telefone = card.telefone || card.telefone_comercial;
-    if (!telefone) throw new Error('Cliente sem telefone cadastrado');
+    // Try multiple phone sources
+    let telefone = card.telefone || card.telefone_comercial;
+    
+    // Fallback: search crm_contacts by email or name
+    if (!telefone) {
+      const email = card.email || card.email_comercial;
+      if (email) {
+        const { data: contact } = await supabase
+          .from('crm_contacts')
+          .select('phone')
+          .eq('email', email.toLowerCase())
+          .not('phone', 'is', null)
+          .limit(1)
+          .single();
+        if (contact?.phone) telefone = contact.phone;
+      }
+    }
+    
+    if (!telefone) {
+      const searchName = card.nome_completo || card.razao_social;
+      if (searchName) {
+        const { data: contact } = await supabase
+          .from('crm_contacts')
+          .select('phone')
+          .ilike('name', searchName)
+          .not('phone', 'is', null)
+          .limit(1)
+          .single();
+        if (contact?.phone) telefone = contact.phone;
+      }
+    }
+
+    if (!telefone) throw new Error('Cliente sem telefone cadastrado. Cadastre o telefone na carta ou no CRM.');
 
     const nome = card.nome_completo || card.razao_social || boleto.nome_extraido || 'Cliente';
     const primeiroNome = nome.split(' ')[0];
