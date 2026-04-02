@@ -80,6 +80,7 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
             <TableHead>Status</TableHead>
             <TableHead>Situação Cota</TableHead>
             <TableHead>Responsável</TableHead>
+            <TableHead className="text-center">Boleto</TableHead>
             <TableHead className="text-center">Ações</TableHead>
           </TableRow>
         </TableHeader>
