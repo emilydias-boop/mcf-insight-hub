@@ -8,7 +8,7 @@ import {
   Settings, 
   Shield, 
   CalendarDays, 
-  UserX, 
+   
   Copy,
   ShoppingCart,
   ClipboardCheck,
@@ -23,7 +23,7 @@ import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
 const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
   incorporador: [
     'visao-geral', 'contatos', 'negocios', 
-    'agenda', 'agenda-r2', 'r2-carrinho', 'deals-orfaos', 'leads-limbo',
+    'agenda', 'agenda-r2', 'r2-carrinho', 'leads-limbo',
     'contatos-duplicados', 'auditoria-agendamentos', 'configuracoes'
   ],
   consorcio: [
@@ -89,7 +89,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     { key: 'agenda', to: `${basePath}/agenda`, label: 'Agenda R1', icon: CalendarDays },
     { key: 'agenda-r2', to: `${basePath}/agenda-r2`, label: 'Agenda R2', icon: CalendarDays },
     { key: 'r2-carrinho', to: `${basePath}/r2-carrinho`, label: 'Carrinho R2', icon: ShoppingCart },
-    { key: 'deals-orfaos', to: `${basePath}/deals-orfaos`, label: 'Órfãos', icon: UserX },
+    
     { key: 'leads-limbo', to: `${basePath}/leads-limbo`, label: 'Limbo', icon: Inbox },
     { key: 'contatos-duplicados', to: `${basePath}/contatos-duplicados`, label: 'Duplicados', icon: Copy },
     { key: 'auditoria-agendamentos', to: `${basePath}/auditoria-agendamentos`, label: 'Auditoria', icon: Shield },

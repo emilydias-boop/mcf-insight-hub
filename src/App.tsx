@@ -51,7 +51,7 @@ import ImportarHistorico from "./pages/crm/ImportarHistorico";
 import AuditoriaAgendamentos from "./pages/crm/AuditoriaAgendamentos";
 
 import Agenda from "./pages/crm/Agenda";
-import DealsOrfaos from "./pages/crm/DealsOrfaos";
+
 import LeadsLimbo from "./pages/crm/LeadsLimbo";
 import RetornosParceiros from "./pages/crm/RetornosParceiros";
 import ContatosDuplicados from "./pages/crm/ContatosDuplicados";
@@ -189,7 +189,7 @@ const App = () => (
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
                 <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
-                <Route path="deals-orfaos" element={<DealsOrfaos />} />
+                
                 <Route path="leads-limbo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsLimbo /></RoleGuard>} />
                 <Route path="contatos-duplicados" element={<ContatosDuplicados />} />
                 <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
@@ -261,7 +261,7 @@ const App = () => (
                 <Route path="importar-contatos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ImportarContatos /></RoleGuard>} />
                 <Route path="importar-negocios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ImportarNegocios /></RoleGuard>} />
                 <Route path="importar-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ImportarHistorico /></RoleGuard>} />
-                <Route path="deals-orfaos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DealsOrfaos /></RoleGuard>} />
+                
                 <Route path="leads-limbo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsLimbo /></RoleGuard>} />
                 <Route path="contatos-duplicados" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ContatosDuplicados /></RoleGuard>} />
                 <Route path="retornos-parceiros" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><RetornosParceiros /></RoleGuard>} />
