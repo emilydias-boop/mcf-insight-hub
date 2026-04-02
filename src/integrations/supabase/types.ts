@@ -2316,6 +2316,81 @@ export type Database = {
           },
         ]
       }
+      consorcio_boletos: {
+        Row: {
+          card_id: string | null
+          codigo_barras: string | null
+          cota_extraida: string | null
+          created_at: string
+          grupo_extraido: string | null
+          id: string
+          installment_id: string | null
+          linha_digitavel: string | null
+          match_confidence: string
+          nome_extraido: string | null
+          sent_at: string | null
+          status: string
+          storage_path: string
+          updated_at: string
+          uploaded_by: string | null
+          valor_extraido: number | null
+          vencimento_extraido: string | null
+        }
+        Insert: {
+          card_id?: string | null
+          codigo_barras?: string | null
+          cota_extraida?: string | null
+          created_at?: string
+          grupo_extraido?: string | null
+          id?: string
+          installment_id?: string | null
+          linha_digitavel?: string | null
+          match_confidence?: string
+          nome_extraido?: string | null
+          sent_at?: string | null
+          status?: string
+          storage_path: string
+          updated_at?: string
+          uploaded_by?: string | null
+          valor_extraido?: number | null
+          vencimento_extraido?: string | null
+        }
+        Update: {
+          card_id?: string | null
+          codigo_barras?: string | null
+          cota_extraida?: string | null
+          created_at?: string
+          grupo_extraido?: string | null
+          id?: string
+          installment_id?: string | null
+          linha_digitavel?: string | null
+          match_confidence?: string
+          nome_extraido?: string | null
+          sent_at?: string | null
+          status?: string
+          storage_path?: string
+          updated_at?: string
+          uploaded_by?: string | null
+          valor_extraido?: number | null
+          vencimento_extraido?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_boletos_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_boletos_installment_id_fkey"
+            columns: ["installment_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_installments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_categoria_options: {
         Row: {
           color: string | null
