@@ -84,13 +84,17 @@ function calcStatusParcela(inst: { status: string; data_pagamento: string | null
   return 'pendente';
 }
 
-function calcSituacaoCota(parcelas: Array<{ status_calculado: StatusParcela }>, cotaStatus: string): SituacaoCota {
+interface CardGlobalStats {
+  totalParcelas: number;
+  parcelasPagas: number;
+  temAtraso: boolean;
+}
+
+function calcSituacaoCotaGlobal(stats: CardGlobalStats | undefined, cotaStatus: string): SituacaoCota {
   if (cotaStatus === 'cancelado') return 'cancelada';
-  if (parcelas.length === 0) return 'pendente';
-  const todasPagas = parcelas.every(p => p.status_calculado === 'paga');
-  if (todasPagas) return 'quitada';
-  const temAtrasada = parcelas.some(p => p.status_calculado === 'atrasada');
-  if (temAtrasada) return 'em_atraso';
+  if (!stats || stats.totalParcelas === 0) return 'pendente';
+  if (stats.parcelasPagas === stats.totalParcelas) return 'quitada';
+  if (stats.temAtraso) return 'em_atraso';
   return 'pendente';
 }
 
