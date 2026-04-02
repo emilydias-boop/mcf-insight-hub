@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
 import { useCRMOverviewData } from '@/hooks/useCRMOverviewData';
-import { OverviewKPIs } from './overview/OverviewKPIs';
+
 import { PipelineHealthBlock } from './overview/PipelineHealthBlock';
 import { FlowFunnelBlock } from './overview/FlowFunnelBlock';
 import { SdrRankingTable } from './overview/SdrRankingTable';
@@ -88,8 +88,6 @@ export function FunilDashboard() {
         </div>
       </div>
 
-      {/* 1. KPIs */}
-      <OverviewKPIs data={data?.kpis} isLoading={isLoading} />
 
       {/* 2. Pipeline Health */}
       <PipelineHealthBlock data={data?.health} isLoading={isLoading} />
