@@ -80,10 +80,11 @@ export interface CRMOverviewData {
 export function useCRMOverviewData(
   periodStart: Date,
   periodEnd: Date,
-  originIds: string[]
+  originIds: string[],
+  buName?: string | null
 ) {
   return useQuery({
-    queryKey: ['crm-overview-data', periodStart.toISOString(), periodEnd.toISOString(), originIds.join(',')],
+    queryKey: ['crm-overview-data', periodStart.toISOString(), periodEnd.toISOString(), originIds.join(','), buName],
     queryFn: async (): Promise<CRMOverviewData> => {
       if (!originIds.length) {
         return emptyData();
