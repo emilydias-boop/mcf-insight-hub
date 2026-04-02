@@ -105,7 +105,7 @@ export function useConsorcioPagamentos(
   selectedMonth?: { start: string; end: string }
 ) {
   // Fetch installments filtered by selected month
-  const { data: rawData, isLoading, refetch } = useQuery({
+  const { data: rawData, isLoading: isLoadingMain, refetch } = useQuery({
     queryKey: ['consorcio-pagamentos-all', selectedMonth?.start, selectedMonth?.end],
     queryFn: async () => {
       const allInstallments: any[] = [];
@@ -126,7 +126,6 @@ export function useConsorcioPagamentos(
           `)
           .order('data_vencimento', { ascending: true });
 
-        // Filter by selected month
         if (selectedMonth) {
           query = query
             .gte('data_vencimento', selectedMonth.start)
@@ -151,6 +150,50 @@ export function useConsorcioPagamentos(
     },
     staleTime: 5 * 60 * 1000,
   });
+
+  // Get unique card_ids from current month data
+  const cardIds = useMemo(() => {
+    if (!rawData) return [];
+    const ids = new Set<string>();
+    for (const inst of rawData) ids.add(inst.card_id);
+    return Array.from(ids);
+  }, [rawData]);
+
+  // Fetch global stats for all card_ids (unfiltered by month)
+  const { data: globalStats, isLoading: isLoadingStats } = useQuery({
+    queryKey: ['consorcio-card-global-stats', cardIds],
+    queryFn: async () => {
+      if (cardIds.length === 0) return new Map<string, CardGlobalStats>();
+      
+      const allRows: any[] = [];
+      // Batch card_ids in groups to avoid query size limits
+      const batchSize = 50;
+      for (let i = 0; i < cardIds.length; i += batchSize) {
+        const batch = cardIds.slice(i, i + batchSize);
+        const { data, error } = await supabase
+          .from('consortium_installments')
+          .select('card_id, status, data_pagamento, data_vencimento')
+          .in('card_id', batch);
+        if (error) throw error;
+        if (data) allRows.push(...data);
+      }
+
+      const hoje = new Date().toISOString().split('T')[0];
+      const statsMap = new Map<string, CardGlobalStats>();
+      for (const row of allRows) {
+        let s = statsMap.get(row.card_id);
+        if (!s) { s = { totalParcelas: 0, parcelasPagas: 0, temAtraso: false }; statsMap.set(row.card_id, s); }
+        s.totalParcelas++;
+        if (row.status === 'pago' || row.data_pagamento) s.parcelasPagas++;
+        if (row.status !== 'pago' && !row.data_pagamento && row.data_vencimento < hoje) s.temAtraso = true;
+      }
+      return statsMap;
+    },
+    enabled: cardIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const isLoading = isLoadingMain || isLoadingStats;
 
   // Process: compute statuses and flatten
   const processedData = useMemo(() => {
