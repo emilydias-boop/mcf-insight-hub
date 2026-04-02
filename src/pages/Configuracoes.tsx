@@ -61,41 +61,6 @@ function useNotificationPreferences() {
   return { data, isLoading, save: mutation.mutate, isSaving: mutation.isPending };
 }
 
-// Hook for integration status checks
-function useIntegrationStatus() {
-  return useQuery({
-    queryKey: ['integration-status'],
-    queryFn: async () => {
-      // Check Clint CRM - verify if sync-deals function exists and has been called recently
-      const { data: clintSettings } = await supabase
-        .from('automation_settings')
-        .select('value')
-        .eq('key', 'clint_api_key')
-        .maybeSingle();
-
-      // Check Twilio - verify if twilio config exists
-      const { data: twilioSettings } = await supabase
-        .from('automation_settings')
-        .select('value')
-        .eq('key', 'twilio_account_sid')
-        .maybeSingle();
-
-      // Check Calendly - verify if any closer has calendly_link
-      const { data: calendlyClosers } = await supabase
-        .from('closers')
-        .select('id')
-        .not('calendly_link', 'is', null)
-        .limit(1);
-
-      return {
-        clint: !!clintSettings,
-        twilio: !!twilioSettings,
-        calendly: (calendlyClosers?.length || 0) > 0,
-      };
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-}
 
 export default function Configuracoes() {
   const { role } = useAuth();
