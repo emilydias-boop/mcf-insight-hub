@@ -51,7 +51,7 @@ import ImportarHistorico from "./pages/crm/ImportarHistorico";
 import AuditoriaAgendamentos from "./pages/crm/AuditoriaAgendamentos";
 
 import Agenda from "./pages/crm/Agenda";
-import DealsOrfaos from "./pages/crm/DealsOrfaos";
+
 import LeadsLimbo from "./pages/crm/LeadsLimbo";
 import RetornosParceiros from "./pages/crm/RetornosParceiros";
 import ContatosDuplicados from "./pages/crm/ContatosDuplicados";
