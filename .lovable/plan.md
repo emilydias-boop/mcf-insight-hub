@@ -1,34 +1,59 @@
 
-## Corrigir inconsistência de Total Conta entre tabela e página individual
 
-### Problema
-A tabela usa `payout.total_conta` do banco (R$ 4.900) como fallback quando as métricas não carregam a tempo, enquanto a página individual calcula em tempo real (R$ 6.370 = fixo + variável calculado).
+## Diagnóstico: Percentual de Contratos por Nível de Closer
 
-### Causa raiz
-O `PayoutTableRow` depende de `metricas.length > 0` para decidir se usa o valor calculado ou o do banco. Se o hook `useActiveMetricsForSdr` não resolve o `cargo_catalogo_id` para o Closer na tabela (problema de timing com múltiplas rows carregando simultaneamente), cai no fallback do DB onde `valor_variavel_total = 0`.
+### O que existe no sistema
 
-### Solução (duas frentes)
+O campo `meta_percentual` na tabela `fechamento_metricas_mes` **já suporta** percentuais diferentes por cargo/nível. O código já usa esse campo (linha 104-108 do `DynamicIndicatorCard.tsx`):
+- Se `meta_percentual > 0` → usa esse valor
+- Senão, fallback hardcoded de 30%
 
-**1. Garantir que o "Recalcular Todos" salve valores corretos no banco**
-- **`src/hooks/useSdrFechamento.ts`** — na função de recalculate, usar a mesma lógica de peso percentual para gravar `valor_variavel_total` e `total_conta` corretos no banco
-- Assim mesmo o fallback mostra valores corretos
+### Dados no banco
 
-**2. Remover fallback inconsistente na tabela**
-- **`src/components/fechamento/PayoutTableRow.tsx`** — enquanto as métricas carregam, mostrar um skeleton/loading em vez de mostrar o valor errado do banco
-- Quando `metricas` ainda estão carregando (hook em loading), exibir indicador visual
-- Só mostrar fallback do banco se o hook terminou e realmente não encontrou métricas
+Métricas **genéricas** (squad=null) estão configuradas corretamente:
+- Closer N1 (`c2909e20`): `meta_percentual = 30` 
+- Closer N2 (`fd8d5a86`): `meta_percentual = 35`
+- Closer N3 (`d7bdc06e`): **nenhuma métrica configurada**
+
+Métricas **squad=incorporador**: todas têm `meta_percentual = NULL` para contratos
+
+### Problemas encontrados
+
+**Problema 1 — Thayna (N2):**
+A tabela `employees` vincula Thayna ao cargo **Closer N3** (`d7bdc06e`), mas o `sdr_comp_plan` dela diz **Closer N2** (`fd8d5a86`). Como N3 não tem métricas configuradas em `fechamento_metricas_mes`, ela cai no fallback padrão com 30% hardcoded. **Isso é um problema de dados** — o cargo no `employees` está errado ou falta configurar métricas para N3.
+
+**Problema 2 — Fallback de squad ignora nível:**
+Quando existem métricas squad-specific (squad=incorporador) com `meta_percentual = NULL`, o código busca o valor da métrica genérica (squad=null) como fallback. Isso funciona para Cris (N1), mas se a métrica genérica não existir para o cargo, cai no 30% hardcoded.
+
+### Solução proposta
+
+1. **Remover o fallback hardcoded de 30%** no `DynamicIndicatorCard.tsx` (linhas 109-113) e no `useCalculatedVariavel.ts`
+   - Em vez de `0.3` fixo, usar o `nivel` do cargo para determinar o percentual: N1=30%, N2=35%, N3=40%
+   - Ou melhor: buscar o `meta_percentual` da métrica genérica quando a squad-specific não tem
+
+2. **Melhorar o fallback no `useActiveMetricsForSdr.ts`** (linhas 127-144)
+   - Atualmente só faz fallback de `meta_percentual` para a métrica `contratos`
+   - Generalizar: para QUALQUER métrica squad-specific com `meta_percentual = NULL`, buscar da genérica
+
+3. **Corrigir a resolução de cargo** — se `employees.cargo_catalogo_id` divergir de `sdr_comp_plan.cargo_catalogo_id`, preferir o mais recente do `sdr_comp_plan` (já que esse reflete o nível atual do closer)
 
 ### Alterações
 
-1. **`src/components/fechamento/PayoutTableRow.tsx`**
-   - Importar `isLoading` do `useActiveMetricsForSdr` (o hook já retorna isso)
-   - Se `isLoading`, mostrar skeleton nos campos Variável e Total Conta
-   - Se métricas carregadas e vazias, aí sim usar fallback do DB
+1. **`src/hooks/useActiveMetricsForSdr.ts`**
+   - Na resolução de `cargoId`: preferir `sdr_comp_plan` sobre `employees` (é mais atualizado para closers)
+   - No fallback squad→genérica: aplicar `meta_percentual` de qualquer métrica genérica, não só `contratos`
 
-2. **`src/hooks/useSdrFechamento.ts`** — na mutation `recalculateAll` / `recalculateWithKpi`
-   - Ao salvar o payout, calcular `valor_variavel_total` e `total_conta` usando os pesos das métricas ativas (mesma lógica do `useCalculatedVariavel`)
-   - Isso garante que o banco sempre tenha os valores atualizados
+2. **`src/components/fechamento/DynamicIndicatorCard.tsx`** (linhas 109-113)
+   - Remover o fallback hardcoded `0.3` / `30%` — se `meta_percentual` não estiver na métrica, usar 30% como último recurso mas com log de aviso
+
+3. **`src/hooks/useCalculatedVariavel.ts`**
+   - Mesma remoção do hardcoded 30% — usar `metrica.meta_percentual` ou fallback 30%
+
+4. **`supabase/functions/recalculate-sdr-payout/index.ts`**
+   - Mesma lógica: buscar `meta_percentual` da métrica configurada em vez de hardcoded
 
 ### Resultado esperado
-- Tabela mostra loading enquanto métricas carregam, depois exibe o valor correto calculado
-- Após "Recalcular Todos", o banco tem os valores corretos, eliminando discrepância mesmo no fallback
+- Cris (N1): Meta de contratos = 30% das realizadas (sem mudança visual)
+- Thayna (N2): Meta de contratos = 35% das realizadas (corrigido)
+- Futuro N3: Meta de contratos = 40% das realizadas
+
