@@ -82,11 +82,11 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           .order('created_at', { ascending: false })
           .limit(50),
 
-        // 6. Deal basic info for synthesizing entry events
+        // 6. Deal basic info for synthesizing entry events + pipeline name
         uuidIds.length > 0
           ? supabase
               .from('crm_deals')
-              .select('id, created_at, origin_id, owner_id')
+              .select('id, created_at, origin_id, owner_id, crm_origins(name, display_name)')
               .in('id', uuidIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
