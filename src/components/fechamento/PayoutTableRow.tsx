@@ -41,7 +41,7 @@ export function PayoutTableRow({
 }: PayoutTableRowProps) {
   const navigate = useNavigate();
 
-  const { metricas } = useActiveMetricsForSdr(payout.sdr_id, anoMes);
+  const { metricas, isLoading: metricasLoading } = useActiveMetricsForSdr(payout.sdr_id, anoMes);
   const { data: kpi } = useSdrMonthKpi(payout.sdr_id, anoMes);
 
   const diasUteisMes = payout.dias_uteis_mes || compPlan?.dias_uteis || 22;
