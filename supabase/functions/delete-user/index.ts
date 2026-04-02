@@ -140,14 +140,18 @@ Deno.serve(async (req) => {
       console.warn("Warning: could not delete profile:", profileError.message);
     }
 
-    // === Step 5: Delete from auth ===
+    // === Step 5: Delete from auth (ignore if already deleted) ===
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user_id);
     if (deleteError) {
-      console.error("Error deleting auth user:", deleteError);
-      return new Response(
-        JSON.stringify({ error: deleteError.message || "Erro ao excluir usuário" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      if (deleteError.status === 404 || deleteError.message?.includes("not found")) {
+        console.warn("Auth user already deleted, continuing cleanup");
+      } else {
+        console.error("Error deleting auth user:", deleteError);
+        return new Response(
+          JSON.stringify({ error: deleteError.message || "Erro ao excluir usuário" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     console.log(`User ${user_id} deleted successfully`);
