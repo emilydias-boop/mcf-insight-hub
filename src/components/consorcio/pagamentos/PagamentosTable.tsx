@@ -114,6 +114,13 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
                   </TableCell>
                   <TableCell className="max-w-[120px] truncate">{row.vendedor_name || '-'}</TableCell>
                   <TableCell className="text-center">
+                    {boletoInstallmentIds.has(row.id) ? (
+                      <FileText className="h-4 w-4 text-green-600 mx-auto" />
+                    ) : (
+                      <span className="text-muted-foreground text-xs">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon">
