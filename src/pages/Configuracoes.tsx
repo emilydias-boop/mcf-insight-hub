@@ -168,7 +168,7 @@ export default function Configuracoes() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Configurações</h1>
         <p className="text-muted-foreground mt-1">
-          {isAdmin ? "Gerenciamento de preferências e integrações" : "Gerenciamento de preferências pessoais"}
+          Gerenciamento de preferências pessoais
         </p>
       </div>
 
