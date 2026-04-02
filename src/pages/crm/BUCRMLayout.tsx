@@ -8,7 +8,7 @@ import {
   Settings, 
   Shield, 
   CalendarDays, 
-  UserX, 
+   
   Copy,
   ShoppingCart,
   ClipboardCheck,
