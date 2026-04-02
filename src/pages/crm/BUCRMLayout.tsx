@@ -24,7 +24,7 @@ const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
   incorporador: [
     'visao-geral', 'contatos', 'negocios', 
     'agenda', 'agenda-r2', 'r2-carrinho', 'leads-limbo',
-    'contatos-duplicados', 'auditoria-agendamentos', 'configuracoes'
+    'auditoria-agendamentos', 'configuracoes'
   ],
   consorcio: [
     'visao-geral', 'contatos', 'negocios', 
