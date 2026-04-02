@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
-import { LayoutDashboard, Users, Briefcase, Settings, CalendarDays, UserX, Copy, Inbox, ShieldAlert, Shield, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, Settings, CalendarDays, Copy, Inbox, ShieldAlert, Shield, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
 import { BUProvider } from '@/contexts/BUContext';
