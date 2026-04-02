@@ -163,27 +163,6 @@ export default function Configuracoes() {
 
   const isSavingProfile = updateProfile.isPending || updateEmail.isPending;
 
-  const integrationItems = [
-    {
-      name: "Clint CRM",
-      description: "Sincronização de leads e deals",
-      icon: <MessageSquare className="h-5 w-5 text-primary" />,
-      connected: integrations?.clint ?? false,
-    },
-    {
-      name: "Twilio",
-      description: "Ligações e SMS automatizados",
-      icon: <Phone className="h-5 w-5 text-primary" />,
-      connected: integrations?.twilio ?? false,
-    },
-    {
-      name: "Calendly",
-      description: "Agendamento de reuniões com closers",
-      icon: <Calendar className="h-5 w-5 text-primary" />,
-      connected: integrations?.calendly ?? false,
-    },
-  ];
-
   return (
     <div className="space-y-8">
       <div>
