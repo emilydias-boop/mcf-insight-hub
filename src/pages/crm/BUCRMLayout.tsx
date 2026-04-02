@@ -23,7 +23,7 @@ import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
 const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
   incorporador: [
     'visao-geral', 'contatos', 'negocios', 
-    'agenda', 'agenda-r2', 'r2-carrinho', 'deals-orfaos', 'leads-limbo',
+    'agenda', 'agenda-r2', 'r2-carrinho', 'leads-limbo',
     'contatos-duplicados', 'auditoria-agendamentos', 'configuracoes'
   ],
   consorcio: [
