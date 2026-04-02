@@ -434,8 +434,12 @@ export function useCRMOverviewData(
         vendas: number;
       }>();
 
-      // R1 data
-      (closerR1Result.data || []).forEach((att: any) => {
+      // R1 data — filter by BU
+      const r1Data = (closerR1Result.data || []).filter((att: any) => {
+        if (!buName) return true;
+        return att.meeting_slots?.closers?.bu === buName;
+      });
+      r1Data.forEach((att: any) => {
         const closer = att.meeting_slots?.closers;
         if (!closer) return;
         const cid = closer.id;
