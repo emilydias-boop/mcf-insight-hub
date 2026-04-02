@@ -24,7 +24,7 @@ const CRM = () => {
     { to: '/crm/r2-carrinho', label: 'Carrinho R2', icon: Briefcase },
     
     { to: '/crm/leads-limbo', label: 'Limbo', icon: Inbox },
-    { to: '/crm/contatos-duplicados', label: 'Duplicados', icon: Copy },
+    
     { to: '/crm/retornos-parceiros', label: 'Retornos', icon: ShieldAlert },
     { to: '/crm/auditoria-agendamentos', label: 'Auditoria', icon: Shield },
     { to: '/crm/webhook-analytics', label: 'Análise Webhooks', icon: BarChart3 },

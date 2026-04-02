@@ -263,7 +263,7 @@ const App = () => (
                 <Route path="importar-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ImportarHistorico /></RoleGuard>} />
                 
                 <Route path="leads-limbo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsLimbo /></RoleGuard>} />
-                <Route path="contatos-duplicados" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ContatosDuplicados /></RoleGuard>} />
+                
                 <Route path="retornos-parceiros" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><RetornosParceiros /></RoleGuard>} />
                 <Route path="auditoria-agendamentos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AuditoriaAgendamentos /></RoleGuard>} />
 
