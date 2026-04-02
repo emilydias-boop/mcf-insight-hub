@@ -162,6 +162,7 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
   if (event.type === 'stage_change') {
     return (
       <div className="flex flex-wrap gap-1.5">
+        {meta.pipeline_name && <Badge variant="secondary" className="text-[10px] font-semibold">{meta.pipeline_name}</Badge>}
         {meta.from_stage && <Badge variant="outline" className="text-[10px]">De: {meta.from_stage}</Badge>}
         {meta.to_stage && <Badge variant="outline" className="text-[10px]">Para: {meta.to_stage}</Badge>}
       </div>

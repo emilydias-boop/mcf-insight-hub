@@ -82,11 +82,11 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           .order('created_at', { ascending: false })
           .limit(50),
 
-        // 6. Deal basic info for synthesizing entry events
+        // 6. Deal basic info for synthesizing entry events + pipeline name
         uuidIds.length > 0
           ? supabase
               .from('crm_deals')
-              .select('id, created_at, origin_id, owner_id')
+              .select('id, created_at, origin_id, owner_id, crm_origins(name, display_name)')
               .in('id', uuidIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
@@ -150,6 +150,17 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
         }
       }
 
+      // Build dealId → pipeline name map
+      const dealIdToPipelineName: Record<string, string> = {};
+      if (dealsRes.data) {
+        for (const deal of dealsRes.data as any[]) {
+          const origin = deal.crm_origins;
+          if (origin) {
+            dealIdToPipelineName[deal.id] = origin.display_name || origin.name || '';
+          }
+        }
+      }
+
       const resolveStageName = (val: string | null | undefined): string => {
         if (!val) return '?';
         if (UUID_RE.test(val)) return stageNameMap[val.toLowerCase()] || val;
@@ -173,6 +184,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           if (actType === 'stage_change' || actType === 'stage_changed') {
             const fromName = resolveStageName(act.from_stage || meta.from_stage);
             const toName = resolveStageName(act.to_stage || meta.to_stage);
+            const pipelineName = dealIdToPipelineName[act.deal_id] || meta.pipeline_name || null;
             events.push({
               id: act.id,
               type: 'stage_change',
@@ -180,7 +192,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               description: act.description,
               date: act.created_at,
               author: resolveAuthor(act.user_id, meta.owner_email, meta.deal_user, meta.changed_by),
-              metadata: { from_stage: fromName, to_stage: toName, ...meta },
+              metadata: { from_stage: fromName, to_stage: toName, pipeline_name: pipelineName, ...meta },
             });
           } else if (actType === 'note' || actType === 'manual_note') {
             events.push({
@@ -346,14 +358,15 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               Math.abs(new Date(e.date).getTime() - dealCreatedMs) < TOLERANCE_MS
           );
           if (!hasEntryEvent) {
+            const pipelineName = dealIdToPipelineName[deal.id] || null;
             events.push({
               id: `entry-${deal.id}`,
               type: 'entry',
-              title: 'Entrada na Pipeline',
-              description: 'Lead entrou na pipeline',
+              title: pipelineName ? `Entrada: ${pipelineName}` : 'Entrada na Pipeline',
+              description: pipelineName ? `Lead entrou na pipeline ${pipelineName}` : 'Lead entrou na pipeline',
               date: deal.created_at,
               author: resolveAuthor(deal.owner_id),
-              metadata: { deal_id: deal.id, origin_id: deal.origin_id, synthetic: true },
+              metadata: { deal_id: deal.id, origin_id: deal.origin_id, pipeline_name: pipelineName, synthetic: true },
             });
           }
         }
