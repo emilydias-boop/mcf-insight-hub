@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
 import { useCRMOverviewData } from '@/hooks/useCRMOverviewData';
-import { OverviewKPIs } from './overview/OverviewKPIs';
+
 import { PipelineHealthBlock } from './overview/PipelineHealthBlock';
 import { FlowFunnelBlock } from './overview/FlowFunnelBlock';
 import { SdrRankingTable } from './overview/SdrRankingTable';
