@@ -8,8 +8,6 @@ import {
   Settings, 
   Shield, 
   CalendarDays, 
-   
-  Copy,
   ShoppingCart,
   ClipboardCheck,
   Inbox
@@ -24,7 +22,7 @@ const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
   incorporador: [
     'visao-geral', 'contatos', 'negocios', 
     'agenda', 'agenda-r2', 'r2-carrinho', 'leads-limbo',
-    'contatos-duplicados', 'auditoria-agendamentos', 'configuracoes'
+    'auditoria-agendamentos', 'configuracoes'
   ],
   consorcio: [
     'visao-geral', 'contatos', 'negocios', 
@@ -91,7 +89,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     { key: 'r2-carrinho', to: `${basePath}/r2-carrinho`, label: 'Carrinho R2', icon: ShoppingCart },
     
     { key: 'leads-limbo', to: `${basePath}/leads-limbo`, label: 'Limbo', icon: Inbox },
-    { key: 'contatos-duplicados', to: `${basePath}/contatos-duplicados`, label: 'Duplicados', icon: Copy },
+    
     { key: 'auditoria-agendamentos', to: `${basePath}/auditoria-agendamentos`, label: 'Auditoria', icon: Shield },
     { key: 'pos-reuniao', to: `${basePath}/pos-reuniao`, label: 'Pós-Reunião', icon: ClipboardCheck },
     { key: 'configuracoes', to: `${basePath}/configuracoes`, label: 'Configurações', icon: Settings },

@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
-import { LayoutDashboard, Users, Briefcase, Settings, CalendarDays, Copy, Inbox, ShieldAlert, Shield, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, Settings, CalendarDays, Inbox, ShieldAlert, Shield, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
 import { BUProvider } from '@/contexts/BUContext';
@@ -24,7 +24,7 @@ const CRM = () => {
     { to: '/crm/r2-carrinho', label: 'Carrinho R2', icon: Briefcase },
     
     { to: '/crm/leads-limbo', label: 'Limbo', icon: Inbox },
-    { to: '/crm/contatos-duplicados', label: 'Duplicados', icon: Copy },
+    
     { to: '/crm/retornos-parceiros', label: 'Retornos', icon: ShieldAlert },
     { to: '/crm/auditoria-agendamentos', label: 'Auditoria', icon: Shield },
     { to: '/crm/webhook-analytics', label: 'Análise Webhooks', icon: BarChart3 },
