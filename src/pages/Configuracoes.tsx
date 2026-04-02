@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { User, Bell, Shield, Palette, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { OperationalCostsConfig } from "@/components/dashboard/OperationalCostsConfig";
+
 import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyProfile, useUpdateMyProfile, useUpdateMyEmail, useUpdateMyPassword } from "@/hooks/useMyProfile";
