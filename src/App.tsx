@@ -85,7 +85,7 @@ import WebhookAnalytics from "./pages/crm/WebhookAnalytics";
 import NotFound from "./pages/NotFound";
 
 import ConsorcioIndex from "./pages/bu-consorcio/Index";
-import ConsorcioImportar from "./pages/bu-consorcio/Importar";
+
 import AdminPermissoes from "./pages/admin/Permissoes";
 import AdminRoles from "./pages/admin/Roles";
 import ConfiguracaoProdutos from "./pages/admin/ConfiguracaoProdutos";
