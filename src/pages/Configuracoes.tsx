@@ -83,7 +83,7 @@ export default function Configuracoes() {
   });
 
   // Integration status
-  const { data: integrations, isLoading: integrationsLoading } = useIntegrationStatus();
+  
 
   // Profile form state
   const [fullName, setFullName] = useState('');
