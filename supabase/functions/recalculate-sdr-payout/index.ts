@@ -181,55 +181,48 @@ const calculatePayoutValues = (
   let valor_organizacao: number;
 
   if (hasActiveMetrics) {
-    // Usar variavel_total do compPlan como fonte da verdade, com fallback para soma dos valores individuais
+    // Usar variavel_total do compPlan como base
     const variavelTotal = compPlan.variavel_total || 
       (compPlan.valor_meta_rpg + compPlan.valor_docs_reuniao + 
        compPlan.valor_tentativas + compPlan.valor_organizacao);
     
-    // Aplicar pesos das métricas ativas
+    // SEMPRE usar pesos das métricas ativas (sem prioridade para compPlan)
     const pesoAgendadas = metricaAgendadas?.peso_percentual || 0;
     const pesoRealizadas = metricaRealizadas?.peso_percentual || 0;
     const pesoTentativas = metricaTentativas?.peso_percentual || 0;
     const pesoOrganizacao = metricaOrganizacao?.peso_percentual || 0;
-    const pesoTotal = pesoAgendadas + pesoRealizadas + pesoTentativas + pesoOrganizacao;
+    const pesoContratos = metricaContratos?.peso_percentual || 0;
     
-    // PRIORIZAR valores específicos do compPlan > cálculo dinâmico por peso
-    // Se o valor específico no plano individual for maior que zero, usá-lo
-    // Caso contrário, usar o cálculo dinâmico baseado no peso percentual
+    valor_reunioes_agendadas = pesoAgendadas > 0
+      ? (variavelTotal * (pesoAgendadas / 100)) * mult_reunioes_agendadas
+      : 0;
     
-    if (compPlan.valor_meta_rpg > 0) {
-      valor_reunioes_agendadas = compPlan.valor_meta_rpg * mult_reunioes_agendadas;
-    } else if (pesoAgendadas > 0) {
-      valor_reunioes_agendadas = (variavelTotal * (pesoAgendadas / 100)) * mult_reunioes_agendadas;
-    } else {
-      valor_reunioes_agendadas = 0;
+    valor_reunioes_realizadas = pesoRealizadas > 0
+      ? (variavelTotal * (pesoRealizadas / 100)) * mult_reunioes_realizadas
+      : 0;
+    
+    valor_tentativas = (pesoTentativas > 0 && !isCloser)
+      ? (variavelTotal * (pesoTentativas / 100)) * mult_tentativas
+      : 0;
+    
+    valor_organizacao = (pesoOrganizacao > 0 && !isCloser)
+      ? (variavelTotal * (pesoOrganizacao / 100)) * mult_organizacao
+      : 0;
+    
+    // Handle contratos metric for SDRs (Closers handle this separately)
+    if (pesoContratos > 0 && !isCloser) {
+      const contratosReais = (kpi as any).intermediacoes_contrato || 0;
+      const metaContratos = metricaContratos!.meta_percentual && metricaContratos!.meta_percentual > 0
+        ? Math.round((kpi.reunioes_realizadas * metricaContratos!.meta_percentual) / 100)
+        : Math.round(kpi.reunioes_realizadas * 0.3);
+      const pctContratos = metaContratos > 0 ? (contratosReais / metaContratos) * 100 : 0;
+      const multContratos = getMultiplier(Math.min(pctContratos, 120));
+      const valorContratos = (variavelTotal * (pesoContratos / 100)) * multContratos;
+      // Add contratos to realizadas slot for compatibility
+      valor_reunioes_realizadas += valorContratos;
     }
     
-    if (compPlan.valor_docs_reuniao > 0) {
-      valor_reunioes_realizadas = compPlan.valor_docs_reuniao * mult_reunioes_realizadas;
-    } else if (pesoRealizadas > 0) {
-      valor_reunioes_realizadas = (variavelTotal * (pesoRealizadas / 100)) * mult_reunioes_realizadas;
-    } else {
-      valor_reunioes_realizadas = 0;
-    }
-    
-    if (!isCloser && compPlan.valor_tentativas > 0) {
-      valor_tentativas = compPlan.valor_tentativas * mult_tentativas;
-    } else if (pesoTentativas > 0 && !isCloser) {
-      valor_tentativas = (variavelTotal * (pesoTentativas / 100)) * mult_tentativas;
-    } else {
-      valor_tentativas = 0;
-    }
-    
-    if (!isCloser && compPlan.valor_organizacao > 0) {
-      valor_organizacao = compPlan.valor_organizacao * mult_organizacao;
-    } else if (pesoOrganizacao > 0 && !isCloser) {
-      valor_organizacao = (variavelTotal * (pesoOrganizacao / 100)) * mult_organizacao;
-    } else {
-      valor_organizacao = 0;
-    }
-    
-    console.log(`   💰 Valores calculados (prioridade compPlan): Agendadas=R$ ${valor_reunioes_agendadas.toFixed(2)}, Realizadas=R$ ${valor_reunioes_realizadas.toFixed(2)}, Tentativas=R$ ${valor_tentativas.toFixed(2)}, Org=R$ ${valor_organizacao.toFixed(2)}`);
+    console.log(`   💰 Valores calculados (pesos métricas): Agendadas=R$ ${valor_reunioes_agendadas.toFixed(2)}, Realizadas=R$ ${valor_reunioes_realizadas.toFixed(2)}, Tentativas=R$ ${valor_tentativas.toFixed(2)}, Org=R$ ${valor_organizacao.toFixed(2)}`);
   } else {
     // Sem métricas ativas, usar valores fixos do comp_plan
     valor_reunioes_agendadas = compPlan.valor_meta_rpg * mult_reunioes_agendadas;
