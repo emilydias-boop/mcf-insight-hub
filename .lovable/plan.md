@@ -1,27 +1,39 @@
 
 
-## Discrepância: Aprovados 33 vs Selecionados 16
+## Separar Movimentações por Pipeline no Timeline
 
-### Causa raiz
+### Problema
 
-Os dois números vêm de **hooks diferentes com lógicas distintas**:
+O timeline unificado mistura movimentações de stage de **todas as pipelines** sem distinção. Quando o lead tem deals em "Efeito Alavanca + Clube" e "Inside Sales", as mudanças de stage aparecem como se fossem na mesma pipeline, gerando confusão.
 
-| Métrica | Hook | Lógica |
-|---|---|---|
-| **Aprovados: 33** (KPI topo) | `useR2CarrinhoKPIs` | Conta **todos** os attendees com status "aprovado" na **janela operacional** (Sex-Sex), independente de terem contrato na safra |
-| **Selecionados: 16** (Métricas) | `useR2MetricsData` | Conta apenas aprovados que vieram da **cadeia safra**: contrato pago (Qui-Qua) → contato → primeiro R2 após contrato → status aprovado |
+### Solução
 
-Ou seja, os 33 aprovados incluem leads que foram aprovados no R2 mas cujo contrato **não está na safra atual** (pode ser de semanas anteriores, ou leads sem contrato vinculado). Os 16 selecionados são apenas os que têm contrato **nesta safra** e foram aprovados.
+Adicionar o **nome da pipeline** a cada evento de `stage_change` e agrupar visualmente os eventos por pipeline no timeline. Cada stage_change mostrará uma badge indicando de qual pipeline é.
 
-### Solução proposta
+### Arquivos afetados
 
-**"Selecionados" deveria refletir o mesmo número de "Aprovados" do topo**, pois a seção "Conversão do Carrinho" deve mostrar a conversão dos leads aprovados em vendas de parceria.
+**1. `src/hooks/useLeadFullTimeline.ts`**
+- Na query de `crm_deals` (linha 89), incluir join com `crm_origins`: `select('id, created_at, origin_id, owner_id, crm_origins(name, display_name)')`
+- Construir mapa `dealIdToOriginName` a partir dos deals
+- Nas activities de `stage_change` (linha 173), o `deal_id` já está disponível em `act.deal_id` — usar para enriquecer o metadata com `pipeline_name`
+- Também enriquecer os eventos de `entry` (linha 349) que já têm `deal.origin_id`
 
-**Correção**: No `useR2MetricsData.ts`, o cálculo de `selecionados` (linha 338) deve usar a mesma lógica do KPI de Aprovados — contar attendees aprovados na janela operacional, não apenas os da cadeia safra.
+**2. `src/components/crm/LeadFullTimeline.tsx`**
+- No `TimelineMetadata` para `stage_change`, renderizar badge com `meta.pipeline_name` quando disponível
+- Adicionar badge também nos eventos de `entry`
 
-Alternativa mais simples: passar o valor de `aprovados` do `useR2CarrinhoKPIs` para o painel de métricas e usá-lo como `selecionados`, garantindo consistência visual.
+**3. `src/components/crm/DealHistory.tsx`**
+- Quando `activity.metadata?.pipeline_name` existir, exibir badge ao lado das badges de from/to stage
 
-### Arquivo afetado
-- `src/hooks/useR2MetricsData.ts` — Ajustar cálculo de `selecionados` para usar a mesma janela operacional dos Aprovados do topo
-- Ou `src/components/crm/R2MetricsPanel.tsx` — Receber `aprovados` do KPI e usar como override
+### Detalhe técnico
+
+```text
+// No hook, ao processar stage_change:
+const pipelineName = dealIdToOriginMap[act.deal_id];
+metadata: { from_stage, to_stage, pipeline_name: pipelineName }
+
+// Na UI, badge extra:
+[Efeito Alavanca + Clube] Lead Gratuito → Base
+[Inside Sales]            Novo → Qualificado
+```
 
