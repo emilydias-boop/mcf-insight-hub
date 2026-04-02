@@ -1,46 +1,58 @@
 
 
-## Unificar cálculo dos indicadores: remover dependência do CompPlan
+## Corrigir carregamento de métricas: usar cargo do CompPlan como fallback
 
 ### Problema
-Os cards de indicadores não refletem as métricas configuradas. Você configurou Agendamentos (30%), R1 Realizadas (40%), Contratos Pagos (20%), Tentativas (10%), mas aparece "Organização" no lugar de "Contratos Pagos". Isso ocorre porque o código tem duas ramificações de cálculo — uma para métricas com `isDynamicCalc` (contratos) e outra para métricas com campos de payout (agendamentos, realizadas, tentativas, organizacao). A ramificação antiga depende do CompPlan para determinar valores fixos.
+Os indicadores mostram "Organização" em vez de "Contratos Pagos" porque o hook `useActiveMetricsForSdr` busca o `cargo_catalogo_id` na tabela `employees`, mas esse SDR não tem registro de employee ativo vinculado. O resultado é que cai no fallback padrão que inclui `organizacao`.
+
+Porém, a tabela `sdr_comp_plan` **tem** o `cargo_catalogo_id` correto (`d035345f...`). O hook precisa usar isso como fallback.
 
 ### Solução
-Unificar TODAS as métricas para usar o mesmo cálculo baseado em peso percentual da tabela `fechamento_metricas_mes`, eliminando a dependência do CompPlan nos indicadores.
+Adicionar um fallback no `useActiveMetricsForSdr`: se não encontrar `cargo_catalogo_id` via `employees`, buscar via `sdr_comp_plan` para o mesmo SDR.
 
-### Alterações
+### Alteração
 
-1. **`src/hooks/useActiveMetricsForSdr.ts`** — METRIC_CONFIG (linhas 256-341)
-   - Remover `compPlanValueField` de TODAS as métricas (agendamentos, realizadas, tentativas, organizacao)
-   - Marcar TODAS as métricas ativas como `isDynamicCalc: true` para que usem o mesmo fluxo de cálculo unificado
-   - Manter `kpiField`, `icon`, `color`, `isAuto`, `autoSource`, `isPercentage`
+**`src/hooks/useActiveMetricsForSdr.ts`** (dentro do `queryFn`, após a query de employees)
 
-2. **`src/components/fechamento/DynamicIndicatorCard.tsx`** (linhas 50-252)
-   - Remover prop `compPlan` do componente e do grid
-   - Unificar o cálculo: TODAS as métricas usam `valorBase = variavelTotal * peso_percentual / 100`
-   - Manter lógica de meta diferenciada por tipo (agendamentos usa meta diária, realizadas usa 70% agendadas, tentativas usa meta diária, organizacao usa 100%, contratos usa % realizadas)
-   - Remover a ramificação `payoutPctField` — tudo passa pelo mesmo fluxo
+Após o bloco que busca `employees.cargo_catalogo_id` (linhas 61-83), antes de retornar o fallback por falta de `cargoId`:
 
-3. **`src/hooks/useCalculatedVariavel.ts`** (linhas 1-168)
-   - Remover prop `compPlan` da interface e do hook
-   - Unificar: todas as métricas calculam `valorBase = variavelTotal * peso_percentual / 100`
-   - Manter lógica de meta por tipo de métrica
-   - Fallback: se `peso_percentual` não definido, usar `100 / metricas.length` (distribuição igual)
+```text
+Fluxo atual:
+  employees → cargoId → fechamento_metricas_mes → métricas
+  Se employees vazio → DEFAULT_SDR_METRICS (organização)
 
-4. **`src/pages/fechamento-sdr/Detail.tsx`**
-   - Remover `compPlan` das props de `DynamicIndicatorsSection` e `useCalculatedVariavel`
-   - Manter `variavelTotal` vindo de `cargo_catalogo.variavel_valor` (já funciona como fallback)
+Fluxo corrigido:
+  employees → cargoId
+  Se vazio → sdr_comp_plan → cargo_catalogo_id
+  Se vazio → sdr.cargo_catalogo_id (direto da tabela sdr)
+  → fechamento_metricas_mes → métricas
+  Se nada → DEFAULT_SDR_METRICS
+```
 
-5. **`src/components/fechamento/PayoutTableRow.tsx`**
-   - Remover `compPlan` do `useCalculatedVariavel`
-   - `variavelTotal` já vem do `compPlan?.variavel_total || cargo_catalogo`, manter apenas o valor numérico
+Concretamente, substituir o bloco nas linhas 73-83:
+```typescript
+let cargoId = employeeData?.cargo_catalogo_id;
+
+// Fallback: try sdr_comp_plan if no employee cargo
+if (!cargoId) {
+  const { data: compPlanData } = await supabase
+    .from('sdr_comp_plan')
+    .select('cargo_catalogo_id')
+    .eq('sdr_id', sdrId)
+    .neq('status', 'REJECTED')
+    .order('vigencia_inicio', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  
+  cargoId = compPlanData?.cargo_catalogo_id || null;
+}
+
+if (!cargoId) {
+  const defaultMetrics = roleType === 'closer' ? DEFAULT_CLOSER_METRICS : DEFAULT_SDR_METRICS;
+  return { metricas: defaultMetrics, fonte: 'fallback', roleType };
+}
+```
 
 ### Resultado esperado
-Com `variavelTotal = R$ 1.200` e pesos 30/40/20/10:
-- Agendamentos R1: R$ 360 (30%)
-- R1 Realizadas: R$ 480 (40%)
-- Contratos Pagos: R$ 240 (20%)
-- Tentativas: R$ 120 (10%)
-
-Organização NÃO aparece porque não está ativa na configuração.
+O hook encontrará `cargo_catalogo_id` via `sdr_comp_plan`, buscará as métricas configuradas em `fechamento_metricas_mes`, e exibirá as 4 métricas corretas (Agendamentos 30%, Realizadas 40%, Contratos Pagos 20%, Tentativas 10%) com badge "Configurado" em vez de "Padrão".
 
