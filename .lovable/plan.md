@@ -1,31 +1,27 @@
 
-## Remover completamente a funcionalidade "Duplicados" do CRM
 
-### O que muda
-Remove a aba "Duplicados", página, hooks, modal de simulação, Edge Function e RPCs associadas. A verificação de duplicidade na criação manual de deals (DealFormDialog) continua funcionando normalmente.
+## Corrigir cálculo de valor base: usar pesos configurados em vez de valores fixos do CompPlan
 
-### Arquivos a deletar
-- `src/pages/crm/ContatosDuplicados.tsx` — página principal
-- `src/hooks/useDuplicateContacts.ts` — hooks (useDuplicateContacts, useMergeDuplicates, useMergeAllDuplicates, useConsolidateDeals, useFullCleanup)
-- `src/components/crm/SimulationResultsModal.tsx` — modal de simulação detalhada
-- `supabase/functions/merge-duplicate-contacts/index.ts` — Edge Function
+### Problema
+Você configurou os pesos das métricas (30%, 40%, 20%, 10%) na aba "Métricas Ativas", mas os cards de indicadores ignoram esses pesos e usam os valores fixos do Plano OTE (`valor_meta_rpg = R$ 400`, `valor_docs_reuniao = R$ 400`, `valor_tentativas = R$ 200`, `valor_organizacao = R$ 200`).
 
-### Arquivos a editar
+Isso acontece porque o código prioriza o valor do CompPlan **antes** de tentar o cálculo por peso percentual.
 
-1. **`src/App.tsx`**
-   - Remover import `ContatosDuplicados` (linha 57)
-   - Remover as 2 rotas `contatos-duplicados` (linhas 194 e 266)
+### Solução
+Inverter a prioridade: usar **primeiro** o cálculo por peso (`variavel_total × peso_percentual / 100`), e só recorrer ao valor fixo do CompPlan como fallback quando não houver peso configurado.
 
-2. **`src/pages/CRM.tsx`** (linha 27)
-   - Remover item `{ to: '/crm/contatos-duplicados', label: 'Duplicados', icon: Copy }`
+### Alterações
 
-3. **`src/pages/crm/BUCRMLayout.tsx`**
-   - Remover `'contatos-duplicados'` do array de tabs (linha 27)
-   - Remover item de navegação `contatos-duplicados` (linha 94)
+1. **`src/components/fechamento/DynamicIndicatorCard.tsx`** (linhas 186-201)
+   - Inverter a lógica: primeiro tentar `peso_percentual`, depois fallback para `compPlanValueField`
 
-### Edge Function a remover do deploy
-- `merge-duplicate-contacts`
+2. **`src/hooks/useCalculatedVariavel.ts`** (linhas 130-140)
+   - Mesma inversão de prioridade para manter consistência entre cards e totais
 
-### O que NÃO muda
-- Verificação de duplicidade no DealFormDialog (prevenção na entrada)
-- RPCs `get_duplicate_contact_emails` e `get_duplicate_contact_phones` ficam no banco (não causam problema, podem ser removidas futuramente via migration)
+### Resultado esperado
+Com `variavel_total = R$ 1.000` e pesos 30/40/20/10:
+- Agendamentos: R$ 300 (30%)
+- R1 Realizadas: R$ 400 (40%)
+- Contratos Pagos: R$ 200 (20%)
+- Tentativas: R$ 100 (10%)
+
