@@ -312,8 +312,11 @@ export function useCRMOverviewData(
       funnelSteps.push({ label: 'R1 Realizadas', value: totalR1Realizadas });
       funnelSteps.push({ label: 'Contratos', value: totalContratos });
 
-      // R2 from closer R2 data
-      const r2Atts = closerR2Result.data || [];
+      // R2 from closer R2 data — filter by BU
+      const r2Atts = (closerR2Result.data || []).filter((att: any) => {
+        if (!buName) return true;
+        return att.meeting_slots?.closers?.bu === buName;
+      });
       funnelSteps.push({ label: 'R2', value: r2Atts.length });
 
       // Vendas = contratos with sold/approved

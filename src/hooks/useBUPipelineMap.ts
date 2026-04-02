@@ -94,7 +94,8 @@ export function useBUOriginIds(bu: BusinessUnit | null) {
         const { data: childOrigins, error } = await supabase
           .from('crm_origins')
           .select('id')
-          .in('group_id', buMapping.groups);
+          .in('group_id', buMapping.groups)
+          .not('is_archived', 'eq', true);
         
         if (error) {
           console.error('Erro ao buscar origens filhas dos grupos:', error);
