@@ -453,8 +453,12 @@ export function useCRMOverviewData(
         if (att.status === 'contract_paid') c.contratos++;
       });
 
-      // R2 data
-      (closerR2Result.data || []).forEach((att: any) => {
+      // R2 data — filter by BU
+      const r2Data = (closerR2Result.data || []).filter((att: any) => {
+        if (!buName) return true;
+        return att.meeting_slots?.closers?.bu === buName;
+      });
+      r2Data.forEach((att: any) => {
         const closer = att.meeting_slots?.closers;
         if (!closer) return;
         const cid = closer.id;
