@@ -420,7 +420,14 @@ export function useCRMOverviewData(
       }
 
       const sdrRanking: SdrRankingRow[] = [...sdrMap.entries()]
-        .filter(([id]) => id !== '__sem_owner__')
+        .filter(([id]) => {
+          if (id === '__sem_owner__') return false;
+          // If we have an SDR whitelist, only show active SDRs from this BU
+          if (activeSdrProfileIds.size > 0) {
+            return activeSdrProfileIds.has(id) || activeSdrEmails.has(id.toLowerCase());
+          }
+          return true;
+        })
         .map(([sdrId, data]) => {
           // Deduplicate trabalhados (count unique deals, not activities)
           const agendaData = sdrAgendaMap.get(sdrId) || { agendados: 0, qualificados: 0 };
