@@ -190,18 +190,6 @@ export default function Configuracoes() {
             <Shield className="h-4 w-4" />
             Segurança
           </TabsTrigger>
-          {isAdmin && (
-            <TabsTrigger value="financeiro" className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Financeiro
-            </TabsTrigger>
-          )}
-          {isAdmin && (
-            <TabsTrigger value="integracoes" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Integrações
-            </TabsTrigger>
-          )}
         </TabsList>
 
         <TabsContent value="perfil" className="space-y-4 mt-6">
