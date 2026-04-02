@@ -40,7 +40,6 @@ const DynamicIndicatorsSection = ({
   anoMes,
   kpi,
   payout,
-  compPlan,
   diasUteisMes,
   sdrMetaDiaria,
   isCloser,
@@ -50,7 +49,6 @@ const DynamicIndicatorsSection = ({
   anoMes: string;
   kpi: SdrMonthKpi | null;
   payout: SdrMonthPayout;
-  compPlan: SdrCompPlan | null;
   diasUteisMes: number;
   sdrMetaDiaria: number;
   isCloser: boolean;
