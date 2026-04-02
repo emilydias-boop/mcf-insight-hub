@@ -1,10 +1,10 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ExternalLink } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { PagamentoRow, useCardInstallments, StatusParcela } from '@/hooks/useConsorcioPagamentos';
+import { useBoletosByCard } from '@/hooks/useConsorcioBoletos';
+import { BoletoSection } from './BoletoSection';
 
 interface Props {
   row: PagamentoRow | null;
@@ -39,12 +39,18 @@ const statusLabels: Record<StatusParcela, string> = {
 
 export function PagamentoDetailDrawer({ row, open, onOpenChange }: Props) {
   const { data: installments, isLoading } = useCardInstallments(row?.card_id ?? null);
+  const { data: boletos } = useBoletosByCard(row?.card_id ?? null);
 
   if (!row) return null;
 
   const pagas = installments?.filter(i => calcStatus(i) === 'paga').length ?? 0;
   const atrasadas = installments?.filter(i => calcStatus(i) === 'atrasada').length ?? 0;
   const pendentes = installments?.filter(i => calcStatus(i) === 'pendente' || calcStatus(i) === 'vencendo').length ?? 0;
+
+  // Map boletos by installment_id for quick lookup
+  const boletoByInstallment = new Map(
+    (boletos || []).filter(b => b.installment_id).map(b => [b.installment_id, b])
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -84,19 +90,23 @@ export function PagamentoDetailDrawer({ row, open, onOpenChange }: Props) {
             {isLoading ? (
               <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
             ) : (
-              <div className="space-y-1 max-h-[400px] overflow-y-auto">
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
                 {installments?.map(inst => {
                   const st = calcStatus(inst);
+                  const boleto = boletoByInstallment.get(inst.id);
                   return (
-                    <div key={inst.id} className={`flex items-center justify-between rounded px-3 py-2 text-sm ${st === 'atrasada' ? 'bg-destructive/5' : 'bg-muted/30'}`}>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs w-6 text-center">{inst.numero_parcela}</span>
-                        <span>{formatDate(inst.data_vencimento)}</span>
+                    <div key={inst.id} className="space-y-1">
+                      <div className={`flex items-center justify-between rounded px-3 py-2 text-sm ${st === 'atrasada' ? 'bg-destructive/5' : 'bg-muted/30'}`}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs w-6 text-center">{inst.numero_parcela}</span>
+                          <span>{formatDate(inst.data_vencimento)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{formatCurrency(Number(inst.valor_parcela))}</span>
+                          <Badge variant="outline" className={`text-[10px] ${statusColors[st]}`}>{statusLabels[st]}</Badge>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{formatCurrency(Number(inst.valor_parcela))}</span>
-                        <Badge variant="outline" className={`text-[10px] ${statusColors[st]}`}>{statusLabels[st]}</Badge>
-                      </div>
+                      {boleto && <BoletoSection boleto={boleto} />}
                     </div>
                   );
                 })}
