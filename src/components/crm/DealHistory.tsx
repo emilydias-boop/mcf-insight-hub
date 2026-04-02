@@ -131,13 +131,20 @@ export const DealHistory = ({ dealId, dealUuid, contactId, limit }: DealHistoryP
                       </span>
                     </div>
                     
-                    {activity.from_stage && activity.to_stage && (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{activity.from_stage}</Badge>
-                        <ArrowRight className="h-3 w-3" />
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{activity.to_stage}</Badge>
+                    {(activity.from_stage && activity.to_stage) || activity.metadata?.pipeline_name ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                        {activity.metadata?.pipeline_name && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-semibold">{activity.metadata.pipeline_name}</Badge>
+                        )}
+                        {activity.from_stage && activity.to_stage && (
+                          <>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">{activity.from_stage}</Badge>
+                            <ArrowRight className="h-3 w-3" />
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">{activity.to_stage}</Badge>
+                          </>
+                        )}
                       </div>
-                    )}
+                    ) : null}
                     
                     {getMovedByName(activity) && (
                       <p className="text-[10px] text-muted-foreground flex items-center gap-1">

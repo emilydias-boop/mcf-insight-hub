@@ -358,14 +358,15 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               Math.abs(new Date(e.date).getTime() - dealCreatedMs) < TOLERANCE_MS
           );
           if (!hasEntryEvent) {
+            const pipelineName = dealIdToPipelineName[deal.id] || null;
             events.push({
               id: `entry-${deal.id}`,
               type: 'entry',
-              title: 'Entrada na Pipeline',
-              description: 'Lead entrou na pipeline',
+              title: pipelineName ? `Entrada: ${pipelineName}` : 'Entrada na Pipeline',
+              description: pipelineName ? `Lead entrou na pipeline ${pipelineName}` : 'Lead entrou na pipeline',
               date: deal.created_at,
               author: resolveAuthor(deal.owner_id),
-              metadata: { deal_id: deal.id, origin_id: deal.origin_id, synthetic: true },
+              metadata: { deal_id: deal.id, origin_id: deal.origin_id, pipeline_name: pipelineName, synthetic: true },
             });
           }
         }
