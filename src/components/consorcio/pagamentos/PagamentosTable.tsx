@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { PagamentoRow, StatusParcela, SituacaoCota } from '@/hooks/useConsorcioPagamentos';
 import { usePayInstallment } from '@/hooks/useConsorcio';
+import { useBoletosByInstallments } from '@/hooks/useConsorcioBoletos';
 import { format } from 'date-fns';
 import {
   DropdownMenu,
