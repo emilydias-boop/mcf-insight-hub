@@ -1,3 +1,4 @@
+
 ## Remover completamente a funcionalidade "Duplicados" do CRM
 
 ### O que muda
