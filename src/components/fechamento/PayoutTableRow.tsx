@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Eye, AlertTriangle } from 'lucide-react';
 import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/formatters';
 import { useActiveMetricsForSdr } from '@/hooks/useActiveMetricsForSdr';
 import { useSdrMonthKpi } from '@/hooks/useSdrFechamento';
