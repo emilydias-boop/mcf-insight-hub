@@ -29,11 +29,16 @@ export interface OverviewKPIData {
 }
 
 export interface PipelineHealthData {
+  // Period flow metrics
+  entaramNoPeriodo: number;
+  trabalhadosNoPeriodo: number;
+  semToqueNoPeriodo: number;
+  avancadosNoPeriodo: number;
+  // General health (90-day window)
   totalAbertos: number;
   leadsParados: number; // 3+ days
   leadsEnvelhecidos: number; // 7+ days
   tempoMedioSemMovHoras: number;
-  leadsSlaEstourado: number; // 14+ days
   travadosPorEtapa: { stageName: string; count: number }[];
 }
 
@@ -250,28 +255,42 @@ export function useCRMOverviewData(
       };
 
       // === Pipeline Health ===
-      const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
-      const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-      const leadsParados = openDeals.filter(d => {
+      // --- Period flow metrics ---
+      const newDealsInPeriod = allDeals.filter(d => {
+        const created = new Date(d.created_at);
+        return created >= periodStart && created <= periodEnd;
+      });
+      const newDealIdSet = new Set(newDealsInPeriod.map(d => d.id));
+      const entaramNoPeriodo = newDealsInPeriod.length;
+      const trabalhadosNoPeriodo = newDealsInPeriod.filter(d => workedDealIds.has(d.id)).length;
+      const semToqueNoPeriodo = entaramNoPeriodo - trabalhadosNoPeriodo;
+      const avancadosNoPeriodo = new Set(
+        stageChanges
+          .filter(a => newDealIdSet.has(a.deal_id) && a.to_stage && !lossStageIds.has(a.to_stage) && !terminalStageIds.has(a.to_stage))
+          .map(a => a.deal_id)
+      ).size;
+
+      // --- General health (90-day window) ---
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const recentOpenDeals = openDeals.filter(d => new Date(d.created_at) >= ninetyDaysAgo);
+
+      const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+
+      const leadsParados = recentOpenDeals.filter(d => {
         const ref = d.last_worked_at ? new Date(d.last_worked_at) : (d.created_at ? new Date(d.created_at) : now);
         return ref < threeDaysAgo;
       }).length;
 
-      const leadsEnvelhecidos = openDeals.filter(d => {
+      const leadsEnvelhecidos = recentOpenDeals.filter(d => {
         const ref = d.last_worked_at ? new Date(d.last_worked_at) : (d.created_at ? new Date(d.created_at) : now);
         return ref < sevenDaysAgo;
       }).length;
 
-      const leadsSlaEstourado = openDeals.filter(d => {
-        const ref = d.last_worked_at ? new Date(d.last_worked_at) : (d.created_at ? new Date(d.created_at) : now);
-        return ref < fourteenDaysAgo;
-      }).length;
-
-      // Average time without movement (hours)
+      // Average time without movement (hours) — recent only
       let totalHours = 0;
       let countForAvg = 0;
-      openDeals.forEach(d => {
+      recentOpenDeals.forEach(d => {
         const ref = d.last_worked_at ? new Date(d.last_worked_at) : (d.created_at ? new Date(d.created_at) : null);
         if (ref) {
           totalHours += differenceInHours(now, ref);
@@ -280,9 +299,9 @@ export function useCRMOverviewData(
       });
       const tempoMedioSemMovHoras = countForAvg > 0 ? Math.round(totalHours / countForAvg) : 0;
 
-      // Stalled by stage
+      // Stalled by stage — recent only
       const stalledByStage = new Map<string, number>();
-      openDeals.forEach(d => {
+      recentOpenDeals.forEach(d => {
         const ref = d.last_worked_at ? new Date(d.last_worked_at) : (d.created_at ? new Date(d.created_at) : now);
         if (ref < threeDaysAgo && d.stage_id) {
           const name = stageMap.get(d.stage_id) || 'Desconhecido';
@@ -295,11 +314,14 @@ export function useCRMOverviewData(
         .slice(0, 5);
 
       const health: PipelineHealthData = {
-        totalAbertos: openDeals.length,
+        entaramNoPeriodo,
+        trabalhadosNoPeriodo,
+        semToqueNoPeriodo,
+        avancadosNoPeriodo,
+        totalAbertos: recentOpenDeals.length,
         leadsParados,
         leadsEnvelhecidos,
         tempoMedioSemMovHoras,
-        leadsSlaEstourado,
         travadosPorEtapa,
       };
 
@@ -524,7 +546,7 @@ export function useCRMOverviewData(
 function emptyData(): CRMOverviewData {
   return {
     kpis: { leadsEntraram: 0, leadsTrabalhados: 0, leadsAvancados: 0, leadsPerdidos: 0, leadsSemMovimentacao: 0, leadsEsquecidos: 0, leadsSemOwner: 0 },
-    health: { totalAbertos: 0, leadsParados: 0, leadsEnvelhecidos: 0, tempoMedioSemMovHoras: 0, leadsSlaEstourado: 0, travadosPorEtapa: [] },
+    health: { entaramNoPeriodo: 0, trabalhadosNoPeriodo: 0, semToqueNoPeriodo: 0, avancadosNoPeriodo: 0, totalAbertos: 0, leadsParados: 0, leadsEnvelhecidos: 0, tempoMedioSemMovHoras: 0, travadosPorEtapa: [] },
     funnel: [],
     sdrRanking: [],
     closerRanking: [],
