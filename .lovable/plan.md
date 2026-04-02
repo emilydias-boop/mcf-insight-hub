@@ -1,43 +1,36 @@
 
 
-## Corrigir "Situação Cota" mostrando "Quitada" incorretamente
+## Plano: Botao rapido "Marcar como Paga" + Robô Newcon
 
-### Problema
+### Parte 1 — Botao rapido de confirmar pagamento (implementar agora)
 
-A função `calcSituacaoCota` verifica se **todas as parcelas visíveis** estão pagas. Como a query filtra por `selectedMonth`, ela só vê as parcelas daquele mês. Se a parcela de abril está paga, o sistema conclui que a cota inteira está quitada -- mesmo tendo 239 parcelas futuras pendentes.
+Hoje o "Marcar como Paga" ja existe no dropdown (tres pontinhos), mas exige 2 cliques. Vamos adicionar um botao direto na linha para parcelas nao pagas.
 
-### Solução
+**Mudanca em `src/components/consorcio/pagamentos/PagamentosTable.tsx`**:
+- Adicionar um botao `CheckCircle` visivel diretamente na coluna "Acoes" ao lado do dropdown, apenas para parcelas com status diferente de `paga`
+- Ao clicar, chama `handleMarkAsPaid(row)` imediatamente (mesmo fluxo ja existente via `usePayInstallment`)
+- Botao verde com tooltip "Marcar como paga" para acao rapida com 1 clique
 
-Para calcular a situação real da cota, precisamos consultar o total de parcelas e parcelas pagas de cada card_id **sem filtro de mês**. Duas abordagens possíveis:
+### Parte 2 — Robo Newcon (analise de viabilidade)
 
-**Abordagem escolhida**: Fazer uma query separada e leve para obter, por `card_id` presente nos dados filtrados, o total de parcelas e quantas estão pagas. Isso evita carregar todas as 240 parcelas de cada carta.
+A intranet Newcon funciona via login/senha no navegador, sem API publica. Para automatizar a coleta de boletos e status de pagamento, seria necessario fazer **web scraping** (navegacao automatizada simulando um usuario).
 
-### Mudanças
+**Limitacoes tecnicas**:
+- Edge Functions do Supabase nao suportam navegadores headless (Puppeteer/Playwright) — sao ambiente Deno com recursos limitados
+- Seria necessario um servidor externo rodando o bot (ex: servidor VPS com Puppeteer, n8n self-hosted, ou servico como Apify/BrowserBase)
+- O scraping depende da estrutura HTML da Newcon, que pode mudar sem aviso
 
-**`src/hooks/useConsorcioPagamentos.ts`**:
+**Opcoes possiveis**:
+1. **n8n workflow** — Usar n8n (ja disponivel como MCP) com nodes de HTTP Request para simular login e navegar na intranet, extraindo boletos e status. Requer que a Newcon nao bloqueie automacao.
+2. **Servidor externo com Puppeteer** — Script Node.js rodando em VPS que faz login, navega, baixa PDFs e envia para o Supabase via API. Mais robusto mas requer infraestrutura separada.
+3. **Extensao de navegador** — Uma extensao Chrome que o operador ativa enquanto esta logado na Newcon, capturando os dados automaticamente.
 
-1. Adicionar uma segunda query (dentro do mesmo `useQuery` ou como query auxiliar) que, para os `card_id`s presentes nos resultados do mês, busca:
-   ```sql
-   SELECT card_id, 
-          COUNT(*) as total_parcelas, 
-          COUNT(*) FILTER (WHERE status = 'pago' OR data_pagamento IS NOT NULL) as parcelas_pagas,
-          bool_or(status != 'pago' AND data_pagamento IS NULL AND data_vencimento < CURRENT_DATE) as tem_atraso
-   FROM consortium_installments 
-   WHERE card_id IN (...)
-   GROUP BY card_id
-   ```
+Nenhuma dessas opcoes pode ser implementada 100% dentro do Lovable. Precisariamos de acesso a Newcon para entender a estrutura do site antes de propor a melhor abordagem.
 
-2. Alterar `calcSituacaoCota` para usar esses dados globais:
-   - **Quitada**: `parcelas_pagas == total_parcelas` (todas as 240 pagas)
-   - **Em atraso**: `tem_atraso == true`
-   - **Pendente**: caso contrário
+### Recomendacao
 
-3. Como não temos RPC, faremos via Supabase client: após obter os `card_id`s únicos do mês, buscar **todas** as parcelas desses cards (apenas `id, card_id, status, data_pagamento, data_vencimento`) e calcular no frontend. Otimização: buscar só os campos mínimos.
-
-### Resultado esperado
-
-- Cotas com 240 meses e apenas 1-3 parcelas pagas mostrarão "Pendente"
-- Cotas com parcelas vencidas e não pagas mostrarão "Em Atraso"
-- Somente cotas com TODAS as parcelas pagas mostrarão "Quitada"
-- KPI "Cotas Quitadas" refletirá o número real
+Implementar agora a **Parte 1** (botao rapido) para agilizar o fluxo manual. Para a Parte 2, precisamos:
+1. Voce compartilhar a URL da intranet Newcon
+2. Entender a estrutura de navegacao (como chega nos boletos)
+3. Definir qual infraestrutura externa voce tem disponivel (VPS, n8n, etc.)
 
