@@ -386,13 +386,12 @@ export function useCRMOverviewData(
         // owner_id in crm_deals is email-like or profile id. Try employees.
         const { data: emps } = await supabase
           .from('employees')
-          .select('profile_id, nome_completo, email')
+          .select('profile_id, nome_completo')
           .limit(500);
         
         if (emps) {
-          emps.forEach(e => {
-            if (e.profile_id) sdrNames.set(e.profile_id, e.nome_completo || e.email || e.profile_id);
-            if (e.email) sdrNames.set(e.email, e.nome_completo || e.email);
+          emps.forEach((e: any) => {
+            if (e.profile_id) sdrNames.set(e.profile_id, e.nome_completo || e.profile_id);
           });
         }
       }
