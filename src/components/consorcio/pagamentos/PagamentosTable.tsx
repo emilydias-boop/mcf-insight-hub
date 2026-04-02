@@ -122,28 +122,48 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
                     )}
                   </TableCell>
                   <TableCell className="text-center">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {!isPaid && (
-                          <>
-                            <DropdownMenuItem onClick={() => handleMarkAsPaid(row)}>
-                              <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
-                              Marcar como Paga
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                          </>
-                        )}
-                        <DropdownMenuItem onClick={() => onViewDetail(row)}>
-                          <Eye className="h-4 w-4 mr-2" />
-                          Ver Detalhes
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex items-center justify-center gap-1">
+                      {!isPaid && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                onClick={() => handleMarkAsPaid(row)}
+                                disabled={payInstallment.isPending}
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Marcar como paga</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {!isPaid && (
+                            <>
+                              <DropdownMenuItem onClick={() => handleMarkAsPaid(row)}>
+                                <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
+                                Marcar como Paga
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
+                          <DropdownMenuItem onClick={() => onViewDetail(row)}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            Ver Detalhes
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </TableCell>
                 </TableRow>
               );
