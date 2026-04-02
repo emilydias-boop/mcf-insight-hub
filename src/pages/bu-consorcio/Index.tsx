@@ -385,7 +385,7 @@ export default function ConsorcioPage() {
           <TabsTrigger value="cotas">Cotas</TabsTrigger>
           <TabsTrigger value="pendentes">Cadastros Pendentes</TabsTrigger>
           <TabsTrigger value="contemplacao">Contemplação</TabsTrigger>
-          <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+          
         </TabsList>
 
         <TabsContent value="cotas" className="space-y-6">
