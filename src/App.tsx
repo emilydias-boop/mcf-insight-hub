@@ -100,6 +100,7 @@ import ConsorcioFechamentoConfig from "./pages/bu-consorcio/FechamentoConfig";
 import ConsorcioRelatorio from "./pages/bu-consorcio/Relatorio";
 import ConsorcioPainelEquipe from "./pages/bu-consorcio/PainelEquipe";
 import ConsorcioVendas from "./pages/bu-consorcio/Vendas";
+import ConsorcioPagamentos from "./pages/bu-consorcio/Pagamentos";
 import Chairman from "./pages/Chairman";
 import Home from "./pages/Home";
 import DocumentosEstrategicos from "./pages/bu-common/DocumentosEstrategicos";
@@ -176,6 +177,7 @@ const App = () => (
               <Route path="consorcio/relatorio" element={<ResourceGuard resource="relatorios"><ConsorcioRelatorio /></ResourceGuard>} />
               <Route path="consorcio/painel-equipe" element={<ResourceGuard resource="crm"><ConsorcioPainelEquipe /></ResourceGuard>} />
               <Route path="consorcio/vendas" element={<ResourceGuard resource="crm"><ConsorcioVendas /></ResourceGuard>} />
+              <Route path="consorcio/pagamentos" element={<ResourceGuard resource="crm"><ConsorcioPagamentos /></ResourceGuard>} />
               <Route path="consorcio/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="consorcio" /></ResourceGuard>} />
               
               {/* BU Consórcio CRM - Dedicado */}
