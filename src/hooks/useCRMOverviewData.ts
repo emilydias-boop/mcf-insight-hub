@@ -146,6 +146,7 @@ export function useCRMOverviewData(
           start_date: format(periodStart, 'yyyy-MM-dd'),
           end_date: format(periodEnd, 'yyyy-MM-dd'),
           sdr_email_filter: null,
+          bu_filter: buName || null,
         }),
 
         // Closer R1 metrics
