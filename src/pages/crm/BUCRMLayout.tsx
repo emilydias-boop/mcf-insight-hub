@@ -8,8 +8,6 @@ import {
   Settings, 
   Shield, 
   CalendarDays, 
-   
-  Copy,
   ShoppingCart,
   ClipboardCheck,
   Inbox
