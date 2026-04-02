@@ -155,7 +155,7 @@ export function useCRMOverviewData(
           .select(`
             id, status, meeting_slot_id, booked_by,
             meeting_slots!inner (id, closer_id, meeting_type, scheduled_at,
-              closers (id, name))
+              closers!inner (id, name, bu))
           `)
           .gte('meeting_slots.scheduled_at', startISO)
           .lte('meeting_slots.scheduled_at', endISO)
@@ -167,7 +167,7 @@ export function useCRMOverviewData(
           .select(`
             id, status, meeting_slot_id,
             meeting_slots!inner (id, closer_id, meeting_type, scheduled_at,
-              closers (id, name))
+              closers!inner (id, name, bu))
           `)
           .gte('meeting_slots.scheduled_at', startISO)
           .lte('meeting_slots.scheduled_at', endISO)
