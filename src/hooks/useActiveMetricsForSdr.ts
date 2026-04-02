@@ -70,21 +70,17 @@ export const useActiveMetricsForSdr = (sdrId: string | undefined, anoMes: string
         return { metricas: [], fonte: 'fallback' as const, roleType };
       }
 
-      let cargoId = employeeData?.cargo_catalogo_id;
-
-      // Fallback: try sdr_comp_plan if no employee cargo
-      if (!cargoId) {
-        const { data: compPlanData } = await supabase
-          .from('sdr_comp_plan')
-          .select('cargo_catalogo_id')
-          .eq('sdr_id', sdrId)
-          .neq('status', 'REJECTED')
-          .order('vigencia_inicio', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        
-        cargoId = compPlanData?.cargo_catalogo_id || null;
-      }
+      // Prefer sdr_comp_plan cargo (more up-to-date for closers with level changes)
+      const { data: compPlanData } = await supabase
+        .from('sdr_comp_plan')
+        .select('cargo_catalogo_id')
+        .eq('sdr_id', sdrId)
+        .neq('status', 'REJECTED')
+        .order('vigencia_inicio', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      let cargoId = compPlanData?.cargo_catalogo_id || employeeData?.cargo_catalogo_id || null;
 
       if (!cargoId) {
         // No cargo found anywhere, return default metrics based on role_type
