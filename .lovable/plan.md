@@ -1,27 +1,21 @@
 
 
-## Remover seção "Relatórios" do sidebar
+## Remover completamente "Importar" e "Relatórios" do BU Consórcio
 
-### O que muda
+### Escopo
 
-Remover o bloco de navegação "Relatórios" (com "Visão Geral" e "Leads sem Tag") do sidebar principal, já que cada BU possui seus próprios relatórios internos.
+Remover sidebar, rotas e arquivos de página das funcionalidades "Importar" e "Relatórios" do BU Consórcio.
 
-### Alteração
+### Alterações
 
-**`src/components/layout/AppSidebar.tsx`** (linhas 185-194) — Remover o bloco inteiro do menu "Relatórios":
+1. **`src/components/layout/AppSidebar.tsx`** (linhas 148-149)
+   - Remover os itens "Importar" e "Relatórios" do array de items do menu Consórcio
 
-```tsx
-// REMOVER este bloco:
-{
-  title: "Relatórios",
-  icon: FileText,
-  requiredRoles: ["admin", "manager", "coordenador"],
-  items: [
-    { title: "Visão Geral", url: "/relatorios" },
-    { title: "Leads sem Tag", url: "/relatorios/leads-sem-tag" },
-  ],
-},
-```
+2. **`src/App.tsx`**
+   - Remover imports: `ConsorcioImportar` (linha 88) e `ConsorcioRelatorio` (linha 100)
+   - Remover rotas: `/consorcio/importar` (linha 173) e `/consorcio/relatorio` (linha 177)
 
-As rotas e componentes (`/relatorios`, `/relatorios/leads-sem-tag`) continuam existindo no código mas ficam inacessíveis pelo menu. Se desejar, posso removê-los também em um próximo passo.
+3. **Deletar arquivos de página**:
+   - `src/pages/bu-consorcio/Importar.tsx`
+   - `src/pages/bu-consorcio/Relatorio.tsx`
 
