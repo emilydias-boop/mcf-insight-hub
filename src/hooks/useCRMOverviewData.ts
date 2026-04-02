@@ -546,7 +546,7 @@ export function useCRMOverviewData(
 function emptyData(): CRMOverviewData {
   return {
     kpis: { leadsEntraram: 0, leadsTrabalhados: 0, leadsAvancados: 0, leadsPerdidos: 0, leadsSemMovimentacao: 0, leadsEsquecidos: 0, leadsSemOwner: 0 },
-    health: { totalAbertos: 0, leadsParados: 0, leadsEnvelhecidos: 0, tempoMedioSemMovHoras: 0, leadsSlaEstourado: 0, travadosPorEtapa: [] },
+    health: { entaramNoPeriodo: 0, trabalhadosNoPeriodo: 0, semToqueNoPeriodo: 0, avancadosNoPeriodo: 0, totalAbertos: 0, leadsParados: 0, leadsEnvelhecidos: 0, tempoMedioSemMovHoras: 0, travadosPorEtapa: [] },
     funnel: [],
     sdrRanking: [],
     closerRanking: [],

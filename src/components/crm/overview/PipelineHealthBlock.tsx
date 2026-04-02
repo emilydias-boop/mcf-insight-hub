@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { PipelineHealthData } from '@/hooks/useCRMOverviewData';
-import { Activity, AlertTriangle, Clock, Timer } from 'lucide-react';
+import { Activity, AlertTriangle, TrendingUp, UserCheck, UserX, ArrowUpRight } from 'lucide-react';
 
 interface Props {
   data: PipelineHealthData | undefined;
@@ -30,27 +30,58 @@ export function PipelineHealthBlock({ data, isLoading }: Props) {
           Saúde da Pipeline
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
-          <div className="text-center">
-            <p className="text-2xl font-bold text-foreground">{data.totalAbertos}</p>
-            <p className="text-xs text-muted-foreground">Abertos</p>
+      <CardContent className="space-y-4">
+        {/* Period Flow */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">No período</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-2 rounded-md bg-muted/50">
+              <p className="text-2xl font-bold text-foreground">{data.entaramNoPeriodo}</p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                <TrendingUp className="h-3 w-3" /> Entraram
+              </p>
+            </div>
+            <div className="text-center p-2 rounded-md bg-muted/50">
+              <p className="text-2xl font-bold text-primary">{data.trabalhadosNoPeriodo}</p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                <UserCheck className="h-3 w-3" /> Já trabalhados
+              </p>
+            </div>
+            <div className="text-center p-2 rounded-md bg-muted/50">
+              <p className="text-2xl font-bold text-warning">{data.semToqueNoPeriodo}</p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                <UserX className="h-3 w-3" /> Sem toque
+              </p>
+            </div>
+            <div className="text-center p-2 rounded-md bg-muted/50">
+              <p className="text-2xl font-bold text-accent-foreground">{data.avancadosNoPeriodo}</p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                <ArrowUpRight className="h-3 w-3" /> Avançados
+              </p>
+            </div>
           </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-warning">{data.leadsParados}</p>
-            <p className="text-xs text-muted-foreground">Parados (3d+)</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-destructive">{data.leadsEnvelhecidos}</p>
-            <p className="text-xs text-muted-foreground">Envelhecidos (7d+)</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-foreground">{formatTempo(data.tempoMedioSemMovHoras)}</p>
-            <p className="text-xs text-muted-foreground">Tempo Médio s/ Mov.</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-destructive">{data.leadsSlaEstourado}</p>
-            <p className="text-xs text-muted-foreground">SLA Estourado (14d+)</p>
+        </div>
+
+        {/* General Health (90d) */}
+        <div className="border-t border-border pt-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Saúde geral (últimos 90 dias)</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-foreground">{data.totalAbertos}</p>
+              <p className="text-xs text-muted-foreground">Abertos</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-warning">{data.leadsParados}</p>
+              <p className="text-xs text-muted-foreground">Parados (3d+)</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-destructive">{data.leadsEnvelhecidos}</p>
+              <p className="text-xs text-muted-foreground">Envelhecidos (7d+)</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-foreground">{formatTempo(data.tempoMedioSemMovHoras)}</p>
+              <p className="text-xs text-muted-foreground">Tempo Médio s/ Mov.</p>
+            </div>
           </div>
         </div>
 
