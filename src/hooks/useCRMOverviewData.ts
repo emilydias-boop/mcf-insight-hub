@@ -29,11 +29,16 @@ export interface OverviewKPIData {
 }
 
 export interface PipelineHealthData {
+  // Period flow metrics
+  entaramNoPeriodo: number;
+  trabalhadosNoPeriodo: number;
+  semToqueNoPeriodo: number;
+  avancadosNoPeriodo: number;
+  // General health (90-day window)
   totalAbertos: number;
   leadsParados: number; // 3+ days
   leadsEnvelhecidos: number; // 7+ days
   tempoMedioSemMovHoras: number;
-  leadsSlaEstourado: number; // 14+ days
   travadosPorEtapa: { stageName: string; count: number }[];
 }
 
