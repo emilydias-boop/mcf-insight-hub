@@ -73,9 +73,11 @@ export function PayoutTableRow({
     }
   }, [calculatedVariavel, calculatedTotalConta, metricas.length, payout.id, onCalculated]);
 
-  // Use calculated values when available, fallback to DB
-  const displayVariavel = metricas.length > 0 ? calculatedVariavel : (payout.valor_variavel_total || 0);
-  const displayTotalConta = metricas.length > 0 ? calculatedTotalConta : (payout.total_conta || 0);
+  // Use calculated values when metrics are loaded; show DB fallback only if hook finished and found nothing
+  const metricsReady = !metricasLoading && metricas.length > 0;
+  const displayVariavel = metricsReady ? calculatedVariavel : (payout.valor_variavel_total || 0);
+  const displayTotalConta = metricsReady ? calculatedTotalConta : (payout.total_conta || 0);
+  const showSkeleton = metricasLoading;
 
 
   const isProporcional = payout.dias_uteis_trabalhados != null && 
