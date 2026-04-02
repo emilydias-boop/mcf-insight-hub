@@ -150,6 +150,17 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
         }
       }
 
+      // Build dealId → pipeline name map
+      const dealIdToPipelineName: Record<string, string> = {};
+      if (dealsRes.data) {
+        for (const deal of dealsRes.data as any[]) {
+          const origin = deal.crm_origins;
+          if (origin) {
+            dealIdToPipelineName[deal.id] = origin.display_name || origin.name || '';
+          }
+        }
+      }
+
       const resolveStageName = (val: string | null | undefined): string => {
         if (!val) return '?';
         if (UUID_RE.test(val)) return stageNameMap[val.toLowerCase()] || val;
