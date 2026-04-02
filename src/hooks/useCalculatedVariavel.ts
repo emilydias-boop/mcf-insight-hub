@@ -77,7 +77,8 @@ function calcularMeta(
 
   if (nome === 'contratos') {
     const realizadas = kpi?.reunioes_realizadas || 0;
-    return Math.round(realizadas * 0.3);
+    const pct = metrica.meta_percentual && metrica.meta_percentual > 0 ? metrica.meta_percentual : 30;
+    return Math.round((realizadas * pct) / 100);
   }
 
   // Fixed meta: daily value × working days

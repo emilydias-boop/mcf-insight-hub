@@ -108,9 +108,10 @@ export const DynamicIndicatorCard = ({
     metaSubtitle = `${metrica.meta_percentual}% de ${realizadas} realiz. = ${metaAjustada}`;
   } else if (nome === 'contratos') {
     const realizadas = kpi?.reunioes_realizadas || 0;
-    metaAjustada = Math.round(realizadas * 0.3);
-    metaDiaria = 30;
-    metaSubtitle = `30% de ${realizadas} realiz. = ${metaAjustada}`;
+    const pctContratos = metrica.meta_percentual && metrica.meta_percentual > 0 ? metrica.meta_percentual : 30;
+    metaAjustada = Math.round((realizadas * pctContratos) / 100);
+    metaDiaria = pctContratos;
+    metaSubtitle = `${pctContratos}% de ${realizadas} realiz. = ${metaAjustada}`;
   } else {
     metaDiaria = metrica.meta_valor || 1;
     metaAjustada = metaDiaria * diasUteisMes;

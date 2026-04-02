@@ -70,21 +70,17 @@ export const useActiveMetricsForSdr = (sdrId: string | undefined, anoMes: string
         return { metricas: [], fonte: 'fallback' as const, roleType };
       }
 
-      let cargoId = employeeData?.cargo_catalogo_id;
-
-      // Fallback: try sdr_comp_plan if no employee cargo
-      if (!cargoId) {
-        const { data: compPlanData } = await supabase
-          .from('sdr_comp_plan')
-          .select('cargo_catalogo_id')
-          .eq('sdr_id', sdrId)
-          .neq('status', 'REJECTED')
-          .order('vigencia_inicio', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        
-        cargoId = compPlanData?.cargo_catalogo_id || null;
-      }
+      // Prefer sdr_comp_plan cargo (more up-to-date for closers with level changes)
+      const { data: compPlanData } = await supabase
+        .from('sdr_comp_plan')
+        .select('cargo_catalogo_id')
+        .eq('sdr_id', sdrId)
+        .neq('status', 'REJECTED')
+        .order('vigencia_inicio', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      let cargoId = compPlanData?.cargo_catalogo_id || employeeData?.cargo_catalogo_id || null;
 
       if (!cargoId) {
         // No cargo found anywhere, return default metrics based on role_type
@@ -126,22 +122,21 @@ export const useActiveMetricsForSdr = (sdrId: string | undefined, anoMes: string
         
         if (squadMetrics && squadMetrics.length > 0) {
           // Check if contratos metric has meta_percentual, if not, use from generic
-          const contratosMetrica = squadMetrics.find(m => m.nome_metrica === 'contratos');
-          if (contratosMetrica && !contratosMetrica.meta_percentual && genericMetrics) {
-            const genericContratos = genericMetrics.find(m => m.nome_metrica === 'contratos');
-            if (genericContratos?.meta_percentual) {
-              console.log(`Fallback: Using meta_percentual=${genericContratos.meta_percentual}% from generic metric for contratos`);
-              metricas = squadMetrics.map(m => 
-                m.nome_metrica === 'contratos' 
-                  ? { ...m, meta_percentual: genericContratos.meta_percentual }
-                  : m
-              ) as ActiveMetric[];
-            } else {
-              metricas = squadMetrics as ActiveMetric[];
-            }
-          } else {
-            metricas = squadMetrics as ActiveMetric[];
-          }
+              // For ANY squad metric with null meta_percentual, fill from generic
+              if (genericMetrics && genericMetrics.length > 0) {
+                metricas = squadMetrics.map(m => {
+                  if (!m.meta_percentual) {
+                    const genericMatch = genericMetrics.find(g => g.nome_metrica === m.nome_metrica);
+                    if (genericMatch?.meta_percentual) {
+                      console.log(`Fallback: Using meta_percentual=${genericMatch.meta_percentual}% from generic for ${m.nome_metrica}`);
+                      return { ...m, meta_percentual: genericMatch.meta_percentual };
+                    }
+                  }
+                  return m;
+                }) as ActiveMetric[];
+              } else {
+                metricas = squadMetrics as ActiveMetric[];
+              }
         }
       }
       
