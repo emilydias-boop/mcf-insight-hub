@@ -818,11 +818,10 @@ serve(async (req) => {
 
         // ===== BUSCAR MÉTRICAS ATIVAS CONFIGURADAS (COM FALLBACK PARA meta_percentual) =====
         let metricasAtivas: MetricaAtiva[] = [];
-        // Resolver cargo_catalogo_id: employee > comp_plan fallback
-        let resolvedCargoId = employeeData?.cargo_catalogo_id || null;
-        if (!resolvedCargoId && compPlan?.cargo_catalogo_id) {
-          resolvedCargoId = compPlan.cargo_catalogo_id;
-          console.log(`   🔄 Fallback: Usando cargo_catalogo_id do comp_plan para ${sdr.name}`);
+        // Resolver cargo_catalogo_id: preferir comp_plan (mais atualizado para closers com mudança de nível)
+        let resolvedCargoId = compPlan?.cargo_catalogo_id || employeeData?.cargo_catalogo_id || null;
+        if (resolvedCargoId) {
+          console.log(`   📋 Cargo resolvido para ${sdr.name}: ${resolvedCargoId} (fonte: ${compPlan?.cargo_catalogo_id ? 'comp_plan' : 'employee'})`);
         }
         
         if (resolvedCargoId) {
