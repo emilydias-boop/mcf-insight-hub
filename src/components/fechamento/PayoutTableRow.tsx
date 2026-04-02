@@ -51,7 +51,6 @@ export function PayoutTableRow({
     metricas,
     kpi: kpi || null,
     payout,
-    compPlan: compPlan || null,
     diasUteisMes,
     sdrMetaDiaria,
     variavelTotal,

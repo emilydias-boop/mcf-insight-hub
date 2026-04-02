@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { SdrIndicatorCard } from '@/components/sdr-fechamento/SdrIndicatorCard';
 import { NoShowIndicator } from '@/components/sdr-fechamento/NoShowIndicator';
 import { ActiveMetric, METRIC_CONFIG } from '@/hooks/useActiveMetricsForSdr';
-import { SdrMonthKpi, SdrCompPlan, SdrMonthPayout, getMultiplier } from '@/types/sdr-fechamento';
+import { SdrMonthKpi, SdrMonthPayout, getMultiplier } from '@/types/sdr-fechamento';
 import { 
   Calendar, 
   Users, 
@@ -20,22 +20,13 @@ interface DynamicIndicatorCardProps {
   metrica: ActiveMetric;
   kpi: SdrMonthKpi | null;
   payout: SdrMonthPayout;
-  compPlan: SdrCompPlan | null;
   diasUteisMes: number;
   sdrMetaDiaria: number;
-  variavelTotal?: number; // Total variável do cargo (fallback do cargo_catalogo)
+  variavelTotal?: number;
 }
 
 const iconMap: Record<string, React.ElementType> = {
-  Calendar,
-  Users,
-  Phone,
-  ClipboardCheck,
-  FileCheck,
-  CalendarPlus,
-  AlertTriangle,
-  Sparkles,
-  Percent,
+  Calendar, Users, Phone, ClipboardCheck, FileCheck, CalendarPlus, AlertTriangle, Sparkles, Percent,
 };
 
 const colorMap: Record<string, string> = {
@@ -51,7 +42,6 @@ export const DynamicIndicatorCard = ({
   metrica,
   kpi,
   payout,
-  compPlan,
   diasUteisMes,
   sdrMetaDiaria,
   variavelTotal = 0,
@@ -59,7 +49,6 @@ export const DynamicIndicatorCard = ({
   const config = METRIC_CONFIG[metrica.nome_metrica];
   
   if (!config) {
-    // Fallback for unknown metrics
     return (
       <Card className="overflow-hidden">
         <CardContent className="p-4">
@@ -69,9 +58,6 @@ export const DynamicIndicatorCard = ({
       </Card>
     );
   }
-
-  const Icon = iconMap[config.icon] || Calendar;
-  const colorClasses = colorMap[config.color] || colorMap.green;
 
   // Special handling for no_show indicator
   if (metrica.nome_metrica === 'no_show') {
@@ -83,172 +69,71 @@ export const DynamicIndicatorCard = ({
     );
   }
 
-  // Get values from KPI
   const kpiValue = kpi ? (kpi as any)[config.kpiField] || 0 : 0;
+  const baseVariavel = variavelTotal || 400;
+  const pesoPercent = metrica.peso_percentual || 25;
+  const valorBase = baseVariavel * (pesoPercent / 100);
 
-  // For metrics with isDynamicCalc (contratos, vendas_parceria), calculate values dynamically
-  if (config.isDynamicCalc) {
-    // Use variável total do cargo_catalogo ou compPlan
-    const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
-    const pesoPercent = metrica.peso_percentual || 25;
-    const valorBase = baseVariavel * (pesoPercent / 100);
-    
-    // NOVA LÓGICA: Se meta_percentual está definida, usar % das Realizadas
-    let metaAjustada: number;
-    let metaDiaria: number;
-    
-    if (metrica.nome_metrica === 'r2_agendadas') {
-      // R2 Agendadas: meta = X% dos Contratos Pagos (default 100%)
-      const contratosPagos = kpi?.intermediacoes_contrato || 0;
-      const pctContratos = metrica.meta_percentual && metrica.meta_percentual > 0 ? metrica.meta_percentual : 100;
-      metaAjustada = Math.round((contratosPagos * pctContratos) / 100);
-      metaDiaria = pctContratos;
-    } else if (metrica.meta_percentual && metrica.meta_percentual > 0) {
-      // Meta dinâmica: X% das Realizadas
-      const realizadas = kpi?.reunioes_realizadas || 0;
-      metaAjustada = Math.round((realizadas * metrica.meta_percentual) / 100);
-      metaDiaria = metrica.meta_percentual; // Exibir como %
-    } else if (metrica.nome_metrica === 'contratos') {
-      // Fallback SDR: 30% das realizadas
-      const realizadas = kpi?.reunioes_realizadas || 0;
-      metaAjustada = Math.round(realizadas * 0.3);
-      metaDiaria = 30; // 30%
-    } else {
-      // Meta fixa: valor diário × dias úteis (comportamento anterior)
-      metaDiaria = metrica.meta_valor || 1;
-      metaAjustada = metaDiaria * diasUteisMes;
-    }
-    
-    // Calcular percentual e multiplicador
-    const pct = metaAjustada > 0 ? (kpiValue / metaAjustada) * 100 : 0;
-    const mult = getMultiplier(pct);
-    const valorFinal = valorBase * mult;
+  // Calculate meta based on metric type
+  let metaAjustada: number;
+  let metaDiaria: number;
+  let metaSubtitle: string | undefined;
 
-    // Custom subtitle based on meta type
-    const isR2Agendadas = metrica.nome_metrica === 'r2_agendadas';
-    const isPercentualMeta = metrica.meta_percentual && metrica.meta_percentual > 0;
-    const isContratosFallback = !isPercentualMeta && metrica.nome_metrica === 'contratos';
-    const pctR2 = isR2Agendadas ? (metrica.meta_percentual && metrica.meta_percentual > 0 ? metrica.meta_percentual : 100) : 0;
-    const metaSubtitle = isR2Agendadas
-      ? `${pctR2}% de ${kpi?.intermediacoes_contrato || 0} contratos = ${metaAjustada}`
-      : isPercentualMeta 
-      ? `${metrica.meta_percentual}% de ${kpi?.reunioes_realizadas || 0} realiz. = ${metaAjustada}`
-      : isContratosFallback
-      ? `30% de ${kpi?.reunioes_realizadas || 0} realiz. = ${metaAjustada}`
-      : undefined;
+  const nome = metrica.nome_metrica;
 
-    return (
-      <SdrIndicatorCard
-        title={metrica.label_exibicao}
-        meta={metaDiaria}
-        metaAjustada={metaAjustada}
-        realizado={kpiValue}
-        pct={pct}
-        multiplicador={mult}
-        valorBase={valorBase}
-        valorFinal={valorFinal}
-        isPercentage={false}
-        isManual={false}
-        metaSubtitle={metaSubtitle}
-      />
-    );
-  }
-  
-  // For metrics that use SdrIndicatorCard (have payout percentage fields)
-  if (config.payoutPctField && config.payoutMultField && config.payoutValueField) {
-    // Calculate meta FIRST based on metric type
-    let meta = 0;
-    let metaAjustada = 0;
-    
-    if (metrica.nome_metrica === 'agendamentos') {
-      meta = sdrMetaDiaria;
-      // Prioridade: valor salvo no payout > compPlan > cálculo dinâmico
-      metaAjustada = (payout as any).meta_agendadas_ajustada 
-        || compPlan?.meta_reunioes_agendadas 
-        || (sdrMetaDiaria * diasUteisMes);
-    } else if (metrica.nome_metrica === 'realizadas') {
-      // SINCRONIZADO COM KpiEditForm: Usar 70% das agendadas REAIS
-      const agendadasReais = kpi?.reunioes_agendadas || 0;
-      meta = agendadasReais;
-      metaAjustada = Math.round(agendadasReais * 0.7);
-    } else if (metrica.nome_metrica === 'tentativas') {
-      meta = 84;
-      metaAjustada = (payout as any).meta_tentativas_ajustada ?? (84 * diasUteisMes);
-    } else if (metrica.nome_metrica === 'organizacao') {
-      meta = 100;
-      metaAjustada = 100;
-    }
-
-    // RECALCULAR porcentagem localmente para garantir consistência com a meta exibida
-    const pct = metaAjustada > 0 ? (kpiValue / metaAjustada) * 100 : 0;
-    const mult = getMultiplier(pct);
-    
-    // Prioridade: peso percentual configurado > valor fixo do compPlan
-    let valorBase = 0;
-    
-    if (metrica.peso_percentual && metrica.peso_percentual > 0) {
-      const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
-      valorBase = baseVariavel * (metrica.peso_percentual / 100);
-    } else if (config.compPlanValueField && compPlan) {
-      const valorEspecifico = (compPlan as any)[config.compPlanValueField] || 0;
-      if (valorEspecifico > 0) {
-        valorBase = valorEspecifico;
-      }
-    }
-    
-    // Fallback final
-    if (valorBase === 0) {
-      const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
-      valorBase = baseVariavel * 0.25;
-    }
-    
-    // Valor final = base × multiplicador (recalculado localmente)
-    const valorFinal = valorBase * mult;
-
-    return (
-      <SdrIndicatorCard
-        title={metrica.label_exibicao}
-        meta={meta}
-        metaAjustada={metaAjustada}
-        realizado={kpiValue}
-        pct={pct}
-        multiplicador={mult}
-        valorBase={valorBase}
-        valorFinal={valorFinal}
-        isPercentage={config.isPercentage}
-        isManual={!config.isAuto}
-      />
-    );
+  if (nome === 'agendamentos') {
+    metaDiaria = sdrMetaDiaria;
+    metaAjustada = (payout as any)?.meta_agendadas_ajustada || (sdrMetaDiaria * diasUteisMes);
+  } else if (nome === 'realizadas') {
+    const agendadasReais = kpi?.reunioes_agendadas || 0;
+    metaDiaria = agendadasReais;
+    metaAjustada = Math.round(agendadasReais * 0.7);
+    metaSubtitle = `70% de ${agendadasReais} agend. = ${metaAjustada}`;
+  } else if (nome === 'tentativas') {
+    metaDiaria = 84;
+    metaAjustada = (payout as any)?.meta_tentativas_ajustada ?? (84 * diasUteisMes);
+  } else if (nome === 'organizacao') {
+    metaDiaria = 100;
+    metaAjustada = 100;
+  } else if (nome === 'r2_agendadas') {
+    const contratosPagos = kpi?.intermediacoes_contrato || 0;
+    const pctContratos = metrica.meta_percentual && metrica.meta_percentual > 0 ? metrica.meta_percentual : 100;
+    metaAjustada = Math.round((contratosPagos * pctContratos) / 100);
+    metaDiaria = pctContratos;
+    metaSubtitle = `${pctContratos}% de ${contratosPagos} contratos = ${metaAjustada}`;
+  } else if (metrica.meta_percentual && metrica.meta_percentual > 0) {
+    const realizadas = kpi?.reunioes_realizadas || 0;
+    metaAjustada = Math.round((realizadas * metrica.meta_percentual) / 100);
+    metaDiaria = metrica.meta_percentual;
+    metaSubtitle = `${metrica.meta_percentual}% de ${realizadas} realiz. = ${metaAjustada}`;
+  } else if (nome === 'contratos') {
+    const realizadas = kpi?.reunioes_realizadas || 0;
+    metaAjustada = Math.round(realizadas * 0.3);
+    metaDiaria = 30;
+    metaSubtitle = `30% de ${realizadas} realiz. = ${metaAjustada}`;
+  } else {
+    metaDiaria = metrica.meta_valor || 1;
+    metaAjustada = metaDiaria * diasUteisMes;
   }
 
-  // For simpler metrics (contratos, r2_agendadas, outside_sales) - use a simple card
+  const pct = metaAjustada > 0 ? (kpiValue / metaAjustada) * 100 : 0;
+  const mult = getMultiplier(pct);
+  const valorFinal = valorBase * mult;
+
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5 text-sm font-medium">
-            <Icon className={`h-4 w-4 ${colorClasses.split(' ')[0]}`} />
-            {metrica.label_exibicao}
-          </div>
-          <Badge variant="outline" className={`text-[10px] ${colorClasses}`}>
-            {config.autoSource}
-          </Badge>
-        </div>
-        <div className={`text-2xl font-bold ${colorClasses.split(' ')[0]}`}>
-          {kpiValue}
-        </div>
-        {metrica.peso_percentual && (
-          <div className="text-xs text-muted-foreground mt-1">
-            Peso: {metrica.peso_percentual}%
-          </div>
-        )}
-        {metrica.meta_valor && (
-          <div className="text-xs text-muted-foreground">
-            Meta: {metrica.meta_valor}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <SdrIndicatorCard
+      title={metrica.label_exibicao}
+      meta={metaDiaria}
+      metaAjustada={metaAjustada}
+      realizado={kpiValue}
+      pct={pct}
+      multiplicador={mult}
+      valorBase={valorBase}
+      valorFinal={valorFinal}
+      isPercentage={config.isPercentage}
+      isManual={!config.isAuto}
+      metaSubtitle={metaSubtitle}
+    />
   );
 };
 
@@ -257,7 +142,6 @@ interface DynamicIndicatorsGridProps {
   metricas: ActiveMetric[];
   kpi: SdrMonthKpi | null;
   payout: SdrMonthPayout;
-  compPlan: SdrCompPlan | null;
   diasUteisMes: number;
   sdrMetaDiaria: number;
   variavelTotal?: number;
@@ -267,7 +151,6 @@ export const DynamicIndicatorsGrid = ({
   metricas,
   kpi,
   payout,
-  compPlan,
   diasUteisMes,
   sdrMetaDiaria,
   variavelTotal,
@@ -288,7 +171,6 @@ export const DynamicIndicatorsGrid = ({
           metrica={metrica}
           kpi={kpi}
           payout={payout}
-          compPlan={compPlan}
           diasUteisMes={diasUteisMes}
           sdrMetaDiaria={sdrMetaDiaria}
           variavelTotal={variavelTotal}

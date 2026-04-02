@@ -1,12 +1,11 @@
 import { useMemo } from 'react';
 import { ActiveMetric, METRIC_CONFIG } from '@/hooks/useActiveMetricsForSdr';
-import { SdrMonthKpi, SdrCompPlan, SdrMonthPayout, getMultiplier } from '@/types/sdr-fechamento';
+import { SdrMonthKpi, SdrMonthPayout, getMultiplier } from '@/types/sdr-fechamento';
 
 interface CalculatedVariavelParams {
   metricas: ActiveMetric[];
   kpi: SdrMonthKpi | null;
   payout: SdrMonthPayout | null;
-  compPlan: SdrCompPlan | null;
   diasUteisMes: number;
   sdrMetaDiaria: number;
   variavelTotal: number;
@@ -27,14 +26,73 @@ interface CalculatedVariavelResult {
 }
 
 /**
+ * Calculates meta for a given metric based on its type.
+ * Unified logic used by both useCalculatedVariavel and DynamicIndicatorCard.
+ */
+function calcularMeta(
+  metrica: ActiveMetric,
+  kpi: SdrMonthKpi | null,
+  payout: SdrMonthPayout | null,
+  diasUteisMes: number,
+  sdrMetaDiaria: number,
+  proRataRatio: number,
+): number {
+  const nome = metrica.nome_metrica;
+
+  if (nome === 'agendamentos') {
+    let meta = (payout as any)?.meta_agendadas_ajustada || (sdrMetaDiaria * diasUteisMes);
+    if (proRataRatio < 1 && !(payout as any)?.meta_agendadas_ajustada) {
+      meta = Math.round(meta * proRataRatio);
+    }
+    return meta;
+  }
+
+  if (nome === 'realizadas') {
+    const agendadasReais = kpi?.reunioes_agendadas || 0;
+    return Math.round(agendadasReais * 0.7);
+  }
+
+  if (nome === 'tentativas') {
+    let meta = (payout as any)?.meta_tentativas_ajustada ?? (84 * diasUteisMes);
+    if (proRataRatio < 1 && !(payout as any)?.meta_tentativas_ajustada) {
+      meta = Math.round(meta * proRataRatio);
+    }
+    return meta;
+  }
+
+  if (nome === 'organizacao') {
+    return 100;
+  }
+
+  if (nome === 'r2_agendadas') {
+    const contratosPagos = kpi?.intermediacoes_contrato || 0;
+    const pct = metrica.meta_percentual && metrica.meta_percentual > 0 ? metrica.meta_percentual : 100;
+    return Math.round((contratosPagos * pct) / 100);
+  }
+
+  if (metrica.meta_percentual && metrica.meta_percentual > 0) {
+    const realizadas = kpi?.reunioes_realizadas || 0;
+    return Math.round((realizadas * metrica.meta_percentual) / 100);
+  }
+
+  if (nome === 'contratos') {
+    const realizadas = kpi?.reunioes_realizadas || 0;
+    return Math.round(realizadas * 0.3);
+  }
+
+  // Fixed meta: daily value × working days
+  const metaDiaria = metrica.meta_valor || 1;
+  return metaDiaria * diasUteisMes;
+}
+
+/**
  * Calculates the total variable pay by summing up individual indicator values.
- * Uses the SAME logic as DynamicIndicatorCard to ensure visual consistency.
+ * All metrics use unified weight-based calculation from fechamento_metricas_mes.
  */
 export function useCalculatedVariavel({
   metricas,
   kpi,
   payout,
-  compPlan,
   diasUteisMes,
   sdrMetaDiaria,
   variavelTotal,
@@ -45,112 +103,30 @@ export function useCalculatedVariavel({
       return { total: 0, indicators: [] };
     }
 
-    // Pro-rata ratio: if dias_uteis_trabalhados is set and less than full month
     const proRataRatio = (diasUteisTrabalhados != null && diasUteisTrabalhados < diasUteisMes && diasUteisMes > 0)
       ? diasUteisTrabalhados / diasUteisMes
       : 1;
 
+    const baseVariavel = variavelTotal || 400;
     const indicators: IndicatorValue[] = [];
     let total = 0;
 
     for (const metrica of metricas) {
       const config = METRIC_CONFIG[metrica.nome_metrica];
-      
-      // Skip metrics without config or special ones like no_show
-      if (!config || metrica.nome_metrica === 'no_show') {
-        continue;
-      }
+      if (!config || metrica.nome_metrica === 'no_show') continue;
 
       const kpiValue = kpi ? (kpi as any)[config.kpiField] || 0 : 0;
-      let valorBase = 0;
-      let mult = 0;
-      let valorFinal = 0;
 
-      // For metrics with isDynamicCalc (contratos, vendas_parceria)
-      if (config.isDynamicCalc) {
-        const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
-        const pesoPercent = metrica.peso_percentual || 25;
-        valorBase = baseVariavel * (pesoPercent / 100);
+      // Unified: all metrics use peso_percentual
+      const pesoPercent = metrica.peso_percentual && metrica.peso_percentual > 0
+        ? metrica.peso_percentual
+        : (100 / metricas.filter(m => m.nome_metrica !== 'no_show').length);
+      const valorBase = baseVariavel * (pesoPercent / 100);
 
-        // Calculate meta and percentage
-        let metaAjustada: number;
-        
-        if (metrica.nome_metrica === 'r2_agendadas') {
-          // R2 Agendadas: meta = X% dos Contratos Pagos (default 100%)
-          const contratosPagos = kpi?.intermediacoes_contrato || 0;
-          const pctContratos = metrica.meta_percentual && metrica.meta_percentual > 0 ? metrica.meta_percentual : 100;
-          metaAjustada = Math.round((contratosPagos * pctContratos) / 100);
-        } else if (metrica.meta_percentual && metrica.meta_percentual > 0) {
-          // Dynamic meta: X% of Realizadas
-          const realizadas = kpi?.reunioes_realizadas || 0;
-          metaAjustada = Math.round((realizadas * metrica.meta_percentual) / 100);
-        } else if (metrica.nome_metrica === 'contratos') {
-          // Fallback SDR: 30% das realizadas
-          const realizadas = kpi?.reunioes_realizadas || 0;
-          metaAjustada = Math.round(realizadas * 0.3);
-        } else {
-          // Fixed meta: daily value × working days
-          const metaDiaria = metrica.meta_valor || 1;
-          metaAjustada = metaDiaria * diasUteisMes;
-        }
-
-        const pct = metaAjustada > 0 ? (kpiValue / metaAjustada) * 100 : 0;
-        mult = getMultiplier(pct);
-        valorFinal = valorBase * mult;
-      }
-      // For standard metrics (agendamentos, realizadas, tentativas, organizacao)
-      else if (config.payoutPctField && config.payoutMultField && config.payoutValueField) {
-        // Calculate meta based on metric type
-        let metaAjustada = 0;
-
-        if (metrica.nome_metrica === 'agendamentos') {
-          // Priority: payout.meta_agendadas_ajustada → compPlan.meta_reunioes_agendadas → sdrMetaDiaria * diasUteisMes
-          metaAjustada = (payout as any)?.meta_agendadas_ajustada || compPlan?.meta_reunioes_agendadas || (sdrMetaDiaria * diasUteisMes);
-          // Apply pro-rata if not already adjusted by edge function
-          if (proRataRatio < 1 && !(payout as any)?.meta_agendadas_ajustada) {
-            metaAjustada = Math.round(metaAjustada * proRataRatio);
-          }
-        } else if (metrica.nome_metrica === 'realizadas') {
-          // SINCRONIZADO COM Edge Function: Usar 70% das agendadas REAIS
-          const agendadasReais = kpi?.reunioes_agendadas || 0;
-          metaAjustada = Math.round(agendadasReais * 0.7);
-        } else if (metrica.nome_metrica === 'tentativas') {
-          metaAjustada = (payout as any).meta_tentativas_ajustada ?? (84 * diasUteisMes);
-          // Apply pro-rata if not already adjusted by edge function
-          if (proRataRatio < 1 && !(payout as any)?.meta_tentativas_ajustada) {
-            metaAjustada = Math.round(metaAjustada * proRataRatio);
-          }
-        } else if (metrica.nome_metrica === 'organizacao') {
-          metaAjustada = 100;
-        }
-
-        // Recalculate percentage and multiplier locally
-        const pct = metaAjustada > 0 ? (kpiValue / metaAjustada) * 100 : 0;
-        mult = getMultiplier(pct);
-
-        // Priority: weight percentage FIRST, then fall back to compPlan fixed value
-        if (metrica.peso_percentual && metrica.peso_percentual > 0) {
-          const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
-          valorBase = baseVariavel * (metrica.peso_percentual / 100);
-        } else if (config.compPlanValueField && compPlan) {
-          const valorEspecifico = (compPlan as any)[config.compPlanValueField] || 0;
-          if (valorEspecifico > 0) {
-            valorBase = valorEspecifico;
-          }
-        }
-
-        // Fallback final
-        if (valorBase === 0) {
-          const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
-          valorBase = baseVariavel * 0.25;
-        }
-
-        valorFinal = valorBase * mult;
-      }
-      // Simple metrics without payout fields (r2_agendadas, outside_sales) - skip for variable calc
-      else {
-        continue;
-      }
+      const metaAjustada = calcularMeta(metrica, kpi, payout, diasUteisMes, sdrMetaDiaria, proRataRatio);
+      const pct = metaAjustada > 0 ? (kpiValue / metaAjustada) * 100 : 0;
+      const mult = getMultiplier(pct);
+      const valorFinal = valorBase * mult;
 
       indicators.push({
         nomeMetrica: metrica.nome_metrica,
@@ -164,5 +140,5 @@ export function useCalculatedVariavel({
     }
 
     return { total, indicators };
-  }, [metricas, kpi, payout, compPlan, diasUteisMes, sdrMetaDiaria, variavelTotal, diasUteisTrabalhados]);
+  }, [metricas, kpi, payout, diasUteisMes, sdrMetaDiaria, variavelTotal, diasUteisTrabalhados]);
 }

@@ -40,7 +40,6 @@ const DynamicIndicatorsSection = ({
   anoMes,
   kpi,
   payout,
-  compPlan,
   diasUteisMes,
   sdrMetaDiaria,
   isCloser,
@@ -50,7 +49,6 @@ const DynamicIndicatorsSection = ({
   anoMes: string;
   kpi: SdrMonthKpi | null;
   payout: SdrMonthPayout;
-  compPlan: SdrCompPlan | null;
   diasUteisMes: number;
   sdrMetaDiaria: number;
   isCloser: boolean;
@@ -84,7 +82,6 @@ const DynamicIndicatorsSection = ({
           metricas={metricas}
           kpi={kpi}
           payout={payout}
-          compPlan={compPlan}
           diasUteisMes={diasUteisMes}
           sdrMetaDiaria={sdrMetaDiaria}
           variavelTotal={variavelTotal}
@@ -149,7 +146,6 @@ const FechamentoSDRDetail = () => {
     metricas: activeMetrics,
     kpi: effectiveKpiEarly,
     payout,
-    compPlan,
     diasUteisMes: diasUteisMesEarly,
     sdrMetaDiaria: sdrMetaDiariaEarly,
     variavelTotal: effectiveVariavelEarly,
@@ -553,7 +549,6 @@ const FechamentoSDRDetail = () => {
             anoMes={payout.ano_mes}
             kpi={effectiveKpi}
             payout={payout}
-            compPlan={compPlan || null}
             diasUteisMes={diasUteisMes}
             sdrMetaDiaria={sdrMetaDiaria}
             isCloser={isCloser}

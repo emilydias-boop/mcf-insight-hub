@@ -244,23 +244,16 @@ export const METRIC_CONFIG: Record<string, {
   icon: string;
   color: string;
   kpiField: string;
-  payoutPctField?: string;
-  payoutMultField?: string;
-  payoutValueField?: string;
-  compPlanValueField?: string;
   isPercentage?: boolean;
   isAuto?: boolean;
   autoSource?: string;
-  isDynamicCalc?: boolean; // For metrics that use dynamic peso/meta calculation
+  isDynamicCalc?: boolean;
 }> = {
   agendamentos: {
     icon: 'Calendar',
     color: 'green',
     kpiField: 'reunioes_agendadas',
-    payoutPctField: 'pct_reunioes_agendadas',
-    payoutMultField: 'mult_reunioes_agendadas',
-    payoutValueField: 'valor_reunioes_agendadas',
-    compPlanValueField: 'valor_meta_rpg',
+    isDynamicCalc: true,
     isAuto: true,
     autoSource: 'Agenda',
   },
@@ -268,10 +261,7 @@ export const METRIC_CONFIG: Record<string, {
     icon: 'Users',
     color: 'blue',
     kpiField: 'reunioes_realizadas',
-    payoutPctField: 'pct_reunioes_realizadas',
-    payoutMultField: 'mult_reunioes_realizadas',
-    payoutValueField: 'valor_reunioes_realizadas',
-    compPlanValueField: 'valor_docs_reuniao',
+    isDynamicCalc: true,
     isAuto: true,
     autoSource: 'Agenda',
   },
@@ -279,10 +269,7 @@ export const METRIC_CONFIG: Record<string, {
     icon: 'Phone',
     color: 'purple',
     kpiField: 'tentativas_ligacoes',
-    payoutPctField: 'pct_tentativas',
-    payoutMultField: 'mult_tentativas',
-    payoutValueField: 'valor_tentativas',
-    compPlanValueField: 'valor_tentativas',
+    isDynamicCalc: true,
     isAuto: true,
     autoSource: 'Twilio',
   },
@@ -290,11 +277,8 @@ export const METRIC_CONFIG: Record<string, {
     icon: 'ClipboardCheck',
     color: 'yellow',
     kpiField: 'score_organizacao',
-    payoutPctField: 'pct_organizacao',
-    payoutMultField: 'mult_organizacao',
-    payoutValueField: 'valor_organizacao',
-    compPlanValueField: 'valor_organizacao',
     isPercentage: true,
+    isDynamicCalc: true,
     isAuto: false,
     autoSource: 'Manual',
   },
@@ -302,7 +286,6 @@ export const METRIC_CONFIG: Record<string, {
     icon: 'FileCheck',
     color: 'green',
     kpiField: 'intermediacoes_contrato',
-    // Contratos usa cálculo dinâmico baseado em peso/meta configurados
     isDynamicCalc: true,
     isAuto: true,
     autoSource: 'Agenda',
@@ -319,6 +302,7 @@ export const METRIC_CONFIG: Record<string, {
     icon: 'AlertTriangle',
     color: 'red',
     kpiField: 'no_shows',
+    isDynamicCalc: true,
     isAuto: true,
     autoSource: 'Agenda',
   },
@@ -326,6 +310,7 @@ export const METRIC_CONFIG: Record<string, {
     icon: 'Sparkles',
     color: 'primary',
     kpiField: 'outside_sales',
+    isDynamicCalc: true,
     isAuto: true,
     autoSource: 'Agenda',
   },
@@ -333,7 +318,6 @@ export const METRIC_CONFIG: Record<string, {
     icon: 'Sparkles',
     color: 'purple',
     kpiField: 'vendas_parceria',
-    // Vendas parceria usa cálculo dinâmico baseado em peso/meta configurados
     isDynamicCalc: true,
     isAuto: true,
     autoSource: 'Agenda',
