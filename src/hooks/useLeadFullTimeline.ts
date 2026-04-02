@@ -184,6 +184,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           if (actType === 'stage_change' || actType === 'stage_changed') {
             const fromName = resolveStageName(act.from_stage || meta.from_stage);
             const toName = resolveStageName(act.to_stage || meta.to_stage);
+            const pipelineName = dealIdToPipelineName[act.deal_id] || meta.pipeline_name || null;
             events.push({
               id: act.id,
               type: 'stage_change',
@@ -191,7 +192,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               description: act.description,
               date: act.created_at,
               author: resolveAuthor(act.user_id, meta.owner_email, meta.deal_user, meta.changed_by),
-              metadata: { from_stage: fromName, to_stage: toName, ...meta },
+              metadata: { from_stage: fromName, to_stage: toName, pipeline_name: pipelineName, ...meta },
             });
           } else if (actType === 'note' || actType === 'manual_note') {
             events.push({
