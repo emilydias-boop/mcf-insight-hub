@@ -856,18 +856,18 @@ serve(async (req) => {
               metricas = metricasSquad;
               console.log(`   📋 Métricas específicas do squad '${sdr.squad}' encontradas`);
               
-              // ===== FALLBACK: Se métrica de contratos do squad não tem meta_percentual, usar da genérica =====
-              const metricaContratosSquad = metricas.find(m => m.nome_metrica === 'contratos');
-              if (metricaContratosSquad && !metricaContratosSquad.meta_percentual && metricasGenericas) {
-                const metricaContratosGenerica = metricasGenericas.find(m => m.nome_metrica === 'contratos');
-                if (metricaContratosGenerica?.meta_percentual) {
-                  console.log(`   🔄 Fallback: Usando meta_percentual=${metricaContratosGenerica.meta_percentual}% da métrica genérica para contratos`);
-                  metricas = metricas.map(m => 
-                    m.nome_metrica === 'contratos' 
-                      ? { ...m, meta_percentual: metricaContratosGenerica.meta_percentual }
-                      : m
-                  );
-                }
+              // ===== FALLBACK: Para QUALQUER métrica do squad sem meta_percentual, usar da genérica =====
+              if (metricasGenericas) {
+                metricas = metricas.map(m => {
+                  if (!m.meta_percentual) {
+                    const genericMatch = metricasGenericas!.find(g => g.nome_metrica === m.nome_metrica);
+                    if (genericMatch?.meta_percentual) {
+                      console.log(`   🔄 Fallback: Usando meta_percentual=${genericMatch.meta_percentual}% da genérica para ${m.nome_metrica}`);
+                      return { ...m, meta_percentual: genericMatch.meta_percentual };
+                    }
+                  }
+                  return m;
+                });
               }
             }
           }
