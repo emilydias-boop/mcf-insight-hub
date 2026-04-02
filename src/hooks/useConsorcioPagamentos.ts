@@ -219,23 +219,14 @@ export function useConsorcioPagamentos(
       } as PagamentoRow;
     });
 
-    // Compute situacao_cota grouped by card_id
-    const byCard = new Map<string, PagamentoRow[]>();
+    // Compute situacao_cota using global stats (all parcelas, not just current month)
     for (const row of withStatus) {
-      const arr = byCard.get(row.card_id) || [];
-      arr.push(row);
-      byCard.set(row.card_id, arr);
-    }
-    
-    for (const [cardId, parcelas] of byCard) {
-      const situacao = calcSituacaoCota(parcelas, parcelas[0]?.cota_status || '');
-      for (const p of parcelas) {
-        p.situacao_cota = situacao;
-      }
+      const stats = globalStats?.get(row.card_id);
+      row.situacao_cota = calcSituacaoCotaGlobal(stats, row.cota_status || '');
     }
 
     return withStatus;
-  }, [rawData]);
+  }, [rawData, globalStats]);
 
   // KPIs
   const kpis = useMemo((): PagamentosKPIData => {
