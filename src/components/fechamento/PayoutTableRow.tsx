@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Eye, AlertTriangle } from 'lucide-react';
 import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/formatters';
 import { useActiveMetricsForSdr } from '@/hooks/useActiveMetricsForSdr';
 import { useSdrMonthKpi } from '@/hooks/useSdrFechamento';
@@ -40,7 +41,7 @@ export function PayoutTableRow({
 }: PayoutTableRowProps) {
   const navigate = useNavigate();
 
-  const { metricas } = useActiveMetricsForSdr(payout.sdr_id, anoMes);
+  const { metricas, isLoading: metricasLoading } = useActiveMetricsForSdr(payout.sdr_id, anoMes);
   const { data: kpi } = useSdrMonthKpi(payout.sdr_id, anoMes);
 
   const diasUteisMes = payout.dias_uteis_mes || compPlan?.dias_uteis || 22;
@@ -72,9 +73,11 @@ export function PayoutTableRow({
     }
   }, [calculatedVariavel, calculatedTotalConta, metricas.length, payout.id, onCalculated]);
 
-  // Use calculated values when available, fallback to DB
-  const displayVariavel = metricas.length > 0 ? calculatedVariavel : (payout.valor_variavel_total || 0);
-  const displayTotalConta = metricas.length > 0 ? calculatedTotalConta : (payout.total_conta || 0);
+  // Use calculated values when metrics are loaded; show DB fallback only if hook finished and found nothing
+  const metricsReady = !metricasLoading && metricas.length > 0;
+  const displayVariavel = metricsReady ? calculatedVariavel : (payout.valor_variavel_total || 0);
+  const displayTotalConta = metricsReady ? calculatedTotalConta : (payout.total_conta || 0);
+  const showSkeleton = metricasLoading;
 
 
   const isProporcional = payout.dias_uteis_trabalhados != null && 
@@ -114,8 +117,12 @@ export function PayoutTableRow({
         </Badge>
       </TableCell>
       <TableCell className="text-right">{formatCurrency(ote)}</TableCell>
-      <TableCell className="text-right">{formatCurrency(displayVariavel)}</TableCell>
-      <TableCell className="text-right font-semibold">{formatCurrency(displayTotalConta)}</TableCell>
+      <TableCell className="text-right">
+        {showSkeleton ? <Skeleton className="h-4 w-16 ml-auto" /> : formatCurrency(displayVariavel)}
+      </TableCell>
+      <TableCell className="text-right font-semibold">
+        {showSkeleton ? <Skeleton className="h-4 w-20 ml-auto" /> : formatCurrency(displayTotalConta)}
+      </TableCell>
       <TableCell className="text-right">{formatCurrency(payout.total_ifood || 0)}</TableCell>
       <TableCell className="text-center">
         <SdrStatusBadge status={payout.status} />
