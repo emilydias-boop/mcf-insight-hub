@@ -173,7 +173,7 @@ export default function Configuracoes() {
       </div>
 
       <Tabs defaultValue="perfil" className="w-full">
-        <TabsList className={`w-full ${isAdmin ? 'md:w-[720px]' : 'md:w-[480px]'}`}>
+        <TabsList className="w-full md:w-[480px]">
           <TabsTrigger value="perfil" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             Perfil
