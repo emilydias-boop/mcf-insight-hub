@@ -6,10 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { User, Bell, Shield, Settings, DollarSign, Palette, Loader2, Phone, MessageSquare, Calendar } from "lucide-react";
+import { User, Bell, Shield, Palette, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { OperationalCostsConfig } from "@/components/dashboard/OperationalCostsConfig";
+
 import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyProfile, useUpdateMyProfile, useUpdateMyEmail, useUpdateMyPassword } from "@/hooks/useMyProfile";
@@ -62,41 +61,6 @@ function useNotificationPreferences() {
   return { data, isLoading, save: mutation.mutate, isSaving: mutation.isPending };
 }
 
-// Hook for integration status checks
-function useIntegrationStatus() {
-  return useQuery({
-    queryKey: ['integration-status'],
-    queryFn: async () => {
-      // Check Clint CRM - verify if sync-deals function exists and has been called recently
-      const { data: clintSettings } = await supabase
-        .from('automation_settings')
-        .select('value')
-        .eq('key', 'clint_api_key')
-        .maybeSingle();
-
-      // Check Twilio - verify if twilio config exists
-      const { data: twilioSettings } = await supabase
-        .from('automation_settings')
-        .select('value')
-        .eq('key', 'twilio_account_sid')
-        .maybeSingle();
-
-      // Check Calendly - verify if any closer has calendly_link
-      const { data: calendlyClosers } = await supabase
-        .from('closers')
-        .select('id')
-        .not('calendly_link', 'is', null)
-        .limit(1);
-
-      return {
-        clint: !!clintSettings,
-        twilio: !!twilioSettings,
-        calendly: (calendlyClosers?.length || 0) > 0,
-      };
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-}
 
 export default function Configuracoes() {
   const { role } = useAuth();
@@ -119,7 +83,7 @@ export default function Configuracoes() {
   });
 
   // Integration status
-  const { data: integrations, isLoading: integrationsLoading } = useIntegrationStatus();
+  
 
   // Profile form state
   const [fullName, setFullName] = useState('');
@@ -199,38 +163,17 @@ export default function Configuracoes() {
 
   const isSavingProfile = updateProfile.isPending || updateEmail.isPending;
 
-  const integrationItems = [
-    {
-      name: "Clint CRM",
-      description: "Sincronização de leads e deals",
-      icon: <MessageSquare className="h-5 w-5 text-primary" />,
-      connected: integrations?.clint ?? false,
-    },
-    {
-      name: "Twilio",
-      description: "Ligações e SMS automatizados",
-      icon: <Phone className="h-5 w-5 text-primary" />,
-      connected: integrations?.twilio ?? false,
-    },
-    {
-      name: "Calendly",
-      description: "Agendamento de reuniões com closers",
-      icon: <Calendar className="h-5 w-5 text-primary" />,
-      connected: integrations?.calendly ?? false,
-    },
-  ];
-
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold text-foreground">Configurações</h1>
         <p className="text-muted-foreground mt-1">
-          {isAdmin ? "Gerenciamento de preferências e integrações" : "Gerenciamento de preferências pessoais"}
+          Gerenciamento de preferências pessoais
         </p>
       </div>
 
       <Tabs defaultValue="perfil" className="w-full">
-        <TabsList className={`w-full ${isAdmin ? 'md:w-[720px]' : 'md:w-[480px]'}`}>
+        <TabsList className="w-full md:w-[480px]">
           <TabsTrigger value="perfil" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             Perfil
@@ -247,18 +190,6 @@ export default function Configuracoes() {
             <Shield className="h-4 w-4" />
             Segurança
           </TabsTrigger>
-          {isAdmin && (
-            <TabsTrigger value="financeiro" className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Financeiro
-            </TabsTrigger>
-          )}
-          {isAdmin && (
-            <TabsTrigger value="integracoes" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Integrações
-            </TabsTrigger>
-          )}
         </TabsList>
 
         <TabsContent value="perfil" className="space-y-4 mt-6">
@@ -445,91 +376,6 @@ export default function Configuracoes() {
           </Card>
         </TabsContent>
 
-        {isAdmin && (
-          <TabsContent value="financeiro" className="space-y-4 mt-6">
-            <OperationalCostsConfig />
-            
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-foreground">Recálculo de Métricas</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Execute o recálculo de todas as métricas semanais após configurar os custos operacionais.
-                </p>
-                <Button 
-                  onClick={async () => {
-                    const { toast } = await import("sonner");
-                    toast.info("Recalculando métricas...");
-                    try {
-                      const { supabase } = await import("@/integrations/supabase/client");
-                      const { data: dates } = await supabase
-                        .from('hubla_transactions')
-                        .select('sale_date')
-                        .order('sale_date', { ascending: true })
-                        .limit(1);
-                      
-                      const { data: maxDates } = await supabase
-                        .from('hubla_transactions')
-                        .select('sale_date')
-                        .order('sale_date', { ascending: false })
-                        .limit(1);
-
-                      const startDate = dates?.[0]?.sale_date || '2024-06-01';
-                      const endDate = maxDates?.[0]?.sale_date || new Date().toISOString();
-
-                      const { error } = await supabase.functions.invoke('recalculate-metrics', {
-                        body: { start_date: startDate, end_date: endDate }
-                      });
-
-                      if (error) throw error;
-                      toast.success("Métricas recalculadas com sucesso!");
-                    } catch (error: any) {
-                      toast.error("Erro ao recalcular: " + error.message);
-                    }
-                  }}
-                  variant="outline"
-                >
-                  Recalcular Todas as Métricas
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
-
-        {isAdmin && (
-          <TabsContent value="integracoes" className="space-y-4 mt-6">
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-foreground">Integrações do Sistema</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {integrationsLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : (
-                  integrationItems.map((item) => (
-                    <div key={item.name} className="flex items-center justify-between p-4 border border-border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded bg-primary/20 flex items-center justify-center">
-                          {item.icon}
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground">{item.name}</p>
-                          <p className="text-sm text-muted-foreground">{item.description}</p>
-                        </div>
-                      </div>
-                      <Badge variant={item.connected ? "default" : "outline"}>
-                        {item.connected ? "Conectado" : "Não configurado"}
-                      </Badge>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
       </Tabs>
     </div>
   );
