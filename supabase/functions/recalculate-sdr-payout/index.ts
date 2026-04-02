@@ -825,7 +825,14 @@ serve(async (req) => {
 
         // ===== BUSCAR MÉTRICAS ATIVAS CONFIGURADAS (COM FALLBACK PARA meta_percentual) =====
         let metricasAtivas: MetricaAtiva[] = [];
-        if (employeeData?.cargo_catalogo_id) {
+        // Resolver cargo_catalogo_id: employee > comp_plan fallback
+        let resolvedCargoId = employeeData?.cargo_catalogo_id || null;
+        if (!resolvedCargoId && compPlan?.cargo_catalogo_id) {
+          resolvedCargoId = compPlan.cargo_catalogo_id;
+          console.log(`   🔄 Fallback: Usando cargo_catalogo_id do comp_plan para ${sdr.name}`);
+        }
+        
+        if (resolvedCargoId) {
           let metricas: MetricaAtiva[] | null = null;
           let metricasGenericas: MetricaAtiva[] | null = null;
           
@@ -834,7 +841,7 @@ serve(async (req) => {
             .from('fechamento_metricas_mes')
             .select('nome_metrica, peso_percentual, meta_valor, meta_percentual, fonte_dados')
             .eq('ano_mes', ano_mes)
-            .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
+            .eq('cargo_catalogo_id', resolvedCargoId)
             .is('squad', null)
             .eq('ativo', true);
           
@@ -849,7 +856,7 @@ serve(async (req) => {
               .from('fechamento_metricas_mes')
               .select('nome_metrica, peso_percentual, meta_valor, meta_percentual, fonte_dados')
               .eq('ano_mes', ano_mes)
-              .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
+              .eq('cargo_catalogo_id', resolvedCargoId)
               .eq('squad', sdr.squad)
               .eq('ativo', true);
             
