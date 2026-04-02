@@ -145,8 +145,6 @@ const menuItems: MenuItem[] = [
       { title: "Vendas", url: "/consorcio/vendas", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
       { title: "Controle Consorcio", url: "/consorcio", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
       { title: "Pagamentos", url: "/consorcio/pagamentos", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
-      { title: "Importar", url: "/consorcio/importar", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
-      { title: "Relatórios", url: "/consorcio/relatorio", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
       { title: "Documentos Estratégicos", url: "/consorcio/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
     ],
   },
