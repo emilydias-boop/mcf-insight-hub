@@ -182,16 +182,6 @@ const menuItems: MenuItem[] = [
     ],
   },
 
-  // RELATÓRIOS
-  {
-    title: "Relatórios",
-    icon: FileText,
-    requiredRoles: ["admin", "manager", "coordenador"],
-    items: [
-      { title: "Visão Geral", url: "/relatorios" },
-      { title: "Leads sem Tag", url: "/relatorios/leads-sem-tag" },
-    ],
-  },
 
   // RH
   {
