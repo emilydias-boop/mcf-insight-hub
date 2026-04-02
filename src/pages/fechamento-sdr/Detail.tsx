@@ -549,7 +549,6 @@ const FechamentoSDRDetail = () => {
             anoMes={payout.ano_mes}
             kpi={effectiveKpi}
             payout={payout}
-            compPlan={compPlan || null}
             diasUteisMes={diasUteisMes}
             sdrMetaDiaria={sdrMetaDiaria}
             isCloser={isCloser}
