@@ -1,38 +1,25 @@
 
 
-## Remover Transações "Make" a Partir de Abril/2026
+## Mover aba "Pagamentos" para página própria no menu do Consórcio
 
-### Contexto
+### O que muda
 
-Transações com `source = 'make'` são duplicatas de vendas que já chegam via Hubla, Kiwify ou Asaas individualmente. A deduplicação atual por email/data falha quando o cliente usa emails diferentes. Em vez de continuar refinando a deduplicação, a solução é simplesmente **excluir make do mês atual em diante**, mantendo o histórico intacto.
+Remover a aba "Pagamentos" da página "Controle Consórcio" (que ficará apenas com Cotas, Cadastros Pendentes e Contemplação) e criar uma rota/página dedicada `/consorcio/pagamentos` com item próprio no sidebar.
 
-Dados: 32 transações make em abril/2026 que serão excluídas.
+### Arquivos afetados
 
-### Correção
+1. **`src/pages/bu-consorcio/Index.tsx`**
+   - Remover import do `ConsorcioPagamentosTab`
+   - Remover `<TabsTrigger value="pagamentos">` e `<TabsContent value="pagamentos">`
 
-**1. Migration SQL** — Adicionar filtro de data nas 3 RPCs:
+2. **`src/pages/bu-consorcio/Pagamentos.tsx`** (novo)
+   - Página wrapper que renderiza `ConsorcioPagamentosTab` com o seletor de mês (reutilizando o mesmo padrão de selectedMonth já existente)
 
-| RPC | Mudança |
-|---|---|
-| `get_all_hubla_transactions` | Adicionar `AND NOT (ht.source = 'make' AND ht.sale_date >= '2026-04-01')` |
-| `get_hubla_transactions_by_bu` | Mesmo filtro |
-| `get_first_transaction_ids` | Mesmo filtro |
+3. **`src/App.tsx`**
+   - Adicionar rota `consorcio/pagamentos` apontando para a nova página
 
-Isso remove `'make'` da lista de sources permitidos **apenas para transações de abril em diante**. Transações make anteriores a abril continuam aparecendo normalmente com toda a lógica de deduplicação existente.
+4. **`src/components/layout/AppSidebar.tsx`**
+   - Adicionar item `{ title: "Pagamentos", url: "/consorcio/pagamentos" }` no menu BU Consórcio (abaixo de "Controle Consorcio")
 
-### Detalhes técnicos
-
-```sql
--- Em cada RPC, trocar:
-AND ht.source IN ('hubla', 'manual', 'make', 'mcfpay', 'kiwify')
-
--- Por:
-AND ht.source IN ('hubla', 'manual', 'make', 'mcfpay', 'kiwify')
-AND NOT (ht.source = 'make' AND ht.sale_date >= '2026-04-01T00:00:00-03:00')
-```
-
-A lógica de deduplicação make existente (NOT EXISTS por email/data) continua funcionando para o histórico anterior a abril.
-
-### Arquivo afetado
-- **Nova migration SQL** — Recria as 3 RPCs com o filtro de corte temporal para `source = 'make'`
+O componente `ConsorcioPagamentosTab` e todo o hook `useConsorcioPagamentos` permanecem inalterados — apenas mudam de local de renderização.
 
