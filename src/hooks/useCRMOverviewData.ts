@@ -117,6 +117,7 @@ export function useCRMOverviewData(
         rpcResult,
         closerR1Result,
         closerR2Result,
+        sdrListResult,
       ] = await Promise.all([
         // All open deals (not in terminal stages) for health metrics
         supabase
@@ -149,30 +150,47 @@ export function useCRMOverviewData(
           bu_filter: buName || null,
         }),
 
-        // Closer R1 metrics
+        // Closer R1 metrics — filter by is_active
         supabase
           .from('meeting_slot_attendees')
           .select(`
             id, status, meeting_slot_id, booked_by,
             meeting_slots!inner (id, closer_id, meeting_type, scheduled_at,
-              closers!inner (id, name, bu))
+              closers!inner (id, name, bu, is_active))
           `)
           .gte('meeting_slots.scheduled_at', startISO)
           .lte('meeting_slots.scheduled_at', endISO)
-          .eq('meeting_slots.meeting_type', 'r1'),
+          .eq('meeting_slots.meeting_type', 'r1')
+          .eq('meeting_slots.closers.is_active', true),
 
-        // Closer R2 metrics
+        // Closer R2 metrics — filter by is_active
         supabase
           .from('meeting_slot_attendees')
           .select(`
             id, status, meeting_slot_id,
             meeting_slots!inner (id, closer_id, meeting_type, scheduled_at,
-              closers!inner (id, name, bu))
+              closers!inner (id, name, bu, is_active))
           `)
           .gte('meeting_slots.scheduled_at', startISO)
           .lte('meeting_slots.scheduled_at', endISO)
-          .eq('meeting_slots.meeting_type', 'r2'),
+          .eq('meeting_slots.meeting_type', 'r2')
+          .eq('meeting_slots.closers.is_active', true),
+
+        // Active SDRs for this BU — whitelist for ranking
+        buName
+          ? supabase
+              .from('sdr')
+              .select('user_id, name, email')
+              .eq('squad', buName)
+              .eq('active', true)
+              .eq('role_type', 'sdr')
+          : Promise.resolve({ data: null, error: null }),
       ]);
+
+      // Build SDR whitelist
+      const activeSdrList = sdrListResult.data || [];
+      const activeSdrProfileIds = new Set(activeSdrList.map(s => (s as any).user_id).filter(Boolean));
+      const activeSdrEmails = new Set(activeSdrList.map(s => (s as any).email?.toLowerCase()).filter(Boolean));
 
       const allDeals = dealsResult.data || [];
       const buDealIds = new Set(allDeals.map(d => d.id));
