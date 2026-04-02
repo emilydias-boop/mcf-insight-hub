@@ -100,6 +100,7 @@ import ConsorcioFechamentoConfig from "./pages/bu-consorcio/FechamentoConfig";
 import ConsorcioRelatorio from "./pages/bu-consorcio/Relatorio";
 import ConsorcioPainelEquipe from "./pages/bu-consorcio/PainelEquipe";
 import ConsorcioVendas from "./pages/bu-consorcio/Vendas";
+import ConsorcioPagamentos from "./pages/bu-consorcio/Pagamentos";
 import Chairman from "./pages/Chairman";
 import Home from "./pages/Home";
 import DocumentosEstrategicos from "./pages/bu-common/DocumentosEstrategicos";
