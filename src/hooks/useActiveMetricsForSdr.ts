@@ -244,14 +244,10 @@ export const METRIC_CONFIG: Record<string, {
   icon: string;
   color: string;
   kpiField: string;
-  payoutPctField?: string;
-  payoutMultField?: string;
-  payoutValueField?: string;
-  compPlanValueField?: string;
   isPercentage?: boolean;
   isAuto?: boolean;
   autoSource?: string;
-  isDynamicCalc?: boolean; // For metrics that use dynamic peso/meta calculation
+  isDynamicCalc?: boolean;
 }> = {
   agendamentos: {
     icon: 'Calendar',

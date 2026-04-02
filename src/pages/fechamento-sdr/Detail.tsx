@@ -146,7 +146,6 @@ const FechamentoSDRDetail = () => {
     metricas: activeMetrics,
     kpi: effectiveKpiEarly,
     payout,
-    compPlan,
     diasUteisMes: diasUteisMesEarly,
     sdrMetaDiaria: sdrMetaDiariaEarly,
     variavelTotal: effectiveVariavelEarly,
