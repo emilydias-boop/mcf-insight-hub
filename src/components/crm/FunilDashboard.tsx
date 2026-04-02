@@ -60,7 +60,7 @@ export function FunilDashboard() {
     [period]
   );
 
-  const { data, isLoading } = useCRMOverviewData(periodStart, periodEnd, originIds);
+  const { data, isLoading } = useCRMOverviewData(periodStart, periodEnd, originIds, activeBU);
 
   return (
     <div className="space-y-6">

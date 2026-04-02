@@ -80,10 +80,11 @@ export interface CRMOverviewData {
 export function useCRMOverviewData(
   periodStart: Date,
   periodEnd: Date,
-  originIds: string[]
+  originIds: string[],
+  buName?: string | null
 ) {
   return useQuery({
-    queryKey: ['crm-overview-data', periodStart.toISOString(), periodEnd.toISOString(), originIds.join(',')],
+    queryKey: ['crm-overview-data', periodStart.toISOString(), periodEnd.toISOString(), originIds.join(','), buName],
     queryFn: async (): Promise<CRMOverviewData> => {
       if (!originIds.length) {
         return emptyData();
@@ -145,6 +146,7 @@ export function useCRMOverviewData(
           start_date: format(periodStart, 'yyyy-MM-dd'),
           end_date: format(periodEnd, 'yyyy-MM-dd'),
           sdr_email_filter: null,
+          bu_filter: buName || null,
         }),
 
         // Closer R1 metrics
@@ -153,7 +155,7 @@ export function useCRMOverviewData(
           .select(`
             id, status, meeting_slot_id, booked_by,
             meeting_slots!inner (id, closer_id, meeting_type, scheduled_at,
-              closers (id, name))
+              closers!inner (id, name, bu))
           `)
           .gte('meeting_slots.scheduled_at', startISO)
           .lte('meeting_slots.scheduled_at', endISO)
@@ -165,7 +167,7 @@ export function useCRMOverviewData(
           .select(`
             id, status, meeting_slot_id,
             meeting_slots!inner (id, closer_id, meeting_type, scheduled_at,
-              closers (id, name))
+              closers!inner (id, name, bu))
           `)
           .gte('meeting_slots.scheduled_at', startISO)
           .lte('meeting_slots.scheduled_at', endISO)
@@ -310,8 +312,11 @@ export function useCRMOverviewData(
       funnelSteps.push({ label: 'R1 Realizadas', value: totalR1Realizadas });
       funnelSteps.push({ label: 'Contratos', value: totalContratos });
 
-      // R2 from closer R2 data
-      const r2Atts = closerR2Result.data || [];
+      // R2 from closer R2 data — filter by BU
+      const r2Atts = (closerR2Result.data || []).filter((att: any) => {
+        if (!buName) return true;
+        return att.meeting_slots?.closers?.bu === buName;
+      });
       funnelSteps.push({ label: 'R2', value: r2Atts.length });
 
       // Vendas = contratos with sold/approved
@@ -432,8 +437,12 @@ export function useCRMOverviewData(
         vendas: number;
       }>();
 
-      // R1 data
-      (closerR1Result.data || []).forEach((att: any) => {
+      // R1 data — filter by BU
+      const r1Data = (closerR1Result.data || []).filter((att: any) => {
+        if (!buName) return true;
+        return att.meeting_slots?.closers?.bu === buName;
+      });
+      r1Data.forEach((att: any) => {
         const closer = att.meeting_slots?.closers;
         if (!closer) return;
         const cid = closer.id;
@@ -447,8 +456,12 @@ export function useCRMOverviewData(
         if (att.status === 'contract_paid') c.contratos++;
       });
 
-      // R2 data
-      (closerR2Result.data || []).forEach((att: any) => {
+      // R2 data — filter by BU
+      const r2Data = (closerR2Result.data || []).filter((att: any) => {
+        if (!buName) return true;
+        return att.meeting_slots?.closers?.bu === buName;
+      });
+      r2Data.forEach((att: any) => {
         const closer = att.meeting_slots?.closers;
         if (!closer) return;
         const cid = closer.id;
