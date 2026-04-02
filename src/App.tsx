@@ -191,7 +191,7 @@ const App = () => (
                 <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
                 
                 <Route path="leads-limbo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsLimbo /></RoleGuard>} />
-                <Route path="contatos-duplicados" element={<ContatosDuplicados />} />
+                
                 <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
                 <Route path="pos-reuniao" element={<PosReuniao />} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
