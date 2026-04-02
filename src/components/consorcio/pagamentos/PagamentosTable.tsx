@@ -45,6 +45,9 @@ interface Props {
 
 export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail }: Props) {
   const payInstallment = usePayInstallment();
+  const installmentIds = data.map(r => r.id);
+  const { data: boletos } = useBoletosByInstallments(installmentIds);
+  const boletoInstallmentIds = new Set((boletos || []).map(b => b.installment_id).filter(Boolean));
 
   const handleMarkAsPaid = (row: PagamentoRow) => {
     payInstallment.mutate({
