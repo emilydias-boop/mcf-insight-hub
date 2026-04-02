@@ -97,6 +97,7 @@ Deno.serve(async (req) => {
       { table: "alerts", column: "resolved_by" },
       { table: "bu_strategic_documents", column: "uploaded_by" },
       { table: "attendee_movement_logs", column: "moved_by" },
+      { table: "crm_deals", column: "owner_profile_id" },
     ];
 
     for (const { table, column } of nullifyTables) {
