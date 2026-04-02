@@ -38,10 +38,10 @@ export function OperationalAlertsBlock({ data, isLoading }: Props) {
     });
   }
 
-  if (data.health.leadsSlaEstourado > 0) {
+  if (data.health.leadsEnvelhecidos > 0) {
     alerts.push({
       level: 'critical',
-      message: `${data.health.leadsSlaEstourado} leads com SLA estourado (14+ dias sem movimentação)`,
+      message: `${data.health.leadsEnvelhecidos} leads envelhecidos (7+ dias sem movimentação)`,
     });
   }
 
