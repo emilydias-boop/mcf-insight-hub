@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ConsorcioPagamentosTab } from '@/components/consorcio/pagamentos/ConsorcioPagamentosTab';
+import { BoletoUploadDialog } from '@/components/consorcio/pagamentos/BoletoUploadDialog';
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
   const date = subMonths(new Date(), i);
@@ -33,18 +34,21 @@ export default function ConsorcioPagamentosPage() {
             Controle de parcelas e boletos das cartas de consórcio
           </p>
         </div>
-        <Select value={monthOffset} onValueChange={setMonthOffset}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {MONTH_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3">
+          <BoletoUploadDialog />
+          <Select value={monthOffset} onValueChange={setMonthOffset}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MONTH_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <ConsorcioPagamentosTab

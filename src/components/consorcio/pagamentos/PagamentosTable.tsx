@@ -1,12 +1,13 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Eye, ChevronLeft, ChevronRight, MoreHorizontal, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Eye, ChevronLeft, ChevronRight, MoreHorizontal, CheckCircle, XCircle, Clock, FileText } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { PagamentoRow, StatusParcela, SituacaoCota } from '@/hooks/useConsorcioPagamentos';
 import { usePayInstallment } from '@/hooks/useConsorcio';
+import { useBoletosByInstallments } from '@/hooks/useConsorcioBoletos';
 import { format } from 'date-fns';
 import {
   DropdownMenu,
@@ -44,6 +45,9 @@ interface Props {
 
 export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail }: Props) {
   const payInstallment = usePayInstallment();
+  const installmentIds = data.map(r => r.id);
+  const { data: boletos } = useBoletosByInstallments(installmentIds);
+  const boletoInstallmentIds = new Set((boletos || []).map(b => b.installment_id).filter(Boolean));
 
   const handleMarkAsPaid = (row: PagamentoRow) => {
     payInstallment.mutate({
@@ -76,13 +80,14 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
             <TableHead>Status</TableHead>
             <TableHead>Situação Cota</TableHead>
             <TableHead>Responsável</TableHead>
+            <TableHead className="text-center">Boleto</TableHead>
             <TableHead className="text-center">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {data.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={13} className="text-center text-muted-foreground py-8">
                 Nenhuma parcela encontrada
               </TableCell>
             </TableRow>
@@ -108,6 +113,13 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
                     <Badge variant="outline" className={situacaoCfg.className}>{situacaoCfg.label}</Badge>
                   </TableCell>
                   <TableCell className="max-w-[120px] truncate">{row.vendedor_name || '-'}</TableCell>
+                  <TableCell className="text-center">
+                    {boletoInstallmentIds.has(row.id) ? (
+                      <FileText className="h-4 w-4 text-green-600 mx-auto" />
+                    ) : (
+                      <span className="text-muted-foreground text-xs">-</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
