@@ -22,7 +22,7 @@ const CRM = () => {
     { to: '/crm/agenda', label: 'Agenda R1', icon: CalendarDays },
     { to: '/crm/agenda-r2', label: 'Agenda R2', icon: CalendarDays },
     { to: '/crm/r2-carrinho', label: 'Carrinho R2', icon: Briefcase },
-    { to: '/crm/deals-orfaos', label: 'Órfãos', icon: UserX },
+    
     { to: '/crm/leads-limbo', label: 'Limbo', icon: Inbox },
     { to: '/crm/contatos-duplicados', label: 'Duplicados', icon: Copy },
     { to: '/crm/retornos-parceiros', label: 'Retornos', icon: ShieldAlert },
