@@ -1,12 +1,27 @@
 
 
-## Remover KPIs da Visão Geral do CRM
+## Remover seção "Relatórios" do sidebar
 
 ### O que muda
 
-Remover a linha de KPI cards (Entraram, Trabalhados, Avançados, Perdidos, Sem Movimentação, Esquecidos, Sem Owner) do `FunilDashboard`. Todo o restante (Saúde da Pipeline, Funil, Rankings, Alertas) permanece igual.
+Remover o bloco de navegação "Relatórios" (com "Visão Geral" e "Leads sem Tag") do sidebar principal, já que cada BU possui seus próprios relatórios internos.
 
 ### Alteração
 
-**`src/components/crm/FunilDashboard.tsx`** — Remover a linha 92 (`<OverviewKPIs ... />`) e o import de `OverviewKPIs` na linha 7. Nenhum outro arquivo é alterado.
+**`src/components/layout/AppSidebar.tsx`** (linhas 185-194) — Remover o bloco inteiro do menu "Relatórios":
+
+```tsx
+// REMOVER este bloco:
+{
+  title: "Relatórios",
+  icon: FileText,
+  requiredRoles: ["admin", "manager", "coordenador"],
+  items: [
+    { title: "Visão Geral", url: "/relatorios" },
+    { title: "Leads sem Tag", url: "/relatorios/leads-sem-tag" },
+  ],
+},
+```
+
+As rotas e componentes (`/relatorios`, `/relatorios/leads-sem-tag`) continuam existindo no código mas ficam inacessíveis pelo menu. Se desejar, posso removê-los também em um próximo passo.
 
