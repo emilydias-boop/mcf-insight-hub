@@ -97,7 +97,7 @@ import ConfiguracaoBU from "./pages/admin/ConfiguracaoBU";
 import ConsorcioFechamento from "./pages/bu-consorcio/Fechamento";
 import ConsorcioFechamentoDetail from "./pages/bu-consorcio/FechamentoDetail";
 import ConsorcioFechamentoConfig from "./pages/bu-consorcio/FechamentoConfig";
-import ConsorcioRelatorio from "./pages/bu-consorcio/Relatorio";
+
 import ConsorcioPainelEquipe from "./pages/bu-consorcio/PainelEquipe";
 import ConsorcioVendas from "./pages/bu-consorcio/Vendas";
 import ConsorcioPagamentos from "./pages/bu-consorcio/Pagamentos";
