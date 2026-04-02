@@ -214,7 +214,7 @@ const calculatePayoutValues = (
       const contratosReais = (kpi as any).intermediacoes_contrato || 0;
       const metaContratos = metricaContratos!.meta_percentual && metricaContratos!.meta_percentual > 0
         ? Math.round((kpi.reunioes_realizadas * metricaContratos!.meta_percentual) / 100)
-        : Math.round(kpi.reunioes_realizadas * 0.3);
+        : Math.round((kpi.reunioes_realizadas * 30) / 100);
       const pctContratos = metaContratos > 0 ? (contratosReais / metaContratos) * 100 : 0;
       const multContratos = getMultiplier(Math.min(pctContratos, 120));
       const valorContratos = (variavelTotal * (pesoContratos / 100)) * multContratos;
