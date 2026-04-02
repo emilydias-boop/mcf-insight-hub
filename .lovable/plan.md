@@ -1,51 +1,64 @@
 
 
-## Corrigir Vazamento de Dados: SDR Ranking e Closer Ranking
+## Saúde da Pipeline: Acompanhar o Filtro de Período
 
-### Diagnóstico
+### Problema atual
 
-Após investigação no banco de dados, identifiquei **3 problemas distintos**:
+O bloco "Saúde da Pipeline" mostra um snapshot de **todos os deals abertos de todos os tempos** — por isso números como 3997 parados. Ele ignora o filtro de período (Hoje/Semana/Mês).
 
-| Problema | Exemplo |
+O usuário quer saber: "dos que entraram hoje, quantos já foram trabalhados?" — uma visão contextual ao período.
+
+### Solução
+
+Reformular o bloco para mostrar **dois contextos**:
+
+**Linha 1 — Fluxo do Período** (segue o filtro):
+| Métrica | Cálculo |
 |---|---|
-| SDRs de outras BUs aparecem no ranking | cleiton.lima (consórcio), rangel.vinicius (crédito), jessica.bellini (crédito) |
-| Closers aparecem no ranking de SDR | cristiane.gomes, julio.caetano, mateus.macedo, thaynar.tavares (todos com `role_type: closer`) |
-| Pessoas desativadas aparecem | evellyn.santos (`active: false`), angelina.maia (`active: false`) |
+| Entraram | Deals criados no período (`created_at` entre start/end) |
+| Já trabalhados | Dos que entraram, quantos têm atividade no período |
+| Sem toque | Dos que entraram, quantos NÃO têm nenhuma atividade ainda |
+| Avançados | Dos que entraram, quantos tiveram stage_change positiva |
 
-A causa: o ranking SDR é construído agrupando `crm_deals.owner_id` sem verificar se o owner é de fato um SDR ativo da BU. Qualquer pessoa que já possuiu um deal na pipeline aparece.
+**Linha 2 — Saúde Geral (snapshot, mas filtrado)** — somente deals abertos que foram **criados nos últimos 90 dias** para excluir "estoque morto":
+| Métrica | Cálculo |
+|---|---|
+| Abertos (recentes) | Deals abertos criados nos últimos 90 dias |
+| Parados (3d+) | Desses, sem atividade há 3+ dias |
+| Envelhecidos (7d+) | Desses, sem atividade há 7+ dias |
+| Tempo médio s/ mov | Média de horas sem atividade (dos recentes) |
 
-### Correção
+**Travados por Etapa** — mantém, mas usando apenas deals dos últimos 90 dias.
 
-**Arquivo: `src/hooks/useCRMOverviewData.ts`**
+### Arquivos afetados
 
-1. **Buscar lista de SDRs ativos da BU** — Adicionar query na `sdr` table filtrando `squad = buName`, `active = true`, `role_type = 'sdr'`. Usar os `user_id`/`email` como whitelist para o ranking.
+1. **`src/hooks/useCRMOverviewData.ts`**
+   - Adicionar à interface `PipelineHealthData`: `entaramNoPeriodo`, `trabalhadosNoPeriodo`, `semToqueNoPeriodo`, `avancadosNoPeriodo`
+   - Calcular essas 4 métricas cruzando `newDeals` (criados no período) com `buActivities`
+   - Filtrar `openDeals` para últimos 90 dias antes de calcular parados/envelhecidos/SLA
 
-2. **Filtrar SDR ranking** — Antes de montar o `sdrRanking`, cruzar os `owner_id` dos deals com a lista de SDRs ativos. Owners que não estejam na lista são excluídos do ranking (seus leads ainda contam nos KPIs gerais, mas não aparecem na tabela de SDR).
-
-3. **Filtrar Closer ranking por `is_active`** — Na query de `meeting_slot_attendees` para R1 e R2, adicionar `.eq('meeting_slots.closers.is_active', true)` para excluir closers desativados.
+2. **`src/components/crm/overview/PipelineHealthBlock.tsx`**
+   - Adicionar primeira linha com métricas do período (Entraram / Já trabalhados / Sem toque / Avançados)
+   - Separar visualmente com label "No período" e "Saúde geral"
+   - Manter layout grid existente
 
 ### Detalhes técnicos
 
 ```text
-// Nova query paralela para SDRs ativos da BU
-const sdrListResult = await supabase
-  .from('sdr')
-  .select('user_id, name, email')
-  .eq('squad', buName)
-  .eq('active', true)
-  .eq('role_type', 'sdr');
+// No hook — novos campos calculados:
+const newDealIds = allDeals
+  .filter(d => new Date(d.created_at) >= periodStart && new Date(d.created_at) <= periodEnd)
+  .map(d => d.id);
+const newDealIdSet = new Set(newDealIds);
 
-// Construir whitelist de profile_ids e emails
-const activeSdrIds = new Set(sdrList.map(s => s.user_id).filter(Boolean));
-const activeSdrEmails = new Set(sdrList.map(s => s.email).filter(Boolean));
+const trabalhadosNoPeriodo = newDealIds.filter(id => workedDealIds.has(id)).length;
+const semToqueNoPeriodo = newDealIds.filter(id => !workedDealIds.has(id)).length;
+const avancadosNoPeriodo = stageChanges
+  .filter(a => newDealIdSet.has(a.deal_id) && a.to_stage && !lossStageIds.has(a.to_stage))
+  ...
 
-// Filtrar SDR ranking: só incluir owners que são SDRs ativos
-sdrMap entries filtered by: activeSdrIds.has(ownerId) || activeSdrEmails.has(ownerEmail)
-
-// Closer R1/R2 queries: adicionar filtro is_active
-.eq('meeting_slots.closers.is_active', true)
+// Filtro 90 dias para saúde geral:
+const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+const recentOpenDeals = openDeals.filter(d => new Date(d.created_at) >= ninetyDaysAgo);
 ```
-
-### Arquivo afetado
-- `src/hooks/useCRMOverviewData.ts` — Adicionar query de SDRs ativos, filtrar ranking SDR por whitelist, filtrar closers por `is_active`
 
