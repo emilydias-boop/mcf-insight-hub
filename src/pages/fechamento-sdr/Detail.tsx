@@ -82,7 +82,6 @@ const DynamicIndicatorsSection = ({
           metricas={metricas}
           kpi={kpi}
           payout={payout}
-          compPlan={compPlan}
           diasUteisMes={diasUteisMes}
           sdrMetaDiaria={sdrMetaDiaria}
           variavelTotal={variavelTotal}
