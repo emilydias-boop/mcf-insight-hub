@@ -88,8 +88,6 @@ export function FunilDashboard() {
         </div>
       </div>
 
-      {/* 1. KPIs */}
-      <OverviewKPIs data={data?.kpis} isLoading={isLoading} />
 
       {/* 2. Pipeline Health */}
       <PipelineHealthBlock data={data?.health} isLoading={isLoading} />
