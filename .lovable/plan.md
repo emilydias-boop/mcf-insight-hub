@@ -1,64 +1,38 @@
 
 
-## Saúde da Pipeline: Acompanhar o Filtro de Período
+## Remover Transações "Make" a Partir de Abril/2026
 
-### Problema atual
+### Contexto
 
-O bloco "Saúde da Pipeline" mostra um snapshot de **todos os deals abertos de todos os tempos** — por isso números como 3997 parados. Ele ignora o filtro de período (Hoje/Semana/Mês).
+Transações com `source = 'make'` são duplicatas de vendas que já chegam via Hubla, Kiwify ou Asaas individualmente. A deduplicação atual por email/data falha quando o cliente usa emails diferentes. Em vez de continuar refinando a deduplicação, a solução é simplesmente **excluir make do mês atual em diante**, mantendo o histórico intacto.
 
-O usuário quer saber: "dos que entraram hoje, quantos já foram trabalhados?" — uma visão contextual ao período.
+Dados: 32 transações make em abril/2026 que serão excluídas.
 
-### Solução
+### Correção
 
-Reformular o bloco para mostrar **dois contextos**:
+**1. Migration SQL** — Adicionar filtro de data nas 3 RPCs:
 
-**Linha 1 — Fluxo do Período** (segue o filtro):
-| Métrica | Cálculo |
+| RPC | Mudança |
 |---|---|
-| Entraram | Deals criados no período (`created_at` entre start/end) |
-| Já trabalhados | Dos que entraram, quantos têm atividade no período |
-| Sem toque | Dos que entraram, quantos NÃO têm nenhuma atividade ainda |
-| Avançados | Dos que entraram, quantos tiveram stage_change positiva |
+| `get_all_hubla_transactions` | Adicionar `AND NOT (ht.source = 'make' AND ht.sale_date >= '2026-04-01')` |
+| `get_hubla_transactions_by_bu` | Mesmo filtro |
+| `get_first_transaction_ids` | Mesmo filtro |
 
-**Linha 2 — Saúde Geral (snapshot, mas filtrado)** — somente deals abertos que foram **criados nos últimos 90 dias** para excluir "estoque morto":
-| Métrica | Cálculo |
-|---|---|
-| Abertos (recentes) | Deals abertos criados nos últimos 90 dias |
-| Parados (3d+) | Desses, sem atividade há 3+ dias |
-| Envelhecidos (7d+) | Desses, sem atividade há 7+ dias |
-| Tempo médio s/ mov | Média de horas sem atividade (dos recentes) |
-
-**Travados por Etapa** — mantém, mas usando apenas deals dos últimos 90 dias.
-
-### Arquivos afetados
-
-1. **`src/hooks/useCRMOverviewData.ts`**
-   - Adicionar à interface `PipelineHealthData`: `entaramNoPeriodo`, `trabalhadosNoPeriodo`, `semToqueNoPeriodo`, `avancadosNoPeriodo`
-   - Calcular essas 4 métricas cruzando `newDeals` (criados no período) com `buActivities`
-   - Filtrar `openDeals` para últimos 90 dias antes de calcular parados/envelhecidos/SLA
-
-2. **`src/components/crm/overview/PipelineHealthBlock.tsx`**
-   - Adicionar primeira linha com métricas do período (Entraram / Já trabalhados / Sem toque / Avançados)
-   - Separar visualmente com label "No período" e "Saúde geral"
-   - Manter layout grid existente
+Isso remove `'make'` da lista de sources permitidos **apenas para transações de abril em diante**. Transações make anteriores a abril continuam aparecendo normalmente com toda a lógica de deduplicação existente.
 
 ### Detalhes técnicos
 
-```text
-// No hook — novos campos calculados:
-const newDealIds = allDeals
-  .filter(d => new Date(d.created_at) >= periodStart && new Date(d.created_at) <= periodEnd)
-  .map(d => d.id);
-const newDealIdSet = new Set(newDealIds);
+```sql
+-- Em cada RPC, trocar:
+AND ht.source IN ('hubla', 'manual', 'make', 'mcfpay', 'kiwify')
 
-const trabalhadosNoPeriodo = newDealIds.filter(id => workedDealIds.has(id)).length;
-const semToqueNoPeriodo = newDealIds.filter(id => !workedDealIds.has(id)).length;
-const avancadosNoPeriodo = stageChanges
-  .filter(a => newDealIdSet.has(a.deal_id) && a.to_stage && !lossStageIds.has(a.to_stage))
-  ...
-
-// Filtro 90 dias para saúde geral:
-const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-const recentOpenDeals = openDeals.filter(d => new Date(d.created_at) >= ninetyDaysAgo);
+-- Por:
+AND ht.source IN ('hubla', 'manual', 'make', 'mcfpay', 'kiwify')
+AND NOT (ht.source = 'make' AND ht.sale_date >= '2026-04-01T00:00:00-03:00')
 ```
+
+A lógica de deduplicação make existente (NOT EXISTS por email/data) continua funcionando para o histórico anterior a abril.
+
+### Arquivo afetado
+- **Nova migration SQL** — Recria as 3 RPCs com o filtro de corte temporal para `source = 'make'`
 
