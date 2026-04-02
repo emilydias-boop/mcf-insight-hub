@@ -128,19 +128,21 @@ export function useCalculatedVariavel({
         const pct = metaAjustada > 0 ? (kpiValue / metaAjustada) * 100 : 0;
         mult = getMultiplier(pct);
 
-        // Priority: try specific compPlan value FIRST, then fall back to weight-based calc
-        if (config.compPlanValueField && compPlan) {
+        // Priority: weight percentage FIRST, then fall back to compPlan fixed value
+        if (metrica.peso_percentual && metrica.peso_percentual > 0) {
+          const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
+          valorBase = baseVariavel * (metrica.peso_percentual / 100);
+        } else if (config.compPlanValueField && compPlan) {
           const valorEspecifico = (compPlan as any)[config.compPlanValueField] || 0;
           if (valorEspecifico > 0) {
             valorBase = valorEspecifico;
           }
         }
 
-        // Fallback: dynamic calculation if no specific value from compPlan
+        // Fallback final
         if (valorBase === 0) {
           const baseVariavel = variavelTotal || compPlan?.variavel_total || 400;
-          const pesoPercent = metrica.peso_percentual || 25;
-          valorBase = baseVariavel * (pesoPercent / 100);
+          valorBase = baseVariavel * 0.25;
         }
 
         valorFinal = valorBase * mult;
