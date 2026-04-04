@@ -1,59 +1,65 @@
 
+Objetivo
 
-## Diagnóstico: Percentual de Contratos por Nível de Closer
+- Fazer o “Total Conta” e o “Valor Variável” usarem uma única fonte de verdade na UI: o valor já salvo em `sdr_month_payout`.
 
-### O que existe no sistema
+Diagnóstico
 
-O campo `meta_percentual` na tabela `fechamento_metricas_mes` **já suporta** percentuais diferentes por cargo/nível. O código já usa esse campo (linha 104-108 do `DynamicIndicatorCard.tsx`):
-- Se `meta_percentual > 0` → usa esse valor
-- Senão, fallback hardcoded de 30%
+- Hoje o detalhe individual (`src/pages/fechamento-sdr/Detail.tsx`) mostra o topo com cálculo ao vivo:
+  - `calculatedVariavel.total`
+  - `effectiveFixoDisplay + calculatedVariavel.total`
+- Já a tabela, o CSV e boa parte do restante da tela trabalham com os campos persistidos:
+  - `payout.valor_variavel_total`
+  - `payout.total_conta`
+- Para Closers isso piora porque o detalhe mistura `useCalculatedVariavel` com `useCloserAgendaMetrics`, enquanto a listagem usa o payout salvo. Resultado: números diferentes para a mesma pessoa.
 
-### Dados no banco
+Implementação
 
-Métricas **genéricas** (squad=null) estão configuradas corretamente:
-- Closer N1 (`c2909e20`): `meta_percentual = 30` 
-- Closer N2 (`fd8d5a86`): `meta_percentual = 35`
-- Closer N3 (`d7bdc06e`): **nenhuma métrica configurada**
+1. `src/pages/fechamento-sdr/Detail.tsx`
+   - Trocar os cards financeiros do topo para sempre exibir os valores salvos:
+     - Fixo: `payout.valor_fixo`
+     - Variável: `payout.valor_variavel_total`
+     - Total Conta: `payout.total_conta`
+   - Manter o cálculo ao vivo apenas para comparação/alerta:
+     - badge “Recalcular” continua aparecendo quando o salvo divergir do cálculo atual
+   - Manter os indicadores dinâmicos e KPIs como estão, porque eles servem como preview operacional, não como fonte oficial do valor financeiro.
 
-Métricas **squad=incorporador**: todas têm `meta_percentual = NULL` para contratos
+2. `src/components/fechamento/PayoutTableRow.tsx`
+   - Simplificar a row para parar de recalcular valor variável/total localmente.
+   - Exibir direto:
+     - `payout.valor_variavel_total`
+     - `payout.total_conta`
+   - Remover dependências hoje usadas só para esse recálculo:
+     - `useActiveMetricsForSdr`
+     - `useSdrMonthKpi`
+     - `useCalculatedVariavel`
+     - `useEffect`, `useRef`, `Skeleton`
+   - Remover também o callback `onCalculated`, que deixa a listagem misturando salvo + cálculo local.
 
-### Problemas encontrados
+3. `src/pages/fechamento-sdr/Index.tsx`
+   - Remover `calculatedValues`, `calculatedValuesRef` e `handleRowCalculated`
+   - Fazer os cards-resumo do topo somarem apenas os campos já persistidos do payout
+   - Atualizar o uso de `<PayoutTableRow />` sem `onCalculated`
 
-**Problema 1 — Thayna (N2):**
-A tabela `employees` vincula Thayna ao cargo **Closer N3** (`d7bdc06e`), mas o `sdr_comp_plan` dela diz **Closer N2** (`fd8d5a86`). Como N3 não tem métricas configuradas em `fechamento_metricas_mes`, ela cai no fallback padrão com 30% hardcoded. **Isso é um problema de dados** — o cargo no `employees` está errado ou falta configurar métricas para N3.
+Resultado esperado
 
-**Problema 2 — Fallback de squad ignora nível:**
-Quando existem métricas squad-specific (squad=incorporador) com `meta_percentual = NULL`, o código busca o valor da métrica genérica (squad=null) como fallback. Isso funciona para Cris (N1), mas se a métrica genérica não existir para o cargo, cai no 30% hardcoded.
+```text
+Hoje:
+- Tabela / exportação -> valor salvo
+- Individual -> cálculo ao vivo
 
-### Solução proposta
+Depois:
+- Tabela -> valor salvo
+- Cards de resumo -> valor salvo
+- Individual -> valor salvo
+- Indicadores -> cálculo ao vivo
+- Badge "Recalcular" -> aviso de diferença entre salvo x cálculo atual
+```
 
-1. **Remover o fallback hardcoded de 30%** no `DynamicIndicatorCard.tsx` (linhas 109-113) e no `useCalculatedVariavel.ts`
-   - Em vez de `0.3` fixo, usar o `nivel` do cargo para determinar o percentual: N1=30%, N2=35%, N3=40%
-   - Ou melhor: buscar o `meta_percentual` da métrica genérica quando a squad-specific não tem
+Com isso, a Cris passará a mostrar no individual exatamente o mesmo `Total Conta` salvo que aparece na tabela. Se o cálculo atual estiver diferente, a tela ainda vai sinalizar isso para você decidir se quer recalcular.
 
-2. **Melhorar o fallback no `useActiveMetricsForSdr.ts`** (linhas 127-144)
-   - Atualmente só faz fallback de `meta_percentual` para a métrica `contratos`
-   - Generalizar: para QUALQUER métrica squad-specific com `meta_percentual = NULL`, buscar da genérica
+Detalhes técnicos
 
-3. **Corrigir a resolução de cargo** — se `employees.cargo_catalogo_id` divergir de `sdr_comp_plan.cargo_catalogo_id`, preferir o mais recente do `sdr_comp_plan` (já que esse reflete o nível atual do closer)
-
-### Alterações
-
-1. **`src/hooks/useActiveMetricsForSdr.ts`**
-   - Na resolução de `cargoId`: preferir `sdr_comp_plan` sobre `employees` (é mais atualizado para closers)
-   - No fallback squad→genérica: aplicar `meta_percentual` de qualquer métrica genérica, não só `contratos`
-
-2. **`src/components/fechamento/DynamicIndicatorCard.tsx`** (linhas 109-113)
-   - Remover o fallback hardcoded `0.3` / `30%` — se `meta_percentual` não estiver na métrica, usar 30% como último recurso mas com log de aviso
-
-3. **`src/hooks/useCalculatedVariavel.ts`**
-   - Mesma remoção do hardcoded 30% — usar `metrica.meta_percentual` ou fallback 30%
-
-4. **`supabase/functions/recalculate-sdr-payout/index.ts`**
-   - Mesma lógica: buscar `meta_percentual` da métrica configurada em vez de hardcoded
-
-### Resultado esperado
-- Cris (N1): Meta de contratos = 30% das realizadas (sem mudança visual)
-- Thayna (N2): Meta de contratos = 35% das realizadas (corrigido)
-- Futuro N3: Meta de contratos = 40% das realizadas
-
+- Não precisa mudar banco nem edge function para este ajuste.
+- A fonte oficial passa a ser `sdr_month_payout`.
+- O cálculo ao vivo continua útil para auditoria visual, mas não vai mais sobrescrever o valor financeiro exibido ao usuário.
