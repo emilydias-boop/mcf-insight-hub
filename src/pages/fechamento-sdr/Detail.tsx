@@ -451,7 +451,7 @@ const FechamentoSDRDetail = () => {
                   )}
                 </div>
                 <div className="text-xl font-bold mt-1 text-primary">
-                  {formatCurrency(employee?.fechamento_manual ? (payout.valor_variavel_total || 0) : calculatedVariavel.total)}
+                  {formatCurrency(payout.valor_variavel_total || 0)}
                 </div>
               </CardContent>
             </Card>
@@ -468,7 +468,7 @@ const FechamentoSDRDetail = () => {
                   )}
                 </div>
                 <div className="text-xl font-bold mt-1 text-primary">
-                  {formatCurrency(employee?.fechamento_manual ? (payout.total_conta || 0) : (effectiveFixoDisplay + calculatedVariavel.total))}
+                  {formatCurrency(payout.total_conta || 0)}
                 </div>
               </CardContent>
             </Card>
