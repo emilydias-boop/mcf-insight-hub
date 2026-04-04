@@ -493,7 +493,7 @@ const FechamentoSDRList = () => {
                       buInfo={getBuFromPayout(payout)}
                       roleLabel={getRoleLabel(sdrData?.role_type)}
                       roleType={sdrData?.role_type || 'sdr'}
-                      onCalculated={handleRowCalculated}
+                      
                     />
                   );
                 })}

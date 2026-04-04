@@ -1,16 +1,10 @@
-import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TableRow, TableCell } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Eye, AlertTriangle } from 'lucide-react';
 import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
-import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/formatters';
-import { useActiveMetricsForSdr } from '@/hooks/useActiveMetricsForSdr';
-import { useSdrMonthKpi } from '@/hooks/useSdrFechamento';
-import { useCalculatedVariavel } from '@/hooks/useCalculatedVariavel';
-import { SdrCompPlan } from '@/types/sdr-fechamento';
 
 interface PayoutTableRowProps {
   payout: any;
@@ -23,7 +17,6 @@ interface PayoutTableRowProps {
   buInfo: { label: string; isFromHR: boolean; hasWarning: boolean };
   roleLabel: string;
   roleType: string;
-  onCalculated: (payoutId: string, variavel: number, totalConta: number) => void;
 }
 
 export function PayoutTableRow({
@@ -37,48 +30,8 @@ export function PayoutTableRow({
   buInfo,
   roleLabel,
   roleType,
-  onCalculated,
 }: PayoutTableRowProps) {
   const navigate = useNavigate();
-
-  const { metricas, isLoading: metricasLoading } = useActiveMetricsForSdr(payout.sdr_id, anoMes);
-  const { data: kpi } = useSdrMonthKpi(payout.sdr_id, anoMes);
-
-  const diasUteisMes = payout.dias_uteis_mes || compPlan?.dias_uteis || 22;
-  const sdrMetaDiaria = payout.sdr?.meta_diaria || 3;
-  const variavelTotal = compPlan?.variavel_total || 400;
-
-  const { total: calculatedVariavel } = useCalculatedVariavel({
-    metricas,
-    kpi: kpi || null,
-    payout,
-    diasUteisMes,
-    sdrMetaDiaria,
-    variavelTotal,
-    diasUteisTrabalhados: payout.dias_uteis_trabalhados,
-  });
-
-  const fixo = payout.valor_fixo || 0;
-  const calculatedTotalConta = fixo + calculatedVariavel;
-
-  // Report calculated values to parent for totalizers
-  const prevRef = useRef({ variavel: -1, total: -1 });
-  useEffect(() => {
-    if (
-      metricas.length > 0 &&
-      (prevRef.current.variavel !== calculatedVariavel || prevRef.current.total !== calculatedTotalConta)
-    ) {
-      prevRef.current = { variavel: calculatedVariavel, total: calculatedTotalConta };
-      onCalculated(payout.id, calculatedVariavel, calculatedTotalConta);
-    }
-  }, [calculatedVariavel, calculatedTotalConta, metricas.length, payout.id, onCalculated]);
-
-  // Use calculated values when metrics are loaded; show DB fallback only if hook finished and found nothing
-  const metricsReady = !metricasLoading && metricas.length > 0;
-  const displayVariavel = metricsReady ? calculatedVariavel : (payout.valor_variavel_total || 0);
-  const displayTotalConta = metricsReady ? calculatedTotalConta : (payout.total_conta || 0);
-  const showSkeleton = metricasLoading;
-
 
   const isProporcional = payout.dias_uteis_trabalhados != null && 
     payout.dias_uteis_trabalhados < (payout.dias_uteis_mes || 22);
@@ -117,12 +70,8 @@ export function PayoutTableRow({
         </Badge>
       </TableCell>
       <TableCell className="text-right">{formatCurrency(ote)}</TableCell>
-      <TableCell className="text-right">
-        {showSkeleton ? <Skeleton className="h-4 w-16 ml-auto" /> : formatCurrency(displayVariavel)}
-      </TableCell>
-      <TableCell className="text-right font-semibold">
-        {showSkeleton ? <Skeleton className="h-4 w-20 ml-auto" /> : formatCurrency(displayTotalConta)}
-      </TableCell>
+      <TableCell className="text-right">{formatCurrency(payout.valor_variavel_total || 0)}</TableCell>
+      <TableCell className="text-right font-semibold">{formatCurrency(payout.total_conta || 0)}</TableCell>
       <TableCell className="text-right">{formatCurrency(payout.total_ifood || 0)}</TableCell>
       <TableCell className="text-center">
         <SdrStatusBadge status={payout.status} />
