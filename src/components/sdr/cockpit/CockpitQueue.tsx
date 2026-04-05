@@ -68,9 +68,9 @@ export function CockpitQueue({ deals, selectedId, onSelect, isLoading, fetchNext
     );
   }
 
-  const headerLabel = hasNextPage
-    ? `Fila (${deals.length} carregados…)`
-    : `Fila (${deals.length})`;
+  const headerLabel = hasNextPage && totalCount
+    ? `Fila (${deals.length} de ${totalCount})`
+    : `Fila (${totalCount ?? deals.length})`;
 
   return (
     <div className="flex flex-col h-full">
