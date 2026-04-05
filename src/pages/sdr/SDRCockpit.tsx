@@ -9,6 +9,7 @@ export default function SDRCockpit() {
   const [leadState, setLeadState] = useState<LeadState>('novo');
   
   const { data: queue, isLoading: queueLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useSDRQueueInfinite();
+  const { data: totalCount } = useSDRQueueCount();
   const { data: selectedDeal, isLoading: dealLoading } = useSelectedDeal(selectedDealId);
 
   // Auto-select first deal
