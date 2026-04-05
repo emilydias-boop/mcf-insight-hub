@@ -8,7 +8,7 @@ export default function SDRCockpit() {
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [leadState, setLeadState] = useState<LeadState>('novo');
   
-  const { data: queue = [], isLoading: queueLoading } = useSDRQueue();
+  const { data: queue, isLoading: queueLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useSDRQueueInfinite();
   const { data: selectedDeal, isLoading: dealLoading } = useSelectedDeal(selectedDealId);
 
   // Auto-select first deal
