@@ -45,6 +45,9 @@ export default function SDRCockpit() {
           selectedId={selectedDealId}
           onSelect={(id) => setSelectedDealId(id)}
           isLoading={queueLoading}
+          fetchNextPage={fetchNextPage}
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
         />
       </div>
 

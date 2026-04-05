@@ -10883,6 +10883,7 @@ export type Database = {
           total_movimentacoes: number
         }[]
       }
+      get_sdr_cockpit_count: { Args: { p_owner_id: string }; Returns: number }
       get_sdr_cockpit_queue: {
         Args: { p_limit?: number; p_offset?: number; p_owner_id: string }
         Returns: {
