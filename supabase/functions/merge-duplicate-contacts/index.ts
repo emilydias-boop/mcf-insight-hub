@@ -5,12 +5,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface MergeGroup {
-  phone_suffix: string;
-  principal_id: string;
-  secondary_ids: string[];
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -21,55 +15,25 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    // Use direct SQL via PostgREST rpc to get groups with all info in one query
-    const sql = `
-      WITH phone_groups AS (
-        SELECT
-          RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) AS phone_suffix,
-          array_agg(id ORDER BY created_at ASC) as contact_ids,
-          COUNT(*) as total
-        FROM crm_contacts
-        WHERE phone IS NOT NULL
-          AND LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) >= 9
-          AND is_archived = false
-        GROUP BY phone_suffix
-        HAVING COUNT(*) > 1
-      )
-      SELECT 
-        pg.phone_suffix,
-        pg.contact_ids
-      FROM phone_groups pg
-      WHERE EXISTS (
-        SELECT 1 FROM crm_deals d 
-        WHERE d.contact_id = ANY(pg.contact_ids)
-      )
-      ORDER BY pg.total DESC
-      LIMIT ${Math.min(batch_size, 200)};
-    `;
-
-    // Execute via PostgREST SQL endpoint
-    const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/get_duplicate_contact_phones`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": serviceKey,
-        "Authorization": `Bearer ${serviceKey}`,
-      },
-      body: JSON.stringify({ limit_count: 1 }),
-    });
-
-    // Instead of the RPC, let's use a pg connection approach
-    // We'll just use the supabase client for targeted operations
-
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Step 1: Get groups via RPC (already optimized)
-    const { data: rawGroups, error: gErr } = await supabase.rpc(
-      "get_duplicate_contact_phones",
-      { limit_count: batch_size }
+    // Use a single optimized SQL query to get all groups with contact details
+    // via PostgREST SQL function
+    const pgResp = await fetch(
+      `${supabaseUrl}/rest/v1/rpc/get_duplicate_contact_phones`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({ limit_count: batch_size }),
+      }
     );
-    if (gErr) throw gErr;
+
+    if (!pgResp.ok) throw new Error(`RPC error: ${await pgResp.text()}`);
+    const groups = await pgResp.json();
 
     const results = {
       dry_run,
@@ -80,46 +44,42 @@ Deno.serve(async (req) => {
       erros: [] as { grupo: string; erro: string }[],
     };
 
-    // Process groups sequentially but with minimal queries
-    for (const group of (rawGroups || [])) {
+    for (const group of groups) {
       if (results.grupos_processados >= batch_size) break;
       const phoneSuffix = group.phone_suffix as string;
 
       try {
-        // Get contacts for this suffix - use phone LIKE pattern
-        const likePattern = `%${phoneSuffix.replace(/%/g, '')}`;
-        const { data: contacts, error: cErr } = await supabase
+        // Get all contacts with this phone suffix using SQL-based filtering
+        // We query all contacts with phone ending in these digits
+        const { data: allContacts, error: cErr } = await supabase
           .from("crm_contacts")
-          .select("id, created_at")
-          .like("phone", likePattern)
+          .select("id, phone, created_at")
           .eq("is_archived", false)
-          .order("created_at", { ascending: true })
-          .limit(10);
+          .not("phone", "is", null)
+          .order("created_at", { ascending: true });
 
         if (cErr) throw cErr;
-        
-        // Also filter by actual 9-digit suffix match (phone format varies)
-        const filtered = (contacts || []).filter((c: any) => {
-          // We trust the RPC grouped them correctly; just ensure >1
-          return true;
+
+        // Filter by suffix match (since phone formats vary)
+        const matching = (allContacts || []).filter((c: any) => {
+          const digits = (c.phone || "").replace(/\D/g, "");
+          return digits.length >= 9 && digits.slice(-9) === phoneSuffix;
         });
 
-        if (!filtered || filtered.length < 2) continue;
+        if (matching.length < 2) continue;
 
-        const principalId = filtered[0].id;
-        const secondaryIds = filtered.slice(1).map((c: any) => c.id);
+        const principalId = matching[0].id;
+        const secondaryIds = matching.slice(1).map((c: any) => c.id);
 
-        // Check if any secondary has deals (if not, check principal)
-        const allIds = filtered.map((c: any) => c.id);
+        // Check deals exist
         const { count: dealCheck } = await supabase
           .from("crm_deals")
           .select("id", { count: "exact", head: true })
-          .in("contact_id", allIds);
+          .in("contact_id", matching.map((c: any) => c.id));
 
         if (!dealCheck) continue;
 
         if (dry_run) {
-          // Count deals on secondaries
           const { count: dC } = await supabase
             .from("crm_deals")
             .select("id", { count: "exact", head: true })
@@ -134,7 +94,6 @@ Deno.serve(async (req) => {
           results.attendees_remapeados += aC || 0;
           results.contatos_arquivados += secondaryIds.length;
         } else {
-          // Remap deals
           const { data: rd } = await supabase
             .from("crm_deals")
             .update({ contact_id: principalId })
@@ -142,7 +101,6 @@ Deno.serve(async (req) => {
             .select("id");
           results.deals_remapeados += (rd || []).length;
 
-          // Remap attendees  
           const { data: ra } = await supabase
             .from("meeting_slot_attendees")
             .update({ contact_id: principalId })
@@ -150,7 +108,6 @@ Deno.serve(async (req) => {
             .select("id");
           results.attendees_remapeados += (ra || []).length;
 
-          // Archive secondaries
           for (const secId of secondaryIds) {
             await supabase
               .from("crm_contacts")
