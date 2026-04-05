@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -33,56 +33,71 @@ export interface SelectedDealData extends QueueDeal {
   callAttempts: number;
 }
 
-export const useSDRQueue = (limit = 50, offset = 0) => {
+const PAGE_SIZE = 50;
+
+function mapRpcRowToQueueDeal(row: any): QueueDeal {
+  const now = new Date();
+  const stageMovedAt = row.stage_moved_at ? new Date(row.stage_moved_at) : null;
+  const hoursInStage = stageMovedAt ? (now.getTime() - stageMovedAt.getTime()) / (1000 * 60 * 60) : 999;
+
+  return {
+    id: row.deal_id,
+    name: row.contact_name || 'Lead',
+    contactName: row.contact_name || null,
+    contactPhone: row.contact_phone || null,
+    contactEmail: null,
+    stageName: row.stage_name || 'Desconhecido',
+    stageId: null,
+    stageMovedAt: row.stage_moved_at,
+    nextActionDate: row.next_action_date,
+    nextActionType: row.next_action_type || null,
+    nextActionNote: null,
+    activityCount: row.activity_count || 0,
+    isOverdue: row.urgency === 'overdue',
+    isNew: (row.activity_count || 0) === 0,
+    isStalledOver4h: row.urgency === 'stale' || row.urgency === 'urgent',
+    hoursInStage,
+    originName: null,
+    originId: null,
+    customFields: null,
+  };
+}
+
+export const useSDRQueueInfinite = () => {
   const { user } = useAuth();
 
-  return useQuery({
-    queryKey: ['sdr-cockpit-queue', user?.email, limit, offset],
-    queryFn: async () => {
+  const query = useInfiniteQuery({
+    queryKey: ['sdr-cockpit-queue', user?.email],
+    queryFn: async ({ pageParam = 0 }) => {
       if (!user?.email) return [];
 
       const { data, error } = await supabase.rpc('get_sdr_cockpit_queue', {
         p_owner_id: user.email,
-        p_limit: limit,
-        p_offset: offset,
+        p_limit: PAGE_SIZE,
+        p_offset: pageParam,
       });
 
       if (error) throw error;
-
-      const now = new Date();
-
-      const mapped: QueueDeal[] = (data || []).map((row: any) => {
-        const stageMovedAt = row.stage_moved_at ? new Date(row.stage_moved_at) : null;
-        const hoursInStage = stageMovedAt ? (now.getTime() - stageMovedAt.getTime()) / (1000 * 60 * 60) : 999;
-
-        return {
-          id: row.deal_id,
-          name: row.contact_name || 'Lead',
-          contactName: row.contact_name || null,
-          contactPhone: row.contact_phone || null,
-          contactEmail: null,
-          stageName: row.stage_name || 'Desconhecido',
-          stageId: null,
-          stageMovedAt: row.stage_moved_at,
-          nextActionDate: row.next_action_date,
-          nextActionType: row.next_action_type || null,
-          nextActionNote: null,
-          activityCount: row.activity_count || 0,
-          isOverdue: row.urgency === 'overdue',
-          isNew: (row.activity_count || 0) === 0,
-          isStalledOver4h: row.urgency === 'stale' || row.urgency === 'urgent',
-          hoursInStage,
-          originName: null,
-          originId: null,
-          customFields: null,
-        };
-      });
-
-      return mapped;
+      return (data || []).map(mapRpcRowToQueueDeal);
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _allPages, lastPageParam) => {
+      if (lastPage.length < PAGE_SIZE) return undefined;
+      return (lastPageParam as number) + PAGE_SIZE;
     },
     enabled: !!user?.email,
     refetchInterval: 60000,
   });
+
+  const flatData = query.data?.pages.flatMap(p => p) ?? [];
+
+  return {
+    data: flatData,
+    isLoading: query.isLoading,
+    fetchNextPage: query.fetchNextPage,
+    hasNextPage: !!query.hasNextPage,
+    isFetchingNextPage: query.isFetchingNextPage,
+  };
 };
 
 export const useSelectedDeal = (dealId: string | null) => {

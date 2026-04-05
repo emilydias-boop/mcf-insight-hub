@@ -1,14 +1,16 @@
+import { useRef, useEffect, useCallback } from 'react';
 import { QueueDeal } from '@/hooks/useSDRCockpit';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, Clock } from 'lucide-react';
+import { AlertTriangle, Clock, Loader2 } from 'lucide-react';
 
 interface CockpitQueueProps {
   deals: QueueDeal[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   isLoading: boolean;
-  onLoadMore?: () => void;
-  hasMore?: boolean;
+  fetchNextPage: () => void;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
 }
 
 function formatTimeInStage(hours: number): string {
@@ -23,7 +25,30 @@ function getUrgencyColor(hours: number): string {
   return 'bg-red-500';
 }
 
-export function CockpitQueue({ deals, selectedId, onSelect, isLoading, onLoadMore, hasMore }: CockpitQueueProps) {
+export function CockpitQueue({ deals, selectedId, onSelect, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage }: CockpitQueueProps) {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleIntersect = useCallback(
+    (entries: IntersectionObserverEntry[]) => {
+      if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
+      }
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage]
+  );
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(handleIntersect, {
+      root: scrollRef.current,
+      rootMargin: '200px',
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [handleIntersect]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-2 p-2">
@@ -42,14 +67,18 @@ export function CockpitQueue({ deals, selectedId, onSelect, isLoading, onLoadMor
     );
   }
 
+  const headerLabel = hasNextPage
+    ? `Fila (${deals.length} carregados…)`
+    : `Fila (${deals.length})`;
+
   return (
     <div className="flex flex-col h-full">
       <div className="px-3 py-2 border-b border-[#1e2130]">
         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-          Fila ({deals.length})
+          {headerLabel}
         </span>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {deals.map((deal) => (
           <button
             key={deal.id}
@@ -81,13 +110,12 @@ export function CockpitQueue({ deals, selectedId, onSelect, isLoading, onLoadMor
             </div>
           </button>
         ))}
-        {hasMore && onLoadMore && (
-          <button
-            onClick={onLoadMore}
-            className="w-full py-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-          >
-            Ver mais
-          </button>
+        {/* Sentinel for infinite scroll */}
+        <div ref={sentinelRef} className="h-1" />
+        {isFetchingNextPage && (
+          <div className="flex items-center justify-center py-3">
+            <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+          </div>
         )}
       </div>
     </div>

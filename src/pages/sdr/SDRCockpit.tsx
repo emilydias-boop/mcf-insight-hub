@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useSDRQueue, useSelectedDeal, LeadState } from '@/hooks/useSDRCockpit';
+import { useSDRQueueInfinite, useSelectedDeal, LeadState } from '@/hooks/useSDRCockpit';
 import { CockpitQueue } from '@/components/sdr/cockpit/CockpitQueue';
 import { CockpitExecutionPanel } from '@/components/sdr/cockpit/CockpitExecutionPanel';
 import { CockpitQualificationPanel } from '@/components/sdr/cockpit/CockpitQualificationPanel';
@@ -8,7 +8,7 @@ export default function SDRCockpit() {
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [leadState, setLeadState] = useState<LeadState>('novo');
   
-  const { data: queue = [], isLoading: queueLoading } = useSDRQueue();
+  const { data: queue, isLoading: queueLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useSDRQueueInfinite();
   const { data: selectedDeal, isLoading: dealLoading } = useSelectedDeal(selectedDealId);
 
   // Auto-select first deal
@@ -45,6 +45,9 @@ export default function SDRCockpit() {
           selectedId={selectedDealId}
           onSelect={(id) => setSelectedDealId(id)}
           isLoading={queueLoading}
+          fetchNextPage={fetchNextPage}
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
         />
       </div>
 
