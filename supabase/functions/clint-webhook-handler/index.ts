@@ -37,6 +37,17 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // DESATIVADO 05/04/2026 - Clint integração encerrada
+  // Leads chegam via Hubla webhook direto. Clint estava gerando duplicatas por race condition.
+  return new Response(JSON.stringify({
+    received: true,
+    processing: false,
+    reason: 'clint_integration_disabled'
+  }), {
+    status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  });
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
