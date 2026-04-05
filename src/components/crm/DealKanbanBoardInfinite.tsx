@@ -72,8 +72,16 @@ export const DealKanbanBoardInfinite = ({
   // stage_permissions is the sole source of truth for visibility
   const visibleStages = useMemo(() => {
     const activeStages = (stages || []).filter((s: any) => s.is_active);
+    
+    if (role === 'sdr') {
+      // SDR só vê stages onde pode movimentar deals (can_move_from OR can_move_to)
+      return activeStages.filter((s: any) => 
+        canMoveFromStage(s.id) || canMoveToStage(s.id)
+      );
+    }
+    
     return activeStages.filter((s: any) => canViewStage(s.id));
-  }, [stages, canViewStage]);
+  }, [stages, canViewStage, canMoveFromStage, canMoveToStage, role]);
   
   // Buscar atividades de todos os deals de uma vez para performance
   // Incluir stageIds para buscar limites corretos por estágio
