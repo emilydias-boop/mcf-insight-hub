@@ -10825,6 +10825,13 @@ export type Database = {
               total_installments: number
             }[]
           }
+      get_merge_groups: {
+        Args: { p_batch_size?: number }
+        Returns: {
+          contact_ids: string[]
+          phone_suffix: string
+        }[]
+      }
       get_next_gr_for_assignment: { Args: { p_bu?: string }; Returns: string }
       get_next_lead_owner: { Args: { p_origin_id: string }; Returns: string }
       get_novo_lead_count:
