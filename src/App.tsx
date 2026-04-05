@@ -77,6 +77,7 @@ import Financeiro from "./pages/Financeiro";
 import Cobrancas from "./pages/Cobrancas";
 import MeuRH from "./pages/MeuRH";
 import MinhasReunioes from "./pages/sdr/MinhasReunioes";
+import SDRCockpit from "./pages/sdr/SDRCockpit";
 import ReunioesEquipe from "./pages/crm/ReunioesEquipe";
 import SdrMeetingsDetailPage from "./pages/crm/SdrMeetingsDetailPage";
 import CloserMeetingsDetailPage from "./pages/crm/CloserMeetingsDetailPage";
