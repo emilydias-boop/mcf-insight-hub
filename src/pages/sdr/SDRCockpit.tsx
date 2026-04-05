@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useSDRQueue, useSelectedDeal, LeadState } from '@/hooks/useSDRCockpit';
+import { useSDRQueueInfinite, useSelectedDeal, LeadState } from '@/hooks/useSDRCockpit';
 import { CockpitQueue } from '@/components/sdr/cockpit/CockpitQueue';
 import { CockpitExecutionPanel } from '@/components/sdr/cockpit/CockpitExecutionPanel';
 import { CockpitQualificationPanel } from '@/components/sdr/cockpit/CockpitQualificationPanel';
