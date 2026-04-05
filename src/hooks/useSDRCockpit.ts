@@ -65,7 +65,7 @@ export const useSDRQueue = (limit = 50, offset = 0) => {
         .from('crm_deals')
         .select(`
           id, name, stage_id, stage_moved_at, next_action_type, next_action_date, next_action_note, 
-          custom_fields, origin_id, deal_value,
+          custom_fields, origin_id,
           crm_contacts ( id, name, phone, email ),
           crm_stages ( id, stage_name ),
           crm_origins ( id, name )
