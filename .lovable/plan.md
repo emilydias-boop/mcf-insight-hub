@@ -1,54 +1,36 @@
 
 
-# Edge Function: merge-duplicate-contacts
+# Filtrar Kanban do SDR por permissoes de movimentacao
 
-## Resumo
-Criar a edge function `merge-duplicate-contacts` que deduplica contatos por telefone (sufixo 9 digitos), remapeando deals e attendees para o contato principal (mais antigo) e arquivando os secundarios.
+## Problema
+O SDR ve todas as stages no Kanban, incluindo R1 Realizada, Contrato Pago, R2 -- stages que nao sao sua responsabilidade. O filtro atual usa `canViewStage` (que retorna `true` quando nao ha permissao explicita), mas o pedido e filtrar por `can_move_to OR can_move_from`.
 
-## Alteracoes
+## Alteracao
 
-### 1. Migration: adicionar colunas em crm_contacts
-Adicionar 3 colunas que nao existem hoje:
-- `merged_into_contact_id` UUID (FK para crm_contacts.id)
-- `merged_at` TIMESTAMPTZ
-- `is_archived` BOOLEAN DEFAULT false
+### `src/components/crm/DealKanbanBoardInfinite.tsx`
+Alterar o `useMemo` de `visibleStages` (linhas 72-76) para, quando o role do usuario for `sdr`, filtrar stages onde `canMoveFromStage(s.id) || canMoveToStage(s.id)` em vez de apenas `canViewStage(s.id)`.
 
-### 2. Edge Function: `supabase/functions/merge-duplicate-contacts/index.ts`
-Parametros de entrada: `{ dry_run: boolean, batch_size?: number (default 50) }`
+```
+const { role } = useAuth();  // ja importado
 
-Logica principal:
-1. Query agrupa contatos por `RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 9)` com `HAVING COUNT(*) > 1`, filtrando apenas grupos que tem deals (`EXISTS crm_deals WHERE contact_id = ANY(ids)`)
-2. Ordena contatos por `created_at ASC` -- o mais antigo e o principal
-3. Para cada grupo (limitado a `batch_size`):
-   - Se `dry_run=false`, executa em transacao (savepoint por grupo):
-     - `UPDATE crm_deals SET contact_id = principal WHERE contact_id = secundario`
-     - `UPDATE meeting_slot_attendees SET contact_id = principal WHERE contact_id = secundario` (meeting_slot_attendees TEM contact_id)
-     - `UPDATE crm_contacts SET merged_into_contact_id = principal, merged_at = NOW(), is_archived = true WHERE id = secundario`
-   - Se `dry_run=true`, apenas acumula contagens
-   - Em caso de erro, faz rollback do grupo e registra no array de erros
-4. Retorna JSON:
-```json
-{
-  "dry_run": true/false,
-  "grupos_processados": 50,
-  "deals_remapeados": 123,
-  "attendees_remapeados": 45,
-  "contatos_arquivados": 80,
-  "erros": [{ "grupo": "...", "erro": "..." }]
-}
+const visibleStages = useMemo(() => {
+  const activeStages = (stages || []).filter((s: any) => s.is_active);
+  
+  if (role === 'sdr') {
+    // SDR so ve stages onde pode movimentar deals
+    return activeStages.filter((s: any) => 
+      canMoveFromStage(s.id) || canMoveToStage(s.id)
+    );
+  }
+  
+  return activeStages.filter((s: any) => canViewStage(s.id));
+}, [stages, canViewStage, canMoveFromStage, canMoveToStage, role]);
 ```
 
-Nota: `deal_activities` e `attendee_notes` NAO tem coluna `contact_id` -- serao ignorados.
+Isso ja usa `useStagePermissions` (importado) e `useAuth` (ja importado). O hook `findPermission` faz lookup por UUID e fallback por nome normalizado, cobrindo ambos os cenarios de mapeamento.
 
-### 3. config.toml
-Ja existe entrada `[functions.merge-duplicate-contacts]` com `verify_jwt = false` -- nenhuma alteracao necessaria.
-
-## Arquivos
-1. `supabase/migrations/TIMESTAMP_add_merge_columns_to_contacts.sql` (migration)
-2. `supabase/functions/merge-duplicate-contacts/index.ts` (nova edge function)
-
-## Seguranca
-- Usa `SUPABASE_SERVICE_ROLE_KEY` para bypass RLS
-- Funcao exposta sem JWT (ja configurado) -- acessivel apenas por quem conhece a URL
-- Transacao por grupo garante atomicidade parcial
+## Impacto
+- Apenas 1 arquivo alterado
+- Nenhuma mudanca no banco
+- Outros roles nao sao afetados (continuam usando `canViewStage`)
 
