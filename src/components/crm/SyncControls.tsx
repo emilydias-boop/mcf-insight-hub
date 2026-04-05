@@ -1,365 +1,14 @@
-import { useState } from 'react';
+// DESATIVADO 05/04/2026 - Clint integração encerrada
+// Leads chegam via Hubla webhook direto. Clint estava gerando duplicatas por race condition.
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { supabase } from '@/integrations/supabase/client';
-import { RefreshCw, CheckCircle2, XCircle, Clock } from 'lucide-react';
-import { toast } from 'sonner';
-
-interface SyncStep {
-  name: string;
-  endpoint?: string;
-  status: 'pending' | 'running' | 'success' | 'error';
-  result?: any;
-  error?: string;
-  duration?: number;
-  origin_id?: string;
-  type?: 'global' | 'origin';
-}
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { RefreshCw, AlertTriangle } from 'lucide-react';
 
 export const SyncControls = () => {
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [isMultiSyncing, setIsMultiSyncing] = useState(false);
-  const [isDealsSyncing, setIsDealsSyncing] = useState(false);
-  const [isLinkingSyncing, setIsLinkingSyncing] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [steps, setSteps] = useState<SyncStep[]>([
-    { name: 'Origens e Estágios', endpoint: 'sync-origins-stages', status: 'pending', type: 'global' },
-  ]);
-  const [multiSyncRuns, setMultiSyncRuns] = useState<Array<{
-    run: number;
-    status: 'pending' | 'running' | 'success' | 'error';
-    result?: any;
-    error?: string;
-    duration?: number;
-  }>>([]);
-  const [dealsRuns, setDealsRuns] = useState<Array<{
-    run: number;
-    status: 'pending' | 'running' | 'success' | 'error';
-    result?: any;
-    error?: string;
-    duration?: number;
-  }>>([]);
-
-  const runSyncStep = async (step: SyncStep, index: number) => {
-    setCurrentStep(index);
-    
-    // Atualizar status para running
-    setSteps(prev => prev.map((s, i) => 
-      i === index ? { ...s, status: 'running' } : s
-    ));
-
-    const startTime = Date.now();
-
-    try {
-      let data;
-      
-      if (step.type === 'origin' && step.origin_id) {
-        // Sincronizar origin específica
-        const result = await supabase.functions.invoke('sync-by-origin', {
-          body: { origin_id: step.origin_id }
-        });
-        if (result.error) throw result.error;
-        data = result.data;
-      } else if (step.endpoint) {
-        // Sincronizar endpoint global
-        const result = await supabase.functions.invoke(step.endpoint);
-        if (result.error) throw result.error;
-        data = result.data;
-      }
-
-      const duration = Date.now() - startTime;
-
-      // Atualizar com sucesso
-      setSteps(prev => prev.map((s, i) => 
-        i === index ? { ...s, status: 'success', result: data, duration } : s
-      ));
-
-      return data;
-    } catch (error: any) {
-      const duration = Date.now() - startTime;
-      
-      // Atualizar com erro
-      setSteps(prev => prev.map((s, i) => 
-        i === index ? { 
-          ...s, 
-          status: 'error', 
-          error: error.message || 'Erro desconhecido',
-          duration 
-        } : s
-      ));
-
-      throw error;
-    }
-  };
-
-  const handleMultiSync = async () => {
-    setIsMultiSyncing(true);
-    const runs = [
-      { run: 1, status: 'pending' as const },
-      { run: 2, status: 'pending' as const },
-      { run: 3, status: 'pending' as const }
-    ];
-    setMultiSyncRuns(runs);
-
-    try {
-      toast.info('Iniciando 3 sincronizações completas para importar todos os contatos...');
-
-      for (let i = 0; i < 3; i++) {
-        const runNumber = i + 1;
-        const startTime = Date.now();
-
-        // Atualizar status para running
-        setMultiSyncRuns(prev => prev.map(r => 
-          r.run === runNumber ? { ...r, status: 'running' } : r
-        ));
-
-        try {
-          toast.info(`Executando sincronização ${runNumber}/3...`);
-          
-          const { data, error } = await supabase.functions.invoke('sync-clint-data', {
-            body: {}
-          });
-
-          if (error) throw error;
-
-          const duration = Date.now() - startTime;
-
-          // Atualizar com sucesso
-          setMultiSyncRuns(prev => prev.map(r => 
-            r.run === runNumber ? { ...r, status: 'success', result: data, duration } : r
-          ));
-
-          toast.success(`Sincronização ${runNumber}/3 completa! (${(duration/1000).toFixed(1)}s)`);
-          
-          // Aguardar 2 segundos entre sincronizações
-          if (i < 2) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        } catch (error: any) {
-          const duration = Date.now() - startTime;
-          
-          // Atualizar com erro
-          setMultiSyncRuns(prev => prev.map(r => 
-            r.run === runNumber ? { 
-              ...r, 
-              status: 'error', 
-              error: error.message || 'Erro desconhecido',
-              duration 
-            } : r
-          ));
-
-          toast.error(`Erro na sincronização ${runNumber}/3: ${error.message}`);
-          throw error; // Para parar o loop
-        }
-      }
-
-      toast.success('🎉 Todas as 3 sincronizações completas! Todos os 102.250 contatos devem estar importados.');
-    } catch (error: any) {
-      console.error('Erro nas sincronizações múltiplas:', error);
-    } finally {
-      setIsMultiSyncing(false);
-    }
-  };
-
-  const handleImportAllDeals = async () => {
-    setIsDealsSyncing(true);
-    const runs = Array.from({ length: 10 }, (_, i) => ({ 
-      run: i + 1, 
-      status: 'pending' as const 
-    }));
-    setDealsRuns(runs);
-
-    try {
-      toast.info('Iniciando importação de TODOS os deals (pode demorar)...');
-
-      for (let i = 0; i < 10; i++) {
-        const runNumber = i + 1;
-        const startTime = Date.now();
-
-        // Atualizar status para running
-        setDealsRuns(prev => prev.map(r => 
-          r.run === runNumber ? { ...r, status: 'running' } : r
-        ));
-
-        try {
-          toast.info(`Importando lote ${runNumber}/10 de deals...`);
-          
-          const { data, error } = await supabase.functions.invoke('sync-deals', {
-            body: { auto_mode: true }
-          });
-
-          if (error) throw error;
-
-          const duration = Date.now() - startTime;
-
-          // Atualizar com sucesso
-          setDealsRuns(prev => prev.map(r => 
-            r.run === runNumber ? { ...r, status: 'success', result: data, duration } : r
-          ));
-
-          toast.success(`Lote ${runNumber}/10 completo! ${data.results?.deals_synced || 0} deals (${(duration/1000).toFixed(1)}s)`);
-          
-          // Se completou, parar
-          if (data.is_complete) {
-            toast.success(`🎉 Importação completa! Total processado até agora.`);
-            break;
-          }
-          
-          // Aguardar 1 segundo entre lotes
-          if (i < 9) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-        } catch (error: any) {
-          const duration = Date.now() - startTime;
-          
-          // Atualizar com erro
-          setDealsRuns(prev => prev.map(r => 
-            r.run === runNumber ? { 
-              ...r, 
-              status: 'error', 
-              error: error.message || 'Erro desconhecido',
-              duration 
-            } : r
-          ));
-
-          toast.error(`Erro no lote ${runNumber}/10: ${error.message}`);
-          throw error; // Para parar o loop
-        }
-      }
-
-      toast.success('🎉 Importação de deals completa!');
-    } catch (error: any) {
-      console.error('Erro na importação de deals:', error);
-    } finally {
-      setIsDealsSyncing(false);
-    }
-  };
-
-  const handleLinkContacts = async () => {
-    setIsLinkingSyncing(true);
-
-    try {
-      toast.info('Vinculando contatos às origens (pode demorar)...');
-      
-      const startTime = Date.now();
-      const { data, error } = await supabase.functions.invoke('sync-link-contacts');
-
-      if (error) throw error;
-
-      const duration = Date.now() - startTime;
-      const contactsLinked = data?.results?.contacts_linked || 0;
-
-      toast.success(`✅ ${contactsLinked.toLocaleString()} contatos vinculados às suas origens! (${(duration/1000).toFixed(1)}s)`);
-    } catch (error: any) {
-      console.error('Erro ao vincular contatos:', error);
-      toast.error(`Erro: ${error.message || 'Falha ao vincular contatos'}`);
-    } finally {
-      setIsLinkingSyncing(false);
-    }
-  };
-
-  const handleFullSync = async () => {
-    setIsSyncing(true);
-    setCurrentStep(0);
-
-    try {
-      toast.info('Iniciando sincronização completa...');
-
-      // Passo 1: Criar steps iniciais globais
-      const initialSteps: SyncStep[] = [
-        { 
-          name: 'Origens e Estágios', 
-          endpoint: 'sync-origins-stages', 
-          status: 'pending', 
-          type: 'global' 
-        },
-        { 
-          name: 'Todos os Contatos', 
-          endpoint: 'sync-contacts', 
-          status: 'pending', 
-          type: 'global' 
-        }
-      ];
-
-      setSteps(initialSteps);
-
-      // Passo 1: Sincronizar origins e stages
-      await runSyncStep(initialSteps[0], 0);
-      toast.success('Origens e estágios sincronizados!');
-
-      // Passo 2: Sincronizar TODOS os contatos (100k+)
-      await runSyncStep(initialSteps[1], 1);
-      toast.success('Contatos sincronizados!');
-
-      // Passo 3: Buscar lista de origins
-      const { data: origins, error: originsError } = await supabase
-        .from('crm_origins')
-        .select('id, name')
-        .order('name');
-
-      if (originsError) throw originsError;
-
-      if (!origins || origins.length === 0) {
-        toast.warning('Nenhuma origem encontrada');
-        return;
-      }
-
-      // Passo 4: Criar steps para cada origin
-      const originSteps: SyncStep[] = origins.map(origin => ({
-        name: origin.name,
-        status: 'pending',
-        type: 'origin',
-        origin_id: origin.id,
-      }));
-
-      setSteps(prev => [...prev, ...originSteps]);
-
-      // Passo 5: Sincronizar cada origin
-      for (let i = 0; i < originSteps.length; i++) {
-        const stepIndex = 2 + i; // +2 porque temos 2 steps globais agora
-        await runSyncStep(originSteps[i], stepIndex);
-        toast.success(`${originSteps[i].name} sincronizado!`);
-      }
-
-      // Passo 6: Vincular contacts aos deals
-      const linkStep: SyncStep = {
-        name: 'Vincular Contatos aos Deals',
-        endpoint: 'sync-link-contacts',
-        status: 'pending',
-        type: 'global',
-      };
-
-      setSteps(prev => [...prev, linkStep]);
-      const linkIndex = 2 + originSteps.length;
-      await runSyncStep(linkStep, linkIndex);
-
-      toast.success('Sincronização completa! 🎉');
-    } catch (error: any) {
-      console.error('Erro na sincronização:', error);
-      toast.error(`Erro: ${error.message || 'Falha na sincronização'}`);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const getProgress = () => {
-    const completed = steps.filter(s => s.status === 'success').length;
-    return (completed / steps.length) * 100;
-  };
-
-  const getStepIcon = (status: SyncStep['status']) => {
-    switch (status) {
-      case 'success':
-        return <CheckCircle2 className="h-5 w-5 text-green-500" />;
-      case 'error':
-        return <XCircle className="h-5 w-5 text-destructive" />;
-      case 'running':
-        return <RefreshCw className="h-5 w-5 text-primary animate-spin" />;
-      default:
-        return <Clock className="h-5 w-5 text-muted-foreground" />;
-    }
-  };
+  const disabledMessage = "Integração Clint encerrada";
 
   return (
     <Card className="bg-card border-border">
@@ -367,187 +16,73 @@ export const SyncControls = () => {
         <CardTitle className="text-foreground flex items-center gap-2">
           <RefreshCw className="h-5 w-5" />
           Sincronização com Clint CRM
+          <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-normal">
+            Desativado
+          </span>
         </CardTitle>
         <CardDescription className="text-muted-foreground">
-          Sincronize dados em etapas otimizadas para evitar timeout
+          Integração encerrada — leads chegam via Hubla webhook direto
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-2">
-          <Button 
-            onClick={handleMultiSync} 
-            disabled={isSyncing || isMultiSyncing || isDealsSyncing || isLinkingSyncing}
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            {isMultiSyncing ? (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Importando...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Importar Contatos
-              </>
-            )}
-          </Button>
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Integração Clint encerrada em 05/04/2026. Todos os leads já chegam via webhook direto da Hubla.
+          </AlertDescription>
+        </Alert>
 
-          <Button 
-            onClick={handleImportAllDeals} 
-            disabled={isSyncing || isMultiSyncing || isDealsSyncing || isLinkingSyncing}
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            {isDealsSyncing ? (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Importando...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Importar Deals
-              </>
-            )}
-          </Button>
-
-          <Button 
-            onClick={handleLinkContacts} 
-            disabled={isSyncing || isMultiSyncing || isDealsSyncing || isLinkingSyncing}
-            variant="secondary"
-          >
-            {isLinkingSyncing ? (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Vinculando...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Vincular Contatos
-              </>
-            )}
-          </Button>
-          
-          <Button 
-            onClick={handleFullSync} 
-            disabled={isSyncing || isMultiSyncing || isDealsSyncing || isLinkingSyncing}
-            variant="outline"
-          >
-            {isSyncing ? (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Sincronizando...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Sync Manual
-              </>
-            )}
-          </Button>
-        </div>
-
-        {isMultiSyncing && multiSyncRuns.length > 0 && (
-          <div className="space-y-2 p-4 border border-border rounded-lg bg-muted/30">
-            <p className="text-sm font-medium text-foreground mb-2">Progresso da Importação de Contatos:</p>
-            {multiSyncRuns.map((run) => (
-              <div
-                key={run.run}
-                className={`flex items-center justify-between p-2 border rounded ${
-                  run.status === 'running' ? 'border-primary bg-primary/5' : 'border-border'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  {getStepIcon(run.status)}
-                  <span className="text-sm text-foreground">Lote {run.run}/3</span>
-                </div>
-                {run.duration && (
-                  <span className="text-xs text-muted-foreground">
-                    {(run.duration / 1000).toFixed(1)}s
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {isDealsSyncing && dealsRuns.length > 0 && (
-          <div className="space-y-2 p-4 border border-border rounded-lg bg-muted/30">
-            <p className="text-sm font-medium text-foreground mb-2">Progresso da Importação de Deals:</p>
-            {dealsRuns.map((run) => (
-              <div
-                key={run.run}
-                className={`flex items-center justify-between p-2 border rounded ${
-                  run.status === 'running' ? 'border-primary bg-primary/5' : 'border-border'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  {getStepIcon(run.status)}
-                  <span className="text-sm text-foreground">
-                    Lote {run.run}/10 
-                    {run.result?.results?.deals_synced && ` - ${run.result.results.deals_synced} deals`}
-                  </span>
-                </div>
-                {run.duration && (
-                  <span className="text-xs text-muted-foreground">
-                    {(run.duration / 1000).toFixed(1)}s
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {isSyncing && (
-          <div className="space-y-2">
-            <Progress value={getProgress()} className="h-2" />
-            <p className="text-sm text-muted-foreground text-center">
-              {Math.round(getProgress())}% completo
-            </p>
-          </div>
-        )}
-
-        <div className="space-y-3 mt-4">
-          {steps.map((step, index) => (
-            <div
-              key={step.endpoint}
-              className={`flex items-center justify-between p-3 border rounded-lg ${
-                step.status === 'running' ? 'border-primary bg-primary/5' : 'border-border'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                {getStepIcon(step.status)}
-                <div>
-                  <p className="font-medium text-foreground">{step.name}</p>
-                  {step.result && (
-                    <p className="text-xs text-muted-foreground">
-                      {step.type === 'origin' ? (
-                        <>
-                          {step.result.results?.contacts_synced || 0} contatos, {step.result.results?.deals_synced || 0} negócios
-                        </>
-                      ) : (
-                        <>
-                          {step.result.results?.groups_synced && `${step.result.results.groups_synced} grupos, `}
-                          {step.result.results?.origins_synced && `${step.result.results.origins_synced} origens, `}
-                          {step.result.results?.stages_synced && `${step.result.results.stages_synced} estágios`}
-                          {step.result.results?.contacts_linked !== undefined && `${step.result.results.contacts_linked} vínculos`}
-                        </>
-                      )}
-                    </p>
-                  )}
-                  {step.error && (
-                    <p className="text-xs text-destructive">{step.error}</p>
-                  )}
-                </div>
-              </div>
-              {step.duration && (
-                <span className="text-xs text-muted-foreground">
-                  {(step.duration / 1000).toFixed(1)}s
+        <TooltipProvider>
+          <div className="grid grid-cols-2 gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button disabled className="w-full opacity-50">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Importar Contatos
+                  </Button>
                 </span>
-              )}
-            </div>
-          ))}
-        </div>
+              </TooltipTrigger>
+              <TooltipContent>{disabledMessage}</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button disabled className="w-full opacity-50">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Importar Deals
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{disabledMessage}</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button disabled variant="secondary" className="w-full opacity-50">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Vincular Contatos
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{disabledMessage}</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button disabled variant="outline" className="w-full opacity-50">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Sync Manual
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{disabledMessage}</TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       </CardContent>
     </Card>
   );
