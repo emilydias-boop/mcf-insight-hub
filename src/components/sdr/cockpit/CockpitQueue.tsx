@@ -26,7 +26,7 @@ function getUrgencyColor(hours: number): string {
   return 'bg-red-500';
 }
 
-export function CockpitQueue({ deals, selectedId, onSelect, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage }: CockpitQueueProps) {
+export function CockpitQueue({ deals, selectedId, onSelect, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage, totalCount }: CockpitQueueProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
