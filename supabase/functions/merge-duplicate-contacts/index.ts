@@ -18,10 +18,10 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 1. Find duplicate phone groups that have deals
+    // Use RPC to get duplicate phone groups efficiently
     const { data: groups, error: groupsError } = await supabase.rpc(
       "get_duplicate_contact_phones",
-      { limit_count: batch_size * 2 }
+      { limit_count: batch_size * 3 }
     );
 
     if (groupsError) throw groupsError;
@@ -35,32 +35,27 @@ Deno.serve(async (req) => {
       erros: [] as { grupo: string; erro: string }[],
     };
 
-    // Process each phone_suffix group
     for (const group of (groups || [])) {
       if (results.grupos_processados >= batch_size) break;
 
-      const phoneSuffix = group.phone_suffix;
+      const phoneSuffix = group.phone_suffix as string;
 
       try {
-        // Fetch all contacts in this group ordered by created_at ASC
+        // Use ilike to find contacts matching this suffix
         const { data: contacts, error: contactsErr } = await supabase
           .from("crm_contacts")
-          .select("id, name, email, phone, created_at, is_archived")
-          .filter("phone", "not.is", null)
-          .order("created_at", { ascending: true });
+          .select("id, name, created_at, is_archived")
+          .ilike("phone", `%${phoneSuffix}`)
+          .eq("is_archived", false)
+          .order("created_at", { ascending: true })
+          .limit(20);
 
         if (contactsErr) throw contactsErr;
+        if (!contacts || contacts.length < 2) continue;
 
-        // Filter contacts matching this phone suffix
-        const matching = (contacts || []).filter((c: any) => {
-          const digits = (c.phone || "").replace(/\D/g, "");
-          return digits.length >= 9 && digits.slice(-9) === phoneSuffix && !c.is_archived;
-        });
+        const contactIds = contacts.map((c: any) => c.id);
 
-        if (matching.length < 2) continue;
-
-        // Check if any contact in the group has deals
-        const contactIds = matching.map((c: any) => c.id);
+        // Check if group has deals
         const { count: dealCount } = await supabase
           .from("crm_deals")
           .select("id", { count: "exact", head: true })
@@ -68,56 +63,49 @@ Deno.serve(async (req) => {
 
         if (!dealCount || dealCount === 0) continue;
 
-        const principalId = matching[0].id;
-        const secondaryContacts = matching.slice(1);
+        const principalId = contacts[0].id;
+        const secondaries = contacts.slice(1);
 
-        for (const secondary of secondaryContacts) {
+        for (const sec of secondaries) {
           if (dry_run) {
-            // Count what would be remapped
-            const { count: dCount } = await supabase
+            const { count: dC } = await supabase
               .from("crm_deals")
               .select("id", { count: "exact", head: true })
-              .eq("contact_id", secondary.id);
+              .eq("contact_id", sec.id);
 
-            const { count: aCount } = await supabase
+            const { count: aC } = await supabase
               .from("meeting_slot_attendees")
               .select("id", { count: "exact", head: true })
-              .eq("contact_id", secondary.id);
+              .eq("contact_id", sec.id);
 
-            results.deals_remapeados += dCount || 0;
-            results.attendees_remapeados += aCount || 0;
+            results.deals_remapeados += dC || 0;
+            results.attendees_remapeados += aC || 0;
             results.contatos_arquivados += 1;
           } else {
-            // Remap deals
-            const { data: remappedDeals } = await supabase
+            const { data: rd } = await supabase
               .from("crm_deals")
               .update({ contact_id: principalId })
-              .eq("contact_id", secondary.id)
+              .eq("contact_id", sec.id)
               .select("id");
+            results.deals_remapeados += (rd || []).length;
 
-            results.deals_remapeados += (remappedDeals || []).length;
-
-            // Remap attendees
-            const { data: remappedAttendees } = await supabase
+            const { data: ra } = await supabase
               .from("meeting_slot_attendees")
               .update({ contact_id: principalId })
-              .eq("contact_id", secondary.id)
+              .eq("contact_id", sec.id)
               .select("id");
+            results.attendees_remapeados += (ra || []).length;
 
-            results.attendees_remapeados += (remappedAttendees || []).length;
-
-            // Archive secondary contact
-            const { error: archiveErr } = await supabase
+            const { error: archErr } = await supabase
               .from("crm_contacts")
               .update({
                 merged_into_contact_id: principalId,
                 merged_at: new Date().toISOString(),
                 is_archived: true,
               })
-              .eq("id", secondary.id);
+              .eq("id", sec.id);
 
-            if (archiveErr) throw archiveErr;
-
+            if (archErr) throw archErr;
             results.contatos_arquivados += 1;
           }
         }
@@ -138,10 +126,7 @@ Deno.serve(async (req) => {
   } catch (err: any) {
     return new Response(
       JSON.stringify({ error: err.message || String(err) }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }
 });
