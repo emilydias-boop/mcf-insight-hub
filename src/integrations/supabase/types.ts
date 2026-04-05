@@ -4136,6 +4136,9 @@ export type Database = {
           custom_fields: Json | null
           email: string | null
           id: string
+          is_archived: boolean
+          merged_at: string | null
+          merged_into_contact_id: string | null
           name: string
           notes: string | null
           organization_name: string | null
@@ -4150,6 +4153,9 @@ export type Database = {
           custom_fields?: Json | null
           email?: string | null
           id?: string
+          is_archived?: boolean
+          merged_at?: string | null
+          merged_into_contact_id?: string | null
           name: string
           notes?: string | null
           organization_name?: string | null
@@ -4164,6 +4170,9 @@ export type Database = {
           custom_fields?: Json | null
           email?: string | null
           id?: string
+          is_archived?: boolean
+          merged_at?: string | null
+          merged_into_contact_id?: string | null
           name?: string
           notes?: string | null
           organization_name?: string | null
@@ -4173,6 +4182,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "crm_contacts_merged_into_contact_id_fkey"
+            columns: ["merged_into_contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "crm_contacts_origin_id_fkey"
             columns: ["origin_id"]
