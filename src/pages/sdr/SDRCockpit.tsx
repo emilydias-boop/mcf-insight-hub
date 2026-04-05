@@ -49,6 +49,7 @@ export default function SDRCockpit() {
           fetchNextPage={fetchNextPage}
           hasNextPage={hasNextPage}
           isFetchingNextPage={isFetchingNextPage}
+          totalCount={totalCount ?? null}
         />
       </div>
 

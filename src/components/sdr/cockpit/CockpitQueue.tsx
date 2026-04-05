@@ -11,6 +11,7 @@ interface CockpitQueueProps {
   fetchNextPage: () => void;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
+  totalCount?: number | null;
 }
 
 function formatTimeInStage(hours: number): string {
