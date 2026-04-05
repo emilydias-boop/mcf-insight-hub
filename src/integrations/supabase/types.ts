@@ -10883,6 +10883,23 @@ export type Database = {
           total_movimentacoes: number
         }[]
       }
+      get_sdr_cockpit_queue: {
+        Args: { p_limit?: number; p_offset?: number; p_owner_id: string }
+        Returns: {
+          activity_count: number
+          call_attempts: number
+          contact_name: string
+          contact_phone: string
+          deal_id: string
+          last_contact_at: string
+          next_action_date: string
+          next_action_type: string
+          priority_score: number
+          stage_moved_at: string
+          stage_name: string
+          urgency: string
+        }[]
+      }
       get_sdr_meetings_from_agenda:
         | {
             Args: {
