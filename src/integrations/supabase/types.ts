@@ -4201,6 +4201,8 @@ export type Database = {
       crm_deals: {
         Row: {
           archived_at: string | null
+          auto_lost_at: string | null
+          call_attempts: number | null
           clint_id: string
           contact_id: string | null
           created_at: string | null
@@ -4210,6 +4212,7 @@ export type Database = {
           expected_close_date: string | null
           id: string
           is_duplicate: boolean | null
+          last_contact_at: string | null
           last_worked_at: string | null
           name: string
           next_action_date: string | null
@@ -4233,6 +4236,8 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
+          auto_lost_at?: string | null
+          call_attempts?: number | null
           clint_id: string
           contact_id?: string | null
           created_at?: string | null
@@ -4242,6 +4247,7 @@ export type Database = {
           expected_close_date?: string | null
           id?: string
           is_duplicate?: boolean | null
+          last_contact_at?: string | null
           last_worked_at?: string | null
           name: string
           next_action_date?: string | null
@@ -4265,6 +4271,8 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
+          auto_lost_at?: string | null
+          call_attempts?: number | null
           clint_id?: string
           contact_id?: string | null
           created_at?: string | null
@@ -4274,6 +4282,7 @@ export type Database = {
           expected_close_date?: string | null
           id?: string
           is_duplicate?: boolean | null
+          last_contact_at?: string | null
           last_worked_at?: string | null
           name?: string
           next_action_date?: string | null

@@ -77,6 +77,7 @@ import Financeiro from "./pages/Financeiro";
 import Cobrancas from "./pages/Cobrancas";
 import MeuRH from "./pages/MeuRH";
 import MinhasReunioes from "./pages/sdr/MinhasReunioes";
+import SDRCockpit from "./pages/sdr/SDRCockpit";
 import ReunioesEquipe from "./pages/crm/ReunioesEquipe";
 import SdrMeetingsDetailPage from "./pages/crm/SdrMeetingsDetailPage";
 import CloserMeetingsDetailPage from "./pages/crm/CloserMeetingsDetailPage";
@@ -239,6 +240,7 @@ const App = () => (
               <Route path="patrimonio/meus-equipamentos" element={<MyEquipmentPage />} />
               <Route path="patrimonio/relatorios" element={<ResourceGuard resource="patrimonio"><PatrimonioRelatorios /></ResourceGuard>} />
               <Route path="patrimonio/:id" element={<ResourceGuard resource="patrimonio"><AssetDetailsPage /></ResourceGuard>} />
+              <Route path="sdr/cockpit" element={<RoleGuard allowedRoles={['sdr']}><SDRCockpit /></RoleGuard>} />
               <Route path="sdr/minhas-reunioes" element={<RoleGuard allowedRoles={['sdr', 'closer']}><MinhasReunioes /></RoleGuard>} />
               <Route path="closer/meu-desempenho" element={<RoleGuard allowedRoles={['closer']}><MeuDesempenhoCloser /></RoleGuard>} />
               <Route path="crm/reunioes-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><ReunioesEquipe /></RoleGuard>} />
