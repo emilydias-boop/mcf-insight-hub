@@ -95,7 +95,7 @@ export const useSelectedDeal = (dealId: string | null) => {
         .from('crm_deals')
         .select(`
           id, name, stage_id, stage_moved_at, next_action_type, next_action_date, next_action_note,
-          custom_fields, origin_id, contact_id,
+          custom_fields, origin_id, contact_id, value,
           crm_contacts ( id, name, phone, email ),
           crm_stages ( id, stage_name ),
           crm_origins ( id, name )
@@ -149,7 +149,7 @@ export const useSelectedDeal = (dealId: string | null) => {
         originName: origin?.name || null,
         originId: deal.origin_id,
         customFields: deal.custom_fields as Record<string, any> | null,
-        dealValue: null,
+        dealValue: deal.value ?? null,
         activities: activities || [],
         callAttempts,
       } as SelectedDealData;
