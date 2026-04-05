@@ -63,6 +63,24 @@ function mapRpcRowToQueueDeal(row: any): QueueDeal {
   };
 }
 
+export const useSDRQueueCount = () => {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['sdr-cockpit-count', user?.email],
+    queryFn: async () => {
+      if (!user?.email) return 0;
+      const { data, error } = await supabase.rpc('get_sdr_cockpit_count', {
+        p_owner_id: user.email,
+      });
+      if (error) throw error;
+      return (data as number) ?? 0;
+    },
+    enabled: !!user?.email,
+    staleTime: 60000,
+  });
+};
+
 export const useSDRQueueInfinite = () => {
   const { user } = useAuth();
 
