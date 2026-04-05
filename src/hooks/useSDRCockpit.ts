@@ -149,7 +149,7 @@ export const useSelectedDeal = (dealId: string | null) => {
         originName: origin?.name || null,
         originId: deal.origin_id,
         customFields: deal.custom_fields as Record<string, any> | null,
-        dealValue: null,
+        dealValue: deal.value ?? null,
         activities: activities || [],
         callAttempts,
       } as SelectedDealData;
