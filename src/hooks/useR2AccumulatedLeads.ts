@@ -87,6 +87,38 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
         const emails = uniqueContracts.map(t => (t.customer_email || '').toLowerCase().trim()).filter(Boolean);
         if (emails.length === 0) continue;
 
+        // Check partnership purchases — exclude leads who already bought
+        const { data: partnershipTx } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email')
+          .in('customer_email', emails)
+          .eq('sale_status', 'completed')
+          .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify']);
+
+        const resolvedEmails = new Set<string>();
+        for (const tx of partnershipTx || []) {
+          const email = (tx.customer_email || '').toLowerCase().trim();
+          // We already have contract emails; if they have ANY other completed transaction, 
+          // we need to check it's not just another A000
+          // We'll do a more precise check below
+        }
+
+        // More precise: get non-contract transactions for these emails
+        const { data: nonContractTx } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email, product_name')
+          .in('customer_email', emails)
+          .eq('sale_status', 'completed')
+          .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify']);
+
+        for (const tx of nonContractTx || []) {
+          const pName = (tx.product_name || '').toLowerCase();
+          if (pName.includes('a000') || pName.includes('contrato')) continue;
+          // Has a non-contract purchase → resolved
+          const email = (tx.customer_email || '').toLowerCase().trim();
+          if (email) resolvedEmails.add(email);
+        }
+
         // Resolve contacts
         const { data: contacts } = await supabase
           .from('crm_contacts')
@@ -156,11 +188,14 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
         (statusOptions || []).forEach(s => statusMap.set(s.id, s));
 
         for (const [contactId, saleInfo] of contactToSaleInfo) {
+          // Skip if already bought partnership
+          if (resolvedEmails.has(saleInfo.email)) continue;
+
           const contactData = emailToContact.get(saleInfo.email);
           const allR2s = contactR2Map.get(contactId) || [];
           const saleDateMs = new Date(saleInfo.saleDate).getTime();
 
-          // First R2 after sale
+          // ALL R2s after sale
           const validR2s = allR2s
             .filter((r: any) => {
               const slot = r.meeting_slot;
@@ -170,6 +205,12 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
             .sort((a: any, b: any) =>
               new Date(a.meeting_slot.scheduled_at).getTime() - new Date(b.meeting_slot.scheduled_at).getTime()
             );
+
+          // Check if ANY R2 has a definitive status → skip entirely
+          const hasDefinitiveStatus = validR2s.some((r: any) =>
+            r.r2_status_id && definitiveStatusIds.has(r.r2_status_id)
+          );
+          if (hasDefinitiveStatus) continue;
 
           if (validR2s.length === 0) {
             // No R2 at all → sem_r2
@@ -192,14 +233,19 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
             continue;
           }
 
-          const att = validR2s[0] as any;
+          // Use the most recent R2 for display purposes
+          const att = validR2s[validR2s.length - 1] as any;
           const slot = att.meeting_slot;
           const closerData = Array.isArray(slot?.closer) ? slot.closer[0] : slot?.closer;
           const status = att.r2_status_id ? statusMap.get(att.r2_status_id) : null;
           const deal = att.deal_id ? dealMap.get(att.deal_id) : null;
 
-          // Check if "Próxima Semana"
-          if (proximaSemanaStatus && att.r2_status_id === proximaSemanaStatus.id) {
+          // Check if "Próxima Semana" (on any R2)
+          const hasProximaSemana = validR2s.some((r: any) =>
+            proximaSemanaStatus && r.r2_status_id === proximaSemanaStatus.id
+          );
+
+          if (hasProximaSemana) {
             results.push({
               id: att.id,
               attendee_name: att.attendee_name,
@@ -219,12 +265,11 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
             continue;
           }
 
-          // If approved or has no "fora" status, skip (already handled)
-          if (aprovadoStatus && att.r2_status_id === aprovadoStatus.id) continue;
-          // If has any other non-fora status, skip
-          if (att.r2_status_id) continue;
+          // If ALL R2s have some status (Pendente, Em Análise, etc.) → skip (handled elsewhere)
+          const allHaveStatus = validR2s.every((r: any) => !!r.r2_status_id);
+          if (allHaveStatus) continue;
 
-          // No status set → sem_r2 (pending)
+          // No status set on latest → sem_r2 (pending)
           results.push({
             id: att.id,
             attendee_name: att.attendee_name,
