@@ -32,9 +32,12 @@ import {
 
 const MeuFechamento = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const currentMonth = format(new Date(), 'yyyy-MM');
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedMonth, setSelectedMonth] = useState(
+    searchParams.get('month') || currentMonth
+  );
   const [showNfseModal, setShowNfseModal] = useState(false);
 
   const { 
