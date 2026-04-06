@@ -413,14 +413,19 @@ export function useUpdateConsorcioPayoutKpi() {
         throw new Error('Não é possível editar um fechamento travado');
       }
       
-      // Recalcular com novos KPIs
+      // Buscar pesos dinâmicos das métricas ativas
+      const pesos = await buscarPesosMetricas(payout.ano_mes);
+      
+      // Recalcular com novos KPIs e pesos dinâmicos
       const calc = calcularPayoutConsorcio(
         payout.variavel_total,
         data.comissao_consorcio,
         data.comissao_holding,
         data.score_organizacao,
         data.meta_comissao_consorcio || payout.meta_comissao_consorcio || 2000,
-        data.meta_comissao_holding || payout.meta_comissao_holding || 500
+        data.meta_comissao_holding || payout.meta_comissao_holding || 500,
+        100,
+        pesos
       );
       
       const total_conta = payout.fixo_valor + calc.valor_variavel_final + (payout.bonus_extra || 0);
