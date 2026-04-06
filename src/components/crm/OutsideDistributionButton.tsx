@@ -130,7 +130,7 @@ export const OutsideDistributionButton = () => {
       if (!contactId) {
         const { data: newContact, error: contactErr } = await supabase
           .from('crm_contacts')
-          .insert([{ name: orphan.name, email: orphan.email.toLowerCase().trim() }])
+          .insert([{ clint_id: `orphan-${Date.now()}`, name: orphan.name, email: orphan.email.toLowerCase().trim() }])
           .select('id')
           .single();
         if (contactErr) throw contactErr;
