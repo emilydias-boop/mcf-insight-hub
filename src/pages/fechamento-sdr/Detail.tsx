@@ -7,6 +7,7 @@ import { SdrIndicatorCard } from "@/components/sdr-fechamento/SdrIndicatorCard";
 import { SdrAdjustmentForm } from "@/components/sdr-fechamento/SdrAdjustmentForm";
 import { KpiEditForm } from "@/components/sdr-fechamento/KpiEditForm";
 import { IntermediacoesList } from "@/components/sdr-fechamento/IntermediacoesList";
+import { CloserContractsList } from "@/components/sdr-fechamento/CloserContractsList";
 import { NoShowIndicator } from "@/components/sdr-fechamento/NoShowIndicator";
 import { ManualPayoutForm } from "@/components/sdr-fechamento/ManualPayoutForm";
 import { DynamicIndicatorsGrid } from "@/components/fechamento/DynamicIndicatorCard";
@@ -560,9 +561,11 @@ const FechamentoSDRDetail = () => {
 
 
 
-      {/* Intermediações / Vendas Parceria (não exibir para Consórcio) */}
+      {/* Contratos / Intermediações (não exibir para Consórcio) */}
       {fromBu !== 'consorcio' && (
-        <IntermediacoesList sdrId={payout.sdr_id} anoMes={payout.ano_mes} disabled={!canEdit} isCloser={isCloser} />
+        isCloser
+          ? <CloserContractsList sdrId={payout.sdr_id} anoMes={payout.ano_mes} />
+          : <IntermediacoesList sdrId={payout.sdr_id} anoMes={payout.ano_mes} disabled={!canEdit} isCloser={false} />
       )}
 
       {/* Adjustments (only for admin/manager) */}
