@@ -1,55 +1,33 @@
 
 
-# Corrigir Planos OTE para Closers Consorcio
+# Adicionar métricas de Comissão Consórcio/Holding na lista de métricas disponíveis
 
-## Problemas raiz
+## Problema
 
-1. **Squad mismatch no dialog**: `EditIndividualPlanDialog` recebe `squad = "BU - Consórcio"` (departamento) mas verifica `squad === 'consorcio'` → campos de meta comissão nunca aparecem
-2. **saveCompPlan ignora novos campos**: A mutation não salva `meta_comissao_consorcio` / `meta_comissao_holding`
-3. **comp_plan não carrega novos campos**: O mapeamento em `employeesWithPlans` não inclui as colunas adicionadas na migration
-4. **currentValues não passa os valores**: O dialog não recebe `meta_comissao_consorcio` / `meta_comissao_holding` do plano existente
-5. **Tabela não diferencia SDR de Closer**: Todos aparecem com coluna "Meta/Dia" que é irrelevante para Closers
+A lista `METRICAS_DISPONIVEIS` em `src/types/sdr-fechamento.ts` contém apenas métricas genéricas de SDR (Agendamentos, R1 Realizadas, Contratos, etc.). Faltam as métricas específicas de Closers Consórcio:
+- **Comissão Consórcio** (valor de comissão gerada em vendas de consórcio)
+- **Comissão Holding** (valor de comissão gerada em vendas holding)
+
+Por isso, na aba "Métricas Ativas" com cargo "Closer Consórcio", o usuário não consegue ativar essas métricas nem definir seus pesos (ex: 90% comissão consórcio, 10% organização).
 
 ## Solução
 
-### Arquivo 1: `src/components/fechamento/PlansOteTab.tsx`
+### Arquivo 1: `src/types/sdr-fechamento.ts`
 
-**Corrigir squad passado ao dialog (linha 707):**
-- Mudar de `squad={editDialog.employee.departamento}` para converter o departamento para o valor correto: `"BU - Consórcio"` → `"consorcio"`
+Adicionar duas entradas ao array `METRICAS_DISPONIVEIS`:
+- `{ nome: 'comissao_consorcio', label: 'Comissão Venda Consórcio', fonte: 'manual' }`
+- `{ nome: 'comissao_holding', label: 'Comissão Venda Holding', fonte: 'manual' }`
 
-**Incluir novos campos no comp_plan (linhas 311-321):**
-- Adicionar `meta_comissao_consorcio` e `meta_comissao_holding` ao mapeamento do plano
+### Arquivo 2: `src/hooks/useActiveMetricsForSdr.ts`
 
-**Incluir novos campos no currentValues (linhas 709-718):**
-- Passar `meta_comissao_consorcio` e `meta_comissao_holding` do comp_plan para o dialog
+Adicionar `comissao_consorcio` e `comissao_holding` ao `METRIC_CONFIG` com os campos corretos (`kpiField`, `icon`, `color`), para que o sistema saiba mapear essas métricas nos cálculos.
 
-**Persistir novos campos no saveCompPlan (linhas 190-211):**
-- Adicionar `meta_comissao_consorcio` e `meta_comissao_holding` ao `planData`
+### Arquivo 3: `src/hooks/useCalculatedVariavel.ts`
 
-**Diferenciar Closers na tabela:**
-- Buscar `role_type` do SDR vinculado
-- Para Closers consórcio, mostrar "Meta Comissão" em vez de "Meta/Dia"
-- Ou simplesmente adaptar a coluna para mostrar o valor relevante por tipo
-
-### Arquivo 2: `src/components/fechamento/EditIndividualPlanDialog.tsx`
-
-**Corrigir condição do squad (linha 214):**
-- Atualmente: `squad === 'consorcio'`
-- Adicionar fallback: `squad === 'consorcio' || squad === 'BU - Consórcio'`
-- Ou melhor: normalizar no componente pai (solução no PlansOteTab)
-
-**Esconder "Meta Diária" para Closers:**
-- Receber prop indicando se é closer
-- Se for closer consórcio, esconder campo "Meta Diária (reuniões)" e dar destaque aos campos de meta comissão
-
-### Arquivo 3: `src/components/fechamento/PlansOteTab.tsx` (interface `EmployeeWithPlan`)
-
-- Adicionar `meta_comissao_consorcio` e `meta_comissao_holding` na interface `comp_plan`
-- Adicionar `role_type` para distinguir SDR de Closer na tabela
+Na função `calcularMeta`, adicionar cases para `comissao_consorcio` e `comissao_holding` que busquem a meta individual do `comp_plan` (campo `meta_comissao_consorcio` / `meta_comissao_holding`) em vez de usar meta diaria x dias uteis.
 
 ## Resultado esperado
-- João Pedro (Closer Consórcio): dialog mostra campos de Meta Comissão Consórcio/Holding, sem "Meta Diária"
-- Campos de meta comissão salvam corretamente no `sdr_comp_plan`
-- Tabela mostra meta comissão para Closers e meta diária para SDRs
-- Valores persistem e são carregados corretamente ao reabrir o dialog
+- Na aba "Métricas Ativas" para Closer Consórcio, aparecem "Comissão Venda Consórcio" e "Comissão Venda Holding" para ativar com peso
+- O recálculo do fechamento usa essas métricas configuradas com os pesos corretos
+- Organização continua disponível como métrica complementar
 
