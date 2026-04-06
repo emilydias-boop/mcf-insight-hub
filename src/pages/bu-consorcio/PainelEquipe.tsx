@@ -720,8 +720,8 @@ export default function ConsorcioPainelEquipe() {
 
       {/* KPI Cards */}
       <TeamKPICards
-        kpis={enrichedKPIs}
-        isLoading={isLoading}
+        kpis={activeTab === "closers" ? closerKPIs : enrichedKPIs}
+        isLoading={activeTab === "closers" ? closerLoading : isLoading}
         isToday={datePreset === "today"}
         pendentesHoje={pendentesHojeConsorcio}
       />
