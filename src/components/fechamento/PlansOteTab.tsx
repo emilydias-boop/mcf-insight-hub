@@ -248,7 +248,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
         // Nenhum plano existente → inserir novo
         const { error } = await supabase
           .from('sdr_comp_plan')
-          .insert(planData);
+          .insert(planData as any);
         if (error) throw error;
       }
       
