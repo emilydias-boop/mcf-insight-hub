@@ -61,6 +61,7 @@ interface EmployeeWithPlan {
   departamento: string | null;
   cargo_catalogo_id: string | null;
   sdr_id: string | null;
+  role_type?: string | null;
   cargo_catalogo: {
     id: string;
     nome_exibicao: string;
@@ -81,6 +82,8 @@ interface EmployeeWithPlan {
     valor_docs_reuniao: number;
     valor_tentativas: number;
     valor_organizacao: number;
+    meta_comissao_consorcio?: number | null;
+    meta_comissao_holding?: number | null;
   } | null;
   sdr_meta_diaria?: number;
 }
