@@ -273,7 +273,7 @@ export function useRecalculateConsorcioPayouts() {
         .in('email_pessoal', emails);
       
       const cargoByEmail = new Map((employees || []).map(e => [e.email_pessoal?.toLowerCase(), e.cargo]));
-      const employeeByEmail = new Map((employees || []).map(e => [e.email_pessoal?.toLowerCase(), e]));
+      const employeeByEmail = new Map((employees || []).map(e => [e.email_pessoal?.toLowerCase(), e as { id: string; email_pessoal: string | null; cargo: string | null; cargo_catalogo_id: string | null }]));
       
       // 3b. Buscar todos os cargos_catalogo relevantes para auto-sync
       const catalogoIds = (employees || [])
