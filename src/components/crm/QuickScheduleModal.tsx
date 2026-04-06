@@ -54,6 +54,7 @@ interface QuickScheduleModalProps {
   preselectedDate?: Date;
   prefilledDealId?: string;
   prefilledNotes?: string;
+  ownerEmail?: string;
 }
 
 interface DealOption {
