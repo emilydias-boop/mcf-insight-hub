@@ -8548,6 +8548,8 @@ export type Database = {
           id: string
           ifood_mensal: number | null
           ifood_ultrameta: number | null
+          meta_comissao_consorcio: number | null
+          meta_comissao_holding: number | null
           meta_no_show_pct: number | null
           meta_organizacao: number | null
           meta_reunioes_agendadas: number | null
@@ -8576,6 +8578,8 @@ export type Database = {
           id?: string
           ifood_mensal?: number | null
           ifood_ultrameta?: number | null
+          meta_comissao_consorcio?: number | null
+          meta_comissao_holding?: number | null
           meta_no_show_pct?: number | null
           meta_organizacao?: number | null
           meta_reunioes_agendadas?: number | null
@@ -8604,6 +8608,8 @@ export type Database = {
           id?: string
           ifood_mensal?: number | null
           ifood_ultrameta?: number | null
+          meta_comissao_consorcio?: number | null
+          meta_comissao_holding?: number | null
           meta_no_show_pct?: number | null
           meta_organizacao?: number | null
           meta_reunioes_agendadas?: number | null

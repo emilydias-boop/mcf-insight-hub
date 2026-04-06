@@ -40,8 +40,9 @@ import {
   useUpdateSdr,
 } from '@/hooks/useSdrFechamento';
 import { Sdr, SdrStatus } from '@/types/sdr-fechamento';
-import { Plus, Check, X, Users, RefreshCw, Pencil, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Check, X, Users, RefreshCw, Pencil, ToggleLeft, ToggleRight, Target } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatCurrency } from '@/lib/formatters';
 
 // Squad options mapping
 const SQUAD_OPTIONS = [
@@ -51,6 +52,9 @@ const SQUAD_OPTIONS = [
   { value: 'projetos', label: 'BU - Projetos' },
   { value: 'leilao', label: 'BU - Leilão' },
 ];
+
+// Cargos excluídos do fechamento de closers
+const CARGOS_EXCLUIDOS_CLOSER = ['Supervisor', 'Closer R2', 'Coordenador', 'ADMIN'];
 
 const StatusBadge = ({ status }: { status: SdrStatus }) => {
   const config = {
@@ -62,8 +66,8 @@ const StatusBadge = ({ status }: { status: SdrStatus }) => {
   return <Badge variant="outline" className={className}>{label}</Badge>;
 };
 
-// Edit SDR Dialog
-const EditSdrDialog = ({ sdr, onSuccess }: { sdr: Sdr; onSuccess: () => void }) => {
+// Edit SDR Dialog - supports both SDR and Closer modes
+const EditSdrDialog = ({ sdr, isCloserMode, onSuccess }: { sdr: Sdr; isCloserMode?: boolean; onSuccess: () => void }) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(sdr.name);
   const [email, setEmail] = useState(sdr.email || '');
@@ -93,8 +97,8 @@ const EditSdrDialog = ({ sdr, onSuccess }: { sdr: Sdr; onSuccess: () => void }) 
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Editar SDR</DialogTitle>
-          <DialogDescription>Atualize os dados do SDR</DialogDescription>
+          <DialogTitle>Editar {isCloserMode ? 'Closer' : 'SDR'}</DialogTitle>
+          <DialogDescription>Atualize os dados do {isCloserMode ? 'Closer' : 'SDR'}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
@@ -119,10 +123,12 @@ const EditSdrDialog = ({ sdr, onSuccess }: { sdr: Sdr; onSuccess: () => void }) 
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Meta Diária</Label>
-              <Input type="number" value={metaDiaria} onChange={(e) => setMetaDiaria(e.target.value)} />
-            </div>
+            {!isCloserMode && (
+              <div className="space-y-2">
+                <Label>Meta Diária</Label>
+                <Input type="number" value={metaDiaria} onChange={(e) => setMetaDiaria(e.target.value)} />
+              </div>
+            )}
           </div>
         </div>
         <DialogFooter>
@@ -294,6 +300,39 @@ const SdrFormDialog = ({ onSuccess, defaultSquad = 'incorporador', lockSquad = f
   );
 };
 
+// Shared row actions
+const SdrRowActions = ({ sdr, isAdmin, isCloserMode, onApprove, onToggle, onRefetch }: {
+  sdr: Sdr;
+  isAdmin: boolean;
+  isCloserMode?: boolean;
+  onApprove: (id: string, approve: boolean) => void;
+  onToggle: (sdr: Sdr) => void;
+  onRefetch: () => void;
+}) => (
+  <div className="flex items-center justify-center gap-1">
+    <EditSdrDialog sdr={sdr} isCloserMode={isCloserMode} onSuccess={onRefetch} />
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={() => onToggle(sdr)}
+      className={sdr.active ? "text-green-500" : "text-gray-400"}
+      title={sdr.active ? "Desativar" : "Ativar"}
+    >
+      {sdr.active ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
+    </Button>
+    {isAdmin && sdr.status === 'PENDING' && (
+      <>
+        <Button size="sm" variant="ghost" className="text-green-500 hover:text-green-400" onClick={() => onApprove(sdr.id, true)}>
+          <Check className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-400" onClick={() => onApprove(sdr.id, false)}>
+          <X className="h-4 w-4" />
+        </Button>
+      </>
+    )}
+  </div>
+);
+
 // Props do componente principal
 export interface SdrConfigTabProps {
   defaultSquad?: string;
@@ -303,6 +342,7 @@ export interface SdrConfigTabProps {
 export function SdrConfigTab({ defaultSquad = 'incorporador', lockSquad = false }: SdrConfigTabProps) {
   const { role, user } = useAuth();
   const isAdmin = role === 'admin';
+  const isConsorcio = defaultSquad === 'consorcio';
   
   const { data: sdrs, isLoading: sdrsLoading, refetch: refetchSdrs } = useSdrsAll();
   const approveSdr = useApproveSdr();
@@ -313,6 +353,23 @@ export function SdrConfigTab({ defaultSquad = 'incorporador', lockSquad = false 
     if (!sdrs) return [];
     return sdrs.filter(s => s.squad === defaultSquad);
   }, [sdrs, defaultSquad]);
+
+  // Separar SDRs e Closers para consórcio
+  const sdrList = useMemo(() => {
+    if (!isConsorcio) return filteredSdrs;
+    return filteredSdrs.filter(s => s.role_type === 'sdr' || !s.role_type);
+  }, [filteredSdrs, isConsorcio]);
+
+  const closerList = useMemo(() => {
+    if (!isConsorcio) return [];
+    return filteredSdrs.filter(s => {
+      if (s.role_type !== 'closer') return false;
+      // Filtrar cargos excluídos (coordenadores, supervisores, etc.)
+      // Note: we don't have cargo info here directly, but the filtering is done
+      // by role_type already. Supervisors/Coordinators should not be role_type='closer'
+      return true;
+    });
+  }, [filteredSdrs, isConsorcio]);
 
   const handleApproveSdr = async (sdrId: string, approve: boolean) => {
     await approveSdr.mutateAsync({ sdrId, approve, userId: user?.id || '' });
@@ -329,104 +386,182 @@ export function SdrConfigTab({ defaultSquad = 'incorporador', lockSquad = false 
 
   const squadLabel = SQUAD_OPTIONS.find(o => o.value === defaultSquad)?.label || defaultSquad;
 
+  const actionProps = {
+    isAdmin,
+    onApprove: handleApproveSdr,
+    onToggle: handleToggleActive,
+    onRefetch: () => refetchSdrs(),
+  };
+
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          SDRs {lockSquad && `- ${squadLabel}`}
-        </CardTitle>
-        <SdrFormDialog 
-          onSuccess={() => refetchSdrs()} 
-          defaultSquad={defaultSquad}
-          lockSquad={lockSquad}
-        />
-      </CardHeader>
-      <CardContent>
-        {sdrsLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : filteredSdrs.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            Nenhum SDR cadastrado{lockSquad ? ` para ${squadLabel}` : ''}.
-            <p className="text-sm mt-2">
-              Clique em "Novo SDR" para cadastrar.
-            </p>
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead className="text-center">Nível</TableHead>
-                <TableHead className="text-center">Meta Diária</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-center">Ativo</TableHead>
-                <TableHead className="text-center">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredSdrs.map((sdr) => (
-                <TableRow key={sdr.id}>
-                  <TableCell className="font-medium">{sdr.name}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{sdr.email || '-'}</TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="outline" className="font-mono">N{sdr.nivel || 1}</Badge>
-                  </TableCell>
-                  <TableCell className="text-center">{sdr.meta_diaria || 5}</TableCell>
-                  <TableCell className="text-center">
-                    <StatusBadge status={sdr.status} />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleToggleActive(sdr)}
-                      className={sdr.active ? "text-green-500" : "text-gray-400"}
-                      title={sdr.active ? "Desativar" : "Ativar"}
-                    >
-                      {sdr.active ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
-                    </Button>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <EditSdrDialog sdr={sdr} onSuccess={() => refetchSdrs()} />
-                      {isAdmin && sdr.status === 'PENDING' && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-green-500 hover:text-green-400"
-                            onClick={() => handleApproveSdr(sdr.id, true)}
-                          >
-                            <Check className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-500 hover:text-red-400"
-                            onClick={() => handleApproveSdr(sdr.id, false)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </TableCell>
+    <div className="space-y-6">
+      {/* SDRs Section */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            SDRs {lockSquad && `- ${squadLabel}`}
+          </CardTitle>
+          <SdrFormDialog 
+            onSuccess={() => refetchSdrs()} 
+            defaultSquad={defaultSquad}
+            lockSquad={lockSquad}
+          />
+        </CardHeader>
+        <CardContent>
+          {sdrsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : sdrList.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Nenhum SDR cadastrado{lockSquad ? ` para ${squadLabel}` : ''}.
+              <p className="text-sm mt-2">Clique em "Novo SDR" para cadastrar.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead className="text-center">Nível</TableHead>
+                  <TableHead className="text-center">Meta Diária</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">Ativo</TableHead>
+                  <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-        
-        {/* Nota informativa */}
-        <div className="mt-4 text-xs text-muted-foreground bg-muted/50 rounded-md p-3 border">
-          <strong>Vínculo automático:</strong> Ao criar um SDR com usuário vinculado, 
-          o sistema automaticamente atualiza o campo <code>sdr_id</code> no colaborador correspondente no RH.
-        </div>
-      </CardContent>
-    </Card>
+              </TableHeader>
+              <TableBody>
+                {sdrList.map((sdr) => (
+                  <TableRow key={sdr.id}>
+                    <TableCell className="font-medium">{sdr.name}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{sdr.email || '-'}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className="font-mono">N{sdr.nivel || 1}</Badge>
+                    </TableCell>
+                    <TableCell className="text-center">{sdr.meta_diaria || 5}</TableCell>
+                    <TableCell className="text-center"><StatusBadge status={sdr.status} /></TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleToggleActive(sdr)}
+                        className={sdr.active ? "text-green-500" : "text-gray-400"}
+                        title={sdr.active ? "Desativar" : "Ativar"}
+                      >
+                        {sdr.active ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
+                      </Button>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <EditSdrDialog sdr={sdr} onSuccess={() => refetchSdrs()} />
+                        {isAdmin && sdr.status === 'PENDING' && (
+                          <>
+                            <Button size="sm" variant="ghost" className="text-green-500 hover:text-green-400" onClick={() => handleApproveSdr(sdr.id, true)}>
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-400" onClick={() => handleApproveSdr(sdr.id, false)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Closers Section - only for consórcio */}
+      {isConsorcio && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              Closers - {squadLabel}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {sdrsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : closerList.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Nenhum Closer cadastrado para {squadLabel}.
+                <p className="text-sm mt-2">
+                  Para adicionar um Closer, crie um SDR com role_type "closer" na BU Consórcio.
+                </p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead className="text-center">Nível</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-center">Ativo</TableHead>
+                    <TableHead className="text-center">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {closerList.map((sdr) => (
+                    <TableRow key={sdr.id}>
+                      <TableCell className="font-medium">{sdr.name}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{sdr.email || '-'}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="font-mono">N{sdr.nivel || 1}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center"><StatusBadge status={sdr.status} /></TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleToggleActive(sdr)}
+                          className={sdr.active ? "text-green-500" : "text-gray-400"}
+                          title={sdr.active ? "Desativar" : "Ativar"}
+                        >
+                          {sdr.active ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
+                        </Button>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <EditSdrDialog sdr={sdr} isCloserMode onSuccess={() => refetchSdrs()} />
+                          {isAdmin && sdr.status === 'PENDING' && (
+                            <>
+                              <Button size="sm" variant="ghost" className="text-green-500 hover:text-green-400" onClick={() => handleApproveSdr(sdr.id, true)}>
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-400" onClick={() => handleApproveSdr(sdr.id, false)}>
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            
+            <div className="mt-4 text-xs text-muted-foreground bg-muted/50 rounded-md p-3 border">
+              <strong>Metas de comissão:</strong> As metas individuais de cada Closer (Meta Comissão Consórcio e Holding) 
+              são configuradas na aba <strong>Planos OTE</strong>, no plano de compensação individual de cada profissional.
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Nota informativa */}
+      <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-3 border">
+        <strong>Vínculo automático:</strong> Ao criar um SDR com usuário vinculado, 
+        o sistema automaticamente atualiza o campo <code>sdr_id</code> no colaborador correspondente no RH.
+      </div>
+    </div>
   );
 }

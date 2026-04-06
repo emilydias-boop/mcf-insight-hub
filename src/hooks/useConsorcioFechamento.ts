@@ -225,7 +225,7 @@ async function buscarCompPlanVigente(sdrId: string, anoMes: string) {
   // Buscar plano vigente para o mês (vigencia_inicio <= mesStr AND (vigencia_fim IS NULL OR vigencia_fim >= mesStr))
   const { data } = await supabase
     .from('sdr_comp_plan')
-    .select('ote_total, fixo_valor, variavel_total')
+    .select('ote_total, fixo_valor, variavel_total, meta_comissao_consorcio, meta_comissao_holding')
     .eq('sdr_id', sdrId)
     .lte('vigencia_inicio', mesStr)
     .or(`vigencia_fim.is.null,vigencia_fim.gte.${mesStr}`)
@@ -304,13 +304,13 @@ export function useRecalculateConsorcioPayouts() {
           continue;
         }
         
-        // Usar metas existentes ou padrão
-        const meta_comissao_consorcio = existing?.meta_comissao_consorcio || 2000;
-        const meta_comissao_holding = existing?.meta_comissao_holding || 500;
+        // Buscar meta individual do comp plan, fallback para existente, depois padrão
+        const sdr = sdrByEmail.get(closerEmail);
+        let meta_comissao_consorcio = existing?.meta_comissao_consorcio || 2000;
+        let meta_comissao_holding = existing?.meta_comissao_holding || 500;
         const score_organizacao = existing?.score_organizacao || 100;
         
-        // 7. Buscar OTE individual do comp plan
-        const sdr = sdrByEmail.get(closerEmail);
+        // 7. Buscar OTE individual e metas do comp plan
         let ote_total = OTE_PADRAO_CONSORCIO.ote_total;
         let fixo_valor = ote_total * OTE_PADRAO_CONSORCIO.fixo_pct;
         let variavel_total = ote_total * OTE_PADRAO_CONSORCIO.variavel_pct;
@@ -321,6 +321,13 @@ export function useRecalculateConsorcioPayouts() {
             ote_total = compPlan.ote_total;
             fixo_valor = compPlan.fixo_valor;
             variavel_total = compPlan.variavel_total;
+            // Usar metas do comp plan se configuradas
+            if (compPlan.meta_comissao_consorcio) {
+              meta_comissao_consorcio = compPlan.meta_comissao_consorcio;
+            }
+            if (compPlan.meta_comissao_holding) {
+              meta_comissao_holding = compPlan.meta_comissao_holding;
+            }
           }
         }
         
