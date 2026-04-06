@@ -266,13 +266,33 @@ export function useRecalculateConsorcioPayouts() {
       
       const sdrByEmail = new Map((sdrs || []).map(s => [s.email.toLowerCase(), s]));
       
-      // 3. Buscar employees para verificar cargo (match por email)
+      // 3. Buscar employees para verificar cargo e cargo_catalogo_id (match por email)
       const { data: employees } = await supabase
         .from('employees')
-        .select('id, email_pessoal, cargo')
+        .select('id, email_pessoal, cargo, cargo_catalogo_id')
         .in('email_pessoal', emails);
       
       const cargoByEmail = new Map((employees || []).map(e => [e.email_pessoal?.toLowerCase(), e.cargo]));
+      const employeeByEmail = new Map((employees || []).map(e => [e.email_pessoal?.toLowerCase(), e]));
+      
+      // 3b. Buscar todos os cargos_catalogo relevantes para auto-sync
+      const catalogoIds = (employees || [])
+        .map(e => e.cargo_catalogo_id)
+        .filter((id): id is string => !!id);
+      
+      let cargoCatalogoMap = new Map<string, { fixo_valor: number; variavel_valor: number; ote_total: number }>();
+      if (catalogoIds.length > 0) {
+        const { data: catalogos } = await supabase
+          .from('cargos_catalogo')
+          .select('id, fixo_valor, variavel_valor, ote_total')
+          .in('id', catalogoIds);
+        
+        cargoCatalogoMap = new Map((catalogos || []).map(c => [c.id, {
+          fixo_valor: c.fixo_valor || 0,
+          variavel_valor: c.variavel_valor || 0,
+          ote_total: c.ote_total || 0,
+        }]));
+      }
       
       const results = [];
       
