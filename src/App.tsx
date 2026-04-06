@@ -214,9 +214,9 @@ const App = () => (
               <Route path="admin/automacoes" element={<RoleGuard allowedRoles={['admin']}><Automacoes /></RoleGuard>} />
               <Route path="admin/configuracao-bu" element={<RoleGuard allowedRoles={['admin', 'manager']}><ConfiguracaoBU /></RoleGuard>} />
               
-              <Route path="fechamento-sdr" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRList /></ResourceGuard>} />
-              <Route path="fechamento-sdr/configuracoes" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRConfiguracoes /></ResourceGuard>} />
-              <Route path="fechamento-sdr/:payoutId" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRDetail /></ResourceGuard>} />
+              <Route path="fechamento-sdr" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ResourceGuard resource="fechamento_sdr"><FechamentoSDRList /></ResourceGuard></RoleGuard>} />
+              <Route path="fechamento-sdr/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ResourceGuard resource="fechamento_sdr"><FechamentoSDRConfiguracoes /></ResourceGuard></RoleGuard>} />
+              <Route path="fechamento-sdr/:payoutId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ResourceGuard resource="fechamento_sdr"><FechamentoSDRDetail /></ResourceGuard></RoleGuard>} />
               <Route path="meu-fechamento" element={<RoleGuard allowedRoles={['sdr', 'closer']}><MeuFechamento /></RoleGuard>} />
               
               {/* BU Incorporador Routes */}
