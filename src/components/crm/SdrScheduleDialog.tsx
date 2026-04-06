@@ -36,6 +36,7 @@ export function SdrScheduleDialog({
   const navigate = useNavigate();
   const basePath = useCRMBasePath();
   const activeBU = useActiveBU();
+  const { user } = useAuth();
   const [showQuickSchedule, setShowQuickSchedule] = useState(false);
   const { data: closers = [] } = useClosersWithAvailability(activeBU);
   
