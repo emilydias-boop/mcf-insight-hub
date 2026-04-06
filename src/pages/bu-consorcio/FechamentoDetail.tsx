@@ -139,7 +139,7 @@ export default function ConsorcioFechamentoDetail() {
           
           <ConsorcioIndicatorCard
             label="Comissão Venda Holding"
-            peso={`${(PESOS_CLOSER_CONSORCIO.comissao_holding * 100).toFixed(0)}%`}
+            peso={`${(PESOS_PADRAO_CONSORCIO.comissao_holding * 100).toFixed(0)}%`}
             meta={payout.meta_comissao_holding || 0}
             realizado={payout.comissao_holding || 0}
             pct={payout.pct_comissao_holding || 0}
