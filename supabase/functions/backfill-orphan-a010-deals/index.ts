@@ -20,13 +20,13 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const dryRun = url.searchParams.get("dry_run") === "true";
   const limitParam = parseInt(url.searchParams.get("limit") || "30");
-  const monthsBack = parseInt(url.searchParams.get("months") || "2");
+  const monthsBack = parseInt(url.searchParams.get("months") || "1");
 
   const sinceDate = new Date();
   sinceDate.setMonth(sinceDate.getMonth() - monthsBack);
   const sinceDateStr = sinceDate.toISOString();
 
-  console.log(`🔍 Backfill orphan A010 (v3 - prioritized) | dry_run=${dryRun} | limit=${limitParam} | since=${sinceDateStr}`);
+  console.log(`🔍 Backfill orphan A010 (v4 - RPC) | dry_run=${dryRun} | limit=${limitParam} | since=${sinceDateStr}`);
 
   try {
     // 1. Find origin + stage
@@ -45,112 +45,27 @@ Deno.serve(async (req) => {
 
     const stageId = (stageRes.data || []).find((s: any) => s.origin_id === originId)?.id || null;
 
-    // 2. Get all A010 buyer emails from transactions
-    let a010Emails: string[] = [];
-    const PAGE_SIZE = 500;
-    let page = 0;
-    let hasMore = true;
+    // 2. Use RPC to get orphan emails in ~1 query (replaces 30s+ classification loop)
+    const { data: orphans, error: rpcError } = await supabase.rpc('get_a010_orphan_emails', {
+      p_origin_id: originId,
+      p_since: sinceDateStr,
+      p_limit: limitParam,
+    });
 
-    while (hasMore) {
-      const { data: txRows, error: txErr } = await supabase
-        .from('hubla_transactions')
-        .select('customer_email')
-        .eq('product_category', 'a010')
-        .eq('sale_status', 'completed')
-        .gte('created_at', sinceDateStr)
-        .not('customer_email', 'is', null)
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (txErr) { console.error("❌ tx error:", txErr.message); break; }
-      const emails = (txRows || []).map((t: any) => t.customer_email?.toLowerCase()).filter(Boolean);
-      a010Emails.push(...emails);
-      hasMore = (txRows || []).length === PAGE_SIZE;
-      page++;
-    }
-
-    const uniqueA010Emails = [...new Set(a010Emails)];
-    console.log(`📧 ${uniqueA010Emails.length} unique A010 buyer emails`);
-
-    if (uniqueA010Emails.length === 0) {
-      return new Response(JSON.stringify({ success: true, message: "No A010 transactions found", orphans: 0 }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" }
+    if (rpcError) {
+      console.error("❌ RPC error:", rpcError.message);
+      return new Response(JSON.stringify({ error: rpcError.message }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    // 3. For each email, check if ANY contact with that email has a deal in this origin
-    // Group contacts by email and classify
-    const emailsWithDeal = new Set<string>();
-    const emailToContacts = new Map<string, any[]>();
-    const CHUNK = 50;
+    console.log(`📧 RPC returned ${(orphans || []).length} orphan emails`);
 
-    for (let i = 0; i < uniqueA010Emails.length; i += CHUNK) {
-      const emailChunk = uniqueA010Emails.slice(i, i + CHUNK);
-
-      // Get all non-archived contacts for these emails
-      const { data: contacts } = await supabase
-        .from('crm_contacts')
-        .select('id, email, name, phone, created_at')
-        .in('email', emailChunk)
-        .eq('is_archived', false)
-        .order('created_at', { ascending: true });
-
-      if (!contacts || contacts.length === 0) continue;
-
-      // Group by email
-      for (const c of contacts) {
-        const em = c.email?.toLowerCase();
-        if (!em) continue;
-        if (!emailToContacts.has(em)) emailToContacts.set(em, []);
-        emailToContacts.get(em)!.push(c);
-      }
-
-      // Check which emails already have deals (via any contact)
-      const contactIds = contacts.map(c => c.id);
-      for (let j = 0; j < contactIds.length; j += 50) {
-        const batch = contactIds.slice(j, j + 50);
-        const { data: deals } = await supabase
-          .from('crm_deals')
-          .select('contact_id, crm_contacts!inner(email)')
-          .eq('origin_id', originId)
-          .in('contact_id', batch);
-
-        for (const d of (deals || [])) {
-          const dealEmail = (d as any).crm_contacts?.email?.toLowerCase();
-          if (dealEmail) emailsWithDeal.add(dealEmail);
-        }
-      }
+    if (!orphans || orphans.length === 0) {
+      return new Response(JSON.stringify({ success: true, message: "No orphans found", orphans: 0 }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
-
-    // Also check emails where the contact with deal might be a different contact_id
-    // (contact A has deal, contact B is orphan, same email)
-    for (let i = 0; i < uniqueA010Emails.length; i += CHUNK) {
-      const emailChunk = uniqueA010Emails.slice(i, i + CHUNK);
-      const { data: dealsViaEmail } = await supabase
-        .from('crm_deals')
-        .select('crm_contacts!inner(email)')
-        .eq('origin_id', originId)
-        .in('crm_contacts.email', emailChunk);
-
-      for (const d of (dealsViaEmail || [])) {
-        const em = (d as any).crm_contacts?.email?.toLowerCase();
-        if (em) emailsWithDeal.add(em);
-      }
-    }
-
-    // Classify
-    const trueOrphanEmails: string[] = [];
-    const duplicateEmails: string[] = [];
-
-    for (const [email, contacts] of emailToContacts.entries()) {
-      if (emailsWithDeal.has(email)) {
-        duplicateEmails.push(email);
-      } else {
-        trueOrphanEmails.push(email);
-      }
-    }
-
-    console.log(`✅ True orphans (no deal at all): ${trueOrphanEmails.length} emails`);
-    console.log(`🔄 Duplicates (email has deal elsewhere): ${duplicateEmails.length} emails`);
 
     const results = {
       deals_created: [] as string[],
@@ -158,14 +73,12 @@ Deno.serve(async (req) => {
       partners_skipped: [] as string[],
       errors: [] as string[],
     };
-    let processed = 0;
 
-    // ===== PHASE 1: True orphans — create deals =====
-    for (const email of trueOrphanEmails) {
-      if (processed >= limitParam) break;
-
-      const contacts = emailToContacts.get(email) || [];
-      if (contacts.length === 0) continue;
+    // 3. Process each orphan — create deal + distribute
+    for (const orphan of orphans) {
+      const email = orphan.email;
+      const contactId = orphan.contact_id;
+      const contactName = orphan.contact_name || 'Cliente';
 
       // Check if partner
       const { data: partnerTxs } = await supabase
@@ -183,134 +96,85 @@ Deno.serve(async (req) => {
 
       if (isPartner) {
         results.partners_skipped.push(email);
-        processed++;
         continue;
       }
 
-      // Pick oldest contact as primary
-      const primary = contacts[0]; // already sorted by created_at ASC
-
       if (dryRun) {
-        results.deals_created.push(`[DRY] ${email} (${primary.id})`);
-        // Archive duplicates
-        for (let k = 1; k < contacts.length; k++) {
-          results.duplicates_archived.push(`[DRY] ${email} (${contacts[k].id} → ${primary.id})`);
-        }
-      } else {
-        // Get owner
-        let ownerEmail: string | null = null;
-        let ownerProfileId: string | null = null;
-        const { data: nextOwner } = await supabase.rpc('get_next_lead_owner', { p_origin_id: originId });
-        if (nextOwner) {
-          ownerEmail = nextOwner;
-          const { data: profile } = await supabase
-            .from('profiles').select('id').ilike('email', nextOwner).limit(1).maybeSingle();
-          ownerProfileId = profile?.id || null;
-        }
+        results.deals_created.push(`[DRY] ${email} (${contactId})`);
+        continue;
+      }
 
-        const dealPayload = {
-          clint_id: `backfill-a010-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          name: `${primary.name || 'Cliente'} - A010`,
-          contact_id: primary.id,
-          origin_id: originId,
-          stage_id: stageId,
-          value: 0,
-          owner_id: ownerEmail,
-          owner_profile_id: ownerProfileId,
-          tags: ['A010', 'Backfill'],
-          custom_fields: { source: 'backfill', backfill_date: new Date().toISOString() },
-          data_source: 'webhook',
-        };
+      // Get owner via round-robin
+      let ownerEmail: string | null = null;
+      let ownerProfileId: string | null = null;
+      const { data: nextOwner } = await supabase.rpc('get_next_lead_owner', { p_origin_id: originId });
+      if (nextOwner) {
+        ownerEmail = nextOwner;
+        const { data: profile } = await supabase
+          .from('profiles').select('id').ilike('email', nextOwner).limit(1).maybeSingle();
+        ownerProfileId = profile?.id || null;
+      }
 
-        const { data: newDeal, error: dealError } = await supabase
-          .from('crm_deals')
-          .insert(dealPayload)
-          .select('id')
-          .maybeSingle();
+      const dealPayload = {
+        clint_id: `backfill-a010-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: `${contactName} - A010`,
+        contact_id: contactId,
+        origin_id: originId,
+        stage_id: stageId,
+        value: 0,
+        owner_id: ownerEmail,
+        owner_profile_id: ownerProfileId,
+        tags: ['A010', 'Backfill'],
+        custom_fields: { source: 'backfill', backfill_date: new Date().toISOString() },
+        data_source: 'webhook',
+      };
 
-        if (dealError) {
-          results.errors.push(`${email}: ${dealError.message}`);
-        } else if (!newDeal) {
-          results.errors.push(`${email}: upsert skip (already exists)`);
+      const { data: newDeal, error: dealError } = await supabase
+        .from('crm_deals')
+        .insert(dealPayload)
+        .select('id')
+        .maybeSingle();
+
+      if (dealError) {
+        if (dealError.message.includes('duplicate') || dealError.message.includes('unique')) {
+          results.errors.push(`${email}: skip (already exists)`);
         } else {
-          results.deals_created.push(`${email} → deal ${newDeal.id} → ${ownerEmail}`);
-          if (newDeal.id && ownerEmail) {
-            await supabase.from('deal_activities').insert({
-              deal_id: newDeal.id,
-              activity_type: 'owner_change',
-              description: `Lead A010 (backfill) distribuído para ${ownerEmail}`,
-              metadata: { owner_email: ownerEmail, source: 'backfill-orphan-a010' },
-            });
-          }
+          results.errors.push(`${email}: ${dealError.message}`);
         }
-
-        // Archive duplicate contacts of same email
-        for (let k = 1; k < contacts.length; k++) {
-          await supabase.from('crm_contacts').update({
-            is_archived: true,
-            merged_into_contact_id: primary.id,
-          }).eq('id', contacts[k].id);
-          results.duplicates_archived.push(`${email} (${contacts[k].id} → ${primary.id})`);
+      } else if (newDeal) {
+        results.deals_created.push(`${email} → deal ${newDeal.id} → ${ownerEmail}`);
+        if (newDeal.id && ownerEmail) {
+          await supabase.from('deal_activities').insert({
+            deal_id: newDeal.id,
+            activity_type: 'owner_change',
+            description: `Lead A010 (backfill) distribuído para ${ownerEmail}`,
+            metadata: { owner_email: ownerEmail, source: 'backfill-orphan-a010' },
+          });
         }
       }
-      processed++;
-    }
 
-    // ===== PHASE 2: Duplicate orphans — just archive =====
-    for (const email of duplicateEmails) {
-      if (processed >= limitParam) break;
+      // Archive duplicate contacts with same email (keep the one we used)
+      const { data: dupes } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', email)
+        .eq('is_archived', false)
+        .neq('id', contactId);
 
-      const contacts = emailToContacts.get(email) || [];
-      if (contacts.length === 0) continue;
-
-      // Find the contact that has the deal
-      let primaryId: string | null = null;
-      for (const c of contacts) {
-        const { data: hasDeal } = await supabase
-          .from('crm_deals')
-          .select('id')
-          .eq('origin_id', originId)
-          .eq('contact_id', c.id)
-          .limit(1)
-          .maybeSingle();
-        if (hasDeal) { primaryId = c.id; break; }
+      for (const dupe of (dupes || [])) {
+        await supabase.from('crm_contacts').update({
+          is_archived: true,
+          merged_into_contact_id: contactId,
+        }).eq('id', dupe.id);
+        results.duplicates_archived.push(`${email} (${dupe.id} → ${contactId})`);
       }
-
-      // If no contact in our list has the deal, find it externally
-      if (!primaryId) {
-        const { data: extContact } = await supabase
-          .from('crm_contacts')
-          .select('id, crm_deals!inner(id)')
-          .ilike('email', email)
-          .eq('crm_deals.origin_id', originId)
-          .limit(1)
-          .maybeSingle();
-        primaryId = extContact?.id || null;
-      }
-
-      if (!primaryId) continue;
-
-      for (const c of contacts) {
-        if (c.id === primaryId) continue;
-        if (!dryRun) {
-          await supabase.from('crm_contacts').update({
-            is_archived: true,
-            merged_into_contact_id: primaryId,
-          }).eq('id', c.id);
-        }
-        results.duplicates_archived.push(`${dryRun ? '[DRY] ' : ''}${email} (${c.id} → ${primaryId})`);
-      }
-      processed++;
     }
 
     const result = {
       success: true,
       dry_run: dryRun,
       since: sinceDateStr,
-      a010_buyer_emails: uniqueA010Emails.length,
-      true_orphan_emails: trueOrphanEmails.length,
-      duplicate_emails: duplicateEmails.length,
-      processed,
+      orphans_from_rpc: orphans.length,
       deals_created: results.deals_created.length,
       duplicates_archived: results.duplicates_archived.length,
       partners_skipped: results.partners_skipped.length,
