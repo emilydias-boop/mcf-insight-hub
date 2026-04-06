@@ -7,6 +7,7 @@ import { SdrIndicatorCard } from "@/components/sdr-fechamento/SdrIndicatorCard";
 import { SdrAdjustmentForm } from "@/components/sdr-fechamento/SdrAdjustmentForm";
 import { KpiEditForm } from "@/components/sdr-fechamento/KpiEditForm";
 import { IntermediacoesList } from "@/components/sdr-fechamento/IntermediacoesList";
+import { CloserContractsList } from "@/components/sdr-fechamento/CloserContractsList";
 import { NoShowIndicator } from "@/components/sdr-fechamento/NoShowIndicator";
 import { ManualPayoutForm } from "@/components/sdr-fechamento/ManualPayoutForm";
 import { DynamicIndicatorsGrid } from "@/components/fechamento/DynamicIndicatorCard";
