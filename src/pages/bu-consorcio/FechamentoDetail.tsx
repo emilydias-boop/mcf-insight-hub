@@ -1,67 +1,79 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle, Lock, Loader2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import {
+  ArrowLeft,
+  Check,
+  Lock,
+  Unlock,
+  Download,
+  Target,
+  Wallet,
+  DollarSign,
+  CreditCard,
+  RefreshCw,
+  User,
+} from 'lucide-react';
 import { formatCurrency, formatDateTime } from '@/lib/formatters';
 import { ConsorcioStatusBadge } from '@/components/consorcio-fechamento/ConsorcioStatusBadge';
-import { ConsorcioPayoutSummary } from '@/components/consorcio-fechamento/ConsorcioPayoutSummary';
-import { ConsorcioIndicatorCard } from '@/components/consorcio-fechamento/ConsorcioIndicatorCard';
-import { ConsorcioKpiForm } from '@/components/consorcio-fechamento/ConsorcioKpiForm';
+import { ConsorcioKpiEditForm } from '@/components/consorcio-fechamento/ConsorcioKpiEditForm';
 import { ConsorcioAjusteForm } from '@/components/consorcio-fechamento/ConsorcioAjusteForm';
-import { 
-  useConsorcioPayoutDetail, 
+import { ConsorcioIndicatorCard } from '@/components/consorcio-fechamento/ConsorcioIndicatorCard';
+import {
+  useConsorcioPayoutDetail,
   useUpdateConsorcioPayoutKpi,
   useUpdateConsorcioPayoutStatus,
   useAddConsorcioAjuste,
 } from '@/hooks/useConsorcioFechamento';
-import { PESOS_PADRAO_CONSORCIO } from '@/types/consorcio-fechamento';
-import { useState } from 'react';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AjusteConsorcio } from '@/types/consorcio-fechamento';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function ConsorcioFechamentoDetail() {
   const { payoutId } = useParams<{ payoutId: string }>();
   const navigate = useNavigate();
-  const [showApproveDialog, setShowApproveDialog] = useState(false);
-  const [showLockDialog, setShowLockDialog] = useState(false);
+  const { user, role } = useAuth();
 
   const { data: payout, isLoading } = useConsorcioPayoutDetail(payoutId || '');
   const updateKpi = useUpdateConsorcioPayoutKpi();
   const updateStatus = useUpdateConsorcioPayoutStatus();
   const addAjuste = useAddConsorcioAjuste();
 
+  const isAdmin = role === 'admin';
+  const isManager = role === 'manager' || role === 'coordenador';
+  const canEdit = (isAdmin || isManager) && payout?.status !== 'LOCKED';
+  const canReopen = isAdmin && payout?.status === 'LOCKED';
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (!payout) {
     return (
-      <div className="container mx-auto p-6">
-        <p className="text-center text-muted-foreground">Fechamento não encontrado.</p>
-        <div className="flex justify-center mt-4">
-          <Button variant="outline" onClick={() => navigate('/consorcio/fechamento')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Voltar
-          </Button>
-        </div>
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">Fechamento não encontrado.</p>
+        <Button variant="outline" className="mt-4" onClick={() => navigate('/consorcio/fechamento')}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Voltar
+        </Button>
       </div>
     );
   }
 
-  const isLocked = payout.status === 'LOCKED';
-  const isApproved = payout.status === 'APPROVED';
-
   const handleApprove = () => {
     updateStatus.mutate({ payoutId: payout.id, status: 'APPROVED' });
-    setShowApproveDialog(false);
   };
 
   const handleLock = () => {
     updateStatus.mutate({ payoutId: payout.id, status: 'LOCKED' });
-    setShowLockDialog(false);
+  };
+
+  const handleReopen = () => {
+    updateStatus.mutate({ payoutId: payout.id, status: 'DRAFT' });
   };
 
   const handleSaveKpi = (data: Parameters<typeof updateKpi.mutate>[0]['data']) => {
@@ -72,63 +84,180 @@ export default function ConsorcioFechamentoDetail() {
     addAjuste.mutate({ payoutId: payout.id, ajuste });
   };
 
+  const handleExport = () => {
+    const name = payout.closer?.name || 'Closer';
+    const adjustments = payout.ajustes_json || [];
+    const lines = [
+      `FECHAMENTO CONSÓRCIO - ${name}`,
+      `Período: ${payout.ano_mes}`,
+      `Status: ${payout.status}`,
+      '',
+      '=== RESUMO FINANCEIRO ===',
+      `OTE Total;${payout.ote_total}`,
+      `Fixo;${payout.fixo_valor}`,
+      `Variável;${payout.valor_variavel_final || 0}`,
+      `Total Conta;${payout.total_conta || 0}`,
+      '',
+      '=== INDICADORES ===',
+      'Indicador;Meta;Realizado;%;Mult;Valor',
+      `Comissão Consórcio;${payout.meta_comissao_consorcio || 0};${payout.comissao_consorcio};${(payout.pct_comissao_consorcio || 0).toFixed(1)}%;${payout.mult_comissao_consorcio || 0}x;${payout.valor_comissao_consorcio || 0}`,
+      `Comissão Holding;${payout.meta_comissao_holding || 0};${payout.comissao_holding};${(payout.pct_comissao_holding || 0).toFixed(1)}%;${payout.mult_comissao_holding || 0}x;${payout.valor_comissao_holding || 0}`,
+      `Organização;100;${payout.score_organizacao};${(payout.pct_organizacao || 0).toFixed(1)}%;${payout.mult_organizacao || 0}x;${payout.valor_organizacao || 0}`,
+      '',
+    ];
+
+    if (adjustments.length > 0) {
+      lines.push('=== AJUSTES ===');
+      lines.push('Tipo;Descrição;Valor;Data');
+      adjustments.forEach((aj: AjusteConsorcio) => {
+        lines.push(`${aj.tipo};${aj.descricao};${aj.valor};${aj.data}`);
+      });
+    }
+
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `fechamento-consorcio-${name.replace(/\s+/g, '-').toLowerCase()}-${payout.ano_mes}.csv`;
+    link.click();
+  };
+
+  const adjustments = payout.ajustes_json || [];
+
+  // Compute peso labels from the payout values
+  const variavelTotal = payout.variavel_total || 0;
+  const pesoConsorcio = variavelTotal > 0 && payout.mult_comissao_consorcio != null
+    ? ((payout.valor_comissao_consorcio || 0) / (variavelTotal * (payout.mult_comissao_consorcio || 1)) * 100) || 0
+    : 90;
+  const pesoHolding = variavelTotal > 0 && payout.mult_comissao_holding != null
+    ? ((payout.valor_comissao_holding || 0) / (variavelTotal * (payout.mult_comissao_holding || 1)) * 100) || 0
+    : 0;
+  const pesoOrg = variavelTotal > 0 && payout.mult_organizacao != null
+    ? ((payout.valor_organizacao || 0) / (variavelTotal * (payout.mult_organizacao || 1)) * 100) || 0
+    : 10;
+
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/consorcio/fechamento')}>
-            <ArrowLeft className="h-5 w-5" />
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/consorcio/fechamento')}>
+            <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold flex items-center gap-2">
               {payout.closer?.color && (
-                <div 
-                  className="w-4 h-4 rounded-full" 
+                <div
+                  className="w-3.5 h-3.5 rounded-full"
                   style={{ backgroundColor: payout.closer.color }}
                 />
               )}
-              <h1 className="text-2xl font-bold">{payout.closer?.name}</h1>
+              {payout.closer?.name || 'Closer'}
               <ConsorcioStatusBadge status={payout.status} />
-            </div>
-            <p className="text-muted-foreground">
+              <Badge variant="secondary" className="text-xs">
+                <User className="h-3 w-3 mr-1" />
+                Closer Consórcio
+              </Badge>
+            </h1>
+            <p className="text-sm text-muted-foreground">
               Fechamento de {payout.ano_mes}
             </p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
-          {!isApproved && !isLocked && (
-            <Button onClick={() => setShowApproveDialog(true)}>
-              <CheckCircle className="h-4 w-4 mr-2" />
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            <Download className="h-3.5 w-3.5 mr-1.5" />
+            Exportar
+          </Button>
+
+          {canEdit && payout.status === 'DRAFT' && (
+            <Button size="sm" onClick={handleApprove} disabled={updateStatus.isPending}>
+              <Check className="h-3.5 w-3.5 mr-1.5" />
               Aprovar
             </Button>
           )}
-          {isApproved && !isLocked && (
-            <Button variant="outline" onClick={() => setShowLockDialog(true)}>
-              <Lock className="h-4 w-4 mr-2" />
-              Travar
+
+          {canEdit && payout.status === 'APPROVED' && (
+            <Button size="sm" onClick={handleLock} disabled={updateStatus.isPending}>
+              <Lock className="h-3.5 w-3.5 mr-1.5" />
+              Travar Mês
+            </Button>
+          )}
+
+          {canReopen && (
+            <Button variant="outline" size="sm" onClick={handleReopen} disabled={updateStatus.isPending}>
+              <Unlock className="h-3.5 w-3.5 mr-1.5" />
+              Reabrir
             </Button>
           )}
         </div>
       </div>
 
-      {/* Summary */}
-      <ConsorcioPayoutSummary
-        ote={payout.ote_total || 0}
-        fixo={payout.fixo_valor || 0}
-        variavel={payout.valor_variavel_final || 0}
-        totalConta={payout.total_conta || 0}
-      />
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
+              <Target className="h-3.5 w-3.5" />
+              OTE Total
+            </div>
+            <div className="text-xl font-bold mt-1">{formatCurrency(payout.ote_total || 0)}</div>
+          </CardContent>
+        </Card>
 
-      {/* Indicators */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Indicadores de Meta</h2>
-        
-        <div className="grid gap-4">
+        <Card>
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
+              <Wallet className="h-3.5 w-3.5" />
+              Fixo
+            </div>
+            <div className="text-xl font-bold mt-1">{formatCurrency(payout.fixo_valor || 0)}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
+              <DollarSign className="h-3.5 w-3.5" />
+              Variável
+            </div>
+            <div className="text-xl font-bold mt-1 text-primary">
+              {formatCurrency(payout.valor_variavel_final || 0)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-primary/10 border-primary/20">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-1.5 text-primary text-xs">
+              <CreditCard className="h-3.5 w-3.5" />
+              Total Conta
+            </div>
+            <div className="text-xl font-bold mt-1 text-primary">
+              {formatCurrency(payout.total_conta || 0)}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* KPI Edit Form */}
+      {canEdit && (
+        <ConsorcioKpiEditForm
+          payout={payout}
+          disabled={!canEdit}
+          onSave={handleSaveKpi}
+          isSaving={updateKpi.isPending}
+        />
+      )}
+
+      {/* Indicator Cards */}
+      <div>
+        <h2 className="text-sm font-semibold mb-3">Indicadores de Meta</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <ConsorcioIndicatorCard
             label="Comissão Venda Consórcio"
-            peso={`${(PESOS_PADRAO_CONSORCIO.comissao_consorcio * 100).toFixed(0)}%`}
+            peso="90%"
             meta={payout.meta_comissao_consorcio || 0}
             realizado={payout.comissao_consorcio || 0}
             pct={payout.pct_comissao_consorcio || 0}
@@ -136,10 +265,10 @@ export default function ConsorcioFechamentoDetail() {
             valorFinal={payout.valor_comissao_consorcio || 0}
             tipo="currency"
           />
-          
+
           <ConsorcioIndicatorCard
             label="Comissão Venda Holding"
-            peso={`${(PESOS_PADRAO_CONSORCIO.comissao_holding * 100).toFixed(0)}%`}
+            peso="0%"
             meta={payout.meta_comissao_holding || 0}
             realizado={payout.comissao_holding || 0}
             pct={payout.pct_comissao_holding || 0}
@@ -147,10 +276,10 @@ export default function ConsorcioFechamentoDetail() {
             valorFinal={payout.valor_comissao_holding || 0}
             tipo="currency"
           />
-          
+
           <ConsorcioIndicatorCard
             label="Organização"
-            peso={`${(PESOS_PADRAO_CONSORCIO.organizacao * 100).toFixed(0)}%`}
+            peso="10%"
             meta={payout.meta_organizacao || 100}
             realizado={payout.score_organizacao || 0}
             pct={payout.pct_organizacao || 0}
@@ -161,94 +290,64 @@ export default function ConsorcioFechamentoDetail() {
         </div>
       </div>
 
-      {/* Edit KPIs */}
-      {!isLocked && (
-        <ConsorcioKpiForm
-          initialData={{
-            comissao_consorcio: payout.comissao_consorcio || 0,
-            comissao_holding: payout.comissao_holding || 0,
-            score_organizacao: payout.score_organizacao || 100,
-            meta_comissao_consorcio: payout.meta_comissao_consorcio || undefined,
-            meta_comissao_holding: payout.meta_comissao_holding || undefined,
-          }}
-          onSave={handleSaveKpi}
-          isLoading={updateKpi.isPending}
-          disabled={isLocked}
-        />
-      )}
+      {/* Adjustments */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-sm font-semibold">Ajustes Manuais</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {canEdit ? (
+              <ConsorcioAjusteForm
+                onAdd={handleAddAjuste}
+                isLoading={addAjuste.isPending}
+                disabled={!canEdit}
+              />
+            ) : (
+              <p className="text-muted-foreground/70 text-xs">Fechamento travado.</p>
+            )}
+          </CardContent>
+        </Card>
 
-      {/* Ajustes */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Ajustes</h2>
-        
-        {payout.ajustes_json && payout.ajustes_json.length > 0 ? (
-          <Card>
-            <CardContent className="p-4">
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-sm font-semibold">Histórico de Ajustes</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {adjustments.length === 0 ? (
+              <p className="text-muted-foreground/70 text-xs">Nenhum ajuste registrado.</p>
+            ) : (
               <div className="space-y-2">
-                {payout.ajustes_json.map((aj, idx) => (
-                  <div key={idx} className="flex items-center justify-between py-2 border-b last:border-0">
+                {adjustments.map((aj, idx) => (
+                  <div key={idx} className="flex items-start justify-between p-2.5 rounded-lg bg-muted/50">
                     <div>
-                      <p className="font-medium">{aj.descricao}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <div className="text-sm font-medium">{aj.descricao}</div>
+                      <div className="text-[10px] text-muted-foreground/60 mt-0.5">
                         {formatDateTime(aj.data)}
-                      </p>
+                      </div>
                     </div>
-                    <p className={aj.tipo === 'bonus' ? 'text-green-400' : 'text-red-400'}>
+                    <div className={`text-sm font-bold ${aj.tipo === 'bonus' ? 'text-green-400' : 'text-red-400'}`}>
                       {aj.tipo === 'bonus' ? '+' : '-'}{formatCurrency(aj.valor)}
-                    </p>
+                    </div>
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <p className="text-sm text-muted-foreground">Nenhum ajuste registrado.</p>
-        )}
-        
-        {!isLocked && (
-          <ConsorcioAjusteForm
-            onAdd={handleAddAjuste}
-            isLoading={addAjuste.isPending}
-            disabled={isLocked}
-          />
-        )}
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Approve Dialog */}
-      <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Aprovar Fechamento</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você está prestes a aprovar o fechamento de {payout.closer?.name} 
-              no valor de {formatCurrency(payout.total_conta || 0)}.
-              Deseja continuar?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleApprove}>Aprovar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Lock Dialog */}
-      <AlertDialog open={showLockDialog} onOpenChange={setShowLockDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Travar Fechamento</AlertDialogTitle>
-            <AlertDialogDescription>
-              Ao travar o fechamento, nenhuma alteração poderá ser feita.
-              Essa ação não pode ser desfeita facilmente.
-              Deseja continuar?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleLock}>Travar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Approval Info */}
+      {payout.aprovado_em && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Check className="h-4 w-4 text-green-400" />
+              Aprovado em {formatDateTime(payout.aprovado_em)}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
