@@ -31,6 +31,7 @@ import { ConsorcioSdrSummaryTable } from "@/components/sdr/ConsorcioSdrSummaryTa
 import { useConsorcioPipelineMetricsBySdr } from "@/hooks/useConsorcioPipelineMetricsBySdr";
 import { useConsorcioProdutosFechadosBySdr } from "@/hooks/useConsorcioProdutosFechadosBySdr";
 import { useConsorcioProdutosFechadosByCloser } from "@/hooks/useConsorcioProdutosFechadosByCloser";
+import { useConsorcioPipelineMetricsByCloser } from "@/hooks/useConsorcioPipelineMetricsByCloser";
 import { ConsorcioCloserSummaryTable } from "@/components/sdr/ConsorcioCloserSummaryTable";
 import { PipelineSelector } from "@/components/crm/PipelineSelector";
 
@@ -330,6 +331,7 @@ export default function ConsorcioPainelEquipe() {
   const { data: propostasData } = useConsorcioPipelineMetricsBySdr(start, end);
   const { data: produtosFechadosBySdr } = useConsorcioProdutosFechadosBySdr(start, end);
   const { data: produtosFechadosByCloser } = useConsorcioProdutosFechadosByCloser(start, end);
+  const { data: propostasByCloser } = useConsorcioPipelineMetricsByCloser(start, end);
   
   // Consórcio team targets
   const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
@@ -763,7 +765,7 @@ export default function ConsorcioPainelEquipe() {
             <ConsorcioCloserSummaryTable
               data={closerMetrics}
               isLoading={closerLoading}
-              propostasEnviadasByCloser={propostasData}
+              propostasEnviadasByCloser={propostasByCloser}
               propostasFechadasByCloser={produtosFechadosByCloser}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
                 const params = new URLSearchParams();
