@@ -765,7 +765,7 @@ export default function ConsorcioPainelEquipe() {
             <ConsorcioCloserSummaryTable
               data={closerMetrics}
               isLoading={closerLoading}
-              propostasEnviadasByCloser={propostasData}
+              propostasEnviadasByCloser={propostasByCloser}
               propostasFechadasByCloser={produtosFechadosByCloser}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
                 const params = new URLSearchParams();
