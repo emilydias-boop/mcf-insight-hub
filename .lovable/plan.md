@@ -1,52 +1,43 @@
 
 
-# Corrigir "Meu Fechamento" para Closers Consórcio
+# Corrigir meta de contratos da Thayna (N2 = 35%, não 30%)
 
 ## Diagnóstico
 
-Victoria tem dois registros de payout em tabelas diferentes:
+Dois problemas combinados causam o erro:
 
-| Tabela | Mês 2026-03 | Status |
-|--------|------------|--------|
-| `sdr_month_payout` | R$ 3.430 | **DRAFT** |
-| `consorcio_closer_payout` | R$ 7.945 | **LOCKED** |
+### Problema 1: Métricas não configuradas para abril 2026
+A tabela `fechamento_metricas_mes` tem configurações para o cargo "Closer Inside N2" apenas até março. Para abril (2026-04), não existe nenhuma linha. O hook `useActiveMetricsForSdr` retorna métricas padrão (fallback), que não incluem `meta_percentual`.
 
-O hook `useOwnFechamento` só consulta `sdr_month_payout`. Como o registro lá está DRAFT, a tela filtra com `visiblePayout = null` e mostra "Nenhum fechamento encontrado".
+### Problema 2: Fallback hardcoded em 30%
+Quando `meta_percentual` é null, o `KpiEditForm` usa `(isCloser ? 30 : undefined)` — sempre 30%, ignorando o nível do closer.
 
-O fechamento real da Victoria (LOCKED, R$ 7.945) está em `consorcio_closer_payout` — e a página "Meu Fechamento" simplesmente não sabe que essa tabela existe.
+```text
+Fluxo atual:
+  Mês sem config → fallback defaults (sem meta_percentual) → KpiEditForm hardcode 30%
 
-Adicionalmente, `sdr.user_id` da Victoria é `null`, então o hook nem encontra o registro pelo `user_id` (precisa do fallback por email).
+Fluxo correto:
+  Mês sem config → busca config do mês anterior → meta_percentual = 35% (N2)
+  OU
+  Fallback → busca nivel do cargo → N2 = 35%
+```
 
 ## Solução
 
-### 1. Atualizar `src/hooks/useOwnFechamento.ts`
+### Arquivo 1: `src/hooks/useActiveMetricsForSdr.ts`
+- Quando não encontrar métricas para o `ano_mes` solicitado, buscar do mês mais recente disponível para o mesmo `cargo_catalogo_id`
+- Isso garante que ao criar um novo mês de fechamento, as configurações de métricas (incluindo `meta_percentual`) sejam herdadas
 
-Para closers do squad `consorcio`, adicionar uma query ao `consorcio_closer_payout`:
-- Buscar o closer_id via tabela `closers` (pelo email do SDR)
-- Consultar `consorcio_closer_payout` filtrado por `closer_id` + `ano_mes`
-- Se encontrar um payout consórcio com status != DRAFT, usar esse como payout principal
-- Mapear os campos do `consorcio_closer_payout` para o formato `SdrPayoutWithDetails` que a tela espera (OTE, fixo, variável, total_conta, status, etc.)
-- Prioridade: consórcio payout > sdr payout (para closers consórcio)
+### Arquivo 2: `src/components/sdr-fechamento/KpiEditForm.tsx`
+- Substituir o fallback hardcoded `(isCloser ? 30 : undefined)` por uma lógica baseada no nível do cargo:
+  - N1 = 30%, N2 = 35%, N3 = 40%
+- Buscar o nível do `cargos_catalogo` via `cargo_catalogo_id` do comp plan
 
-### 2. Atualizar `src/pages/fechamento-sdr/MeuFechamento.tsx`
-
-- Quando o payout vem do consórcio, o botão "Ver Detalhes" deve navegar para `/consorcio/fechamento/{id}` em vez de `/fechamento-sdr/{id}`
-- Adicionar flag `isConsorcioPayout` no retorno do hook para distinguir a rota
-- O `SdrStatusBadge` já suporta os mesmos status (DRAFT/APPROVED/LOCKED)
-
-### 3. Vincular `user_id` no registro da Victoria
-
-- A `sdr.user_id` da Victoria é null. Isso impede o hook de encontrá-la pelo método primário
-- Corrigir via migration: `UPDATE sdr SET user_id = '5a702a6c-...' WHERE email = 'victoria.paz@minhacasafinanciada.com'`
-- Isso resolve também para outros closers consórcio que possam ter `user_id` null
-
-## Arquivos alterados
-1. `src/hooks/useOwnFechamento.ts` — query adicional para `consorcio_closer_payout`
-2. `src/pages/fechamento-sdr/MeuFechamento.tsx` — rota dinâmica para detalhes
-3. Migration SQL — vincular user_id da Victoria
+### Arquivo 3: `supabase/functions/recalculate-sdr-payout/index.ts`
+- Mesma correção no fallback do servidor: quando `meta_percentual` é null, usar o nível do cargo para determinar a porcentagem correta em vez de hardcodar 30%
 
 ## Resultado esperado
-- Victoria acessa "Meu Fechamento", seleciona março 2026, e vê seu fechamento LOCKED de R$ 7.945
-- Botão "Ver Detalhes" abre `/consorcio/fechamento/3da8c2b3-...`
-- NFSe e demais funcionalidades funcionam normalmente
+- Thayna (Closer Inside N2) aparece com "Meta: 35% de X Realizadas" em todos os meses
+- Novos meses de fechamento herdam as configurações de métricas do mês anterior
+- O recálculo no servidor também usa 35% para N2
 
