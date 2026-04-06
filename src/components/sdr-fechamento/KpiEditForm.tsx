@@ -27,6 +27,7 @@ interface KpiEditFormProps {
   metaContratosDiaria?: number;
   vendasParceria?: number;
   metaContratosPercentual?: number; // Novo: % das Realizadas para meta de contratos
+  cargoNivel?: number | null; // Nível do cargo (1=N1, 2=N2, 3=N3) para fallback de meta_percentual
   closerAgendaMetrics?: { r1_alocadas: number; r1_realizadas: number; contratos_pagos: number; no_shows: number; vendas_parceria: number; r2_agendadas: number };
 }
 
@@ -45,6 +46,7 @@ export const KpiEditForm = ({
   metaContratosDiaria = 1,
   vendasParceria = 0,
   metaContratosPercentual,
+  cargoNivel,
   closerAgendaMetrics,
 }: KpiEditFormProps) => {
   const isCloser = roleType === 'closer';
@@ -74,7 +76,13 @@ export const KpiEditForm = ({
 
   // Meta de contratos para Closer - dinâmica se metaContratosPercentual está configurado
   const realizadasAtual = kpi?.reunioes_realizadas || closerAgendaMetrics?.r1_realizadas || agendaMetrics.data?.r1_realizada || 0;
-  const effectiveMetaContratosPercentual = metaContratosPercentual || (isCloser ? 30 : undefined);
+  // Fallback baseado no nível do cargo: N1=30%, N2=35%, N3=40%
+  const getDefaultPercentualByNivel = (nivel?: number | null): number => {
+    if (nivel === 3) return 40;
+    if (nivel === 2) return 35;
+    return 30; // N1 ou padrão
+  };
+  const effectiveMetaContratosPercentual = metaContratosPercentual || (isCloser ? getDefaultPercentualByNivel(cargoNivel) : undefined);
   const metaContratosCalculada = effectiveMetaContratosPercentual && effectiveMetaContratosPercentual > 0
     ? Math.round((realizadasAtual * effectiveMetaContratosPercentual) / 100)
     : metaContratosDiaria * diasUteisMes;
