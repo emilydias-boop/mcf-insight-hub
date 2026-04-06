@@ -304,9 +304,10 @@ export function useRecalculateConsorcioPayouts() {
           continue;
         }
         
-        // Usar metas existentes ou padrão
-        const meta_comissao_consorcio = existing?.meta_comissao_consorcio || 2000;
-        const meta_comissao_holding = existing?.meta_comissao_holding || 500;
+        // Buscar meta individual do comp plan, fallback para existente, depois padrão
+        const sdr = sdrByEmail.get(closerEmail);
+        let meta_comissao_consorcio = existing?.meta_comissao_consorcio || 2000;
+        let meta_comissao_holding = existing?.meta_comissao_holding || 500;
         const score_organizacao = existing?.score_organizacao || 100;
         
         // 7. Buscar OTE individual do comp plan
