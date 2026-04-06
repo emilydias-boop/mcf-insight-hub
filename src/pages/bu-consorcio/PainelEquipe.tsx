@@ -331,6 +331,7 @@ export default function ConsorcioPainelEquipe() {
   const { data: propostasData } = useConsorcioPipelineMetricsBySdr(start, end);
   const { data: produtosFechadosBySdr } = useConsorcioProdutosFechadosBySdr(start, end);
   const { data: produtosFechadosByCloser } = useConsorcioProdutosFechadosByCloser(start, end);
+  const { data: propostasByCloser } = useConsorcioPipelineMetricsByCloser(start, end);
   
   // Consórcio team targets
   const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
