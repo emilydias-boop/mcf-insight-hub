@@ -540,7 +540,7 @@ export function QuickScheduleModal({
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Digite o nome do lead..."
+                  placeholder="Nome, email ou telefone..."
                   value={nameQuery}
                   onChange={(e) => {
                     setNameQuery(e.target.value);
