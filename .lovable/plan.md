@@ -1,27 +1,18 @@
 
 
-# Adicionar botão de remover ajuste no fechamento Consórcio
+# Corrigir step dos campos de remuneração no Cargo
 
 ## Problema
-Atualmente o histórico de ajustes só exibe os itens, sem opção de removê-los. O usuário precisa poder excluir um ajuste adicionado por engano.
+Os inputs "Fixo (R$)" e "Variável (R$)" no `CargoFormDialog` usam `step={100}`, forçando validação nativa do browser para aceitar apenas múltiplos de 100. Valores como R$ 3.150 ou R$ 1.350 são rejeitados.
 
 ## Solução
 
-### Arquivo 1: `src/hooks/useConsorcioFechamento.ts`
-Criar hook `useRemoveConsorcioAjuste()`:
-- Busca o payout atual e seu `ajustes_json`
-- Remove o ajuste pelo índice
-- Recalcula `bonus_extra` e `total_conta` subtraindo o valor do ajuste removido
-- Atualiza o registro no Supabase
-- Invalida queries relevantes
+### Arquivo: `src/components/hr/config/CargoFormDialog.tsx`
+- Linha 451: alterar `step={100}` para `step={0.01}` (ou `step="any"`) no input de `fixo_valor`
+- Linha ~471: mesma alteração no input de `variavel_valor`
 
-### Arquivo 2: `src/pages/bu-consorcio/FechamentoDetail.tsx`
-- Importar o novo hook e o ícone `Trash2`
-- No histórico de ajustes, adicionar um botão de lixeira ao lado de cada item (visível apenas quando `canEdit`)
-- Ao clicar, chamar `removeAjuste.mutate({ payoutId, index })`
+Isso permite qualquer valor decimal, mantendo a validação `min={0}` do Zod.
 
 ## Resultado esperado
-- Cada ajuste no histórico terá um ícone de lixeira clicável
-- Ao remover, o `total_conta` e `bonus_extra` são recalculados automaticamente
-- Botão só aparece quando o fechamento não está travado
+- Valores como R$ 3.150, R$ 2.750 são aceitos sem erro do browser
 
