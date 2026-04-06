@@ -313,11 +313,7 @@ export function QuickScheduleModal({
     setNameQuery('');
     setSelectedEmail('');
     setSelectedPhone('');
-    setPhoneQuery('');
-    setEmailQuery('');
     setShowResults(false);
-    setShowPhoneResults(false);
-    setShowEmailResults(false);
   }, []);
 
   // Handle selecting a lead from weekly list
