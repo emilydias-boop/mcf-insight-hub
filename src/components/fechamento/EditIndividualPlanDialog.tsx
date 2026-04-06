@@ -193,22 +193,24 @@ export const EditIndividualPlanDialog = ({
             </div>
           </div>
 
-          {/* Meta Diária */}
-          <div className="space-y-1.5">
-            <Label htmlFor="meta_diaria" className="text-xs">Meta Diária (reuniões)</Label>
-            <Input
-              id="meta_diaria"
-              type="number"
-              min="1"
-              max="50"
-              value={formData.meta_diaria}
-              onChange={(e) => handleChange('meta_diaria', e.target.value)}
-              className="h-9 w-32"
-            />
-            <span className="text-[10px] text-muted-foreground">
-              Quantidade de reuniões/dia esperadas
-            </span>
-          </div>
+          {/* Meta Diária - hidden for closers consórcio */}
+          {!(squad === 'consorcio' && roleType === 'closer') && (
+            <div className="space-y-1.5">
+              <Label htmlFor="meta_diaria" className="text-xs">Meta Diária (reuniões)</Label>
+              <Input
+                id="meta_diaria"
+                type="number"
+                min="1"
+                max="50"
+                value={formData.meta_diaria}
+                onChange={(e) => handleChange('meta_diaria', e.target.value)}
+                className="h-9 w-32"
+              />
+              <span className="text-[10px] text-muted-foreground">
+                Quantidade de reuniões/dia esperadas
+              </span>
+            </div>
+          )}
 
           {/* Metas de Comissão - para Closers Consórcio */}
           {squad === 'consorcio' && (

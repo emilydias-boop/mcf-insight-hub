@@ -720,7 +720,8 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
           sdrId={editDialog.employee.sdr_id}
           cargoName={editDialog.employee.cargo_catalogo?.nome_exibicao || '-'}
           cargoId={editDialog.employee.cargo_catalogo_id}
-          squad={editDialog.employee.departamento}
+          squad={Object.entries(BU_MAPPING).find(([, dept]) => dept === editDialog.employee!.departamento)?.[0] || editDialog.employee.departamento}
+          roleType={editDialog.employee.role_type}
           anoMes={format(selectedDate, 'yyyy-MM')}
           currentValues={{
             ote_total: getDisplayValues(editDialog.employee).ote,
@@ -731,6 +732,8 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
             valor_docs_reuniao: editDialog.employee.comp_plan?.valor_docs_reuniao || 0,
             valor_tentativas: editDialog.employee.comp_plan?.valor_tentativas || 0,
             valor_organizacao: editDialog.employee.comp_plan?.valor_organizacao || 0,
+            meta_comissao_consorcio: editDialog.employee.comp_plan?.meta_comissao_consorcio || null,
+            meta_comissao_holding: editDialog.employee.comp_plan?.meta_comissao_holding || null,
           }}
           catalogValues={editDialog.employee.cargo_catalogo ? {
             ote_total: editDialog.employee.cargo_catalogo.ote_total,
