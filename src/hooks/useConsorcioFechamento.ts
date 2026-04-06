@@ -324,14 +324,16 @@ export function useRecalculateConsorcioPayouts() {
           }
         }
         
-        // 8. Calcular valores
+        // 8. Calcular valores com pesos dinâmicos
         const calc = calcularPayoutConsorcio(
           variavel_total,
           comissao_consorcio,
           comissao_holding,
           score_organizacao,
           meta_comissao_consorcio,
-          meta_comissao_holding
+          meta_comissao_holding,
+          100,
+          pesos
         );
         
         const total_conta = fixo_valor + calc.valor_variavel_final;
