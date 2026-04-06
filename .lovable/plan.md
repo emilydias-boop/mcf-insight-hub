@@ -1,25 +1,45 @@
 
-# Ocultar "Intermediações de Contrato" para Consórcio
+
+# Substituir "Vendas Parceria" por "Contratos Pagos" para Closers
 
 ## Problema
 
-A seção "Intermediações de Contrato" aparece para todos os SDRs no fechamento, inclusive os de Consórcio. Consórcio não utiliza contratos Hubla — a métrica relevante é "Proposta Fechada", não "Contrato Pago". Portanto essa seção não faz sentido para eles.
+Na página de fechamento de um Closer, a seção "Vendas Parceria" aparece vazia e não é útil. O que o Closer precisa ver é a **lista de contratos pagos** com:
+- Nome do lead
+- SDR que trouxe (quem agendou a R1 — `booked_by`)
+- Data da reunião (`scheduled_at`)
+- Data do pagamento (`contract_paid_at`)
 
 ## Solução
 
-### Arquivo: `src/pages/fechamento-sdr/Detail.tsx`
+### Arquivo 1: `src/hooks/useCloserContractsList.ts` (novo)
 
-A página já lê `fromBu = searchParams.get('bu')` da URL. Basta condicionar a renderização do `IntermediacoesList`:
+Hook que busca os contratos pagos do closer no mês:
+1. Resolve `sdr_id` → email → `closer_id`
+2. Busca `meeting_slot_attendees` com `status in (contract_paid, refunded)` e `contract_paid_at` no período, joined com `meeting_slots` do closer
+3. Para cada contrato, busca o `booked_by` (UUID) da R1 correspondente ao deal e resolve o nome via `profiles`
+4. Retorna array com: `leadName`, `sdrName`, `meetingDate`, `contractPaidAt`
 
+### Arquivo 2: `src/components/sdr-fechamento/CloserContractsList.tsx` (novo)
+
+Componente de tabela simples que renderiza os contratos:
+- Colunas: Lead | SDR | Data Reunião | Data Contrato
+- Total no rodapé
+- Sem botão de adicionar (dados automáticos da Agenda)
+
+### Arquivo 3: `src/pages/fechamento-sdr/Detail.tsx`
+
+Substituir o bloco de `IntermediacoesList` para closers:
 ```tsx
-// Linha ~563-564: adicionar condição
 {fromBu !== 'consorcio' && (
-  <IntermediacoesList sdrId={payout.sdr_id} anoMes={payout.ano_mes} disabled={!canEdit} isCloser={isCloser} />
+  isCloser 
+    ? <CloserContractsList sdrId={payout.sdr_id} anoMes={payout.ano_mes} />
+    : <IntermediacoesList sdrId={payout.sdr_id} anoMes={payout.ano_mes} disabled={!canEdit} isCloser={false} />
 )}
 ```
 
-Isso remove a seção inteira (título + lista + botão adicionar) quando o SDR é de Consórcio.
-
 ## Resultado esperado
-- SDRs de Consórcio: seção "Intermediações de Contrato" não aparece
-- SDRs de Incorporador: comportamento inalterado
+- Closers veem a lista completa de contratos com SDR, data da reunião e data do pagamento
+- SDRs continuam vendo "Intermediações de Contrato" normalmente
+- Consórcio continua sem exibir nenhuma das duas seções
+
