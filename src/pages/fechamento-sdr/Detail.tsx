@@ -560,8 +560,10 @@ const FechamentoSDRDetail = () => {
 
 
 
-      {/* Intermediações / Vendas Parceria */}
-      <IntermediacoesList sdrId={payout.sdr_id} anoMes={payout.ano_mes} disabled={!canEdit} isCloser={isCloser} />
+      {/* Intermediações / Vendas Parceria (não exibir para Consórcio) */}
+      {fromBu !== 'consorcio' && (
+        <IntermediacoesList sdrId={payout.sdr_id} anoMes={payout.ano_mes} disabled={!canEdit} isCloser={isCloser} />
+      )}
 
       {/* Adjustments (only for admin/manager) */}
       {!isReadOnly && (
