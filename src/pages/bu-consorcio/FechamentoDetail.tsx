@@ -14,7 +14,7 @@ import {
   useUpdateConsorcioPayoutStatus,
   useAddConsorcioAjuste,
 } from '@/hooks/useConsorcioFechamento';
-import { PESOS_CLOSER_CONSORCIO } from '@/types/consorcio-fechamento';
+import { PESOS_PADRAO_CONSORCIO } from '@/types/consorcio-fechamento';
 import { useState } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
