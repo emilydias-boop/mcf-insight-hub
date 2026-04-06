@@ -44,6 +44,14 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
         s => s.name.toLowerCase() === 'aprovado'
       );
 
+      // Definitive statuses that mean the lead is already handled
+      const definitiveStatusNames = ['aprovado', 'reembolso', 'desistente', 'reprovado', 'cancelado'];
+      const definitiveStatusIds = new Set(
+        (statusOptions || [])
+          .filter(s => definitiveStatusNames.includes(s.name.toLowerCase()))
+          .map(s => s.id)
+      );
+
       // Scan previous 4 weeks
       for (let i = 1; i <= 4; i++) {
         const prevDate = subWeeks(currentWeekStart, i);
