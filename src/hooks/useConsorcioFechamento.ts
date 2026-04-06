@@ -242,7 +242,7 @@ export function useRecalculateConsorcioPayouts() {
         
         // 4. Filtrar por cargo - excluir supervisores, closer R2, coordenadores
         const cargo = cargoByEmail.get(closerEmail);
-        if (cargo && CARGOS_EXCLUIDOS.includes(cargo)) {
+        if (cargo && CARGOS_EXCLUIDOS_LIST.includes(cargo)) {
           results.push({ closer: closer.name, status: 'skipped', reason: `cargo: ${cargo}` });
           continue;
         }
