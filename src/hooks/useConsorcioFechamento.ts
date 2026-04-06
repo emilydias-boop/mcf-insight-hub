@@ -10,7 +10,43 @@ import {
   AjusteConsorcio,
   calcularPayoutConsorcio,
   OTE_PADRAO_CONSORCIO,
+  PESOS_PADRAO_CONSORCIO,
+  PesosConsorcio,
 } from '@/types/consorcio-fechamento';
+
+// ID do cargo "Closer Consórcio" em cargos_catalogo
+const CARGO_CLOSER_CONSORCIO_ID = '6258e185-0001-40a6-bcd8-d9eb8a5c2720';
+
+// Buscar pesos dinâmicos das métricas ativas do mês
+async function buscarPesosMetricas(anoMes: string): Promise<PesosConsorcio> {
+  const { data: metricas } = await supabase
+    .from('fechamento_metricas_mes')
+    .select('nome_metrica, peso_percentual')
+    .eq('ano_mes', anoMes)
+    .eq('cargo_catalogo_id', CARGO_CLOSER_CONSORCIO_ID)
+    .eq('ativo', true);
+  
+  if (!metricas || metricas.length === 0) {
+    // Fallback: pesos padrão 90/0/10
+    return { ...PESOS_PADRAO_CONSORCIO };
+  }
+  
+  const pesos: PesosConsorcio = { comissao_consorcio: 0, comissao_holding: 0, organizacao: 0 };
+  
+  for (const m of metricas) {
+    const pesoDecimal = (m.peso_percentual || 0) / 100;
+    const nome = m.nome_metrica?.toLowerCase() || '';
+    if (nome.includes('comissao_consorcio') || nome.includes('comissão') || nome.includes('venda_consorcio')) {
+      pesos.comissao_consorcio += pesoDecimal;
+    } else if (nome.includes('holding')) {
+      pesos.comissao_holding += pesoDecimal;
+    } else if (nome.includes('organizacao') || nome.includes('organização')) {
+      pesos.organizacao += pesoDecimal;
+    }
+  }
+  
+  return pesos;
+}
 
 // Cargos excluídos do fechamento
 const CARGOS_EXCLUIDOS_LIST = ['Supervisor', 'Closer R2', 'Coordenador', 'ADMIN'];
