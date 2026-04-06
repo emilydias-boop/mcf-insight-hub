@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
             owner_profile_id: ownerProfileId,
             tags: ['A010', 'Backfill'],
             custom_fields: { source: 'backfill', backfill_date: new Date().toISOString() },
-            data_source: 'backfill',
+            data_source: 'webhook',
           })
           .select('id')
           .maybeSingle();
