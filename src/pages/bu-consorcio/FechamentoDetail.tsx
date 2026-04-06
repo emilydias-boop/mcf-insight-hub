@@ -150,7 +150,7 @@ export default function ConsorcioFechamentoDetail() {
           
           <ConsorcioIndicatorCard
             label="Organização"
-            peso={`${(PESOS_CLOSER_CONSORCIO.organizacao * 100).toFixed(0)}%`}
+            peso={`${(PESOS_PADRAO_CONSORCIO.organizacao * 100).toFixed(0)}%`}
             meta={payout.meta_organizacao || 100}
             realizado={payout.score_organizacao || 0}
             pct={payout.pct_organizacao || 0}
