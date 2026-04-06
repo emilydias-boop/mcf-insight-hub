@@ -94,7 +94,7 @@ export const useActiveMetricsForSdr = (sdrId: string | undefined, anoMes: string
 
       // Step 3: Fetch active metrics from fechamento_metricas_mes
       // First, always fetch generic metrics (squad = null) for fallback
-      const { data: genericMetrics } = await supabase
+      let { data: genericMetrics } = await supabase
         .from('fechamento_metricas_mes')
         .select('*')
         .eq('ano_mes', anoMes)
@@ -102,6 +102,26 @@ export const useActiveMetricsForSdr = (sdrId: string | undefined, anoMes: string
         .is('squad', null)
         .eq('ativo', true)
         .order('created_at', { ascending: true });
+
+      // If no generic metrics for this month, try fetching from most recent available month
+      if (!genericMetrics || genericMetrics.length === 0) {
+        const { data: fallbackGeneric } = await supabase
+          .from('fechamento_metricas_mes')
+          .select('*')
+          .eq('cargo_catalogo_id', cargoId)
+          .is('squad', null)
+          .eq('ativo', true)
+          .lt('ano_mes', anoMes)
+          .order('ano_mes', { ascending: false })
+          .limit(20);
+        
+        if (fallbackGeneric && fallbackGeneric.length > 0) {
+          // Get the most recent month's metrics
+          const mostRecentMonth = fallbackGeneric[0].ano_mes;
+          genericMetrics = fallbackGeneric.filter(m => m.ano_mes === mostRecentMonth);
+          console.log(`Fallback: Using generic metrics from ${mostRecentMonth} for ${anoMes}`);
+        }
+      }
       
       // If squad is specified, try to get squad-specific metrics
       let metricas: ActiveMetric[] | null = null;
