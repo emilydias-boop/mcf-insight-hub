@@ -61,6 +61,7 @@ interface EmployeeWithPlan {
   departamento: string | null;
   cargo_catalogo_id: string | null;
   sdr_id: string | null;
+  role_type?: string | null;
   cargo_catalogo: {
     id: string;
     nome_exibicao: string;
@@ -81,6 +82,8 @@ interface EmployeeWithPlan {
     valor_docs_reuniao: number;
     valor_tentativas: number;
     valor_organizacao: number;
+    meta_comissao_consorcio?: number | null;
+    meta_comissao_holding?: number | null;
   } | null;
   sdr_meta_diaria?: number;
 }
@@ -187,7 +190,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
       // Find the employee to get cargo_catalogo_id
       const emp = employeesWithPlans.find(e => e.sdr_id === sdrId);
       
-      const planData = {
+      const planData: Record<string, any> = {
         sdr_id: sdrId,
         vigencia_inicio: monthStart,
         cargo_catalogo_id: emp?.cargo_catalogo_id || null,
@@ -208,6 +211,8 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
         ifood_ultrameta: 0,
         status: 'PENDING',
         updated_at: new Date().toISOString(),
+        meta_comissao_consorcio: values.meta_comissao_consorcio || null,
+        meta_comissao_holding: values.meta_comissao_holding || null,
       };
       
       if (existing) {
@@ -236,14 +241,14 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
           // Criar novo plano para o mês selecionado
           const { error: insertError } = await supabase
             .from('sdr_comp_plan')
-            .insert(planData);
+            .insert(planData as any);
           if (insertError) throw insertError;
         }
       } else {
         // Nenhum plano existente → inserir novo
         const { error } = await supabase
           .from('sdr_comp_plan')
-          .insert(planData);
+          .insert(planData as any);
         if (error) throw error;
       }
       
@@ -307,6 +312,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
           departamento: emp.departamento,
           cargo_catalogo_id: emp.cargo_catalogo_id,
           sdr_id: sdrId,
+          role_type: sdrRecord?.role_type || null,
           cargo_catalogo: cargo,
           comp_plan: plan ? {
             id: plan.id,
@@ -317,6 +323,8 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
             valor_docs_reuniao: plan.valor_docs_reuniao,
             valor_tentativas: plan.valor_tentativas,
             valor_organizacao: plan.valor_organizacao,
+            meta_comissao_consorcio: (plan as any).meta_comissao_consorcio || null,
+            meta_comissao_holding: (plan as any).meta_comissao_holding || null,
           } : null,
           sdr_meta_diaria: sdrRecord?.meta_diaria || 10,
         };
@@ -606,7 +614,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
                   <TableHead className="text-right">OTE Total</TableHead>
                   <TableHead className="text-right">Fixo</TableHead>
                   <TableHead className="text-right">Variável</TableHead>
-                  <TableHead className="text-center">Meta/Dia</TableHead>
+                  <TableHead className="text-center">Meta</TableHead>
                   <TableHead className="text-center w-[100px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -660,7 +668,15 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline">{values.metaDiaria}</Badge>
+                        {emp.role_type === 'closer' && emp.departamento === 'BU - Consórcio' ? (
+                          <span className="text-xs">
+                            {emp.comp_plan?.meta_comissao_consorcio
+                              ? formatCurrency(emp.comp_plan.meta_comissao_consorcio)
+                              : <span className="text-muted-foreground">—</span>}
+                          </span>
+                        ) : (
+                          <Badge variant="outline">{values.metaDiaria}</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         <Button
@@ -704,7 +720,8 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
           sdrId={editDialog.employee.sdr_id}
           cargoName={editDialog.employee.cargo_catalogo?.nome_exibicao || '-'}
           cargoId={editDialog.employee.cargo_catalogo_id}
-          squad={editDialog.employee.departamento}
+          squad={Object.entries(BU_MAPPING).find(([, dept]) => dept === editDialog.employee!.departamento)?.[0] || editDialog.employee.departamento}
+          roleType={editDialog.employee.role_type}
           anoMes={format(selectedDate, 'yyyy-MM')}
           currentValues={{
             ote_total: getDisplayValues(editDialog.employee).ote,
@@ -715,6 +732,8 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
             valor_docs_reuniao: editDialog.employee.comp_plan?.valor_docs_reuniao || 0,
             valor_tentativas: editDialog.employee.comp_plan?.valor_tentativas || 0,
             valor_organizacao: editDialog.employee.comp_plan?.valor_organizacao || 0,
+            meta_comissao_consorcio: editDialog.employee.comp_plan?.meta_comissao_consorcio || null,
+            meta_comissao_holding: editDialog.employee.comp_plan?.meta_comissao_holding || null,
           }}
           catalogValues={editDialog.employee.cargo_catalogo ? {
             ote_total: editDialog.employee.cargo_catalogo.ote_total,
