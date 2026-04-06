@@ -100,8 +100,7 @@ export function R2QuickScheduleModal({
 
   const buOriginIds = originIds && originIds.length > 0 ? originIds : undefined;
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery, buOriginIds);
-  const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery, buOriginIds);
-  const { data: emailSearchResults = [], isLoading: searchingEmail } = useSearchDealsByEmail(emailQuery, buOriginIds);
+  const createMeeting = useCreateR2Meeting();
   const createMeeting = useCreateR2Meeting();
   const { data: r2Bookers = [] } = useR2Bookers();
 
