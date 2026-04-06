@@ -37,10 +37,9 @@ interface EditIndividualPlanDialogProps {
   cargoName: string;
   cargoId?: string;
   squad?: string;
+  roleType?: string | null;
   anoMes: string;
-  // Valores atuais (do sdr_comp_plan ou cargos_catalogo)
   currentValues: PlanValues;
-  // Valores do catálogo (para referência)
   catalogValues?: PlanValues;
   isPersonalized: boolean;
   onSave: (values: PlanValues) => void;
