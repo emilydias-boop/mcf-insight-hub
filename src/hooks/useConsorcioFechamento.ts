@@ -178,8 +178,8 @@ async function buscarComissaoHoldingMes(closerId: string, anoMes: string): Promi
   return (data || []).reduce((sum, v) => sum + (v.valor_comissao || 0), 0);
 }
 
-// Cargos que devem ser excluídos do fechamento de closers
-const CARGOS_EXCLUIDOS = ['Supervisor', 'Closer R2', 'Coordenador', 'ADMIN'];
+
+
 
 // Buscar OTE do comp plan individual para o mês
 async function buscarCompPlanVigente(sdrId: string, anoMes: string) {
