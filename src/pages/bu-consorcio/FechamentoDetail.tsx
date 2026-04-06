@@ -26,6 +26,7 @@ import {
   useUpdateConsorcioPayoutKpi,
   useUpdateConsorcioPayoutStatus,
   useAddConsorcioAjuste,
+  useRemoveConsorcioAjuste,
 } from '@/hooks/useConsorcioFechamento';
 import { AjusteConsorcio } from '@/types/consorcio-fechamento';
 import { useAuth } from '@/contexts/AuthContext';
