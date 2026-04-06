@@ -1,30 +1,32 @@
 
 
-# Alinhar KPIs do topo com a tabela de Closers
+# Unificar busca do R2QuickScheduleModal em campo unico
 
-## Situacao atual
+## Problema
+O modal "Agendar Reuniao R2" tem 3 campos separados (Nome, Email, Telefone) com 3 queries independentes. Deve seguir o mesmo padrao ja implementado no QuickScheduleModal de R1: um unico campo que busca por nome, email ou telefone simultaneamente.
 
-Os KPIs do topo e a tabela de SDRs usam `useTeamMeetingsData` (RPC `get_sdr_metrics_from_agenda`), que ja distingue:
-- **Agendamentos** = criados no periodo (`booked_at`/`created_at`)
-- **R1 Agendada** = reunioes agendadas PARA o periodo (`scheduled_at`)
+## Abordagem
 
-A tabela de Closers usa `useR1CloserMetrics` (queries diretas em `meeting_slots`), que conta por `scheduled_at` do closer. A diferenca (286 vs 321) ocorre porque alguns leads foram atribuidos a closers de consorcio mas agendados por SDRs de outra squad, ou vice-versa.
+O hook `useSearchDealsForSchedule` ja suporta busca unificada (nome + telefone + email no `.or()`). Basta usar apenas esse hook e remover os outros dois.
 
-## Proposta
+## Alteracao: `src/components/crm/R2QuickScheduleModal.tsx`
 
-Quando a aba "Closers" estiver ativa, os KPIs do topo devem refletir os totais da tabela de closers (soma dos `closerMetrics`), nao os do SDR. Isso garante consistencia visual.
+**Remover:**
+- Estados: `phoneQuery`, `showPhoneResults`, `emailQuery`, `showEmailResults`
+- Imports: `useSearchDealsByPhone`, `useSearchDealsByEmail`
+- Os 2 blocos de busca separados (Email lines 338-380, Phone lines 382-424)
+- Referencias nos handlers `handleSelectDeal`, `handleClearSelection`, `resetForm`
 
-### Alteracao unica: `src/pages/bu-consorcio/PainelEquipe.tsx`
+**Substituir os 3 campos por 1:**
+- Unico campo com placeholder "Buscar por nome, email ou telefone..."
+- Icone `Search`, mesma logica de `nameQuery` + `showResults`
+- Apos selecao: mostrar card compacto com nome, email e telefone (read-only), com botao X para limpar
 
-- Criar um `closerKPIs` derivado da soma de `closerMetrics` (r1_agendada, r1_realizada, noshow)
-- No componente `TeamKPICards`, passar `closerKPIs` quando `activeTab === 'closers'` e `enrichedKPIs` quando `activeTab === 'sdrs'`
-- Isso faz com que ao clicar em "Closers", os cards de R1 Agendada, Realizada e No-Show atualizem para bater com a tabela
-
-## Resultado
-- Aba SDRs: KPIs mostram 286 agendamentos, coerente com a tabela SDR
-- Aba Closers: KPIs mostram 321 agendadas, coerente com a tabela Closer
-- Sem ambiguidade entre os numeros
+**Resultado visual:**
+- 1 campo de busca ao inves de 3
+- Card informativo apos selecao (igual ao R1)
+- Modal mais compacto
 
 ## Arquivo alterado
-1. `src/pages/bu-consorcio/PainelEquipe.tsx`
+1. `src/components/crm/R2QuickScheduleModal.tsx`
 
