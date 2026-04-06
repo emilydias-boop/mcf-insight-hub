@@ -17,135 +17,131 @@ Deno.serve(async (req) => {
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  // Parse params
   const url = new URL(req.url);
   const dryRun = url.searchParams.get("dry_run") === "true";
-  const limitParam = parseInt(url.searchParams.get("limit") || "50");
+  const limitParam = parseInt(url.searchParams.get("limit") || "30");
   const monthsBack = parseInt(url.searchParams.get("months") || "2");
 
   const sinceDate = new Date();
   sinceDate.setMonth(sinceDate.getMonth() - monthsBack);
   const sinceDateStr = sinceDate.toISOString();
 
-  console.log(`🔍 Backfill orphan A010 deals | dry_run=${dryRun} | limit=${limitParam} | since=${sinceDateStr}`);
+  console.log(`🔍 Backfill orphan A010 | dry_run=${dryRun} | limit=${limitParam} | since=${sinceDateStr}`);
 
   try {
-    // 1. Find origin ID for PIPELINE INSIDE SALES
-    const { data: originData } = await supabase
-      .from('crm_origins')
-      .select('id')
-      .ilike('name', PIPELINE_INSIDE_SALES_ORIGIN)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
+    // 1. Find origin + stage in parallel
+    const [originRes, stageRes] = await Promise.all([
+      supabase.from('crm_origins').select('id').ilike('name', PIPELINE_INSIDE_SALES_ORIGIN)
+        .order('created_at', { ascending: true }).limit(1).maybeSingle(),
+      supabase.from('crm_stages').select('id, origin_id').ilike('stage_name', '%Novo Lead%').limit(50),
+    ]);
 
-    if (!originData) {
-      return new Response(JSON.stringify({ error: "Origin PIPELINE INSIDE SALES not found" }), {
+    const originId = originRes.data?.id;
+    if (!originId) {
+      return new Response(JSON.stringify({ error: "Origin not found" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
-    const originId = originData.id;
 
-    // 2. Find "Novo Lead" stage
-    const { data: stageData } = await supabase
-      .from('crm_stages')
-      .select('id')
-      .eq('origin_id', originId)
-      .ilike('stage_name', '%Novo Lead%')
-      .limit(1)
-      .maybeSingle();
-    const stageId = stageData?.id || null;
+    const stageId = (stageRes.data || []).find((s: any) => s.origin_id === originId)?.id || null;
 
-    // 3. Find orphan contacts: have A010 tag, created recently, NO deal in this origin
-    // We use a raw approach: get contacts with A010 tag created after sinceDate
-    const { data: a010Contacts, error: contactsError } = await supabase
-      .from('crm_contacts')
-      .select('id, email, name, phone, created_at')
-      .contains('tags', ['A010'])
-      .gte('created_at', sinceDateStr)
-      .eq('is_archived', false)
-      .order('created_at', { ascending: false })
-      .limit(1000);
+    // 2. Use RPC/raw query to find orphan contacts efficiently
+    // Find contacts with A010 tag, no deal in this origin, created recently
+    const { data: orphanRows, error: orphanError } = await supabase.rpc('execute_readonly_query', {
+      query_text: `
+        SELECT c.id, c.email, c.name, c.phone, c.created_at
+        FROM crm_contacts c
+        WHERE c.tags @> ARRAY['A010']::text[]
+          AND c.is_archived = false
+          AND c.created_at >= '${sinceDateStr}'
+          AND NOT EXISTS (
+            SELECT 1 FROM crm_deals d 
+            WHERE d.contact_id = c.id AND d.origin_id = '${originId}'
+          )
+        ORDER BY c.created_at DESC
+        LIMIT ${limitParam * 3}
+      `
+    });
 
-    if (contactsError) {
-      console.error("❌ Error fetching contacts:", contactsError);
-      return new Response(JSON.stringify({ error: contactsError.message }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+    // Fallback if RPC doesn't exist — use manual approach with batch
+    let orphans: any[] = [];
+    
+    if (orphanError) {
+      console.log("⚠️ RPC not available, using manual approach...");
+      // Get contacts in batch, then filter
+      const { data: contacts } = await supabase
+        .from('crm_contacts')
+        .select('id, email, name, phone, created_at')
+        .contains('tags', ['A010'])
+        .gte('created_at', sinceDateStr)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: false })
+        .limit(500);
+
+      if (contacts && contacts.length > 0) {
+        // Get all deals for these contacts in one query
+        const contactIds = contacts.map(c => c.id);
+        const { data: deals } = await supabase
+          .from('crm_deals')
+          .select('contact_id')
+          .eq('origin_id', originId)
+          .in('contact_id', contactIds);
+
+        const contactsWithDeal = new Set((deals || []).map(d => d.contact_id));
+        orphans = contacts.filter(c => !contactsWithDeal.has(c.id)).slice(0, limitParam * 2);
+        console.log(`📋 Manual: ${contacts.length} contacts, ${contactsWithDeal.size} with deals, ${orphans.length} orphans`);
+      }
+    } else {
+      orphans = orphanRows || [];
+      console.log(`📋 RPC: ${orphans.length} orphans found`);
     }
 
-    console.log(`📋 Found ${a010Contacts?.length || 0} A010 contacts since ${sinceDateStr}`);
+    // 3. For orphans with email, check if another contact with same email has a deal
+    const results = {
+      duplicates_archived: [] as string[],
+      deals_created: [] as string[],
+      partners_skipped: [] as string[],
+      already_has_deal_via_email: [] as string[],
+    };
 
-    // 4. For each contact, check if they have a deal in this origin
-    const orphans: any[] = [];
-    const duplicatesArchived: string[] = [];
-    const dealsCreated: string[] = [];
-    const skippedPartners: string[] = [];
-    const skippedHasDeal: string[] = [];
+    let processed = 0;
 
-    for (const contact of (a010Contacts || [])) {
-      if (orphans.length >= limitParam) break;
+    for (const orphan of orphans) {
+      if (processed >= limitParam) break;
 
-      // Check if THIS contact has a deal
-      const { data: deal } = await supabase
-        .from('crm_deals')
-        .select('id')
-        .eq('contact_id', contact.id)
-        .eq('origin_id', originId)
-        .limit(1)
-        .maybeSingle();
-
-      if (deal) {
-        continue; // Has deal, not orphan
-      }
-
-      // Check if another contact with same email already has a deal
-      if (contact.email) {
-        const { data: otherContacts } = await supabase
+      // Check if email duplicate already has a deal
+      if (orphan.email) {
+        const { data: otherWithDeal } = await supabase
           .from('crm_contacts')
-          .select('id')
-          .ilike('email', contact.email)
-          .neq('id', contact.id)
+          .select('id, crm_deals!inner(id)')
+          .ilike('email', orphan.email)
           .eq('is_archived', false)
-          .limit(10);
+          .neq('id', orphan.id)
+          .eq('crm_deals.origin_id', originId)
+          .limit(1)
+          .maybeSingle();
 
-        let emailHasDeal = false;
-        for (const other of (otherContacts || [])) {
-          const { data: otherDeal } = await supabase
-            .from('crm_deals')
-            .select('id')
-            .eq('contact_id', other.id)
-            .eq('origin_id', originId)
-            .limit(1)
-            .maybeSingle();
-
-          if (otherDeal) {
-            // Another copy of this email already has a deal — archive this duplicate
-            emailHasDeal = true;
-            if (!dryRun) {
-              await supabase.from('crm_contacts').update({
-                is_archived: true,
-                merged_into_contact_id: other.id,
-              }).eq('id', contact.id);
-            }
-            duplicatesArchived.push(`${contact.email} (${contact.id} → ${other.id})`);
-            break;
+        if (otherWithDeal) {
+          // Archive this duplicate
+          if (!dryRun) {
+            await supabase.from('crm_contacts').update({
+              is_archived: true,
+              merged_into_contact_id: otherWithDeal.id,
+            }).eq('id', orphan.id);
           }
-        }
-        if (emailHasDeal) {
-          skippedHasDeal.push(contact.email);
+          results.duplicates_archived.push(`${orphan.email} (${orphan.id} → ${otherWithDeal.id})`);
+          results.already_has_deal_via_email.push(orphan.email);
+          processed++;
           continue;
         }
-      }
 
-      // Check if partner
-      if (contact.email) {
+        // Check if partner
         const { data: partnerTxs } = await supabase
           .from('hubla_transactions')
           .select('product_name')
-          .ilike('customer_email', contact.email)
+          .ilike('customer_email', orphan.email)
           .eq('sale_status', 'completed')
-          .limit(50);
+          .limit(30);
 
         const isPartner = (partnerTxs || []).some((tx: any) => {
           if (!tx.product_name) return false;
@@ -154,87 +150,69 @@ Deno.serve(async (req) => {
         });
 
         if (isPartner) {
-          skippedPartners.push(contact.email);
+          results.partners_skipped.push(orphan.email);
+          processed++;
           continue;
         }
       }
 
-      orphans.push(contact);
-    }
-
-    console.log(`🔎 Orphans to fix: ${orphans.length} | Duplicates to archive: ${duplicatesArchived.length} | Partners skipped: ${skippedPartners.length} | Has deal elsewhere: ${skippedHasDeal.length}`);
-
-    // 5. Create deals for true orphans
-    for (const orphan of orphans) {
+      // Create deal
       if (dryRun) {
-        dealsCreated.push(`[DRY] ${orphan.email || orphan.name} (${orphan.id})`);
-        continue;
-      }
-
-      // Distribute to SDR
-      let ownerEmail: string | null = null;
-      let ownerProfileId: string | null = null;
-      const { data: nextOwner } = await supabase.rpc('get_next_lead_owner', { p_origin_id: originId });
-      if (nextOwner) {
-        ownerEmail = nextOwner;
-        const { data: profile } = await supabase
-          .from('profiles').select('id').ilike('email', nextOwner).limit(1).maybeSingle();
-        ownerProfileId = profile?.id || null;
-      }
-
-      const { data: newDeal, error: dealError } = await supabase
-        .from('crm_deals')
-        .upsert({
-          clint_id: `backfill-a010-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          name: `${orphan.name || 'Cliente'} - A010`,
-          contact_id: orphan.id,
-          origin_id: originId,
-          stage_id: stageId,
-          value: 0,
-          owner_id: ownerEmail,
-          owner_profile_id: ownerProfileId,
-          tags: ['A010', 'Backfill'],
-          custom_fields: { source: 'backfill', backfill_date: new Date().toISOString() },
-          data_source: 'backfill',
-        }, {
-          onConflict: 'contact_id,origin_id',
-          ignoreDuplicates: true,
-        })
-        .select('id')
-        .maybeSingle();
-
-      if (dealError) {
-        console.error(`❌ Deal error for ${orphan.email}:`, dealError.message);
+        results.deals_created.push(`[DRY] ${orphan.email || orphan.name} (${orphan.id})`);
       } else {
-        dealsCreated.push(`${orphan.email || orphan.name} → ${newDeal?.id || 'upsert_ignored'} → owner: ${ownerEmail}`);
-        
-        // Log activity
-        if (newDeal?.id && ownerEmail) {
-          await supabase.from('deal_activities').insert({
-            deal_id: newDeal.id,
-            activity_type: 'owner_change',
-            description: `Lead A010 (backfill) distribuído para ${ownerEmail}`,
-            metadata: { owner_email: ownerEmail, source: 'backfill-orphan-a010' },
-          });
+        let ownerEmail: string | null = null;
+        let ownerProfileId: string | null = null;
+        const { data: nextOwner } = await supabase.rpc('get_next_lead_owner', { p_origin_id: originId });
+        if (nextOwner) {
+          ownerEmail = nextOwner;
+          const { data: profile } = await supabase
+            .from('profiles').select('id').ilike('email', nextOwner).limit(1).maybeSingle();
+          ownerProfileId = profile?.id || null;
+        }
+
+        const { data: newDeal, error: dealError } = await supabase
+          .from('crm_deals')
+          .upsert({
+            clint_id: `backfill-a010-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            name: `${orphan.name || 'Cliente'} - A010`,
+            contact_id: orphan.id,
+            origin_id: originId,
+            stage_id: stageId,
+            value: 0,
+            owner_id: ownerEmail,
+            owner_profile_id: ownerProfileId,
+            tags: ['A010', 'Backfill'],
+            custom_fields: { source: 'backfill', backfill_date: new Date().toISOString() },
+            data_source: 'backfill',
+          }, { onConflict: 'contact_id,origin_id', ignoreDuplicates: true })
+          .select('id')
+          .maybeSingle();
+
+        if (dealError) {
+          console.error(`❌ ${orphan.email}: ${dealError.message}`);
+        } else {
+          results.deals_created.push(`${orphan.email || orphan.name} → ${newDeal?.id || 'ignored'} → ${ownerEmail}`);
+          if (newDeal?.id && ownerEmail) {
+            await supabase.from('deal_activities').insert({
+              deal_id: newDeal.id,
+              activity_type: 'owner_change',
+              description: `Lead A010 (backfill) distribuído para ${ownerEmail}`,
+              metadata: { owner_email: ownerEmail, source: 'backfill-orphan-a010' },
+            });
+          }
         }
       }
+      processed++;
     }
 
     const result = {
       success: true,
       dry_run: dryRun,
       since: sinceDateStr,
-      total_a010_contacts_checked: a010Contacts?.length || 0,
-      orphans_found: orphans.length,
-      duplicates_archived: duplicatesArchived.length,
-      deals_created: dealsCreated.length,
-      partners_skipped: skippedPartners.length,
-      has_deal_elsewhere: skippedHasDeal.length,
-      details: {
-        deals_created: dealsCreated,
-        duplicates_archived: duplicatesArchived,
-        partners_skipped: skippedPartners,
-      },
+      orphans_checked: orphans.length,
+      processed,
+      ...Object.fromEntries(Object.entries(results).map(([k, v]) => [`${k}_count`, v.length])),
+      details: results,
     };
 
     console.log("✅ Backfill complete:", JSON.stringify(result, null, 2));
@@ -245,7 +223,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error("❌ Backfill error:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }
