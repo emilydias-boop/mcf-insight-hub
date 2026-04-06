@@ -127,7 +127,7 @@ export const useActiveMetricsForSdr = (sdrId: string | undefined, anoMes: string
       let metricas: ActiveMetric[] | null = null;
       
       if (squad) {
-        const { data: squadMetrics, error: squadError } = await supabase
+        let { data: squadMetrics, error: squadError } = await supabase
           .from('fechamento_metricas_mes')
           .select('*')
           .eq('ano_mes', anoMes)
@@ -135,6 +135,25 @@ export const useActiveMetricsForSdr = (sdrId: string | undefined, anoMes: string
           .eq('squad', squad)
           .eq('ativo', true)
           .order('created_at', { ascending: true });
+
+        // If no squad metrics for this month, try most recent available month
+        if (!squadMetrics || squadMetrics.length === 0) {
+          const { data: fallbackSquad } = await supabase
+            .from('fechamento_metricas_mes')
+            .select('*')
+            .eq('cargo_catalogo_id', cargoId)
+            .eq('squad', squad)
+            .eq('ativo', true)
+            .lt('ano_mes', anoMes)
+            .order('ano_mes', { ascending: false })
+            .limit(20);
+          
+          if (fallbackSquad && fallbackSquad.length > 0) {
+            const mostRecentMonth = fallbackSquad[0].ano_mes;
+            squadMetrics = fallbackSquad.filter(m => m.ano_mes === mostRecentMonth);
+            console.log(`Fallback: Using squad metrics from ${mostRecentMonth} for ${anoMes}`);
+          }
+        }
         
         if (squadError) {
           console.error('Error fetching squad metrics:', squadError);
