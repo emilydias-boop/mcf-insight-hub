@@ -1,56 +1,55 @@
 
 
-# Separar SDRs e Closers no Config + Metas individuais de comissao
+# Corrigir Planos OTE para Closers Consorcio
 
-## Problema
+## Problemas raiz
 
-1. **Aba SDRs mistura tudo**: A tab "SDRs" na config do consorcio mostra SDRs e Closers juntos, com coluna "Meta Diaria" que so faz sentido para SDRs. Closers precisam de meta de comissao consorcio (ex: Victoria = R$ 19M), nao meta diaria de reunioes.
+1. **Squad mismatch no dialog**: `EditIndividualPlanDialog` recebe `squad = "BU - Consórcio"` (departamento) mas verifica `squad === 'consorcio'` → campos de meta comissão nunca aparecem
+2. **saveCompPlan ignora novos campos**: A mutation não salva `meta_comissao_consorcio` / `meta_comissao_holding`
+3. **comp_plan não carrega novos campos**: O mapeamento em `employeesWithPlans` não inclui as colunas adicionadas na migration
+4. **currentValues não passa os valores**: O dialog não recebe `meta_comissao_consorcio` / `meta_comissao_holding` do plano existente
+5. **Tabela não diferencia SDR de Closer**: Todos aparecem com coluna "Meta/Dia" que é irrelevante para Closers
 
-2. **Meta de comissao hardcoded**: O recalculo usa `meta_comissao_consorcio = 2000` para todos os closers. Na planilha real, cada closer tem sua meta individual (ex: Victoria R$ 19.000 de comissao, Joao Pedro pode ter outro valor).
+## Solução
 
-3. **Onde guardar a meta individual**: Hoje o `sdr_comp_plan` nao tem campo para `meta_comissao_consorcio`. A meta fica apenas no `consorcio_closer_payout` (por mes), mas sem lugar para configurar antecipadamente.
+### Arquivo 1: `src/components/fechamento/PlansOteTab.tsx`
 
-## Solucao
+**Corrigir squad passado ao dialog (linha 707):**
+- Mudar de `squad={editDialog.employee.departamento}` para converter o departamento para o valor correto: `"BU - Consórcio"` → `"consorcio"`
 
-### 1. Migration: adicionar campos de meta ao sdr_comp_plan
+**Incluir novos campos no comp_plan (linhas 311-321):**
+- Adicionar `meta_comissao_consorcio` e `meta_comissao_holding` ao mapeamento do plano
 
-Adicionar colunas opcionais ao `sdr_comp_plan`:
-- `meta_comissao_consorcio NUMERIC` (meta de venda consorcio em R$)
-- `meta_comissao_holding NUMERIC` (meta de venda holding em R$)
+**Incluir novos campos no currentValues (linhas 709-718):**
+- Passar `meta_comissao_consorcio` e `meta_comissao_holding` do comp_plan para o dialog
 
-Isso permite que cada closer tenha sua meta individual configurada no plano de compensacao, junto com OTE/fixo/variavel.
+**Persistir novos campos no saveCompPlan (linhas 190-211):**
+- Adicionar `meta_comissao_consorcio` e `meta_comissao_holding` ao `planData`
 
-### 2. Separar SDRs e Closers na aba de config
+**Diferenciar Closers na tabela:**
+- Buscar `role_type` do SDR vinculado
+- Para Closers consórcio, mostrar "Meta Comissão" em vez de "Meta/Dia"
+- Ou simplesmente adaptar a coluna para mostrar o valor relevante por tipo
 
-No `SdrConfigTab`, quando `squad = 'consorcio'`:
-- Dividir a tabela em duas secoes: **SDRs** (role_type = 'sdr') e **Closers** (role_type = 'closer')
-- SDRs mantem colunas atuais: Nome, Email, Nivel, Meta Diaria, Status, Ativo
-- Closers mostram colunas diferentes: Nome, Email, Nivel, Meta Comissao Consorcio, Meta Comissao Holding, Status, Ativo
-- Filtrar Supervisores/Coordenadores da secao de Closers (mesma logica do fechamento)
+### Arquivo 2: `src/components/fechamento/EditIndividualPlanDialog.tsx`
 
-### 3. Formulario de edicao de Closer com campos de meta
+**Corrigir condição do squad (linha 214):**
+- Atualmente: `squad === 'consorcio'`
+- Adicionar fallback: `squad === 'consorcio' || squad === 'BU - Consórcio'`
+- Ou melhor: normalizar no componente pai (solução no PlansOteTab)
 
-No `EditSdrDialog`, quando o SDR for role_type = 'closer' e squad = 'consorcio':
-- Mostrar campos de meta de comissao (consorcio e holding) em vez de meta diaria
-- Salvar esses valores no registro do SDR ou no comp plan
+**Esconder "Meta Diária" para Closers:**
+- Receber prop indicando se é closer
+- Se for closer consórcio, esconder campo "Meta Diária (reuniões)" e dar destaque aos campos de meta comissão
 
-### 4. Recalculo usa meta individual
+### Arquivo 3: `src/components/fechamento/PlansOteTab.tsx` (interface `EmployeeWithPlan`)
 
-No `useConsorcioFechamento.ts`, ao recalcular:
-- Buscar `meta_comissao_consorcio` e `meta_comissao_holding` do `sdr_comp_plan` vigente
-- Usar como meta individual em vez do hardcoded 2000/500
-- Fallback para 2000/500 se nao configurado
-
-## Arquivos alterados
-1. **Migration SQL** — adicionar `meta_comissao_consorcio` e `meta_comissao_holding` ao `sdr_comp_plan`
-2. `src/components/fechamento/SdrConfigTab.tsx` — separar tabelas SDR/Closer, colunas diferentes
-3. `src/hooks/useConsorcioFechamento.ts` — buscar meta individual do comp plan no recalculo
-4. `src/components/fechamento/EditIndividualPlanDialog.tsx` — adicionar campos de meta comissao para closers consorcio
+- Adicionar `meta_comissao_consorcio` e `meta_comissao_holding` na interface `comp_plan`
+- Adicionar `role_type` para distinguir SDR de Closer na tabela
 
 ## Resultado esperado
-- Aba config mostra SDRs separados dos Closers
-- Victoria aparece como Closer com meta R$ 19.000 (configuravel)
-- Joao Pedro aparece como Closer com sua meta individual
-- Luis Felipe/Thobson nao aparecem (filtrados por cargo)
-- Recalculo do fechamento usa meta individual de cada closer
+- João Pedro (Closer Consórcio): dialog mostra campos de Meta Comissão Consórcio/Holding, sem "Meta Diária"
+- Campos de meta comissão salvam corretamente no `sdr_comp_plan`
+- Tabela mostra meta comissão para Closers e meta diária para SDRs
+- Valores persistem e são carregados corretamente ao reabrir o dialog
 
