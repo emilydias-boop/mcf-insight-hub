@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
 
         const { data: newDeal, error: dealError } = await supabase
           .from('crm_deals')
-          .upsert(dealPayload, { onConflict: 'contact_id,origin_id', ignoreDuplicates: true })
+          .insert(dealPayload)
           .select('id')
           .maybeSingle();
 
