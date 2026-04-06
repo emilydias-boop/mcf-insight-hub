@@ -561,9 +561,11 @@ const FechamentoSDRDetail = () => {
 
 
 
-      {/* Intermediações / Vendas Parceria (não exibir para Consórcio) */}
+      {/* Contratos / Intermediações (não exibir para Consórcio) */}
       {fromBu !== 'consorcio' && (
-        <IntermediacoesList sdrId={payout.sdr_id} anoMes={payout.ano_mes} disabled={!canEdit} isCloser={isCloser} />
+        isCloser
+          ? <CloserContractsList sdrId={payout.sdr_id} anoMes={payout.ano_mes} />
+          : <IntermediacoesList sdrId={payout.sdr_id} anoMes={payout.ano_mes} disabled={!canEdit} isCloser={false} />
       )}
 
       {/* Adjustments (only for admin/manager) */}
