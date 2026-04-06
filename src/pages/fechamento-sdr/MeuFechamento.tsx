@@ -153,7 +153,7 @@ const MeuFechamento = () => {
           </p>
         </div>
 
-        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+        <Select value={selectedMonth} onValueChange={handleMonthChange}>
           <SelectTrigger className="w-[200px]">
             <SelectValue />
           </SelectTrigger>
