@@ -266,13 +266,33 @@ export function useRecalculateConsorcioPayouts() {
       
       const sdrByEmail = new Map((sdrs || []).map(s => [s.email.toLowerCase(), s]));
       
-      // 3. Buscar employees para verificar cargo (match por email)
+      // 3. Buscar employees para verificar cargo e cargo_catalogo_id (match por email)
       const { data: employees } = await supabase
         .from('employees')
-        .select('id, email_pessoal, cargo')
+        .select('id, email_pessoal, cargo, cargo_catalogo_id')
         .in('email_pessoal', emails);
       
       const cargoByEmail = new Map((employees || []).map(e => [e.email_pessoal?.toLowerCase(), e.cargo]));
+      const employeeByEmail = new Map((employees || []).map(e => [e.email_pessoal?.toLowerCase(), e as { id: string; email_pessoal: string | null; cargo: string | null; cargo_catalogo_id: string | null }]));
+      
+      // 3b. Buscar todos os cargos_catalogo relevantes para auto-sync
+      const catalogoIds = (employees || [])
+        .map(e => e.cargo_catalogo_id)
+        .filter((id): id is string => !!id);
+      
+      let cargoCatalogoMap = new Map<string, { fixo_valor: number; variavel_valor: number; ote_total: number }>();
+      if (catalogoIds.length > 0) {
+        const { data: catalogos } = await supabase
+          .from('cargos_catalogo')
+          .select('id, fixo_valor, variavel_valor, ote_total')
+          .in('id', catalogoIds);
+        
+        cargoCatalogoMap = new Map((catalogos || []).map(c => [c.id, {
+          fixo_valor: c.fixo_valor || 0,
+          variavel_valor: c.variavel_valor || 0,
+          ote_total: c.ote_total || 0,
+        }]));
+      }
       
       const results = [];
       
@@ -315,12 +335,43 @@ export function useRecalculateConsorcioPayouts() {
         let fixo_valor = ote_total * OTE_PADRAO_CONSORCIO.fixo_pct;
         let variavel_total = ote_total * OTE_PADRAO_CONSORCIO.variavel_pct;
         
+        // Auto-sync: buscar valores atualizados do cargo catálogo
+        const emp = employeeByEmail.get(closerEmail);
+        const cargoAtualizado = emp?.cargo_catalogo_id ? cargoCatalogoMap.get(emp.cargo_catalogo_id) : null;
+        
         if (sdr) {
           const compPlan = await buscarCompPlanVigente(sdr.id, anoMes);
           if (compPlan) {
             ote_total = compPlan.ote_total;
             fixo_valor = compPlan.fixo_valor;
             variavel_total = compPlan.variavel_total;
+            
+            // Auto-sync: se cargo foi atualizado, propagar para comp plan e usar novos valores
+            if (cargoAtualizado && (
+              compPlan.fixo_valor !== cargoAtualizado.fixo_valor ||
+              compPlan.variavel_total !== cargoAtualizado.variavel_valor
+            )) {
+              const novoOte = cargoAtualizado.fixo_valor + cargoAtualizado.variavel_valor;
+              ote_total = cargoAtualizado.ote_total || novoOte;
+              fixo_valor = cargoAtualizado.fixo_valor;
+              variavel_total = cargoAtualizado.variavel_valor;
+              
+              // Atualizar comp plan para manter consistência
+              await supabase
+                .from('sdr_comp_plan')
+                .update({
+                  ote_total,
+                  fixo_valor,
+                  variavel_total,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('sdr_id', sdr.id)
+                .lte('vigencia_inicio', `${anoMes}-01`)
+                .or(`vigencia_fim.is.null,vigencia_fim.gte.${anoMes}-01`);
+              
+              console.log(`[Auto-sync] ${closer.name}: fixo atualizado para ${fixo_valor}`);
+            }
+            
             // Usar metas do comp plan se configuradas
             if (compPlan.meta_comissao_consorcio) {
               meta_comissao_consorcio = compPlan.meta_comissao_consorcio;
@@ -328,7 +379,17 @@ export function useRecalculateConsorcioPayouts() {
             if (compPlan.meta_comissao_holding) {
               meta_comissao_holding = compPlan.meta_comissao_holding;
             }
+          } else if (cargoAtualizado) {
+            // Sem comp plan: usar valores direto do cargo catálogo
+            ote_total = cargoAtualizado.ote_total || (cargoAtualizado.fixo_valor + cargoAtualizado.variavel_valor);
+            fixo_valor = cargoAtualizado.fixo_valor;
+            variavel_total = cargoAtualizado.variavel_valor;
           }
+        } else if (cargoAtualizado) {
+          // Sem SDR: usar valores direto do cargo catálogo
+          ote_total = cargoAtualizado.ote_total || (cargoAtualizado.fixo_valor + cargoAtualizado.variavel_valor);
+          fixo_valor = cargoAtualizado.fixo_valor;
+          variavel_total = cargoAtualizado.variavel_valor;
         }
         
         // 8. Calcular valores com pesos dinâmicos
