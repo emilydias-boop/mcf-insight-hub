@@ -55,6 +55,7 @@ export const EditIndividualPlanDialog = ({
   cargoName,
   cargoId,
   squad,
+  roleType,
   anoMes,
   currentValues,
   catalogValues,
