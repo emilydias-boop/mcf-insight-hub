@@ -621,160 +621,23 @@ export function QuickScheduleModal({
               )}
             </div>
 
-            {/* Email Field (searchable or read-only when selected) */}
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder={isSelected ? "Auto-preenchido" : "Digite o email para buscar..."}
-                  value={isSelected ? selectedEmail : emailQuery}
-                  onChange={(e) => {
-                    if (!isSelected) {
-                      const value = e.target.value;
-                      setEmailQuery(value);
-                      setShowEmailResults(value.length >= 3);
-                    }
-                  }}
-                  onFocus={() => {
-                    if (emailQuery.length >= 3 && !isSelected) {
-                      setShowEmailResults(true);
-                    }
-                  }}
-                  readOnly={isSelected}
-                  className={cn(
-                    "pl-9 pr-9",
-                    isSelected && selectedEmail && "bg-muted border-green-500/50"
-                  )}
-                />
-                {isSelected && selectedEmail && (
-                  <Check className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
+            {/* Selected Lead Info Card */}
+            {isSelected && (selectedEmail || selectedPhone) && (
+              <div className="border rounded-md bg-muted/50 px-3 py-2 space-y-1">
+                {selectedEmail && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Mail className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{selectedEmail}</span>
+                  </div>
+                )}
+                {selectedPhone && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Phone className="h-3 w-3 shrink-0" />
+                    <span>{formatPhoneDisplay(selectedPhone)}</span>
+                  </div>
                 )}
               </div>
-
-              {/* Email Search Results */}
-              {showEmailResults && emailQuery.length >= 3 && !selectedDeal && (
-                <div className="border rounded-md max-h-48 overflow-y-auto shadow-sm bg-popover">
-                  {searchingEmail ? (
-                    <div className="p-2 space-y-2">
-                      <Skeleton className="h-10 w-full" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ) : emailSearchResults.length === 0 ? (
-                    <p className="p-3 text-sm text-muted-foreground text-center">
-                      Nenhum lead encontrado com esse email
-                    </p>
-                  ) : (
-                    emailSearchResults.map(deal => {
-                      const stageName = (deal as any).stage?.stage_name;
-                      return (
-                        <button
-                          key={deal.id}
-                          onClick={() => handleSelectDeal(deal as DealOption)}
-                          className="w-full text-left px-3 py-2.5 hover:bg-accent border-b last:border-b-0 flex items-center justify-between gap-2"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">
-                              {deal.contact?.name || deal.name}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span className="truncate">{deal.contact?.email || '(sem email)'}</span>
-                              {stageName && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0 bg-muted/50">
-                                  {stageName}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          {deal.contact?.phone && (
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
-                              <Phone className="h-3 w-3" />
-                              <span>{formatPhoneDisplay(deal.contact.phone)}</span>
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Telefone Field (searchable or read-only when selected) */}
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium">Telefone</Label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder={isSelected ? "Auto-preenchido" : "Digite o telefone para buscar..."}
-                  value={isSelected ? formatPhoneDisplay(selectedPhone) : phoneQuery}
-                  onChange={(e) => {
-                    if (!isSelected) {
-                      const value = e.target.value;
-                      setPhoneQuery(value);
-                      setShowPhoneResults(value.replace(/\D/g, '').length >= 4);
-                    }
-                  }}
-                  onFocus={() => {
-                    if (phoneQuery.replace(/\D/g, '').length >= 4 && !isSelected) {
-                      setShowPhoneResults(true);
-                    }
-                  }}
-                  readOnly={isSelected}
-                  className={cn(
-                    "pl-9 pr-9",
-                    isSelected && selectedPhone && "bg-muted border-green-500/50"
-                  )}
-                />
-                {isSelected && selectedPhone && (
-                  <Check className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
-                )}
-              </div>
-
-              {/* Phone Search Results */}
-              {showPhoneResults && phoneQuery.replace(/\D/g, '').length >= 4 && !selectedDeal && (
-                <div className="border rounded-md max-h-48 overflow-y-auto shadow-sm bg-popover">
-                  {searchingPhone ? (
-                    <div className="p-2 space-y-2">
-                      <Skeleton className="h-10 w-full" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ) : phoneSearchResults.length === 0 ? (
-                    <p className="p-3 text-sm text-muted-foreground text-center">
-                      Nenhum lead encontrado com esse telefone
-                    </p>
-                  ) : (
-                    phoneSearchResults.map(deal => {
-                      const stageName = (deal as any).stage?.stage_name;
-                      return (
-                        <button
-                          key={deal.id}
-                          onClick={() => handleSelectDeal(deal as DealOption)}
-                          className="w-full text-left px-3 py-2.5 hover:bg-accent border-b last:border-b-0 flex items-center justify-between gap-2"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">
-                              {deal.contact?.name || deal.name}
-                            </div>
-                            {stageName && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0 bg-muted/50">
-                                {stageName}
-                              </Badge>
-                            )}
-                          </div>
-                          {deal.contact?.phone && (
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
-                              <Phone className="h-3 w-3" />
-                              <span>{formatPhoneDisplay(deal.contact.phone)}</span>
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Lead Type Badge */}
             {selectedDeal && (
