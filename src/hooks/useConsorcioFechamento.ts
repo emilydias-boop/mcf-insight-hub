@@ -10,7 +10,43 @@ import {
   AjusteConsorcio,
   calcularPayoutConsorcio,
   OTE_PADRAO_CONSORCIO,
+  PESOS_PADRAO_CONSORCIO,
+  PesosConsorcio,
 } from '@/types/consorcio-fechamento';
+
+// ID do cargo "Closer Consórcio" em cargos_catalogo
+const CARGO_CLOSER_CONSORCIO_ID = '6258e185-0001-40a6-bcd8-d9eb8a5c2720';
+
+// Buscar pesos dinâmicos das métricas ativas do mês
+async function buscarPesosMetricas(anoMes: string): Promise<PesosConsorcio> {
+  const { data: metricas } = await supabase
+    .from('fechamento_metricas_mes')
+    .select('nome_metrica, peso_percentual')
+    .eq('ano_mes', anoMes)
+    .eq('cargo_catalogo_id', CARGO_CLOSER_CONSORCIO_ID)
+    .eq('ativo', true);
+  
+  if (!metricas || metricas.length === 0) {
+    // Fallback: pesos padrão 90/0/10
+    return { ...PESOS_PADRAO_CONSORCIO };
+  }
+  
+  const pesos: PesosConsorcio = { comissao_consorcio: 0, comissao_holding: 0, organizacao: 0 };
+  
+  for (const m of metricas) {
+    const pesoDecimal = (m.peso_percentual || 0) / 100;
+    const nome = m.nome_metrica?.toLowerCase() || '';
+    if (nome.includes('comissao_consorcio') || nome.includes('comissão') || nome.includes('venda_consorcio')) {
+      pesos.comissao_consorcio += pesoDecimal;
+    } else if (nome.includes('holding')) {
+      pesos.comissao_holding += pesoDecimal;
+    } else if (nome.includes('organizacao') || nome.includes('organização')) {
+      pesos.organizacao += pesoDecimal;
+    }
+  }
+  
+  return pesos;
+}
 
 // Cargos excluídos do fechamento
 const CARGOS_EXCLUIDOS_LIST = ['Supervisor', 'Closer R2', 'Coordenador', 'ADMIN'];
@@ -206,6 +242,9 @@ export function useRecalculateConsorcioPayouts() {
   
   return useMutation({
     mutationFn: async (anoMes: string) => {
+      // 0. Buscar pesos dinâmicos das métricas ativas
+      const pesos = await buscarPesosMetricas(anoMes);
+      
       // 1. Buscar closers ativos do consórcio
       const { data: closers, error: closersError } = await supabase
         .from('closers')
@@ -285,14 +324,16 @@ export function useRecalculateConsorcioPayouts() {
           }
         }
         
-        // 8. Calcular valores
+        // 8. Calcular valores com pesos dinâmicos
         const calc = calcularPayoutConsorcio(
           variavel_total,
           comissao_consorcio,
           comissao_holding,
           score_organizacao,
           meta_comissao_consorcio,
-          meta_comissao_holding
+          meta_comissao_holding,
+          100,
+          pesos
         );
         
         const total_conta = fixo_valor + calc.valor_variavel_final;
@@ -372,14 +413,19 @@ export function useUpdateConsorcioPayoutKpi() {
         throw new Error('Não é possível editar um fechamento travado');
       }
       
-      // Recalcular com novos KPIs
+      // Buscar pesos dinâmicos das métricas ativas
+      const pesos = await buscarPesosMetricas(payout.ano_mes);
+      
+      // Recalcular com novos KPIs e pesos dinâmicos
       const calc = calcularPayoutConsorcio(
         payout.variavel_total,
         data.comissao_consorcio,
         data.comissao_holding,
         data.score_organizacao,
         data.meta_comissao_consorcio || payout.meta_comissao_consorcio || 2000,
-        data.meta_comissao_holding || payout.meta_comissao_holding || 500
+        data.meta_comissao_holding || payout.meta_comissao_holding || 500,
+        100,
+        pesos
       );
       
       const total_conta = payout.fixo_valor + calc.valor_variavel_final + (payout.bonus_extra || 0);

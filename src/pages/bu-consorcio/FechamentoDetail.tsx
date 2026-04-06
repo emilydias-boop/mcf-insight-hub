@@ -14,7 +14,7 @@ import {
   useUpdateConsorcioPayoutStatus,
   useAddConsorcioAjuste,
 } from '@/hooks/useConsorcioFechamento';
-import { PESOS_CLOSER_CONSORCIO } from '@/types/consorcio-fechamento';
+import { PESOS_PADRAO_CONSORCIO } from '@/types/consorcio-fechamento';
 import { useState } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
@@ -128,7 +128,7 @@ export default function ConsorcioFechamentoDetail() {
         <div className="grid gap-4">
           <ConsorcioIndicatorCard
             label="Comissão Venda Consórcio"
-            peso={`${(PESOS_CLOSER_CONSORCIO.comissao_consorcio * 100).toFixed(0)}%`}
+            peso={`${(PESOS_PADRAO_CONSORCIO.comissao_consorcio * 100).toFixed(0)}%`}
             meta={payout.meta_comissao_consorcio || 0}
             realizado={payout.comissao_consorcio || 0}
             pct={payout.pct_comissao_consorcio || 0}
@@ -139,7 +139,7 @@ export default function ConsorcioFechamentoDetail() {
           
           <ConsorcioIndicatorCard
             label="Comissão Venda Holding"
-            peso={`${(PESOS_CLOSER_CONSORCIO.comissao_holding * 100).toFixed(0)}%`}
+            peso={`${(PESOS_PADRAO_CONSORCIO.comissao_holding * 100).toFixed(0)}%`}
             meta={payout.meta_comissao_holding || 0}
             realizado={payout.comissao_holding || 0}
             pct={payout.pct_comissao_holding || 0}
@@ -150,7 +150,7 @@ export default function ConsorcioFechamentoDetail() {
           
           <ConsorcioIndicatorCard
             label="Organização"
-            peso={`${(PESOS_CLOSER_CONSORCIO.organizacao * 100).toFixed(0)}%`}
+            peso={`${(PESOS_PADRAO_CONSORCIO.organizacao * 100).toFixed(0)}%`}
             meta={payout.meta_organizacao || 100}
             realizado={payout.score_organizacao || 0}
             pct={payout.pct_organizacao || 0}

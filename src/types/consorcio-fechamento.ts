@@ -2,19 +2,19 @@
 
 export type ConsorcioPayoutStatus = 'DRAFT' | 'APPROVED' | 'LOCKED';
 
-// Pesos fixos para distribuição do variável
-export const PESOS_CLOSER_CONSORCIO = {
-  comissao_consorcio: 0.72,  // 72% do variável
-  comissao_holding: 0.18,    // 18% do variável
-  organizacao: 0.10,         // 10% do variável
-} as const;
-
-// OTE padrão para closers de consórcio
+// OTE padrão para closers de consórcio (fallback)
 export const OTE_PADRAO_CONSORCIO = {
-  ote_total: 5000,
+  ote_total: 7000,
   fixo_pct: 0.70,      // 70% fixo
   variavel_pct: 0.30,  // 30% variável
 };
+
+// Pesos padrão (fallback quando não há métricas configuradas)
+export const PESOS_PADRAO_CONSORCIO = {
+  comissao_consorcio: 0.90,  // 90%
+  comissao_holding: 0.00,    // 0%
+  organizacao: 0.10,         // 10%
+} as const;
 
 export interface ConsorcioCloserPayout {
   id: string;
@@ -134,16 +134,23 @@ export const CONSORCIO_STATUS_LABELS: Record<ConsorcioPayoutStatus, { label: str
   },
 };
 
-// Multiplicador por % de atingimento (mesmo padrão do SDR)
-export function getMultiplier(pct: number): number {
-  if (pct < 50) return 0;
-  if (pct < 70) return 0.5;
-  if (pct < 100) return 0.7;
-  if (pct < 150) return 1;
-  return 1.5;
+// Multiplicador específico para Consórcio (faixas diferentes do SDR)
+export function getMultiplierConsorcio(pct: number): number {
+  if (pct <= 70) return 0;
+  if (pct <= 85) return 0.5;
+  if (pct <= 99) return 0.7;
+  if (pct <= 119) return 1;
+  return 1.5; // 120%+
 }
 
-// Calcula valores do payout
+// Interface para pesos dinâmicos
+export interface PesosConsorcio {
+  comissao_consorcio: number;
+  comissao_holding: number;
+  organizacao: number;
+}
+
+// Calcula valores do payout com pesos dinâmicos
 export function calcularPayoutConsorcio(
   variavel_total: number,
   comissao_consorcio: number,
@@ -151,7 +158,8 @@ export function calcularPayoutConsorcio(
   score_organizacao: number,
   meta_comissao_consorcio: number,
   meta_comissao_holding: number,
-  meta_organizacao: number = 100
+  meta_organizacao: number = 100,
+  pesos: PesosConsorcio = PESOS_PADRAO_CONSORCIO
 ): {
   pct_comissao_consorcio: number;
   pct_comissao_holding: number;
@@ -175,15 +183,15 @@ export function calcularPayoutConsorcio(
     ? (score_organizacao / meta_organizacao) * 100 
     : 100;
   
-  // Multiplicadores
-  const mult_comissao_consorcio = getMultiplier(pct_comissao_consorcio);
-  const mult_comissao_holding = getMultiplier(pct_comissao_holding);
-  const mult_organizacao = getMultiplier(pct_organizacao);
+  // Multiplicadores (faixas específicas do consórcio)
+  const mult_comissao_consorcio = getMultiplierConsorcio(pct_comissao_consorcio);
+  const mult_comissao_holding = getMultiplierConsorcio(pct_comissao_holding);
+  const mult_organizacao = getMultiplierConsorcio(pct_organizacao);
   
   // Valores finais (peso × mult × variavel_total)
-  const valor_comissao_consorcio = variavel_total * PESOS_CLOSER_CONSORCIO.comissao_consorcio * mult_comissao_consorcio;
-  const valor_comissao_holding = variavel_total * PESOS_CLOSER_CONSORCIO.comissao_holding * mult_comissao_holding;
-  const valor_organizacao = variavel_total * PESOS_CLOSER_CONSORCIO.organizacao * mult_organizacao;
+  const valor_comissao_consorcio = variavel_total * pesos.comissao_consorcio * mult_comissao_consorcio;
+  const valor_comissao_holding = variavel_total * pesos.comissao_holding * mult_comissao_holding;
+  const valor_organizacao = variavel_total * pesos.organizacao * mult_organizacao;
   
   const valor_variavel_final = valor_comissao_consorcio + valor_comissao_holding + valor_organizacao;
   
