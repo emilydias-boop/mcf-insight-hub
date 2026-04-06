@@ -332,7 +332,29 @@ export default function ConsorcioPainelEquipe() {
   const { data: produtosFechadosBySdr } = useConsorcioProdutosFechadosBySdr(start, end);
   const { data: produtosFechadosByCloser } = useConsorcioProdutosFechadosByCloser(start, end);
   const { data: propostasByCloser } = useConsorcioPipelineMetricsByCloser(start, end);
-  
+
+  // KPIs derivados da tabela de Closers para consistência quando aba Closers ativa
+  const closerKPIs = useMemo(() => {
+    const metrics = closerMetrics || [];
+    const totalAgendamentos = metrics.reduce((s, m) => s + m.r1_agendada, 0);
+    const totalRealizadas = metrics.reduce((s, m) => s + m.r1_realizada, 0);
+    const totalNoShows = metrics.reduce((s, m) => s + m.noshow, 0);
+    const totalContratos = produtosFechadosByCloser
+      ? Array.from(produtosFechadosByCloser.values()).reduce((s, v) => s + v, 0)
+      : 0;
+    return {
+      sdrCount: metrics.length,
+      totalAgendamentos,
+      totalRealizadas,
+      totalNoShows,
+      totalContratos,
+      totalOutside: 0,
+      totalR1Agendada: totalAgendamentos,
+      taxaConversao: totalRealizadas > 0 ? (totalContratos / totalRealizadas) * 100 : 0,
+      taxaNoShow: totalAgendamentos > 0 ? (totalNoShows / totalAgendamentos) * 100 : 0,
+    };
+  }, [closerMetrics, produtosFechadosByCloser]);
+
   // Consórcio team targets
   const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
   const canEditGoals = role && ['admin', 'manager', 'coordenador'].includes(role);
