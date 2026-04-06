@@ -312,6 +312,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
           departamento: emp.departamento,
           cargo_catalogo_id: emp.cargo_catalogo_id,
           sdr_id: sdrId,
+          role_type: sdrRecord?.role_type || null,
           cargo_catalogo: cargo,
           comp_plan: plan ? {
             id: plan.id,
@@ -322,6 +323,8 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
             valor_docs_reuniao: plan.valor_docs_reuniao,
             valor_tentativas: plan.valor_tentativas,
             valor_organizacao: plan.valor_organizacao,
+            meta_comissao_consorcio: (plan as any).meta_comissao_consorcio || null,
+            meta_comissao_holding: (plan as any).meta_comissao_holding || null,
           } : null,
           sdr_meta_diaria: sdrRecord?.meta_diaria || 10,
         };
