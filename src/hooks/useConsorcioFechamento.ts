@@ -335,12 +335,43 @@ export function useRecalculateConsorcioPayouts() {
         let fixo_valor = ote_total * OTE_PADRAO_CONSORCIO.fixo_pct;
         let variavel_total = ote_total * OTE_PADRAO_CONSORCIO.variavel_pct;
         
+        // Auto-sync: buscar valores atualizados do cargo catálogo
+        const emp = employeeByEmail.get(closerEmail);
+        const cargoAtualizado = emp?.cargo_catalogo_id ? cargoCatalogoMap.get(emp.cargo_catalogo_id) : null;
+        
         if (sdr) {
           const compPlan = await buscarCompPlanVigente(sdr.id, anoMes);
           if (compPlan) {
             ote_total = compPlan.ote_total;
             fixo_valor = compPlan.fixo_valor;
             variavel_total = compPlan.variavel_total;
+            
+            // Auto-sync: se cargo foi atualizado, propagar para comp plan e usar novos valores
+            if (cargoAtualizado && (
+              compPlan.fixo_valor !== cargoAtualizado.fixo_valor ||
+              compPlan.variavel_total !== cargoAtualizado.variavel_valor
+            )) {
+              const novoOte = cargoAtualizado.fixo_valor + cargoAtualizado.variavel_valor;
+              ote_total = cargoAtualizado.ote_total || novoOte;
+              fixo_valor = cargoAtualizado.fixo_valor;
+              variavel_total = cargoAtualizado.variavel_valor;
+              
+              // Atualizar comp plan para manter consistência
+              await supabase
+                .from('sdr_comp_plan')
+                .update({
+                  ote_total,
+                  fixo_valor,
+                  variavel_total,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('sdr_id', sdr.id)
+                .lte('vigencia_inicio', `${anoMes}-01`)
+                .or(`vigencia_fim.is.null,vigencia_fim.gte.${anoMes}-01`);
+              
+              console.log(`[Auto-sync] ${closer.name}: fixo atualizado para ${fixo_valor}`);
+            }
+            
             // Usar metas do comp plan se configuradas
             if (compPlan.meta_comissao_consorcio) {
               meta_comissao_consorcio = compPlan.meta_comissao_consorcio;
@@ -348,7 +379,17 @@ export function useRecalculateConsorcioPayouts() {
             if (compPlan.meta_comissao_holding) {
               meta_comissao_holding = compPlan.meta_comissao_holding;
             }
+          } else if (cargoAtualizado) {
+            // Sem comp plan: usar valores direto do cargo catálogo
+            ote_total = cargoAtualizado.ote_total || (cargoAtualizado.fixo_valor + cargoAtualizado.variavel_valor);
+            fixo_valor = cargoAtualizado.fixo_valor;
+            variavel_total = cargoAtualizado.variavel_valor;
           }
+        } else if (cargoAtualizado) {
+          // Sem SDR: usar valores direto do cargo catálogo
+          ote_total = cargoAtualizado.ote_total || (cargoAtualizado.fixo_valor + cargoAtualizado.variavel_valor);
+          fixo_valor = cargoAtualizado.fixo_valor;
+          variavel_total = cargoAtualizado.variavel_valor;
         }
         
         // 8. Calcular valores com pesos dinâmicos
