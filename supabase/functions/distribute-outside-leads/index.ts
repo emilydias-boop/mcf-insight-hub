@@ -337,6 +337,77 @@ serve(async (req) => {
 
     console.log(`🎉 [DISTRIBUTE-OUTSIDE] Concluído: ${distributedCount}/${outsideDeals.length} distribuídos`);
 
+    // 10. Detectar contratos órfãos (sem deal no CRM)
+    let orphan_contracts: Array<{ email: string; name: string; sale_date: string; product_name: string }> = [];
+    let no_contact_contracts: Array<{ email: string; name: string; sale_date: string; product_name: string }> = [];
+    
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const { data: recentContracts } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, customer_name, sale_date, product_name')
+        .in('product_category', ['contrato', 'incorporador'])
+        .ilike('product_name', '%contrato%')
+        .eq('sale_status', 'completed')
+        .gte('sale_date', thirtyDaysAgo.toISOString());
+
+      if (recentContracts && recentContracts.length > 0) {
+        // Deduplicate by email
+        const contractsByEmail = new Map<string, typeof recentContracts[0]>();
+        for (const c of recentContracts) {
+          const email = c.customer_email?.toLowerCase().trim();
+          if (!email) continue;
+          if (!contractsByEmail.has(email)) {
+            contractsByEmail.set(email, c);
+          }
+        }
+
+        const contractEmails = [...contractsByEmail.keys()];
+        
+        // Check which emails have contacts
+        const { data: contacts } = await supabase
+          .from('crm_contacts')
+          .select('id, email')
+          .in('email', contractEmails);
+        
+        const contactMap = new Map<string, string>();
+        for (const c of (contacts || [])) {
+          if (c.email) contactMap.set(c.email.toLowerCase().trim(), c.id);
+        }
+
+        // Check which contacts have deals in this origin
+        const contactIdsWithEmail = [...contactMap.values()];
+        let dealsForContacts: Array<{ contact_id: string }> = [];
+        if (contactIdsWithEmail.length > 0) {
+          const { data: existingDeals } = await supabase
+            .from('crm_deals')
+            .select('contact_id')
+            .in('contact_id', contactIdsWithEmail)
+            .eq('origin_id', originId);
+          dealsForContacts = existingDeals || [];
+        }
+        
+        const contactsWithDeals = new Set(dealsForContacts.map(d => d.contact_id));
+
+        for (const [email, contract] of contractsByEmail) {
+          const contactId = contactMap.get(email);
+          const entry = { email, name: contract.customer_name || '', sale_date: contract.sale_date, product_name: contract.product_name || '' };
+          
+          if (!contactId) {
+            no_contact_contracts.push(entry);
+          } else if (!contactsWithDeals.has(contactId)) {
+            orphan_contracts.push(entry);
+          }
+        }
+        
+        console.log(`🔍 [DISTRIBUTE-OUTSIDE] Órfãos: ${orphan_contracts.length} com contato sem deal, ${no_contact_contracts.length} sem contato`);
+      }
+    } catch (orphanErr) {
+      console.error('[DISTRIBUTE-OUTSIDE] Erro ao buscar órfãos:', orphanErr);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -346,6 +417,8 @@ serve(async (req) => {
         distributed: distributedCount,
         failed: outsideDeals.length - distributedCount,
         results,
+        orphan_contracts,
+        no_contact_contracts,
         message: dry_run
           ? `Simulação: ${outsideDeals.length} leads Outside encontrados, ${distributedCount} seriam distribuídos`
           : `${distributedCount} leads Outside distribuídos com sucesso`
