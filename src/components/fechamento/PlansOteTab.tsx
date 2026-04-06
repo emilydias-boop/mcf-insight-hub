@@ -190,7 +190,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
       // Find the employee to get cargo_catalogo_id
       const emp = employeesWithPlans.find(e => e.sdr_id === sdrId);
       
-      const planData = {
+      const planData: Record<string, any> = {
         sdr_id: sdrId,
         vigencia_inicio: monthStart,
         cargo_catalogo_id: emp?.cargo_catalogo_id || null,
@@ -211,6 +211,8 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
         ifood_ultrameta: 0,
         status: 'PENDING',
         updated_at: new Date().toISOString(),
+        meta_comissao_consorcio: values.meta_comissao_consorcio || null,
+        meta_comissao_holding: values.meta_comissao_holding || null,
       };
       
       if (existing) {
