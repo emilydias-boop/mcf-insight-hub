@@ -305,9 +305,9 @@ export const OutsideDistributionButton = () => {
                 {/* Orphan Contracts Section */}
                 {allOrphans.length > 0 && (
                   <div className="space-y-2">
-                    <div className="flex gap-2 p-2 rounded-lg border border-yellow-500/30 bg-yellow-500/5 text-sm">
-                      <AlertCircle className="h-4 w-4 text-yellow-600 shrink-0 mt-0.5" />
-                      <span className="text-yellow-700 dark:text-yellow-400">
+                    <div className="flex gap-2 p-2 rounded-lg border border-accent bg-accent/10 text-sm">
+                      <AlertCircle className="h-4 w-4 text-accent-foreground shrink-0 mt-0.5" />
+                      <span className="text-accent-foreground">
                         {allOrphans.length} contrato(s) sem deal no CRM detectado(s). Verifique e crie manualmente se necessário.
                       </span>
                     </div>
