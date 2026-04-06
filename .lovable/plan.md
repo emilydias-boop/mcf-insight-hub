@@ -1,45 +1,23 @@
 
 
-# Substituir "Vendas Parceria" por "Contratos Pagos" para Closers
+# Alinhar lista de Contratos Pagos com o indicador (58 → 57)
 
-## Problema
+## Diagnóstico
 
-Na página de fechamento de um Closer, a seção "Vendas Parceria" aparece vazia e não é útil. O que o Closer precisa ver é a **lista de contratos pagos** com:
-- Nome do lead
-- SDR que trouxe (quem agendou a R1 — `booked_by`)
-- Data da reunião (`scheduled_at`)
-- Data do pagamento (`contract_paid_at`)
+A diferença de 1 contrato é o **Samuel Figueiredo Siqueira** — um "outside lead" cujo `contract_paid_at` (03:15) é anterior ao `scheduled_at` (17:00) da reunião. O indicador KPI (`useCloserAgendaMetrics`) já exclui outsides; a lista (`useCloserContractsList`) não aplica essa mesma lógica.
 
 ## Solução
 
-### Arquivo 1: `src/hooks/useCloserContractsList.ts` (novo)
+### Arquivo: `src/hooks/useCloserContractsList.ts`
 
-Hook que busca os contratos pagos do closer no mês:
-1. Resolve `sdr_id` → email → `closer_id`
-2. Busca `meeting_slot_attendees` com `status in (contract_paid, refunded)` e `contract_paid_at` no período, joined com `meeting_slots` do closer
-3. Para cada contrato, busca o `booked_by` (UUID) da R1 correspondente ao deal e resolve o nome via `profiles`
-4. Retorna array com: `leadName`, `sdrName`, `meetingDate`, `contractPaidAt`
+Adicionar detecção de "outside" igual ao `useCloserAgendaMetrics`:
 
-### Arquivo 2: `src/components/sdr-fechamento/CloserContractsList.tsx` (novo)
+1. Ao coletar os attendees com `contract_paid` / `refunded`, verificar se `contract_paid_at < scheduled_at` (contrato pago antes da reunião) — se sim, é outside e deve ser excluído da lista
+2. Isso alinha a lista com o KPI automaticamente
 
-Componente de tabela simples que renderiza os contratos:
-- Colunas: Lead | SDR | Data Reunião | Data Contrato
-- Total no rodapé
-- Sem botão de adicionar (dados automáticos da Agenda)
-
-### Arquivo 3: `src/pages/fechamento-sdr/Detail.tsx`
-
-Substituir o bloco de `IntermediacoesList` para closers:
-```tsx
-{fromBu !== 'consorcio' && (
-  isCloser 
-    ? <CloserContractsList sdrId={payout.sdr_id} anoMes={payout.ano_mes} />
-    : <IntermediacoesList sdrId={payout.sdr_id} anoMes={payout.ano_mes} disabled={!canEdit} isCloser={false} />
-)}
-```
+A lógica é simples: no loop existente (linha 82-98), ao adicionar cada attendee, comparar `att.contract_paid_at` com `slot.scheduled_at`. Se o pagamento foi antes da reunião, pular (`continue`).
 
 ## Resultado esperado
-- Closers veem a lista completa de contratos com SDR, data da reunião e data do pagamento
-- SDRs continuam vendo "Intermediações de Contrato" normalmente
-- Consórcio continua sem exibir nenhuma das duas seções
+- Lista e indicador mostram o mesmo número (57)
+- Outsides não aparecem na lista de contratos do closer
 
