@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
 
         const { data: newDeal, error: dealError } = await supabase
           .from('crm_deals')
-          .upsert({
+          .insert({
             clint_id: `backfill-a010-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             name: `${orphan.name || 'Cliente'} - A010`,
             contact_id: orphan.id,
@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
             tags: ['A010', 'Backfill'],
             custom_fields: { source: 'backfill', backfill_date: new Date().toISOString() },
             data_source: 'backfill',
-          }, { onConflict: 'contact_id,origin_id', ignoreDuplicates: true })
+          })
           .select('id')
           .maybeSingle();
 
