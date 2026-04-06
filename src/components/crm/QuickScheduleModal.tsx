@@ -31,8 +31,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { 
   CloserWithAvailability, 
   useSearchDealsForSchedule, 
-  useSearchDealsByPhone,
-  useSearchDealsByEmail,
   useCreateMeeting,
   useCheckSlotAvailability,
   useSendMeetingNotification,
