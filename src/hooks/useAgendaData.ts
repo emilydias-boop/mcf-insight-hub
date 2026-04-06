@@ -867,11 +867,12 @@ export function useSearchDealsForSchedule(query: string, originIds?: string[]) {
       // 2. Buscar contatos pelo nome ou telefone (case-insensitive)
       const normalizedQuery = query.replace(/\D/g, ''); // Remove non-digits for phone search
       const phoneFilter = normalizedQuery.length >= 4 ? `,phone.ilike.%${normalizedQuery}%` : '';
+      const emailFilter = query.includes('@') || query.length >= 3 ? `,email.ilike.%${query}%` : '';
       
       const { data: contacts } = await supabase
         .from('crm_contacts')
         .select('id')
-        .or(`name.ilike.%${query}%${phoneFilter}`)
+        .or(`name.ilike.%${query}%${phoneFilter}${emailFilter}`)
         .limit(10);
 
       // 3. Se achou contatos, buscar os deals relacionados
