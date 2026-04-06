@@ -10636,6 +10636,15 @@ export type Database = {
         Args: { p_tipo: Database["public"]["Enums"]["asset_type"] }
         Returns: string
       }
+      get_a010_orphan_emails: {
+        Args: { p_limit?: number; p_origin_id: string; p_since: string }
+        Returns: {
+          contact_id: string
+          contact_name: string
+          contact_phone: string
+          email: string
+        }[]
+      }
       get_all_hubla_transactions: {
         Args: {
           p_end_date?: string
