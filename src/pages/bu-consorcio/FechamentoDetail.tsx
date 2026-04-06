@@ -40,6 +40,7 @@ export default function ConsorcioFechamentoDetail() {
   const updateKpi = useUpdateConsorcioPayoutKpi();
   const updateStatus = useUpdateConsorcioPayoutStatus();
   const addAjuste = useAddConsorcioAjuste();
+  const removeAjuste = useRemoveConsorcioAjuste();
 
   const isAdmin = role === 'admin';
   const isManager = role === 'manager' || role === 'coordenador';
