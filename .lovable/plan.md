@@ -1,58 +1,99 @@
 
 
-# Corrigir Outsides orfaos sem criar deals automaticamente
+# Corrigir race condition na criacao de contatos e deals no webhook
 
-## Problema confirmado
+## Diagnostico
 
-Thiago Desidera: contato existe (8c21c...), tem 2 transacoes A010 + 2 contratos A000, mas **nenhum deal** no CRM. Causa: race condition no webhook (eventos duplicados simultaneos).
+O problema e **sistemico** e afeta todos os novos leads, nao apenas o Adriano Rodrigues. Nos ultimos 6 dias, **126 contatos foram criados sem nenhum deal**. So hoje (06/04), 16 contatos ficaram orfaos.
 
-## Preocupacao do usuario
+### Causa raiz
 
-Se criarmos deals automaticamente para todo contrato orfao, podemos criar deals falsos quando alguem compra no nome de outra pessoa (socio, esposa, etc.).
+A tabela `crm_contacts` **nao tem unique constraint em `email`**. Quando dois webhooks chegam simultaneamente (ex: `NewSale` + `invoice.payment_succeeded`), ambos:
 
-## Solucao revisada: 2 partes
+1. Buscam contato por email → nao encontram (ainda nao existe)
+2. Cada um cria um contato DIFERENTE (com `clint_id` aleatorio diferente)
+3. Cada um tenta criar deal com seu `contact_id` diferente
+4. O unique index `(contact_id, origin_id)` nao conflita porque os contact_ids sao diferentes
+5. Por razoes de timing, um ou ambos falham silenciosamente, resultando em 0 deals
 
-### Parte 1: Fix preventivo no webhook (evitar novos orfaos)
+O fallback que implementamos na ultima vez nao funciona porque o problema esta ANTES — na duplicacao de contatos.
+
+## Solucao em 2 partes
+
+### Parte 1: Proteger criacao de contato contra race condition
 
 **Arquivo: `supabase/functions/hubla-webhook-handler/index.ts`**
 
-Na funcao `createOrUpdateCRMContact`, apos o upsert com `ignoreDuplicates: true` (linha 603-610):
-- Quando `newDeal` e null E `dealError` e null (upsert ignorado), fazer um SELECT para confirmar que o deal realmente existe
-- Se NAO existir (orfao por race condition), fazer INSERT direto como fallback
-- Adicionar log explicito: `"Deal verificado/criado via fallback"`
+Na secao de criacao de contato (linhas 410-428), substituir o INSERT simples por:
 
-Isso corrige o caso do Thiago para futuras compras — o deal sera criado mesmo com eventos duplicados.
+1. Tentar INSERT com `ON CONFLICT` no email (precisa de unique index parcial)
+2. Se falhar, fazer SELECT para buscar o contato que acabou de ser criado pelo outro evento
+3. Usar o contact_id encontrado para prosseguir
 
-### Parte 2: Listar orfaos existentes para revisao manual (sem criar deals)
+**Alternativa mais robusta** (sem alterar schema): Envolver a busca + criacao de contato em logica de retry:
+- Apos o INSERT, se obtiver erro de constraint ou se o contato ja existir, buscar novamente por email
+- Isso garante que ambos os eventos usem o MESMO contact_id
 
-**Arquivo: `supabase/functions/distribute-outside-leads/index.ts`**
+### Parte 2: Migration — Adicionar unique index parcial em email
 
-Adicionar uma secao extra no response que lista contratos orfaos encontrados:
-- Buscar `hubla_transactions` com `product_category IN ('contrato','incorporador')`, `product_name ILIKE '%contrato%'`, `sale_status = 'completed'`, ultimos 30 dias
-- Para cada email, verificar se existe `crm_contacts` com deal na origin "PIPELINE INSIDE SALES"
-- Se tem contato mas SEM deal: incluir na lista `orphan_contracts` do response (email, nome, data, produto)
-- Se nem contato tem: incluir na lista `no_contact_contracts`
-- **NAO criar deals** — apenas informar para revisao manual
+**Nova migration SQL:**
 
-O botao de distribuicao no frontend mostrara esses orfaos como aviso:
-> "X contratos sem deal no CRM detectados. Verifique manualmente."
+```sql
+-- Limpar contatos duplicados primeiro (manter o mais antigo)
+DELETE FROM crm_contacts 
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id, ROW_NUMBER() OVER (PARTITION BY lower(email) ORDER BY created_at ASC) as rn
+    FROM crm_contacts
+    WHERE email IS NOT NULL
+  ) sub WHERE rn > 1
+  AND id NOT IN (SELECT contact_id FROM crm_deals WHERE contact_id IS NOT NULL)
+);
 
-### Parte 3: Botao de correcao manual no frontend
+-- Criar unique index parcial (apenas para emails nao-null)
+CREATE UNIQUE INDEX IF NOT EXISTS crm_contacts_email_unique 
+ON crm_contacts (lower(email)) 
+WHERE email IS NOT NULL;
+```
 
-**Arquivo: `src/components/crm/OutsideDistributionButton.tsx`**
+**Importante:** Antes de deletar duplicados, verificar quais tem deals associados para nao perder dados.
 
-Quando o response incluir `orphan_contracts`, mostrar uma secao extra no dialog:
-- Lista dos orfaos com nome, email, data do contrato
-- Botao "Criar Deal" individual para cada um (chamando o webhook handler com os dados corretos)
-- Isso da controle ao coordenador para decidir caso a caso se o contrato e legitimo ou se foi compra no nome de terceiro
+### Parte 3: Webhook handler — usar upsert no contato
+
+**Arquivo: `supabase/functions/hubla-webhook-handler/index.ts`**
+
+Alterar a criacao de contato (linhas 410-428) para:
+
+```
+INSERT INTO crm_contacts (...) VALUES (...)
+ON CONFLICT (lower(email)) WHERE email IS NOT NULL
+DO UPDATE SET updated_at = now()
+RETURNING id
+```
+
+Ou via Supabase client: usar `.upsert()` com `onConflict: 'email'` apos o index existir.
+
+Isso garante que mesmo com 2 eventos simultaneos, apenas 1 contato sera criado, e ambos receberao o mesmo `contact_id`.
+
+### Parte 4: Fix retroativo para orfaos existentes
+
+**Arquivo: `supabase/functions/hubla-webhook-handler/index.ts`** ou script one-off
+
+Criar deals para os 126 contatos orfaos dos ultimos 6 dias:
+- Buscar contatos sem deal
+- Para cada um, verificar se tem transacao A010 em `hubla_transactions`
+- Criar deal com as tags e origem corretas
+- Esse fix pode ser um script manual ou integrado no `distribute-outside-leads`
+
+## Resultado esperado
+
+- Novos webhooks nunca criam contatos duplicados (unique index)
+- Deals sao sempre criados corretamente (mesmo contact_id usado por ambos eventos)
+- 126 orfaos existentes sao corrigidos retroativamente
+- Problema do Adriano Rodrigues e todos os outros leads de hoje sao resolvidos
 
 ## Arquivos alterados
-1. `supabase/functions/hubla-webhook-handler/index.ts` — fallback apos upsert ignorado
-2. `supabase/functions/distribute-outside-leads/index.ts` — listar orfaos sem criar deals
-3. `src/components/crm/OutsideDistributionButton.tsx` — mostrar orfaos para acao manual
-
-## Resultado
-- Novos webhooks nao geram mais orfaos (fix preventivo)
-- Orfaos existentes aparecem para revisao manual, sem criar deals automaticamente
-- Coordenador decide caso a caso se o contrato e legitimo
+1. **Migration SQL** — unique index parcial em `crm_contacts.email` + limpeza de duplicados
+2. `supabase/functions/hubla-webhook-handler/index.ts` — usar upsert atomico na criacao de contato
+3. Script retroativo para criar deals dos orfaos (integrado no distribute-outside-leads ou one-off)
 
