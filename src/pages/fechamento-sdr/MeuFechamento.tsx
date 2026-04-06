@@ -102,12 +102,17 @@ const MeuFechamento = () => {
     });
   };
 
+  const handleMonthChange = (month: string) => {
+    setSelectedMonth(month);
+    setSearchParams({ month });
+  };
+
   const handleViewDetails = () => {
     if (!visiblePayout) return;
     if (isConsorcioPayout) {
-      navigate(`/consorcio/fechamento/${visiblePayout.id}`);
+      navigate(`/consorcio/fechamento/${visiblePayout.id}?from=${selectedMonth}&source=meu-fechamento`);
     } else {
-      navigate(`/fechamento-sdr/${visiblePayout.id}`);
+      navigate(`/fechamento-sdr/${visiblePayout.id}?from=${selectedMonth}&source=meu-fechamento`);
     }
   };
 
