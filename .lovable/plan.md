@@ -1,29 +1,25 @@
 
+# Ocultar "Intermediações de Contrato" para Consórcio
 
-# Filtrar Thobson e Luis Felipe do Fechamento Consórcio
+## Problema
 
-## Diagnóstico
-
-A query `useConsorcioPayouts` busca **todos** os registros de `consorcio_closer_payout` do mês, sem aplicar o filtro de cargos excluídos (`CARGOS_EXCLUIDOS_LIST`). Já existe um filtro em `useConsorcioClosers()` que exclui cargos como "Closer R2", mas ele só é usado para listar closers — não para filtrar os payouts exibidos na tabela.
-
-Dados no banco:
-- **Thobson**: cargo = "Closer R2" (está na lista de exclusão, mas o payout aparece mesmo assim)
-- **Luis Felipe**: sem registro em `employees`, então passa no filtro de cargos. Se ele não deve aparecer, precisa ser desativado na tabela `closers` ou ter um cargo excludente
+A seção "Intermediações de Contrato" aparece para todos os SDRs no fechamento, inclusive os de Consórcio. Consórcio não utiliza contratos Hubla — a métrica relevante é "Proposta Fechada", não "Contrato Pago". Portanto essa seção não faz sentido para eles.
 
 ## Solução
 
-### Arquivo: `src/hooks/useConsorcioFechamento.ts` — `useConsorcioPayouts`
+### Arquivo: `src/pages/fechamento-sdr/Detail.tsx`
 
-Após buscar os payouts, aplicar o mesmo filtro de cargos excluídos que já existe em `useConsorcioClosers`:
-1. Coletar os emails dos closers dos payouts retornados
-2. Buscar os cargos desses emails na tabela `employees`
-3. Filtrar payouts cujo closer tenha cargo na `CARGOS_EXCLUIDOS_LIST`
+A página já lê `fromBu = searchParams.get('bu')` da URL. Basta condicionar a renderização do `IntermediacoesList`:
 
-Isso garante que Thobson (Closer R2) não apareça na listagem.
+```tsx
+// Linha ~563-564: adicionar condição
+{fromBu !== 'consorcio' && (
+  <IntermediacoesList sdrId={payout.sdr_id} anoMes={payout.ano_mes} disabled={!canEdit} isCloser={isCloser} />
+)}
+```
 
-Para Luis Felipe: confirmar com o usuário se ele deve ser excluído por outro motivo (ex: desativação do closer) ou se precisa de um cargo específico no `employees`.
+Isso remove a seção inteira (título + lista + botão adicionar) quando o SDR é de Consórcio.
 
 ## Resultado esperado
-- Thobson não aparece mais na lista de fechamento consórcio (cargo "Closer R2" excluído)
-- Luis Felipe: depende da confirmação — se o cargo dele não está na lista de exclusão, pode ser necessário desativá-lo ou adicionar seu cargo à lista
-
+- SDRs de Consórcio: seção "Intermediações de Contrato" não aparece
+- SDRs de Incorporador: comportamento inalterado
