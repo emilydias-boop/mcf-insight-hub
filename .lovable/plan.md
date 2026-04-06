@@ -1,39 +1,58 @@
 
 
-# Filtrar leads ja resolvidos da aba Acumulados
+# Corrigir Outsides orfaos sem criar deals automaticamente
 
-## Problema
+## Problema confirmado
 
-A aba "Acumulados" mostra 100 leads, mas muitos ja foram resolvidos:
-- **Dercio Maurilio Frai**: tem R2 Aprovada (01/04) e comprou A001 (02/04), mas aparece como "Sem R2" porque o codigo so olha a PRIMEIRA R2 apos o contrato (que nao tem status), ignorando a segunda R2 que esta aprovada
-- Dos 54 contratos da safra 26/03, 20 ja tem R2 aprovada e 17 ja compraram parceria — esses nao deveriam estar na lista
+Thiago Desidera: contato existe (8c21c...), tem 2 transacoes A010 + 2 contratos A000, mas **nenhum deal** no CRM. Causa: race condition no webhook (eventos duplicados simultaneos).
 
-## Causa raiz
+## Preocupacao do usuario
 
-No `useR2AccumulatedLeads.ts`, a logica pega apenas `validR2s[0]` (primeira R2 apos sale_date). Se essa primeira R2 nao tem status, classifica como "sem_r2" sem verificar se existe outra R2 posterior aprovada ou se o lead ja comprou produtos.
+Se criarmos deals automaticamente para todo contrato orfao, podemos criar deals falsos quando alguem compra no nome de outra pessoa (socio, esposa, etc.).
 
-## Solucao
+## Solucao revisada: 2 partes
 
-### Alteracao: `src/hooks/useR2AccumulatedLeads.ts`
+### Parte 1: Fix preventivo no webhook (evitar novos orfaos)
 
-1. **Verificar TODAS as R2s do contato**, nao so a primeira:
-   - Se QUALQUER R2 apos sale_date tem status "Aprovado" → excluir (ja resolvido)
-   - Se QUALQUER R2 tem status definitivo (Reembolso, Desistente, Reprovado, Cancelado) → excluir (ja tratado no "Fora do Carrinho")
-   - Se a primeira R2 tem status "Proxima Semana" mas existe outra R2 posterior aprovada → excluir
+**Arquivo: `supabase/functions/hubla-webhook-handler/index.ts`**
 
-2. **Verificar compra de parceria**: Antes de marcar como "sem_r2", verificar se o email tem transacao de parceria/incorporador (excluindo A000/contrato) com status completed. Se sim → excluir
+Na funcao `createOrUpdateCRMContact`, apos o upsert com `ignoreDuplicates: true` (linha 603-610):
+- Quando `newDeal` e null E `dealError` e null (upsert ignorado), fazer um SELECT para confirmar que o deal realmente existe
+- Se NAO existir (orfao por race condition), fazer INSERT direto como fallback
+- Adicionar log explicito: `"Deal verificado/criado via fallback"`
 
-3. **Implementacao**:
-   - Apos coletar todos os emails da safra, fazer uma query extra buscando transacoes de parceria desses emails
-   - Criar set `resolvedEmails` com emails que tem parceria comprada
-   - Na iteracao de R2s por contato: verificar se alguma R2 (nao so a primeira) tem status aprovado ou definitivo
-   - So incluir no resultado se nao estiver resolvido por nenhum dos criterios
+Isso corrige o caso do Thiago para futuras compras — o deal sera criado mesmo com eventos duplicados.
 
-## Resultado esperado
-- Dercio e outros leads ja aprovados/parceiros saem da lista
-- Lista mostra apenas leads genuinamente pendentes que precisam de atencao
-- Numero deve cair significativamente de 100
+### Parte 2: Listar orfaos existentes para revisao manual (sem criar deals)
 
-## Arquivo alterado
-1. `src/hooks/useR2AccumulatedLeads.ts`
+**Arquivo: `supabase/functions/distribute-outside-leads/index.ts`**
+
+Adicionar uma secao extra no response que lista contratos orfaos encontrados:
+- Buscar `hubla_transactions` com `product_category IN ('contrato','incorporador')`, `product_name ILIKE '%contrato%'`, `sale_status = 'completed'`, ultimos 30 dias
+- Para cada email, verificar se existe `crm_contacts` com deal na origin "PIPELINE INSIDE SALES"
+- Se tem contato mas SEM deal: incluir na lista `orphan_contracts` do response (email, nome, data, produto)
+- Se nem contato tem: incluir na lista `no_contact_contracts`
+- **NAO criar deals** — apenas informar para revisao manual
+
+O botao de distribuicao no frontend mostrara esses orfaos como aviso:
+> "X contratos sem deal no CRM detectados. Verifique manualmente."
+
+### Parte 3: Botao de correcao manual no frontend
+
+**Arquivo: `src/components/crm/OutsideDistributionButton.tsx`**
+
+Quando o response incluir `orphan_contracts`, mostrar uma secao extra no dialog:
+- Lista dos orfaos com nome, email, data do contrato
+- Botao "Criar Deal" individual para cada um (chamando o webhook handler com os dados corretos)
+- Isso da controle ao coordenador para decidir caso a caso se o contrato e legitimo ou se foi compra no nome de terceiro
+
+## Arquivos alterados
+1. `supabase/functions/hubla-webhook-handler/index.ts` — fallback apos upsert ignorado
+2. `supabase/functions/distribute-outside-leads/index.ts` — listar orfaos sem criar deals
+3. `src/components/crm/OutsideDistributionButton.tsx` — mostrar orfaos para acao manual
+
+## Resultado
+- Novos webhooks nao geram mais orfaos (fix preventivo)
+- Orfaos existentes aparecem para revisao manual, sem criar deals automaticamente
+- Coordenador decide caso a caso se o contrato e legitimo
 
