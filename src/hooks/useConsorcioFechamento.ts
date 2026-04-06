@@ -225,7 +225,7 @@ async function buscarCompPlanVigente(sdrId: string, anoMes: string) {
   // Buscar plano vigente para o mês (vigencia_inicio <= mesStr AND (vigencia_fim IS NULL OR vigencia_fim >= mesStr))
   const { data } = await supabase
     .from('sdr_comp_plan')
-    .select('ote_total, fixo_valor, variavel_total')
+    .select('ote_total, fixo_valor, variavel_total, meta_comissao_consorcio, meta_comissao_holding')
     .eq('sdr_id', sdrId)
     .lte('vigencia_inicio', mesStr)
     .or(`vigencia_fim.is.null,vigencia_fim.gte.${mesStr}`)
