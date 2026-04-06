@@ -331,6 +331,22 @@ export const METRIC_CONFIG: Record<string, {
     isAuto: true,
     autoSource: 'Agenda',
   },
+  comissao_consorcio: {
+    icon: 'DollarSign',
+    color: 'green',
+    kpiField: 'comissao_consorcio',
+    isDynamicCalc: true,
+    isAuto: false,
+    autoSource: 'Manual',
+  },
+  comissao_holding: {
+    icon: 'DollarSign',
+    color: 'blue',
+    kpiField: 'comissao_holding',
+    isDynamicCalc: true,
+    isAuto: false,
+    autoSource: 'Manual',
+  },
 };
 
 // Get label for metric value field

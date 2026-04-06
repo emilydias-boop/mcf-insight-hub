@@ -227,6 +227,8 @@ export const METRICAS_DISPONIVEIS = [
   { nome: 'no_show', label: 'No-Show (inverso)', fonte: 'agenda' },
   { nome: 'outside_sales', label: 'Outside Sales', fonte: 'manual' },
   { nome: 'r2_agendadas', label: 'R2 Agendadas', fonte: 'agenda' },
+  { nome: 'comissao_consorcio', label: 'Comissão Venda Consórcio', fonte: 'manual' },
+  { nome: 'comissao_holding', label: 'Comissão Venda Holding', fonte: 'manual' },
 ] as const;
 
 export type MetricaNome = typeof METRICAS_DISPONIVEIS[number]['nome'];

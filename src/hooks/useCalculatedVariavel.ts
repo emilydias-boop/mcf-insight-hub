@@ -70,6 +70,14 @@ function calcularMeta(
     return Math.round((contratosPagos * pct) / 100);
   }
 
+  if (nome === 'comissao_consorcio') {
+    return (payout as any)?.meta_comissao_consorcio || metrica.meta_valor || 0;
+  }
+
+  if (nome === 'comissao_holding') {
+    return (payout as any)?.meta_comissao_holding || metrica.meta_valor || 0;
+  }
+
   if (metrica.meta_percentual && metrica.meta_percentual > 0) {
     const realizadas = kpi?.reunioes_realizadas || 0;
     return Math.round((realizadas * metrica.meta_percentual) / 100);
