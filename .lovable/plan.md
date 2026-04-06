@@ -1,58 +1,56 @@
 
 
-# Alinhar fechamento Consórcio com métricas reais da planilha
+# Separar SDRs e Closers no Config + Metas individuais de comissao
 
-## Problemas identificados
+## Problema
 
-Comparando o sistema atual com a planilha do João Pedro:
+1. **Aba SDRs mistura tudo**: A tab "SDRs" na config do consorcio mostra SDRs e Closers juntos, com coluna "Meta Diaria" que so faz sentido para SDRs. Closers precisam de meta de comissao consorcio (ex: Victoria = R$ 19M), nao meta diaria de reunioes.
 
-**1. Multiplicadores errados**
-O código usa as faixas do SDR, mas consórcio tem faixas diferentes:
+2. **Meta de comissao hardcoded**: O recalculo usa `meta_comissao_consorcio = 2000` para todos os closers. Na planilha real, cada closer tem sua meta individual (ex: Victoria R$ 19.000 de comissao, Joao Pedro pode ter outro valor).
 
-```text
-Sistema atual          |  Planilha real
------------------------|------------------
-< 50%  → 0            |  0-70%   → 0
-50-70% → 0.5          |  71-85%  → 0.5
-70-100% → 0.7         |  86-99%  → 0.7
-100-150% → 1          |  100-119% → 1
-150%+ → 1.5           |  120%+   → 1.5
-```
+3. **Onde guardar a meta individual**: Hoje o `sdr_comp_plan` nao tem campo para `meta_comissao_consorcio`. A meta fica apenas no `consorcio_closer_payout` (por mes), mas sem lugar para configurar antecipadamente.
 
-**2. Pesos hardcoded e errados**
-O código tem `PESOS_CLOSER_CONSORCIO = { comissao_consorcio: 0.72, comissao_holding: 0.18, organizacao: 0.10 }`, mas a planilha mostra **90% / 0% / 10%** para abril. Os pesos deveriam vir da configuração de **Métricas Ativas** (`fechamento_metricas_mes`), não serem fixos.
+## Solucao
 
-**3. Métricas não configuradas**
-O screenshot mostra que as métricas para "Closer Consórcio" em abril estão todas desativadas — precisam ser ativadas com os pesos corretos.
+### 1. Migration: adicionar campos de meta ao sdr_comp_plan
 
-## Solução
+Adicionar colunas opcionais ao `sdr_comp_plan`:
+- `meta_comissao_consorcio NUMERIC` (meta de venda consorcio em R$)
+- `meta_comissao_holding NUMERIC` (meta de venda holding em R$)
 
-### Arquivo 1: `src/types/consorcio-fechamento.ts`
+Isso permite que cada closer tenha sua meta individual configurada no plano de compensacao, junto com OTE/fixo/variavel.
 
-- Criar `getMultiplierConsorcio(pct)` com as faixas corretas (0-70→0, 71-85→0.5, 86-99→0.7, 100-119→1, 120+→1.5)
-- Remover `PESOS_CLOSER_CONSORCIO` hardcoded
-- Refatorar `calcularPayoutConsorcio` para receber os pesos como parâmetro em vez de usar constantes fixas
+### 2. Separar SDRs e Closers na aba de config
 
-### Arquivo 2: `src/hooks/useConsorcioFechamento.ts`
+No `SdrConfigTab`, quando `squad = 'consorcio'`:
+- Dividir a tabela em duas secoes: **SDRs** (role_type = 'sdr') e **Closers** (role_type = 'closer')
+- SDRs mantem colunas atuais: Nome, Email, Nivel, Meta Diaria, Status, Ativo
+- Closers mostram colunas diferentes: Nome, Email, Nivel, Meta Comissao Consorcio, Meta Comissao Holding, Status, Ativo
+- Filtrar Supervisores/Coordenadores da secao de Closers (mesma logica do fechamento)
 
-No `useRecalculateConsorcioPayouts`:
-- Buscar métricas ativas do mês em `fechamento_metricas_mes` para o cargo "Closer Consórcio" (ou squad "consorcio")
-- Extrair `peso_percentual` de cada métrica configurada (ex: comissao_consorcio=90%, organizacao=10%)
-- Passar os pesos dinâmicos para `calcularPayoutConsorcio`
-- Se não houver métricas configuradas, usar fallback com pesos padrão (90/0/10)
-- Usar `getMultiplierConsorcio` em vez de `getMultiplier`
+### 3. Formulario de edicao de Closer com campos de meta
 
-No `useUpdateConsorcioPayoutKpi`:
-- Mesma lógica: buscar pesos das métricas ativas antes de recalcular
+No `EditSdrDialog`, quando o SDR for role_type = 'closer' e squad = 'consorcio':
+- Mostrar campos de meta de comissao (consorcio e holding) em vez de meta diaria
+- Salvar esses valores no registro do SDR ou no comp plan
 
-### Arquivo 3: Componentes de exibição (indicator cards, detail page)
+### 4. Recalculo usa meta individual
 
-- Atualizar referências a `PESOS_CLOSER_CONSORCIO` para usar os pesos salvos no payout ou buscados dinamicamente
+No `useConsorcioFechamento.ts`, ao recalcular:
+- Buscar `meta_comissao_consorcio` e `meta_comissao_holding` do `sdr_comp_plan` vigente
+- Usar como meta individual em vez do hardcoded 2000/500
+- Fallback para 2000/500 se nao configurado
+
+## Arquivos alterados
+1. **Migration SQL** — adicionar `meta_comissao_consorcio` e `meta_comissao_holding` ao `sdr_comp_plan`
+2. `src/components/fechamento/SdrConfigTab.tsx` — separar tabelas SDR/Closer, colunas diferentes
+3. `src/hooks/useConsorcioFechamento.ts` — buscar meta individual do comp plan no recalculo
+4. `src/components/fechamento/EditIndividualPlanDialog.tsx` — adicionar campos de meta comissao para closers consorcio
 
 ## Resultado esperado
-- João Pedro com 136.26% de atingimento em comissão consórcio → mult 1.5 (≥120%) → R$ 2,835 (90% × R$2,100 × 1.5)
-- Holding 0% de peso → R$ 0
-- Organização 100% → mult 1 → R$ 210 (10% × R$2,100 × 1)
-- Total variável: R$ 3,045
-- Total conta: R$ 4,900 + R$ 3,045 + R$ 660 (iFood) = R$ 8,605
+- Aba config mostra SDRs separados dos Closers
+- Victoria aparece como Closer com meta R$ 19.000 (configuravel)
+- Joao Pedro aparece como Closer com sua meta individual
+- Luis Felipe/Thobson nao aparecem (filtrados por cargo)
+- Recalculo do fechamento usa meta individual de cada closer
 
