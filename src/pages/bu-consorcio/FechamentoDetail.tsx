@@ -62,7 +62,7 @@ export default function ConsorcioFechamentoDetail() {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">Fechamento não encontrado.</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate('/consorcio/fechamento')}>
+        <Button variant="outline" className="mt-4" onClick={() => navigate(backUrl)}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Voltar
         </Button>
