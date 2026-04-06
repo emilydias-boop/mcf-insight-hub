@@ -160,6 +160,28 @@ async function buscarComissaoHoldingMes(closerId: string, anoMes: string): Promi
   return (data || []).reduce((sum, v) => sum + (v.valor_comissao || 0), 0);
 }
 
+// Cargos que devem ser excluídos do fechamento de closers
+const CARGOS_EXCLUIDOS = ['Supervisor', 'Closer R2', 'Coordenador', 'ADMIN'];
+
+// Buscar OTE do comp plan individual para o mês
+async function buscarCompPlanVigente(sdrId: string, anoMes: string) {
+  const [ano, mes] = anoMes.split('-').map(Number);
+  const mesStr = `${ano}-${String(mes).padStart(2, '0')}-01`;
+  
+  // Buscar plano vigente para o mês (vigencia_inicio <= mesStr AND (vigencia_fim IS NULL OR vigencia_fim >= mesStr))
+  const { data } = await supabase
+    .from('sdr_comp_plan')
+    .select('ote_total, fixo_valor, variavel_total')
+    .eq('sdr_id', sdrId)
+    .lte('vigencia_inicio', mesStr)
+    .or(`vigencia_fim.is.null,vigencia_fim.gte.${mesStr}`)
+    .order('vigencia_inicio', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  
+  return data;
+}
+
 // Gerar/Recalcular payouts do mês
 export function useRecalculateConsorcioPayouts() {
   const queryClient = useQueryClient();
@@ -178,14 +200,40 @@ export function useRecalculateConsorcioPayouts() {
         throw new Error('Nenhum closer ativo encontrado para consórcio');
       }
       
+      // 2. Buscar SDRs correspondentes (match por email)
+      const emails = closers.map(c => c.email.toLowerCase());
+      const { data: sdrs } = await supabase
+        .from('sdr')
+        .select('id, email, name')
+        .in('email', emails);
+      
+      const sdrByEmail = new Map((sdrs || []).map(s => [s.email.toLowerCase(), s]));
+      
+      // 3. Buscar employees para verificar cargo (match por email)
+      const { data: employees } = await supabase
+        .from('employees')
+        .select('id, email_pessoal, cargo')
+        .in('email_pessoal', emails);
+      
+      const cargoByEmail = new Map((employees || []).map(e => [e.email_pessoal?.toLowerCase(), e.cargo]));
+      
       const results = [];
       
       for (const closer of closers) {
-        // 2. Buscar KPIs automáticos
+        const closerEmail = closer.email.toLowerCase();
+        
+        // 4. Filtrar por cargo - excluir supervisores, closer R2, coordenadores
+        const cargo = cargoByEmail.get(closerEmail);
+        if (cargo && CARGOS_EXCLUIDOS.includes(cargo)) {
+          results.push({ closer: closer.name, status: 'skipped', reason: `cargo: ${cargo}` });
+          continue;
+        }
+        
+        // 5. Buscar KPIs automáticos
         const comissao_consorcio = await buscarComissaoConsorcioMes(closer.id, anoMes);
         const comissao_holding = await buscarComissaoHoldingMes(closer.id, anoMes);
         
-        // 3. Verificar se já existe payout
+        // 6. Verificar se já existe payout
         const { data: existing } = await supabase
           .from('consorcio_closer_payout')
           .select('id, status, score_organizacao, meta_comissao_consorcio, meta_comissao_holding')
@@ -204,12 +252,22 @@ export function useRecalculateConsorcioPayouts() {
         const meta_comissao_holding = existing?.meta_comissao_holding || 500;
         const score_organizacao = existing?.score_organizacao || 100;
         
-        // OTE padrão
-        const ote_total = OTE_PADRAO_CONSORCIO.ote_total;
-        const fixo_valor = ote_total * OTE_PADRAO_CONSORCIO.fixo_pct;
-        const variavel_total = ote_total * OTE_PADRAO_CONSORCIO.variavel_pct;
+        // 7. Buscar OTE individual do comp plan
+        const sdr = sdrByEmail.get(closerEmail);
+        let ote_total = OTE_PADRAO_CONSORCIO.ote_total;
+        let fixo_valor = ote_total * OTE_PADRAO_CONSORCIO.fixo_pct;
+        let variavel_total = ote_total * OTE_PADRAO_CONSORCIO.variavel_pct;
         
-        // 4. Calcular valores
+        if (sdr) {
+          const compPlan = await buscarCompPlanVigente(sdr.id, anoMes);
+          if (compPlan) {
+            ote_total = compPlan.ote_total;
+            fixo_valor = compPlan.fixo_valor;
+            variavel_total = compPlan.variavel_total;
+          }
+        }
+        
+        // 8. Calcular valores
         const calc = calcularPayoutConsorcio(
           variavel_total,
           comissao_consorcio,
