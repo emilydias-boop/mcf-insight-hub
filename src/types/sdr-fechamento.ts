@@ -36,6 +36,8 @@ export interface SdrCompPlan {
   ote_total: number;
   fixo_valor: number;
   variavel_total: number;
+  meta_comissao_consorcio?: number | null;
+  meta_comissao_holding?: number | null;
   valor_meta_rpg: number;
   valor_docs_reuniao: number;
   valor_tentativas: number;

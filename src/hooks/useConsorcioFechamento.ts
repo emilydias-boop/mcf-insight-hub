@@ -310,8 +310,7 @@ export function useRecalculateConsorcioPayouts() {
         let meta_comissao_holding = existing?.meta_comissao_holding || 500;
         const score_organizacao = existing?.score_organizacao || 100;
         
-        // 7. Buscar OTE individual do comp plan
-        const sdr = sdrByEmail.get(closerEmail);
+        // 7. Buscar OTE individual e metas do comp plan
         let ote_total = OTE_PADRAO_CONSORCIO.ote_total;
         let fixo_valor = ote_total * OTE_PADRAO_CONSORCIO.fixo_pct;
         let variavel_total = ote_total * OTE_PADRAO_CONSORCIO.variavel_pct;
@@ -322,6 +321,13 @@ export function useRecalculateConsorcioPayouts() {
             ote_total = compPlan.ote_total;
             fixo_valor = compPlan.fixo_valor;
             variavel_total = compPlan.variavel_total;
+            // Usar metas do comp plan se configuradas
+            if (compPlan.meta_comissao_consorcio) {
+              meta_comissao_consorcio = compPlan.meta_comissao_consorcio;
+            }
+            if (compPlan.meta_comissao_holding) {
+              meta_comissao_holding = compPlan.meta_comissao_holding;
+            }
           }
         }
         
