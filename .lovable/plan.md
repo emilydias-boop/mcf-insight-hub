@@ -1,50 +1,47 @@
 
 
-# Corrigir Backfill: Unique Constraint + Query Limit
+# Corrigir Backfill A010: Tags inconsistentes + Orlando sem deal
 
 ## Problema
 
-Todos os 50+ inserts falharam com `duplicate key value violates unique constraint "crm_deals_contact_origin_unique"`. A causa é dupla:
+O backfill não está encontrando todos os órfãos (incluindo Orlando) por causa de **dois formatos de tags** no `crm_contacts`:
 
-1. **Limite de 1000 rows do Supabase**: A query que busca deals existentes (linha 84-88) usa `.in('contact_id', contactIds)` com até 500 IDs, mas o Supabase retorna no máximo 1000 rows. Se houver mais deals que isso, alguns contatos parecem "órfãos" mas já têm deal.
+1. **Texto simples**: `['A010', 'Hubla']` — criado pelo webhook Hubla/Make (29 contatos em abril)
+2. **Objetos JSON**: `[{"id":"...","name":"A010 - Consultoria..."}]` — criado pelo sync Clint (96+ contatos em abril)
 
-2. **Sem tratamento de conflito**: O insert não usa `onConflict` nem trata o erro de constraint, então falha silenciosamente contando como "processado" mas sem criar nada.
+O backfill atual busca `tags @> ARRAY['A010']` que só encontra o formato 1. Resultado: de **55 órfãos reais** em abril (com pagamento A010 confirmado), o backfill só consegue ver ~20.
+
+Orlando tem tags `[{"id":null,"name":null,"color":null}]` — nem texto nem JSON com nome. Ele nunca seria encontrado pela busca de tags.
 
 ## Solução
 
 ### Arquivo: `supabase/functions/backfill-orphan-a010-deals/index.ts`
 
-Duas correções:
+**Mudar a estratégia de busca**: em vez de procurar pela tag no contato, buscar diretamente pela transação confirmada no `hubla_transactions`. Isso é 100% confiável:
 
-**1. Buscar deals em batches menores** para evitar o limite de 1000:
-```typescript
-// Em vez de .in('contact_id', allContactIds) de uma vez
-// Dividir em batches de 50 IDs
-const contactsWithDeal = new Set<string>();
-for (let i = 0; i < contactIds.length; i += 50) {
-  const batch = contactIds.slice(i, i + 50);
-  const { data: deals } = await supabase
-    .from('crm_deals')
-    .select('contact_id')
-    .eq('origin_id', originId)
-    .in('contact_id', batch);
-  (deals || []).forEach(d => contactsWithDeal.add(d.contact_id));
-}
+```text
+Lógica atual (falha):
+  crm_contacts WHERE tags @> ['A010'] AND NOT EXISTS deal
+
+Lógica corrigida:
+  crm_contacts WHERE email IN (
+    SELECT customer_email FROM hubla_transactions 
+    WHERE product_category = 'a010' AND sale_status = 'completed'
+  ) AND NOT EXISTS deal
 ```
 
-**2. Tratar constraint no insert** — usar `upsert` com `onConflict` ou ignorar erro de duplicata:
-```typescript
-const { data: newDeal, error: dealError } = await supabase
-  .from('crm_deals')
-  .upsert({...dealData}, { onConflict: 'contact_id,origin_id', ignoreDuplicates: true })
-  .select('id')
-  .maybeSingle();
-```
+Mudanças específicas:
 
-Se `ignoreDuplicates` não funcionar com esse constraint name, usar try/catch e pular com log.
+1. **Query RPC**: Substituir `c.tags @> ARRAY['A010']` por um JOIN com `hubla_transactions` onde `product_category = 'a010'` e `sale_status = 'completed'`
+
+2. **Fallback manual**: Substituir `.contains('tags', ['A010'])` por uma busca em duas etapas:
+   - Primeiro buscar emails com transação A010 confirmada
+   - Depois buscar contatos com esses emails que não têm deal
+
+3. **Manter o resto**: A lógica de deduplicação, partner check, distribuição e upsert continua igual
 
 ## Resultado esperado
-- Orphans verdadeiros recebem deals
-- Contatos que já têm deal são ignorados sem erro
-- Sem impacto do limite de 1000 rows
+- Orlando e todos os 55 órfãos de abril são encontrados
+- Não depende mais do formato das tags (que é inconsistente)
+- Backfill passa a usar a fonte de verdade: o pagamento confirmado na `hubla_transactions`
 
