@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +34,9 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function ConsorcioFechamentoDetail() {
   const { payoutId } = useParams<{ payoutId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromMonth = searchParams.get('from');
+  const backUrl = fromMonth ? `/consorcio/fechamento?month=${fromMonth}` : '/consorcio/fechamento';
   const { user, role } = useAuth();
 
   const { data: payout, isLoading } = useConsorcioPayoutDetail(payoutId || '');
@@ -59,7 +62,7 @@ export default function ConsorcioFechamentoDetail() {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">Fechamento não encontrado.</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate('/consorcio/fechamento')}>
+        <Button variant="outline" className="mt-4" onClick={() => navigate(backUrl)}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Voltar
         </Button>
@@ -144,7 +147,7 @@ export default function ConsorcioFechamentoDetail() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/consorcio/fechamento')}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(backUrl)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>

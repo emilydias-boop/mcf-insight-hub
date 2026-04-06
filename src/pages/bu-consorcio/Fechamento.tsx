@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +16,12 @@ import { Badge } from '@/components/ui/badge';
 
 export default function ConsorcioFechamento() {
   const navigate = useNavigate();
-  const [anoMes, setAnoMes] = useState(format(new Date(), 'yyyy-MM'));
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [anoMes, setAnoMes] = useState(() => searchParams.get('month') || format(new Date(), 'yyyy-MM'));
+
+  useEffect(() => {
+    setSearchParams({ month: anoMes }, { replace: true });
+  }, [anoMes, setSearchParams]);
   
   // Closers data
   const { data: payouts, isLoading } = useConsorcioPayouts(anoMes);
@@ -236,7 +241,7 @@ export default function ConsorcioFechamento() {
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => navigate(`/consorcio/fechamento/${payout.id}`)}
+                            onClick={() => navigate(`/consorcio/fechamento/${payout.id}?from=${anoMes}`)}
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -373,7 +378,7 @@ export default function ConsorcioFechamento() {
                             <Button 
                               variant="ghost" 
                               size="sm"
-                              onClick={() => navigate(`/fechamento-sdr/${payout.id}`)}
+                              onClick={() => navigate(`/fechamento-sdr/${payout.id}?from=${anoMes}&bu=consorcio`)}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
