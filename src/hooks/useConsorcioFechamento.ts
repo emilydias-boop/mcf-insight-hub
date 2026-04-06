@@ -108,12 +108,39 @@ export function useConsorcioPayouts(anoMes: string) {
       if (error) throw error;
       
       // Parse ajustes_json
-      return (data || []).map(row => ({
+      const payouts = (data || []).map(row => ({
         ...row,
         ajustes_json: Array.isArray(row.ajustes_json) 
           ? (row.ajustes_json as unknown as AjusteConsorcio[])
           : [],
       })) as ConsorcioCloserPayout[];
+
+      // Filtrar por cargo excluído (mesmo filtro de useConsorcioClosers)
+      if (payouts.length > 0) {
+        const emails = payouts
+          .map(p => p.closer?.email?.toLowerCase())
+          .filter((e): e is string => !!e);
+        
+        if (emails.length > 0) {
+          const { data: employees } = await supabase
+            .from('employees')
+            .select('email_pessoal, cargo')
+            .in('email_pessoal', emails);
+          
+          const cargoByEmail = new Map(
+            (employees || []).map(e => [e.email_pessoal?.toLowerCase(), e.cargo])
+          );
+          
+          return payouts.filter(p => {
+            const email = p.closer?.email?.toLowerCase();
+            if (!email) return true;
+            const cargo = cargoByEmail.get(email);
+            return !cargo || !CARGOS_EXCLUIDOS_LIST.includes(cargo);
+          });
+        }
+      }
+      
+      return payouts;
     },
     enabled: !!anoMes,
   });
