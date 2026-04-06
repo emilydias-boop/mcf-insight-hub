@@ -399,15 +399,11 @@ export function QuickScheduleModal({
   const resetForm = () => {
     setSearchMode('normal');
     setNameQuery('');
-    setPhoneQuery('');
-    setEmailQuery('');
     setSelectedDeal(null);
     setSelectedEmail('');
     setSelectedPhone('');
     setSelectedSdr('');
     setShowResults(false);
-    setShowPhoneResults(false);
-    setShowEmailResults(false);
     setSelectedCloser(preselectedCloserId || '');
     setSelectedDate(undefined);
     setSelectedTime('09:00');
