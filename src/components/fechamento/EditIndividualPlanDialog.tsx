@@ -210,6 +210,45 @@ export const EditIndividualPlanDialog = ({
             </span>
           </div>
 
+          {/* Metas de Comissão - para Closers Consórcio */}
+          {squad === 'consorcio' && (
+            <div className="border-t pt-3">
+              <Label className="text-xs text-muted-foreground mb-2 block">
+                Metas de Comissão (Closers Consórcio)
+              </Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="meta_comissao_consorcio" className="text-[10px]">
+                    Meta Comissão Consórcio (R$)
+                  </Label>
+                  <Input
+                    id="meta_comissao_consorcio"
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={formData.meta_comissao_consorcio || 0}
+                    onChange={(e) => handleChange('meta_comissao_consorcio', e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="meta_comissao_holding" className="text-[10px]">
+                    Meta Comissão Holding (R$)
+                  </Label>
+                  <Input
+                    id="meta_comissao_holding"
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={formData.meta_comissao_holding || 0}
+                    onChange={(e) => handleChange('meta_comissao_holding', e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Valores por Métrica - Dynamic based on active metrics */}
           <div className="border-t pt-3">
             <Label className="text-xs text-muted-foreground mb-2 block flex items-center gap-2">
