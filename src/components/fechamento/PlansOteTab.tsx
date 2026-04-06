@@ -614,7 +614,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
                   <TableHead className="text-right">OTE Total</TableHead>
                   <TableHead className="text-right">Fixo</TableHead>
                   <TableHead className="text-right">Variável</TableHead>
-                  <TableHead className="text-center">Meta/Dia</TableHead>
+                  <TableHead className="text-center">Meta</TableHead>
                   <TableHead className="text-center w-[100px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
