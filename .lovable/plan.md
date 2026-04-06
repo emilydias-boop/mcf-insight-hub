@@ -1,44 +1,57 @@
 
-# Remover SDR Responsavel e restringir busca por owner
 
-## Problema
-1. O campo "SDR Responsavel" e desnecessario para SDRs — o usuario logado deve ser automaticamente o responsavel
-2. A busca de leads retorna qualquer lead da BU, permitindo que um SDR agende reuniao com lead de outro SDR (risco de "roubo de lead")
+# Corrigir metricas de Closer no Painel Consorcio
+
+## Diagnostico
+
+Dois problemas distintos causam os numeros errados na aba Closers:
+
+### Problema 1: Outside detection incorreta (causa principal da diferenca 321→196)
+
+O hook `useR1CloserMetrics` exclui leads "outside" das metricas de R1 Agendada/Realizada/No-show (linhas 500-504). A deteccao de outside busca transacoes na `hubla_transactions` com filtro:
+```
+product_category IN ('contrato', 'incorporador')
+product_name LIKE '%contrato%'
+```
+Esse filtro e especifico do **incorporador** ("A000 - Contrato", "Contrato - Socio MCF"), mas e aplicado igualmente para closers de **consorcio**. Resultado: 106+ leads de consorcio que tambem compraram produto incorporador sao incorretamente excluidos como "outside".
+
+- Dados reais no banco: **321 agendadas, 244 realizadas, 75 no-shows** (sem exclusao)
+- Apos exclusao outside: **196 agendadas, 143 realizadas, 51 no-shows** (o que aparece na tela)
+
+### Problema 2: Proposta Enviada mostra 0 para closers
+
+Na linha 766 do PainelEquipe, `propostasEnviadasByCloser` recebe `propostasData` que vem de `useConsorcioPipelineMetricsBySdr` — retorna `Map<sdrEmail, count>`. Como as chaves sao emails de SDR e nao IDs de closer, o componente `ConsorcioCloserSummaryTable` nunca encontra match.
 
 ## Alteracoes
 
-### 1. `src/components/crm/QuickScheduleModal.tsx`
+### 1. `src/hooks/useR1CloserMetrics.ts` — Condicionar outside por BU
 
-**Remover campo SDR Responsavel para SDRs:**
-- Adicionar prop `ownerEmail?: string` para receber o email do SDR logado
-- Se o usuario NAO for coordenador/admin/manager, ocultar o bloco "SDR Responsavel" (linhas 661-680)
-- Passar `user.email` automaticamente como `sdrEmail` no submit quando o campo estiver oculto
-- Remover estado `selectedSdr` da logica quando nao visivel
+O outside detection so faz sentido para `bu === 'incorporador'`. Para consorcio, o conceito de "outside" (lead comprou contrato incorporador antes da reuniao) nao se aplica.
 
-**Restringir busca por owner:**
-- Adicionar prop `ownerFilter?: string` (email do owner)
-- Passar para `useSearchDealsForSchedule` como novo parametro
+- Quando `bu !== 'incorporador'`: pular toda a logica de outside (emailContractDate, outsideByCloser, etc.)
+- Setar `isOutsideLead = false` no loop de processamento de attendees
+- Isso restaura os numeros corretos: 321 agendadas, 244 realizadas, 75 no-shows
 
-### 2. `src/hooks/useAgendaData.ts` — `useSearchDealsForSchedule`
+### 2. `src/pages/bu-consorcio/PainelEquipe.tsx` — Criar hook de propostas enviadas por closer
 
-Adicionar parametro `ownerEmail?: string`:
-- Quando fornecido, adicionar `.eq('owner_id', ownerEmail)` nas queries de `crm_deals` (tanto busca por nome quanto busca por contato)
-- Quando nao fornecido (coordenadores), manter comportamento atual sem filtro
+- Criar ou usar um hook `useConsorcioPipelineMetricsByCloser(start, end)` que retorne `Map<closerId, count>` (similar ao que existe para SDR mas com join via meeting_slot_attendees)
+- Passar o resultado correto para `propostasEnviadasByCloser`
 
-### 3. `src/components/crm/SdrScheduleDialog.tsx`
+Alternativa mais simples: como nao existe um hook dedicado e a feature de "proposta enviada por closer" pode nao ter dados, criar o hook `useConsorcioPipelineMetricsByCloser` seguindo o mesmo padrao de `useConsorcioProdutosFechadosByCloser` mas consultando `deal_activities` com `to_stage` contendo "proposta" ou similar.
 
-- Passar `ownerEmail={user.email}` para `QuickScheduleModal` quando chamado do contexto SDR
+### 3. `src/hooks/useConsorcioPipelineMetricsByCloser.ts` (novo arquivo)
 
-### 4. Callers existentes (Agenda.tsx, QualificationAndScheduleModal.tsx)
-
-- NAO alterar — coordenadores continuam vendo todos os leads e o campo SDR
-
-## Resultado
-- SDR logado ve apenas seus proprios leads na busca
-- Campo "SDR Responsavel" some para SDRs (atribuicao automatica)
-- Coordenadores/admin/manager mantem acesso completo
+Hook que conta propostas enviadas por closer:
+- Query `deal_activities` com `activity_type = 'stage_change'` e `to_stage` contendo "Proposta" no periodo
+- Join via `deal_id → meeting_slot_attendees → meeting_slots.closer_id`
+- Retorna `Map<closerId, count>`
 
 ## Arquivos alterados
-1. `src/hooks/useAgendaData.ts`
-2. `src/components/crm/QuickScheduleModal.tsx`
-3. `src/components/crm/SdrScheduleDialog.tsx`
+1. `src/hooks/useR1CloserMetrics.ts` — condicionar outside por BU
+2. `src/pages/bu-consorcio/PainelEquipe.tsx` — usar hook correto para propostas by closer
+3. `src/hooks/useConsorcioPipelineMetricsByCloser.ts` — novo hook
+
+## Resultado esperado
+- Closer tab mostrara: ~321 R1 Agendada, ~244 R1 Realizada, ~75 No-show (alinhado com SDR)
+- Proposta Env. e Proposta Fech. mostrarao valores reais por closer
+
