@@ -1,47 +1,45 @@
 
 
-# Corrigir Backfill A010: Tags inconsistentes + Orlando sem deal
+# Otimizar Backfill: Priorizar Órfãos Verdadeiros
 
 ## Problema
 
-O backfill não está encontrando todos os órfãos (incluindo Orlando) por causa de **dois formatos de tags** no `crm_contacts`:
-
-1. **Texto simples**: `['A010', 'Hubla']` — criado pelo webhook Hubla/Make (29 contatos em abril)
-2. **Objetos JSON**: `[{"id":"...","name":"A010 - Consultoria..."}]` — criado pelo sync Clint (96+ contatos em abril)
-
-O backfill atual busca `tags @> ARRAY['A010']` que só encontra o formato 1. Resultado: de **55 órfãos reais** em abril (com pagamento A010 confirmado), o backfill só consegue ver ~20.
-
-Orlando tem tags `[{"id":null,"name":null,"color":null}]` — nem texto nem JSON com nome. Ele nunca seria encontrado pela busca de tags.
+O backfill encontra 1053 "orphans" mas a maioria são **contatos duplicados** cujo irmão já tem deal. A função gasta todo o `limit` arquivando duplicatas e nunca chega nos **135 órfãos verdadeiros** (como o Orlando).
 
 ## Solução
 
 ### Arquivo: `supabase/functions/backfill-orphan-a010-deals/index.ts`
 
-**Mudar a estratégia de busca**: em vez de procurar pela tag no contato, buscar diretamente pela transação confirmada no `hubla_transactions`. Isso é 100% confiável:
+Reestruturar a lógica em 2 fases separadas:
 
-```text
-Lógica atual (falha):
-  crm_contacts WHERE tags @> ['A010'] AND NOT EXISTS deal
+**Fase 1 — Criar deals para órfãos verdadeiros** (emails sem nenhum deal):
+- Após buscar todos os emails A010 compradores, verificar quais emails já têm algum deal na pipeline (via qualquer contato)
+- Filtrar apenas emails sem deal nenhum
+- Para cada email, pegar o contato mais antigo (não arquivado), criar o deal e distribuir
+- Arquivar contatos duplicados do mesmo email (mantendo o que recebeu o deal)
 
-Lógica corrigida:
-  crm_contacts WHERE email IN (
-    SELECT customer_email FROM hubla_transactions 
-    WHERE product_category = 'a010' AND sale_status = 'completed'
-  ) AND NOT EXISTS deal
-```
+**Fase 2 — Limpar duplicatas restantes** (emails com deal mas contatos extras):
+- Processar os contatos órfãos cujo email já tem deal via outro contato
+- Apenas arquivar e vincular ao contato principal (sem criar deal)
 
-Mudanças específicas:
+A mudança principal é na **ordem de processamento**: primeiro cria deals para quem precisa, depois limpa duplicatas. Hoje faz tudo misturado e as duplicatas consomem o `limit`.
 
-1. **Query RPC**: Substituir `c.tags @> ARRAY['A010']` por um JOIN com `hubla_transactions` onde `product_category = 'a010'` e `sale_status = 'completed'`
+### Mudanças específicas no loop (linhas 122-233)
 
-2. **Fallback manual**: Substituir `.contains('tags', ['A010'])` por uma busca em duas etapas:
-   - Primeiro buscar emails com transação A010 confirmada
-   - Depois buscar contatos com esses emails que não têm deal
+1. Separar `orphans` em dois grupos:
+   - `trueOrphans`: contatos cujo email não tem nenhum deal (nenhum contato com esse email tem deal)
+   - `duplicateOrphans`: contatos cujo email já tem deal via outro contato
 
-3. **Manter o resto**: A lógica de deduplicação, partner check, distribuição e upsert continua igual
+2. Processar `trueOrphans` primeiro (criar deal + distribuir)
+3. Processar `duplicateOrphans` depois (apenas arquivar)
+4. O `limit` se aplica ao total das duas fases
+
+### Performance
+- A pré-classificação é feita na query existente de `contactsWithDeal` — basta agrupar por email em vez de por contact_id
+- Sem queries adicionais ao banco
 
 ## Resultado esperado
-- Orlando e todos os 55 órfãos de abril são encontrados
-- Não depende mais do formato das tags (que é inconsistente)
-- Backfill passa a usar a fonte de verdade: o pagamento confirmado na `hubla_transactions`
+- Orlando e os 135 órfãos verdadeiros são processados primeiro
+- Com `limit=50`, cria ~50 deals novos em vez de 0
+- Duplicatas são limpas só depois, no espaço que sobrar do limit
 
