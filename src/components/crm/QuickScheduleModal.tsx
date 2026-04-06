@@ -534,9 +534,9 @@ export function QuickScheduleModal({
           {/* Normal Search Section */}
           {searchMode === 'normal' && (
           <div className="space-y-3">
-            {/* Nome Field with Search */}
+            {/* Buscar Lead — campo unificado */}
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium">Nome</Label>
+              <Label className="text-sm font-medium">Buscar lead</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
