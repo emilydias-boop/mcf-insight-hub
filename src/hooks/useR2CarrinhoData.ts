@@ -30,48 +30,6 @@ export interface R2CarrinhoAttendee {
   contract_paid_at: string | null;
 }
 
-/**
- * Fetches safra contracts (Thu-Wed), resolves to contacts, then fetches
- * R2 attendees for those contacts (first R2 after sale_date).
- */
-async function fetchSafraContracts(boundaries: ReturnType<typeof getCarrinhoMetricBoundaries>) {
-  const { data: contratosTx } = await supabase
-    .from('hubla_transactions')
-    .select('customer_email, sale_date, hubla_id, source, product_name, installment_number, sale_status')
-    .eq('product_name', 'A000 - Contrato')
-    .in('sale_status', ['completed', 'refunded'])
-    .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
-    .gte('sale_date', boundaries.contratos.start.toISOString())
-    .lte('sale_date', boundaries.contratos.end.toISOString());
-
-  const validTx = (contratosTx || []).filter(t => {
-    if (t.hubla_id?.startsWith('newsale-')) return false;
-    if (t.source === 'make' && t.product_name?.toLowerCase() === 'contrato') return false;
-    if (t.installment_number && t.installment_number > 1) return false;
-    return true;
-  });
-
-  const emailMap = new Map<string, typeof validTx[0]>();
-  for (const tx of validTx) {
-    const email = (tx.customer_email || '').toLowerCase().trim();
-    if (email && !emailMap.has(email)) emailMap.set(email, tx);
-  }
-  return Array.from(emailMap.values());
-}
-
-async function resolveContactIds(emails: string[]) {
-  if (emails.length === 0) return new Map<string, string>();
-  const { data: contacts } = await supabase
-    .from('crm_contacts')
-    .select('id, email')
-    .in('email', emails);
-
-  const map = new Map<string, string>();
-  for (const c of contacts || []) {
-    if (c.email) map.set(c.email.toLowerCase().trim(), c.id);
-  }
-  return map;
-}
 
 export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados', carrinhoConfig?: CarrinhoConfig) {
   return useQuery({
