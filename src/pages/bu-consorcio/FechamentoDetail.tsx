@@ -36,7 +36,10 @@ export default function ConsorcioFechamentoDetail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const fromMonth = searchParams.get('from');
-  const backUrl = fromMonth ? `/consorcio/fechamento?month=${fromMonth}` : '/consorcio/fechamento';
+  const sourceParam = searchParams.get('source');
+  const backUrl = sourceParam === 'meu-fechamento' 
+    ? `/meu-fechamento${fromMonth ? `?month=${fromMonth}` : ''}`
+    : fromMonth ? `/consorcio/fechamento?month=${fromMonth}` : '/consorcio/fechamento';
   const { user, role } = useAuth();
 
   const { data: payout, isLoading } = useConsorcioPayoutDetail(payoutId || '');

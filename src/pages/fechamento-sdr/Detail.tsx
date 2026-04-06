@@ -167,11 +167,33 @@ const FechamentoSDRDetail = () => {
     );
   }
 
+  const sourceParam = searchParams.get('source');
+  const getBackUrl = () => {
+    if (sourceParam === 'meu-fechamento') {
+      return `/meu-fechamento${fromMonth ? `?month=${fromMonth}` : ''}`;
+    }
+    return fromMonth ? `/fechamento-sdr?month=${fromMonth}${fromBu ? `&bu=${fromBu}` : ''}` : `/fechamento-sdr${fromBu ? `?bu=${fromBu}` : ''}`;
+  };
+
   if (!payout) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">Fechamento não encontrado.</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate(fromMonth ? `/fechamento-sdr?month=${fromMonth}${fromBu ? `&bu=${fromBu}` : ''}` : `/fechamento-sdr${fromBu ? `?bu=${fromBu}` : ''}`)}>
+        <Button variant="outline" className="mt-4" onClick={() => navigate(getBackUrl())}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Voltar
+        </Button>
+      </div>
+    );
+  }
+
+  // Block SDRs from viewing DRAFT payouts
+  if (isReadOnly && payout.status === 'DRAFT') {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">Fechamento ainda não disponível para visualização.</p>
+        <p className="text-xs text-muted-foreground mt-2">Aguarde a aprovação do seu gestor.</p>
+        <Button variant="outline" className="mt-4" onClick={() => navigate(getBackUrl())}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Voltar
         </Button>
@@ -330,7 +352,7 @@ const FechamentoSDRDetail = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate(fromMonth ? `/fechamento-sdr?month=${fromMonth}${fromBu ? `&bu=${fromBu}` : ''}` : `/fechamento-sdr${fromBu ? `?bu=${fromBu}` : ''}`)}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(getBackUrl())}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>

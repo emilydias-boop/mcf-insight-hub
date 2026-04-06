@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,9 +32,12 @@ import {
 
 const MeuFechamento = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const currentMonth = format(new Date(), 'yyyy-MM');
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedMonth, setSelectedMonth] = useState(
+    searchParams.get('month') || currentMonth
+  );
   const [showNfseModal, setShowNfseModal] = useState(false);
 
   const { 
@@ -99,12 +102,17 @@ const MeuFechamento = () => {
     });
   };
 
+  const handleMonthChange = (month: string) => {
+    setSelectedMonth(month);
+    setSearchParams({ month });
+  };
+
   const handleViewDetails = () => {
     if (!visiblePayout) return;
     if (isConsorcioPayout) {
-      navigate(`/consorcio/fechamento/${visiblePayout.id}`);
+      navigate(`/consorcio/fechamento/${visiblePayout.id}?from=${selectedMonth}&source=meu-fechamento`);
     } else {
-      navigate(`/fechamento-sdr/${visiblePayout.id}`);
+      navigate(`/fechamento-sdr/${visiblePayout.id}?from=${selectedMonth}&source=meu-fechamento`);
     }
   };
 
@@ -145,7 +153,7 @@ const MeuFechamento = () => {
           </p>
         </div>
 
-        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+        <Select value={selectedMonth} onValueChange={handleMonthChange}>
           <SelectTrigger className="w-[200px]">
             <SelectValue />
           </SelectTrigger>
