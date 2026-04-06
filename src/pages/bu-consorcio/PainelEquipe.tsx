@@ -31,6 +31,7 @@ import { ConsorcioSdrSummaryTable } from "@/components/sdr/ConsorcioSdrSummaryTa
 import { useConsorcioPipelineMetricsBySdr } from "@/hooks/useConsorcioPipelineMetricsBySdr";
 import { useConsorcioProdutosFechadosBySdr } from "@/hooks/useConsorcioProdutosFechadosBySdr";
 import { useConsorcioProdutosFechadosByCloser } from "@/hooks/useConsorcioProdutosFechadosByCloser";
+import { useConsorcioPipelineMetricsByCloser } from "@/hooks/useConsorcioPipelineMetricsByCloser";
 import { ConsorcioCloserSummaryTable } from "@/components/sdr/ConsorcioCloserSummaryTable";
 import { PipelineSelector } from "@/components/crm/PipelineSelector";
 
