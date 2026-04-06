@@ -288,14 +288,39 @@ async function createCrmDeal(supabase: any, data: {
     }
 
     // 3. Buscar/criar contato (email + fallback por telefone)
-    const { data: existingContact } = await supabase
+    // IMPORTANTE: Buscar TODOS os contatos com esse email para verificar se algum já tem deal
+    const { data: allContactsByEmail } = await supabase
       .from('crm_contacts')
       .select('id')
       .ilike('email', data.email)
-      .limit(1)
-      .maybeSingle();
+      .eq('is_archived', false)
+      .order('created_at', { ascending: true })
+      .limit(20);
 
-    let contactId: string | null = existingContact?.id || null;
+    let contactId: string | null = null;
+
+    // Verificar se algum contato com esse email já tem deal nesta origin
+    if (allContactsByEmail && allContactsByEmail.length > 0) {
+      for (const c of allContactsByEmail) {
+        const { data: existingDealForContact } = await supabase
+          .from('crm_deals')
+          .select('id')
+          .eq('contact_id', c.id)
+          .eq('origin_id', originId)
+          .limit(1)
+          .maybeSingle();
+        if (existingDealForContact) {
+          contactId = c.id;
+          console.log(`✅ CRM: Contato com deal existente encontrado: ${contactId} (deal ${existingDealForContact.id})`);
+          break;
+        }
+      }
+      // Se nenhum tem deal, usar o mais antigo
+      if (!contactId) {
+        contactId = allContactsByEmail[0].id;
+        console.log(`📧 CRM: Usando contato mais antigo por email: ${contactId}`);
+      }
+    }
 
     // Fallback: buscar por telefone (sufixo de 9 dígitos)
     if (!contactId && data.phone) {
@@ -313,7 +338,6 @@ async function createCrmDeal(supabase: any, data: {
           if (byPhone) {
             contactId = byPhone.id;
             console.log(`📞 CRM: Contato encontrado por telefone (sufixo ${phoneSuffix}):`, contactId);
-            // Atualizar email do contato encontrado por telefone
             await supabase.from('crm_contacts').update({ email: data.email }).eq('id', contactId);
           }
         }

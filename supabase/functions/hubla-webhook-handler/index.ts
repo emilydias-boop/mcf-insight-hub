@@ -360,22 +360,42 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
     }
     
     // 2. Buscar contato existente pelo EMAIL primeiro (prioridade)
+    // IMPORTANTE: Buscar TODOS os contatos com esse email para verificar se algum já tem deal
     let contactId: string | null = null;
     let existingContact: any = null;
     
     if (data.email) {
-      const { data: byEmail } = await supabase
+      const { data: allByEmail } = await supabase
         .from('crm_contacts')
         .select('id, phone')
         .ilike('email', data.email)
+        .eq('is_archived', false)
         .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
+        .limit(20);
       
-      if (byEmail) {
-        existingContact = byEmail;
-        contactId = byEmail.id;
-        console.log(`[CRM] Contato existente por email: ${contactId}`);
+      if (allByEmail && allByEmail.length > 0) {
+        // Check if any of these contacts already has a deal in this origin
+        for (const c of allByEmail) {
+          const { data: dealForContact } = await supabase
+            .from('crm_deals')
+            .select('id')
+            .eq('contact_id', c.id)
+            .eq('origin_id', originId)
+            .limit(1)
+            .maybeSingle();
+          if (dealForContact) {
+            contactId = c.id;
+            existingContact = c;
+            console.log(`[CRM] Contato com deal existente por email: ${contactId} (deal ${dealForContact.id})`);
+            break;
+          }
+        }
+        // If none has a deal, use the oldest one
+        if (!contactId) {
+          contactId = allByEmail[0].id;
+          existingContact = allByEmail[0];
+          console.log(`[CRM] Contato mais antigo por email: ${contactId}`);
+        }
       }
     }
     
@@ -414,7 +434,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
           clint_id: `hubla-${Date.now()}-${Math.random().toString(36).substring(7)}`,
           name: data.name || 'Cliente A010',
           email: data.email,
-          phone: normalizedPhone, // TELEFONE NORMALIZADO
+          phone: normalizedPhone,
           origin_id: originId,
           tags: ['A010', 'Hubla'],
           custom_fields: { source: 'hubla', product: data.productName }
