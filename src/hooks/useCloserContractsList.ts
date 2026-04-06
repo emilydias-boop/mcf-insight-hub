@@ -83,6 +83,8 @@ export const useCloserContractsList = (sdrId: string | undefined, anoMes: string
           if (att.is_partner) continue;
           if (att.status === 'contract_paid' || att.status === 'refunded') {
             if (!att.contract_paid_at) continue;
+            // Exclude outsides: contract paid before the meeting
+            if (new Date(att.contract_paid_at) < new Date(slot.scheduled_at)) continue;
             // Check if contract_paid_at is in the month range
             const paidDate = att.contract_paid_at.slice(0, 10);
             if (paidDate >= startDate && paidDate <= endDate) {
