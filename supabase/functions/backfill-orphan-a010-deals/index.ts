@@ -79,15 +79,18 @@ Deno.serve(async (req) => {
         .limit(500);
 
       if (contacts && contacts.length > 0) {
-        // Get all deals for these contacts in one query
+        // Get all deals for these contacts in batches of 50 to avoid 1000-row limit
         const contactIds = contacts.map(c => c.id);
-        const { data: deals } = await supabase
-          .from('crm_deals')
-          .select('contact_id')
-          .eq('origin_id', originId)
-          .in('contact_id', contactIds);
-
-        const contactsWithDeal = new Set((deals || []).map(d => d.contact_id));
+        const contactsWithDeal = new Set<string>();
+        for (let i = 0; i < contactIds.length; i += 50) {
+          const batch = contactIds.slice(i, i + 50);
+          const { data: deals } = await supabase
+            .from('crm_deals')
+            .select('contact_id')
+            .eq('origin_id', originId)
+            .in('contact_id', batch);
+          (deals || []).forEach((d: any) => contactsWithDeal.add(d.contact_id));
+        }
         orphans = contacts.filter(c => !contactsWithDeal.has(c.id)).slice(0, limitParam * 2);
         console.log(`📋 Manual: ${contacts.length} contacts, ${contactsWithDeal.size} with deals, ${orphans.length} orphans`);
       }
