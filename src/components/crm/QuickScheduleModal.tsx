@@ -134,13 +134,6 @@ export function QuickScheduleModal({
   const [nameQuery, setNameQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
   
-  // Phone search state
-  const [phoneQuery, setPhoneQuery] = useState('');
-  const [showPhoneResults, setShowPhoneResults] = useState(false);
-  
-  // Email search state
-  const [emailQuery, setEmailQuery] = useState('');
-  const [showEmailResults, setShowEmailResults] = useState(false);
   
   // Selected deal and auto-filled fields
   const [selectedDeal, setSelectedDeal] = useState<DealOption | null>(null);
