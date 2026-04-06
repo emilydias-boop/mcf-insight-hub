@@ -46,6 +46,7 @@ export const KpiEditForm = ({
   metaContratosDiaria = 1,
   vendasParceria = 0,
   metaContratosPercentual,
+  cargoNivel,
   closerAgendaMetrics,
 }: KpiEditFormProps) => {
   const isCloser = roleType === 'closer';
