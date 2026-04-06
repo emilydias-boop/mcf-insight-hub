@@ -14,6 +14,7 @@ import {
   CreditCard,
   RefreshCw,
   User,
+  Trash2,
 } from 'lucide-react';
 import { formatCurrency, formatDateTime } from '@/lib/formatters';
 import { ConsorcioStatusBadge } from '@/components/consorcio-fechamento/ConsorcioStatusBadge';
