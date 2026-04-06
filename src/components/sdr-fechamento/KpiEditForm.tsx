@@ -27,6 +27,7 @@ interface KpiEditFormProps {
   metaContratosDiaria?: number;
   vendasParceria?: number;
   metaContratosPercentual?: number; // Novo: % das Realizadas para meta de contratos
+  cargoNivel?: number | null; // Nível do cargo (1=N1, 2=N2, 3=N3) para fallback de meta_percentual
   closerAgendaMetrics?: { r1_alocadas: number; r1_realizadas: number; contratos_pagos: number; no_shows: number; vendas_parceria: number; r2_agendadas: number };
 }
 
