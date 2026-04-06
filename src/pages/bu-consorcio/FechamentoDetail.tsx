@@ -34,6 +34,9 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function ConsorcioFechamentoDetail() {
   const { payoutId } = useParams<{ payoutId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromMonth = searchParams.get('from');
+  const backUrl = fromMonth ? `/consorcio/fechamento?month=${fromMonth}` : '/consorcio/fechamento';
   const { user, role } = useAuth();
 
   const { data: payout, isLoading } = useConsorcioPayoutDetail(payoutId || '');
