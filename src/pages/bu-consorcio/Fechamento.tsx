@@ -378,7 +378,7 @@ export default function ConsorcioFechamento() {
                             <Button 
                               variant="ghost" 
                               size="sm"
-                              onClick={() => navigate(`/fechamento-sdr/${payout.id}`)}
+                              onClick={() => navigate(`/fechamento-sdr/${payout.id}?from=${anoMes}&bu=consorcio`)}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
