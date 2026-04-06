@@ -569,6 +569,60 @@ export function useAddConsorcioAjuste() {
   });
 }
 
+// Remover ajuste manual
+export function useRemoveConsorcioAjuste() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ payoutId, index }: { payoutId: string; index: number }) => {
+      const { data: payout, error: fetchError } = await supabase
+        .from('consorcio_closer_payout')
+        .select('*')
+        .eq('id', payoutId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      if (payout.status === 'LOCKED') {
+        throw new Error('Não é possível remover ajuste de um fechamento travado');
+      }
+      
+      const ajustes = Array.isArray(payout.ajustes_json) 
+        ? (payout.ajustes_json as unknown as AjusteConsorcio[]) 
+        : [];
+      
+      if (index < 0 || index >= ajustes.length) {
+        throw new Error('Índice de ajuste inválido');
+      }
+      
+      const ajusteRemovido = ajustes[index];
+      const valorAjuste = ajusteRemovido.tipo === 'bonus' ? ajusteRemovido.valor : -ajusteRemovido.valor;
+      
+      const novosAjustes = ajustes.filter((_, i) => i !== index);
+      
+      const { error } = await supabase
+        .from('consorcio_closer_payout')
+        .update({
+          ajustes_json: JSON.parse(JSON.stringify(novosAjustes)),
+          bonus_extra: (payout.bonus_extra || 0) - valorAjuste,
+          total_conta: (payout.total_conta || 0) - valorAjuste,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', payoutId);
+      
+      if (error) throw error;
+      return payoutId;
+    },
+    onSuccess: (payoutId) => {
+      queryClient.invalidateQueries({ queryKey: ['consorcio-payout', payoutId] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-payouts'] });
+      toast.success('Ajuste removido');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao remover ajuste: ${error.message}`);
+    },
+  });
+}
+
 // Adicionar venda holding
 export function useAddVendaHolding() {
   const queryClient = useQueryClient();

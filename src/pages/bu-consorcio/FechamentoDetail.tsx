@@ -14,6 +14,7 @@ import {
   CreditCard,
   RefreshCw,
   User,
+  Trash2,
 } from 'lucide-react';
 import { formatCurrency, formatDateTime } from '@/lib/formatters';
 import { ConsorcioStatusBadge } from '@/components/consorcio-fechamento/ConsorcioStatusBadge';
@@ -25,6 +26,7 @@ import {
   useUpdateConsorcioPayoutKpi,
   useUpdateConsorcioPayoutStatus,
   useAddConsorcioAjuste,
+  useRemoveConsorcioAjuste,
 } from '@/hooks/useConsorcioFechamento';
 import { AjusteConsorcio } from '@/types/consorcio-fechamento';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,6 +40,7 @@ export default function ConsorcioFechamentoDetail() {
   const updateKpi = useUpdateConsorcioPayoutKpi();
   const updateStatus = useUpdateConsorcioPayoutStatus();
   const addAjuste = useAddConsorcioAjuste();
+  const removeAjuste = useRemoveConsorcioAjuste();
 
   const isAdmin = role === 'admin';
   const isManager = role === 'manager' || role === 'coordenador';
@@ -319,16 +322,27 @@ export default function ConsorcioFechamentoDetail() {
             ) : (
               <div className="space-y-2">
                 {adjustments.map((aj, idx) => (
-                  <div key={idx} className="flex items-start justify-between p-2.5 rounded-lg bg-muted/50">
-                    <div>
+                  <div key={idx} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/50 gap-2">
+                    <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium">{aj.descricao}</div>
                       <div className="text-[10px] text-muted-foreground/60 mt-0.5">
                         {formatDateTime(aj.data)}
                       </div>
                     </div>
-                    <div className={`text-sm font-bold ${aj.tipo === 'bonus' ? 'text-green-400' : 'text-red-400'}`}>
+                    <div className={`text-sm font-bold shrink-0 ${aj.tipo === 'bonus' ? 'text-green-400' : 'text-red-400'}`}>
                       {aj.tipo === 'bonus' ? '+' : '-'}{formatCurrency(aj.valor)}
                     </div>
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeAjuste.mutate({ payoutId: payout.id, index: idx })}
+                        disabled={removeAjuste.isPending}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
