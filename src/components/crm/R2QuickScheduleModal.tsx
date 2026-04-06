@@ -87,14 +87,6 @@ export function R2QuickScheduleModal({
   const [selectedTime, setSelectedTime] = useState('');
   const [calendarMonth, setCalendarMonth] = useState<Date>(preselectedDate || new Date());
 
-  // Phone search state
-  const [phoneQuery, setPhoneQuery] = useState('');
-  const [showPhoneResults, setShowPhoneResults] = useState(false);
-
-  // Email search state
-  const [emailQuery, setEmailQuery] = useState('');
-  const [showEmailResults, setShowEmailResults] = useState(false);
-
   // Selected contact fields (auto-filled after selection)
   const [selectedEmail, setSelectedEmail] = useState('');
   const [selectedPhone, setSelectedPhone] = useState('');
