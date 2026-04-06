@@ -816,6 +816,45 @@ serve(async (req) => {
           console.log(`   ✅ Comp plan fallback criado para ${sdr.name} (Nível ${nivel}): OTE R$${fallbackValues.ote_total}`);
         }
 
+        // ===== AUTO-SYNC: Sincronizar comp_plan com cargo_catalogo se divergirem =====
+        if (compPlan && cargoInfo && (
+          compPlan.fixo_valor !== cargoInfo.fixo_valor ||
+          compPlan.variavel_total !== cargoInfo.variavel_valor ||
+          compPlan.ote_total !== cargoInfo.ote_total
+        )) {
+          console.log(`   🔄 SYNC: Comp plan desatualizado para ${sdr.name}. Cargo: Fixo=${cargoInfo.fixo_valor}, Var=${cargoInfo.variavel_valor}, OTE=${cargoInfo.ote_total}. CompPlan: Fixo=${compPlan.fixo_valor}, Var=${compPlan.variavel_total}, OTE=${compPlan.ote_total}`);
+          
+          const updateData: Record<string, any> = {
+            fixo_valor: cargoInfo.fixo_valor,
+            variavel_total: cargoInfo.variavel_valor,
+            ote_total: cargoInfo.ote_total,
+            updated_at: new Date().toISOString(),
+          };
+          
+          // Recalcular distribuição dos valores variáveis proporcionalmente
+          if (compPlan.variavel_total > 0 && cargoInfo.variavel_valor > 0) {
+            const ratio = cargoInfo.variavel_valor / compPlan.variavel_total;
+            updateData.valor_meta_rpg = Math.round((compPlan.valor_meta_rpg || 0) * ratio);
+            updateData.valor_docs_reuniao = Math.round((compPlan.valor_docs_reuniao || 0) * ratio);
+            updateData.valor_tentativas = Math.round((compPlan.valor_tentativas || 0) * ratio);
+            updateData.valor_organizacao = Math.round((compPlan.valor_organizacao || 0) * ratio);
+          }
+          
+          const { data: updatedPlan, error: syncError } = await supabase
+            .from('sdr_comp_plan')
+            .update(updateData)
+            .eq('id', compPlan.id)
+            .select()
+            .single();
+          
+          if (syncError) {
+            console.error(`   ❌ Erro ao sincronizar comp_plan: ${syncError.message}`);
+          } else {
+            compPlan = updatedPlan;
+            console.log(`   ✅ Comp plan sincronizado: Fixo=${compPlan.fixo_valor}, Var=${compPlan.variavel_total}, OTE=${compPlan.ote_total}`);
+          }
+        }
+
         // ===== BUSCAR MÉTRICAS ATIVAS CONFIGURADAS (COM FALLBACK PARA meta_percentual) =====
         let metricasAtivas: MetricaAtiva[] = [];
         // Resolver cargo_catalogo_id: preferir comp_plan (mais atualizado para closers com mudança de nível)
