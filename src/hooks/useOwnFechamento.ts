@@ -159,7 +159,7 @@ export function useOwnFechamento(anoMes: string): OwnFechamentoData {
         bonus: data.bonus_extra || 0,
         total_conta: data.total_conta || 0,
         status: data.status as PayoutStatus,
-        ajustes_json: (data.ajustes_json as PayoutAdjustment[]) || [],
+        ajustes_json: (data.ajustes_json as unknown as PayoutAdjustment[]) || [],
         aprovado_por: data.aprovado_por,
         aprovado_em: data.aprovado_em,
         nfse_id: data.nfse_id,

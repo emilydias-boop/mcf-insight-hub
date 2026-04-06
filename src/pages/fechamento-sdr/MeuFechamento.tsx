@@ -251,7 +251,7 @@ const MeuFechamento = () => {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Variável</p>
-                    <p className="text-lg font-semibold">{formatCurrency(visiblePayout.valor_variavel || 0)}</p>
+                    <p className="text-lg font-semibold">{formatCurrency((visiblePayout as any).valor_variavel || 0)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Total Conta</p>
