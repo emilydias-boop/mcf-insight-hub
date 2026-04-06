@@ -894,6 +894,11 @@ export function useSearchDealsForSchedule(query: string, originIds?: string[], o
           contactDealsQuery = contactDealsQuery.in('origin_id', originIds);
         }
         
+        // Filtrar por owner se especificado (SDR só vê seus leads)
+        if (ownerEmail) {
+          contactDealsQuery = contactDealsQuery.eq('owner_id', ownerEmail);
+        }
+        
         const { data } = await contactDealsQuery.limit(10);
         dealsByContact = data || [];
       }

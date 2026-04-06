@@ -660,7 +660,8 @@ export function QuickScheduleModal({
           </div>
           )}
 
-          {/* SDR Responsável Selection */}
+          {/* SDR Responsável Selection - only for coordinators/admins */}
+          {isCoordinatorOrAbove && (
           <div className="space-y-2">
             <Label>SDR Responsável (opcional)</Label>
             <Select value={selectedSdr} onValueChange={setSelectedSdr}>
@@ -680,6 +681,7 @@ export function QuickScheduleModal({
               Se não selecionado, será atribuído a você
             </p>
           </div>
+          )}
 
           {/* Closer Selection */}
           <div className="space-y-2">
