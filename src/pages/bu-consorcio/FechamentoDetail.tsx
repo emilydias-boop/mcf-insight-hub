@@ -128,7 +128,7 @@ export default function ConsorcioFechamentoDetail() {
         <div className="grid gap-4">
           <ConsorcioIndicatorCard
             label="Comissão Venda Consórcio"
-            peso={`${(PESOS_CLOSER_CONSORCIO.comissao_consorcio * 100).toFixed(0)}%`}
+            peso={`${(PESOS_PADRAO_CONSORCIO.comissao_consorcio * 100).toFixed(0)}%`}
             meta={payout.meta_comissao_consorcio || 0}
             realizado={payout.comissao_consorcio || 0}
             pct={payout.pct_comissao_consorcio || 0}
