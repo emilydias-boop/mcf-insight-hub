@@ -173,9 +173,7 @@ Deno.serve(async (req) => {
           ownerProfileId = profile?.id || null;
         }
 
-        const { data: newDeal, error: dealError } = await supabase
-          .from('crm_deals')
-          .insert({
+        const dealPayload = {
             clint_id: `backfill-a010-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             name: `${orphan.name || 'Cliente'} - A010`,
             contact_id: orphan.id,
@@ -187,12 +185,20 @@ Deno.serve(async (req) => {
             tags: ['A010', 'Backfill'],
             custom_fields: { source: 'backfill', backfill_date: new Date().toISOString() },
             data_source: 'webhook',
-          })
+          };
+
+        // Use upsert with ignoreDuplicates to handle constraint gracefully
+        const { data: newDeal, error: dealError } = await supabase
+          .from('crm_deals')
+          .upsert(dealPayload, { onConflict: 'contact_id,origin_id', ignoreDuplicates: true })
           .select('id')
           .maybeSingle();
 
         if (dealError) {
           console.error(`❌ ${orphan.email}: ${dealError.message}`);
+        } else if (!newDeal) {
+          console.log(`⏭️ ${orphan.email}: already has deal (constraint skip)`);
+          results.already_has_deal_via_email.push(`${orphan.email} (upsert skip)`);
         } else {
           results.deals_created.push(`${orphan.email || orphan.name} → ${newDeal?.id || 'ignored'} → ${ownerEmail}`);
           if (newDeal?.id && ownerEmail) {
