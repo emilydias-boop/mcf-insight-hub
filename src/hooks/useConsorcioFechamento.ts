@@ -12,12 +12,15 @@ import {
   OTE_PADRAO_CONSORCIO,
 } from '@/types/consorcio-fechamento';
 
-// Lista closers ativos do consórcio
+// Cargos excluídos do fechamento
+const CARGOS_EXCLUIDOS_LIST = ['Supervisor', 'Closer R2', 'Coordenador', 'ADMIN'];
+
+// Lista closers ativos do consórcio (filtrando coordenadores/supervisores)
 export function useConsorcioClosers() {
   return useQuery({
     queryKey: ['consorcio-closers'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: closers, error } = await supabase
         .from('closers')
         .select('id, name, email, color, is_active, employee_id')
         .eq('bu', 'consorcio')
@@ -25,7 +28,22 @@ export function useConsorcioClosers() {
         .order('name');
       
       if (error) throw error;
-      return data;
+      if (!closers || closers.length === 0) return [];
+      
+      // Buscar cargos dos employees para filtrar
+      const emails = closers.map(c => c.email.toLowerCase());
+      const { data: employees } = await supabase
+        .from('employees')
+        .select('email_pessoal, cargo')
+        .in('email_pessoal', emails);
+      
+      const cargoByEmail = new Map((employees || []).map(e => [e.email_pessoal?.toLowerCase(), e.cargo]));
+      
+      // Filtrar closers cujo cargo está na lista de exclusão
+      return closers.filter(c => {
+        const cargo = cargoByEmail.get(c.email.toLowerCase());
+        return !cargo || !CARGOS_EXCLUIDOS_LIST.includes(cargo);
+      });
     },
   });
 }
