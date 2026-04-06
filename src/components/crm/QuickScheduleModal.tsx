@@ -110,6 +110,7 @@ export function QuickScheduleModal({
   preselectedDate,
   prefilledDealId,
   prefilledNotes,
+  ownerEmail,
 }: QuickScheduleModalProps) {
   const { role } = useAuth();
   const activeBU = useActiveBU();
