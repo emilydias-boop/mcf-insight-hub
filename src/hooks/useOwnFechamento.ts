@@ -24,6 +24,7 @@ export interface OwnFechamentoData {
   closerMetrics: CloserMetrics | null;
   closerId: string | null;
   canSendNfse: boolean;
+  isConsorcioPayout: boolean;
   isLoading: boolean;
   error: Error | null;
 }
@@ -48,14 +49,12 @@ export function useOwnFechamento(anoMes: string): OwnFechamentoData {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return null;
 
-      // First try to find by user_id
       let { data, error } = await supabase
         .from('sdr')
         .select('*')
         .eq('user_id', authUser.id)
         .single();
       
-      // Fallback: search by email if not found by user_id
       if (error?.code === 'PGRST116' && authUser.email) {
         const emailResult = await supabase
           .from('sdr')
@@ -73,16 +72,17 @@ export function useOwnFechamento(anoMes: string): OwnFechamentoData {
     enabled: !!user,
   });
 
-  // Determine user type
   const userType: FechamentoUserType = sdrRecord?.role_type === 'closer' 
     ? 'closer' 
     : sdrRecord?.role_type === 'sdr' 
       ? 'sdr' 
       : 'unknown';
 
-  // Fetch payout for the month
+  const isConsorcioSquad = sdrRecord?.squad === 'consorcio';
+
+  // Fetch SDR payout for the month
   const { 
-    data: payout, 
+    data: sdrPayout, 
     isLoading: payoutLoading,
     error: payoutError 
   } = useQuery({
@@ -104,6 +104,99 @@ export function useOwnFechamento(anoMes: string): OwnFechamentoData {
       return data ? transformPayout(data) : null;
     },
     enabled: !!sdrRecord?.id && !!anoMes,
+  });
+
+  // Fetch closer ID (for closers only)
+  const { 
+    data: closerId, 
+    isLoading: closerIdLoading 
+  } = useQuery({
+    queryKey: ['own-closer-id', sdrRecord?.email],
+    queryFn: async () => {
+      if (!sdrRecord?.email) return null;
+
+      const { data, error } = await supabase
+        .from('closers')
+        .select('id')
+        .eq('email', sdrRecord.email)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') throw error;
+      return data?.id || null;
+    },
+    enabled: !!sdrRecord?.email && userType === 'closer',
+  });
+
+  // Fetch consorcio payout (for consorcio closers only)
+  const {
+    data: consorcioPayout,
+    isLoading: consorcioPayoutLoading,
+  } = useQuery({
+    queryKey: ['own-consorcio-payout', anoMes, closerId],
+    queryFn: async () => {
+      if (!closerId || !anoMes) return null;
+
+      const { data, error } = await supabase
+        .from('consorcio_closer_payout')
+        .select(`
+          *,
+          closer:closer_id(id, name, email, color, is_active, employee_id)
+        `)
+        .eq('closer_id', closerId)
+        .eq('ano_mes', anoMes)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      if (!data) return null;
+
+      // Map consorcio payout to SdrPayoutWithDetails format
+      const mapped: SdrPayoutWithDetails = {
+        id: data.id,
+        sdr_id: sdrRecord?.id || '',
+        ano_mes: data.ano_mes,
+        valor_fixo: data.fixo_valor,
+        valor_variavel: data.valor_variavel_final || 0,
+        bonus: data.bonus_extra || 0,
+        total_conta: data.total_conta || 0,
+        status: data.status as PayoutStatus,
+        ajustes_json: (data.ajustes_json as PayoutAdjustment[]) || [],
+        aprovado_por: data.aprovado_por,
+        aprovado_em: data.aprovado_em,
+        nfse_id: data.nfse_id,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+        sdr: sdrRecord ? {
+          id: sdrRecord.id,
+          user_id: sdrRecord.user_id,
+          name: sdrRecord.name,
+          email: sdrRecord.email,
+          active: sdrRecord.active,
+          nivel: sdrRecord.nivel,
+          meta_diaria: sdrRecord.meta_diaria,
+          observacao: sdrRecord.observacao,
+          status: sdrRecord.status,
+          criado_por: sdrRecord.criado_por,
+          aprovado_por: sdrRecord.aprovado_por,
+          aprovado_em: sdrRecord.aprovado_em,
+          created_at: sdrRecord.created_at,
+          updated_at: sdrRecord.updated_at,
+          squad: sdrRecord.squad,
+          role_type: sdrRecord.role_type,
+        } : undefined,
+        // Fields that don't exist in consorcio but are in the type
+        dias_uteis: data.dias_uteis_mes || 0,
+        rpg: 0,
+        docs_enviados: 0,
+        docs_reuniao: 0,
+        r1_agendada: 0,
+        r1_realizada: 0,
+        contrato_pago: 0,
+        organizacao: data.score_organizacao || 0,
+      } as any;
+
+      return mapped;
+    },
+    enabled: !!closerId && !!anoMes && isConsorcioSquad,
   });
 
   // Fetch comp plan
@@ -134,28 +227,7 @@ export function useOwnFechamento(anoMes: string): OwnFechamentoData {
     enabled: !!sdrRecord?.id && !!anoMes,
   });
 
-  // Fetch closer ID (for closers only)
-  const { 
-    data: closerId, 
-    isLoading: closerIdLoading 
-  } = useQuery({
-    queryKey: ['own-closer-id', sdrRecord?.email],
-    queryFn: async () => {
-      if (!sdrRecord?.email) return null;
-
-      const { data, error } = await supabase
-        .from('closers')
-        .select('id')
-        .eq('email', sdrRecord.email)
-        .single();
-      
-      if (error && error.code !== 'PGRST116') throw error;
-      return data?.id || null;
-    },
-    enabled: !!sdrRecord?.email && userType === 'closer',
-  });
-
-  // Fetch closer metrics for the month (for closers only)
+  // Fetch closer metrics for the month (for closers only, non-consorcio)
   const { 
     data: closerMetrics, 
     isLoading: closerMetricsLoading 
@@ -168,7 +240,6 @@ export function useOwnFechamento(anoMes: string): OwnFechamentoData {
       const startDate = startOfMonth(new Date(year, month - 1));
       const endDate = endOfMonth(new Date(year, month - 1));
 
-      // Fetch meeting slot attendees for this closer
       const { data: meetings, error } = await supabase
         .from('meeting_slots')
         .select(`
@@ -204,11 +275,8 @@ export function useOwnFechamento(anoMes: string): OwnFechamentoData {
         });
       });
 
-      // Fetch outside sales (contracts before scheduled meeting)
-      // This is a simplified version - the full logic is in useR1CloserMetrics
       let outsideSales = 0;
 
-      // Fetch R2 scheduled
       const { data: r2Meetings } = await supabase
         .from('meeting_slots')
         .select('id, meeting_slot_attendees(id)')
@@ -240,22 +308,32 @@ export function useOwnFechamento(anoMes: string): OwnFechamentoData {
         taxaNoShow,
       } as CloserMetrics;
     },
-    enabled: !!closerId && !!anoMes && userType === 'closer',
+    enabled: !!closerId && !!anoMes && userType === 'closer' && !isConsorcioSquad,
   });
 
-  const isLoading = sdrLoading || payoutLoading || compPlanLoading || 
-    (userType === 'closer' && (closerIdLoading || closerMetricsLoading));
+  // Determine which payout to use
+  // For consorcio closers: prefer consorcio payout over sdr payout
+  const isConsorcioPayout = isConsorcioSquad && !!consorcioPayout && consorcioPayout.status !== 'DRAFT';
+  const effectivePayout = isConsorcioPayout 
+    ? consorcioPayout 
+    : sdrPayout;
 
-  const canSendNfse = payout?.status === 'APPROVED' && !payout?.nfse_id;
+  const isLoading = sdrLoading || payoutLoading || compPlanLoading || 
+    (userType === 'closer' && closerIdLoading) ||
+    (isConsorcioSquad && consorcioPayoutLoading) ||
+    (!isConsorcioSquad && userType === 'closer' && closerMetricsLoading);
+
+  const canSendNfse = effectivePayout?.status === 'APPROVED' && !effectivePayout?.nfse_id;
 
   return {
     userType,
     userRecord: sdrRecord || null,
-    payout: payout || null,
+    payout: effectivePayout || null,
     compPlan: compPlan || null,
     closerMetrics: closerMetrics || null,
     closerId: closerId || null,
     canSendNfse,
+    isConsorcioPayout,
     isLoading,
     error: sdrError || payoutError || null,
   };

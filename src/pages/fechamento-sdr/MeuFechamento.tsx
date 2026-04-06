@@ -42,6 +42,7 @@ const MeuFechamento = () => {
     userRecord, 
     payout, 
     closerMetrics,
+    isConsorcioPayout,
     isLoading 
   } = useOwnFechamento(selectedMonth);
   const { data: myEmployee } = useMyEmployee();
@@ -62,7 +63,6 @@ const MeuFechamento = () => {
     if (!payout?.nfse_id) return;
 
     try {
-      // Fetch the NFSe record to get the storage path
       const { data: nfseData, error } = await supabase
         .from('rh_nfse')
         .select('storage_path')
@@ -93,6 +93,19 @@ const MeuFechamento = () => {
       queryKey: ['own-payout'],
       exact: false 
     });
+    queryClient.invalidateQueries({ 
+      queryKey: ['own-consorcio-payout'],
+      exact: false 
+    });
+  };
+
+  const handleViewDetails = () => {
+    if (!visiblePayout) return;
+    if (isConsorcioPayout) {
+      navigate(`/consorcio/fechamento/${visiblePayout.id}`);
+    } else {
+      navigate(`/fechamento-sdr/${visiblePayout.id}`);
+    }
   };
 
   if (isLoading) {
@@ -171,7 +184,7 @@ const MeuFechamento = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate(`/fechamento-sdr/${visiblePayout.id}`)}
+                onClick={handleViewDetails}
               >
                 <Eye className="h-4 w-4 mr-2" />
                 Ver Detalhes
@@ -221,10 +234,32 @@ const MeuFechamento = () => {
             </Card>
           )}
 
-          {/* Render view based on user type */}
-          {userType === 'sdr' && <SdrFechamentoView payout={visiblePayout} />}
-          {userType === 'closer' && (
+          {/* Render view based on user type (only for non-consorcio) */}
+          {!isConsorcioPayout && userType === 'sdr' && <SdrFechamentoView payout={visiblePayout} />}
+          {!isConsorcioPayout && userType === 'closer' && (
             <CloserFechamentoView payout={visiblePayout} closerMetrics={closerMetrics} />
+          )}
+
+          {/* For consorcio, show summary card */}
+          {isConsorcioPayout && (
+            <Card>
+              <CardContent className="py-6">
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Fixo</p>
+                    <p className="text-lg font-semibold">{formatCurrency(visiblePayout.valor_fixo || 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Variável</p>
+                    <p className="text-lg font-semibold">{formatCurrency(visiblePayout.valor_variavel || 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Conta</p>
+                    <p className="text-lg font-semibold text-primary">{formatCurrency(visiblePayout.total_conta || 0)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </>
       )}
