@@ -862,6 +862,11 @@ export function useSearchDealsForSchedule(query: string, originIds?: string[], o
         dealsQuery = dealsQuery.in('origin_id', originIds);
       }
       
+      // Filtrar por owner se especificado (SDR só vê seus leads)
+      if (ownerEmail) {
+        dealsQuery = dealsQuery.eq('owner_id', ownerEmail);
+      }
+      
       const { data: dealsByName } = await dealsQuery.limit(10);
 
       // 2. Buscar contatos pelo nome ou telefone (case-insensitive)
