@@ -87,10 +87,6 @@ export function R2QuickScheduleModal({
   const [selectedTime, setSelectedTime] = useState('');
   const [calendarMonth, setCalendarMonth] = useState<Date>(preselectedDate || new Date());
 
-  // Selected contact fields (auto-filled after selection)
-  const [selectedEmail, setSelectedEmail] = useState('');
-  const [selectedPhone, setSelectedPhone] = useState('');
-
   // R2-specific fields
   const [r2Observations, setR2Observations] = useState<string>('');
   const [isPreSchedule, setIsPreSchedule] = useState(false);
@@ -101,7 +97,7 @@ export function R2QuickScheduleModal({
   const buOriginIds = originIds && originIds.length > 0 ? originIds : undefined;
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery, buOriginIds);
   const createMeeting = useCreateR2Meeting();
-  const createMeeting = useCreateR2Meeting();
+  const { data: r2Bookers = [] } = useR2Bookers();
   const { data: r2Bookers = [] } = useR2Bookers();
 
   // Fetch available slots for selected closer + date
