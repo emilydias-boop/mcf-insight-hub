@@ -1,54 +1,52 @@
 
-# Diagnóstico
 
-- Não é só front.
-- O fechamento que você abriu está na rota `/fechamento-sdr/0178c7bc-51df-4e58-bbc5-b0c7e49bb260`, então essa tela usa o fluxo de SDR padrão (`sdr_month_payout` + `sdr_comp_plan`), não o fluxo `consorcio_closer_payout`.
-- No banco, para esse registro, hoje está assim:
-  - `cargos_catalogo.fixo_valor = 3150`
-  - `sdr_comp_plan.fixo_valor = 3200`
-  - `sdr_month_payout.valor_fixo = 3200`
+# Corrigir "Meu Fechamento" para Closers Consórcio
 
-Ou seja: o front está exibindo um valor que já está salvo defasado no banco.
+## Diagnóstico
 
-# Causa raiz
+Victoria tem dois registros de payout em tabelas diferentes:
 
-1. `src/pages/fechamento-sdr/Detail.tsx` prioriza `compPlan.fixo_valor` na exibição.
-2. A edge function `supabase/functions/recalculate-sdr-payout/index.ts` até busca o `cargos_catalogo`, mas só usa os valores do cargo como fallback quando não existe `sdr_comp_plan`.
-3. Como existe um comp plan vigente com `3200`, o recálculo continua usando `3200` e grava `3200` de novo no payout.
+| Tabela | Mês 2026-03 | Status |
+|--------|------------|--------|
+| `sdr_month_payout` | R$ 3.430 | **DRAFT** |
+| `consorcio_closer_payout` | R$ 7.945 | **LOCKED** |
 
-# Plano de correção
+O hook `useOwnFechamento` só consulta `sdr_month_payout`. Como o registro lá está DRAFT, a tela filtra com `visiblePayout = null` e mostra "Nenhum fechamento encontrado".
 
-1. Ajustar `supabase/functions/recalculate-sdr-payout/index.ts`
-   - comparar `sdr_comp_plan` vigente com `cargos_catalogo`
-   - se `fixo_valor`, `variavel_total` ou `ote_total` divergirem, sincronizar antes de calcular
-   - recalcular o `sdr_month_payout` já com os valores atualizados do cargo
+O fechamento real da Victoria (LOCKED, R$ 7.945) está em `consorcio_closer_payout` — e a página "Meu Fechamento" simplesmente não sabe que essa tabela existe.
 
-2. Ajustar `src/pages/fechamento-sdr/Detail.tsx`
-   - manter a tela coerente com o dado recalculado
-   - opcional: exibir aviso visual quando RH e comp plan estiverem divergentes, para deixar claro que o problema é de sincronização e não mascarar no front
+Adicionalmente, `sdr.user_id` da Victoria é `null`, então o hook nem encontra o registro pelo `user_id` (precisa do fallback por email).
 
-3. Garantir refetch após recálculo
-   - invalidar/recarregar `sdr-payout-detail` e `sdr-comp-plan` para o valor de `3150` aparecer imediatamente
+## Solução
 
-# Detalhe técnico
+### 1. Atualizar `src/hooks/useOwnFechamento.ts`
 
-```text
-Fluxo atual:
-Cargo RH (3150) -> Comp Plan vigente (3200) -> recalculate-sdr-payout usa comp plan -> payout fica 3200 -> tela mostra 3200
+Para closers do squad `consorcio`, adicionar uma query ao `consorcio_closer_payout`:
+- Buscar o closer_id via tabela `closers` (pelo email do SDR)
+- Consultar `consorcio_closer_payout` filtrado por `closer_id` + `ano_mes`
+- Se encontrar um payout consórcio com status != DRAFT, usar esse como payout principal
+- Mapear os campos do `consorcio_closer_payout` para o formato `SdrPayoutWithDetails` que a tela espera (OTE, fixo, variável, total_conta, status, etc.)
+- Prioridade: consórcio payout > sdr payout (para closers consórcio)
 
-Fluxo correto:
-Cargo RH (3150) -> edge function detecta divergência -> sincroniza comp plan -> recalcula payout -> tela mostra 3150
-```
+### 2. Atualizar `src/pages/fechamento-sdr/MeuFechamento.tsx`
 
-# Resultado esperado
+- Quando o payout vem do consórcio, o botão "Ver Detalhes" deve navegar para `/consorcio/fechamento/{id}` em vez de `/fechamento-sdr/{id}`
+- Adicionar flag `isConsorcioPayout` no retorno do hook para distinguir a rota
+- O `SdrStatusBadge` já suporta os mesmos status (DRAFT/APPROVED/LOCKED)
 
-- O Fixo do Cleiton passa para `R$ 3.150,00`
-- O Total Conta é recalculado com base no novo fixo
-- Exportação e demais telas ficam consistentes
-- A correção acontece na origem do dado, não só na aparência da tela
+### 3. Vincular `user_id` no registro da Victoria
 
-# Arquivos principais
+- A `sdr.user_id` da Victoria é null. Isso impede o hook de encontrá-la pelo método primário
+- Corrigir via migration: `UPDATE sdr SET user_id = '5a702a6c-...' WHERE email = 'victoria.paz@minhacasafinanciada.com'`
+- Isso resolve também para outros closers consórcio que possam ter `user_id` null
 
-- `supabase/functions/recalculate-sdr-payout/index.ts`
-- `src/pages/fechamento-sdr/Detail.tsx`
-- se necessário, `src/hooks/useSdrFechamento.ts` e/ou `src/hooks/useSdrKpiMutations.ts`
+## Arquivos alterados
+1. `src/hooks/useOwnFechamento.ts` — query adicional para `consorcio_closer_payout`
+2. `src/pages/fechamento-sdr/MeuFechamento.tsx` — rota dinâmica para detalhes
+3. Migration SQL — vincular user_id da Victoria
+
+## Resultado esperado
+- Victoria acessa "Meu Fechamento", seleciona março 2026, e vê seu fechamento LOCKED de R$ 7.945
+- Botão "Ver Detalhes" abre `/consorcio/fechamento/3da8c2b3-...`
+- NFSe e demais funcionalidades funcionam normalmente
+
