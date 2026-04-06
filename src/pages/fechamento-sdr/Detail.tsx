@@ -539,6 +539,7 @@ const FechamentoSDRDetail = () => {
               roleType={(payout.sdr as any)?.role_type || "sdr"}
               vendasParceria={vendasParceria}
               metaContratosPercentual={metaContratosPercentual}
+              cargoNivel={employeeEarly?.cargo_catalogo?.nivel}
               closerAgendaMetrics={isCloser ? closerMetrics.data ?? undefined : undefined}
             />
           )}
