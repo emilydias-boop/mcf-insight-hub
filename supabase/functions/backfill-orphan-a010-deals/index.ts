@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
   sinceDate.setMonth(sinceDate.getMonth() - monthsBack);
   const sinceDateStr = sinceDate.toISOString();
 
-  console.log(`🔍 Backfill orphan A010 | dry_run=${dryRun} | limit=${limitParam} | since=${sinceDateStr}`);
+  console.log(`🔍 Backfill orphan A010 (via transactions) | dry_run=${dryRun} | limit=${limitParam} | since=${sinceDateStr}`);
 
   try {
     // 1. Find origin + stage in parallel
@@ -45,61 +45,81 @@ Deno.serve(async (req) => {
 
     const stageId = (stageRes.data || []).find((s: any) => s.origin_id === originId)?.id || null;
 
-    // 2. Use RPC/raw query to find orphan contacts efficiently
-    // Find contacts with A010 tag, no deal in this origin, created recently
-    const { data: orphanRows, error: orphanError } = await supabase.rpc('execute_readonly_query', {
-      query_text: `
-        SELECT c.id, c.email, c.name, c.phone, c.created_at
-        FROM crm_contacts c
-        WHERE c.tags @> ARRAY['A010']::text[]
-          AND c.is_archived = false
-          AND c.created_at >= '${sinceDateStr}'
-          AND NOT EXISTS (
-            SELECT 1 FROM crm_deals d 
-            WHERE d.contact_id = c.id AND d.origin_id = '${originId}'
-          )
-        ORDER BY c.created_at DESC
-        LIMIT ${limitParam * 3}
-      `
-    });
+    // 2. Find orphans via hubla_transactions (source of truth) instead of tags
+    // Step A: Get emails with confirmed A010 purchase since date
+    let a010Emails: string[] = [];
+    const PAGE_SIZE = 500;
+    let page = 0;
+    let hasMore = true;
 
-    // Fallback if RPC doesn't exist — use manual approach with batch
+    while (hasMore) {
+      const { data: txRows, error: txErr } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email')
+        .eq('product_category', 'a010')
+        .eq('sale_status', 'completed')
+        .gte('created_at', sinceDateStr)
+        .not('customer_email', 'is', null)
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+      if (txErr) {
+        console.error("❌ Error fetching transactions:", txErr.message);
+        break;
+      }
+
+      const emails = (txRows || []).map((t: any) => t.customer_email?.toLowerCase()).filter(Boolean);
+      a010Emails.push(...emails);
+      hasMore = (txRows || []).length === PAGE_SIZE;
+      page++;
+    }
+
+    // Deduplicate emails
+    const uniqueA010Emails = [...new Set(a010Emails)];
+    console.log(`📧 Found ${uniqueA010Emails.length} unique A010 buyer emails since ${sinceDateStr}`);
+
+    if (uniqueA010Emails.length === 0) {
+      return new Response(JSON.stringify({ success: true, message: "No A010 transactions found", orphans: 0 }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Step B: Find contacts with those emails that DON'T have a deal in this origin
     let orphans: any[] = [];
-    
-    if (orphanError) {
-      console.log("⚠️ RPC not available, using manual approach...");
-      // Get contacts in batch, then filter
+    const CHUNK = 50;
+
+    for (let i = 0; i < uniqueA010Emails.length; i += CHUNK) {
+      const emailChunk = uniqueA010Emails.slice(i, i + CHUNK);
+
+      // Get contacts for these emails
       const { data: contacts } = await supabase
         .from('crm_contacts')
         .select('id, email, name, phone, created_at')
-        .contains('tags', ['A010'])
-        .gte('created_at', sinceDateStr)
-        .eq('is_archived', false)
-        .order('created_at', { ascending: false })
-        .limit(500);
+        .in('email', emailChunk)
+        .eq('is_archived', false);
 
-      if (contacts && contacts.length > 0) {
-        // Get all deals for these contacts in batches of 50 to avoid 1000-row limit
-        const contactIds = contacts.map(c => c.id);
-        const contactsWithDeal = new Set<string>();
-        for (let i = 0; i < contactIds.length; i += 50) {
-          const batch = contactIds.slice(i, i + 50);
-          const { data: deals } = await supabase
-            .from('crm_deals')
-            .select('contact_id')
-            .eq('origin_id', originId)
-            .in('contact_id', batch);
-          (deals || []).forEach((d: any) => contactsWithDeal.add(d.contact_id));
-        }
-        orphans = contacts.filter(c => !contactsWithDeal.has(c.id)).slice(0, limitParam * 2);
-        console.log(`📋 Manual: ${contacts.length} contacts, ${contactsWithDeal.size} with deals, ${orphans.length} orphans`);
+      if (!contacts || contacts.length === 0) continue;
+
+      // Check which ones already have deals in batches
+      const contactIds = contacts.map(c => c.id);
+      const contactsWithDeal = new Set<string>();
+
+      for (let j = 0; j < contactIds.length; j += 50) {
+        const batch = contactIds.slice(j, j + 50);
+        const { data: deals } = await supabase
+          .from('crm_deals')
+          .select('contact_id')
+          .eq('origin_id', originId)
+          .in('contact_id', batch);
+        (deals || []).forEach((d: any) => contactsWithDeal.add(d.contact_id));
       }
-    } else {
-      orphans = orphanRows || [];
-      console.log(`📋 RPC: ${orphans.length} orphans found`);
+
+      const chunkOrphans = contacts.filter(c => !contactsWithDeal.has(c.id));
+      orphans.push(...chunkOrphans);
     }
 
-    // 3. For orphans with email, check if another contact with same email has a deal
+    console.log(`📋 Found ${orphans.length} orphan contacts (A010 buyer, no deal)`);
+
+    // 3. Process orphans: dedup, partner check, create deal
     const results = {
       duplicates_archived: [] as string[],
       deals_created: [] as string[],
@@ -125,7 +145,6 @@ Deno.serve(async (req) => {
           .maybeSingle();
 
         if (otherWithDeal) {
-          // Archive this duplicate
           if (!dryRun) {
             await supabase.from('crm_contacts').update({
               is_archived: true,
@@ -174,20 +193,19 @@ Deno.serve(async (req) => {
         }
 
         const dealPayload = {
-            clint_id: `backfill-a010-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            name: `${orphan.name || 'Cliente'} - A010`,
-            contact_id: orphan.id,
-            origin_id: originId,
-            stage_id: stageId,
-            value: 0,
-            owner_id: ownerEmail,
-            owner_profile_id: ownerProfileId,
-            tags: ['A010', 'Backfill'],
-            custom_fields: { source: 'backfill', backfill_date: new Date().toISOString() },
-            data_source: 'webhook',
-          };
+          clint_id: `backfill-a010-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          name: `${orphan.name || 'Cliente'} - A010`,
+          contact_id: orphan.id,
+          origin_id: originId,
+          stage_id: stageId,
+          value: 0,
+          owner_id: ownerEmail,
+          owner_profile_id: ownerProfileId,
+          tags: ['A010', 'Backfill'],
+          custom_fields: { source: 'backfill', backfill_date: new Date().toISOString() },
+          data_source: 'webhook',
+        };
 
-        // Use upsert with ignoreDuplicates to handle constraint gracefully
         const { data: newDeal, error: dealError } = await supabase
           .from('crm_deals')
           .upsert(dealPayload, { onConflict: 'contact_id,origin_id', ignoreDuplicates: true })
@@ -218,7 +236,8 @@ Deno.serve(async (req) => {
       success: true,
       dry_run: dryRun,
       since: sinceDateStr,
-      orphans_checked: orphans.length,
+      a010_buyer_emails: uniqueA010Emails.length,
+      orphans_found: orphans.length,
       processed,
       ...Object.fromEntries(Object.entries(results).map(([k, v]) => [`${k}_count`, v.length])),
       details: results,
