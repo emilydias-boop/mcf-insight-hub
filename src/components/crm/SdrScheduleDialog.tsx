@@ -12,6 +12,7 @@ import { Calendar, ExternalLink } from 'lucide-react';
 import { QuickScheduleModal } from './QuickScheduleModal';
 import { useClosersWithAvailability } from '@/hooks/useAgendaData';
 import { useCRMBasePath, useActiveBU } from '@/hooks/useActiveBU';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SdrScheduleDialogProps {
   open: boolean;
