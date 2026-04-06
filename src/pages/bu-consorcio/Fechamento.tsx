@@ -16,7 +16,12 @@ import { Badge } from '@/components/ui/badge';
 
 export default function ConsorcioFechamento() {
   const navigate = useNavigate();
-  const [anoMes, setAnoMes] = useState(format(new Date(), 'yyyy-MM'));
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [anoMes, setAnoMes] = useState(() => searchParams.get('month') || format(new Date(), 'yyyy-MM'));
+
+  useEffect(() => {
+    setSearchParams({ month: anoMes }, { replace: true });
+  }, [anoMes, setSearchParams]);
   
   // Closers data
   const { data: payouts, isLoading } = useConsorcioPayouts(anoMes);
