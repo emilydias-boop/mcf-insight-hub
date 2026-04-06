@@ -24,6 +24,8 @@ interface PlanValues {
   valor_docs_reuniao: number;
   valor_tentativas: number;
   valor_organizacao: number;
+  meta_comissao_consorcio?: number | null;
+  meta_comissao_holding?: number | null;
 }
 
 interface EditIndividualPlanDialogProps {
