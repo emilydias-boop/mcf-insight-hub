@@ -494,10 +494,12 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           if ((att as any).is_partner) return;
 
           // Skip outsides from ALL closer metrics (R1 Agendada, Realizada, No-show)
-          // Outside = lead bought contract BEFORE the meeting — not a closer conversion
-          const attEmail = att.deal_id ? dealEmailMap.get(att.deal_id) : undefined;
-          const isOutsideLead = attEmail && emailContractDate.has(attEmail) && emailContractDate.get(attEmail)! < new Date(meeting.scheduled_at);
-          if (isOutsideLead) return; // Outside — skip from closer metrics entirely
+          // Only applies to incorporador BU
+          if (bu === 'incorporador') {
+            const attEmail = att.deal_id ? dealEmailMap.get(att.deal_id) : undefined;
+            const isOutsideLead = attEmail && emailContractDate.has(attEmail) && emailContractDate.get(attEmail)! < new Date(meeting.scheduled_at);
+            if (isOutsideLead) return;
+          }
 
           const status = att.status;
           
