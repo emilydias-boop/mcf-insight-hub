@@ -12,6 +12,7 @@ import { Calendar, ExternalLink } from 'lucide-react';
 import { QuickScheduleModal } from './QuickScheduleModal';
 import { useClosersWithAvailability } from '@/hooks/useAgendaData';
 import { useCRMBasePath, useActiveBU } from '@/hooks/useActiveBU';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SdrScheduleDialogProps {
   open: boolean;
@@ -35,6 +36,7 @@ export function SdrScheduleDialog({
   const navigate = useNavigate();
   const basePath = useCRMBasePath();
   const activeBU = useActiveBU();
+  const { user } = useAuth();
   const [showQuickSchedule, setShowQuickSchedule] = useState(false);
   const { data: closers = [] } = useClosersWithAvailability(activeBU);
   
@@ -118,6 +120,7 @@ export function SdrScheduleDialog({
         closers={closers}
         prefilledDealId={dealId}
         prefilledNotes={initialNotes}
+        ownerEmail={user?.email || undefined}
       />
     </>
   );

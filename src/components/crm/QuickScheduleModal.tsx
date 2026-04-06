@@ -54,6 +54,7 @@ interface QuickScheduleModalProps {
   preselectedDate?: Date;
   prefilledDealId?: string;
   prefilledNotes?: string;
+  ownerEmail?: string;
 }
 
 interface DealOption {
@@ -109,6 +110,7 @@ export function QuickScheduleModal({
   preselectedDate,
   prefilledDealId,
   prefilledNotes,
+  ownerEmail,
 }: QuickScheduleModalProps) {
   const { role } = useAuth();
   const activeBU = useActiveBU();
@@ -216,7 +218,7 @@ export function QuickScheduleModal({
     closerName?: string;
   } | null>(null);
 
-  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery, originIds && originIds.length > 0 ? originIds : undefined);
+  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery, originIds && originIds.length > 0 ? originIds : undefined, ownerEmail);
   const { data: weeklyLeads = [], isLoading: weeklyLeadsLoading } = useSearchWeeklyMeetingLeads(weeklyStatusFilter, closerIdsForBU);
   const createMeeting = useCreateMeeting();
   const sendNotification = useSendMeetingNotification();
@@ -658,7 +660,8 @@ export function QuickScheduleModal({
           </div>
           )}
 
-          {/* SDR Responsável Selection */}
+          {/* SDR Responsável Selection - only for coordinators/admins */}
+          {isCoordinatorOrAbove && (
           <div className="space-y-2">
             <Label>SDR Responsável (opcional)</Label>
             <Select value={selectedSdr} onValueChange={setSelectedSdr}>
@@ -678,6 +681,7 @@ export function QuickScheduleModal({
               Se não selecionado, será atribuído a você
             </p>
           </div>
+          )}
 
           {/* Closer Selection */}
           <div className="space-y-2">

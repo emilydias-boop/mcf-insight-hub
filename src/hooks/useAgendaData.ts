@@ -845,9 +845,9 @@ export function useSearchDealsByEmail(emailQuery: string, originIds?: string[]) 
   });
 }
 
-export function useSearchDealsForSchedule(query: string, originIds?: string[]) {
+export function useSearchDealsForSchedule(query: string, originIds?: string[], ownerEmail?: string) {
   return useQuery({
-    queryKey: ['schedule-search', query, originIds],
+    queryKey: ['schedule-search', query, originIds, ownerEmail],
     queryFn: async () => {
       if (!query || query.length < 2) return [];
 
@@ -860,6 +860,11 @@ export function useSearchDealsForSchedule(query: string, originIds?: string[]) {
       // Filtrar por origin_id se especificado
       if (originIds && originIds.length > 0) {
         dealsQuery = dealsQuery.in('origin_id', originIds);
+      }
+      
+      // Filtrar por owner se especificado (SDR só vê seus leads)
+      if (ownerEmail) {
+        dealsQuery = dealsQuery.eq('owner_id', ownerEmail);
       }
       
       const { data: dealsByName } = await dealsQuery.limit(10);
@@ -887,6 +892,11 @@ export function useSearchDealsForSchedule(query: string, originIds?: string[]) {
         // Filtrar por origin_id se especificado
         if (originIds && originIds.length > 0) {
           contactDealsQuery = contactDealsQuery.in('origin_id', originIds);
+        }
+        
+        // Filtrar por owner se especificado (SDR só vê seus leads)
+        if (ownerEmail) {
+          contactDealsQuery = contactDealsQuery.eq('owner_id', ownerEmail);
         }
         
         const { data } = await contactDealsQuery.limit(10);
