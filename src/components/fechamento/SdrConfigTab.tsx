@@ -518,10 +518,30 @@ export function SdrConfigTab({ defaultSquad = 'incorporador', lockSquad = false 
                       </TableCell>
                       <TableCell className="text-center"><StatusBadge status={sdr.status} /></TableCell>
                       <TableCell className="text-center">
-                        <SdrRowActions sdr={sdr} isCloserMode {...actionProps} />
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleToggleActive(sdr)}
+                          className={sdr.active ? "text-green-500" : "text-gray-400"}
+                          title={sdr.active ? "Desativar" : "Ativar"}
+                        >
+                          {sdr.active ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
+                        </Button>
                       </TableCell>
                       <TableCell className="text-center">
-                        <SdrRowActions sdr={sdr} isCloserMode {...actionProps} />
+                        <div className="flex items-center justify-center gap-1">
+                          <EditSdrDialog sdr={sdr} isCloserMode onSuccess={() => refetchSdrs()} />
+                          {isAdmin && sdr.status === 'PENDING' && (
+                            <>
+                              <Button size="sm" variant="ghost" className="text-green-500 hover:text-green-400" onClick={() => handleApproveSdr(sdr.id, true)}>
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-400" onClick={() => handleApproveSdr(sdr.id, false)}>
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
