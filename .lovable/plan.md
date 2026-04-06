@@ -1,45 +1,50 @@
 
 
-# Unificar busca do QuickScheduleModal em campo unico
+# Filtrar Cockpit SDR por BU — isolamento de pipeline
 
 ## Problema
-O modal "Agendar Reuniao" tem 3 campos separados (Nome, Email, Telefone), cada um com sua propria query. O usuario quer um unico campo que busca por nome, email ou telefone simultaneamente.
+O Cockpit SDR mostra deals de TODAS as pipelines que o SDR possui, sem filtrar pela BU do usuario. Exemplo: Carol Correa (incorporador) ve leads da pipeline "VIVER DE ALUGUEL" (consorcio) na fila.
 
-## Abordagem
+A causa raiz e dupla:
+1. As RPCs `get_sdr_cockpit_queue` e `get_sdr_cockpit_count` filtram apenas por `owner_id`, sem considerar origin/BU
+2. O mapeamento `bu_origin_mapping` para incorporador mapeia apenas 1 origin direta, mas o grupo inteiro "Perpetuo - X1" (`a6f3cbfc-...`) contem todas as pipelines do incorporador (PIPELINE INSIDE SALES, LEAD GRATUITO, INSTAGRAM, SOCIOS, etc.)
 
-### 1. `src/hooks/useAgendaData.ts` — Expandir `useSearchDealsForSchedule`
-A funcao ja busca por nome e telefone. Adicionar busca por email:
-- Na query de `crm_contacts`, adicionar filtro `email.ilike.%${query}%` no `.or()`
-- Isso faz com que um unico input encontre leads por qualquer campo
+## Alteracoes
 
-Os hooks `useSearchDealsByPhone` e `useSearchDealsByEmail` continuam existindo (usados em outros lugares), mas nao serao mais usados no QuickScheduleModal.
+### 1. Migracao SQL — Atualizar RPCs e mapeamento
 
-### 2. `src/components/crm/QuickScheduleModal.tsx` — Substituir 3 campos por 1
+**a) Adicionar grupo do incorporador ao `bu_origin_mapping`:**
+```sql
+INSERT INTO bu_origin_mapping (bu, entity_type, entity_id, is_default)
+VALUES ('incorporador', 'group', 'a6f3cbfc-0567-427f-a405-5a869aaa6010', true)
+ON CONFLICT DO NOTHING;
+```
 
-**Remover**:
-- States: `phoneQuery`, `emailQuery`, `showPhoneResults`, `showEmailResults`
-- Imports: `useSearchDealsByPhone`, `useSearchDealsByEmail`
-- Os 2 blocos de UI para Email e Telefone (campos + resultados dropdown)
+**b) Recriar `get_sdr_cockpit_queue` com parametro `p_origin_ids UUID[] DEFAULT NULL`:**
+- Quando fornecido, adicionar `AND d.origin_id = ANY(p_origin_ids)` ao WHERE
+- Quando NULL, manter comportamento atual (sem filtro de origin)
 
-**Alterar**:
-- O campo "Nome" vira "Buscar lead" com placeholder "Nome, email ou telefone..."
-- O campo usa `nameQuery` e `useSearchDealsForSchedule` (que agora busca por nome/email/phone)
-- Nos resultados do dropdown, mostrar nome + email + telefone para diferenciar leads homonimos
-- Apos selecionar, mostrar email e telefone como texto informativo (read-only, sem campo de input separado) abaixo do campo de busca
+**c) Recriar `get_sdr_cockpit_count` com mesmo parametro `p_origin_ids UUID[] DEFAULT NULL`:**
+- Mesma logica de filtro
 
-**Resultado visual**:
-- 1 campo de busca unificado com icone Search
-- Apos selecao: card compacto mostrando nome, email e telefone do lead selecionado (com botao X para limpar)
+### 2. `src/hooks/useSDRCockpit.ts` — Passar origin_ids para RPCs
 
-### 3. Ajustes no `resetForm` e `handleClearSelection`
-- Remover referencias a `phoneQuery`, `emailQuery`, `showPhoneResults`, `showEmailResults`
+- Importar `useActiveBU` e `useBUOriginIds`
+- Em `useSDRQueueInfinite`: obter `originIds` da BU ativa, passar como `p_origin_ids` para a RPC
+- Em `useSDRQueueCount`: mesma logica, passar `p_origin_ids`
+- Adicionar `originIds` ao `queryKey` de ambos os hooks para invalidar cache quando BU mudar
+
+### 3. `src/integrations/supabase/types.ts` — Atualizar tipos das RPCs
+
+- Adicionar `p_origin_ids?: string[]` aos Args de `get_sdr_cockpit_queue` e `get_sdr_cockpit_count`
 
 ## Arquivos alterados
-1. `src/hooks/useAgendaData.ts` — adicionar email ao filtro de `useSearchDealsForSchedule`
-2. `src/components/crm/QuickScheduleModal.tsx` — substituir 3 campos por 1 + info card
+1. Nova migracao SQL (RPCs + mapeamento)
+2. `src/hooks/useSDRCockpit.ts`
+3. `src/integrations/supabase/types.ts`
 
-## Impacto
-- Nenhum outro componente afetado (os hooks de phone/email search continuam disponiveis)
-- Comportamento de selecao de deal permanece identico
-- Modal fica mais compacto e intuitivo
+## Resultado
+- Carol Correa (incorporador) vera apenas leads de pipelines do grupo Perpetuo - X1: PIPELINE INSIDE SALES, LEAD GRATUITO, INSTAGRAM, etc.
+- Leads de "VIVER DE ALUGUEL" continuam visiveis apenas se essa origin tambem estiver mapeada para incorporador (atualmente nao esta — pertence ao mesmo grupo mas o mapeamento pode ser ajustado no admin de configuracao BU)
+- Nenhuma outra tela afetada
 
