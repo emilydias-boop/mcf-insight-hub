@@ -241,7 +241,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
           // Criar novo plano para o mês selecionado
           const { error: insertError } = await supabase
             .from('sdr_comp_plan')
-            .insert(planData);
+            .insert(planData as any);
           if (insertError) throw insertError;
         }
       } else {
