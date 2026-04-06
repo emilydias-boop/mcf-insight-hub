@@ -304,11 +304,7 @@ export function QuickScheduleModal({
     setNameQuery(deal.contact?.name || deal.name);
     setSelectedEmail(deal.contact?.email || '');
     setSelectedPhone(deal.contact?.phone || '');
-    setPhoneQuery('');
-    setEmailQuery('');
     setShowResults(false);
-    setShowPhoneResults(false);
-    setShowEmailResults(false);
   }, []);
 
   // Clear selection to search again
