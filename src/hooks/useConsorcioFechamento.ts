@@ -242,6 +242,9 @@ export function useRecalculateConsorcioPayouts() {
   
   return useMutation({
     mutationFn: async (anoMes: string) => {
+      // 0. Buscar pesos dinâmicos das métricas ativas
+      const pesos = await buscarPesosMetricas(anoMes);
+      
       // 1. Buscar closers ativos do consórcio
       const { data: closers, error: closersError } = await supabase
         .from('closers')
