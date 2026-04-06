@@ -668,7 +668,15 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline">{values.metaDiaria}</Badge>
+                        {emp.role_type === 'closer' && emp.departamento === 'BU - Consórcio' ? (
+                          <span className="text-xs">
+                            {emp.comp_plan?.meta_comissao_consorcio
+                              ? formatCurrency(emp.comp_plan.meta_comissao_consorcio)
+                              : <span className="text-muted-foreground">—</span>}
+                          </span>
+                        ) : (
+                          <Badge variant="outline">{values.metaDiaria}</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         <Button
