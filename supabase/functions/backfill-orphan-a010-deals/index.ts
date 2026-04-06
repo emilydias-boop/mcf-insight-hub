@@ -79,15 +79,18 @@ Deno.serve(async (req) => {
         .limit(500);
 
       if (contacts && contacts.length > 0) {
-        // Get all deals for these contacts in one query
+        // Get all deals for these contacts in batches of 50 to avoid 1000-row limit
         const contactIds = contacts.map(c => c.id);
-        const { data: deals } = await supabase
-          .from('crm_deals')
-          .select('contact_id')
-          .eq('origin_id', originId)
-          .in('contact_id', contactIds);
-
-        const contactsWithDeal = new Set((deals || []).map(d => d.contact_id));
+        const contactsWithDeal = new Set<string>();
+        for (let i = 0; i < contactIds.length; i += 50) {
+          const batch = contactIds.slice(i, i + 50);
+          const { data: deals } = await supabase
+            .from('crm_deals')
+            .select('contact_id')
+            .eq('origin_id', originId)
+            .in('contact_id', batch);
+          (deals || []).forEach((d: any) => contactsWithDeal.add(d.contact_id));
+        }
         orphans = contacts.filter(c => !contactsWithDeal.has(c.id)).slice(0, limitParam * 2);
         console.log(`📋 Manual: ${contacts.length} contacts, ${contactsWithDeal.size} with deals, ${orphans.length} orphans`);
       }
@@ -170,9 +173,7 @@ Deno.serve(async (req) => {
           ownerProfileId = profile?.id || null;
         }
 
-        const { data: newDeal, error: dealError } = await supabase
-          .from('crm_deals')
-          .insert({
+        const dealPayload = {
             clint_id: `backfill-a010-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             name: `${orphan.name || 'Cliente'} - A010`,
             contact_id: orphan.id,
@@ -184,12 +185,20 @@ Deno.serve(async (req) => {
             tags: ['A010', 'Backfill'],
             custom_fields: { source: 'backfill', backfill_date: new Date().toISOString() },
             data_source: 'webhook',
-          })
+          };
+
+        // Use upsert with ignoreDuplicates to handle constraint gracefully
+        const { data: newDeal, error: dealError } = await supabase
+          .from('crm_deals')
+          .upsert(dealPayload, { onConflict: 'contact_id,origin_id', ignoreDuplicates: true })
           .select('id')
           .maybeSingle();
 
         if (dealError) {
           console.error(`❌ ${orphan.email}: ${dealError.message}`);
+        } else if (!newDeal) {
+          console.log(`⏭️ ${orphan.email}: already has deal (constraint skip)`);
+          results.already_has_deal_via_email.push(`${orphan.email} (upsert skip)`);
         } else {
           results.deals_created.push(`${orphan.email || orphan.name} → ${newDeal?.id || 'ignored'} → ${ownerEmail}`);
           if (newDeal?.id && ownerEmail) {
