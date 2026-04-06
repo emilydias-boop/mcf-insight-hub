@@ -448,16 +448,15 @@ export default function CargoFormDialog({ open, onOpenChange, cargo }: CargoForm
                           <Input
                             type="number"
                             min={0}
-                            step={100}
+                            step={0.01}
                             value={field.value}
                             onChange={(e) => field.onChange(Number(e.target.value))}
+                            placeholder="0,00"
                           />
                         </FormControl>
-                        <FormMessage />
                       </FormItem>
                     )}
                   />
-
                   <FormField
                     control={form.control}
                     name="variavel_valor"
@@ -468,7 +467,7 @@ export default function CargoFormDialog({ open, onOpenChange, cargo }: CargoForm
                           <Input
                             type="number"
                             min={0}
-                            step={100}
+                            step={0.01}
                             value={field.value}
                             onChange={(e) => field.onChange(Number(e.target.value))}
                           />
