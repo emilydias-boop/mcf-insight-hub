@@ -845,9 +845,9 @@ export function useSearchDealsByEmail(emailQuery: string, originIds?: string[]) 
   });
 }
 
-export function useSearchDealsForSchedule(query: string, originIds?: string[]) {
+export function useSearchDealsForSchedule(query: string, originIds?: string[], ownerEmail?: string) {
   return useQuery({
-    queryKey: ['schedule-search', query, originIds],
+    queryKey: ['schedule-search', query, originIds, ownerEmail],
     queryFn: async () => {
       if (!query || query.length < 2) return [];
 
