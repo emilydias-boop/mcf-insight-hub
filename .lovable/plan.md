@@ -1,32 +1,47 @@
 
+# Corrigir Carrinho R2 — Mostrar R2s da janela operacional, nao da safra
 
-# Unificar busca do R2QuickScheduleModal em campo unico
+## Diagnostico
 
-## Problema
-O modal "Agendar Reuniao R2" tem 3 campos separados (Nome, Email, Telefone) com 3 queries independentes. Deve seguir o mesmo padrao ja implementado no QuickScheduleModal de R1: um unico campo que busca por nome, email ou telefone simultaneamente.
+O Carrinho R2 mostra **"Todas R2s: 0"** mesmo com 9 reunioes R2 agendadas na semana. A causa:
 
-## Abordagem
+- A aba "Todas R2s" usa logica de **safra** (contratos pagos Qui 02/04 - Qua 08/04) e procura R2s desses contratos
+- Os 3 contratos desta safra (Bruno, Leandro, Thiago) ainda nao tem R2 agendada
+- As 9 R2s visiveis na Agenda R2 sao de contratos da **safra anterior** (26/03-01/04), cujas R2s foram agendadas para esta semana
 
-O hook `useSearchDealsForSchedule` ja suporta busca unificada (nome + telefone + email no `.or()`). Basta usar apenas esse hook e remover os outros dois.
+O sistema ja calcula uma janela operacional de R2 (`r2Meetings: Sex 03/04 → Sex 10/04`) mas essa janela **nao e usada** pela aba "Todas R2s" — so e usada pela aba "Aprovados".
 
-## Alteracao: `src/components/crm/R2QuickScheduleModal.tsx`
+## Proposta
 
-**Remover:**
-- Estados: `phoneQuery`, `showPhoneResults`, `emailQuery`, `showEmailResults`
-- Imports: `useSearchDealsByPhone`, `useSearchDealsByEmail`
-- Os 2 blocos de busca separados (Email lines 338-380, Phone lines 382-424)
-- Referencias nos handlers `handleSelectDeal`, `handleClearSelection`, `resetForm`
+A aba "Todas R2s" (e as sub-abas Fora do Carrinho, Pendentes) deve mostrar **todas as R2 meetings agendadas na janela operacional** (Sex-Sex), independente de quando o contrato foi pago. A logica de safra continua valida apenas para o KPI "Contratos (R1)".
 
-**Substituir os 3 campos por 1:**
-- Unico campo com placeholder "Buscar por nome, email ou telefone..."
-- Icone `Search`, mesma logica de `nameQuery` + `showResults`
-- Apos selecao: mostrar card compacto com nome, email e telefone (read-only), com botao X para limpar
+### Alteracao 1: `src/hooks/useR2CarrinhoData.ts`
 
-**Resultado visual:**
-- 1 campo de busca ao inves de 3
-- Card informativo apos selecao (igual ao R1)
-- Modal mais compacto
+Para os filtros `agendadas`, `no_show`, `realizadas`:
+- **Atual**: Busca contratos da safra → resolve contatos → busca R2s desses contatos apos sale_date
+- **Novo**: Busca diretamente R2 attendees com `meeting_slot.scheduled_at` dentro da janela `boundaries.r2Meetings` (Sex-Sex), igual ao que ja faz para `aprovados`
+- Manter enriquecimento com dados de R1 (closer, data) e deal info
+- Aplicar filtros de status do slot (agendadas = nao cancelled/rescheduled, no_show, realizadas = completed)
 
-## Arquivo alterado
-1. `src/components/crm/R2QuickScheduleModal.tsx`
+### Alteracao 2: `src/hooks/useR2CarrinhoKPIs.ts`
 
+Alinhar KPIs de R2 (Agendadas, Realizadas, Fora do Carrinho, Pendentes) com a mesma janela operacional:
+- `contratosPagos`: continua usando safra (Thu-Wed) — correto
+- `r2Agendadas`, `r2Realizadas`, `foraDoCarrinho`, `pendentes`, `emAnalise`: usar janela `r2Meetings` (Sex-Sex) em vez de filtrar por safra de contratos
+- `aprovados`: ja usa janela operacional — sem mudanca
+
+### Alteracao 3: `src/hooks/useR2ForaDoCarrinhoData.ts`
+
+Mesmo ajuste: buscar R2 attendees na janela operacional com status "fora do carrinho", em vez de filtrar por safra de contratos.
+
+## Resultado esperado
+
+- "Todas R2s" mostrara as 9 reunioes agendadas para esta semana (Lindenberg, Pedro, Junio, etc.)
+- "Contratos (R1)" continua mostrando 3 (contratos pagos nesta safra)
+- KPIs de R2 refletirao a operacao real da semana
+- Aprovados permanece igual (ja funciona com janela operacional)
+
+## Arquivos alterados
+1. `src/hooks/useR2CarrinhoData.ts` — buscar R2s pela janela operacional
+2. `src/hooks/useR2CarrinhoKPIs.ts` — alinhar KPIs de R2 com janela operacional
+3. `src/hooks/useR2ForaDoCarrinhoData.ts` — alinhar fora do carrinho com janela operacional
