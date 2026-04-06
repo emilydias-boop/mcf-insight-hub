@@ -120,6 +120,7 @@ export function SdrScheduleDialog({
         closers={closers}
         prefilledDealId={dealId}
         prefilledNotes={initialNotes}
+        ownerEmail={user?.email || undefined}
       />
     </>
   );
