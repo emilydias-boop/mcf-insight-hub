@@ -29,7 +29,8 @@ import { useActiveBU } from '@/hooks/useActiveBU';
 
 export default function Agenda() {
   const navigate = useNavigate();
-  const { role, allRoles } = useAuth();
+  const { role, allRoles, user } = useAuth();
+  const sdrOwnerEmail = role === 'sdr' ? user?.email || undefined : undefined;
   const { data: myCloser } = useMyCloser();
   const activeBU = useActiveBU();
   
