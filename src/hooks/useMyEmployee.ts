@@ -32,6 +32,20 @@ export function useMyEmployee() {
           console.log('Employee encontrado via email fallback:', data.nome_completo);
         }
       }
+
+      // Fallback: buscar por profile_id se não encontrou por user_id nem email
+      if (!data && user.id) {
+        const profileResult = await supabase
+          .from('employees')
+          .select('*')
+          .eq('profile_id', user.id)
+          .maybeSingle();
+        
+        if (profileResult.data) {
+          data = profileResult.data;
+          console.log('Employee encontrado via profile_id fallback:', data.nome_completo);
+        }
+      }
       
       if (error) throw error;
       return data as Employee | null;
