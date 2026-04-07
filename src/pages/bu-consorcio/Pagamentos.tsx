@@ -10,6 +10,11 @@ import {
 } from '@/components/ui/select';
 import { ConsorcioPagamentosTab } from '@/components/consorcio/pagamentos/ConsorcioPagamentosTab';
 import { BoletoUploadDialog } from '@/components/consorcio/pagamentos/BoletoUploadDialog';
+import { BoletoReviewDialog } from '@/components/consorcio/pagamentos/BoletoReviewDialog';
+import { useBoletosReview } from '@/hooks/useConsorcioBoletos';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { AlertTriangle } from 'lucide-react';
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
   const date = subMonths(new Date(), i);
