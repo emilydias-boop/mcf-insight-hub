@@ -1,29 +1,59 @@
 
+# Verificação: por que ainda entram em Viver de Aluguel
 
-# Corrigir deals A010 recuperados na pipeline errada
+## Diagnóstico
+- Confirmei que o problema ainda existe e não é só visual.
+- Casos auditados:
+  - `andreaatelier@gmail.com`: tem compra A010 registrada e deal em `PIPELINE - INSIDE SALES - VIVER DE ALUGUEL`, mas não tem deal em `PIPELINE INSIDE SALES`.
+  - `luan.felipe.navarro@gmail.com`: já tem deal em `PIPELINE INSIDE SALES` e mesmo assim também ganhou deal em Viver.
+- Isso mostra 2 falhas diferentes:
+  1. O fluxo A010 do Make ainda pode falhar ao criar o deal correto no Incorporador.
+  2. O fluxo de `Construir Para Alugar` ainda pode abrir deal em Viver mesmo quando o lead já comprou A010.
 
-## Problema
-Os 12 deals A010 recuperados no script anterior foram criados na pipeline **"PIPELINE - INSIDE SALES - VIVER DE ALUGUEL"** (`4e2b810a`) em vez da pipeline correta **"PIPELINE INSIDE SALES"** (`e3c04f21`) que pertence a BU Incorporador.
+## Causa raiz encontrada
+- `supabase/functions/webhook-make-a010/index.ts` ainda usa:
+  - `.upsert(... onConflict: 'contact_id,origin_id')` em `crm_deals`
+- Isso repete o mesmo problema do índice único parcial já corrigido no `hubla-webhook-handler`, então algumas compras A010 ficam só na transação e não viram deal no Inside Sales.
+- Em `supabase/functions/hubla-webhook-handler/index.ts`, o fluxo `createDealForConsorcioProduct(...)` de `ob_construir_alugar` ainda está frágil:
+  - a proteção depende de achar o deal/A010 “na hora”;
+  - a checagem não é robusta para corrida entre eventos, contatos duplicados e variação email/telefone;
+  - por isso ainda nasce deal em Viver para lead que deveria passar primeiro no Incorporador.
 
-O webhook em si esta correto (linha 328 converte "A010 Hubla" → "PIPELINE INSIDE SALES"). O erro foi no script de recuperacao que usou a origin errada.
+## Plano
+1. Corrigir o webhook Make A010
+- Em `supabase/functions/webhook-make-a010/index.ts`, trocar o `upsert` do deal por `insert` com fallback para duplicata, igual ao padrão já aplicado no Hubla.
+- Objetivo: garantir que a compra A010 sempre gere/atualize primeiro o deal no `PIPELINE INSIDE SALES`.
 
-## Solucao
+2. Blindar a regra “A010 passa primeiro no Incorporador”
+- Em `supabase/functions/hubla-webhook-handler/index.ts`, reforçar `createDealForConsorcioProduct(...)` para `ob_construir_alugar`:
+  - procurar compra A010 e deal de Inside Sales por email e por telefone normalizado/sufixo;
+  - olhar todos os contatos equivalentes, não só um registro;
+  - se houver A010 confirmado, nunca criar deal em Viver antes de garantir o deal no Inside Sales.
+- Regra final:
+  - se já existe deal no Inside Sales: só adicionar tag/atividade;
+  - se existe compra A010 mas o deal do Inside Sales está faltando: criar/recuperar esse deal primeiro e bloquear Viver.
 
-### 1. Corrigir os 12 deals existentes
-Executar um UPDATE para mover os 12 deals recuperados para a origin correta:
-- **De**: `4e2b810a-6782-4ce9-9c0d-10d04c018636` (PIPELINE - INSIDE SALES - VIVER DE ALUGUEL)
-- **Para**: `e3c04f21-ba2c-4c66-84f8-b4341c826b1c` (PIPELINE INSIDE SALES)
-- Tambem atualizar o `stage_id` para o estagio "NOVO LEAD" da pipeline correta
-- Filtro: deals com tag `recuperado` criados em 2026-04-07
+3. Corrigir os casos recentes já afetados
+- Criar migration para:
+  - gerar os deals faltantes no `PIPELINE INSIDE SALES` para compradores A010 que ficaram só com Viver;
+  - ajustar os deals indevidos de Viver criados no período recente.
+- Priorizar os casos já confirmados na auditoria, como `andreaatelier@gmail.com` e `thiagoamorim18@hotmail.com`.
 
-### 2. Verificar stage_id correto
-Buscar o stage "NOVO LEAD" da origin `e3c04f21` e atualizar os deals.
+4. Ajustar a leitura no drawer de contato
+- Em `src/components/crm/ContactDetailsDrawer.tsx`, parar de usar apenas o deal mais recente como “principal”.
+- Quando houver deal de A010/Inside Sales, priorizar ele no drawer.
+- Isso evita confusão nos casos em que o contato tem mais de um negócio.
 
-### Detalhes tecnicos
-- Migration SQL para UPDATE dos 12 deals
-- Nenhuma alteracao de codigo necessaria (o webhook ja roteia corretamente para "PIPELINE INSIDE SALES")
+## Arquivos
+| Arquivo | Ação |
+|---|---|
+| `supabase/functions/webhook-make-a010/index.ts` | trocar `upsert` por `insert` com tratamento de duplicata |
+| `supabase/functions/hubla-webhook-handler/index.ts` | endurecer o bloqueio de Viver para quem tem A010 e garantir criação/recuperação no Inside Sales |
+| `src/components/crm/ContactDetailsDrawer.tsx` | priorizar o deal de Inside Sales/A010 como deal principal |
+| `supabase/migrations/*.sql` | backfill/correção dos leads recentes afetados |
 
-| Acao | Detalhe |
-|------|---------|
-| Migration SQL | UPDATE 12 deals: origin_id e stage_id para a pipeline correta do Incorporador |
-
+## Resultado esperado
+- Quem compra A010 entra primeiro na BU Incorporador.
+- `Construir Para Alugar` não abre Viver para lead que já é A010.
+- Os casos já errados ficam corrigidos no banco.
+- A tela passa a refletir o deal certo no CRM.
