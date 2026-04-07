@@ -127,7 +127,7 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
       <PagamentosAlerts {...alertData} />
 
       {/* Bulk action bar */}
-      {selectedIds.size > 0 && (
+      {bulkMode && selectedIds.size > 0 && (
         <div className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20">
           <Badge variant="secondary" className="text-sm">
             {selectedIds.size} selecionado(s)
