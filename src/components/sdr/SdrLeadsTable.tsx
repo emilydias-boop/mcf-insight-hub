@@ -1,8 +1,16 @@
 import { useState, useMemo } from "react";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ExternalLink, Filter } from "lucide-react";
+import { ExternalLink, Filter, Search, CalendarIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -52,6 +60,8 @@ const getStatusBadgeClass = (status: string) => {
 export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeadsTableProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
 
   // Get unique statuses and types
   const { statuses, types } = useMemo(() => {
@@ -74,9 +84,28 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
     return meetings.filter(m => {
       if (statusFilter !== "all" && m.status_atual !== statusFilter) return false;
       if (typeFilter !== "all" && m.tipo !== typeFilter) return false;
+      
+      // Search filter
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const nameMatch = (m.contact_name || '').toLowerCase().includes(q);
+        const emailMatch = (m.contact_email || '').toLowerCase().includes(q);
+        if (!nameMatch && !emailMatch) return false;
+      }
+      
+      // Date filter
+      if (dateFilter) {
+        const dayStart = startOfDay(dateFilter);
+        const dayEnd = endOfDay(dateFilter);
+        const meetingDate = m.scheduled_at ? new Date(m.scheduled_at) : m.data_agendamento ? parseISO(m.data_agendamento) : null;
+        if (!meetingDate || meetingDate < dayStart || meetingDate > dayEnd) return false;
+      }
+      
       return true;
     });
-  }, [meetings, statusFilter, typeFilter]);
+  }, [meetings, statusFilter, typeFilter, searchQuery, dateFilter]);
+
+  const hasActiveFilters = statusFilter !== "all" || typeFilter !== "all" || searchQuery !== "" || dateFilter !== undefined;
 
   if (isLoading) {
     return (
@@ -96,6 +125,51 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
           <Filter className="h-4 w-4" />
           <span>Filtros:</span>
         </div>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Buscar lead..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 w-[180px] pl-8 text-sm"
+          />
+        </div>
+
+        {/* Date filter */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                "h-8 w-[150px] justify-start text-left text-sm font-normal",
+                !dateFilter && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+              {dateFilter ? format(dateFilter, "dd/MM/yyyy", { locale: ptBR }) : "Data reunião"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+            <Calendar
+              mode="single"
+              selected={dateFilter}
+              onSelect={setDateFilter}
+              locale={ptBR}
+              className="p-3 pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8"
+          onClick={() => setDateFilter(new Date())}
+        >
+          Hoje
+        </Button>
         
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[160px] h-8">
@@ -125,13 +199,15 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
           </SelectContent>
         </Select>
 
-        {(statusFilter !== "all" || typeFilter !== "all") && (
+        {hasActiveFilters && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => {
               setStatusFilter("all");
               setTypeFilter("all");
+              setSearchQuery("");
+              setDateFilter(undefined);
             }}
           >
             Limpar filtros
