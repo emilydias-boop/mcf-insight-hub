@@ -557,6 +557,22 @@ const Negocios = () => {
         }
       }
       
+      // Filtro por produtos adquiridos (hubla_transactions)
+      if (filters.productFilters.length > 0) {
+        const email = deal.crm_contacts?.email?.toLowerCase().trim();
+        const dealProducts = email ? productMap.get(email) : undefined;
+        
+        const evaluateProductRule = (rule: { product: string; mode: 'has' | 'not_has' }) => {
+          const hasProduct = dealProducts?.has(rule.product) ?? false;
+          return rule.mode === 'has' ? hasProduct : !hasProduct;
+        };
+        
+        if (filters.productOperator === 'and') {
+          if (!filters.productFilters.every(evaluateProductRule)) return false;
+        } else {
+          if (!filters.productFilters.some(evaluateProductRule)) return false;
+        }
+      
       // Filtro por prioridade de atividade
       if (filters.activityPriority !== 'all' && activitySummaries) {
         const summary = activitySummaries.get(deal.id.toLowerCase().trim());
