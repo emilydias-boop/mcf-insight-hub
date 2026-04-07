@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
     const { data: newDeal, error } = await supabase
       .from('crm_deals')
       .insert({
+        clint_id: `hubla-recover-${lead.contact_id.slice(0, 8)}-${Date.now()}`,
         contact_id: lead.contact_id,
         origin_id: originId,
         stage_id: stageId,
