@@ -55,6 +55,7 @@ export default function ConsorcioPagamentosPage() {
         type="consorcio"
         title="Parcelas com Vencimento Próximo"
       />
+      <CobrancaHistoryPanel type="consorcio" />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">💳 Pagamentos Consórcio</h1>

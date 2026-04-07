@@ -88,6 +88,7 @@ export const FinanceiroCobrancas = () => {
         type="billing"
         title="Parcelas com Vencimento Próximo"
       />
+      <CobrancaHistoryPanel type="billing" />
       <CobrancaKPIs kpis={kpis} isLoading={loadingKpis} />
 
       <CobrancaQueue onSelect={handleSelect} />
