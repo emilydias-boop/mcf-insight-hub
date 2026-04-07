@@ -23,6 +23,7 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
   const [detailRow, setDetailRow] = useState<PagamentoRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [sendProgress, setSendProgress] = useState({ current: 0, total: 0, skipped: 0 });
 

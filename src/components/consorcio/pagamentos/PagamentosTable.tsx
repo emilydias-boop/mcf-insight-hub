@@ -119,14 +119,8 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-10">
-              <Checkbox
-                checked={allSelected}
-                onCheckedChange={(checked) => handleSelectAll(!!checked)}
-                aria-label="Selecionar todos"
-              />
-            </TableHead>
-            <TableHead>Cliente</TableHead>
+             <TableHead>Cliente</TableHead>
+
             <TableHead>Grupo</TableHead>
             <TableHead>Cota</TableHead>
             <TableHead className="text-center">Nº</TableHead>
