@@ -1543,7 +1543,7 @@ async function createDealForConsorcioProduct(supabase: any, data: ConsorcioDealD
     let linkedDealId: string | null = null;
     const { data: existingDeal } = await supabase
       .from('crm_deals')
-      .select('id, origin_id, name')
+      .select('id, origin_id, name, tags')
       .eq('contact_id', contactId)
       .neq('origin_id', CONSORCIO_ORIGIN_ID)
       .neq('origin_id', VIVER_ALUGUEL_ORIGIN_ID)
@@ -1554,6 +1554,57 @@ async function createDealForConsorcioProduct(supabase: any, data: ConsorcioDealD
     if (existingDeal) {
       linkedDealId = existingDeal.id;
       console.log(`🏦 [CONSÓRCIO] Deal existente para vincular: ${linkedDealId} (${existingDeal.name})`);
+    }
+    
+    // 5b. Se é ob_construir_alugar e o contato já tem deal no Inside Sales (comprou A010),
+    // NÃO criar deal no Viver de Aluguel — apenas adicionar tag ao deal existente
+    if (data.productCategory === 'ob_construir_alugar' && existingDeal) {
+      const INSIDE_SALES_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
+      if (existingDeal.origin_id === INSIDE_SALES_ORIGIN_ID) {
+        console.log(`🏦 [CONSÓRCIO] ob_construir_alugar: Contato já tem deal no Inside Sales (${existingDeal.id}). Adicionando tag em vez de criar deal no Viver de Aluguel.`);
+        
+        const currentTags = existingDeal.tags || [];
+        if (!currentTags.includes('ob-construir-alugar')) {
+          await supabase
+            .from('crm_deals')
+            .update({
+              tags: [...currentTags, 'ob-construir-alugar'],
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingDeal.id);
+          console.log(`🏦 [CONSÓRCIO] Tag 'ob-construir-alugar' adicionada ao deal ${existingDeal.id}`);
+        }
+        
+        // Registrar atividade no deal
+        await supabase
+          .from('deal_activities')
+          .insert({
+            deal_id: existingDeal.id,
+            activity_type: 'note',
+            description: `🔗 Cliente comprou order bump "Construir Para Alugar" — registrado como tag (deal já no Inside Sales)`,
+            metadata: { product_name: data.productName, value: data.value }
+          });
+        
+        return; // Não criar deal no Viver de Aluguel
+      }
+    }
+    
+    // 5c. Se é ob_construir_alugar e o contato tem compra A010 confirmada (mas sem deal ainda),
+    // também não criar deal separado — o A010 webhook vai criar o deal correto
+    if (data.productCategory === 'ob_construir_alugar' && !existingDeal && data.email) {
+      const { data: a010Purchase } = await supabase
+        .from('hubla_transactions')
+        .select('id')
+        .ilike('customer_email', data.email)
+        .in('product_category', ['a010'])
+        .eq('sale_status', 'completed')
+        .limit(1)
+        .maybeSingle();
+      
+      if (a010Purchase) {
+        console.log(`🏦 [CONSÓRCIO] ob_construir_alugar: Contato tem compra A010 confirmada mas sem deal ainda. Pulando criação no Viver de Aluguel (A010 webhook criará o deal).`);
+        return;
+      }
     }
     
     // 6. Verificar se já existe deal no pipeline correto para evitar duplicação
