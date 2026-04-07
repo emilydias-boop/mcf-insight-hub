@@ -126,8 +126,8 @@ export default function SdrMeetingsDetailPage() {
         onBack={handleBack}
       />
 
-      {/* Filters */}
-      <SdrPerformanceFilters
+      {/* Filters - hidden on leads tab */}
+      {activeTab !== "leads" && <SdrPerformanceFilters
         startDate={startDate}
         endDate={endDate}
         comparisonMode={comparisonMode}
