@@ -102,9 +102,10 @@ const EditWorkingDayDialog = ({
     updateMutation.mutate({
       dias_uteis_base: parseInt(diasUteisBase),
       dias_uteis_final: parseInt(diasUteisFinal),
+      dias_uteis_closer: diasUteisCloser ? parseInt(diasUteisCloser) : null,
       ifood_valor_dia: parseFloat(ifoodValorDia),
       observacoes: observacoes || null,
-    });
+    } as any);
   };
 
   const calculatedIfood = parseInt(diasUteisFinal) * parseFloat(ifoodValorDia);
