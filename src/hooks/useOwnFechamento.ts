@@ -312,6 +312,28 @@ export function useOwnFechamento(anoMes: string): OwnFechamentoData {
     enabled: !!closerId && !!anoMes && userType === 'closer' && !isConsorcioSquad,
   });
 
+  // Fetch KPI for the month
+  const {
+    data: kpiData,
+    isLoading: kpiLoading,
+  } = useQuery({
+    queryKey: ['own-kpi', anoMes, sdrRecord?.id],
+    queryFn: async () => {
+      if (!sdrRecord?.id || !anoMes) return null;
+
+      const { data, error } = await supabase
+        .from('sdr_month_kpi')
+        .select('*')
+        .eq('sdr_id', sdrRecord.id)
+        .eq('ano_mes', anoMes)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as SdrMonthKpi | null;
+    },
+    enabled: !!sdrRecord?.id && !!anoMes && !isConsorcioSquad,
+  });
+
   // Determine which payout to use
   // For consorcio closers: prefer consorcio payout over sdr payout
   const isConsorcioPayout = isConsorcioSquad && !!consorcioPayout && consorcioPayout.status !== 'DRAFT';
@@ -319,7 +341,7 @@ export function useOwnFechamento(anoMes: string): OwnFechamentoData {
     ? consorcioPayout 
     : sdrPayout;
 
-  const isLoading = sdrLoading || payoutLoading || compPlanLoading || 
+  const isLoading = sdrLoading || payoutLoading || compPlanLoading || kpiLoading ||
     (userType === 'closer' && closerIdLoading) ||
     (isConsorcioSquad && consorcioPayoutLoading) ||
     (!isConsorcioSquad && userType === 'closer' && closerMetricsLoading);
@@ -333,6 +355,7 @@ export function useOwnFechamento(anoMes: string): OwnFechamentoData {
     compPlan: compPlan || null,
     closerMetrics: closerMetrics || null,
     closerId: closerId || null,
+    kpi: kpiData || null,
     canSendNfse,
     isConsorcioPayout,
     isLoading,
