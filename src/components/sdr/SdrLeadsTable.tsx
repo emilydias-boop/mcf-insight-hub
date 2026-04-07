@@ -62,6 +62,7 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
+  const [meetingDateFilter, setMeetingDateFilter] = useState<Date | undefined>(undefined);
 
   // Get unique statuses and types
   const { statuses, types } = useMemo(() => {
