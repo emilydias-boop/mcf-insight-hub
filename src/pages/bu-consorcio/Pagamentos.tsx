@@ -33,9 +33,27 @@ export default function ConsorcioPagamentosPage() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const selectedMonth = MONTH_OPTIONS[Number(monthOffset)] || MONTH_OPTIONS[0];
   const { data: reviewBoletos = [] } = useBoletosReview();
+  const { data: consorcioAlerts = [], isLoading: loadingAlerts } = useConsorcioCobrancaAlerts();
+
+  const alertItems = consorcioAlerts.map(a => ({
+    id: a.installment_id,
+    label: a.nome_completo,
+    sublabel: [a.grupo, a.cota].filter(Boolean).join('/') || undefined,
+    numero_parcela: a.numero_parcela,
+    valor: a.valor_parcela,
+    data_vencimento: a.data_vencimento,
+    dias_para_vencer: a.dias_para_vencer,
+    priority: a.priority,
+  }));
 
   return (
     <div className="p-6 space-y-6">
+      <CobrancaAlertPanel
+        alerts={alertItems}
+        isLoading={loadingAlerts}
+        type="consorcio"
+        title="Parcelas com Vencimento Próximo"
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">💳 Pagamentos Consórcio</h1>
