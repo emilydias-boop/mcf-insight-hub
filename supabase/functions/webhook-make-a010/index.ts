@@ -464,10 +464,10 @@ async function createCrmDeal(supabase: any, data: {
       return { status: "updated", deal_id: doubleCheck.id, reason: "double_check" };
     }
 
-    // 8. Criar deal com upsert atômico
+    // 8. Criar deal com INSERT direto (evita conflito com índice único parcial)
     const { data: newDeal, error: dealError } = await supabase
       .from('crm_deals')
-      .upsert({
+      .insert({
         clint_id: `make-a010-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         name: `${data.name} - A010`,
         contact_id: contactId,
@@ -479,28 +479,25 @@ async function createCrmDeal(supabase: any, data: {
         tags: ['A010', 'Make'],
         custom_fields: { source: 'make', product: 'A010 - MCF Fundamentos', sale_date: data.saleDate, distributed: !!ownerEmail, deal_user_original: ownerEmail },
         data_source: 'webhook',
-      }, {
-        onConflict: 'contact_id,origin_id',
-        ignoreDuplicates: true,
       })
       .select('id')
       .maybeSingle();
 
     if (dealError) {
+      // Se é duplicata (23505), buscar o existente
+      if (dealError.code === '23505') {
+        console.log("✅ CRM: Deal duplicado detectado, buscando existente...");
+        const { data: fallbackDeal } = await supabase
+          .from('crm_deals')
+          .select('id')
+          .eq('contact_id', contactId)
+          .eq('origin_id', originId)
+          .limit(1)
+          .maybeSingle();
+        return { status: "updated", deal_id: fallbackDeal?.id, reason: "duplicate_insert" };
+      }
       console.error("❌ CRM: Erro ao criar deal:", dealError);
       return { status: "error", reason: "deal_creation_failed", detail: dealError.message };
-    }
-
-    // Se upsert retornou null (ignoreDuplicates), buscar o existente
-    if (!newDeal) {
-      const { data: fallbackDeal } = await supabase
-        .from('crm_deals')
-        .select('id')
-        .eq('contact_id', contactId)
-        .eq('origin_id', originId)
-        .limit(1)
-        .maybeSingle();
-      return { status: "updated", deal_id: fallbackDeal?.id, reason: "upsert_ignored" };
     }
 
     console.log(`✅ CRM: Deal criado ${newDeal.id} → owner: ${ownerEmail}`);
