@@ -28,6 +28,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { R2CloserWithAvailability, useCreateR2Meeting } from '@/hooks/useR2AgendaData';
 import { useSearchDealsForSchedule } from '@/hooks/useAgendaData';
 import { useActiveBU } from '@/hooks/useActiveBU';
+import { useAuth } from '@/contexts/AuthContext';
 import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
 import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2CloserAvailableSlots';
 import { useR2Bookers } from '@/hooks/useR2Bookers';
@@ -93,10 +94,12 @@ export function R2QuickScheduleModal({
 
   // BU filtering
   const activeBU = useActiveBU();
+  const { role, user } = useAuth();
   const { data: originIds } = useBUOriginIds(activeBU);
 
   const buOriginIds = originIds && originIds.length > 0 ? originIds : undefined;
-  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, buOriginIds);
+  const sdrOwnerEmail = role === 'sdr' ? user?.email || undefined : undefined;
+  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, buOriginIds, sdrOwnerEmail);
   const createMeeting = useCreateR2Meeting();
   const { data: r2Bookers = [] } = useR2Bookers();
 
