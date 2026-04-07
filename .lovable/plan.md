@@ -1,27 +1,34 @@
 
 
-# Fix Review Dialog: Mostrar Card Vinculado + Corrigir Scroll
+# Adicionar Vinculação Manual no Painel de Revisão de Boletos
 
-## Problemas
-
-1. **Sem informação do match**: Muitos boletos mostram "Card Nome: —" e "Card Grupo/Cota: —/—" porque o `card_id` é null (a IA não encontrou match). Confirmar sem saber a qual carta vinculou não faz sentido.
-
-2. **Scroll não funciona**: O `ScrollArea` não tem altura fixa definida — `flex-1 min-h-0` dentro do DialogContent não está gerando altura calculável, impedindo o scroll.
+## Problema
+Atualmente o painel de revisão mostra boletos "Sem Vínculo" e "Parcial", mas não permite vincular ou corrigir manualmente a carta. O hook `useRelinkBoleto` já existe mas não está conectado à UI.
 
 ## Mudanças
 
 ### `src/components/consorcio/pagamentos/BoletoReviewDialog.tsx`
 
-1. **Corrigir scroll**: Adicionar `h-[60vh]` no ScrollArea para garantir altura fixa e scroll funcional.
+1. **Adicionar modo de vinculação manual em cada card**:
+   - Botão "Vincular" (para sem vínculo) e "Corrigir" (para parcial com match errado)
+   - Ao clicar, abre um campo de busca inline dentro do card
+   - Busca cartas em `consortium_cards` por nome, grupo ou cota (query com `ilike`)
+   - Exibe lista de resultados com nome, grupo, cota para selecionar
+   - Ao selecionar, chama `useRelinkBoleto` com o `cardId` escolhido
 
-2. **Separar boletos com e sem match**: Mostrar claramente quando um boleto **não tem card vinculado** (card_id null) vs quando tem card mas dados divergem:
-   - Sem match: Badge "Sem Vínculo" (vermelho) + mensagem clara "Nenhuma carta vinculada — necessário vincular manualmente"
-   - Com match parcial: Mostrar lado a lado PDF vs Card como hoje, mas com destaque visual melhor
+2. **Fluxo UX**:
+   - Card sem vínculo: mostra botão "Vincular Carta" ao lado do "Ver PDF"
+   - Card parcial: mostra botão "Corrigir" ao lado do "Confirmar"
+   - Ambos abrem o mesmo componente de busca inline
+   - Após vincular, o card some da lista (match_confidence vira 'exact')
 
-3. **Mostrar nome do card vinculado de forma proeminente**: Quando há card vinculado, exibir o nome do card em destaque no topo do card, para o usuário saber exatamente qual carta a IA escolheu antes de confirmar.
+### `src/hooks/useConsorcioBoletos.ts`
+- Já possui `useRelinkBoleto` — nenhuma mudança necessária
 
-4. **Desabilitar "Confirmar" quando não há card**: Se `card_id` é null, não faz sentido confirmar — esconder botão confirmar e mostrar apenas "Ver PDF" nesses casos.
+### Novo: busca de cartas
+- Adicionar hook `useSearchCards` ou query inline no componente para buscar `consortium_cards` com filtro por nome/grupo/cota via `ilike`
 
 ### Arquivos
-- `src/components/consorcio/pagamentos/BoletoReviewDialog.tsx`
+- `src/components/consorcio/pagamentos/BoletoReviewDialog.tsx` — adicionar UI de vinculação manual
+- `src/hooks/useConsorcioBoletos.ts` — adicionar hook de busca de cartas (se necessário)
 
