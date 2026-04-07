@@ -98,6 +98,19 @@ export default function SdrMeetingsDetailPage() {
     customMeta,
   });
 
+  // Independent query for Reuniões tab - broad range (6 months back, 1 month ahead)
+  const allMeetingsRange = useMemo(() => ({
+    start: subMonths(new Date(), 6),
+    end: addMonths(new Date(), 1),
+  }), []);
+
+  const allMeetingsQuery = useSdrMeetingsFromAgenda({
+    startDate: allMeetingsRange.start,
+    endDate: allMeetingsRange.end,
+    sdrEmailFilter: sdrEmail || undefined,
+  });
+  const allMeetings = allMeetingsQuery.data || [];
+
   const handleBack = () => {
     const params = new URLSearchParams();
     params.set("preset", preset);
