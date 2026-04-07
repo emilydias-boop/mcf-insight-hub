@@ -797,7 +797,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
 
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={handleReset}>Voltar</Button>
-              <Button size="sm" onClick={handleCompare} disabled={isComparing}>
+              <Button size="sm" onClick={() => handleCompare()} disabled={isComparing}>
                 {isComparing ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-1" />
