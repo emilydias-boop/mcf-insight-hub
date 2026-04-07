@@ -160,6 +160,17 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
       <div className="flex items-center justify-between">
         <PagamentosFilters filters={filters} onChange={handleFilterChange} options={filterOptions} />
         <div className="flex items-center gap-2 shrink-0 ml-3">
+          <Button
+            variant={bulkMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setBulkMode(!bulkMode);
+              if (bulkMode) setSelectedIds(new Set());
+            }}
+          >
+            <Send className="h-4 w-4 mr-1" />
+            {bulkMode ? 'Sair Envio em Massa' : 'Envio em Massa'}
+          </Button>
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="h-4 w-4 mr-1" />
             Exportar
