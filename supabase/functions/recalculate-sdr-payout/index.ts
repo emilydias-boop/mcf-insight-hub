@@ -1056,7 +1056,10 @@ serve(async (req) => {
         }
 
         // Calculate values - lógica diferente para Closers com métricas ativas
-        const diasUteisMes = calendarData?.dias_uteis_final ?? null;
+        // Usar dias_uteis_closer para closers, com fallback para dias_uteis_final
+        const diasUteisMes = isCloser && calendarData?.dias_uteis_closer != null
+          ? calendarData.dias_uteis_closer
+          : calendarData?.dias_uteis_final ?? null;
         let calculatedValues;
         
         if (isCloser && metricasAtivas.length > 0 && cargoInfo) {
