@@ -5,6 +5,7 @@ import { BillingSubscription, BillingFilters, SUBSCRIPTION_STATUS_LABELS, PAYMEN
 import { useBillingSubscriptions, useBillingKPIs } from '@/hooks/useBillingSubscriptions';
 import { useBillingMonthKPIs } from '@/hooks/useBillingMonthKPIs';
 import { useSyncBillingFromHubla } from '@/hooks/useSyncBillingFromHubla';
+import { useBillingCobrancaAlerts } from '@/hooks/useCobrancaAlerts';
 import { CobrancaKPIs } from './CobrancaKPIs';
 import { CobrancaMonthSelector } from './CobrancaMonthSelector';
 import { CobrancaMonthKPIs } from './CobrancaMonthKPIs';
@@ -13,6 +14,7 @@ import { CobrancaTable } from './CobrancaTable';
 import { CobrancaDetailDrawer } from './CobrancaDetailDrawer';
 import { CreateSubscriptionModal } from './CreateSubscriptionModal';
 import { CobrancaQueue } from './CobrancaQueue';
+import { CobrancaAlertPanel } from '@/components/shared/CobrancaAlertPanel';
 import { Plus, RefreshCw, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
