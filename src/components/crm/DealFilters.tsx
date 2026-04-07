@@ -72,6 +72,8 @@ export const DealFilters = ({
   ownerOptions,
   availableTags = [],
   isLoadingTags = false,
+  availableProducts = [],
+  isLoadingProducts = false,
 }: DealFiltersProps) => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isAttemptsPopoverOpen, setIsAttemptsPopoverOpen] = useState(false);
