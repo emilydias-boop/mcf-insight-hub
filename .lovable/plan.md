@@ -1,38 +1,21 @@
 
 
-# Painel de Revisão de Boletos Parciais/Pendentes
+# Mover botão "Revisar Boletos" para o header da página
 
 ## Problema
-Existem 31 boletos com match "parcial" e 3 com "pending_review" que foram vinculados automaticamente pela IA mas com confiança baixa (ex: nome bate mas grupo/cota extraído difere do card vinculado). Não existe interface para revisar, confirmar ou corrigir essas vinculações.
-
-## Solução
-Criar um painel de revisão acessível via botão ao lado do "Subir Boletos", mostrando todos os boletos parciais/pendentes com opção de confirmar ou re-vincular.
+O botão "Revisar Boletos" fica na linha de filtros dentro do `ConsorcioPagamentosTab`, difícil de ver. O usuário quer ele visível no topo, ao lado de "Subir Boletos".
 
 ## Mudanças
 
-### 1. Novo hook: `useBoletosReview` em `src/hooks/useConsorcioBoletos.ts`
-- Query que busca boletos com `match_confidence IN ('partial', 'pending_review')`
-- Join com `consortium_cards` para mostrar o card vinculado atual
-- Mutation `useConfirmBoletoMatch` para atualizar `match_confidence` para `'exact'`
-- Mutation `useRelinkBoleto` para mudar o `card_id` e `installment_id` de um boleto
+### `src/pages/bu-consorcio/Pagamentos.tsx`
+- Importar `useBoletosReview` e `BoletoReviewDialog`
+- Adicionar estado `reviewOpen` e botão "Revisar Boletos" com badge de contagem ao lado do `BoletoUploadDialog`, usando variante `destructive` (amber) para destaque
+- Renderizar `BoletoReviewDialog` neste nível
 
-### 2. Novo componente: `BoletoReviewDialog.tsx`
-- Dialog com lista dos boletos pendentes de revisão (34 no total)
-- Cada item mostra:
-  - Nome extraído do PDF vs nome do card vinculado
-  - Grupo/Cota extraídos vs Grupo/Cota do card
-  - Valor e vencimento extraídos
-  - Botão "Confirmar" (marca como `exact`)
-  - Botão "Ver PDF" (abre signed URL)
-  - Select para re-vincular a outro card (busca por nome/grupo/cota)
-- Badge com contagem de pendentes no botão de abrir
+### `src/components/consorcio/pagamentos/ConsorcioPagamentosTab.tsx`
+- Remover o botão "Revisar Boletos", o estado `reviewOpen`, o import de `BoletoReviewDialog` e `useBoletosReview` (já que sobe para a página pai)
 
-### 3. Atualizar `ConsorcioPagamentosTab.tsx`
-- Adicionar botão "Revisar Boletos (34)" ao lado do "Subir Boletos" e "Exportar"
-- Badge com contagem dinâmica de boletos pendentes
-
-### Arquivos
-- `src/hooks/useConsorcioBoletos.ts` — adicionar hooks de review
-- `src/components/consorcio/pagamentos/BoletoReviewDialog.tsx` — novo
-- `src/components/consorcio/pagamentos/ConsorcioPagamentosTab.tsx` — botão de acesso
+### Resultado
+- Botão sempre visível no header, ao lado de "Subir Boletos" e seletor de mês
+- Badge com contagem dinâmica dos boletos pendentes de revisão
 
