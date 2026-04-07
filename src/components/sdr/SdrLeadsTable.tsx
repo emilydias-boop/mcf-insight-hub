@@ -148,7 +148,7 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
               )}
             >
               <CalendarIcon className="mr-2 h-3.5 w-3.5" />
-              {dateFilter ? format(dateFilter, "dd/MM/yyyy", { locale: ptBR }) : "Data reunião"}
+              {dateFilter ? format(dateFilter, "dd/MM/yyyy", { locale: ptBR }) : "Agendado em"}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
