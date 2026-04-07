@@ -39,6 +39,7 @@ export default function SdrMeetingsDetailPage() {
   const monthParam = searchParams.get("month");
 
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingV2 | null>(null);
+  const [activeTab, setActiveTab] = useState("overview");
 
   // Initial dates from URL
   const initialDates = useMemo(() => {
