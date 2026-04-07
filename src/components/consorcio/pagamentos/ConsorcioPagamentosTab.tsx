@@ -7,7 +7,7 @@ import { PagamentosTable } from './PagamentosTable';
 import { PagamentoDetailDrawer } from './PagamentoDetailDrawer';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Download, MessageCircle, X, Loader2 } from 'lucide-react';
+import { Download, MessageCircle, X, Loader2, Send } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -23,6 +23,7 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
   const [detailRow, setDetailRow] = useState<PagamentoRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [sendProgress, setSendProgress] = useState({ current: 0, total: 0, skipped: 0 });
 
@@ -126,7 +127,7 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
       <PagamentosAlerts {...alertData} />
 
       {/* Bulk action bar */}
-      {selectedIds.size > 0 && (
+      {bulkMode && selectedIds.size > 0 && (
         <div className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20">
           <Badge variant="secondary" className="text-sm">
             {selectedIds.size} selecionado(s)
@@ -159,6 +160,17 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
       <div className="flex items-center justify-between">
         <PagamentosFilters filters={filters} onChange={handleFilterChange} options={filterOptions} />
         <div className="flex items-center gap-2 shrink-0 ml-3">
+          <Button
+            variant={bulkMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setBulkMode(!bulkMode);
+              if (bulkMode) setSelectedIds(new Set());
+            }}
+          >
+            <Send className="h-4 w-4 mr-1" />
+            {bulkMode ? 'Sair Envio em Massa' : 'Envio em Massa'}
+          </Button>
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="h-4 w-4 mr-1" />
             Exportar
@@ -178,6 +190,8 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
         onViewDetail={handleViewDetail}
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
+        bulkMode={bulkMode}
+        filtroBoleto={filters.filtroBoleto}
       />
 
       <PagamentoDetailDrawer

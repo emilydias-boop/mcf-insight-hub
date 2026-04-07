@@ -40,9 +40,11 @@ interface Props {
   onViewDetail: (row: PagamentoRow) => void;
   selectedIds: Set<string>;
   onSelectionChange: (ids: Set<string>) => void;
+  bulkMode: boolean;
+  filtroBoleto: string;
 }
 
-export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange }: Props) {
+export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange, bulkMode, filtroBoleto }: Props) {
   const payInstallment = usePayInstallment();
   const installmentIds = data.map(r => r.id);
   const { data: boletos } = useBoletosByInstallments(installmentIds);
@@ -54,8 +56,13 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
     }
   });
 
+  // Apply boleto filter
+  const filteredData = filtroBoleto === 'todos' ? data
+    : filtroBoleto === 'com_boleto' ? data.filter(r => boletoMap.has(r.id))
+    : data.filter(r => !boletoMap.has(r.id));
+
   // Rows eligible for bulk WhatsApp (has boleto)
-  const selectableIds = data.filter(r => boletoMap.has(r.id)).map(r => r.id);
+  const selectableIds = filteredData.filter(r => boletoMap.has(r.id)).map(r => r.id);
   const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
 
   const handleSelectAll = (checked: boolean) => {
@@ -111,15 +118,17 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
     <div className="space-y-3">
       <Table>
         <TableHeader>
-          <TableRow>
-            <TableHead className="w-10">
-              <Checkbox
-                checked={allSelected}
-                onCheckedChange={(checked) => handleSelectAll(!!checked)}
-                aria-label="Selecionar todos"
-              />
-            </TableHead>
-            <TableHead>Cliente</TableHead>
+           <TableRow>
+            {bulkMode && (
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                  aria-label="Selecionar todos"
+                />
+              </TableHead>
+            )}
+             <TableHead>Cliente</TableHead>
             <TableHead>Grupo</TableHead>
             <TableHead>Cota</TableHead>
             <TableHead className="text-center">Nº</TableHead>
@@ -135,14 +144,14 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.length === 0 ? (
+          {filteredData.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={bulkMode ? 14 : 13} className="text-center text-muted-foreground py-8">
                 Nenhuma parcela encontrada
               </TableCell>
             </TableRow>
           ) : (
-            data.map(row => {
+            filteredData.map(row => {
               const statusCfg = statusBadgeConfig[row.status_calculado];
               const situacaoCfg = situacaoBadgeConfig[row.situacao_cota];
               const isPaid = row.status_calculado === 'paga';
@@ -154,17 +163,19 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
                   className={`cursor-pointer hover:bg-muted/50 ${row.status_calculado === 'atrasada' ? 'bg-destructive/5' : ''} ${selectedIds.has(row.id) ? 'bg-primary/5' : ''}`}
                   onClick={() => onViewDetail(row)}
                 >
-                  <TableCell onClick={e => e.stopPropagation()}>
-                    {isSelectable ? (
-                      <Checkbox
-                        checked={selectedIds.has(row.id)}
-                        onCheckedChange={(checked) => handleSelectRow(row.id, !!checked)}
-                        aria-label={`Selecionar ${row.cliente_nome}`}
-                      />
-                    ) : (
-                      <span className="block w-4" />
-                    )}
-                  </TableCell>
+                  {bulkMode && (
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      {isSelectable ? (
+                        <Checkbox
+                          checked={selectedIds.has(row.id)}
+                          onCheckedChange={(checked) => handleSelectRow(row.id, !!checked)}
+                          aria-label={`Selecionar ${row.cliente_nome}`}
+                        />
+                      ) : (
+                        <span className="block w-4" />
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="font-medium max-w-[160px] truncate">{row.cliente_nome}</TableCell>
                   <TableCell>{row.grupo}</TableCell>
                   <TableCell>{row.cota}</TableCell>

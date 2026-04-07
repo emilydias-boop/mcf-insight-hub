@@ -59,6 +59,15 @@ export function PagamentosFilters({ filters, onChange, options }: Props) {
           </SelectContent>
         </Select>
 
+        <Select value={filters.filtroBoleto} onValueChange={v => set('filtroBoleto', v)}>
+          <SelectTrigger className="w-[140px]"><SelectValue placeholder="Boleto" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="com_boleto">Com Boleto</SelectItem>
+            <SelectItem value="sem_boleto">Sem Boleto</SelectItem>
+          </SelectContent>
+        </Select>
+
         <div className="flex items-center gap-2">
           <Switch checked={filters.apenasVencendoSemana} onCheckedChange={v => set('apenasVencendoSemana', v)} id="vencendo" />
           <Label htmlFor="vencendo" className="text-xs">Vencendo esta semana</Label>
