@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO, subMonths, addMonths } from "date-fns";
 import { getWeekStartsOn } from "@/lib/businessDays";
 import { useActiveBU } from "@/hooks/useActiveBU";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,6 +19,7 @@ import { SdrTeamComparisonPanel } from "@/components/sdr/SdrTeamComparisonPanel"
 import { SdrDailyBreakdownTable } from "@/components/sdr/SdrDailyBreakdownTable";
 import { SdrLeadsTable } from "@/components/sdr/SdrLeadsTable";
 import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
+import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
 
 import {
   useSdrPerformanceData,
@@ -97,6 +98,19 @@ export default function SdrMeetingsDetailPage() {
     customMeta,
   });
 
+  // Independent query for Reuniões tab - broad range (6 months back, 1 month ahead)
+  const allMeetingsRange = useMemo(() => ({
+    start: subMonths(new Date(), 6),
+    end: addMonths(new Date(), 1),
+  }), []);
+
+  const allMeetingsQuery = useSdrMeetingsFromAgenda({
+    startDate: allMeetingsRange.start,
+    endDate: allMeetingsRange.end,
+    sdrEmailFilter: sdrEmail || undefined,
+  });
+  const allMeetings = allMeetingsQuery.data || [];
+
   const handleBack = () => {
     const params = new URLSearchParams();
     params.set("preset", preset);
@@ -141,7 +155,7 @@ export default function SdrMeetingsDetailPage() {
       <Tabs defaultValue="overview" className="space-y-5" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-          <TabsTrigger value="leads">Reuniões ({perfData.meetings.length})</TabsTrigger>
+          <TabsTrigger value="leads">Reuniões ({allMeetings.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-5">
@@ -171,8 +185,8 @@ export default function SdrMeetingsDetailPage() {
           <Card className="bg-card border-border">
             <CardContent className="p-4">
               <SdrLeadsTable
-                meetings={perfData.meetings}
-                isLoading={perfData.isLoading}
+                meetings={allMeetings}
+                isLoading={allMeetingsQuery.isLoading}
                 onSelectMeeting={handleSelectMeeting}
               />
             </CardContent>
@@ -180,7 +194,7 @@ export default function SdrMeetingsDetailPage() {
         </TabsContent>
       </Tabs>
 
-      <SdrMeetingActionsDrawer meeting={selectedMeeting} onClose={() => setSelectedMeeting(null)} onRefresh={() => perfData.refetch()} />
+      <SdrMeetingActionsDrawer meeting={selectedMeeting} onClose={() => setSelectedMeeting(null)} onRefresh={() => { perfData.refetch(); allMeetingsQuery.refetch(); }} />
     </div>
   );
 }
