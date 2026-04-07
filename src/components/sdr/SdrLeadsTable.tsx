@@ -112,7 +112,7 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
       
       return true;
     });
-  }, [meetings, statusFilter, typeFilter, searchQuery, dateFilter]);
+  }, [meetings, statusFilter, typeFilter, searchQuery, dateFilter, meetingDateFilter]);
 
   const hasActiveFilters = statusFilter !== "all" || typeFilter !== "all" || searchQuery !== "" || dateFilter !== undefined;
 
