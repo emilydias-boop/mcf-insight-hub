@@ -1,86 +1,48 @@
 
 
-# Sistema de Alertas de Cobrança para Consórcio e Billing
+# Historico de Acoes de Cobranca + Marcar como Pago
 
-## Contexto
-Hoje o operador precisa manualmente verificar quais parcelas vencem nos proximos dias e quais boletos precisam ser enviados. Nao existe lembrete automatico, nem forma de registrar que o boleto ja foi enviado ou que o lead respondeu.
+## Problema
+Quando o operador marca "Boleto Enviado", o alerta some e nao ha como acompanhar se o lead pagou ou nao. Falta um historico das acoes ja registradas com possibilidade de atualizar o status (ex: marcar como pago).
 
-## Solucao
+## Mudancas
 
-Criar um painel de alertas inteligentes na pagina de Pagamentos (consorcio) e na pagina de Cobrancas (billing), com logica baseada em:
-- **Vencimento proximo**: parcelas que vencem nos proximos 3-5 dias uteis e ainda nao tiveram boleto enviado
-- **Assalariados (5o dia util)**: cards com `dia_vencimento` proximo ao 5o dia util do mes recebem alerta antecipado (ex: "Grupo 7253 - 26 cartas vencem dia 10, assalariados recebem no 5o dia util")
-- **Acao pendente**: marcar como "boleto enviado" / "lead respondeu" / "sem retorno" para silenciar o alerta daquela parcela
+### 1. Hook `useCobrancaHistory.ts` (novo)
+- Query na tabela `cobranca_acoes` com join em `consortium_installments` (card data) e `billing_installments` (subscription data)
+- Filtro por tipo (consorcio/billing) e por periodo
+- Retorna lista com: nome do lead, grupo/cota, parcela, valor, vencimento, tipo_acao, data da acao, observacao
+- Ordenado por `created_at` desc
 
-## Mudancas Tecnicas
+### 2. Componente `CobrancaHistoryPanel.tsx` (novo)
+Painel colapsavel abaixo do `CobrancaAlertPanel`, mostrando acoes recentes:
+- Tabs ou filtro: "Boleto Enviado" / "Lead Respondeu" / "Sem Retorno" / "Todos"
+- Cada item mostra: nome, grupo/cota, parcela, valor, data vencimento, quando foi marcado, por quem
+- Botao "Pago" em cada linha para registrar `pago_confirmado` (usa `useRegistrarAcaoCobranca` existente)
+- Botao "Sem Retorno" para quem esta como "Boleto Enviado" mas nao respondeu
+- Badge colorido por status da acao
+- Limite de 50 itens recentes, com opcao de ver mais
 
-### 1. Nova tabela `cobranca_acoes` (migration)
-Registra acoes do operador sobre parcelas especificas:
-```text
-id (uuid PK)
-installment_id (uuid FK → consortium_installments)  -- nullable
-subscription_id (uuid FK → billing_subscriptions)    -- nullable
-tipo_acao: 'boleto_enviado' | 'lead_respondeu' | 'sem_retorno' | 'pago_confirmado'
-observacao (text, nullable)
-created_by (uuid FK → auth.users)
-created_at (timestamptz)
-```
-RLS: authenticated can insert/select own rows.
+### 3. Integracao em `Pagamentos.tsx`
+- Renderizar `CobrancaHistoryPanel` abaixo do `CobrancaAlertPanel`
+- Passar `type="consorcio"`
 
-### 2. Hook `useCobrancaAlerts.ts`
-- Query que busca parcelas com `data_vencimento` entre hoje e hoje+5 dias uteis
-- Left join com `consorcio_boletos` (tem boleto?) e `cobranca_acoes` (ja teve acao?)
-- Filtra: parcelas sem acao recente = alerta ativo
-- Agrupa por `dia_vencimento` e por lead (nome_completo)
-- Retorna lista de alertas com prioridade:
-  - **Urgente** (vence em 1-2 dias, sem boleto enviado)
-  - **Atencao** (vence em 3-5 dias, sem boleto enviado)
-  - **OK** (boleto ja enviado ou lead respondeu) — nao aparece
+### 4. Integracao em `FinanceiroCobrancas.tsx`
+- Renderizar `CobrancaHistoryPanel` com `type="billing"`
 
-### 3. Hook `useRegistrarAcaoCobranca.ts`
-- Mutation para inserir em `cobranca_acoes`
-- Invalida cache dos alertas
-
-### 4. Componente `CobrancaAlertPanel.tsx`
-Painel que aparece no topo da pagina de Pagamentos e Cobrancas:
-- Lista agrupada por dia de vencimento (ex: "Dia 10 — 26 parcelas")
-- Dentro de cada grupo, lista de leads com:
-  - Nome, grupo/cota, valor
-  - Status do boleto (enviado/nao enviado)
-  - Botoes de acao: "Boleto Enviado", "Lead Respondeu", "Sem Retorno"
-- Ao clicar numa acao, registra em `cobranca_acoes` e o alerta desaparece
-- Badge com contagem total de pendentes
-- Expansivel/colapsavel como a `CobrancaQueue`
-
-### 5. Overlay global (opcional, similar ao SDR)
-- Componente flutuante no `MainLayout` para roles de financeiro/admin
-- Mostra contagem de parcelas com vencimento proximo sem acao
-- Clique navega para `/consorcio/pagamentos`
-
-### 6. Integracao nas paginas
-- `Pagamentos.tsx` (consorcio): renderizar `CobrancaAlertPanel` acima dos KPIs
-- `FinanceiroCobrancas.tsx` (billing): renderizar versao equivalente para `billing_installments` com vencimento proximo
-
-## Arquivos
-
+### Arquivos
 | Arquivo | Acao |
 |---------|------|
-| `supabase/migrations/xxx_create_cobranca_acoes.sql` | Nova tabela + RLS |
-| `src/hooks/useCobrancaAlerts.ts` | Hook de alertas com query inteligente |
-| `src/hooks/useRegistrarAcaoCobranca.ts` | Mutation para registrar acoes |
-| `src/components/shared/CobrancaAlertPanel.tsx` | Painel de alertas reutilizavel |
+| `src/hooks/useCobrancaHistory.ts` | Novo hook de historico |
+| `src/components/shared/CobrancaHistoryPanel.tsx` | Novo componente de historico |
 | `src/pages/bu-consorcio/Pagamentos.tsx` | Integrar painel |
 | `src/components/financeiro/cobranca/FinanceiroCobrancas.tsx` | Integrar painel |
-| `src/components/layout/MainLayout.tsx` | Overlay global (se aprovado) |
 
-## Fluxo do Operador
+### Fluxo
 ```text
-1. Abre pagina de Pagamentos
-2. Ve painel: "⚠ 26 parcelas vencem dia 10 (em 3 dias)"
-3. Expande grupo dia 10 → ve lista de leads
-4. Para cada lead: clica "Boleto Enviado" → alerta some
-5. Se lead respondeu: clica "Lead Respondeu"
-6. Se nao respondeu: clica "Sem Retorno" (fica registrado, pode filtrar depois)
-7. Parcelas pagas automaticamente saem do alerta
+1. Operador marca "Boleto Enviado" no alerta → alerta some
+2. Parcela aparece no Historico com status "Boleto Enviado"
+3. Lead pagou? → Clica "Pago" → registra pago_confirmado
+4. Lead nao respondeu? → Clica "Sem Retorno" → fica registrado
+5. Historico mostra timeline completa de cada parcela
 ```
 
