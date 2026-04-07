@@ -735,12 +735,63 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
               ))}
             </div>
 
+            {/* Data preview */}
+            {rawData.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Preview dos dados (3 primeiras linhas):</p>
+                <div className="border rounded overflow-auto max-h-40">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {COLUMN_KEYS.map(key => (
+                          <TableHead key={key} className="text-xs py-1 px-2 whitespace-nowrap">
+                            {COLUMN_LABELS[key]}
+                            {columnMapping[key] && (
+                              <span className="text-muted-foreground ml-1">({columnMapping[key]})</span>
+                            )}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rawData.slice(0, 3).map((row, i) => (
+                        <TableRow key={i}>
+                          {COLUMN_KEYS.map(key => (
+                            <TableCell key={key} className="text-xs py-1 px-2 font-mono">
+                              {columnMapping[key] ? String(row[columnMapping[key]] || '').substring(0, 40) : <span className="text-muted-foreground italic">—</span>}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
             {extraColumnHeaders.length > 0 && (
               <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded border">
                 <span className="font-medium">Colunas extras detectadas:</span>{' '}
                 {extraColumnHeaders.join(', ')}
                 <br />
                 <span className="text-muted-foreground">Estas colunas serão preservadas e exibidas nos resultados.</span>
+              </div>
+            )}
+
+            {/* Numeric name warning */}
+            {numericNameWarning && (
+              <div className="p-3 border border-amber-500 bg-amber-50 dark:bg-amber-900/20 rounded-lg space-y-2">
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                  ⚠️ Os valores mapeados como "Nome" parecem ser números (CPF ou telefone). Verifique o mapeamento.
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setNumericNameWarning(false)}>
+                    Corrigir mapeamento
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => { setNumericNameWarning(false); handleCompare(true); }}>
+                    Continuar mesmo assim
+                  </Button>
+                </div>
               </div>
             )}
 
