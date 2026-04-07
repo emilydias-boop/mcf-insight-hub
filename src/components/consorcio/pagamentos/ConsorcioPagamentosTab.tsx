@@ -91,11 +91,6 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
       />
-
-      <BoletoReviewDialog
-        open={reviewOpen}
-        onOpenChange={setReviewOpen}
-      />
     </div>
   );
 }

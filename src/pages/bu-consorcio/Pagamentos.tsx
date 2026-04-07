@@ -71,6 +71,7 @@ export default function ConsorcioPagamentosPage() {
           end: format(selectedMonth.end, 'yyyy-MM-dd'),
         }}
       />
+      <BoletoReviewDialog open={reviewOpen} onOpenChange={setReviewOpen} />
     </div>
   );
 }
