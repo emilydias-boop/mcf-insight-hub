@@ -114,6 +114,93 @@ export function useSendBoletoWhatsApp() {
   });
 }
 
+export interface BoletoReviewItem {
+  id: string;
+  card_id: string | null;
+  installment_id: string | null;
+  nome_extraido: string | null;
+  grupo_extraido: string | null;
+  cota_extraida: string | null;
+  valor_extraido: number | null;
+  vencimento_extraido: string | null;
+  storage_path: string;
+  match_confidence: string;
+  status: string;
+  created_at: string;
+  card_nome: string | null;
+  card_grupo: string | null;
+  card_cota: string | null;
+}
+
+export function useBoletosReview() {
+  return useQuery({
+    queryKey: ['consorcio-boletos-review'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('consorcio_boletos')
+        .select('*, consortium_cards!consorcio_boletos_card_id_fkey(cliente_nome, grupo, cota)')
+        .in('match_confidence', ['partial', 'pending_review'])
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((b: any) => ({
+        id: b.id,
+        card_id: b.card_id,
+        installment_id: b.installment_id,
+        nome_extraido: b.nome_extraido,
+        grupo_extraido: b.grupo_extraido,
+        cota_extraida: b.cota_extraida,
+        valor_extraido: b.valor_extraido,
+        vencimento_extraido: b.vencimento_extraido,
+        storage_path: b.storage_path,
+        match_confidence: b.match_confidence,
+        status: b.status,
+        created_at: b.created_at,
+        card_nome: b.consortium_cards?.cliente_nome || null,
+        card_grupo: b.consortium_cards?.grupo || null,
+        card_cota: b.consortium_cards?.cota || null,
+      })) as BoletoReviewItem[];
+    },
+  });
+}
+
+export function useConfirmBoletoMatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (boletoId: string) => {
+      const { error } = await supabase
+        .from('consorcio_boletos')
+        .update({ match_confidence: 'exact' })
+        .eq('id', boletoId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Match confirmado!');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-boletos-review'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-boletos'] });
+    },
+    onError: (err: any) => toast.error(err.message || 'Erro ao confirmar'),
+  });
+}
+
+export function useRelinkBoleto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ boletoId, cardId }: { boletoId: string; cardId: string }) => {
+      const { error } = await supabase
+        .from('consorcio_boletos')
+        .update({ card_id: cardId, match_confidence: 'exact', installment_id: null })
+        .eq('id', boletoId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Boleto re-vinculado!');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-boletos-review'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-boletos'] });
+    },
+    onError: (err: any) => toast.error(err.message || 'Erro ao re-vincular'),
+  });
+}
+
 export function useBoletoSignedUrl(storagePath: string | null) {
   return useQuery({
     queryKey: ['boleto-url', storagePath],
