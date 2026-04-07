@@ -1,57 +1,61 @@
 
 
-# Otimizar Backfill: Resolver Timeout na Classificação
+# Diagnóstico: Visibilidade do "Meu Fechamento" por SDRs/Closers
 
-## Problema
+## Descobertas
 
-A função leva ~30s+ só na fase de classificação (linhas 86-138), percorrendo 1700+ emails em chunks de 50, fazendo 2 queries por chunk (contacts + deals). Isso causa timeout antes de chegar na fase de criação de deals.
+A página `/meu-fechamento` funciona para a maioria dos casos, mas há **dois problemas de RLS** que afetam alguns colaboradores:
+
+### Problema 1: `sdr_comp_plan` inacessível via email-only
+A policy `SDRs podem ver seus próprios planos` usa apenas `sdr.user_id = auth.uid()`. Os **4 SDRs ativos sem `user_id`** (match por email) não conseguem ver seu comp plan. O hook `useOwnFechamento` busca o comp plan (linha 207), mas o banco retorna vazio.
+
+**Impacto**: Comp plan não carrega para esses 4 SDRs. A view do fechamento ainda mostra valores do payout, mas informações do plano (OTE real, metas) ficam indisponíveis.
+
+### Problema 2: `sdr_comp_plan` sem policy para `manager`
+Managers não têm SELECT na `sdr_comp_plan`. Só `admin` e `coordenador` têm. Se um manager acessar a rota de fechamento de equipe, os comp plans não carregam.
+
+### O que funciona corretamente
+- **Tabela `sdr`**: Tem policy para `user_id = auth.uid()` **E** fallback para `email = auth.email()` -- OK
+- **Tabela `sdr_month_payout`**: Usa `is_own_sdr(sdr_id)` que também checa email -- OK
+- **Tabela `sdr_month_kpi`**: Usa `is_own_sdr(sdr_id)` -- OK
+- **Tabela `closers`**: Qualquer autenticado pode ver -- OK
+- **Tabela `consorcio_closer_payout`**: Qualquer autenticado pode ler -- OK
+- **Tabela `rh_nfse`**: Vinculada a `employees.user_id` -- OK
+- **Rota e sidebar**: Corretamente restritas a roles `sdr` e `closer` -- OK
+- **DRAFT filtering**: Payouts DRAFT são ocultados corretamente -- OK
 
 ## Solução
 
-### Arquivo: `supabase/functions/backfill-orphan-a010-deals/index.ts`
+### Migration SQL (1 arquivo)
 
-**Estratégia: Usar `months=1` como default e adicionar parâmetro `offset` para pular emails já processados.**
+1. **Atualizar policy de `sdr_comp_plan`** para SDRs -- usar `is_own_sdr()` em vez de check direto por `user_id`:
 
-Mas a solução mais eficiente é **mover a classificação para uma única query SQL** em vez de N queries via SDK:
-
-1. **Substituir o loop de classificação (linhas 82-150)** por uma abordagem em 2 queries apenas:
-   - Query 1: Buscar todos os emails A010 que **já têm deal** nesta origin (uma única query com JOIN)
-   - Query 2: Buscar contatos não-arquivados para os emails que **não** estão no resultado da query 1
-
-2. **Criar uma RPC `get_a010_orphan_emails`** que faz tudo em SQL:
 ```sql
-CREATE FUNCTION get_a010_orphan_emails(p_origin_id uuid, p_since timestamptz, p_limit int)
-RETURNS TABLE(email text, contact_id uuid, contact_name text)
-AS $$
-  SELECT DISTINCT ON (lower(ht.customer_email))
-    lower(ht.customer_email) as email,
-    c.id as contact_id,
-    c.name as contact_name
-  FROM hubla_transactions ht
-  JOIN crm_contacts c ON lower(c.email) = lower(ht.customer_email) AND c.is_archived = false
-  WHERE ht.product_category = 'a010'
-    AND ht.sale_status = 'completed'
-    AND ht.created_at >= p_since
-    AND NOT EXISTS (
-      SELECT 1 FROM crm_deals d
-      JOIN crm_contacts c2 ON c2.id = d.contact_id
-      WHERE d.origin_id = p_origin_id
-        AND lower(c2.email) = lower(ht.customer_email)
-    )
-  ORDER BY lower(ht.customer_email), c.created_at ASC
-  LIMIT p_limit;
-$$ LANGUAGE sql STABLE;
+DROP POLICY "SDRs podem ver seus próprios planos" ON sdr_comp_plan;
+CREATE POLICY "SDRs podem ver seus próprios planos"
+  ON sdr_comp_plan FOR SELECT
+  TO authenticated
+  USING (is_own_sdr(sdr_id));
 ```
 
-3. **Simplificar a edge function**: Chamar a RPC, receber direto a lista de orphans prontos para processar, e criar os deals sem a fase de classificação pesada.
+2. **Adicionar manager** à policy de SELECT do `sdr_comp_plan`:
 
-### Mudanças
+```sql
+DROP POLICY "Admins e coordenadores podem ver todos os planos" ON sdr_comp_plan;
+CREATE POLICY "Admins coordenadores e managers podem ver todos os planos"
+  ON sdr_comp_plan FOR SELECT
+  TO authenticated
+  USING (
+    has_role(auth.uid(), 'admin') OR 
+    has_role(auth.uid(), 'coordenador') OR 
+    has_role(auth.uid(), 'manager')
+  );
+```
 
-1. **Migration**: Criar a function SQL `get_a010_orphan_emails`
-2. **Edge function**: Substituir linhas 48-150 por uma chamada `supabase.rpc('get_a010_orphan_emails', {...})` e processar direto
+### Nenhuma mudança de código necessária
+O hook `useOwnFechamento` e os componentes de view já estão corretos. O problema é puramente de RLS.
 
-### Resultado esperado
-- Classificação que levava 30s+ passa a levar ~1-2s (uma query SQL otimizada)
-- Com limit=10, a função toda roda em ~5s
-- Podemos processar todos os 64 orphans restantes em poucas chamadas
+## Resultado esperado
+- Todos os SDRs/Closers (incluindo os 4 sem `user_id`) conseguem ver seu fechamento e comp plan
+- Managers também conseguem acessar comp plans na visão de equipe
 
