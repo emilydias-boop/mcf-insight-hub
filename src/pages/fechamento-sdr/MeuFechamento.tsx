@@ -45,6 +45,7 @@ const MeuFechamento = () => {
     userRecord, 
     payout, 
     closerMetrics,
+    kpi,
     isConsorcioPayout,
     isLoading 
   } = useOwnFechamento(selectedMonth);
