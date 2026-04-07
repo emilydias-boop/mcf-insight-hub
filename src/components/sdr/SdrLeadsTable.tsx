@@ -62,6 +62,7 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
+  const [meetingDateFilter, setMeetingDateFilter] = useState<Date | undefined>(undefined);
 
   // Get unique statuses and types
   const { statuses, types } = useMemo(() => {
@@ -93,19 +94,27 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
         if (!nameMatch && !emailMatch) return false;
       }
       
-      // Date filter
+      // Date filter (booked_at)
       if (dateFilter) {
         const dayStart = startOfDay(dateFilter);
         const dayEnd = endOfDay(dateFilter);
-        const meetingDate = m.booked_at ? new Date(m.booked_at) : null;
-        if (!meetingDate || meetingDate < dayStart || meetingDate > dayEnd) return false;
+        const bookedDate = m.booked_at ? new Date(m.booked_at) : null;
+        if (!bookedDate || bookedDate < dayStart || bookedDate > dayEnd) return false;
+      }
+      
+      // Meeting date filter (scheduled_at)
+      if (meetingDateFilter) {
+        const dayStart = startOfDay(meetingDateFilter);
+        const dayEnd = endOfDay(meetingDateFilter);
+        const scheduledDate = m.scheduled_at ? new Date(m.scheduled_at) : m.data_agendamento ? parseISO(m.data_agendamento) : null;
+        if (!scheduledDate || scheduledDate < dayStart || scheduledDate > dayEnd) return false;
       }
       
       return true;
     });
-  }, [meetings, statusFilter, typeFilter, searchQuery, dateFilter]);
+  }, [meetings, statusFilter, typeFilter, searchQuery, dateFilter, meetingDateFilter]);
 
-  const hasActiveFilters = statusFilter !== "all" || typeFilter !== "all" || searchQuery !== "" || dateFilter !== undefined;
+  const hasActiveFilters = statusFilter !== "all" || typeFilter !== "all" || searchQuery !== "" || dateFilter !== undefined || meetingDateFilter !== undefined;
 
   if (isLoading) {
     return (
@@ -162,14 +171,30 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
           </PopoverContent>
         </Popover>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8"
-          onClick={() => setDateFilter(new Date())}
-        >
-          Hoje
-        </Button>
+        {/* Meeting date filter */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                "h-8 w-[150px] justify-start text-left text-sm font-normal",
+                !meetingDateFilter && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+              {meetingDateFilter ? format(meetingDateFilter, "dd/MM/yyyy", { locale: ptBR }) : "Reunião em"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+            <Calendar
+              mode="single"
+              selected={meetingDateFilter}
+              onSelect={setMeetingDateFilter}
+              locale={ptBR}
+              className="p-3 pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
         
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[160px] h-8">
@@ -208,6 +233,7 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
               setTypeFilter("all");
               setSearchQuery("");
               setDateFilter(undefined);
+              setMeetingDateFilter(undefined);
             }}
           >
             Limpar filtros
