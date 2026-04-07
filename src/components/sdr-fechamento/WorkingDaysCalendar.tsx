@@ -125,7 +125,7 @@ const EditWorkingDayDialog = ({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="dias_base">Dias Úteis Base</Label>
               <Input
@@ -136,7 +136,7 @@ const EditWorkingDayDialog = ({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="dias_final">Dias Úteis Final</Label>
+              <Label htmlFor="dias_final">Dias SDR</Label>
               <Input
                 id="dias_final"
                 type="number"
@@ -144,7 +144,20 @@ const EditWorkingDayDialog = ({
                 onChange={(e) => setDiasUteisFinal(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Após descontar feriados e paradas
+                Dias úteis para SDRs
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dias_closer">Dias Closer</Label>
+              <Input
+                id="dias_closer"
+                type="number"
+                value={diasUteisCloser}
+                onChange={(e) => setDiasUteisCloser(e.target.value)}
+                placeholder={diasUteisFinal}
+              />
+              <p className="text-xs text-muted-foreground">
+                Se vazio, usa Dias SDR
               </p>
             </div>
           </div>
