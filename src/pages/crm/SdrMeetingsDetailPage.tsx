@@ -194,7 +194,7 @@ export default function SdrMeetingsDetailPage() {
         </TabsContent>
       </Tabs>
 
-      <SdrMeetingActionsDrawer meeting={selectedMeeting} onClose={() => setSelectedMeeting(null)} onRefresh={() => perfData.refetch()} />
+      <SdrMeetingActionsDrawer meeting={selectedMeeting} onClose={() => setSelectedMeeting(null)} onRefresh={() => { perfData.refetch(); allMeetingsQuery.refetch(); }} />
     </div>
   );
 }
