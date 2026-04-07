@@ -774,7 +774,9 @@ serve(async (req) => {
             console.log(`   📋 Usando valores do cargo_catalogo para ${sdr.name}`);
           }
           
-          const diasUteis = calendarData?.dias_uteis_final || 22;
+          const diasUteis = (isCloser && calendarData?.dias_uteis_closer != null) 
+            ? calendarData.dias_uteis_closer 
+            : calendarData?.dias_uteis_final || 22;
           
           // Criar comp_plan implícito para o mês
           const newPlan = {
