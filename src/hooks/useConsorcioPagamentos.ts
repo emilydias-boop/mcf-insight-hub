@@ -46,30 +46,16 @@ export interface PagamentosKPIData {
 export interface PagamentosFiltersState {
   search: string;
   statusParcela: string;
-  situacaoCota: string;
-  grupo: string;
-  responsavel: string;
-  origem: string;
   tipo: string;
-  periodoInicio: string;
-  periodoFim: string;
-  apenasInadimplentes: boolean;
-  apenasQuitadas: boolean;
+  diaVencimento: string;
   apenasVencendoSemana: boolean;
 }
 
 export const defaultFilters: PagamentosFiltersState = {
   search: '',
   statusParcela: 'todos',
-  situacaoCota: 'todos',
-  grupo: 'todos',
-  responsavel: 'todos',
-  origem: 'todos',
   tipo: 'todos',
-  periodoInicio: '',
-  periodoFim: '',
-  apenasInadimplentes: false,
-  apenasQuitadas: false,
+  diaVencimento: 'todos',
   apenasVencendoSemana: false,
 };
 
