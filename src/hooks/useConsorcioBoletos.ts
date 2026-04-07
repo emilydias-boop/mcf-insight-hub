@@ -138,7 +138,7 @@ export function useBoletosReview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('consorcio_boletos')
-        .select('*, consortium_cards!consorcio_boletos_card_id_fkey(cliente_nome, grupo, cota)')
+        .select('*, consortium_cards!consorcio_boletos_card_id_fkey(nome_completo, grupo, cota)')
         .in('match_confidence', ['partial', 'pending_review'])
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -155,7 +155,7 @@ export function useBoletosReview() {
         match_confidence: b.match_confidence,
         status: b.status,
         created_at: b.created_at,
-        card_nome: b.consortium_cards?.cliente_nome || null,
+        card_nome: b.consortium_cards?.nome_completo || null,
         card_grupo: b.consortium_cards?.grupo || null,
         card_cota: b.consortium_cards?.cota || null,
       })) as BoletoReviewItem[];
