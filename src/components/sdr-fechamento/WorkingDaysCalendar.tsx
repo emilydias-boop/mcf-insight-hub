@@ -215,7 +215,8 @@ const YearMonthsTable = ({
       <TableRow>
         <TableHead>Mês</TableHead>
         <TableHead className="text-center">Dias Base</TableHead>
-        <TableHead className="text-center">Dias Final</TableHead>
+        <TableHead className="text-center">Dias SDR</TableHead>
+        <TableHead className="text-center">Dias Closer</TableHead>
         <TableHead className="text-right">R$/Dia</TableHead>
         <TableHead className="text-right">iFood Mensal</TableHead>
         <TableHead>Observações</TableHead>
