@@ -125,6 +125,51 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
           <Filter className="h-4 w-4" />
           <span>Filtros:</span>
         </div>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Buscar lead..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 w-[180px] pl-8 text-sm"
+          />
+        </div>
+
+        {/* Date filter */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                "h-8 w-[150px] justify-start text-left text-sm font-normal",
+                !dateFilter && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+              {dateFilter ? format(dateFilter, "dd/MM/yyyy", { locale: ptBR }) : "Data reunião"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+            <Calendar
+              mode="single"
+              selected={dateFilter}
+              onSelect={setDateFilter}
+              locale={ptBR}
+              className="p-3 pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8"
+          onClick={() => setDateFilter(new Date())}
+        >
+          Hoje
+        </Button>
         
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[160px] h-8">
@@ -154,13 +199,15 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
           </SelectContent>
         </Select>
 
-        {(statusFilter !== "all" || typeFilter !== "all") && (
+        {hasActiveFilters && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => {
               setStatusFilter("all");
               setTypeFilter("all");
+              setSearchQuery("");
+              setDateFilter(undefined);
             }}
           >
             Limpar filtros
