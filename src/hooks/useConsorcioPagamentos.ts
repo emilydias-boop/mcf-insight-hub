@@ -46,30 +46,16 @@ export interface PagamentosKPIData {
 export interface PagamentosFiltersState {
   search: string;
   statusParcela: string;
-  situacaoCota: string;
-  grupo: string;
-  responsavel: string;
-  origem: string;
   tipo: string;
-  periodoInicio: string;
-  periodoFim: string;
-  apenasInadimplentes: boolean;
-  apenasQuitadas: boolean;
+  diaVencimento: string;
   apenasVencendoSemana: boolean;
 }
 
 export const defaultFilters: PagamentosFiltersState = {
   search: '',
   statusParcela: 'todos',
-  situacaoCota: 'todos',
-  grupo: 'todos',
-  responsavel: 'todos',
-  origem: 'todos',
   tipo: 'todos',
-  periodoInicio: '',
-  periodoFim: '',
-  apenasInadimplentes: false,
-  apenasQuitadas: false,
+  diaVencimento: 'todos',
   apenasVencendoSemana: false,
 };
 
@@ -281,32 +267,15 @@ export function useConsorcioPagamentos(
     if (filters.statusParcela !== 'todos') {
       result = result.filter(r => r.status_calculado === filters.statusParcela);
     }
-    if (filters.situacaoCota !== 'todos') {
-      result = result.filter(r => r.situacao_cota === filters.situacaoCota);
-    }
-    if (filters.grupo !== 'todos') {
-      result = result.filter(r => r.grupo === filters.grupo);
-    }
-    if (filters.responsavel !== 'todos') {
-      result = result.filter(r => r.vendedor_name === filters.responsavel);
-    }
-    if (filters.origem !== 'todos') {
-      result = result.filter(r => r.origem === filters.origem);
-    }
     if (filters.tipo !== 'todos') {
       result = result.filter(r => r.tipo === filters.tipo);
     }
-    if (filters.periodoInicio) {
-      result = result.filter(r => r.data_vencimento >= filters.periodoInicio);
-    }
-    if (filters.periodoFim) {
-      result = result.filter(r => r.data_vencimento <= filters.periodoFim);
-    }
-    if (filters.apenasInadimplentes) {
-      result = result.filter(r => r.situacao_cota === 'em_atraso');
-    }
-    if (filters.apenasQuitadas) {
-      result = result.filter(r => r.situacao_cota === 'quitada');
+    if (filters.diaVencimento !== 'todos') {
+      const dia = parseInt(filters.diaVencimento, 10);
+      result = result.filter(r => {
+        const d = new Date(r.data_vencimento + 'T00:00:00');
+        return d.getDate() === dia;
+      });
     }
     if (filters.apenasVencendoSemana) {
       result = result.filter(r => r.status_calculado === 'vencendo');
@@ -325,18 +294,15 @@ export function useConsorcioPagamentos(
 
   // Unique values for filter dropdowns
   const filterOptions = useMemo(() => {
-    const grupos = new Set<string>();
-    const responsaveis = new Set<string>();
-    const origens = new Set<string>();
+    const dias = new Set<number>();
     for (const p of processedData) {
-      if (p.grupo) grupos.add(p.grupo);
-      if (p.vendedor_name) responsaveis.add(p.vendedor_name);
-      if (p.origem) origens.add(p.origem);
+      if (p.data_vencimento) {
+        const d = new Date(p.data_vencimento + 'T00:00:00');
+        dias.add(d.getDate());
+      }
     }
     return {
-      grupos: Array.from(grupos).sort(),
-      responsaveis: Array.from(responsaveis).sort(),
-      origens: Array.from(origens).sort(),
+      diasVencimento: Array.from(dias).sort((a, b) => a - b),
     };
   }, [processedData]);
 
