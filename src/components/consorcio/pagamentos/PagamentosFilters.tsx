@@ -9,9 +9,7 @@ interface Props {
   filters: PagamentosFiltersState;
   onChange: (f: PagamentosFiltersState) => void;
   options: {
-    grupos: string[];
-    responsaveis: string[];
-    origens: string[];
+    diasVencimento: number[];
   };
 }
 
@@ -42,38 +40,13 @@ export function PagamentosFilters({ filters, onChange, options }: Props) {
           </SelectContent>
         </Select>
 
-        <Select value={filters.situacaoCota} onValueChange={v => set('situacaoCota', v)}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Situação Cota" /></SelectTrigger>
+        <Select value={filters.diaVencimento} onValueChange={v => set('diaVencimento', v)}>
+          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Dia Vencimento" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="todos">Todas Situações</SelectItem>
-            <SelectItem value="pendente">Pendente</SelectItem>
-            <SelectItem value="em_atraso">Em Atraso</SelectItem>
-            <SelectItem value="quitada">Quitada</SelectItem>
-            <SelectItem value="cancelada">Cancelada</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={filters.grupo} onValueChange={v => set('grupo', v)}>
-          <SelectTrigger className="w-[130px]"><SelectValue placeholder="Grupo" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos Grupos</SelectItem>
-            {options.grupos.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
-        <Select value={filters.responsavel} onValueChange={v => set('responsavel', v)}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Responsável" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            {options.responsaveis.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
-        <Select value={filters.origem} onValueChange={v => set('origem', v)}>
-          <SelectTrigger className="w-[130px]"><SelectValue placeholder="Origem" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todas Origens</SelectItem>
-            {options.origens.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+            <SelectItem value="todos">Todos os Dias</SelectItem>
+            {options.diasVencimento.map(d => (
+              <SelectItem key={d} value={String(d)}>Dia {d}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -86,25 +59,6 @@ export function PagamentosFilters({ filters, onChange, options }: Props) {
           </SelectContent>
         </Select>
 
-        <div className="flex items-center gap-2">
-          <Label className="text-xs text-muted-foreground">De</Label>
-          <Input type="date" value={filters.periodoInicio} onChange={e => set('periodoInicio', e.target.value)} className="w-[140px]" />
-        </div>
-        <div className="flex items-center gap-2">
-          <Label className="text-xs text-muted-foreground">Até</Label>
-          <Input type="date" value={filters.periodoFim} onChange={e => set('periodoFim', e.target.value)} className="w-[140px]" />
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-4">
-        <div className="flex items-center gap-2">
-          <Switch checked={filters.apenasInadimplentes} onCheckedChange={v => set('apenasInadimplentes', v)} id="inadimplentes" />
-          <Label htmlFor="inadimplentes" className="text-xs">Apenas inadimplentes</Label>
-        </div>
-        <div className="flex items-center gap-2">
-          <Switch checked={filters.apenasQuitadas} onCheckedChange={v => set('apenasQuitadas', v)} id="quitadas" />
-          <Label htmlFor="quitadas" className="text-xs">Apenas quitadas</Label>
-        </div>
         <div className="flex items-center gap-2">
           <Switch checked={filters.apenasVencendoSemana} onCheckedChange={v => set('apenasVencendoSemana', v)} id="vencendo" />
           <Label htmlFor="vencendo" className="text-xs">Vencendo esta semana</Label>

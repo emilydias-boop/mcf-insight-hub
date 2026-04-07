@@ -294,18 +294,15 @@ export function useConsorcioPagamentos(
 
   // Unique values for filter dropdowns
   const filterOptions = useMemo(() => {
-    const grupos = new Set<string>();
-    const responsaveis = new Set<string>();
-    const origens = new Set<string>();
+    const dias = new Set<number>();
     for (const p of processedData) {
-      if (p.grupo) grupos.add(p.grupo);
-      if (p.vendedor_name) responsaveis.add(p.vendedor_name);
-      if (p.origem) origens.add(p.origem);
+      if (p.data_vencimento) {
+        const d = new Date(p.data_vencimento + 'T00:00:00');
+        dias.add(d.getDate());
+      }
     }
     return {
-      grupos: Array.from(grupos).sort(),
-      responsaveis: Array.from(responsaveis).sort(),
-      origens: Array.from(origens).sort(),
+      diasVencimento: Array.from(dias).sort((a, b) => a - b),
     };
   }, [processedData]);
 
