@@ -572,6 +572,7 @@ const Negocios = () => {
         } else {
           if (!filters.productFilters.some(evaluateProductRule)) return false;
         }
+      }
       
       // Filtro por prioridade de atividade
       if (filters.activityPriority !== 'all' && activitySummaries) {
