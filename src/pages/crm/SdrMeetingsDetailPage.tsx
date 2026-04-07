@@ -39,6 +39,7 @@ export default function SdrMeetingsDetailPage() {
   const monthParam = searchParams.get("month");
 
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingV2 | null>(null);
+  const [activeTab, setActiveTab] = useState("overview");
 
   // Initial dates from URL
   const initialDates = useMemo(() => {
@@ -125,8 +126,8 @@ export default function SdrMeetingsDetailPage() {
         onBack={handleBack}
       />
 
-      {/* Filters */}
-      <SdrPerformanceFilters
+      {/* Filters - hidden on leads tab */}
+      {activeTab !== "leads" && <SdrPerformanceFilters
         startDate={startDate}
         endDate={endDate}
         comparisonMode={comparisonMode}
@@ -135,9 +136,9 @@ export default function SdrMeetingsDetailPage() {
         onFiltersChange={handleFiltersChange}
         onRefresh={() => perfData.refetch()}
         isLoading={perfData.isLoading}
-      />
+      />}
 
-      <Tabs defaultValue="overview" className="space-y-5">
+      <Tabs defaultValue="overview" className="space-y-5" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="leads">Reuniões ({perfData.meetings.length})</TabsTrigger>
