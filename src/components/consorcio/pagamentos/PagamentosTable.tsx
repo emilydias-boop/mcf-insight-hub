@@ -1,6 +1,7 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ChevronLeft, ChevronRight, CheckCircle, FileText } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,19 +38,44 @@ interface Props {
   onPageChange: (p: number) => void;
   onPageSizeChange: (size: number) => void;
   onViewDetail: (row: PagamentoRow) => void;
+  selectedIds: Set<string>;
+  onSelectionChange: (ids: Set<string>) => void;
 }
 
-export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail }: Props) {
+export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange }: Props) {
   const payInstallment = usePayInstallment();
   const installmentIds = data.map(r => r.id);
   const { data: boletos } = useBoletosByInstallments(installmentIds);
 
-  const boletoMap = new Map<string, { storage_path: string | null }>();
+  const boletoMap = new Map<string, { storage_path: string | null; id: string }>();
   (boletos || []).forEach(b => {
     if (b.installment_id) {
-      boletoMap.set(b.installment_id, { storage_path: b.storage_path });
+      boletoMap.set(b.installment_id, { storage_path: b.storage_path, id: b.id });
     }
   });
+
+  // Rows eligible for bulk WhatsApp (has boleto)
+  const selectableIds = data.filter(r => boletoMap.has(r.id)).map(r => r.id);
+  const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const newSet = new Set(selectedIds);
+      selectableIds.forEach(id => newSet.add(id));
+      onSelectionChange(newSet);
+    } else {
+      const newSet = new Set(selectedIds);
+      selectableIds.forEach(id => newSet.delete(id));
+      onSelectionChange(newSet);
+    }
+  };
+
+  const handleSelectRow = (id: string, checked: boolean) => {
+    const newSet = new Set(selectedIds);
+    if (checked) newSet.add(id);
+    else newSet.delete(id);
+    onSelectionChange(newSet);
+  };
 
   const handleMarkAsPaid = (e: React.MouseEvent, row: PagamentoRow) => {
     e.stopPropagation();
@@ -86,6 +112,13 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-10">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                aria-label="Selecionar todos"
+              />
+            </TableHead>
             <TableHead>Cliente</TableHead>
             <TableHead>Grupo</TableHead>
             <TableHead>Cota</TableHead>
@@ -104,7 +137,7 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
         <TableBody>
           {data.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={13} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
                 Nenhuma parcela encontrada
               </TableCell>
             </TableRow>
@@ -114,12 +147,24 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
               const situacaoCfg = situacaoBadgeConfig[row.situacao_cota];
               const isPaid = row.status_calculado === 'paga';
               const boleto = boletoMap.get(row.id);
+              const isSelectable = !!boleto;
               return (
                 <TableRow
                   key={row.id}
-                  className={`cursor-pointer hover:bg-muted/50 ${row.status_calculado === 'atrasada' ? 'bg-destructive/5' : ''}`}
+                  className={`cursor-pointer hover:bg-muted/50 ${row.status_calculado === 'atrasada' ? 'bg-destructive/5' : ''} ${selectedIds.has(row.id) ? 'bg-primary/5' : ''}`}
                   onClick={() => onViewDetail(row)}
                 >
+                  <TableCell onClick={e => e.stopPropagation()}>
+                    {isSelectable ? (
+                      <Checkbox
+                        checked={selectedIds.has(row.id)}
+                        onCheckedChange={(checked) => handleSelectRow(row.id, !!checked)}
+                        aria-label={`Selecionar ${row.cliente_nome}`}
+                      />
+                    ) : (
+                      <span className="block w-4" />
+                    )}
+                  </TableCell>
                   <TableCell className="font-medium max-w-[160px] truncate">{row.cliente_nome}</TableCell>
                   <TableCell>{row.grupo}</TableCell>
                   <TableCell>{row.cota}</TableCell>
