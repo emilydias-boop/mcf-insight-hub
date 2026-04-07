@@ -233,6 +233,7 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
               setTypeFilter("all");
               setSearchQuery("");
               setDateFilter(undefined);
+              setMeetingDateFilter(undefined);
             }}
           >
             Limpar filtros
