@@ -288,7 +288,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     processFileData(hdrs, data);
   }, [pastedText, processFileData]);
 
-  const handleCompare = useCallback(async () => {
+  const handleCompare = useCallback(async (skipNumericCheck = false) => {
     if (!columnMapping.name && !columnMapping.email && !columnMapping.phone) {
       toast.error('Mapeie pelo menos uma coluna (nome, email ou telefone)');
       return;
@@ -297,6 +297,16 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     if (!activeOriginId) {
       toast.error('Selecione uma pipeline de destino');
       return;
+    }
+
+    // Validate: check if mapped "name" values look like numbers (CPF/phone)
+    if (!skipNumericCheck && columnMapping.name) {
+      const nameValues = rawData.map(row => String(row[columnMapping.name] || '').trim()).filter(Boolean);
+      const numericCount = nameValues.filter(v => /^\d{8,}$/.test(v.replace(/\D/g, ''))).length;
+      if (nameValues.length > 0 && numericCount / nameValues.length > 0.5) {
+        setNumericNameWarning(true);
+        return;
+      }
     }
 
     // Build extra columns map
