@@ -72,11 +72,19 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
 
       <div className="flex items-center justify-between">
         <PagamentosFilters filters={filters} onChange={handleFilterChange} options={filterOptions} />
-        <Button variant="outline" size="sm" onClick={handleExport} className="shrink-0 ml-3">
-          <Download className="h-4 w-4 mr-1" />
-          Exportar
-        </Button>
-      </div>
+        <div className="flex items-center gap-2 shrink-0 ml-3">
+          {reviewBoletos.length > 0 && (
+            <Button variant="outline" size="sm" onClick={() => setReviewOpen(true)}>
+              <AlertTriangle className="h-4 w-4 mr-1" />
+              Revisar Boletos
+              <Badge variant="secondary" className="ml-1.5 text-xs">{reviewBoletos.length}</Badge>
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            <Download className="h-4 w-4 mr-1" />
+            Exportar
+          </Button>
+        </div>
 
       <PagamentosTable
         data={data}
