@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
         contact_id: lead.contact_id,
         origin_id: originId,
         stage_id: stageId,
-        title: `${lead.name} - A010`,
+        name: `${lead.name} - A010`,
         product_name: 'A010 - Consultoria Construa para Vender sem Dinheiro + Treinamento',
         tags: ['A010', 'Hubla', 'recuperado'],
         custom_fields: { source: 'hubla', a010_compra: true, recovered: '2026-04-07' },
