@@ -62,7 +62,7 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
     : data.filter(r => !boletoMap.has(r.id));
 
   // Rows eligible for bulk WhatsApp (has boleto)
-  const selectableIds = data.filter(r => boletoMap.has(r.id)).map(r => r.id);
+  const selectableIds = filteredData.filter(r => boletoMap.has(r.id)).map(r => r.id);
   const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
 
   const handleSelectAll = (checked: boolean) => {
