@@ -28,6 +28,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { R2CloserWithAvailability, useCreateR2Meeting } from '@/hooks/useR2AgendaData';
 import { useSearchDealsForSchedule } from '@/hooks/useAgendaData';
 import { useActiveBU } from '@/hooks/useActiveBU';
+import { useAuth } from '@/contexts/AuthContext';
 import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
 import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2CloserAvailableSlots';
 import { useR2Bookers } from '@/hooks/useR2Bookers';
