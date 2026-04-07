@@ -23,6 +23,9 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
   const [pageSize, setPageSize] = useState(200);
   const [detailRow, setDetailRow] = useState<PagamentoRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+
+  const { data: reviewBoletos = [] } = useBoletosReview();
 
   const { data, allData, isLoading, kpis, alertData, totalItems, totalPages, filterOptions } = useConsorcioPagamentos(filters, page, pageSize, selectedMonth);
 
