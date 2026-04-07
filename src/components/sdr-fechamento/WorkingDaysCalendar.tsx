@@ -231,6 +231,9 @@ const YearMonthsTable = ({
           </TableCell>
           <TableCell className="text-center">{wd.dias_uteis_base}</TableCell>
           <TableCell className="text-center">{wd.dias_uteis_final}</TableCell>
+          <TableCell className="text-center">
+            {wd.dias_uteis_closer != null ? wd.dias_uteis_closer : <span className="text-muted-foreground">-</span>}
+          </TableCell>
           <TableCell className="text-right">{formatCurrency(wd.ifood_valor_dia)}</TableCell>
           <TableCell className="text-right font-semibold">
             {formatCurrency(wd.ifood_mensal_calculado || 0)}
