@@ -1,39 +1,20 @@
 
 
-# Adicionar Filtros Avancados na Tabela de Reunioes
+# Corrigir filtro de data: filtrar por "Agendado em" (booked_at)
 
 ## Problema
-A tabela de reunioes do SDR so tem filtros de status e tipo. O usuario precisa:
-- Filtrar por **data da reuniao** (ex: ver so as de hoje, ou de amanha)
-- **Buscar por nome** do lead
-- Ver rapidamente o que foi **agendado para um dia especifico**
+O filtro de data atual filtra pelo horario da reuniao (`scheduled_at`). O usuario precisa filtrar pela coluna **"Agendado em"** (`booked_at`) para ver quais leads o SDR agendou em um dia especifico.
 
 ## Solucao
 
-Adicionar 2 novos filtros ao componente `SdrLeadsTable`:
+Alterar o filtro de data no `SdrLeadsTable.tsx` para usar `booked_at` em vez de `scheduled_at`:
 
-### 1. Filtro por data da reuniao (DatePicker)
-- Seletor de data unica que filtra pelo campo `scheduled_at`
-- Quando selecionado, mostra apenas reunioes daquele dia
-- Botao "Hoje" como atalho rapido ao lado
-
-### 2. Busca por nome do lead (Input texto)
-- Campo de busca que filtra por `contact_name` e `contact_email` (case-insensitive)
-- Com icone de lupa e placeholder "Buscar lead..."
-
-### Layout dos filtros
-```text
-[🔍 Buscar lead...] [📅 Data reuniao] [Hoje] [Status ▼] [Tipo ▼] [Limpar]  20 de 20 leads
-```
-
-### Logica de filtragem
-- Filtro de data compara `scheduled_at` com `startOfDay`/`endOfDay` da data selecionada
-- Busca por nome usa `.toLowerCase().includes()`
-- Todos os filtros se acumulam (AND)
-- "Limpar filtros" reseta tudo
+1. **Trocar o campo filtrado** na logica de `filteredMeetings`: de `scheduled_at` para `booked_at`
+2. **Renomear o label** do botao de "Data reuniao" para "Agendado em"
+3. **"Hoje"** continua funcionando igual, mas agora filtra por leads agendados hoje
 
 ### Arquivo
 | Arquivo | Acao |
 |---------|------|
-| `src/components/sdr/SdrLeadsTable.tsx` | Adicionar input de busca, date picker e botao "Hoje" |
+| `src/components/sdr/SdrLeadsTable.tsx` | Linha 100: trocar `scheduled_at`/`data_agendamento` por `booked_at`; Linha ~139: renomear label para "Agendado em" |
 
