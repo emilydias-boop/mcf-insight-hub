@@ -10581,6 +10581,7 @@ export type Database = {
           ano_mes: string
           created_at: string | null
           dias_uteis_base: number
+          dias_uteis_closer: number | null
           dias_uteis_final: number
           feriados_nacionais: Json | null
           id: string
@@ -10594,6 +10595,7 @@ export type Database = {
           ano_mes: string
           created_at?: string | null
           dias_uteis_base?: number
+          dias_uteis_closer?: number | null
           dias_uteis_final?: number
           feriados_nacionais?: Json | null
           id?: string
@@ -10607,6 +10609,7 @@ export type Database = {
           ano_mes?: string
           created_at?: string | null
           dias_uteis_base?: number
+          dias_uteis_closer?: number | null
           dias_uteis_final?: number
           feriados_nacionais?: Json | null
           id?: string
