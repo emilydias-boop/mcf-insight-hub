@@ -338,6 +338,9 @@ const Negocios = () => {
   // Detectar Outside em batch para todos os deals carregados
   const { data: outsideMap } = useOutsideDetectionForDeals(dealsData || []);
   
+  // Buscar produtos adquiridos para filtro por produto
+  const { productMap, availableProducts, isLoading: isLoadingProducts } = useProductFilterData(dealEmails);
+  
   // isRestrictedRole já definido no topo do componente (linha 77)
   const handleSync = () => {
     toast.info('Sincronizando dados do Clint...');
