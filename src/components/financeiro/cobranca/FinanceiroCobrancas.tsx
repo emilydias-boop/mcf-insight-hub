@@ -81,6 +81,12 @@ export const FinanceiroCobrancas = () => {
 
   return (
     <div className="space-y-4">
+      <CobrancaAlertPanel
+        alerts={billingAlertItems}
+        isLoading={loadingBillingAlerts}
+        type="billing"
+        title="Parcelas com Vencimento Próximo"
+      />
       <CobrancaKPIs kpis={kpis} isLoading={loadingKpis} />
 
       <CobrancaQueue onSelect={handleSelect} />
