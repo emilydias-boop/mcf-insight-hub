@@ -185,8 +185,8 @@ export default function SdrMeetingsDetailPage() {
           <Card className="bg-card border-border">
             <CardContent className="p-4">
               <SdrLeadsTable
-                meetings={perfData.meetings}
-                isLoading={perfData.isLoading}
+                meetings={allMeetings}
+                isLoading={allMeetingsQuery.isLoading}
                 onSelectMeeting={handleSelectMeeting}
               />
             </CardContent>
