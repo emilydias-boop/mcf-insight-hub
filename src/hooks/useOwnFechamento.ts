@@ -23,6 +23,7 @@ export interface OwnFechamentoData {
   compPlan: SdrCompPlan | null;
   closerMetrics: CloserMetrics | null;
   closerId: string | null;
+  kpi: SdrMonthKpi | null;
   canSendNfse: boolean;
   isConsorcioPayout: boolean;
   isLoading: boolean;
