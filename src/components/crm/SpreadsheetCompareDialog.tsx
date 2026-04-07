@@ -155,6 +155,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
   const [selectedStageId, setSelectedStageId] = useState<string>('__default__');
   const [assignMode, setAssignMode] = useState<AssignMode>('single');
   const [selectedDestinationOriginId, setSelectedDestinationOriginId] = useState<string>('');
+  const [numericNameWarning, setNumericNameWarning] = useState(false);
 
   const createNotFoundMutation = useCreateNotFoundDeals();
   const bulkTransfer = useBulkTransfer();
@@ -287,7 +288,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     processFileData(hdrs, data);
   }, [pastedText, processFileData]);
 
-  const handleCompare = useCallback(async () => {
+  const handleCompare = useCallback(async (skipNumericCheck = false) => {
     if (!columnMapping.name && !columnMapping.email && !columnMapping.phone) {
       toast.error('Mapeie pelo menos uma coluna (nome, email ou telefone)');
       return;
@@ -296,6 +297,16 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     if (!activeOriginId) {
       toast.error('Selecione uma pipeline de destino');
       return;
+    }
+
+    // Validate: check if mapped "name" values look like numbers (CPF/phone)
+    if (!skipNumericCheck && columnMapping.name) {
+      const nameValues = rawData.map(row => String(row[columnMapping.name] || '').trim()).filter(Boolean);
+      const numericCount = nameValues.filter(v => /^\d{8,}$/.test(v.replace(/\D/g, ''))).length;
+      if (nameValues.length > 0 && numericCount / nameValues.length > 0.5) {
+        setNumericNameWarning(true);
+        return;
+      }
     }
 
     // Build extra columns map
@@ -610,6 +621,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     setSelectedStageId('__default__');
     setAssignMode('single');
     setSelectedDestinationOriginId('');
+    setNumericNameWarning(false);
   };
 
   const getStatusIcon = (status: SpreadsheetRow['matchStatus']) => {
@@ -724,6 +736,40 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
               ))}
             </div>
 
+            {/* Data preview */}
+            {rawData.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Preview dos dados (3 primeiras linhas):</p>
+                <div className="border rounded overflow-auto max-h-40">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {COLUMN_KEYS.map(key => (
+                          <TableHead key={key} className="text-xs py-1 px-2 whitespace-nowrap">
+                            {COLUMN_LABELS[key]}
+                            {columnMapping[key] && (
+                              <span className="text-muted-foreground ml-1">({columnMapping[key]})</span>
+                            )}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rawData.slice(0, 3).map((row, i) => (
+                        <TableRow key={i}>
+                          {COLUMN_KEYS.map(key => (
+                            <TableCell key={key} className="text-xs py-1 px-2 font-mono">
+                              {columnMapping[key] ? String(row[columnMapping[key]] || '').substring(0, 40) : <span className="text-muted-foreground italic">—</span>}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
             {extraColumnHeaders.length > 0 && (
               <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded border">
                 <span className="font-medium">Colunas extras detectadas:</span>{' '}
@@ -733,9 +779,26 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
               </div>
             )}
 
+            {/* Numeric name warning */}
+            {numericNameWarning && (
+              <div className="p-3 border border-amber-500 bg-amber-50 dark:bg-amber-900/20 rounded-lg space-y-2">
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                  ⚠️ Os valores mapeados como "Nome" parecem ser números (CPF ou telefone). Verifique o mapeamento.
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setNumericNameWarning(false)}>
+                    Corrigir mapeamento
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => { setNumericNameWarning(false); handleCompare(true); }}>
+                    Continuar mesmo assim
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={handleReset}>Voltar</Button>
-              <Button size="sm" onClick={handleCompare} disabled={isComparing}>
+              <Button size="sm" onClick={() => handleCompare()} disabled={isComparing}>
                 {isComparing ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-1" />
