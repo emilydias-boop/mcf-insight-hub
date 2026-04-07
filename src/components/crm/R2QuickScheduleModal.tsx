@@ -94,10 +94,12 @@ export function R2QuickScheduleModal({
 
   // BU filtering
   const activeBU = useActiveBU();
+  const { role, user } = useAuth();
   const { data: originIds } = useBUOriginIds(activeBU);
 
   const buOriginIds = originIds && originIds.length > 0 ? originIds : undefined;
-  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, buOriginIds);
+  const sdrOwnerEmail = role === 'sdr' ? user?.email || undefined : undefined;
+  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, buOriginIds, sdrOwnerEmail);
   const createMeeting = useCreateR2Meeting();
   const { data: r2Bookers = [] } = useR2Bookers();
 

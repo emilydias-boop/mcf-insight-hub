@@ -519,6 +519,7 @@ export default function Agenda() {
         closers={filteredClosers}
         preselectedCloserId={preselectedCloserId}
         preselectedDate={preselectedDate}
+        ownerEmail={sdrOwnerEmail}
       />
 
       {/* Reschedule Modal */}
