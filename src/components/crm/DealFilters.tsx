@@ -388,6 +388,15 @@ export const DealFilters = ({
         isLoading={isLoadingTags}
       />
       
+      {/* Filtro de Produtos Adquiridos */}
+      <ProductFilterPopover
+        availableProducts={availableProducts}
+        productFilters={filters.productFilters}
+        productOperator={filters.productOperator}
+        onChangeFilters={(productFilters, productOperator) => onChange({ ...filters, productFilters, productOperator })}
+        isLoading={isLoadingProducts}
+      />
+      
       {/* Filtro de Prioridade de Atividade */}
       <Select
         value={filters.activityPriority}

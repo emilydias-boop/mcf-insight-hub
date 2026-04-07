@@ -633,6 +633,8 @@ const Negocios = () => {
       selectedTags: [],
       tagFilters: [],
       tagOperator: 'and',
+      productFilters: [],
+      productOperator: 'and',
       activityPriority: 'all',
       outsideFilter: 'all',
     });
