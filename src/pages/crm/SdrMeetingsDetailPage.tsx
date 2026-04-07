@@ -155,7 +155,7 @@ export default function SdrMeetingsDetailPage() {
       <Tabs defaultValue="overview" className="space-y-5" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-          <TabsTrigger value="leads">Reuniões ({perfData.meetings.length})</TabsTrigger>
+          <TabsTrigger value="leads">Reuniões ({allMeetings.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-5">
