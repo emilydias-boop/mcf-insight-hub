@@ -144,14 +144,14 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.length === 0 ? (
+          {filteredData.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={bulkMode ? 14 : 13} className="text-center text-muted-foreground py-8">
                 Nenhuma parcela encontrada
               </TableCell>
             </TableRow>
           ) : (
-            data.map(row => {
+            filteredData.map(row => {
               const statusCfg = statusBadgeConfig[row.status_calculado];
               const situacaoCfg = situacaoBadgeConfig[row.situacao_cota];
               const isPaid = row.status_calculado === 'paga';
@@ -163,17 +163,19 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
                   className={`cursor-pointer hover:bg-muted/50 ${row.status_calculado === 'atrasada' ? 'bg-destructive/5' : ''} ${selectedIds.has(row.id) ? 'bg-primary/5' : ''}`}
                   onClick={() => onViewDetail(row)}
                 >
-                  <TableCell onClick={e => e.stopPropagation()}>
-                    {isSelectable ? (
-                      <Checkbox
-                        checked={selectedIds.has(row.id)}
-                        onCheckedChange={(checked) => handleSelectRow(row.id, !!checked)}
-                        aria-label={`Selecionar ${row.cliente_nome}`}
-                      />
-                    ) : (
-                      <span className="block w-4" />
-                    )}
-                  </TableCell>
+                  {bulkMode && (
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      {isSelectable ? (
+                        <Checkbox
+                          checked={selectedIds.has(row.id)}
+                          onCheckedChange={(checked) => handleSelectRow(row.id, !!checked)}
+                          aria-label={`Selecionar ${row.cliente_nome}`}
+                        />
+                      ) : (
+                        <span className="block w-4" />
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="font-medium max-w-[160px] truncate">{row.cliente_nome}</TableCell>
                   <TableCell>{row.grupo}</TableCell>
                   <TableCell>{row.cota}</TableCell>

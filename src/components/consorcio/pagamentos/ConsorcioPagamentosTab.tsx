@@ -190,6 +190,8 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
         onViewDetail={handleViewDetail}
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
+        bulkMode={bulkMode}
+        filtroBoleto={filters.filtroBoleto}
       />
 
       <PagamentoDetailDrawer
