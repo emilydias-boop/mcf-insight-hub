@@ -118,9 +118,17 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
     <div className="space-y-3">
       <Table>
         <TableHeader>
-          <TableRow>
+           <TableRow>
+            {bulkMode && (
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                  aria-label="Selecionar todos"
+                />
+              </TableHead>
+            )}
              <TableHead>Cliente</TableHead>
-
             <TableHead>Grupo</TableHead>
             <TableHead>Cota</TableHead>
             <TableHead className="text-center">Nº</TableHead>
