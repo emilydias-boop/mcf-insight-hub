@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { compareSpreadsheetGlobal, SpreadsheetRow, useCreateNotFoundDeals } from '@/hooks/useSpreadsheetCompare';
+import { ExpandableResultsTable } from '@/components/crm/ExpandableResultsTable';
 import { DealStatus, getDealStatusLabel, getDealStatusColor } from '@/lib/dealStatusHelper';
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useQuery } from '@tanstack/react-query';
