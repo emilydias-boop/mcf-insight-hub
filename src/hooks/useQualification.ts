@@ -92,13 +92,15 @@ export function useQualification({
 
       if (updateError) throw updateError;
 
-      // Registrar atividade
+      // Registrar atividade com user_id
+      const { data: { user } } = await supabase.auth.getUser();
       await supabase.from('deal_activities').insert({
         deal_id: dealId,
         activity_type: 'stage_change',
         description: `Lead qualificado automaticamente`,
         from_stage: currentStageId,
         to_stage: qualifiedStageId,
+        user_id: user?.id,
       });
 
       return qualifiedStageId;

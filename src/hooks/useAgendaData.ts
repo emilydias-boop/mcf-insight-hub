@@ -1689,7 +1689,8 @@ export async function syncDealStageFromAgenda(
       return;
     }
 
-    // 8. Log activity
+    // 8. Log activity with user_id
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
     await supabase
       .from('deal_activities')
       .insert({
@@ -1700,6 +1701,7 @@ export async function syncDealStageFromAgenda(
           : `Status atualizado via Agenda: ${agendaStatus}`,
         from_stage: deal.stage_id,
         to_stage: targetStage.id,
+        user_id: currentUser?.id,
         metadata: { 
           via: 'agenda_sync', 
           status: agendaStatus, 
@@ -1707,6 +1709,7 @@ export async function syncDealStageFromAgenda(
           ownershipTransferred: shouldTransferOwnership,
           newOwner: shouldTransferOwnership ? closerEmail : undefined,
           previousOwner: shouldTransferOwnership ? deal.owner_id : undefined,
+          changed_by: currentUser?.email,
         }
       });
     

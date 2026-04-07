@@ -57,12 +57,14 @@ export function PostCallModal({ open, onClose, callId, onSave }: PostCallModalPr
         .eq('id', callId)
         .single();
 
-      // Add to deal timeline if deal exists
+      // Add to deal timeline if deal exists (with user_id)
       if (callData?.deal_id) {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
         await supabase.from('deal_activities').insert({
           deal_id: callData.deal_id,
           activity_type: 'call',
           description: `Ligação (${formatDuration(callData.duration_seconds || 0)}) - ${OUTCOME_OPTIONS.find(o => o.value === outcome)?.label || outcome}`,
+          user_id: currentUser?.id,
           metadata: {
             call_id: callId,
             outcome,
