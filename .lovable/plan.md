@@ -1,16 +1,27 @@
 
 
-# Fix: Botão "Revisar Boletos" não aparece — erro na query
+# Fix Review Dialog: Mostrar Card Vinculado + Corrigir Scroll
 
-## Causa raiz
-A query do hook `useBoletosReview` faz join com `consortium_cards` pedindo a coluna `cliente_nome`, que **não existe**. O nome correto é `nome_completo`. Isso causa erro 400 do Supabase, retornando array vazio, e o botão nunca aparece (condição `reviewBoletos.length > 0` é sempre falsa).
+## Problemas
 
-## Mudança
+1. **Sem informação do match**: Muitos boletos mostram "Card Nome: —" e "Card Grupo/Cota: —/—" porque o `card_id` é null (a IA não encontrou match). Confirmar sem saber a qual carta vinculou não faz sentido.
 
-### `src/hooks/useConsorcioBoletos.ts`
-Na função `useBoletosReview` (aprox. linha 121):
-- Trocar `cliente_nome` por `nome_completo` no select do join: `consortium_cards!consorcio_boletos_card_id_fkey(nome_completo, grupo, cota)`
-- Trocar o mapeamento `b.consortium_cards?.cliente_nome` por `b.consortium_cards?.nome_completo`
+2. **Scroll não funciona**: O `ScrollArea` não tem altura fixa definida — `flex-1 min-h-0` dentro do DialogContent não está gerando altura calculável, impedindo o scroll.
 
-Uma linha de código corrigida e o botão vai aparecer com os 40 boletos pendentes.
+## Mudanças
+
+### `src/components/consorcio/pagamentos/BoletoReviewDialog.tsx`
+
+1. **Corrigir scroll**: Adicionar `h-[60vh]` no ScrollArea para garantir altura fixa e scroll funcional.
+
+2. **Separar boletos com e sem match**: Mostrar claramente quando um boleto **não tem card vinculado** (card_id null) vs quando tem card mas dados divergem:
+   - Sem match: Badge "Sem Vínculo" (vermelho) + mensagem clara "Nenhuma carta vinculada — necessário vincular manualmente"
+   - Com match parcial: Mostrar lado a lado PDF vs Card como hoje, mas com destaque visual melhor
+
+3. **Mostrar nome do card vinculado de forma proeminente**: Quando há card vinculado, exibir o nome do card em destaque no topo do card, para o usuário saber exatamente qual carta a IA escolheu antes de confirmar.
+
+4. **Desabilitar "Confirmar" quando não há card**: Se `card_id` é null, não faz sentido confirmar — esconder botão confirmar e mostrar apenas "Ver PDF" nesses casos.
+
+### Arquivos
+- `src/components/consorcio/pagamentos/BoletoReviewDialog.tsx`
 
