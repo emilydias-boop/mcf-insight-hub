@@ -1,22 +1,21 @@
 
 
-# Limpar 3 deals duplicados do CSV
+# Deletar 123 deals recuperados pré-2026
 
-## Ação
-Deletar os 3 deals com `data_source = 'csv'` que são cópias dos deals originais criados via webhook na pipeline Inside Sales.
+## Resumo
+Dos 182 deals com tag `recuperado-a010`, 123 são de compradores A010 de 2024/2025. Vamos deletar esses 123 deals e seus registros dependentes, mantendo apenas os 59 de 2026.
 
-### IDs a deletar
-- `263113b4-1316-413f-a2bf-ff0a8bf97b70` (Diogo Cascudo - csv)
-- `79663c2b-3810-4b32-98e0-2e42590f77ad` (Pedro Brandão - csv)
-- `5dcce67b-e1d1-4e91-a58c-a0548e434132` (Régis Maciel - csv)
+## Execução
+Uma migration SQL que:
+1. Identifica os 123 deal IDs (já levantados) cujo primeiro A010 foi antes de 2026-01-01
+2. Deleta dependências: `deal_activities`, `deal_tasks`, `automation_queue`, `automation_logs`, `calls`, `meeting_slots` (e filhos), `consorcio_pending_registrations` (e `consortium_documents`)
+3. Deleta os 123 deals de `crm_deals`
 
-### Pré-limpeza
-Antes de deletar cada deal, remover registros dependentes (deal_activities, deal_tasks, automation_queue, automation_logs, calls, meeting_slots e seus filhos).
+## Resultado
+- 123 deals antigos removidos
+- 59 deals de 2026 preservados na pipeline Inside Sales
 
-### Execução
-Uma migration SQL com DELETE cascata dos 3 IDs.
-
-| Arquivo | Ação |
+| Arquivo | Acao |
 |---|---|
-| `supabase/migrations/*.sql` | DELETE dos 3 deals CSV duplicados e seus registros dependentes |
+| `supabase/migrations/*.sql` | DELETE dos 123 deals recuperados pré-2026 e dependências |
 
