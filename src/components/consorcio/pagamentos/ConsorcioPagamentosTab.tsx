@@ -85,6 +85,7 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
             Exportar
           </Button>
         </div>
+      </div>
 
       <PagamentosTable
         data={data}
@@ -102,6 +103,11 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
         row={detailRow}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+      />
+
+      <BoletoReviewDialog
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
       />
     </div>
   );
