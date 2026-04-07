@@ -68,7 +68,7 @@ export function BoletoReviewDialog({ open, onOpenChange }: Props) {
           />
         </div>
 
-        <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
+        <ScrollArea className="h-[60vh] -mx-6 px-6">
           {isLoading ? (
             <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>
           ) : filtered.length === 0 ? (
