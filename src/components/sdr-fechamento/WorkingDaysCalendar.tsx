@@ -73,6 +73,7 @@ const EditWorkingDayDialog = ({
   const [open, setOpen] = useState(false);
   const [diasUteisBase, setDiasUteisBase] = useState(workingDay.dias_uteis_base.toString());
   const [diasUteisFinal, setDiasUteisFinal] = useState(workingDay.dias_uteis_final.toString());
+  const [diasUteisCloser, setDiasUteisCloser] = useState(workingDay.dias_uteis_closer?.toString() || '');
   const [ifoodValorDia, setIfoodValorDia] = useState(workingDay.ifood_valor_dia.toString());
   const [observacoes, setObservacoes] = useState(workingDay.observacoes || '');
 
