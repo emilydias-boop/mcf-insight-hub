@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { SdrPayoutWithDetails, PayoutAdjustment, PayoutStatus, Sdr, SdrCompPlan } from '@/types/sdr-fechamento';
+import { SdrPayoutWithDetails, PayoutAdjustment, PayoutStatus, Sdr, SdrCompPlan, SdrMonthKpi } from '@/types/sdr-fechamento';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
 
 export type FechamentoUserType = 'sdr' | 'closer' | 'unknown';
