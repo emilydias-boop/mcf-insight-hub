@@ -23,6 +23,8 @@ import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import type { OwnerOption } from '@/hooks/useDealOwnerOptions';
 import { TagFilterPopover } from './TagFilterPopover';
+import { ProductFilterPopover } from './ProductFilterPopover';
+import type { ProductFilterRule, ProductOperator } from '@/hooks/useProductFilterData';
 
 export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
 export type ActivityPriorityFilter = 'all' | 'high' | 'medium' | 'low';
