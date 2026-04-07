@@ -1010,65 +1010,12 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
             </div>
 
             {/* Table */}
-            <div className="border rounded-lg max-h-[50vh] overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs sticky left-0 bg-background z-10">Status</TableHead>
-                    <TableHead className="text-xs">Nome (Planilha)</TableHead>
-                    <TableHead className="text-xs">Tel (Planilha)</TableHead>
-                    {extraColumnHeaders.map(h => (
-                      <TableHead key={h} className="text-xs whitespace-nowrap">{h}</TableHead>
-                    ))}
-                    <TableHead className="text-xs">Nome (Sistema)</TableHead>
-                    <TableHead className="text-xs">Tel (Sistema)</TableHead>
-                    <TableHead className="text-xs">Pipeline / Estágio</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredResults.slice(0, 200).map((row, i) => (
-                    <TableRow key={i} className={row.matchStatus === 'not_found' ? 'opacity-60' : ''}>
-                      <TableCell className="py-1 sticky left-0 bg-background z-10">
-                        <div className="flex items-center gap-1">
-                          {getStatusIcon(row.matchStatus)}
-                          <span className="text-xs">{getStatusLabel(row.matchStatus)}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs py-1">{row.excelName}</TableCell>
-                      <TableCell className="text-xs py-1">{row.excelPhone}</TableCell>
-                      {extraColumnHeaders.map(h => (
-                        <TableCell key={h} className="text-xs py-1 whitespace-nowrap">
-                          {row.extraColumns?.[h] || '—'}
-                        </TableCell>
-                      ))}
-                      <TableCell className="text-xs py-1">{row.localContactName || '—'}</TableCell>
-                      <TableCell className="text-xs py-1">{row.localContactPhone || '—'}</TableCell>
-                      <TableCell className="text-xs py-1">
-                        {row.matchStatus === 'found_in_current' && row.localStageName ? (
-                          <Badge variant="outline" className="text-xs">{row.localStageName}</Badge>
-                        ) : row.matchStatus === 'found_elsewhere' && row.originName ? (
-                          <Badge className="bg-amber-500/20 text-amber-700 text-xs">{row.originName}</Badge>
-                        ) : '—'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredResults.length > 200 && (
-                    <TableRow>
-                      <TableCell colSpan={6 + extraColumnHeaders.length} className="text-center text-xs text-muted-foreground py-2">
-                        Mostrando 200 de {filteredResults.length} resultados.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {filteredResults.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6 + extraColumnHeaders.length} className="text-center text-xs text-muted-foreground py-4">
-                        Nenhum resultado encontrado
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+            <ExpandableResultsTable
+              filteredResults={filteredResults}
+              extraColumnHeaders={extraColumnHeaders}
+              getStatusIcon={getStatusIcon}
+              getStatusLabel={getStatusLabel}
+            />
 
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={handleReset}>Nova comparação</Button>
