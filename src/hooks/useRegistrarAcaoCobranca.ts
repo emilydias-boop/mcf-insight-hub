@@ -43,6 +43,7 @@ export function useRegistrarAcaoCobranca() {
       toast.success(`Ação "${ACAO_LABELS[params.tipo_acao]}" registrada`);
       queryClient.invalidateQueries({ queryKey: ['consorcio-cobranca-alerts'] });
       queryClient.invalidateQueries({ queryKey: ['billing-cobranca-alerts'] });
+      queryClient.invalidateQueries({ queryKey: ['cobranca-history'] });
     },
     onError: (err: any) => {
       toast.error('Erro ao registrar ação: ' + err.message);

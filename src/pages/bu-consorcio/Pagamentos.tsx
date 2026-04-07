@@ -14,6 +14,7 @@ import { BoletoReviewDialog } from '@/components/consorcio/pagamentos/BoletoRevi
 import { useBoletosReview } from '@/hooks/useConsorcioBoletos';
 import { useConsorcioCobrancaAlerts } from '@/hooks/useCobrancaAlerts';
 import { CobrancaAlertPanel } from '@/components/shared/CobrancaAlertPanel';
+import { CobrancaHistoryPanel } from '@/components/shared/CobrancaHistoryPanel';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle } from 'lucide-react';
@@ -54,6 +55,7 @@ export default function ConsorcioPagamentosPage() {
         type="consorcio"
         title="Parcelas com Vencimento Próximo"
       />
+      <CobrancaHistoryPanel type="consorcio" />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">💳 Pagamentos Consórcio</h1>
