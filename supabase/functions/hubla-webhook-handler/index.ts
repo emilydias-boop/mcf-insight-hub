@@ -622,58 +622,28 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
       
       const { data: newDeal, error: dealError } = await supabase
         .from('crm_deals')
-        .upsert(dealData, {
-          onConflict: 'contact_id,origin_id',
-          ignoreDuplicates: true
-        })
+        .insert(dealData)
         .select('id')
         .maybeSingle();
       
-      // Se ignoreDuplicates=true e já existia, newDeal será null mas sem erro
       let createdDealId: string | null = newDeal?.id || null;
       
       if (dealError) {
-        // Ignorar erro de constraint única (23505) - significa que já existe
         if (dealError.code === '23505' || dealError.message?.includes('duplicate')) {
-          console.log(`[CRM] Deal já existe para contact_id=${contactId}, origin_id=${originId} (ignorado)`);
+          console.log(`[CRM] Deal já existe para contact_id=${contactId}, origin_id=${originId} (duplicata ignorada)`);
+          // Buscar o deal existente para usar o ID
+          const { data: existingDeal } = await supabase
+            .from('crm_deals')
+            .select('id')
+            .eq('contact_id', contactId)
+            .eq('origin_id', originId)
+            .maybeSingle();
+          createdDealId = existingDeal?.id || null;
         } else {
           console.error('[CRM] Erro ao criar deal:', dealError);
         }
       } else if (newDeal) {
         console.log(`[CRM] Deal criado: ${data.name} - A010 (${newDeal.id}) com owner: ${inheritedOwnerId || 'nenhum'}`);
-      } else {
-        // FALLBACK: upsert retornou null sem erro — verificar se deal realmente existe (race condition fix)
-        console.log(`[CRM] Upsert ignorado, verificando se deal existe para contact_id=${contactId}, origin_id=${originId}...`);
-        const { data: existingDeal } = await supabase
-          .from('crm_deals')
-          .select('id')
-          .eq('contact_id', contactId)
-          .eq('origin_id', originId)
-          .maybeSingle();
-        
-        if (existingDeal) {
-          console.log(`[CRM] Deal já existe: ${existingDeal.id} (verificado via fallback)`);
-          createdDealId = existingDeal.id;
-        } else {
-          // Deal realmente não existe — criar via INSERT direto
-          console.warn(`[CRM] Deal NÃO existe! Criando via INSERT direto (fallback race condition)...`);
-          const { data: fallbackDeal, error: fallbackError } = await supabase
-            .from('crm_deals')
-            .insert(dealData)
-            .select('id')
-            .maybeSingle();
-          
-          if (fallbackError) {
-            if (fallbackError.code === '23505') {
-              console.log(`[CRM] Deal criado por outro processo concorrente (OK)`);
-            } else {
-              console.error('[CRM] Erro no INSERT fallback:', fallbackError);
-            }
-          } else if (fallbackDeal) {
-            console.log(`[CRM] Deal criado via fallback: ${fallbackDeal.id}`);
-            createdDealId = fallbackDeal.id;
-          }
-        }
       }
       
       // 8. Gerar tarefas automáticas baseadas nos templates do estágio
