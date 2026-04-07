@@ -1,7 +1,7 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Eye, ChevronLeft, ChevronRight, MoreHorizontal, CheckCircle, XCircle, Clock, FileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, FileText } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,14 +9,9 @@ import { formatCurrency, formatDate } from '@/lib/formatters';
 import { PagamentoRow, StatusParcela, SituacaoCota } from '@/hooks/useConsorcioPagamentos';
 import { usePayInstallment } from '@/hooks/useConsorcio';
 import { useBoletosByInstallments } from '@/hooks/useConsorcioBoletos';
+import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
 
 const statusBadgeConfig: Record<StatusParcela, { label: string; className: string }> = {
   paga: { label: 'Paga', className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' },
@@ -48,13 +43,34 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
   const payInstallment = usePayInstallment();
   const installmentIds = data.map(r => r.id);
   const { data: boletos } = useBoletosByInstallments(installmentIds);
-  const boletoInstallmentIds = new Set((boletos || []).map(b => b.installment_id).filter(Boolean));
 
-  const handleMarkAsPaid = (row: PagamentoRow) => {
+  const boletoMap = new Map<string, { storage_path: string | null }>();
+  (boletos || []).forEach(b => {
+    if (b.installment_id) {
+      boletoMap.set(b.installment_id, { storage_path: b.storage_path });
+    }
+  });
+
+  const handleMarkAsPaid = (e: React.MouseEvent, row: PagamentoRow) => {
+    e.stopPropagation();
     payInstallment.mutate({
       installmentId: row.id,
       dataPagamento: format(new Date(), 'yyyy-MM-dd'),
     });
+  };
+
+  const handleOpenBoleto = async (e: React.MouseEvent, storagePath: string | null) => {
+    e.stopPropagation();
+    if (!storagePath) {
+      toast.error('Caminho do boleto não encontrado');
+      return;
+    }
+    const { data, error } = await supabase.storage.from('consorcio-boletos').createSignedUrl(storagePath, 300);
+    if (error || !data?.signedUrl) {
+      toast.error('Erro ao gerar link do boleto');
+      return;
+    }
+    window.open(data.signedUrl, '_blank');
   };
 
   if (isLoading) {
@@ -97,8 +113,13 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
               const statusCfg = statusBadgeConfig[row.status_calculado];
               const situacaoCfg = situacaoBadgeConfig[row.situacao_cota];
               const isPaid = row.status_calculado === 'paga';
+              const boleto = boletoMap.get(row.id);
               return (
-                <TableRow key={row.id} className={row.status_calculado === 'atrasada' ? 'bg-destructive/5' : ''}>
+                <TableRow
+                  key={row.id}
+                  className={`cursor-pointer hover:bg-muted/50 ${row.status_calculado === 'atrasada' ? 'bg-destructive/5' : ''}`}
+                  onClick={() => onViewDetail(row)}
+                >
                   <TableCell className="font-medium max-w-[160px] truncate">{row.cliente_nome}</TableCell>
                   <TableCell>{row.grupo}</TableCell>
                   <TableCell>{row.cota}</TableCell>
@@ -115,55 +136,45 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
                   </TableCell>
                   <TableCell className="max-w-[120px] truncate">{row.vendedor_name || '-'}</TableCell>
                   <TableCell className="text-center">
-                    {boletoInstallmentIds.has(row.id) ? (
-                      <FileText className="h-4 w-4 text-green-600 mx-auto" />
+                    {boleto ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                              onClick={(e) => handleOpenBoleto(e, boleto.storage_path)}
+                            >
+                              <FileText className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Abrir boleto PDF</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     ) : (
                       <span className="text-muted-foreground text-xs">-</span>
                     )}
                   </TableCell>
                   <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      {!isPaid && (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
-                                onClick={() => handleMarkAsPaid(row)}
-                                disabled={payInstallment.isPending}
-                              >
-                                <CheckCircle className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Marcar como paga</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {!isPaid && (
-                            <>
-                              <DropdownMenuItem onClick={() => handleMarkAsPaid(row)}>
-                                <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
-                                Marcar como Paga
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                            </>
-                          )}
-                          <DropdownMenuItem onClick={() => onViewDetail(row)}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            Ver Detalhes
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                    {!isPaid && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                              onClick={(e) => handleMarkAsPaid(e, row)}
+                              disabled={payInstallment.isPending}
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Marcar como paga</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
                   </TableCell>
                 </TableRow>
               );
