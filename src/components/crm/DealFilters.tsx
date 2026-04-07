@@ -43,6 +43,8 @@ export interface DealFiltersState {
   selectedTags: string[];
   tagFilters: TagFilterRule[];
   tagOperator: TagOperator;
+  productFilters: ProductFilterRule[];
+  productOperator: ProductOperator;
   activityPriority: ActivityPriorityFilter;
   outsideFilter: OutsideFilter;
 }
