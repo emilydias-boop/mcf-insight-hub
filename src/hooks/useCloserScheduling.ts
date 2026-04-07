@@ -229,7 +229,7 @@ export function useBookMeeting() {
         
         if (dealError) throw dealError;
         
-        // Log activity
+        // Log activity (user already fetched above)
         await supabase.from('deal_activities').insert({
           deal_id: dealId,
           activity_type: 'meeting_scheduled',

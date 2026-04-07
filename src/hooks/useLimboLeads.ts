@@ -438,13 +438,15 @@ export function useDuplicateToInsideSales() {
           .single();
         if (dErr) throw dErr;
 
-        // Step 3: Log activity on the new deal
+        // Step 3: Log activity on the new deal (with user_id)
+        const { data: { user: limboUser } } = await supabase.auth.getUser();
         await supabase.from('deal_activities').insert({
           deal_id: newDeal.id,
           activity_type: 'creation',
           description: lead.sourceDealId
             ? `Duplicado de outra pipeline (deal original: ${lead.sourceDealId}) via Limbo`
             : 'Criado via Limbo — lead de outra pipeline',
+          user_id: limboUser?.id,
         });
 
         // Step 4: Log activity on the source deal (if exists)
@@ -453,6 +455,7 @@ export function useDuplicateToInsideSales() {
             deal_id: lead.sourceDealId,
             activity_type: 'replication',
             description: `Lead duplicado para Inside Sales (novo deal: ${newDeal.id})`,
+            user_id: limboUser?.id,
           });
         }
 

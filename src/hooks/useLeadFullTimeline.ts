@@ -181,7 +181,23 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           const actType = act.activity_type || '';
           const meta = (act.metadata as Record<string, any>) || {};
 
-          if (actType === 'stage_change' || actType === 'stage_changed') {
+          if (actType === 'lead_entered') {
+            // Webhook entry event — show source info
+            const endpointName = meta.endpoint_name || meta.endpoint_slug || meta.source || '';
+            const pipelineName = dealIdToPipelineName[act.deal_id] || meta.pipeline_name || '';
+            const titleParts = ['Entrada'];
+            if (endpointName) titleParts.push(`via ${endpointName}`);
+            if (pipelineName) titleParts.push(`— ${pipelineName}`);
+            events.push({
+              id: act.id,
+              type: 'entry',
+              title: titleParts.join(' '),
+              description: act.description,
+              date: act.created_at,
+              author: resolveAuthor(act.user_id, meta.owner_email, meta.changed_by),
+              metadata: { endpoint_name: endpointName, pipeline_name: pipelineName, ...meta },
+            });
+          } else if (actType === 'stage_change' || actType === 'stage_changed') {
             const fromName = resolveStageName(act.from_stage || meta.from_stage);
             const toName = resolveStageName(act.to_stage || meta.to_stage);
             const pipelineName = dealIdToPipelineName[act.deal_id] || meta.pipeline_name || null;
