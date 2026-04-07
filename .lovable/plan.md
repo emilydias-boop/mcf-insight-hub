@@ -1,50 +1,54 @@
 
 
-# Calendário de Dias Úteis separado para SDR e Closer
+# Mostrar indicadores completos no Meu Fechamento
 
 ## Problema
-Março foi atípico: SDRs não trabalharam dia 31, mas Closers fizeram reuniões. Precisa de um calendário visual onde se seleciona os dias específicos de cada cargo, e o sistema calcula automaticamente a contagem.
+A visao do SDR/Closer no "Meu Fechamento" mostra apenas um resumo simplificado (% e multiplicador em caixinhas pequenas). O admin ve os indicadores completos com meta, realizado, barra de progresso, faixa e calculo do valor. O SDR/Closer precisa ver a mesma coisa.
 
-## Solução
+## Solucao
 
-Adicionar uma coluna `dias_uteis_closer` à tabela `working_days_calendar`. Na UI, o dialog de edição ganha dois mini-calendários visuais (um para SDR, outro para Closer) onde se marca/desmarca dias individualmente. O total é calculado automaticamente a partir dos dias selecionados.
+Reutilizar o componente `DynamicIndicatorsGrid` (ja usado na pagina de detalhe do admin) dentro de `SdrFechamentoView` e `CloserFechamentoView`. Para isso, buscar os dados necessarios (KPI e metricas ativas) que hoje nao sao carregados no `useOwnFechamento`.
 
-### 1. Migration — nova coluna
-```sql
-ALTER TABLE working_days_calendar 
-  ADD COLUMN dias_uteis_closer INTEGER DEFAULT NULL;
-```
-Quando `dias_uteis_closer` é NULL, o sistema usa `dias_uteis_final` para ambos (comportamento atual preservado).
+### Alteracoes
 
-### 2. UI — WorkingDaysCalendar.tsx
+**1. `src/hooks/useOwnFechamento.ts`**
+- Adicionar busca de `sdr_month_kpi` para o mes selecionado (query simples por `sdr_id` + `ano_mes`)
+- Retornar `kpi: SdrMonthKpi | null` no resultado do hook
 
-**Tabela principal**: adicionar coluna "Dias Closer" entre "Dias Final" e "R$/Dia". Mostra o valor ou "-" quando NULL.
+**2. `src/components/fechamento/SdrFechamentoView.tsx`**
+- Importar `useActiveMetricsForSdr` e `DynamicIndicatorsGrid`
+- Receber `sdrId` e `anoMes` como props adicionais
+- Buscar metricas ativas via `useActiveMetricsForSdr(sdrId, anoMes)`
+- Substituir a secao "Resumo dos Indicadores" (caixinhas simplificadas) pelo `DynamicIndicatorsGrid` com os mesmos cards completos que o admin ve (meta, realizado, barra de progresso, faixa, multiplicador, valor)
+- Manter os summary cards de OTE/Fixo/Variavel/Total no topo
 
-**Dialog de edição**: substituir os campos numéricos simples por dois mini-calendários lado a lado:
-- **Calendário SDR**: mostra o mês, dias úteis pré-selecionados (baseado em `dias_uteis_final`). Clicar em um dia adiciona/remove. O total aparece abaixo: "20 dias úteis SDR".
-- **Calendário Closer**: idem, inicializa com `dias_uteis_closer ?? dias_uteis_final`. Total: "21 dias úteis Closer".
-- Os calendários usam o componente `Calendar` já existente com `mode="multiple"`, destacando dias selecionados vs não-selecionados.
-- Feriados nacionais e fins de semana ficam desabilitados por padrão mas podem ser habilitados manualmente.
-- Ao salvar, grava `dias_uteis_final` = count dos dias SDR selecionados e `dias_uteis_closer` = count dos dias Closer selecionados.
+**3. `src/components/fechamento/CloserFechamentoView.tsx`**
+- Mesma logica: importar `useActiveMetricsForSdr` e `DynamicIndicatorsGrid`
+- Receber `sdrId` e `anoMes` como props
+- Substituir a secao "Indicadores de Performance" pelo `DynamicIndicatorsGrid`
+- Manter summary cards e metricas secundarias (taxa conversao, outside sales, R2) que nao fazem parte dos indicadores de variavel
 
-### 3. Edge Function — recalculate-sdr-payout
-- Buscar `dias_uteis_closer` junto com `dias_uteis_final` na query do calendário
-- Se o SDR tem `role_type = 'closer'` e `dias_uteis_closer` não é NULL → usar `dias_uteis_closer` como `diasUteisMes`
-- Senão → usar `dias_uteis_final` (comportamento atual)
-- `valor_fixo` **não muda** — continua vindo do comp_plan
+**4. `src/pages/fechamento-sdr/MeuFechamento.tsx`**
+- Passar `sdrId={userRecord.id}` e `anoMes={selectedMonth}` para `SdrFechamentoView` e `CloserFechamentoView`
+- Buscar e passar `kpi` do hook (ou deixar os views buscarem internamente)
 
-### 4. Frontend — useSdrFechamento.ts
-- Na preview dinâmica, aplicar a mesma lógica: se closer e `dias_uteis_closer` disponível, usar esse valor para metas
+### Dados necessarios
 
-### 5. Atualizar Março 2026
-Via insert tool: `UPDATE working_days_calendar SET dias_uteis_closer = 21, dias_uteis_final = 20 WHERE ano_mes = '2026-03'`
+O `DynamicIndicatorsGrid` precisa de:
+- `metricas`: vem de `useActiveMetricsForSdr(sdrId, anoMes)`
+- `kpi`: buscar `sdr_month_kpi` por `sdr_id` + `ano_mes`
+- `payout`: ja disponivel
+- `diasUteisMes`: vem de `payout.dias_uteis_mes`
+- `sdrMetaDiaria`: vem de `payout.sdr.meta_diaria`
+- `variavelTotal`: vem do comp plan ou payout
 
-## Arquivos alterados
+### Resultado
+O SDR/Closer vera exatamente os mesmos cards de indicadores que o admin ve na pagina de detalhe: meta, realizado, barra de progresso colorida, faixa, multiplicador e valor calculado.
 
-| Arquivo | Alteração |
+| Arquivo | Alteracao |
 |---|---|
-| `supabase/migrations/*.sql` | Coluna `dias_uteis_closer` |
-| `src/components/sdr-fechamento/WorkingDaysCalendar.tsx` | Coluna na tabela + dialog com 2 mini-calendários (SDR/Closer) |
-| `supabase/functions/recalculate-sdr-payout/index.ts` | Buscar e usar `dias_uteis_closer` para closers |
-| `src/hooks/useSdrFechamento.ts` | Usar dias corretos por role |
+| `src/hooks/useOwnFechamento.ts` | Adicionar query de KPI, retornar no resultado |
+| `src/components/fechamento/SdrFechamentoView.tsx` | Usar DynamicIndicatorsGrid em vez do resumo simplificado |
+| `src/components/fechamento/CloserFechamentoView.tsx` | Usar DynamicIndicatorsGrid em vez do resumo simplificado |
+| `src/pages/fechamento-sdr/MeuFechamento.tsx` | Passar props extras (sdrId, anoMes, kpi) para os views |
 
