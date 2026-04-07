@@ -138,7 +138,7 @@ export function useBoletosReview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('consorcio_boletos')
-        .select('*, consortium_cards!consorcio_boletos_card_id_fkey(cliente_nome, grupo, cota)')
+        .select('*, consortium_cards!consorcio_boletos_card_id_fkey(nome_completo, grupo, cota)')
         .in('match_confidence', ['partial', 'pending_review'])
         .order('created_at', { ascending: false });
       if (error) throw error;
