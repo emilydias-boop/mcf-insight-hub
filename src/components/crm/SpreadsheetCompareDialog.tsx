@@ -155,6 +155,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
   const [selectedStageId, setSelectedStageId] = useState<string>('__default__');
   const [assignMode, setAssignMode] = useState<AssignMode>('single');
   const [selectedDestinationOriginId, setSelectedDestinationOriginId] = useState<string>('');
+  const [numericNameWarning, setNumericNameWarning] = useState(false);
 
   const createNotFoundMutation = useCreateNotFoundDeals();
   const bulkTransfer = useBulkTransfer();
