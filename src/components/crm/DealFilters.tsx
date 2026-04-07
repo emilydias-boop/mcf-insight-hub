@@ -59,6 +59,10 @@ interface DealFiltersProps {
   availableTags?: string[];
   /** Loading state para tags */
   isLoadingTags?: boolean;
+  /** Produtos disponíveis para filtro */
+  availableProducts?: string[];
+  /** Loading state para produtos */
+  isLoadingProducts?: boolean;
 }
 
 export const DealFilters = ({ 
