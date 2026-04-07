@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Copy, ExternalLink, MessageCircle, Send } from 'lucide-react';
+import { Copy, ExternalLink, MessageCircle, Send, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import { ConsorcioBoleto, useSendBoletoWhatsApp, useBoletoSignedUrl } from '@/hooks/useConsorcioBoletos';
 import { formatCurrency, formatDate } from '@/lib/formatters';
@@ -10,12 +10,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Props {
   boleto: ConsorcioBoleto;
+  hasPhone?: boolean;
 }
 
-export function BoletoSection({ boleto }: Props) {
+export function BoletoSection({ boleto, hasPhone = true }: Props) {
   const sendWhatsApp = useSendBoletoWhatsApp();
   const { data: pdfUrl } = useBoletoSignedUrl(boleto.storage_path);
 
@@ -24,6 +26,14 @@ export function BoletoSection({ boleto }: Props) {
       navigator.clipboard.writeText(boleto.linha_digitavel);
       toast.success('Linha digitável copiada!');
     }
+  };
+
+  const handleWhatsApp = (mode: 'wame' | 'twilio') => {
+    if (!hasPhone) {
+      toast.error('Cliente sem telefone cadastrado. Cadastre o telefone na carta do consórcio ou no CRM.');
+      return;
+    }
+    sendWhatsApp.mutate({ boletoId: boleto.id, mode });
   };
 
   return (
@@ -76,24 +86,40 @@ export function BoletoSection({ boleto }: Props) {
             Ver PDF
           </Button>
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-7 text-xs">
-              <MessageCircle className="h-3 w-3 mr-1" />
-              WhatsApp
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => sendWhatsApp.mutate({ boletoId: boleto.id, mode: 'wame' })}>
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Abrir WhatsApp Web
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => sendWhatsApp.mutate({ boletoId: boleto.id, mode: 'twilio' })}>
-              <Send className="h-4 w-4 mr-2" />
-              Enviar via Twilio
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`h-7 text-xs ${!hasPhone ? 'opacity-50' : ''}`}
+                    >
+                      <MessageCircle className="h-3 w-3 mr-1" />
+                      WhatsApp
+                      {!hasPhone && <Phone className="h-3 w-3 ml-1 text-destructive" />}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => handleWhatsApp('wame')}>
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Abrir WhatsApp Web
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleWhatsApp('twilio')}>
+                      <Send className="h-4 w-4 mr-2" />
+                      Enviar via Twilio
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </TooltipTrigger>
+            {!hasPhone && (
+              <TooltipContent>Telefone não cadastrado na carta</TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </div>
   );

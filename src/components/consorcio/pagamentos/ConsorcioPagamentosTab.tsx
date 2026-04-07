@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useConsorcioPagamentos, defaultFilters, PagamentosFiltersState, PagamentoRow } from '@/hooks/useConsorcioPagamentos';
 import { PagamentosKPIs } from './PagamentosKPIs';
 import { PagamentosAlerts } from './PagamentosAlerts';
@@ -6,9 +6,11 @@ import { PagamentosFilters } from './PagamentosFilters';
 import { PagamentosTable } from './PagamentosTable';
 import { PagamentoDetailDrawer } from './PagamentoDetailDrawer';
 import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Download, MessageCircle, X, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { formatCurrency, formatDate } from '@/lib/formatters';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface Props {
   selectedMonth: { start: string; end: string };
@@ -20,6 +22,9 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
   const [pageSize, setPageSize] = useState(200);
   const [detailRow, setDetailRow] = useState<PagamentoRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isSending, setIsSending] = useState(false);
+  const [sendProgress, setSendProgress] = useState({ current: 0, total: 0, skipped: 0 });
 
   const { data, allData, isLoading, kpis, alertData, totalItems, totalPages, filterOptions } = useConsorcioPagamentos(filters, page, pageSize, selectedMonth);
 
@@ -59,10 +64,97 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
     XLSX.writeFile(wb, 'pagamentos_consorcio.xlsx');
   };
 
+  const handleBulkWhatsApp = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    setIsSending(true);
+    setSendProgress({ current: 0, total: ids.length, skipped: 0 });
+    let skipped = 0;
+
+    for (let i = 0; i < ids.length; i++) {
+      setSendProgress(prev => ({ ...prev, current: i + 1 }));
+
+      // Find the boleto for this installment
+      const { data: boletos } = await supabase
+        .from('consorcio_boletos')
+        .select('id')
+        .eq('installment_id', ids[i])
+        .limit(1);
+
+      if (!boletos || boletos.length === 0) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        const { data: result, error } = await supabase.functions.invoke('send-boleto-whatsapp', {
+          body: { boletoId: boletos[0].id, mode: 'wame' },
+        });
+
+        if (error || !result?.success) {
+          skipped++;
+          continue;
+        }
+
+        if (result.wameUrl) {
+          window.open(result.wameUrl, '_blank');
+          // Small delay to avoid popup blockers
+          if (i < ids.length - 1) {
+            await new Promise(r => setTimeout(r, 1500));
+          }
+        }
+      } catch {
+        skipped++;
+      }
+    }
+
+    setSendProgress(prev => ({ ...prev, skipped }));
+    setIsSending(false);
+    setSelectedIds(new Set());
+
+    const sent = ids.length - skipped;
+    if (sent > 0) toast.success(`${sent} link(s) WhatsApp aberto(s)`);
+    if (skipped > 0) toast.warning(`${skipped} boleto(s) ignorado(s) (sem telefone ou erro)`);
+  }, [selectedIds]);
+
+  const handleClearSelection = () => setSelectedIds(new Set());
+
   return (
     <div className="space-y-4">
       <PagamentosKPIs data={kpis} isLoading={isLoading} />
       <PagamentosAlerts {...alertData} />
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20">
+          <Badge variant="secondary" className="text-sm">
+            {selectedIds.size} selecionado(s)
+          </Badge>
+          <Button
+            size="sm"
+            onClick={handleBulkWhatsApp}
+            disabled={isSending}
+            className="gap-1.5"
+          >
+            {isSending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Enviando {sendProgress.current}/{sendProgress.total}...
+              </>
+            ) : (
+              <>
+                <MessageCircle className="h-4 w-4" />
+                Enviar WhatsApp ({selectedIds.size})
+              </>
+            )}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleClearSelection} disabled={isSending}>
+            <X className="h-4 w-4 mr-1" />
+            Limpar
+          </Button>
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <PagamentosFilters filters={filters} onChange={handleFilterChange} options={filterOptions} />
@@ -84,6 +176,8 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
         onPageChange={setPage}
         onPageSizeChange={handlePageSizeChange}
         onViewDetail={handleViewDetail}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
       />
 
       <PagamentoDetailDrawer
