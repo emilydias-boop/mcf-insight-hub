@@ -45,6 +45,7 @@ interface WorkingDay {
   ano_mes: string;
   dias_uteis_base: number;
   dias_uteis_final: number;
+  dias_uteis_closer: number | null;
   feriados_nacionais: string[] | null;
   paradas_empresa: string[] | null;
   ifood_valor_dia: number;
