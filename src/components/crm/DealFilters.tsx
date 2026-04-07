@@ -148,6 +148,7 @@ export const DealFilters = ({
     filters.salesChannel !== 'all',
     filters.attemptsRange !== null,
     filters.tagFilters.length > 0,
+    filters.productFilters.length > 0,
     filters.activityPriority !== 'all',
     filters.outsideFilter !== 'all',
   ].filter(Boolean).length;
