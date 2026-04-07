@@ -68,7 +68,7 @@ export function BoletoReviewDialog({ open, onOpenChange }: Props) {
           />
         </div>
 
-        <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
+        <ScrollArea className="h-[60vh] -mx-6 px-6">
           {isLoading ? (
             <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>
           ) : filtered.length === 0 ? (
@@ -103,7 +103,10 @@ function BoletoReviewCard({
   onOpenPdf: () => void;
   isConfirming: boolean;
 }) {
+  const hasCard = !!boleto.card_id;
+
   const hasMismatch = (field: 'grupo' | 'cota' | 'nome') => {
+    if (!hasCard) return false;
     if (field === 'grupo') return boleto.grupo_extraido !== boleto.card_grupo;
     if (field === 'cota') return boleto.cota_extraida !== boleto.card_cota;
     if (field === 'nome') {
@@ -119,9 +122,11 @@ function BoletoReviewCard({
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant={boleto.match_confidence === 'partial' ? 'secondary' : 'destructive'} className="text-xs">
-              {boleto.match_confidence === 'partial' ? 'Parcial' : 'Pendente'}
-            </Badge>
+            {hasCard ? (
+              <Badge variant="secondary" className="text-xs">Parcial</Badge>
+            ) : (
+              <Badge variant="destructive" className="text-xs">Sem Vínculo</Badge>
+            )}
             {boleto.valor_extraido && (
               <span className="text-sm font-medium">{formatCurrency(boleto.valor_extraido)}</span>
             )}
@@ -130,36 +135,55 @@ function BoletoReviewCard({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-            <div>
-              <span className="text-muted-foreground">PDF Nome: </span>
-              <span className={hasMismatch('nome') ? 'text-amber-600 font-medium' : ''}>{boleto.nome_extraido || '—'}</span>
+          {hasCard ? (
+            <>
+              <p className="text-sm font-semibold text-primary">
+                Vinculado a: {boleto.card_nome || '—'} (G{boleto.card_grupo}/C{boleto.card_cota})
+              </p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <div>
+                  <span className="text-muted-foreground">PDF Nome: </span>
+                  <span className={hasMismatch('nome') ? 'text-amber-600 font-medium' : ''}>{boleto.nome_extraido || '—'}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Card Nome: </span>
+                  <span>{boleto.card_nome || '—'}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">PDF Grupo/Cota: </span>
+                  <span className={hasMismatch('grupo') || hasMismatch('cota') ? 'text-amber-600 font-medium' : ''}>
+                    {boleto.grupo_extraido || '—'}/{boleto.cota_extraida || '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Card Grupo/Cota: </span>
+                  <span>{boleto.card_grupo || '—'}/{boleto.card_cota || '—'}</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-xs space-y-1">
+              <p className="text-muted-foreground italic">Nenhuma carta vinculada — necessário vincular manualmente.</p>
+              <div>
+                <span className="text-muted-foreground">PDF Nome: </span>
+                <span>{boleto.nome_extraido || '—'}</span>
+                <span className="text-muted-foreground ml-3">Grupo/Cota: </span>
+                <span>{boleto.grupo_extraido || '—'}/{boleto.cota_extraida || '—'}</span>
+              </div>
             </div>
-            <div>
-              <span className="text-muted-foreground">Card Nome: </span>
-              <span>{boleto.card_nome || '—'}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">PDF Grupo/Cota: </span>
-              <span className={hasMismatch('grupo') || hasMismatch('cota') ? 'text-amber-600 font-medium' : ''}>
-                {boleto.grupo_extraido || '—'}/{boleto.cota_extraida || '—'}
-              </span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Card Grupo/Cota: </span>
-              <span>{boleto.card_grupo || '—'}/{boleto.card_cota || '—'}</span>
-            </div>
-          </div>
+          )}
         </div>
 
         <div className="flex gap-1 shrink-0">
           <Button size="sm" variant="ghost" onClick={onOpenPdf} title="Ver PDF">
             <ExternalLink className="h-4 w-4" />
           </Button>
-          <Button size="sm" variant="outline" onClick={onConfirm} disabled={isConfirming} title="Confirmar match">
-            <Check className="h-4 w-4 mr-1" />
-            Confirmar
-          </Button>
+          {hasCard && (
+            <Button size="sm" variant="outline" onClick={onConfirm} disabled={isConfirming} title="Confirmar match">
+              <Check className="h-4 w-4 mr-1" />
+              Confirmar
+            </Button>
+          )}
         </div>
       </div>
     </div>
