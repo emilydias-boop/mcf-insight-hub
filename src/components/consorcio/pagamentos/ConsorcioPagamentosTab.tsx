@@ -1,15 +1,12 @@
 import { useState } from 'react';
 import { useConsorcioPagamentos, defaultFilters, PagamentosFiltersState, PagamentoRow } from '@/hooks/useConsorcioPagamentos';
-import { useBoletosReview } from '@/hooks/useConsorcioBoletos';
 import { PagamentosKPIs } from './PagamentosKPIs';
 import { PagamentosAlerts } from './PagamentosAlerts';
 import { PagamentosFilters } from './PagamentosFilters';
 import { PagamentosTable } from './PagamentosTable';
 import { PagamentoDetailDrawer } from './PagamentoDetailDrawer';
-import { BoletoReviewDialog } from './BoletoReviewDialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Download, AlertTriangle } from 'lucide-react';
+import { Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 
