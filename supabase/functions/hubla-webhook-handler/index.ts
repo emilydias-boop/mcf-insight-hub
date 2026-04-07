@@ -1526,54 +1526,115 @@ async function createDealForConsorcioProduct(supabase: any, data: ConsorcioDealD
       console.log(`🏦 [CONSÓRCIO] Deal existente para vincular: ${linkedDealId} (${existingDeal.name})`);
     }
     
-    // 5b. Se é ob_construir_alugar e o contato já tem deal no Inside Sales (comprou A010),
-    // NÃO criar deal no Viver de Aluguel — apenas adicionar tag ao deal existente
-    if (data.productCategory === 'ob_construir_alugar' && existingDeal) {
+    // 5b. Se é ob_construir_alugar, fazer verificação DEDICADA de A010/Inside Sales
+    // Buscar em TODOS os contatos com este email (não só o contactId encontrado)
+    if (data.productCategory === 'ob_construir_alugar') {
       const INSIDE_SALES_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
-      if (existingDeal.origin_id === INSIDE_SALES_ORIGIN_ID) {
-        console.log(`🏦 [CONSÓRCIO] ob_construir_alugar: Contato já tem deal no Inside Sales (${existingDeal.id}). Adicionando tag em vez de criar deal no Viver de Aluguel.`);
-        
-        const currentTags = existingDeal.tags || [];
-        if (!currentTags.includes('ob-construir-alugar')) {
-          await supabase
-            .from('crm_deals')
-            .update({
-              tags: [...currentTags, 'ob-construir-alugar'],
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingDeal.id);
-          console.log(`🏦 [CONSÓRCIO] Tag 'ob-construir-alugar' adicionada ao deal ${existingDeal.id}`);
-        }
-        
-        // Registrar atividade no deal
-        await supabase
-          .from('deal_activities')
-          .insert({
-            deal_id: existingDeal.id,
-            activity_type: 'note',
-            description: `🔗 Cliente comprou order bump "Construir Para Alugar" — registrado como tag (deal já no Inside Sales)`,
-            metadata: { product_name: data.productName, value: data.value }
-          });
-        
-        return; // Não criar deal no Viver de Aluguel
-      }
-    }
-    
-    // 5c. Se é ob_construir_alugar e o contato tem compra A010 confirmada (mas sem deal ainda),
-    // também não criar deal separado — o A010 webhook vai criar o deal correto
-    if (data.productCategory === 'ob_construir_alugar' && !existingDeal && data.email) {
-      const { data: a010Purchase } = await supabase
-        .from('hubla_transactions')
-        .select('id')
-        .ilike('customer_email', data.email)
-        .in('product_category', ['a010'])
-        .eq('sale_status', 'completed')
+      
+      // Verificação 1: Deal no Inside Sales para ESTE contato
+      const { data: insideSalesDeal } = await supabase
+        .from('crm_deals')
+        .select('id, tags')
+        .eq('contact_id', contactId)
+        .eq('origin_id', INSIDE_SALES_ORIGIN_ID)
         .limit(1)
         .maybeSingle();
       
-      if (a010Purchase) {
-        console.log(`🏦 [CONSÓRCIO] ob_construir_alugar: Contato tem compra A010 confirmada mas sem deal ainda. Pulando criação no Viver de Aluguel (A010 webhook criará o deal).`);
+      if (insideSalesDeal) {
+        console.log(`🏦 [CONSÓRCIO] ob_construir_alugar: Contato já tem deal no Inside Sales (${insideSalesDeal.id}). Adicionando tag.`);
+        const currentTags = insideSalesDeal.tags || [];
+        if (!currentTags.includes('ob-construir-alugar')) {
+          await supabase.from('crm_deals').update({
+            tags: [...currentTags, 'ob-construir-alugar'],
+            updated_at: new Date().toISOString()
+          }).eq('id', insideSalesDeal.id);
+        }
+        await supabase.from('deal_activities').insert({
+          deal_id: insideSalesDeal.id,
+          activity_type: 'note',
+          description: `🔗 Cliente comprou order bump "Construir Para Alugar" — registrado como tag (deal já no Inside Sales)`,
+          metadata: { product_name: data.productName, value: data.value }
+        });
         return;
+      }
+      
+      // Verificação 2: Deal no Inside Sales via OUTROS contatos com mesmo email
+      if (data.email) {
+        const { data: crossEmailDeal } = await supabase
+          .from('crm_deals')
+          .select('id, tags, crm_contacts!inner(email)')
+          .eq('origin_id', INSIDE_SALES_ORIGIN_ID)
+          .ilike('crm_contacts.email', data.email)
+          .limit(1)
+          .maybeSingle();
+        
+        if (crossEmailDeal) {
+          console.log(`🏦 [CONSÓRCIO] ob_construir_alugar: Deal no Inside Sales encontrado via cross-email (${crossEmailDeal.id}). Adicionando tag.`);
+          const currentTags = crossEmailDeal.tags || [];
+          if (!currentTags.includes('ob-construir-alugar')) {
+            await supabase.from('crm_deals').update({
+              tags: [...currentTags, 'ob-construir-alugar'],
+              updated_at: new Date().toISOString()
+            }).eq('id', crossEmailDeal.id);
+          }
+          await supabase.from('deal_activities').insert({
+            deal_id: crossEmailDeal.id,
+            activity_type: 'note',
+            description: `🔗 Cliente comprou order bump "Construir Para Alugar" — registrado como tag (deal no Inside Sales via cross-email)`,
+            metadata: { product_name: data.productName, value: data.value }
+          });
+          return;
+        }
+      }
+      
+      // Verificação 3: Deal no Inside Sales via telefone (sufixo 9 dígitos)
+      if (normalizedPhone) {
+        const phoneDigits = normalizedPhone.replace(/\D/g, '');
+        const phoneSuffix = phoneDigits.slice(-9);
+        if (phoneSuffix.length >= 8) {
+          const { data: crossPhoneDeal } = await supabase
+            .from('crm_deals')
+            .select('id, tags, crm_contacts!inner(phone)')
+            .eq('origin_id', INSIDE_SALES_ORIGIN_ID)
+            .like('crm_contacts.phone', `%${phoneSuffix}`)
+            .limit(1)
+            .maybeSingle();
+          
+          if (crossPhoneDeal) {
+            console.log(`🏦 [CONSÓRCIO] ob_construir_alugar: Deal no Inside Sales encontrado via cross-phone (${crossPhoneDeal.id}). Adicionando tag.`);
+            const currentTags = crossPhoneDeal.tags || [];
+            if (!currentTags.includes('ob-construir-alugar')) {
+              await supabase.from('crm_deals').update({
+                tags: [...currentTags, 'ob-construir-alugar'],
+                updated_at: new Date().toISOString()
+              }).eq('id', crossPhoneDeal.id);
+            }
+            await supabase.from('deal_activities').insert({
+              deal_id: crossPhoneDeal.id,
+              activity_type: 'note',
+              description: `🔗 Cliente comprou order bump "Construir Para Alugar" — registrado como tag (deal no Inside Sales via cross-phone)`,
+              metadata: { product_name: data.productName, value: data.value }
+            });
+            return;
+          }
+        }
+      }
+      
+      // Verificação 4: Compra A010 confirmada SEM deal ainda — bloquear Viver
+      if (data.email) {
+        const { data: a010Purchase } = await supabase
+          .from('hubla_transactions')
+          .select('id')
+          .ilike('customer_email', data.email)
+          .in('product_category', ['a010'])
+          .eq('sale_status', 'completed')
+          .limit(1)
+          .maybeSingle();
+        
+        if (a010Purchase) {
+          console.log(`🏦 [CONSÓRCIO] ob_construir_alugar: Compra A010 confirmada mas sem deal. Bloqueando Viver (A010 webhook criará o deal).`);
+          return;
+        }
       }
     }
     
