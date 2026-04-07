@@ -15,6 +15,7 @@ import { CobrancaDetailDrawer } from './CobrancaDetailDrawer';
 import { CreateSubscriptionModal } from './CreateSubscriptionModal';
 import { CobrancaQueue } from './CobrancaQueue';
 import { CobrancaAlertPanel } from '@/components/shared/CobrancaAlertPanel';
+import { CobrancaHistoryPanel } from '@/components/shared/CobrancaHistoryPanel';
 import { Plus, RefreshCw, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
