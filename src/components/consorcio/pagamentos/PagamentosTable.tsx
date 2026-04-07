@@ -40,6 +40,8 @@ interface Props {
   onViewDetail: (row: PagamentoRow) => void;
   selectedIds: Set<string>;
   onSelectionChange: (ids: Set<string>) => void;
+  bulkMode: boolean;
+  filtroBoleto: string;
 }
 
 export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange }: Props) {

@@ -49,6 +49,7 @@ export interface PagamentosFiltersState {
   tipo: string;
   diaVencimento: string;
   apenasVencendoSemana: boolean;
+  filtroBoleto: string;
 }
 
 export const defaultFilters: PagamentosFiltersState = {
@@ -57,6 +58,7 @@ export const defaultFilters: PagamentosFiltersState = {
   tipo: 'todos',
   diaVencimento: 'todos',
   apenasVencendoSemana: false,
+  filtroBoleto: 'todos',
 };
 
 function calcStatusParcela(inst: { status: string; data_pagamento: string | null; data_vencimento: string }): StatusParcela {
