@@ -1,45 +1,25 @@
 
 
-# Reorganizar Filtros da Página Pagamentos Consórcio
-
-## Resumo das mudanças
-
-Simplificar os filtros removendo redundâncias e adicionando filtro por dia de vencimento.
+# Simplificar Ações da Tabela de Pagamentos Consórcio
 
 ## Mudanças
 
-### 1. Filtros a remover
-- **Situação Cota** — redundante com Status
-- **Responsável** — não necessário nesta visão
-- **Origens** — não necessário nesta visão
-- **Período (De/Até)** — sem utilidade clara (já há filtro por mês no topo)
-- **Apenas inadimplentes** e **Apenas quitadas** — remover toggles
+### `src/components/consorcio/pagamentos/PagamentosTable.tsx`
 
-### 2. Filtros a manter
-- **Busca** (texto livre)
-- **Status** (Paga, Pendente, Vencendo, Atrasada)
-- **Tipo** (Cliente, Empresa)
-- **Vencendo esta semana** (toggle)
+1. **Linha clicável**: Adicionar `onClick={() => onViewDetail(row)}` e `cursor-pointer` no `TableRow` para abrir o drawer de detalhes ao clicar em qualquer célula da linha.
 
-### 3. Filtro novo: Dia de Vencimento
-Dropdown com os dias de vencimento encontrados nos dados (ex: "Dia 5", "Dia 10", "Dia 15", "Dia 20"). Extraído dinamicamente do campo `data_vencimento` (pega o dia do mês). Filtra parcelas cujo vencimento cai naquele dia.
+2. **Remover dropdown (3 pontos)**: Eliminar completamente o `DropdownMenu` com `MoreHorizontal`. O botão de "Marcar como paga" (CheckCircle) já existe isolado e é suficiente. A coluna "Ações" passa a ter apenas esse botão.
 
-## Arquivos alterados
+3. **Boleto clicável**: Na coluna "Boleto", quando há boleto (`boletoInstallmentIds.has(row.id)`), transformar o ícone `FileText` em um botão clicável que abre o PDF do boleto diretamente. Para isso:
+   - Criar um mapa `boletosByInstallment` (installment_id → boleto) a partir dos boletos carregados
+   - Usar `useBoletoSignedUrl` não é viável por boleto individual (muitos hooks). Em vez disso, ao clicar no ícone de boleto, abrir o drawer de detalhes (mesmo `onViewDetail`) onde o PDF já está acessível via `BoletoSection`.
+   - **Alternativa mais prática**: Fazer o ícone de boleto buscar o `storage_path` do boleto correspondente e gerar a URL assinada on-click via `supabase.storage.from('consorcio-boletos').createSignedUrl(path, 300)` para abrir em nova aba.
 
-### `src/hooks/useConsorcioPagamentos.ts`
-- Remover do `PagamentosFiltersState`: `situacaoCota`, `grupo`, `responsavel`, `origem`, `periodoInicio`, `periodoFim`, `apenasInadimplentes`, `apenasQuitadas`
-- Adicionar: `diaVencimento: string` (default `'todos'`)
-- Atualizar `defaultFilters`
-- Remover filtros correspondentes do `filteredData`
-- Adicionar filtro por dia: extrair dia do `data_vencimento` e comparar
-- Atualizar `filterOptions`: remover `responsaveis`/`origens`, adicionar `diasVencimento: number[]`
+4. **Prevenir conflito de clique**: Nos botões de ação (CheckCircle e Boleto), usar `e.stopPropagation()` para que o clique no botão não dispare o `onViewDetail` da linha.
 
-### `src/components/consorcio/pagamentos/PagamentosFilters.tsx`
-- Remover selects de Situação, Grupo, Responsável, Origens, campos de data
-- Remover toggles de inadimplentes e quitadas
-- Adicionar select de "Dia Vencimento" com opções dinâmicas
-- Manter: busca, status, tipo, toggle vencendo esta semana
-
-### `src/components/consorcio/pagamentos/ConsorcioPagamentosTab.tsx`
-- Ajustar props de `filterOptions` (remover campos antigos)
+### Resultado
+- Clicar na linha → abre drawer de detalhes
+- Clicar no ícone de boleto → abre PDF em nova aba
+- Clicar no CheckCircle → marca como paga
+- Dropdown de 3 pontos removido (redundante)
 
