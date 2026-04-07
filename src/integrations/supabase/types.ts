@@ -2316,6 +2316,61 @@ export type Database = {
           },
         ]
       }
+      cobranca_acoes: {
+        Row: {
+          billing_installment_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          installment_id: string | null
+          observacao: string | null
+          subscription_id: string | null
+          tipo_acao: Database["public"]["Enums"]["cobranca_acao_tipo"]
+        }
+        Insert: {
+          billing_installment_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          installment_id?: string | null
+          observacao?: string | null
+          subscription_id?: string | null
+          tipo_acao: Database["public"]["Enums"]["cobranca_acao_tipo"]
+        }
+        Update: {
+          billing_installment_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          installment_id?: string | null
+          observacao?: string | null
+          subscription_id?: string | null
+          tipo_acao?: Database["public"]["Enums"]["cobranca_acao_tipo"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobranca_acoes_billing_installment_id_fkey"
+            columns: ["billing_installment_id"]
+            isOneToOne: false
+            referencedRelation: "billing_installments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_acoes_installment_id_fkey"
+            columns: ["installment_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_installments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_acoes_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "billing_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_boletos: {
         Row: {
           card_id: string | null
@@ -11146,6 +11201,11 @@ export type Database = {
         | "cancelada"
         | "finalizada"
         | "quitada"
+      cobranca_acao_tipo:
+        | "boleto_enviado"
+        | "lead_respondeu"
+        | "sem_retorno"
+        | "pago_confirmado"
       flag_category:
         | "desempenho"
         | "comportamento"
@@ -11426,6 +11486,12 @@ export const Constants = {
         "cancelada",
         "finalizada",
         "quitada",
+      ],
+      cobranca_acao_tipo: [
+        "boleto_enviado",
+        "lead_respondeu",
+        "sem_retorno",
+        "pago_confirmado",
       ],
       flag_category: [
         "desempenho",

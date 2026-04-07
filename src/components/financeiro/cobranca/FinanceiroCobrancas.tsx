@@ -5,6 +5,7 @@ import { BillingSubscription, BillingFilters, SUBSCRIPTION_STATUS_LABELS, PAYMEN
 import { useBillingSubscriptions, useBillingKPIs } from '@/hooks/useBillingSubscriptions';
 import { useBillingMonthKPIs } from '@/hooks/useBillingMonthKPIs';
 import { useSyncBillingFromHubla } from '@/hooks/useSyncBillingFromHubla';
+import { useBillingCobrancaAlerts } from '@/hooks/useCobrancaAlerts';
 import { CobrancaKPIs } from './CobrancaKPIs';
 import { CobrancaMonthSelector } from './CobrancaMonthSelector';
 import { CobrancaMonthKPIs } from './CobrancaMonthKPIs';
@@ -13,6 +14,7 @@ import { CobrancaTable } from './CobrancaTable';
 import { CobrancaDetailDrawer } from './CobrancaDetailDrawer';
 import { CreateSubscriptionModal } from './CreateSubscriptionModal';
 import { CobrancaQueue } from './CobrancaQueue';
+import { CobrancaAlertPanel } from '@/components/shared/CobrancaAlertPanel';
 import { Plus, RefreshCw, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -26,10 +28,22 @@ export const FinanceiroCobrancas = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const syncMutation = useSyncBillingFromHubla();
+  const { data: billingAlerts = [], isLoading: loadingBillingAlerts } = useBillingCobrancaAlerts();
 
   const { data: kpis, isLoading: loadingKpis } = useBillingKPIs(currentMonth);
   const { data: subscriptions = [], isLoading: loadingSubs } = useBillingSubscriptions({ ...filters, month: currentMonth });
   const { data: monthKpis, isLoading: loadingMonthKpis } = useBillingMonthKPIs(currentMonth);
+
+  const billingAlertItems = billingAlerts.map(a => ({
+    id: a.installment_id,
+    label: a.customer_name,
+    sublabel: a.product_name || undefined,
+    numero_parcela: a.numero_parcela,
+    valor: a.valor_original,
+    data_vencimento: a.data_vencimento,
+    dias_para_vencer: a.dias_para_vencer,
+    priority: a.priority,
+  }));
 
   const monthLabel = format(currentMonth, 'MMM/yy', { locale: ptBR });
 
@@ -67,6 +81,12 @@ export const FinanceiroCobrancas = () => {
 
   return (
     <div className="space-y-4">
+      <CobrancaAlertPanel
+        alerts={billingAlertItems}
+        isLoading={loadingBillingAlerts}
+        type="billing"
+        title="Parcelas com Vencimento Próximo"
+      />
       <CobrancaKPIs kpis={kpis} isLoading={loadingKpis} />
 
       <CobrancaQueue onSelect={handleSelect} />
