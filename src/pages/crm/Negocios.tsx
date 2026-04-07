@@ -814,6 +814,8 @@ const Negocios = () => {
           ownerOptions={ownerOptions}
           availableTags={availableTags || []}
           isLoadingTags={isLoadingTags}
+          availableProducts={availableProducts}
+          isLoadingProducts={isLoadingProducts}
         />
         
         <div className="flex-1 overflow-hidden p-2 sm:p-4">
