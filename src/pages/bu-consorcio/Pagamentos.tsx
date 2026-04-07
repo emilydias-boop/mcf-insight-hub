@@ -12,6 +12,8 @@ import { ConsorcioPagamentosTab } from '@/components/consorcio/pagamentos/Consor
 import { BoletoUploadDialog } from '@/components/consorcio/pagamentos/BoletoUploadDialog';
 import { BoletoReviewDialog } from '@/components/consorcio/pagamentos/BoletoReviewDialog';
 import { useBoletosReview } from '@/hooks/useConsorcioBoletos';
+import { useConsorcioCobrancaAlerts } from '@/hooks/useCobrancaAlerts';
+import { CobrancaAlertPanel } from '@/components/shared/CobrancaAlertPanel';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle } from 'lucide-react';
