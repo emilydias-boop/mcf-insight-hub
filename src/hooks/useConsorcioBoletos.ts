@@ -201,6 +201,24 @@ export function useRelinkBoleto() {
   });
 }
 
+export function useSearchConsortiumCards(searchTerm: string) {
+  return useQuery({
+    queryKey: ['consortium-cards-search', searchTerm],
+    queryFn: async () => {
+      if (!searchTerm || searchTerm.length < 2) return [];
+      const term = `%${searchTerm}%`;
+      const { data, error } = await supabase
+        .from('consortium_cards')
+        .select('id, nome_completo, grupo, cota')
+        .or(`nome_completo.ilike.${term},grupo.ilike.${term},cota.ilike.${term}`)
+        .limit(10);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: searchTerm.length >= 2,
+  });
+}
+
 export function useBoletoSignedUrl(storagePath: string | null) {
   return useQuery({
     queryKey: ['boleto-url', storagePath],

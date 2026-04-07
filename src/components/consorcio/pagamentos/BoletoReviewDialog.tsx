@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Check, ExternalLink, Search, AlertTriangle } from 'lucide-react';
-import { useBoletosReview, useConfirmBoletoMatch, BoletoReviewItem } from '@/hooks/useConsorcioBoletos';
+import { Check, ExternalLink, Search, AlertTriangle, Link2, X } from 'lucide-react';
+import { useBoletosReview, useConfirmBoletoMatch, useRelinkBoleto, useSearchConsortiumCards, BoletoReviewItem } from '@/hooks/useConsorcioBoletos';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatters';
@@ -92,6 +92,60 @@ export function BoletoReviewDialog({ open, onOpenChange }: Props) {
   );
 }
 
+function CardSearchInline({ boletoId, onClose }: { boletoId: string; onClose: () => void }) {
+  const [term, setTerm] = useState('');
+  const { data: results = [], isLoading } = useSearchConsortiumCards(term);
+  const relinkMutation = useRelinkBoleto();
+
+  const handleSelect = (cardId: string) => {
+    relinkMutation.mutate({ boletoId, cardId }, {
+      onSuccess: () => onClose(),
+    });
+  };
+
+  return (
+    <div className="mt-2 border rounded-md p-2 bg-muted/30 space-y-2">
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Buscar carta por nome, grupo ou cota..."
+            value={term}
+            onChange={e => setTerm(e.target.value)}
+            className="pl-8 h-8 text-xs"
+            autoFocus
+          />
+        </div>
+        <Button size="sm" variant="ghost" onClick={onClose} className="h-8 w-8 p-0">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {isLoading && <p className="text-xs text-muted-foreground px-1">Buscando...</p>}
+
+      {term.length >= 2 && !isLoading && results.length === 0 && (
+        <p className="text-xs text-muted-foreground px-1">Nenhuma carta encontrada.</p>
+      )}
+
+      {results.length > 0 && (
+        <div className="max-h-32 overflow-y-auto space-y-1">
+          {results.map(card => (
+            <button
+              key={card.id}
+              onClick={() => handleSelect(card.id)}
+              disabled={relinkMutation.isPending}
+              className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-accent transition-colors flex items-center justify-between gap-2"
+            >
+              <span className="truncate font-medium">{card.nome_completo}</span>
+              <span className="text-muted-foreground shrink-0">G{card.grupo}/C{card.cota}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BoletoReviewCard({
   boleto,
   onConfirm,
@@ -104,6 +158,7 @@ function BoletoReviewCard({
   isConfirming: boolean;
 }) {
   const hasCard = !!boleto.card_id;
+  const [linking, setLinking] = useState(false);
 
   const hasMismatch = (field: 'grupo' | 'cota' | 'nome') => {
     if (!hasCard) return false;
@@ -163,7 +218,7 @@ function BoletoReviewCard({
             </>
           ) : (
             <div className="text-xs space-y-1">
-              <p className="text-muted-foreground italic">Nenhuma carta vinculada — necessário vincular manualmente.</p>
+              <p className="text-muted-foreground italic">Nenhuma carta vinculada — vincule manualmente abaixo.</p>
               <div>
                 <span className="text-muted-foreground">PDF Nome: </span>
                 <span>{boleto.nome_extraido || '—'}</span>
@@ -184,8 +239,21 @@ function BoletoReviewCard({
               Confirmar
             </Button>
           )}
+          <Button
+            size="sm"
+            variant={hasCard ? 'ghost' : 'default'}
+            onClick={() => setLinking(!linking)}
+            title={hasCard ? 'Corrigir vinculação' : 'Vincular carta'}
+          >
+            <Link2 className="h-4 w-4 mr-1" />
+            {hasCard ? 'Corrigir' : 'Vincular'}
+          </Button>
         </div>
       </div>
+
+      {linking && (
+        <CardSearchInline boletoId={boleto.id} onClose={() => setLinking(false)} />
+      )}
     </div>
   );
 }
