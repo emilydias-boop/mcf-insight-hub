@@ -28,10 +28,22 @@ export const FinanceiroCobrancas = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const syncMutation = useSyncBillingFromHubla();
+  const { data: billingAlerts = [], isLoading: loadingBillingAlerts } = useBillingCobrancaAlerts();
 
   const { data: kpis, isLoading: loadingKpis } = useBillingKPIs(currentMonth);
   const { data: subscriptions = [], isLoading: loadingSubs } = useBillingSubscriptions({ ...filters, month: currentMonth });
   const { data: monthKpis, isLoading: loadingMonthKpis } = useBillingMonthKPIs(currentMonth);
+
+  const billingAlertItems = billingAlerts.map(a => ({
+    id: a.installment_id,
+    label: a.customer_name,
+    sublabel: a.product_name || undefined,
+    numero_parcela: a.numero_parcela,
+    valor: a.valor_original,
+    data_vencimento: a.data_vencimento,
+    dias_para_vencer: a.dias_para_vencer,
+    priority: a.priority,
+  }));
 
   const monthLabel = format(currentMonth, 'MMM/yy', { locale: ptBR });
 
