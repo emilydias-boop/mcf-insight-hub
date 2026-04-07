@@ -1,23 +1,26 @@
 
-
-# Corrigir Nomes dos 5 Leads com CPF
+# Compactar Tabela de Resultados da Planilha
 
 ## Problema
-5 contatos e deals foram salvos com CPF no lugar do nome durante importacao por planilha.
+A tabela de resultados mostra todas as colunas extras da planilha (Estado, Cidade, Bairro, Rua, Numero, Complemento, CEP) como colunas separadas, forçando scroll horizontal. O usuario precisa arrastar para ver Nome/Tel do Sistema e Pipeline/Estagio.
 
-## Correcao
-Usar o insert tool (UPDATE) para corrigir tanto `crm_contacts.name` quanto `crm_deals.name` dos 5 registros.
+## Solucao
+Remover as colunas extras da tabela principal e mostrar em uma linha expansivel (accordion row). Clicar na linha expande uma sub-row com os dados extras em grid compacto.
 
-Nomes derivados dos emails:
-- 82778485520 → **Hernani Costa**
-- 05910937405 → **Marcia** (confirmar sobrenome com usuario)
-- 40923895825 → **Flavia Rodrigues**
-- 01414776446 → **Lidyana Wanessa**
-- 84181966100 → **Ronaldo Forasteiro**
+### Mudancas em `SpreadsheetCompareDialog.tsx`
 
-### Execucao
-2 UPDATEs por registro (contato + deal), total 10 statements.
+**Tabela principal** — colunas fixas apenas:
+- Status | Nome (Planilha) | Tel (Planilha) | Nome (Sistema) | Tel (Sistema) | Pipeline/Estagio
 
-### Confirmacao necessaria
-O nome "Marcia" (email smarcia01@hotmail.com) esta incompleto — voce sabe o nome completo dela?
+**Linha expansivel** — ao clicar numa linha:
+- Expande sub-row abaixo com grid 3-4 colunas mostrando as colunas extras (Cliente, Estado, Cidade, Bairro, Rua, etc.)
+- Icone de chevron na primeira coluna indica que a linha e expansivel (so aparece se tem extras)
 
+**Busca** — continua buscando nas colunas extras normalmente (ja funciona)
+
+**Exportar** — continua exportando todas as colunas (sem mudanca)
+
+### Arquivo
+| Arquivo | Acao |
+|---------|------|
+| `src/components/crm/SpreadsheetCompareDialog.tsx` | Colapsar extras em row expansivel |
