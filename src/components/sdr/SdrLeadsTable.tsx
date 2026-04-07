@@ -114,7 +114,7 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
     });
   }, [meetings, statusFilter, typeFilter, searchQuery, dateFilter, meetingDateFilter]);
 
-  const hasActiveFilters = statusFilter !== "all" || typeFilter !== "all" || searchQuery !== "" || dateFilter !== undefined;
+  const hasActiveFilters = statusFilter !== "all" || typeFilter !== "all" || searchQuery !== "" || dateFilter !== undefined || meetingDateFilter !== undefined;
 
   if (isLoading) {
     return (
