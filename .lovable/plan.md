@@ -1,37 +1,29 @@
 
 
-# Distribuir 16 leads sem dono para os SDRs da Inside Sales
+# Corrigir visibilidade de leads no agendamento para SDRs
 
-## Diagnóstico confirmado
-- **16 deals** sem owner na pipeline Inside Sales (não 13 como estimado antes)
-- **0 duplicatas** — todos verificados por email, nenhum tem outro deal na mesma pipeline
-- Inclui 13 recuperados A010/Hubla + 2 order bumps + 1 contrato avulso
+## Problema
+Na página **Agenda R1** (`/crm/agenda`), o `QuickScheduleModal` é renderizado **sem** a prop `ownerEmail`. Isso significa que quando um SDR busca um lead para agendar, ele vê **todos os leads** da BU, não apenas os seus. O mesmo ocorre no `R2QuickScheduleModal` em **Agenda R2**.
 
-## SDRs ativos na distribuição (8 pessoas)
-Os mesmos 8 SDRs do `lead_distribution_config` da origin Inside Sales.
+A proteção já existe no hook `useSearchDealsForSchedule` — ele aceita `ownerEmail` e filtra por `owner_id`. Porém, as páginas de Agenda não passam esse parâmetro para SDRs.
 
-## Distribuição: 16 leads / 8 SDRs = 2 cada
+## Solução
 
-| SDR | Leads |
+### 1. Agenda R1 — `src/pages/crm/Agenda.tsx`
+- Extrair `user` do `useAuth()` (já tem `role`)
+- Calcular `sdrOwnerEmail`: se o role for `sdr`, usar `user.email`; senão, `undefined`
+- Passar `ownerEmail={sdrOwnerEmail}` no `<QuickScheduleModal>`
+
+### 2. Agenda R2 — `src/components/crm/R2QuickScheduleModal.tsx`
+- Importar `useAuth` e obter `role` + `user`
+- Se role for `sdr`, passar `ownerEmail` para `useSearchDealsForSchedule`
+- Atualmente passa apenas `buOriginIds` sem filtro de owner
+
+### Resultado
+SDRs verão apenas seus próprios leads ao buscar no modal de agendamento. Coordenadores, admins e managers continuam vendo todos.
+
+| Arquivo | Alteracao |
 |---|---|
-| Caroline Corrêa | 2 |
-| Mayara Souza | 2 |
-| Leticia Nunes | 2 |
-| Caroline Souza | 2 |
-| Marcio Dantas | 2 |
-| Julia Caroline | 2 |
-| Robert Gusmão | 2 |
-| Alex Dias | 2 |
-
-## Execução
-Uma migration SQL que:
-1. Busca os 16 deal IDs sem owner na Inside Sales (criados desde 06/04)
-2. Busca os 8 SDRs e seus profile IDs do `lead_distribution_config`
-3. Atribui `owner_id` (email) e `owner_profile_id` (UUID) — 2 leads por SDR, round-robin por ordem de `current_count`
-4. Incrementa `current_count` em +2 para cada SDR
-5. Registra `deal_activities` com `activity_type = 'owner_change'` para cada atribuição
-
-| Arquivo | Acao |
-|---|---|
-| `supabase/migrations/*.sql` | UPDATE owner nos 16 deals + incrementar contadores + registrar atividades |
+| `src/pages/crm/Agenda.tsx` | Passar `ownerEmail` para `QuickScheduleModal` quando role = sdr |
+| `src/components/crm/R2QuickScheduleModal.tsx` | Filtrar busca por `ownerEmail` quando role = sdr |
 
