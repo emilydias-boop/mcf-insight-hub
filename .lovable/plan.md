@@ -1,21 +1,16 @@
 
 
-# Mover botão "Revisar Boletos" para o header da página
+# Fix: Botão "Revisar Boletos" não aparece — erro na query
 
-## Problema
-O botão "Revisar Boletos" fica na linha de filtros dentro do `ConsorcioPagamentosTab`, difícil de ver. O usuário quer ele visível no topo, ao lado de "Subir Boletos".
+## Causa raiz
+A query do hook `useBoletosReview` faz join com `consortium_cards` pedindo a coluna `cliente_nome`, que **não existe**. O nome correto é `nome_completo`. Isso causa erro 400 do Supabase, retornando array vazio, e o botão nunca aparece (condição `reviewBoletos.length > 0` é sempre falsa).
 
-## Mudanças
+## Mudança
 
-### `src/pages/bu-consorcio/Pagamentos.tsx`
-- Importar `useBoletosReview` e `BoletoReviewDialog`
-- Adicionar estado `reviewOpen` e botão "Revisar Boletos" com badge de contagem ao lado do `BoletoUploadDialog`, usando variante `destructive` (amber) para destaque
-- Renderizar `BoletoReviewDialog` neste nível
+### `src/hooks/useConsorcioBoletos.ts`
+Na função `useBoletosReview` (aprox. linha 121):
+- Trocar `cliente_nome` por `nome_completo` no select do join: `consortium_cards!consorcio_boletos_card_id_fkey(nome_completo, grupo, cota)`
+- Trocar o mapeamento `b.consortium_cards?.cliente_nome` por `b.consortium_cards?.nome_completo`
 
-### `src/components/consorcio/pagamentos/ConsorcioPagamentosTab.tsx`
-- Remover o botão "Revisar Boletos", o estado `reviewOpen`, o import de `BoletoReviewDialog` e `useBoletosReview` (já que sobe para a página pai)
-
-### Resultado
-- Botão sempre visível no header, ao lado de "Subir Boletos" e seletor de mês
-- Badge com contagem dinâmica dos boletos pendentes de revisão
+Uma linha de código corrigida e o botão vai aparecer com os 40 boletos pendentes.
 
