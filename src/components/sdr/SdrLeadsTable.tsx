@@ -60,6 +60,8 @@ const getStatusBadgeClass = (status: string) => {
 export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeadsTableProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
 
   // Get unique statuses and types
   const { statuses, types } = useMemo(() => {
@@ -82,9 +84,28 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
     return meetings.filter(m => {
       if (statusFilter !== "all" && m.status_atual !== statusFilter) return false;
       if (typeFilter !== "all" && m.tipo !== typeFilter) return false;
+      
+      // Search filter
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const nameMatch = (m.contact_name || '').toLowerCase().includes(q);
+        const emailMatch = (m.contact_email || '').toLowerCase().includes(q);
+        if (!nameMatch && !emailMatch) return false;
+      }
+      
+      // Date filter
+      if (dateFilter) {
+        const dayStart = startOfDay(dateFilter);
+        const dayEnd = endOfDay(dateFilter);
+        const meetingDate = m.scheduled_at ? new Date(m.scheduled_at) : m.data_agendamento ? parseISO(m.data_agendamento) : null;
+        if (!meetingDate || meetingDate < dayStart || meetingDate > dayEnd) return false;
+      }
+      
       return true;
     });
-  }, [meetings, statusFilter, typeFilter]);
+  }, [meetings, statusFilter, typeFilter, searchQuery, dateFilter]);
+
+  const hasActiveFilters = statusFilter !== "all" || typeFilter !== "all" || searchQuery !== "" || dateFilter !== undefined;
 
   if (isLoading) {
     return (
