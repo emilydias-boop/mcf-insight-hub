@@ -297,7 +297,7 @@ serve(async (req) => {
     // Fetch working days calendar for this month
     const { data: calendarData, error: calendarError } = await supabase
       .from('working_days_calendar')
-      .select('ifood_mensal_calculado, dias_uteis_final, ifood_valor_dia')
+      .select('ifood_mensal_calculado, dias_uteis_final, dias_uteis_closer, ifood_valor_dia')
       .eq('ano_mes', ano_mes)
       .single();
 
