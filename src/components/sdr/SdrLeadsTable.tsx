@@ -97,7 +97,7 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
       if (dateFilter) {
         const dayStart = startOfDay(dateFilter);
         const dayEnd = endOfDay(dateFilter);
-        const meetingDate = m.scheduled_at ? new Date(m.scheduled_at) : m.data_agendamento ? parseISO(m.data_agendamento) : null;
+        const meetingDate = m.booked_at ? new Date(m.booked_at) : null;
         if (!meetingDate || meetingDate < dayStart || meetingDate > dayEnd) return false;
       }
       
@@ -148,7 +148,7 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
               )}
             >
               <CalendarIcon className="mr-2 h-3.5 w-3.5" />
-              {dateFilter ? format(dateFilter, "dd/MM/yyyy", { locale: ptBR }) : "Data reunião"}
+              {dateFilter ? format(dateFilter, "dd/MM/yyyy", { locale: ptBR }) : "Agendado em"}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
