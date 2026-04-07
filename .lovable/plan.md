@@ -1,60 +1,50 @@
 
 
-# Filtro de Produtos Adquiridos na Pipeline de Negocios
+# Calendário de Dias Úteis separado para SDR e Closer
 
 ## Problema
-Nao existe forma de filtrar leads por produto adquirido (ex: EFEITO ALAVANCA 2026). Isso impede ações operacionais como identificar e remover leads que pertencem a outra BU.
+Março foi atípico: SDRs não trabalharam dia 31, mas Closers fizeram reuniões. Precisa de um calendário visual onde se seleciona os dias específicos de cada cargo, e o sistema calcula automaticamente a contagem.
 
-## Solucao
+## Solução
 
-### Arquitetura
-Reutilizar o mesmo padrão do filtro de Tags (AND/OR + has/not_has), mas cruzando o email do deal com a tabela `hubla_transactions` para detectar produtos comprados.
+Adicionar uma coluna `dias_uteis_closer` à tabela `working_days_calendar`. Na UI, o dialog de edição ganha dois mini-calendários visuais (um para SDR, outro para Closer) onde se marca/desmarca dias individualmente. O total é calculado automaticamente a partir dos dias selecionados.
 
-```text
-Fluxo:
-1. Negocios.tsx extrai emails dos deals carregados
-2. Novo hook busca em batch: email → lista de produtos comprados (hubla_transactions)
-3. ProductFilterPopover permite selecionar regras (Possui / Nao possui produto X)
-4. Filtro client-side aplica as regras no useMemo de filteredDeals
+### 1. Migration — nova coluna
+```sql
+ALTER TABLE working_days_calendar 
+  ADD COLUMN dias_uteis_closer INTEGER DEFAULT NULL;
 ```
+Quando `dias_uteis_closer` é NULL, o sistema usa `dias_uteis_final` para ambos (comportamento atual preservado).
 
-### Componentes e arquivos
+### 2. UI — WorkingDaysCalendar.tsx
 
-| Arquivo | Acao |
+**Tabela principal**: adicionar coluna "Dias Closer" entre "Dias Final" e "R$/Dia". Mostra o valor ou "-" quando NULL.
+
+**Dialog de edição**: substituir os campos numéricos simples por dois mini-calendários lado a lado:
+- **Calendário SDR**: mostra o mês, dias úteis pré-selecionados (baseado em `dias_uteis_final`). Clicar em um dia adiciona/remove. O total aparece abaixo: "20 dias úteis SDR".
+- **Calendário Closer**: idem, inicializa com `dias_uteis_closer ?? dias_uteis_final`. Total: "21 dias úteis Closer".
+- Os calendários usam o componente `Calendar` já existente com `mode="multiple"`, destacando dias selecionados vs não-selecionados.
+- Feriados nacionais e fins de semana ficam desabilitados por padrão mas podem ser habilitados manualmente.
+- Ao salvar, grava `dias_uteis_final` = count dos dias SDR selecionados e `dias_uteis_closer` = count dos dias Closer selecionados.
+
+### 3. Edge Function — recalculate-sdr-payout
+- Buscar `dias_uteis_closer` junto com `dias_uteis_final` na query do calendário
+- Se o SDR tem `role_type = 'closer'` e `dias_uteis_closer` não é NULL → usar `dias_uteis_closer` como `diasUteisMes`
+- Senão → usar `dias_uteis_final` (comportamento atual)
+- `valor_fixo` **não muda** — continua vindo do comp_plan
+
+### 4. Frontend — useSdrFechamento.ts
+- Na preview dinâmica, aplicar a mesma lógica: se closer e `dias_uteis_closer` disponível, usar esse valor para metas
+
+### 5. Atualizar Março 2026
+Via insert tool: `UPDATE working_days_calendar SET dias_uteis_closer = 21, dias_uteis_final = 20 WHERE ano_mes = '2026-03'`
+
+## Arquivos alterados
+
+| Arquivo | Alteração |
 |---|---|
-| `src/hooks/useProductFilterData.ts` | **Novo** — hook que recebe array de emails, busca `hubla_transactions` (completed/paid), retorna `Map<email, Set<productLabel>>` com produtos classificados |
-| `src/components/crm/ProductFilterPopover.tsx` | **Novo** — UI identica ao TagFilterPopover mas com icone de Package e lista de produtos disponiveis |
-| `src/components/crm/DealFilters.tsx` | Adicionar `productFilters` e `productOperator` ao state + renderizar o ProductFilterPopover |
-| `src/pages/crm/Negocios.tsx` | Chamar o hook com emails dos deals, aplicar filtro de produtos no `filteredDeals` |
-
-### Hook `useProductFilterData`
-- Recebe `emails: string[]`
-- Query unica: `SELECT customer_email, product_name FROM hubla_transactions WHERE customer_email IN (...) AND sale_status IN ('completed','paid')`
-- Classifica cada product_name em um label amigavel (ex: "EFEITO ALAVANCA 2026", "A001", "A010", etc.)
-- Retorna `{ productMap: Map<string, Set<string>>, availableProducts: string[] }`
-- staleTime 5min
-
-### ProductFilterPopover
-- Mesma estrutura do TagFilterPopover (operador E/OU, modo Possui/Nao possui, busca, scroll)
-- Icone: `Package` do Lucide
-- Lista de produtos vem do hook (produtos reais encontrados nos deals carregados)
-
-### Filtro no Negocios
-No bloco `filteredDeals`, apos o filtro de tags:
-```
-if (productFilters.length > 0) {
-  const email = deal.crm_contacts?.email?.toLowerCase();
-  const dealProducts = email ? productMap.get(email) : new Set();
-  // Avaliar cada regra has/not_has com operador AND/OR
-}
-```
-
-### Classificacao de produtos
-Em vez de classificar em labels curtos (como o partner detection faz), manter o `product_name` original limpo (sem prefixo "A0XX - ") para facilitar a busca textual. Agrupar variantes obvias (ex: todas as variantes de "Efeito Alavanca" viram "Efeito Alavanca").
-
-### DealFiltersState atualizado
-```typescript
-productFilters: ProductFilterRule[];  // { product: string; mode: 'has' | 'not_has' }
-productOperator: 'and' | 'or';
-```
+| `supabase/migrations/*.sql` | Coluna `dias_uteis_closer` |
+| `src/components/sdr-fechamento/WorkingDaysCalendar.tsx` | Coluna na tabela + dialog com 2 mini-calendários (SDR/Closer) |
+| `supabase/functions/recalculate-sdr-payout/index.ts` | Buscar e usar `dias_uteis_closer` para closers |
+| `src/hooks/useSdrFechamento.ts` | Usar dias corretos por role |
 
