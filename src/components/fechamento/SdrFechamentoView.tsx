@@ -1,6 +1,8 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/formatters';
-import { SdrPayoutWithDetails } from '@/types/sdr-fechamento';
+import { SdrPayoutWithDetails, SdrMonthKpi } from '@/types/sdr-fechamento';
+import { DynamicIndicatorsGrid } from '@/components/fechamento/DynamicIndicatorCard';
+import { useActiveMetricsForSdr } from '@/hooks/useActiveMetricsForSdr';
 import {
   DollarSign,
   Target,
@@ -11,9 +13,18 @@ import {
 
 interface SdrFechamentoViewProps {
   payout: SdrPayoutWithDetails;
+  sdrId: string;
+  anoMes: string;
+  kpi: SdrMonthKpi | null;
 }
 
-export function SdrFechamentoView({ payout }: SdrFechamentoViewProps) {
+export function SdrFechamentoView({ payout, sdrId, anoMes, kpi }: SdrFechamentoViewProps) {
+  const { metricas, isLoading: metricasLoading } = useActiveMetricsForSdr(sdrId, anoMes);
+
+  const diasUteisMes = (payout as any).dias_uteis_mes || (payout as any).dias_uteis || 22;
+  const sdrMetaDiaria = payout.sdr?.meta_diaria || 3;
+  const variavelTotal = payout.valor_variavel_total || 0;
+
   return (
     <>
       {/* Summary Cards */}
@@ -80,63 +91,15 @@ export function SdrFechamentoView({ payout }: SdrFechamentoViewProps) {
         </Card>
       </div>
 
-      {/* Indicators Preview */}
-      <Card>
-        <CardHeader className="py-3">
-          <CardTitle className="text-sm font-semibold">Resumo dos Indicadores</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="p-3 rounded-lg bg-muted/50">
-            <div className="text-xs text-muted-foreground/70">
-                Agendamento
-              </div>
-              <div className="text-lg font-semibold mt-0.5">
-                {(payout.pct_reunioes_agendadas || 0).toFixed(1)}%
-              </div>
-              <div className="text-xs text-muted-foreground/70">
-                Mult: {payout.mult_reunioes_agendadas || 0}x
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-muted/50">
-              <div className="text-xs text-muted-foreground/70">
-                Reuniões Realizadas
-              </div>
-              <div className="text-lg font-semibold mt-0.5">
-                {(payout.pct_reunioes_realizadas || 0).toFixed(1)}%
-              </div>
-              <div className="text-xs text-muted-foreground/70">
-                Mult: {payout.mult_reunioes_realizadas || 0}x
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-muted/50">
-              <div className="text-xs text-muted-foreground/70">
-                Tentativas
-              </div>
-              <div className="text-lg font-semibold mt-0.5">
-                {(payout.pct_tentativas || 0).toFixed(1)}%
-              </div>
-              <div className="text-xs text-muted-foreground/70">
-                Mult: {payout.mult_tentativas || 0}x
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-muted/50">
-              <div className="text-xs text-muted-foreground/70">
-                Organização
-              </div>
-              <div className="text-lg font-semibold mt-0.5">
-                {(payout.pct_organizacao || 0).toFixed(1)}%
-              </div>
-              <div className="text-xs text-muted-foreground/70">
-                Mult: {payout.mult_organizacao || 0}x
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Dynamic Indicators */}
+      <DynamicIndicatorsGrid
+        metricas={metricas}
+        kpi={kpi}
+        payout={payout}
+        diasUteisMes={diasUteisMes}
+        sdrMetaDiaria={sdrMetaDiaria}
+        variavelTotal={variavelTotal}
+      />
     </>
   );
 }
