@@ -19,6 +19,7 @@ import { SdrTeamComparisonPanel } from "@/components/sdr/SdrTeamComparisonPanel"
 import { SdrDailyBreakdownTable } from "@/components/sdr/SdrDailyBreakdownTable";
 import { SdrLeadsTable } from "@/components/sdr/SdrLeadsTable";
 import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
+import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
 
 import {
   useSdrPerformanceData,
