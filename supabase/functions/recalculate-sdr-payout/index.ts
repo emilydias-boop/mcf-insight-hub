@@ -297,7 +297,7 @@ serve(async (req) => {
     // Fetch working days calendar for this month
     const { data: calendarData, error: calendarError } = await supabase
       .from('working_days_calendar')
-      .select('ifood_mensal_calculado, dias_uteis_final, ifood_valor_dia')
+      .select('ifood_mensal_calculado, dias_uteis_final, dias_uteis_closer, ifood_valor_dia')
       .eq('ano_mes', ano_mes)
       .single();
 
@@ -774,7 +774,9 @@ serve(async (req) => {
             console.log(`   📋 Usando valores do cargo_catalogo para ${sdr.name}`);
           }
           
-          const diasUteis = calendarData?.dias_uteis_final || 22;
+          const diasUteis = (isCloser && calendarData?.dias_uteis_closer != null) 
+            ? calendarData.dias_uteis_closer 
+            : calendarData?.dias_uteis_final || 22;
           
           // Criar comp_plan implícito para o mês
           const newPlan = {
@@ -1056,7 +1058,10 @@ serve(async (req) => {
         }
 
         // Calculate values - lógica diferente para Closers com métricas ativas
-        const diasUteisMes = calendarData?.dias_uteis_final ?? null;
+        // Usar dias_uteis_closer para closers, com fallback para dias_uteis_final
+        const diasUteisMes = isCloser && calendarData?.dias_uteis_closer != null
+          ? calendarData.dias_uteis_closer
+          : calendarData?.dias_uteis_final ?? null;
         let calculatedValues;
         
         if (isCloser && metricasAtivas.length > 0 && cargoInfo) {

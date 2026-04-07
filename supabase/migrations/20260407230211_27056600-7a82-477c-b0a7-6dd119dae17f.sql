@@ -1,0 +1,1 @@
+UPDATE working_days_calendar SET dias_uteis_final = 20, dias_uteis_closer = 21 WHERE ano_mes = '2026-03';

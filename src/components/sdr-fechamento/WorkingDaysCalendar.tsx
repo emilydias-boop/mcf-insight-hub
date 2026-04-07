@@ -45,6 +45,7 @@ interface WorkingDay {
   ano_mes: string;
   dias_uteis_base: number;
   dias_uteis_final: number;
+  dias_uteis_closer: number | null;
   feriados_nacionais: string[] | null;
   paradas_empresa: string[] | null;
   ifood_valor_dia: number;
@@ -72,6 +73,7 @@ const EditWorkingDayDialog = ({
   const [open, setOpen] = useState(false);
   const [diasUteisBase, setDiasUteisBase] = useState(workingDay.dias_uteis_base.toString());
   const [diasUteisFinal, setDiasUteisFinal] = useState(workingDay.dias_uteis_final.toString());
+  const [diasUteisCloser, setDiasUteisCloser] = useState(workingDay.dias_uteis_closer?.toString() || '');
   const [ifoodValorDia, setIfoodValorDia] = useState(workingDay.ifood_valor_dia.toString());
   const [observacoes, setObservacoes] = useState(workingDay.observacoes || '');
 
@@ -100,9 +102,10 @@ const EditWorkingDayDialog = ({
     updateMutation.mutate({
       dias_uteis_base: parseInt(diasUteisBase),
       dias_uteis_final: parseInt(diasUteisFinal),
+      dias_uteis_closer: diasUteisCloser ? parseInt(diasUteisCloser) : null,
       ifood_valor_dia: parseFloat(ifoodValorDia),
       observacoes: observacoes || null,
-    });
+    } as any);
   };
 
   const calculatedIfood = parseInt(diasUteisFinal) * parseFloat(ifoodValorDia);
@@ -122,7 +125,7 @@ const EditWorkingDayDialog = ({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="dias_base">Dias Úteis Base</Label>
               <Input
@@ -133,7 +136,7 @@ const EditWorkingDayDialog = ({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="dias_final">Dias Úteis Final</Label>
+              <Label htmlFor="dias_final">Dias SDR</Label>
               <Input
                 id="dias_final"
                 type="number"
@@ -141,7 +144,20 @@ const EditWorkingDayDialog = ({
                 onChange={(e) => setDiasUteisFinal(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Após descontar feriados e paradas
+                Dias úteis para SDRs
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dias_closer">Dias Closer</Label>
+              <Input
+                id="dias_closer"
+                type="number"
+                value={diasUteisCloser}
+                onChange={(e) => setDiasUteisCloser(e.target.value)}
+                placeholder={diasUteisFinal}
+              />
+              <p className="text-xs text-muted-foreground">
+                Se vazio, usa Dias SDR
               </p>
             </div>
           </div>
@@ -199,7 +215,8 @@ const YearMonthsTable = ({
       <TableRow>
         <TableHead>Mês</TableHead>
         <TableHead className="text-center">Dias Base</TableHead>
-        <TableHead className="text-center">Dias Final</TableHead>
+        <TableHead className="text-center">Dias SDR</TableHead>
+        <TableHead className="text-center">Dias Closer</TableHead>
         <TableHead className="text-right">R$/Dia</TableHead>
         <TableHead className="text-right">iFood Mensal</TableHead>
         <TableHead>Observações</TableHead>
@@ -214,6 +231,9 @@ const YearMonthsTable = ({
           </TableCell>
           <TableCell className="text-center">{wd.dias_uteis_base}</TableCell>
           <TableCell className="text-center">{wd.dias_uteis_final}</TableCell>
+          <TableCell className="text-center">
+            {wd.dias_uteis_closer != null ? wd.dias_uteis_closer : <span className="text-muted-foreground">-</span>}
+          </TableCell>
           <TableCell className="text-right">{formatCurrency(wd.ifood_valor_dia)}</TableCell>
           <TableCell className="text-right font-semibold">
             {formatCurrency(wd.ifood_mensal_calculado || 0)}
