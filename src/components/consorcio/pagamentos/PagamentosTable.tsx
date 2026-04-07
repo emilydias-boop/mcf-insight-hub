@@ -44,7 +44,7 @@ interface Props {
   filtroBoleto: string;
 }
 
-export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange }: Props) {
+export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange, bulkMode, filtroBoleto }: Props) {
   const payInstallment = usePayInstallment();
   const installmentIds = data.map(r => r.id);
   const { data: boletos } = useBoletosByInstallments(installmentIds);
@@ -55,6 +55,11 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
       boletoMap.set(b.installment_id, { storage_path: b.storage_path, id: b.id });
     }
   });
+
+  // Apply boleto filter
+  const filteredData = filtroBoleto === 'todos' ? data
+    : filtroBoleto === 'com_boleto' ? data.filter(r => boletoMap.has(r.id))
+    : data.filter(r => !boletoMap.has(r.id));
 
   // Rows eligible for bulk WhatsApp (has boleto)
   const selectableIds = data.filter(r => boletoMap.has(r.id)).map(r => r.id);
