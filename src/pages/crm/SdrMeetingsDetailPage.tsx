@@ -136,9 +136,9 @@ export default function SdrMeetingsDetailPage() {
         onFiltersChange={handleFiltersChange}
         onRefresh={() => perfData.refetch()}
         isLoading={perfData.isLoading}
-      />
+      />}
 
-      <Tabs defaultValue="overview" className="space-y-5">
+      <Tabs defaultValue="overview" className="space-y-5" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="leads">Reuniões ({perfData.meetings.length})</TabsTrigger>
