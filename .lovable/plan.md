@@ -1,32 +1,86 @@
 
-# Checkboxes sob demanda + Filtro de Boleto
 
-## Problema
-1. Os checkboxes ficam sempre visíveis na tabela, poluindo a interface quando o usuário não quer fazer envio em massa
-2. Não existe filtro para ver quais parcelas têm boleto vinculado e quais não têm
+# Sistema de Alertas de Cobrança para Consórcio e Billing
 
-## Mudanças
+## Contexto
+Hoje o operador precisa manualmente verificar quais parcelas vencem nos proximos dias e quais boletos precisam ser enviados. Nao existe lembrete automatico, nem forma de registrar que o boleto ja foi enviado ou que o lead respondeu.
 
-### 1. `ConsorcioPagamentosTab.tsx` — Botão "Envio em Massa"
-- Adicionar estado `bulkMode` (boolean, default false)
-- Adicionar botão "Envio em Massa" ao lado do "Exportar"
-- Quando ativado, mostra os checkboxes na tabela e a barra de ações
-- Quando desativado, esconde checkboxes e limpa seleção
-- Passar `bulkMode` como prop para `PagamentosTable`
+## Solucao
 
-### 2. `PagamentosTable.tsx` — Checkboxes condicionais
-- Receber nova prop `bulkMode: boolean`
-- Só renderizar coluna de checkbox (header + cells) quando `bulkMode === true`
-- Quando `bulkMode === false`, não renderizar a coluna, tabela fica limpa
+Criar um painel de alertas inteligentes na pagina de Pagamentos (consorcio) e na pagina de Cobrancas (billing), com logica baseada em:
+- **Vencimento proximo**: parcelas que vencem nos proximos 3-5 dias uteis e ainda nao tiveram boleto enviado
+- **Assalariados (5o dia util)**: cards com `dia_vencimento` proximo ao 5o dia util do mes recebem alerta antecipado (ex: "Grupo 7253 - 26 cartas vencem dia 10, assalariados recebem no 5o dia util")
+- **Acao pendente**: marcar como "boleto enviado" / "lead respondeu" / "sem retorno" para silenciar o alerta daquela parcela
 
-### 3. `PagamentosFilters.tsx` + `useConsorcioPagamentos.ts` — Filtro "Boleto"
-- Adicionar campo `filtroBoleto` ao `PagamentosFiltersState`: `'todos' | 'com_boleto' | 'sem_boleto'`
-- Adicionar dropdown "Boleto" nos filtros com opções: "Todos", "Com Boleto", "Sem Boleto"
-- A filtragem será feita no `ConsorcioPagamentosTab` ou `PagamentosTable` pois a info de boleto vem de query separada (`useBoletosByInstallments`)
-- Na prática: passar o filtro para `PagamentosTable`, que já tem o `boletoMap`, e filtrar `data` internamente antes de renderizar
+## Mudancas Tecnicas
 
-### Arquivos
-- `src/hooks/useConsorcioPagamentos.ts` — adicionar `filtroBoleto` ao tipo de filtros e default
-- `src/components/consorcio/pagamentos/PagamentosFilters.tsx` — dropdown "Boleto"
-- `src/components/consorcio/pagamentos/PagamentosTable.tsx` — checkboxes condicionais + filtro por boleto
-- `src/components/consorcio/pagamentos/ConsorcioPagamentosTab.tsx` — botão "Envio em Massa" toggle
+### 1. Nova tabela `cobranca_acoes` (migration)
+Registra acoes do operador sobre parcelas especificas:
+```text
+id (uuid PK)
+installment_id (uuid FK → consortium_installments)  -- nullable
+subscription_id (uuid FK → billing_subscriptions)    -- nullable
+tipo_acao: 'boleto_enviado' | 'lead_respondeu' | 'sem_retorno' | 'pago_confirmado'
+observacao (text, nullable)
+created_by (uuid FK → auth.users)
+created_at (timestamptz)
+```
+RLS: authenticated can insert/select own rows.
+
+### 2. Hook `useCobrancaAlerts.ts`
+- Query que busca parcelas com `data_vencimento` entre hoje e hoje+5 dias uteis
+- Left join com `consorcio_boletos` (tem boleto?) e `cobranca_acoes` (ja teve acao?)
+- Filtra: parcelas sem acao recente = alerta ativo
+- Agrupa por `dia_vencimento` e por lead (nome_completo)
+- Retorna lista de alertas com prioridade:
+  - **Urgente** (vence em 1-2 dias, sem boleto enviado)
+  - **Atencao** (vence em 3-5 dias, sem boleto enviado)
+  - **OK** (boleto ja enviado ou lead respondeu) — nao aparece
+
+### 3. Hook `useRegistrarAcaoCobranca.ts`
+- Mutation para inserir em `cobranca_acoes`
+- Invalida cache dos alertas
+
+### 4. Componente `CobrancaAlertPanel.tsx`
+Painel que aparece no topo da pagina de Pagamentos e Cobrancas:
+- Lista agrupada por dia de vencimento (ex: "Dia 10 — 26 parcelas")
+- Dentro de cada grupo, lista de leads com:
+  - Nome, grupo/cota, valor
+  - Status do boleto (enviado/nao enviado)
+  - Botoes de acao: "Boleto Enviado", "Lead Respondeu", "Sem Retorno"
+- Ao clicar numa acao, registra em `cobranca_acoes` e o alerta desaparece
+- Badge com contagem total de pendentes
+- Expansivel/colapsavel como a `CobrancaQueue`
+
+### 5. Overlay global (opcional, similar ao SDR)
+- Componente flutuante no `MainLayout` para roles de financeiro/admin
+- Mostra contagem de parcelas com vencimento proximo sem acao
+- Clique navega para `/consorcio/pagamentos`
+
+### 6. Integracao nas paginas
+- `Pagamentos.tsx` (consorcio): renderizar `CobrancaAlertPanel` acima dos KPIs
+- `FinanceiroCobrancas.tsx` (billing): renderizar versao equivalente para `billing_installments` com vencimento proximo
+
+## Arquivos
+
+| Arquivo | Acao |
+|---------|------|
+| `supabase/migrations/xxx_create_cobranca_acoes.sql` | Nova tabela + RLS |
+| `src/hooks/useCobrancaAlerts.ts` | Hook de alertas com query inteligente |
+| `src/hooks/useRegistrarAcaoCobranca.ts` | Mutation para registrar acoes |
+| `src/components/shared/CobrancaAlertPanel.tsx` | Painel de alertas reutilizavel |
+| `src/pages/bu-consorcio/Pagamentos.tsx` | Integrar painel |
+| `src/components/financeiro/cobranca/FinanceiroCobrancas.tsx` | Integrar painel |
+| `src/components/layout/MainLayout.tsx` | Overlay global (se aprovado) |
+
+## Fluxo do Operador
+```text
+1. Abre pagina de Pagamentos
+2. Ve painel: "⚠ 26 parcelas vencem dia 10 (em 3 dias)"
+3. Expande grupo dia 10 → ve lista de leads
+4. Para cada lead: clica "Boleto Enviado" → alerta some
+5. Se lead respondeu: clica "Lead Respondeu"
+6. Se nao respondeu: clica "Sem Retorno" (fica registrado, pode filtrar depois)
+7. Parcelas pagas automaticamente saem do alerta
+```
+
