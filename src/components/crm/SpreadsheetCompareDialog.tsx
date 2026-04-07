@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Upload, FileSpreadsheet, Search, CheckCircle2, XCircle, Download, Tag, ClipboardPaste, UserPlus, Loader2, ArrowRightLeft, Users, GitBranch, ChevronRight, ChevronDown } from 'lucide-react';
+import { Upload, FileSpreadsheet, Search, CheckCircle2, XCircle, Download, Tag, ClipboardPaste, UserPlus, Loader2, ArrowRightLeft, Users, GitBranch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
