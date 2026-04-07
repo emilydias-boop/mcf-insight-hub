@@ -1,27 +1,22 @@
 
 
-# Substituir botao "Hoje" por filtro de data da reuniao
+# Esconder filtro de periodo na aba Reunioes
 
 ## Problema
-O botao "Hoje" e redundante (ja da pra selecionar hoje no date picker de "Agendado em"). O usuario quer um segundo filtro de data para filtrar pela **data da reuniao** (`scheduled_at`).
+O filtro de periodo no topo limita os dados que chegam na tabela de reunioes, causando confusao quando o usuario tenta filtrar por datas fora do periodo. A barra de periodo so faz sentido na aba "Visao Geral".
 
 ## Solucao
 
-No `SdrLeadsTable.tsx`:
+No `SdrMeetingsDetailPage.tsx`:
 
-1. **Remover** o botao "Hoje" (linhas 165-172)
-2. **Adicionar estado** `meetingDateFilter` (Date | undefined)
-3. **Adicionar segundo DatePicker** com label "Reuniao em" que filtra por `scheduled_at`
-4. **Adicionar logica de filtro** no `filteredMeetings`: comparar `scheduled_at` com startOfDay/endOfDay do `meetingDateFilter`
-5. **Atualizar** `hasActiveFilters` e "Limpar filtros" para incluir o novo filtro
+1. **Adicionar estado `activeTab`** para rastrear qual aba esta ativa
+2. **Esconder `SdrPerformanceFilters`** quando `activeTab === "leads"` (render condicional)
+3. **Passar `onValueChange` no `<Tabs>`** para atualizar o estado
 
-### Layout final dos filtros
-```text
-[🔍 Buscar lead...] [📅 Agendado em] [📅 Reuniao em] [Status ▼] [Tipo ▼] [Limpar]
-```
+A tabela de reunioes continua recebendo `perfData.meetings` (dados ja carregados pelo periodo inicial), e os filtros internos da tabela (Agendado em, Reuniao em, busca, status, tipo) funcionam livremente sobre esses dados.
 
 ### Arquivo
 | Arquivo | Acao |
 |---------|------|
-| `src/components/sdr/SdrLeadsTable.tsx` | Remover botao Hoje, adicionar state + DatePicker + filtro para `scheduled_at` |
+| `src/pages/crm/SdrMeetingsDetailPage.tsx` | Adicionar estado `activeTab`, esconder `SdrPerformanceFilters` quando `activeTab === "leads"` |
 
