@@ -94,12 +94,20 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
         if (!nameMatch && !emailMatch) return false;
       }
       
-      // Date filter
+      // Date filter (booked_at)
       if (dateFilter) {
         const dayStart = startOfDay(dateFilter);
         const dayEnd = endOfDay(dateFilter);
-        const meetingDate = m.booked_at ? new Date(m.booked_at) : null;
-        if (!meetingDate || meetingDate < dayStart || meetingDate > dayEnd) return false;
+        const bookedDate = m.booked_at ? new Date(m.booked_at) : null;
+        if (!bookedDate || bookedDate < dayStart || bookedDate > dayEnd) return false;
+      }
+      
+      // Meeting date filter (scheduled_at)
+      if (meetingDateFilter) {
+        const dayStart = startOfDay(meetingDateFilter);
+        const dayEnd = endOfDay(meetingDateFilter);
+        const scheduledDate = m.scheduled_at ? new Date(m.scheduled_at) : m.data_agendamento ? parseISO(m.data_agendamento) : null;
+        if (!scheduledDate || scheduledDate < dayStart || scheduledDate > dayEnd) return false;
       }
       
       return true;
