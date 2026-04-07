@@ -28,7 +28,9 @@ const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
 
 export default function ConsorcioPagamentosPage() {
   const [monthOffset, setMonthOffset] = useState<string>('0');
+  const [reviewOpen, setReviewOpen] = useState(false);
   const selectedMonth = MONTH_OPTIONS[Number(monthOffset)] || MONTH_OPTIONS[0];
+  const { data: reviewBoletos = [] } = useBoletosReview();
 
   return (
     <div className="p-6 space-y-6">
