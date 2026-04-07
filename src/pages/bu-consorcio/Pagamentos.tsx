@@ -43,6 +43,13 @@ export default function ConsorcioPagamentosPage() {
         </div>
         <div className="flex items-center gap-3">
           <BoletoUploadDialog />
+          {reviewBoletos.length > 0 && (
+            <Button variant="outline" className="border-amber-500 text-amber-600 hover:bg-amber-50" onClick={() => setReviewOpen(true)}>
+              <AlertTriangle className="h-4 w-4 mr-1" />
+              Revisar Boletos
+              <Badge variant="destructive" className="ml-1.5 text-xs">{reviewBoletos.length}</Badge>
+            </Button>
+          )}
           <Select value={monthOffset} onValueChange={setMonthOffset}>
             <SelectTrigger className="w-48">
               <SelectValue />
