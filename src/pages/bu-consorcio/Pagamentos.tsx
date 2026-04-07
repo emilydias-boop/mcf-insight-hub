@@ -10,6 +10,11 @@ import {
 } from '@/components/ui/select';
 import { ConsorcioPagamentosTab } from '@/components/consorcio/pagamentos/ConsorcioPagamentosTab';
 import { BoletoUploadDialog } from '@/components/consorcio/pagamentos/BoletoUploadDialog';
+import { BoletoReviewDialog } from '@/components/consorcio/pagamentos/BoletoReviewDialog';
+import { useBoletosReview } from '@/hooks/useConsorcioBoletos';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { AlertTriangle } from 'lucide-react';
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
   const date = subMonths(new Date(), i);
@@ -23,7 +28,9 @@ const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
 
 export default function ConsorcioPagamentosPage() {
   const [monthOffset, setMonthOffset] = useState<string>('0');
+  const [reviewOpen, setReviewOpen] = useState(false);
   const selectedMonth = MONTH_OPTIONS[Number(monthOffset)] || MONTH_OPTIONS[0];
+  const { data: reviewBoletos = [] } = useBoletosReview();
 
   return (
     <div className="p-6 space-y-6">
@@ -36,6 +43,13 @@ export default function ConsorcioPagamentosPage() {
         </div>
         <div className="flex items-center gap-3">
           <BoletoUploadDialog />
+          {reviewBoletos.length > 0 && (
+            <Button variant="outline" className="border-amber-500 text-amber-600 hover:bg-amber-50" onClick={() => setReviewOpen(true)}>
+              <AlertTriangle className="h-4 w-4 mr-1" />
+              Revisar Boletos
+              <Badge variant="destructive" className="ml-1.5 text-xs">{reviewBoletos.length}</Badge>
+            </Button>
+          )}
           <Select value={monthOffset} onValueChange={setMonthOffset}>
             <SelectTrigger className="w-48">
               <SelectValue />
@@ -57,6 +71,7 @@ export default function ConsorcioPagamentosPage() {
           end: format(selectedMonth.end, 'yyyy-MM-dd'),
         }}
       />
+      <BoletoReviewDialog open={reviewOpen} onOpenChange={setReviewOpen} />
     </div>
   );
 }
