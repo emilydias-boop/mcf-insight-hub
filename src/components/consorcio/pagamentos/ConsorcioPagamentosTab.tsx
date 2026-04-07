@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { useConsorcioPagamentos, defaultFilters, PagamentosFiltersState, PagamentoRow } from '@/hooks/useConsorcioPagamentos';
+import { useBoletosReview } from '@/hooks/useConsorcioBoletos';
 import { PagamentosKPIs } from './PagamentosKPIs';
 import { PagamentosAlerts } from './PagamentosAlerts';
 import { PagamentosFilters } from './PagamentosFilters';
 import { PagamentosTable } from './PagamentosTable';
 import { PagamentoDetailDrawer } from './PagamentoDetailDrawer';
+import { BoletoReviewDialog } from './BoletoReviewDialog';
 import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Download, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 
@@ -20,6 +23,9 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
   const [pageSize, setPageSize] = useState(200);
   const [detailRow, setDetailRow] = useState<PagamentoRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+
+  const { data: reviewBoletos = [] } = useBoletosReview();
 
   const { data, allData, isLoading, kpis, alertData, totalItems, totalPages, filterOptions } = useConsorcioPagamentos(filters, page, pageSize, selectedMonth);
 
@@ -66,10 +72,19 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
 
       <div className="flex items-center justify-between">
         <PagamentosFilters filters={filters} onChange={handleFilterChange} options={filterOptions} />
-        <Button variant="outline" size="sm" onClick={handleExport} className="shrink-0 ml-3">
-          <Download className="h-4 w-4 mr-1" />
-          Exportar
-        </Button>
+        <div className="flex items-center gap-2 shrink-0 ml-3">
+          {reviewBoletos.length > 0 && (
+            <Button variant="outline" size="sm" onClick={() => setReviewOpen(true)}>
+              <AlertTriangle className="h-4 w-4 mr-1" />
+              Revisar Boletos
+              <Badge variant="secondary" className="ml-1.5 text-xs">{reviewBoletos.length}</Badge>
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            <Download className="h-4 w-4 mr-1" />
+            Exportar
+          </Button>
+        </div>
       </div>
 
       <PagamentosTable
@@ -88,6 +103,11 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
         row={detailRow}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+      />
+
+      <BoletoReviewDialog
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
       />
     </div>
   );
