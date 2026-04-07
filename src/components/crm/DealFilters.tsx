@@ -23,6 +23,8 @@ import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import type { OwnerOption } from '@/hooks/useDealOwnerOptions';
 import { TagFilterPopover } from './TagFilterPopover';
+import { ProductFilterPopover } from './ProductFilterPopover';
+import type { ProductFilterRule, ProductOperator } from '@/hooks/useProductFilterData';
 
 export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
 export type ActivityPriorityFilter = 'all' | 'high' | 'medium' | 'low';
@@ -41,6 +43,8 @@ export interface DealFiltersState {
   selectedTags: string[];
   tagFilters: TagFilterRule[];
   tagOperator: TagOperator;
+  productFilters: ProductFilterRule[];
+  productOperator: ProductOperator;
   activityPriority: ActivityPriorityFilter;
   outsideFilter: OutsideFilter;
 }
@@ -55,6 +59,10 @@ interface DealFiltersProps {
   availableTags?: string[];
   /** Loading state para tags */
   isLoadingTags?: boolean;
+  /** Produtos disponíveis para filtro */
+  availableProducts?: string[];
+  /** Loading state para produtos */
+  isLoadingProducts?: boolean;
 }
 
 export const DealFilters = ({ 
@@ -64,6 +72,8 @@ export const DealFilters = ({
   ownerOptions,
   availableTags = [],
   isLoadingTags = false,
+  availableProducts = [],
+  isLoadingProducts = false,
 }: DealFiltersProps) => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isAttemptsPopoverOpen, setIsAttemptsPopoverOpen] = useState(false);
@@ -138,6 +148,7 @@ export const DealFilters = ({
     filters.salesChannel !== 'all',
     filters.attemptsRange !== null,
     filters.tagFilters.length > 0,
+    filters.productFilters.length > 0,
     filters.activityPriority !== 'all',
     filters.outsideFilter !== 'all',
   ].filter(Boolean).length;
@@ -375,6 +386,15 @@ export const DealFilters = ({
         tagOperator={filters.tagOperator}
         onChangeFilters={(tagFilters, tagOperator) => onChange({ ...filters, tagFilters, tagOperator })}
         isLoading={isLoadingTags}
+      />
+      
+      {/* Filtro de Produtos Adquiridos */}
+      <ProductFilterPopover
+        availableProducts={availableProducts}
+        productFilters={filters.productFilters}
+        productOperator={filters.productOperator}
+        onChangeFilters={(productFilters, productOperator) => onChange({ ...filters, productFilters, productOperator })}
+        isLoading={isLoadingProducts}
       />
       
       {/* Filtro de Prioridade de Atividade */}

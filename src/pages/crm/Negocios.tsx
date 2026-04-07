@@ -40,6 +40,7 @@ import { differenceInDays } from 'date-fns';
 import { useDealOwnerOptions } from '@/hooks/useDealOwnerOptions';
 import { useUniqueDealTags } from '@/hooks/useUniqueDealTags';
 import { useOutsideDetectionForDeals } from '@/hooks/useOutsideDetectionForDeals';
+import { useProductFilterData } from '@/hooks/useProductFilterData';
 import { OutsideDistributionButton } from '@/components/crm/OutsideDistributionButton';
 import { MovePartnersButton } from '@/components/crm/MovePartnersButton';
 import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDialog';
@@ -71,6 +72,8 @@ const Negocios = () => {
     selectedTags: [],
     tagFilters: [],
     tagOperator: 'and',
+    productFilters: [],
+    productOperator: 'and',
     activityPriority: 'all',
     outsideFilter: 'all',
   });
@@ -335,6 +338,9 @@ const Negocios = () => {
   // Detectar Outside em batch para todos os deals carregados
   const { data: outsideMap } = useOutsideDetectionForDeals(dealsData || []);
   
+  // Buscar produtos adquiridos para filtro por produto
+  const { productMap, availableProducts, isLoading: isLoadingProducts } = useProductFilterData(dealEmails);
+  
   // isRestrictedRole já definido no topo do componente (linha 77)
   const handleSync = () => {
     toast.info('Sincronizando dados do Clint...');
@@ -551,6 +557,23 @@ const Negocios = () => {
         }
       }
       
+      // Filtro por produtos adquiridos (hubla_transactions)
+      if (filters.productFilters.length > 0) {
+        const email = deal.crm_contacts?.email?.toLowerCase().trim();
+        const dealProducts = email ? productMap.get(email) : undefined;
+        
+        const evaluateProductRule = (rule: { product: string; mode: 'has' | 'not_has' }) => {
+          const hasProduct = dealProducts?.has(rule.product) ?? false;
+          return rule.mode === 'has' ? hasProduct : !hasProduct;
+        };
+        
+        if (filters.productOperator === 'and') {
+          if (!filters.productFilters.every(evaluateProductRule)) return false;
+        } else {
+          if (!filters.productFilters.some(evaluateProductRule)) return false;
+        }
+      }
+      
       // Filtro por prioridade de atividade
       if (filters.activityPriority !== 'all' && activitySummaries) {
         const summary = activitySummaries.get(deal.id.toLowerCase().trim());
@@ -631,6 +654,8 @@ const Negocios = () => {
       selectedTags: [],
       tagFilters: [],
       tagOperator: 'and',
+      productFilters: [],
+      productOperator: 'and',
       activityPriority: 'all',
       outsideFilter: 'all',
     });
@@ -790,6 +815,8 @@ const Negocios = () => {
           ownerOptions={ownerOptions}
           availableTags={availableTags || []}
           isLoadingTags={isLoadingTags}
+          availableProducts={availableProducts}
+          isLoadingProducts={isLoadingProducts}
         />
         
         <div className="flex-1 overflow-hidden p-2 sm:p-4">
