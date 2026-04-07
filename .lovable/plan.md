@@ -1,66 +1,60 @@
 
 
-# Diagnostico: Backfill criou duplicatas + leads A010 foram roteados para pipeline errada
+# Limpeza: 20 Leads Backfill Duplicados no Inside Sales
 
-## O que aconteceu
+## Diagnostico
 
-### Problema 1: Leads A010 roteados para "Viver de Aluguel" em vez de "Inside Sales"
+Dos **147 deals com tag Backfill** criados ontem, **20 sao duplicatas** de leads que ja existiam no sistema. Eles nao foram detectados pelo backfill porque usavam **emails diferentes** (ex: `andresmacedos@gmail.com` vs `andre_smacedo@hotmail.com`) — a deduplicacao foi feita apenas por email, mas o telefone e o mesmo.
 
-O webhook `hubla-webhook-handler` tem uma regra na linha 1506 que roteia **todo produto com categoria `ob_construir_alugar`** (Construir Para Alugar) para o pipeline "VIVER DE ALUGUEL":
+Esses 20 leads ja estavam sendo trabalhados e **nao sao leads perdidos novos**. Mante-los gera:
+- Contagem inflada no funil (86 "Novo Lead" inclui duplicatas)
+- SDR recebe lead que outro SDR ja trabalha
+- Historico do lead fica fragmentado entre dois contatos
 
-```text
-productCategory === 'ob_construir_alugar' → VIVER_ALUGUEL_ORIGIN_ID
-```
+### Os 20 duplicados
 
-O problema: quando um lead compra A010 + order bump "Construir Para Alugar", o webhook processa os dois produtos separadamente. O A010 cria deal corretamente no "PIPELINE INSIDE SALES", mas o "Construir Para Alugar" cria um **segundo deal** no "VIVER DE ALUGUEL".
+| Backfill | Email Backfill | Ja existia como | Email original |
+|----------|---------------|-----------------|----------------|
+| André Santos | andresmacedos@gmail.com | André Santos | andre_smacedo@hotmail.com |
+| Andresa Cristina Vaz | kizy.andresa@gmail.com | Andresa Vaz | (phone match) |
+| Bhruno Nalin de Souza | bhruno.nalin@gmail.com | Bhruno Souza | bhruno.niteroi@gmail.com |
+| Carlos Barros | carlos.barros@monetali.com | Carlos Barros | camdbgalo@gmail.com |
+| Cesar Schneider | cesar@eworlslabs.com | Cesar Schneider | cesar@eworkslabs.com |
+| Danilo Corado | danilo@gestora... | DANILO SERRA CORAO | raimundoalvesnunes78@... |
+| Danilo Pellegrino | danilo.pellegrino@icloud.com | Danilo Pellegrino | danilo@sport360.com.br |
+| Fabio Gomes | fabiogomesoliveira@hotmail.com | Fabio Gomes | ec.fabio.oliveira@gmail.com |
+| Fernando Lucas | engfernando.assumpcao@gmail.com | Fernando Lucas | fernando.assumpcao@outlook.com |
+| Fernando Rodrigo | fermoraisfer@gmail.com | Fernando Rodrigo | fernandorodrigodemorais@... |
+| Francisco Wellington | wellingtonms2@hotmail.com | Francisco Wellington | wmedeirosrep@hotmail.com |
+| Gilberto Pavanelli | gilberto.pavanell.jr@gmail.com | Gilberto Pavanelli | gilberto.pavanelli.jr@... |
+| Liliana Miranda | lilianamcapanema@gmail.com | Liliana Miranda | lmcapa@hotmail.com |
+| Lucine Ferrari | lucineferrari@gmail.com | Lucne Serina | (phone match) |
+| Murillo Heguer | murilloheguer0223@gmail.com | Murillo Heguer | mhservicosemsaude@gmail.com |
+| Rafael Santos | eng.rferreira97@gmail.com | Rafael Santos Ferreira | rafael141197@gmail.com |
+| Thiago Grossi | tgrossis17@gmail.com | Thiago Grossi | thiago@tgplanejamentos.com |
+| Valdecir Ribeiro | engenhariavival@gmail.com | Valdecir Ribeiro | engenheirovaldecir7@... |
+| Vinicius Valente | vinicius0@outlook.com | Vinicius Valente | vinivalente27@gmail.com |
 
-**Caso Rafaela Regis**: Ela comprou A010 + Construir Para Alugar (offer). O webhook criou o contato e um deal em "Viver de Aluguel" primeiro (pelo OB). O A010 nao criou deal no Inside Sales porque o webhook Make Sync processou antes mas **nao cria deals, so transacoes**. Resultado: ela ficou apenas no pipeline errado.
+Alem disso, **17 backfill deals** tem o mesmo `contact_id` com deals em outras pipelines (Viver de Aluguel, Efeito Alavanca, Gerentes de Relacionamento) — esses sao validos pois o lead pode ter deal em Inside Sales + outra pipeline.
 
-**5 leads afetados** (criados Apr 6-7 em Viver de Aluguel, todos com compras A010):
+## Plano de Correcao
 
-| Lead | Email | Deal Inside Sales? |
-|------|-------|-------------------|
-| Fernando Palma Saboia | saboia.arq@gmail.com | Sim (duplicado) |
-| Kitison Unicacio | kitison4578@gmail.com | Sim (duplicado) |
-| Rafaela Regis | rafaela.regis@atrativarh.com.br | Sim (manual, adicionado depois) |
-| ALLAN CALADO | allan.calado@gmail.com | Nao |
-| Paulo Eduardo Rebelo | drpaulorebelo@gmail.com | Nao |
+### 1. Migration: Deletar os 20 deals duplicados + arquivar contatos duplicados
 
-### Problema 2: Contatos duplicados (Hilton Jamal)
+Para cada duplicata:
+- **Deletar** o deal backfill (o lead ja tem deal ativo no Inside Sales sob outro contato)
+- **Arquivar** o contato backfill e vincular ao contato principal (`merged_into_contact_id`)
 
-Hilton Jamal aparece 2x porque tem 2 contatos nao arquivados com emails diferentes (`hiljamal@gmail.com` e `hilton_jamal@yahoo.com.br`) e telefones ligeiramente diferentes (`+5517991229718` vs `17991229718`). A deduplicacao por sufixo de 9 digitos nao resolveu porque ambos vieram de fontes diferentes antes do merge ser implementado.
+Isso reduz o funil de ~86 "Novo Lead" para ~66 leads genuinamente perdidos.
 
-## Correcoes
+### 2. Melhoria futura no backfill (opcional)
 
-### 1. Database: Mover deals errados de "Viver de Aluguel" para "Inside Sales"
-
-Para os 5 deals criados erroneamente em "Viver de Aluguel":
-- **Fernando e Kitison**: ja tem deal no Inside Sales → deletar o deal do Viver de Aluguel (duplicado)
-- **Rafaela**: ja foi adicionada manualmente ao Inside Sales → deletar o deal do Viver de Aluguel
-- **Allan e Paulo**: nao tem deal no Inside Sales → mover o deal para "PIPELINE INSIDE SALES" e atribuir via round-robin (ou manter sem dono para distribuicao manual)
-
-### 2. Database: Merge contato duplicado Hilton Jamal
-
-Arquivar o contato mais novo, mover deals para o mais antigo.
-
-### 3. Codigo: Corrigir roteamento no `hubla-webhook-handler`
-
-Alterar a logica na linha 1506: quando o lead tem **compra A010 confirmada**, o order bump "Construir Para Alugar" **nao deve criar deal separado** no Viver de Aluguel. Deve apenas registrar a transacao e, se ja existe deal no Inside Sales, adicionar tag.
-
-Logica proposta:
-```text
-Se productCategory === 'ob_construir_alugar':
-  1. Verificar se o contato ja tem deal no Inside Sales (via email/phone)
-  2. Se sim → nao criar deal no Viver de Aluguel, apenas adicionar tag 'ob-construir-alugar' ao deal existente
-  3. Se nao → verificar se tem compra A010 confirmada
-     - Se sim → nao criar deal (sera criado pelo webhook A010)
-     - Se nao → criar deal no Viver de Aluguel normalmente (compra avulsa)
-```
+Adicionar verificacao por sufixo de 9 digitos do telefone antes de criar deal, nao apenas por email. Isso preveniria esse tipo de duplicata em backfills futuros.
 
 ### Arquivos
 
-| Arquivo | Acao |
+| Recurso | Acao |
 |---------|------|
-| Migration SQL (insert tool) | Deletar 3 deals duplicados + mover 2 deals para Inside Sales + merge Hilton |
-| `supabase/functions/hubla-webhook-handler/index.ts` | Corrigir logica de roteamento OB Construir |
+| Migration SQL | DELETE 20 deals + UPDATE 20 contacts (archive + merge) |
+| `supabase/functions/backfill-orphan-a010-deals/index.ts` | (futuro) Adicionar check por phone suffix |
 
