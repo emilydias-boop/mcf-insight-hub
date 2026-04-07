@@ -171,14 +171,30 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
           </PopoverContent>
         </Popover>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8"
-          onClick={() => setDateFilter(new Date())}
-        >
-          Hoje
-        </Button>
+        {/* Meeting date filter */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                "h-8 w-[150px] justify-start text-left text-sm font-normal",
+                !meetingDateFilter && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+              {meetingDateFilter ? format(meetingDateFilter, "dd/MM/yyyy", { locale: ptBR }) : "Reunião em"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+            <Calendar
+              mode="single"
+              selected={meetingDateFilter}
+              onSelect={setMeetingDateFilter}
+              locale={ptBR}
+              className="p-3 pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
         
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[160px] h-8">
