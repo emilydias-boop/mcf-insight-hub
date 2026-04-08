@@ -279,6 +279,14 @@ export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) 
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <MoveWebhookDialog
+        open={moveDialogOpen}
+        onOpenChange={setMoveDialogOpen}
+        mode={moveMode}
+        endpoint={moveEndpoint}
+        currentOriginId={originId}
+      />
     </div>
   );
 };
