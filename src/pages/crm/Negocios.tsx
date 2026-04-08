@@ -675,11 +675,14 @@ const Negocios = () => {
   };
   
   // Determinar se deve mostrar a sidebar
+  // SDRs com override individual: esconder sidebar se só tem 1 pipeline no override
+  const sdrHasOverride = isSdr && sdrOriginOverride && sdrOriginOverride.length > 0;
+  const sdrOverrideSingle = sdrHasOverride && sdrOriginOverride!.length === 1;
   // SDRs de BUs com multi-pipeline podem ver a sidebar e navegar
-  const sdrCanSeeSidebar = isSdr && activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU);
+  const sdrCanSeeSidebar = (isSdr && activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU)) || (sdrHasOverride && !sdrOverrideSingle);
   const totalMappedPipelines = buAllowedGroups.length + (buMapping?.origins?.length || 0);
   const hasSinglePipeline = totalMappedPipelines === 1;
-  const showSidebar = (!isSdr || sdrCanSeeSidebar) && !hasSinglePipeline;
+  const showSidebar = (!isSdr || sdrCanSeeSidebar) && !hasSinglePipeline && !sdrOverrideSingle;
   
   // Auto-seleção de single pipeline agora está integrada no useEffect principal de default (linha 156+)
   
