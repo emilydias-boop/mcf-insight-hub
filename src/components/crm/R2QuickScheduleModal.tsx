@@ -27,9 +27,6 @@ import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { R2CloserWithAvailability, useCreateR2Meeting } from '@/hooks/useR2AgendaData';
 import { useSearchDealsForSchedule } from '@/hooks/useAgendaData';
-import { useActiveBU } from '@/hooks/useActiveBU';
-import { useAuth } from '@/contexts/AuthContext';
-import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
 import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2CloserAvailableSlots';
 import { useR2Bookers } from '@/hooks/useR2Bookers';
 import { R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
@@ -92,13 +89,7 @@ export function R2QuickScheduleModal({
   const [r2Observations, setR2Observations] = useState<string>('');
   const [isPreSchedule, setIsPreSchedule] = useState(false);
 
-  // BU filtering
-  const activeBU = useActiveBU();
-  const { role, user } = useAuth();
-  const { data: originIds } = useBUOriginIds(activeBU);
-
-  const buOriginIds = originIds && originIds.length > 0 ? originIds : undefined;
-  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, buOriginIds, undefined);
+  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, undefined, undefined);
   const createMeeting = useCreateR2Meeting();
   const { data: r2Bookers = [] } = useR2Bookers();
 
