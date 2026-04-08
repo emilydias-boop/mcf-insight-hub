@@ -1249,7 +1249,29 @@ serve(async (req) => {
             console.log(`   📊 Vendas Parceria: Peso=${pesoVendasParceria}%, Valor Base=R$ ${valorVendasParceria.toFixed(2)}`);
           }
           
-          const valorVariavelTotal = valorContratos + valorOrganizacao + valorRealizadas + valorVendasParceria;
+          // Calcular R2 Agendadas
+          const metricaR2 = metricasAtivas.find(m => m.nome_metrica === 'r2_agendadas');
+          let valorR2Agendadas = 0;
+          
+          if (metricaR2 && metricaR2.peso_percentual > 0) {
+            const pesoR2 = metricaR2.peso_percentual;
+            const valorBaseR2 = (cargoInfo.variavel_valor * pesoR2) / 100;
+            
+            // Meta = % dos contratos pagos (default 100%)
+            const pctR2 = metricaR2.meta_percentual && metricaR2.meta_percentual > 0 
+              ? metricaR2.meta_percentual : 100;
+            const metaR2 = Math.round((contratosPagos * pctR2) / 100);
+            
+            // Valor realizado
+            const r2Real = r2AgendadasCount;
+            const pctR2Atingido = metaR2 > 0 ? (r2Real / metaR2) * 100 : 0;
+            const multR2 = getMultiplier(Math.min(pctR2Atingido, 120));
+            valorR2Agendadas = valorBaseR2 * multR2;
+            
+            console.log(`   📊 R2 Agendadas: Real=${r2Real}, Meta=${metaR2}, %=${pctR2Atingido.toFixed(1)}%, Mult=${multR2}, Valor=R$ ${valorR2Agendadas.toFixed(2)}`);
+          }
+          
+          const valorVariavelTotal = valorContratos + valorOrganizacao + valorRealizadas + valorVendasParceria + valorR2Agendadas;
           const fixoValor = cargoInfo.fixo_valor;
           const totalConta = fixoValor + valorVariavelTotal;
           
