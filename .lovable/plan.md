@@ -1,54 +1,61 @@
 
 
-# Mostrar indicadores completos no Meu Fechamento
+# Ajustar Nível e Meta de Contratos para Julio e Thayna - Março 2026
 
-## Problema
-A visao do SDR/Closer no "Meu Fechamento" mostra apenas um resumo simplificado (% e multiplicador em caixinhas pequenas). O admin ve os indicadores completos com meta, realizado, barra de progresso, faixa e calculo do valor. O SDR/Closer precisa ver a mesma coisa.
+## Situação Atual
 
-## Solucao
+### Comp Plans
+- **Julio** (21393c7b): N1 (fixo=4900, var=2100, ote=7000)
+- **Thayna** (66a5a9ea): N2 com valores inconsistentes (fixo=6300, var=2700, ote=9000)
 
-Reutilizar o componente `DynamicIndicatorsGrid` (ja usado na pagina de detalhe do admin) dentro de `SdrFechamentoView` e `CloserFechamentoView`. Para isso, buscar os dados necessarios (KPI e metricas ativas) que hoje nao sao carregados no `useOwnFechamento`.
+### Métricas de Contratos (fechamento_metricas_mes) - Março
+- Closer N1: `meta_percentual = null` (fallback para 30% via genérico de Fev)
+- Closer N2: `meta_percentual = null` (fallback para 35% via genérico de Fev)
+- **Closer N3: NÃO EXISTE para Março** - precisa ser criado
 
-### Alteracoes
+### Problema
+O `meta_percentual` dos contratos está null nas métricas de Março para closers. O sistema faz fallback para meses anteriores (genérico), mas para N3 não existe nenhum registro. Mesmo para N1/N2, o fallback depende de métricas genéricas (squad=null) de Fevereiro.
 
-**1. `src/hooks/useOwnFechamento.ts`**
-- Adicionar busca de `sdr_month_kpi` para o mes selecionado (query simples por `sdr_id` + `ano_mes`)
-- Retornar `kpi: SdrMonthKpi | null` no resultado do hook
+## Plano de Execução (2 partes)
 
-**2. `src/components/fechamento/SdrFechamentoView.tsx`**
-- Importar `useActiveMetricsForSdr` e `DynamicIndicatorsGrid`
-- Receber `sdrId` e `anoMes` como props adicionais
-- Buscar metricas ativas via `useActiveMetricsForSdr(sdrId, anoMes)`
-- Substituir a secao "Resumo dos Indicadores" (caixinhas simplificadas) pelo `DynamicIndicatorsGrid` com os mesmos cards completos que o admin ve (meta, realizado, barra de progresso, faixa, multiplicador, valor)
-- Manter os summary cards de OTE/Fixo/Variavel/Total no topo
+### Parte 1: Dados nas métricas (fechamento_metricas_mes)
 
-**3. `src/components/fechamento/CloserFechamentoView.tsx`**
-- Mesma logica: importar `useActiveMetricsForSdr` e `DynamicIndicatorsGrid`
-- Receber `sdrId` e `anoMes` como props
-- Substituir a secao "Indicadores de Performance" pelo `DynamicIndicatorsGrid`
-- Manter summary cards e metricas secundarias (taxa conversao, outside sales, R2) que nao fazem parte dos indicadores de variavel
+1. **Atualizar meta_percentual** nas métricas de Março existentes:
+   - Closer N1 contratos (id: `19645a2a`): `meta_percentual = 30`
+   - Closer N2 contratos (id: `5dd6255b`): `meta_percentual = 35`
 
-**4. `src/pages/fechamento-sdr/MeuFechamento.tsx`**
-- Passar `sdrId={userRecord.id}` e `anoMes={selectedMonth}` para `SdrFechamentoView` e `CloserFechamentoView`
-- Buscar e passar `kpi` do hook (ou deixar os views buscarem internamente)
+2. **Criar métricas para Closer N3** (cargo `d7bdc06e`) em Março:
+   - `contratos`: peso=50%, meta_percentual=40
+   - `r2_agendadas`: peso=50% (copiar da N1/N2)
 
-### Dados necessarios
+### Parte 2: Comp Plans (sdr_comp_plan)
 
-O `DynamicIndicatorsGrid` precisa de:
-- `metricas`: vem de `useActiveMetricsForSdr(sdrId, anoMes)`
-- `kpi`: buscar `sdr_month_kpi` por `sdr_id` + `ano_mes`
-- `payout`: ja disponivel
-- `diasUteisMes`: vem de `payout.dias_uteis_mes`
-- `sdrMetaDiaria`: vem de `payout.sdr.meta_diaria`
-- `variavelTotal`: vem do comp plan ou payout
+**Julio → N2 somente em Março:**
+- Fechar plano atual com `vigencia_fim = 2026-02-28`
+- Criar plano N2 (cargo `fd8d5a86`): fixo=5600, var=2400, ote=8000, vigencia 2026-03-01 a 2026-03-31
+- Criar plano N1 (cargo `c2909e20`): fixo=4900, var=2100, ote=7000, vigencia 2026-04-01 (restaurar)
 
-### Resultado
-O SDR/Closer vera exatamente os mesmos cards de indicadores que o admin ve na pagina de detalhe: meta, realizado, barra de progresso colorida, faixa, multiplicador e valor calculado.
+**Thayna → N3 somente em Março:**
+- Fechar plano atual com `vigencia_fim = 2026-02-28`
+- Criar plano N3 (cargo `d7bdc06e`): fixo=6300, var=2700, ote=9000, vigencia 2026-03-01 a 2026-03-31
+- Criar plano N2 (cargo `fd8d5a86`): fixo=5600, var=2400, ote=8000, vigencia 2026-04-01 (restaurar)
 
-| Arquivo | Alteracao |
-|---|---|
-| `src/hooks/useOwnFechamento.ts` | Adicionar query de KPI, retornar no resultado |
-| `src/components/fechamento/SdrFechamentoView.tsx` | Usar DynamicIndicatorsGrid em vez do resumo simplificado |
-| `src/components/fechamento/CloserFechamentoView.tsx` | Usar DynamicIndicatorsGrid em vez do resumo simplificado |
-| `src/pages/fechamento-sdr/MeuFechamento.tsx` | Passar props extras (sdrId, anoMes, kpi) para os views |
+### Parte 3: Recalcular payouts
+
+Chamar `recalculate-sdr-payout` para ambos em 2026-03. A Edge Function vai:
+- Buscar o comp_plan vigente (agora N2 para Julio, N3 para Thayna)
+- Buscar métricas do cargo correto (com meta_percentual preenchido)
+- Calcular contratos como % das realizadas (35% e 40% respectivamente)
+
+## Resultado
+
+| Closer | Março | Meta Contratos | Abril+ |
+|---|---|---|---|
+| Julio | N2 (R$8.000 OTE) | 35% das Realizadas | N1 (R$7.000) |
+| Thayna | N3 (R$9.000 OTE) | 40% das Realizadas | N2 (R$8.000) |
+| Demais | N1 (R$7.000 OTE) | 30% das Realizadas | Sem alteração |
+
+## Operações
+
+Todas as alterações são de dados (INSERT/UPDATE), sem mudança de código. Serão executadas via tool de insert do Supabase.
 
