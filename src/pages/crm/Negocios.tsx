@@ -878,6 +878,7 @@ const Negocios = () => {
         onDelete={canDelete ? () => setDeleteDialogOpen(true) : undefined}
         isDeleting={bulkDelete.isPending}
         onMoveStage={() => setMoveStageDialogOpen(true)}
+        onMovePipeline={() => setMovePipelineDialogOpen(true)}
       />
       
       {/* Dialog de confirmação de exclusão em massa */}
