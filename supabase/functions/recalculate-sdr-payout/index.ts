@@ -583,6 +583,77 @@ serve(async (req) => {
                 
                 console.log(`   📊 Métricas de Closer para ${sdr.name}: Alocadas=${reunioesAgendadas}, Realizadas=${reunioesRealizadas}, No-Shows=${noShows}`);
                 console.log(`   📊 Contratos para ${sdr.name}: Por data pagamento=${contractsNewCount}, Legacy=${contractsLegacyCount}, Total=${contratosPagos}`);
+                
+                // ===== R2 AGENDADAS: Buscar reuniões R2 atribuídas cronologicamente =====
+                // Construir mapa deal_id -> contract_paid_at dos contratos pagos
+                const r1DealMap = new Map<string, string>();
+                const allContracts = [...(contractsByPaymentDate || []), ...(contractsLegacy || [])];
+                for (const contract of allContracts) {
+                  if (contract.contract_paid_at) {
+                    const dealId = (contract as any).deal_id;
+                    if (dealId && !r1DealMap.has(dealId)) {
+                      r1DealMap.set(dealId, contract.contract_paid_at);
+                    }
+                  }
+                }
+                
+                // Buscar deal_ids dos attendees com contrato pago
+                const contractAttendeeIds = allContracts.map(c => c.id);
+                if (contractAttendeeIds.length > 0) {
+                  const { data: attendeesWithDeals } = await supabase
+                    .from('meeting_slot_attendees')
+                    .select('id, deal_id, contract_paid_at')
+                    .in('id', contractAttendeeIds)
+                    .not('deal_id', 'is', null);
+                  
+                  if (attendeesWithDeals) {
+                    for (const att of attendeesWithDeals) {
+                      if (att.deal_id && att.contract_paid_at && !r1DealMap.has(att.deal_id)) {
+                        r1DealMap.set(att.deal_id, att.contract_paid_at);
+                      }
+                    }
+                  }
+                }
+                
+                const r1DealIds = [...r1DealMap.keys()];
+                if (r1DealIds.length > 0) {
+                  // Buscar R2 meetings vinculadas aos deals dos contratos pagos
+                  const { data: r2Slots } = await supabase
+                    .from('meeting_slots')
+                    .select('id, deal_id, created_at')
+                    .eq('meeting_type', 'r2')
+                    .in('deal_id', r1DealIds)
+                    .gte('scheduled_at', `${monthStart}T00:00:00`)
+                    .lte('scheduled_at', `${monthEnd}T23:59:59`);
+                  
+                  if (r2Slots) {
+                    r2AgendadasCount = r2Slots.filter((r2: any) => {
+                      const paidAt = r1DealMap.get(r2.deal_id);
+                      return paidAt && new Date(r2.created_at) >= new Date(paidAt);
+                    }).length;
+                  }
+                }
+                
+                // Fallback: buscar R2 diretamente pelo closer_id
+                if (r2AgendadasCount === 0) {
+                  const { data: r2Direct } = await supabase
+                    .from('meeting_slots')
+                    .select('id, deal_id, created_at')
+                    .eq('closer_id', closerRecord.id)
+                    .eq('meeting_type', 'r2')
+                    .gte('scheduled_at', `${monthStart}T00:00:00`)
+                    .lte('scheduled_at', `${monthEnd}T23:59:59`);
+                  
+                  if (r2Direct) {
+                    r2AgendadasCount = r2Direct.filter((r2: any) => {
+                      const paidAt = r1DealMap.get(r2.deal_id);
+                      if (!paidAt) return true;
+                      return new Date(r2.created_at) >= new Date(paidAt);
+                    }).length;
+                  }
+                }
+                
+                console.log(`   📊 R2 Agendadas para ${sdr.name}: ${r2AgendadasCount}`);
               }
             } else {
               console.log(`   ⚠️ Closer ${sdr.name} não encontrado na tabela closers`);
