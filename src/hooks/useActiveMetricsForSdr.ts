@@ -70,12 +70,15 @@ export const useActiveMetricsForSdr = (sdrId: string | undefined, anoMes: string
         return { metricas: [], fonte: 'fallback' as const, roleType };
       }
 
-      // Prefer sdr_comp_plan cargo (more up-to-date for closers with level changes)
+      // Prefer sdr_comp_plan cargo for the specific month (handles level changes per month)
+      const monthStart = `${anoMes}-01`;
       const { data: compPlanData } = await supabase
         .from('sdr_comp_plan')
         .select('cargo_catalogo_id')
         .eq('sdr_id', sdrId)
         .neq('status', 'REJECTED')
+        .lte('vigencia_inicio', monthStart)
+        .or(`vigencia_fim.gte.${monthStart},vigencia_fim.is.null`)
         .order('vigencia_inicio', { ascending: false })
         .limit(1)
         .maybeSingle();
