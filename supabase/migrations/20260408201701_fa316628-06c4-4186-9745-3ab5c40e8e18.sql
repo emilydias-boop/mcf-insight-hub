@@ -1,0 +1,1 @@
+ALTER TABLE public.sdr ADD COLUMN allowed_origin_ids TEXT[] DEFAULT NULL;
