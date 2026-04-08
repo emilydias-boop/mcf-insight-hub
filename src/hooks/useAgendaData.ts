@@ -871,7 +871,8 @@ export function useSearchDealsForSchedule(query: string, originIds?: string[], o
 
       // 2. Buscar contatos pelo nome ou telefone (case-insensitive)
       const normalizedQuery = query.replace(/\D/g, ''); // Remove non-digits for phone search
-      const phoneFilter = normalizedQuery.length >= 4 ? `,phone.ilike.%${normalizedQuery}%` : '';
+      const isLikelyPhone = normalizedQuery.length >= 4 && (normalizedQuery.length / query.length) > 0.5;
+      const phoneFilter = isLikelyPhone ? `,phone.ilike.%${normalizedQuery}%` : '';
       const emailFilter = query.includes('@') || query.length >= 3 ? `,email.ilike.%${query}%` : '';
       
       const { data: contacts } = await supabase
