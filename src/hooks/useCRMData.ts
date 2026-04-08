@@ -443,12 +443,25 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
         query = query.eq('owner_profile_id', filters.ownerProfileId);
       }
       
-      // Server-side search across deal name, contact name, email and phone
+      // Server-side search: two-step approach to avoid PostgREST limitation
       if (filters.searchTerm && filters.searchTerm.trim().length >= 2) {
         const term = filters.searchTerm.trim();
-        query = query.or(
-          `name.ilike.%${term}%,crm_contacts.name.ilike.%${term}%,crm_contacts.email.ilike.%${term}%,crm_contacts.phone.ilike.%${term}%`
-        );
+        
+        // Step 1: Find matching contact IDs by name/email/phone
+        const { data: matchingContacts } = await supabase
+          .from('crm_contacts')
+          .select('id')
+          .or(`name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`)
+          .limit(500);
+        
+        const contactIds = matchingContacts?.map(c => c.id) || [];
+        
+        // Step 2: Filter deals by name OR matching contact_id
+        if (contactIds.length > 0) {
+          query = query.or(`name.ilike.%${term}%,contact_id.in.(${contactIds.join(',')})`);
+        } else {
+          query = query.ilike('name', `%${term}%`);
+        }
       }
       
       const { data, error } = await query;
