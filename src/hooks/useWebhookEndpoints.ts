@@ -159,6 +159,75 @@ export const useDeleteWebhookEndpoint = () => {
   });
 };
 
+export const useMoveWebhookEndpoint = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, newOriginId }: { id: string; newOriginId: string }) => {
+      const { data, error } = await supabase
+        .from('webhook_endpoints')
+        .update({ origin_id: newOriginId, stage_id: null })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['webhook-endpoints'] });
+      toast.success('Webhook movido com sucesso!');
+    },
+    onError: (error) => {
+      console.error('Error moving webhook endpoint:', error);
+      toast.error('Erro ao mover webhook: ' + error.message);
+    },
+  });
+};
+
+export const useCopyWebhookToOrigin = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ endpoint, newOriginId }: { endpoint: WebhookEndpoint; newOriginId: string }) => {
+      const newSlug = `${endpoint.slug}-copy-${Date.now().toString(36).slice(-4)}`;
+      const { data, error } = await supabase
+        .from('webhook_endpoints')
+        .insert({
+          slug: newSlug,
+          name: `${endpoint.name} (cópia)`,
+          description: endpoint.description,
+          origin_id: newOriginId,
+          stage_id: null,
+          auto_tags: endpoint.auto_tags || [],
+          field_mapping: endpoint.field_mapping || {},
+          required_fields: endpoint.required_fields || ['name', 'email'],
+          auth_header_name: endpoint.auth_header_name,
+          auth_header_value: endpoint.auth_header_value,
+          fixed_owner_email: endpoint.fixed_owner_email,
+          is_active: endpoint.is_active,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['webhook-endpoints'] });
+      toast.success('Webhook copiado com sucesso!');
+    },
+    onError: (error) => {
+      console.error('Error copying webhook endpoint:', error);
+      if (error.message?.includes('duplicate key')) {
+        toast.error('Já existe um webhook com este slug');
+      } else {
+        toast.error('Erro ao copiar webhook: ' + error.message);
+      }
+    },
+  });
+};
+
 export const useToggleWebhookEndpoint = () => {
   const queryClient = useQueryClient();
 
