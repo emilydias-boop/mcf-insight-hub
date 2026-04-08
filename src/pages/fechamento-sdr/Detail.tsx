@@ -14,7 +14,7 @@ import { DynamicIndicatorsGrid } from "@/components/fechamento/DynamicIndicatorC
 import { useActiveMetricsForSdr } from "@/hooks/useActiveMetricsForSdr";
 import { useCloserAgendaMetrics } from "@/hooks/useCloserAgendaMetrics";
 import { useCalculatedVariavel } from "@/hooks/useCalculatedVariavel";
-import { useSdrPayoutDetail, useSdrCompPlan, useSdrMonthKpi, useUpdatePayoutStatus } from "@/hooks/useSdrFechamento";
+import { useSdrPayoutDetail, useSdrCompPlan, useSdrMonthKpi, useUpdatePayoutStatus, useRemoveAdjustment } from "@/hooks/useSdrFechamento";
 import { useRecalculateWithKpi, useAuthorizeUltrameta, useSdrIntermediacoes } from "@/hooks/useSdrKpiMutations";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
@@ -32,6 +32,7 @@ import {
   Gift,
   CheckCircle,
   Download,
+  Trash2,
   User,
 } from "lucide-react";
 
@@ -153,6 +154,7 @@ const FechamentoSDRDetail = () => {
     diasUteisTrabalhados: payout?.dias_uteis_trabalhados,
   });
 
+  const removeAdjustment = useRemoveAdjustment();
   const isAdmin = role === "admin";
   const isManager = role === "manager" || role === "coordenador";
   const canEdit = (isAdmin || isManager) && payout?.status !== "LOCKED";
@@ -620,9 +622,22 @@ const FechamentoSDRDetail = () => {
                           {formatDateTime(adj.created_at)}
                         </div>
                       </div>
-                      <div className={`text-sm font-bold ${adj.valor >= 0 ? "text-green-400" : "text-red-400"}`}>
-                        {adj.valor >= 0 ? "+" : ""}
-                        {formatCurrency(adj.valor)}
+                      <div className="flex items-center gap-2">
+                        <div className={`text-sm font-bold ${adj.valor >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          {adj.valor >= 0 ? "+" : ""}
+                          {formatCurrency(adj.valor)}
+                        </div>
+                        {canEdit && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => removeAdjustment.mutate({ payoutId: payout.id, index: idx })}
+                            disabled={removeAdjustment.isPending}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}

@@ -971,6 +971,70 @@ export const useAddAdjustment = () => {
   });
 };
 
+// Remove adjustment
+export const useRemoveAdjustment = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ payoutId, index }: { payoutId: string; index: number }) => {
+      const { data: payout, error: fetchError } = await supabase
+        .from('sdr_month_payout')
+        .select('*')
+        .eq('id', payoutId)
+        .single();
+
+      if (fetchError) throw fetchError;
+      if (payout.status === 'LOCKED') {
+        throw new Error('Não é possível remover ajuste de um fechamento travado');
+      }
+
+      const ajustes = Array.isArray(payout.ajustes_json)
+        ? (payout.ajustes_json as unknown as PayoutAdjustment[])
+        : [];
+
+      if (index < 0 || index >= ajustes.length) {
+        throw new Error('Índice de ajuste inválido');
+      }
+
+      const ajusteRemovido = ajustes[index];
+      const novosAjustes = ajustes.filter((_, i) => i !== index);
+
+      const { error } = await supabase
+        .from('sdr_month_payout')
+        .update({
+          ajustes_json: JSON.parse(JSON.stringify(novosAjustes)),
+          valor_variavel_total: (payout.valor_variavel_total || 0) - ajusteRemovido.valor,
+          total_conta: (payout.total_conta || 0) - ajusteRemovido.valor,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', payoutId);
+
+      if (error) throw error;
+
+      // Audit log
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('sdr_payout_audit_log').insert({
+        payout_id: payoutId,
+        user_id: user?.id || null,
+        campo: 'ajustes_json',
+        valor_anterior: JSON.stringify(ajusteRemovido),
+        valor_novo: null,
+        motivo: `Ajuste removido: ${ajusteRemovido.motivo}`,
+      });
+
+      return payoutId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sdr-payout-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-payouts'] });
+      toast.success('Ajuste removido');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao remover ajuste: ${error.message}`);
+    },
+  });
+};
+
 // Update iFood ultrameta authorization
 export const useUpdateIfoodAuthorization = () => {
   const queryClient = useQueryClient();
