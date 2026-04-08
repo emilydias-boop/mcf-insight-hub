@@ -1,43 +1,41 @@
 
 
-# Corrigir busca por email retornando resultados errados no agendamento R2
+# Corrigir cálculo dos indicadores na visão do SDR (Meu Fechamento)
 
 ## Problema
 
-Ao buscar por `victorsaraiva1777@gmail.com`, o sistema:
-1. Extrai os dígitos do texto: `"1777"`
-2. Como tem 4+ dígitos, adiciona filtro `phone.ilike.%1777%`
-3. Isso retorna contatos como Bruna (`19998871777`) que contêm "1777" no telefone
+Os valores base dos indicadores estão errados na tela "Meu Fechamento" do SDR porque o componente `SdrFechamentoView` usa `payout.valor_variavel_total` (o resultado já calculado, R$996) como base para os indicadores, quando deveria usar `compPlan.variavel_total` (o valor base do plano de compensação, R$1200).
+
+| Indicador | Admin (correto) | SDR (errado) |
+|---|---|---|
+| Agendamentos R1 (30%) | R$360 (1200×30%) | R$298.80 (996×30%) |
+| R1 Realizadas (40%) | R$480 (1200×40%) | R$398.40 (996×40%) |
+| Contratos (20%) | R$240 (1200×20%) | R$199.20 (996×20%) |
+| Tentativas (10%) | R$120 (1200×10%) | R$99.60 (996×10%) |
 
 ## Causa raiz
 
-Linha 873-874 de `useAgendaData.ts`:
-```typescript
-const normalizedQuery = query.replace(/\D/g, '');
-const phoneFilter = normalizedQuery.length >= 4 ? ... : '';
-```
+`SdrFechamentoView` (linha 26): `variavelTotal = payout.valor_variavel_total` usa o valor de saída como entrada.
 
-Não distingue se o input é email ou telefone — extrai dígitos de qualquer texto.
+O Detail.tsx (admin) usa corretamente: `compPlan?.variavel_total || 1200`.
 
 ## Solução
 
-No `useSearchDealsForSchedule` (`src/hooks/useAgendaData.ts`, linhas 872-875):
+| Arquivo | Alteração |
+|---|---|
+| `src/pages/fechamento-sdr/MeuFechamento.tsx` | Extrair `compPlan` do `useOwnFechamento` e passá-lo ao `SdrFechamentoView` e `CloserFechamentoView` |
+| `src/components/fechamento/SdrFechamentoView.tsx` | Adicionar prop `compPlan` e usar `compPlan?.variavel_total` como base em vez de `payout.valor_variavel_total` |
+| `src/components/fechamento/CloserFechamentoView.tsx` | Mesma correção para closers |
 
-Só aplicar o filtro de telefone quando a query original parecer um número de telefone (maioria dos caracteres são dígitos), e não quando for claramente um email ou nome:
+### Detalhe da mudança em SdrFechamentoView
 
 ```typescript
-// Antes
-const normalizedQuery = query.replace(/\D/g, '');
-const phoneFilter = normalizedQuery.length >= 4 ? `,phone.ilike.%${normalizedQuery}%` : '';
+// Antes (linha 26):
+const variavelTotal = payout.valor_variavel_total || 0;
 
-// Depois
-const normalizedQuery = query.replace(/\D/g, '');
-const isLikelyPhone = normalizedQuery.length >= 4 && (normalizedQuery.length / query.length) > 0.5;
-const phoneFilter = isLikelyPhone ? `,phone.ilike.%${normalizedQuery}%` : '';
+// Depois:
+const variavelTotal = compPlan?.variavel_total || payout.sdr?.meta_diaria ? 1200 : 400;
 ```
 
-A heurística `normalizedQuery.length / query.length > 0.5` garante que:
-- `"86988436557"` → 100% dígitos → busca por telefone ✓
-- `"victorsaraiva1777@gmail.com"` → 4/28 = 14% dígitos → NÃO busca por telefone ✓
-- `"43998693444"` → 100% dígitos → busca por telefone ✓
+Passando `compPlan` como prop, o cálculo fica idêntico ao da tela admin: base fixa do plano de compensação multiplicada pelos pesos e multiplicadores de performance.
 
