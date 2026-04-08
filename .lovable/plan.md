@@ -1,55 +1,41 @@
 
 
-# Fix: Server-side search failing with PostgREST error
+# Copiar e Mover Webhook para outra Pipeline
 
-## Problem
+## O que será feito
 
-The `.or()` filter with related table columns (`crm_contacts.name`, `crm_contacts.email`, etc.) is not supported by PostgREST inside `or()`. This causes a 400 error:
+Adicionar duas novas opções no menu de contexto (⋯) de cada webhook de entrada:
 
-```
-"failed to parse logic tree ((name.ilike.%...%,crm_contacts.name.ilike.%...%))"
-```
+1. **Copiar para outra Pipeline** -- Cria uma cópia do webhook (com novo slug) em outra pipeline, mantendo o original intacto
+2. **Mover para outra Pipeline** -- Altera o `origin_id` do webhook existente para a pipeline escolhida
 
-The search in Contatos works because it queries `crm_contacts` directly. The search in Negocios (Pipeline) fails because it tries to filter on joined table columns inside `.or()`.
+Ambas as ações abrem um dialog de seleção de pipeline antes de executar.
 
-## Solution
+## Mudanças
 
-When a `searchTerm` is present, run a **two-step query**:
-
-1. First, query `crm_contacts` to find matching contact IDs by name/email/phone
-2. Then query `crm_deals` with `.or()` using only deal-level columns: `name.ilike.%term%` OR `contact_id.in.(matched_ids)`
-
-This avoids the PostgREST limitation entirely.
-
-## Changes
-
-| File | Change |
+| Arquivo | Alteração |
 |---|---|
-| `src/hooks/useCRMData.ts` | Replace the broken `.or()` with a two-step approach: first find contact IDs, then filter deals by `name` OR `contact_id.in.(...)` |
+| `src/components/crm/webhooks/IncomingWebhookEditor.tsx` | Adicionar itens "Copiar para Pipeline" e "Mover para Pipeline" no dropdown menu; novo state para controlar dialog de seleção |
+| `src/components/crm/webhooks/MoveWebhookDialog.tsx` | **Novo arquivo** -- Dialog com Select de pipelines (origins) e botão confirmar. Recebe `mode: 'copy' \| 'move'`, `endpoint`, `currentOriginId` |
+| `src/hooks/useWebhookEndpoints.ts` | Adicionar `useMoveWebhookEndpoint()` (update `origin_id`) e `useCopyWebhookToOrigin()` (insert cópia com novo slug) |
 
-### Implementation detail (line ~446-452 in useCRMData.ts)
+## Detalhes técnicos
 
+### MoveWebhookDialog
+- Busca todas as `crm_origins` não arquivadas, excluindo a origin atual
+- Mostra nome da origin agrupado pelo grupo (se tiver)
+- Botão "Confirmar" executa a ação
+
+### Hook: Mover
 ```typescript
-if (filters.searchTerm && filters.searchTerm.trim().length >= 2) {
-  const term = filters.searchTerm.trim();
-  
-  // Step 1: Find matching contact IDs
-  const { data: matchingContacts } = await supabase
-    .from('crm_contacts')
-    .select('id')
-    .or(`name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`)
-    .limit(500);
-  
-  const contactIds = matchingContacts?.map(c => c.id) || [];
-  
-  // Step 2: Filter deals by name OR matching contact_id
-  if (contactIds.length > 0) {
-    query = query.or(`name.ilike.%${term}%,contact_id.in.(${contactIds.join(',')})`);
-  } else {
-    query = query.ilike('name', `%${term}%`);
-  }
-}
+// Simplesmente atualiza origin_id (e opcionalmente stage_id para null)
+useMutation: UPDATE webhook_endpoints SET origin_id = newOriginId, stage_id = null WHERE id = ...
 ```
 
-Also remove origin_id filter when searching (cross-pipeline search) since the user may want to find deals in any pipeline.
+### Hook: Copiar
+```typescript
+// Cria novo registro com slug incrementado (ex: "anamnese" → "anamnese-copy")
+// Copia: name, description, auto_tags, field_mapping, required_fields, auth configs, is_active
+// Altera: origin_id para destino, slug com sufixo, leads_received = 0
+```
 
