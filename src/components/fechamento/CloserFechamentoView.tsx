@@ -1,20 +1,9 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/formatters';
-import { SdrPayoutWithDetails, SdrMonthKpi } from '@/types/sdr-fechamento';
+import { SdrPayoutWithDetails, SdrMonthKpi, SdrCompPlan } from '@/types/sdr-fechamento';
 import { CloserMetrics } from '@/hooks/useOwnFechamento';
 import { DynamicIndicatorsGrid } from '@/components/fechamento/DynamicIndicatorCard';
 import { useActiveMetricsForSdr } from '@/hooks/useActiveMetricsForSdr';
-import {
-  DollarSign,
-  Target,
-  Wallet,
-  CreditCard,
-  UtensilsCrossed,
-  TrendingUp,
-  AlertTriangle,
-  Sparkles,
-  CalendarPlus,
-} from 'lucide-react';
 
 interface CloserFechamentoViewProps {
   payout: SdrPayoutWithDetails;
@@ -22,14 +11,15 @@ interface CloserFechamentoViewProps {
   sdrId: string;
   anoMes: string;
   kpi: SdrMonthKpi | null;
+  compPlan?: SdrCompPlan | null;
 }
 
-export function CloserFechamentoView({ payout, closerMetrics, sdrId, anoMes, kpi }: CloserFechamentoViewProps) {
+export function CloserFechamentoView({ payout, closerMetrics, sdrId, anoMes, kpi, compPlan }: CloserFechamentoViewProps) {
   const { metricas } = useActiveMetricsForSdr(sdrId, anoMes);
 
   const diasUteisMes = (payout as any).dias_uteis_mes || (payout as any).dias_uteis || 22;
   const sdrMetaDiaria = payout.sdr?.meta_diaria || 3;
-  const variavelTotal = payout.valor_variavel_total || 0;
+  const variavelTotal = compPlan?.variavel_total || (payout.sdr?.meta_diaria && payout.sdr.meta_diaria >= 3 ? 1200 : 400);
 
   const getNoShowColor = (rate: number) => {
     if (rate <= 20) return 'text-success';

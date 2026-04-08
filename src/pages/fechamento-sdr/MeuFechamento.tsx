@@ -44,6 +44,7 @@ const MeuFechamento = () => {
     userType, 
     userRecord, 
     payout, 
+    compPlan,
     closerMetrics,
     kpi,
     isConsorcioPayout,
