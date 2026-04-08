@@ -621,9 +621,22 @@ const FechamentoSDRDetail = () => {
                           {formatDateTime(adj.created_at)}
                         </div>
                       </div>
-                      <div className={`text-sm font-bold ${adj.valor >= 0 ? "text-green-400" : "text-red-400"}`}>
-                        {adj.valor >= 0 ? "+" : ""}
-                        {formatCurrency(adj.valor)}
+                      <div className="flex items-center gap-2">
+                        <div className={`text-sm font-bold ${adj.valor >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          {adj.valor >= 0 ? "+" : ""}
+                          {formatCurrency(adj.valor)}
+                        </div>
+                        {canEdit && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => removeAdjustment.mutate({ payoutId: payout.id, index: idx })}
+                            disabled={removeAdjustment.isPending}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
