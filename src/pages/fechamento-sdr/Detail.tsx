@@ -14,7 +14,7 @@ import { DynamicIndicatorsGrid } from "@/components/fechamento/DynamicIndicatorC
 import { useActiveMetricsForSdr } from "@/hooks/useActiveMetricsForSdr";
 import { useCloserAgendaMetrics } from "@/hooks/useCloserAgendaMetrics";
 import { useCalculatedVariavel } from "@/hooks/useCalculatedVariavel";
-import { useSdrPayoutDetail, useSdrCompPlan, useSdrMonthKpi, useUpdatePayoutStatus } from "@/hooks/useSdrFechamento";
+import { useSdrPayoutDetail, useSdrCompPlan, useSdrMonthKpi, useUpdatePayoutStatus, useRemoveAdjustment } from "@/hooks/useSdrFechamento";
 import { useRecalculateWithKpi, useAuthorizeUltrameta, useSdrIntermediacoes } from "@/hooks/useSdrKpiMutations";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
