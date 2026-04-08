@@ -245,9 +245,9 @@ const MeuFechamento = () => {
           )}
 
           {/* Render view based on user type (only for non-consorcio) */}
-          {!isConsorcioPayout && userType === 'sdr' && <SdrFechamentoView payout={visiblePayout} sdrId={userRecord.id} anoMes={selectedMonth} kpi={kpi} />}
+          {!isConsorcioPayout && userType === 'sdr' && <SdrFechamentoView payout={visiblePayout} sdrId={userRecord.id} anoMes={selectedMonth} kpi={kpi} compPlan={compPlan} />}
           {!isConsorcioPayout && userType === 'closer' && (
-            <CloserFechamentoView payout={visiblePayout} closerMetrics={closerMetrics} sdrId={userRecord.id} anoMes={selectedMonth} kpi={kpi} />
+            <CloserFechamentoView payout={visiblePayout} closerMetrics={closerMetrics} sdrId={userRecord.id} anoMes={selectedMonth} kpi={kpi} compPlan={compPlan} />
           )}
 
           {/* For consorcio, show summary card */}
