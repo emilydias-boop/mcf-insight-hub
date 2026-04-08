@@ -404,20 +404,7 @@ const Negocios = () => {
       
       // Filtro por role removido - backend já filtra por owner_profile_id
       
-      // Busca expandida: nome do deal, nome do contato, email e telefone
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        const searchRaw = filters.search;
-        
-        const matchesDealName = deal.name?.toLowerCase().includes(searchLower);
-        const matchesContactName = deal.crm_contacts?.name?.toLowerCase().includes(searchLower);
-        const matchesEmail = deal.crm_contacts?.email?.toLowerCase().includes(searchLower);
-        const matchesPhone = deal.crm_contacts?.phone?.includes(searchRaw);
-        
-        if (!matchesDealName && !matchesContactName && !matchesEmail && !matchesPhone) {
-          return false;
-        }
-      }
+      // Search is now handled server-side in useCRMDeals
       
       // Filtro por data de criação (ou criação/atualização quando tags ativas)
       if (filters.dateRange?.from) {
