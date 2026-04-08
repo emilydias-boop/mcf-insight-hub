@@ -215,6 +215,22 @@ export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) 
                       <Copy className="h-4 w-4 mr-2" />
                       Duplicar
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => {
+                      setMoveMode('copy');
+                      setMoveEndpoint(endpoint);
+                      setMoveDialogOpen(true);
+                    }}>
+                      <CopyPlus className="h-4 w-4 mr-2" />
+                      Copiar para Pipeline
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => {
+                      setMoveMode('move');
+                      setMoveEndpoint(endpoint);
+                      setMoveDialogOpen(true);
+                    }}>
+                      <ArrowRightLeft className="h-4 w-4 mr-2" />
+                      Mover para Pipeline
+                    </DropdownMenuItem>
                     <DropdownMenuItem 
                       onClick={() => window.open(getWebhookUrl(endpoint.slug), '_blank')}
                     >
