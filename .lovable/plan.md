@@ -1,41 +1,47 @@
 
 
-# Corrigir cálculo dos indicadores na visão do SDR (Meu Fechamento)
+# Restringir Antony para ver apenas PILOTO ANAMNESE / INDICAÇÃO
 
 ## Problema
 
-Os valores base dos indicadores estão errados na tela "Meu Fechamento" do SDR porque o componente `SdrFechamentoView` usa `payout.valor_variavel_total` (o resultado já calculado, R$996) como base para os indicadores, quando deveria usar `compPlan.variavel_total` (o valor base do plano de compensação, R$1200).
-
-| Indicador | Admin (correto) | SDR (errado) |
-|---|---|---|
-| Agendamentos R1 (30%) | R$360 (1200×30%) | R$298.80 (996×30%) |
-| R1 Realizadas (40%) | R$480 (1200×40%) | R$398.40 (996×40%) |
-| Contratos (20%) | R$240 (1200×20%) | R$199.20 (996×20%) |
-| Tentativas (10%) | R$120 (1200×10%) | R$99.60 (996×10%) |
-
-## Causa raiz
-
-`SdrFechamentoView` (linha 26): `variavelTotal = payout.valor_variavel_total` usa o valor de saída como entrada.
-
-O Detail.tsx (admin) usa corretamente: `compPlan?.variavel_total || 1200`.
+O Antony (SDR, BU incorporador) precisa ver **apenas** a pipeline "PILOTO ANAMNESE / INDICAÇÃO" e **não** a "Inside Sales". Atualmente, SDRs do incorporador são fixados na Inside Sales sem opção de troca.
 
 ## Solução
 
-| Arquivo | Alteração |
-|---|---|
-| `src/pages/fechamento-sdr/MeuFechamento.tsx` | Extrair `compPlan` do `useOwnFechamento` e passá-lo ao `SdrFechamentoView` e `CloserFechamentoView` |
-| `src/components/fechamento/SdrFechamentoView.tsx` | Adicionar prop `compPlan` e usar `compPlan?.variavel_total` como base em vez de `payout.valor_variavel_total` |
-| `src/components/fechamento/CloserFechamentoView.tsx` | Mesma correção para closers |
+Adicionar uma coluna `allowed_origin_ids` (TEXT[]) na tabela `sdr` para override individual de pipelines. Quando preenchida, o SDR vê **apenas** essas pipelines em vez do padrão da BU.
 
-### Detalhe da mudança em SdrFechamentoView
+### 1. Migration: adicionar coluna na tabela `sdr`
 
-```typescript
-// Antes (linha 26):
-const variavelTotal = payout.valor_variavel_total || 0;
+```sql
+ALTER TABLE public.sdr ADD COLUMN allowed_origin_ids TEXT[] DEFAULT NULL;
 
-// Depois:
-const variavelTotal = compPlan?.variavel_total || payout.sdr?.meta_diaria ? 1200 : 400;
+-- Configurar Antony para ver apenas PILOTO ANAMNESE
+UPDATE public.sdr 
+SET allowed_origin_ids = ARRAY['7431cf4a-dc29-4208-95a6-28a499a06dac']
+WHERE id = '11111111-0001-0001-0001-000000000005';
 ```
 
-Passando `compPlan` como prop, o cálculo fica idêntico ao da tela admin: base fixa do plano de compensação multiplicada pelos pesos e multiplicadores de performance.
+### 2. Hook para buscar override do SDR
+
+Criar `src/hooks/useSDROriginOverride.ts` — busca `allowed_origin_ids` do SDR logado. Se preenchido, retorna esses IDs; se null, retorna null (usa padrão da BU).
+
+### 3. Alterar `Negocios.tsx`
+
+No cálculo de `effectiveOriginId` e no `useEffect` de auto-seleção:
+- Se SDR tem `allowed_origin_ids`, usar o primeiro como default e restringir sidebar/dropdown a essas origens
+- Se não tem override, manter comportamento atual (padrão da BU)
+
+No `showSidebar`: se SDR tem override com 1 pipeline, esconder sidebar (single pipeline). Se tem múltiplas no override, mostrar sidebar.
+
+| Arquivo | Alteração |
+|---|---|
+| Migration SQL | Adicionar `allowed_origin_ids TEXT[]` na tabela `sdr` + setar Antony |
+| `src/hooks/useSDROriginOverride.ts` | Novo hook para buscar override |
+| `src/pages/crm/Negocios.tsx` | Usar override quando disponível no effectiveOriginId e sidebar |
+
+### Resultado
+
+- Antony verá **apenas** PILOTO ANAMNESE / INDICAÇÃO (sem sidebar, pipeline fixa)
+- Outros SDRs do incorporador continuam vendo Inside Sales normalmente
+- Futuramente, basta editar `allowed_origin_ids` no admin/RH para mudar a pipeline de qualquer SDR
 
