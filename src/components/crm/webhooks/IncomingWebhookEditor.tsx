@@ -10,7 +10,9 @@ import {
   MoreHorizontal,
   ExternalLink,
   Check,
-  Download
+  Download,
+  ArrowRightLeft,
+  CopyPlus,
 } from 'lucide-react';
 import {
   DropdownMenu,
