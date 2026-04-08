@@ -505,6 +505,7 @@ serve(async (req) => {
         let reunioesRealizadas = 0;
         let taxaNoShow = 0;
         let contratosPagos = 0; // Novo: contratos pagos para Closers
+        let r2AgendadasCount = 0; // R2 agendadas para Closers
 
         if (sdr.email) {
           if (isCloser) {
