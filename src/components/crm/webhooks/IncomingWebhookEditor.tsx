@@ -54,6 +54,9 @@ export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [endpointToDelete, setEndpointToDelete] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [moveMode, setMoveMode] = useState<'move' | 'copy'>('move');
+  const [moveEndpoint, setMoveEndpoint] = useState<WebhookEndpoint | null>(null);
 
   const { data: endpoints, isLoading } = useWebhookEndpoints(originId);
   const deleteMutation = useDeleteWebhookEndpoint();
