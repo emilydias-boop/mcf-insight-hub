@@ -26,6 +26,8 @@ import {
 } from '@/components/ui/table';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { R2AttendeeTransferModal } from './R2AttendeeTransferModal';
+import { R2AttendeeExtended, R2MeetingRow } from '@/types/r2Agenda';
 
 // Hook to check which pre-scheduled leads have configured daily slots
 function usePreScheduledSlotCheck(leads: ReturnType<typeof useR2PreScheduledLeads>['data']) {
