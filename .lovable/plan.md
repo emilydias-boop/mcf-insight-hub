@@ -1,39 +1,55 @@
 
 
-# Fix: Search not finding deals beyond 10,000 limit
+# Fix: Server-side search failing with PostgREST error
 
 ## Problem
 
-The Pipeline de Vendas has 10,000+ deals. The current implementation:
-1. Fetches up to 10,000 deals client-side (`limit: 10000` in Negocios.tsx line 259)
-2. Search filtering happens **in the browser** on those 10,000 deals (lines 401-420)
-3. Deals beyond the 10,000 limit are invisible to search
+The `.or()` filter with related table columns (`crm_contacts.name`, `crm_contacts.email`, etc.) is not supported by PostgREST inside `or()`. This causes a 400 error:
 
-Simply increasing the limit (e.g., to 50,000) is not viable -- it would make the page extremely slow and use excessive memory.
+```
+"failed to parse logic tree ((name.ilike.%...%,crm_contacts.name.ilike.%...%))"
+```
 
-## Solution: Move search to the backend (Supabase query)
+The search in Contatos works because it queries `crm_contacts` directly. The search in Negocios (Pipeline) fails because it tries to filter on joined table columns inside `.or()`.
 
-When the user types a search term, apply the filter **server-side** using Supabase's `or()` and `ilike()` operators. This way, the search queries the entire database, not just the first 10,000 rows.
+## Solution
+
+When a `searchTerm` is present, run a **two-step query**:
+
+1. First, query `crm_contacts` to find matching contact IDs by name/email/phone
+2. Then query `crm_deals` with `.or()` using only deal-level columns: `name.ilike.%term%` OR `contact_id.in.(matched_ids)`
+
+This avoids the PostgREST limitation entirely.
 
 ## Changes
 
 | File | Change |
 |---|---|
-| `src/hooks/useCRMData.ts` | In `useCRMDeals`, when `searchTerm` is present, add `.or()` filter to query `name`, `crm_contacts.name`, `crm_contacts.email`, `crm_contacts.phone` server-side |
-| `src/pages/crm/Negocios.tsx` | Remove the client-side search filter in `filteredDeals` (lines 407-420) since it's now handled by the backend |
+| `src/hooks/useCRMData.ts` | Replace the broken `.or()` with a two-step approach: first find contact IDs, then filter deals by `name` OR `contact_id.in.(...)` |
 
-## Technical detail
-
-In `useCRMData.ts`, after line 444, add:
+### Implementation detail (line ~446-452 in useCRMData.ts)
 
 ```typescript
 if (filters.searchTerm && filters.searchTerm.trim().length >= 2) {
   const term = filters.searchTerm.trim();
-  query = query.or(
-    `name.ilike.%${term}%,crm_contacts.name.ilike.%${term}%,crm_contacts.email.ilike.%${term}%,crm_contacts.phone.ilike.%${term}%`
-  );
+  
+  // Step 1: Find matching contact IDs
+  const { data: matchingContacts } = await supabase
+    .from('crm_contacts')
+    .select('id')
+    .or(`name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`)
+    .limit(500);
+  
+  const contactIds = matchingContacts?.map(c => c.id) || [];
+  
+  // Step 2: Filter deals by name OR matching contact_id
+  if (contactIds.length > 0) {
+    query = query.or(`name.ilike.%${term}%,contact_id.in.(${contactIds.join(',')})`);
+  } else {
+    query = query.ilike('name', `%${term}%`);
+  }
 }
 ```
 
-This ensures search works across **all** deals in the database, regardless of the limit. The 10,000 limit still applies to the results shown (but a search for "João" will find all matches, not just within the first 10k).
+Also remove origin_id filter when searching (cross-pipeline search) since the user may want to find deals in any pipeline.
 
