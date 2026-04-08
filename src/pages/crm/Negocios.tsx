@@ -96,6 +96,9 @@ const Negocios = () => {
   const activeBU = useActiveBU();
   const isLoadingBU = false; // useActiveBU é síncrono
   
+  // Buscar override individual de pipelines do SDR (se configurado)
+  const { data: sdrOriginOverride } = useSDROriginOverride();
+  
   // Verificar se é SDR (acesso restrito ao Pipeline Inside Sales)
   // Usa allRoles para suportar usuários com múltiplas roles (ex: SDR + Closer)
   const isSdr = isSdrRole(role, allRoles);
