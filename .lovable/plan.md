@@ -1,61 +1,90 @@
 
 
-# Adicionar métrica R2 Agendadas no cálculo de variável dos Closers
+# Fix: Duplicate contacts from webhook race conditions + cleanup
 
-## Problema
+## Root Cause
 
-A edge function `recalculate-sdr-payout` calcula a variável dos Closers somando apenas 4 métricas:
+The `webhook-lead-receiver` function creates duplicate contacts due to two issues:
 
+1. **Race condition**: Two concurrent webhooks (e.g., Hubla + Make) both run `SELECT` before either `INSERT` commits. With `gap_seconds < 1` (e.g., 0.096s for rodrigopopiel), both create separate contacts.
+
+2. **Phone format mismatch**: The email lookup uses `.maybeSingle()` which returns `null` when multiple matches exist (e.g., an already-duplicated contact). The phone fallback fails because phones aren't normalized consistently (`+5511950406830` vs `11950406830`).
+
+**Evidence**: 30 unique emails with 58 duplicate contacts since April 1st. Many with sub-second gaps (race condition) or ~100s gaps (different webhook sources).
+
+## Fix (3 parts)
+
+### Part 1: Database unique index on email
+
+Add a partial unique index to prevent duplicate active contacts with the same email:
+
+```sql
+CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_contacts_unique_active_email 
+ON crm_contacts (lower(email)) 
+WHERE email IS NOT NULL AND is_archived = false;
 ```
-valorVariavelTotal = valorContratos + valorOrganizacao + valorRealizadas + valorVendasParceria
-```
 
-A métrica **r2_agendadas** (peso 50%) está completamente ausente do cálculo. Por isso:
-- **Thayna**: mostra R$675 (só contratos) em vez de R$675 + R$945 = R$1.620
-- **Julio**: mostra R$1.200 (só contratos) em vez de R$1.200 + R$600 = R$1.800
+This requires first cleaning up existing duplicates (Part 3) before the index can be created, so we'll handle cleanup first, then add the index.
 
-## Correção
+### Part 2: Edge Function - handle conflict on insert
 
-Adicionar o bloco de cálculo de `r2_agendadas` na edge function, seguindo o mesmo padrão das outras métricas (buscar peso, calcular meta como % dos contratos pagos, aplicar multiplicador).
-
-## Arquivo
-
-| Arquivo | Alteração |
-|---|---|
-| `supabase/functions/recalculate-sdr-payout/index.ts` | Adicionar bloco de cálculo para `r2_agendadas` entre vendas_parceria e o total |
-
-## Detalhes técnicos
-
-No arquivo `supabase/functions/recalculate-sdr-payout/index.ts`, após o bloco de vendas_parceria (linha ~1178), adicionar:
+In `webhook-lead-receiver/index.ts` (lines 296-314), wrap the contact INSERT to catch unique violation errors (`23505`) and retry the lookup:
 
 ```typescript
-// Calcular R2 Agendadas
-const metricaR2 = metricasAtivas.find(m => m.nome_metrica === 'r2_agendadas');
-let valorR2Agendadas = 0;
+const { data: newContact, error: contactError } = await supabase
+  .from('crm_contacts')
+  .insert({ ... })
+  .select('id')
+  .single();
 
-if (metricaR2 && metricaR2.peso_percentual > 0) {
-  const pesoR2 = metricaR2.peso_percentual;
-  const valorBaseR2 = (cargoInfo.variavel_valor * pesoR2) / 100;
-  
-  // Meta = % dos contratos pagos (default 100%)
-  const pctR2 = metricaR2.meta_percentual && metricaR2.meta_percentual > 0 
-    ? metricaR2.meta_percentual : 100;
-  const metaR2 = Math.round((contratosPagos * pctR2) / 100);
-  
-  // Valor realizado do KPI
-  const r2Real = kpi.r2_agendadas || 0;
-  const pctR2Atingido = metaR2 > 0 ? (r2Real / metaR2) * 100 : 0;
-  const multR2 = getMultiplier(Math.min(pctR2Atingido, 120));
-  valorR2Agendadas = valorBaseR2 * multR2;
-  
-  console.log(`   📊 R2 Agendadas: Real=${r2Real}, Meta=${metaR2}, %=${pctR2Atingido.toFixed(1)}%, Mult=${multR2}, Valor=R$ ${valorR2Agendadas.toFixed(2)}`);
+if (contactError) {
+  if (contactError.code === '23505' && emailTrimmed) {
+    // Race condition: another request just created this contact
+    const { data: raceContact } = await supabase
+      .from('crm_contacts')
+      .select('id')
+      .ilike('email', emailTrimmed)
+      .order('created_at', { ascending: true })
+      .limit(1);
+    if (raceContact?.[0]) {
+      contactId = raceContact[0].id;
+      existingContact = raceContact[0];
+    } else throw contactError;
+  } else throw contactError;
 }
 ```
 
-E atualizar a soma:
+Also fix the email lookup (line 188-193) to use `limit(1)` instead of `.maybeSingle()` to handle pre-existing duplicates gracefully:
+
 ```typescript
-const valorVariavelTotal = valorContratos + valorOrganizacao + valorRealizadas + valorVendasParceria + valorR2Agendadas;
+const { data: contactsByEmail } = await supabase
+  .from('crm_contacts')
+  .select('id')
+  .ilike('email', emailTrimmed)
+  .eq('is_archived', false)
+  .order('created_at', { ascending: true })
+  .limit(1);
+existingContact = contactsByEmail?.[0] || null;
 ```
 
-Após o deploy, recalcular os payouts de Março para Julio e Thayna.
+### Part 3: Cleanup existing duplicates
+
+Use a data operation to archive the 28+ orphan duplicate contacts (those without deals) and merge the ones with deals. Specifically:
+
+1. Archive duplicate contacts that have **no deals** (set `is_archived = true`, `merged_into_contact_id` = principal)
+2. For duplicates with deals, remap deals to the oldest contact and archive the duplicate
+3. Then create the unique index
+
+## Files
+
+| File | Change |
+|---|---|
+| `supabase/functions/webhook-lead-receiver/index.ts` | Fix email lookup to use `limit(1)`, handle `23505` conflict on insert |
+| `supabase/migrations/*.sql` | Archive duplicates, remap deals, add unique index |
+
+## Impact
+
+- Prevents all future duplicate contacts from concurrent webhooks
+- Cleans up ~28 orphan duplicate contacts and merges ~2 that have deals
+- No behavioral change for existing valid flows
 
