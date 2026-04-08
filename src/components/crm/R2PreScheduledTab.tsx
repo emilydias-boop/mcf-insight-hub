@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Check, X, Phone, Calendar, User, Loader2, Clock, AlertTriangle, StickyNote } from 'lucide-react';
+import { Check, X, Phone, Calendar, User, Loader2, Clock, AlertTriangle, StickyNote, ArrowRightLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
