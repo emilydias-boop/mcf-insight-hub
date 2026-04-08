@@ -139,6 +139,14 @@ const Negocios = () => {
   const effectiveOriginId = useMemo(() => {
     // Para SDRs
     if (isSdr) {
+      // Prioridade 0: override individual do SDR (allowed_origin_ids)
+      if (sdrOriginOverride && sdrOriginOverride.length > 0) {
+        if (selectedOriginId && sdrOriginOverride.includes(selectedOriginId)) {
+          return selectedOriginId;
+        }
+        return sdrOriginOverride[0];
+      }
+      
       // SDRs de BUs com multi-pipeline podem navegar manualmente
       if (activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU)) {
         if (selectedOriginId) return selectedOriginId;
