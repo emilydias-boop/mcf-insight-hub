@@ -1,6 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/formatters';
-import { SdrPayoutWithDetails, SdrMonthKpi } from '@/types/sdr-fechamento';
+import { SdrPayoutWithDetails, SdrMonthKpi, SdrCompPlan } from '@/types/sdr-fechamento';
 import { DynamicIndicatorsGrid } from '@/components/fechamento/DynamicIndicatorCard';
 import { useActiveMetricsForSdr } from '@/hooks/useActiveMetricsForSdr';
 import {
@@ -16,14 +16,15 @@ interface SdrFechamentoViewProps {
   sdrId: string;
   anoMes: string;
   kpi: SdrMonthKpi | null;
+  compPlan?: SdrCompPlan | null;
 }
 
-export function SdrFechamentoView({ payout, sdrId, anoMes, kpi }: SdrFechamentoViewProps) {
+export function SdrFechamentoView({ payout, sdrId, anoMes, kpi, compPlan }: SdrFechamentoViewProps) {
   const { metricas, isLoading: metricasLoading } = useActiveMetricsForSdr(sdrId, anoMes);
 
   const diasUteisMes = (payout as any).dias_uteis_mes || (payout as any).dias_uteis || 22;
   const sdrMetaDiaria = payout.sdr?.meta_diaria || 3;
-  const variavelTotal = payout.valor_variavel_total || 0;
+  const variavelTotal = compPlan?.variavel_total || (payout.sdr?.meta_diaria && payout.sdr.meta_diaria >= 3 ? 1200 : 400);
 
   return (
     <>
