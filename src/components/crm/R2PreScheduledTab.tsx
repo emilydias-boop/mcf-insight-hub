@@ -193,6 +193,54 @@ export function R2PreScheduledTab() {
                     <Button
                       size="sm"
                       variant="outline"
+                      disabled={isPending}
+                      onClick={() => {
+                        if (!meetingSlot) return;
+                        setTransferTarget({
+                          attendee: {
+                            id: lead.id,
+                            name: name,
+                            phone: phone !== '-' ? phone : null,
+                            email: null,
+                            status: lead.status,
+                            deal_id: lead.deal_id,
+                            already_builds: null,
+                            partner_name: null,
+                            lead_profile: null,
+                            video_status: null,
+                            r2_status_id: null,
+                            thermometer_ids: [],
+                            r2_confirmation: null,
+                            r2_observations: lead.r2_observations || null,
+                            meeting_link: null,
+                            updated_by: null,
+                            updated_at: null,
+                            r1_qualification_note: null,
+                            sales_channel: 'A010',
+                            is_decision_maker: null,
+                            decision_maker_type: null,
+                            is_reschedule: null,
+                            parent_attendee_id: null,
+                          },
+                          meeting: {
+                            id: meetingSlot.id,
+                            scheduled_at: meetingSlot.scheduled_at,
+                            status: 'pre_scheduled',
+                            created_at: lead.created_at,
+                            meeting_type: 'r2',
+                            notes: lead.notes,
+                            closer: meetingSlot.closer || null,
+                            attendees: [],
+                          },
+                        });
+                      }}
+                    >
+                      <ArrowRightLeft className="h-4 w-4 mr-1" />
+                      Mover
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
                       className="text-green-600 border-green-300 hover:bg-green-50 dark:hover:bg-green-950/30"
                       disabled={isPending}
                       onClick={() => confirmMutation.mutate(lead.id)}
