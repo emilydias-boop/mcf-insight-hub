@@ -1,29 +1,30 @@
 
 
-# Reverter Antony Elias para Nível 1 (N1)
+# Corrigir comp plan de março do Antony para N1
 
-## Situação atual
+## Problema
 
-Antony Elias está registrado como **N2** em 3 locais:
-- `sdr.nivel = 2`
-- `employees.nivel = 2`
-- `sdr_comp_plan` de 2026-03 com valores de N2 (Fixo R$3.150, OTE R$4.500)
+A migration anterior atualizou `sdr.nivel` e `employees.nivel/cargo_catalogo_id`, mas não atualizou o `sdr_comp_plan` de 2026-03 que ainda tem valores de N2:
 
-## O que será feito
+| Campo | Atual (N2) | Correto (N1) |
+|---|---|---|
+| `fixo_valor` | 3150 | 2800 |
+| `variavel_total` | 1350 | 1200 |
+| `ote_total` | 4500 | 4000 |
+| `cargo_catalogo_id` | `9e3d43e9...` (N2) | `d035345f...` (N1) |
 
-Criar uma migration SQL para reverter tudo para N1:
+## Mudança
 
-| Tabela | Campo | De | Para |
-|---|---|---|---|
-| `sdr` | `nivel` | 2 | 1 |
-| `employees` | `nivel` | 2 | 1 |
-| `employees` | `salario_base` | 2800 (ok) | 2800 |
-| `employees` | `ote_mensal` | 1200 | 1200 |
-| `sdr_comp_plan` (2026-03) | `fixo_valor` | 3150 | 2800 |
-| `sdr_comp_plan` (2026-03) | `variavel_total` | 1350 | 1200 |
-| `sdr_comp_plan` (2026-03) | `ote_total` | 4500 | 4000 |
+Usar a ferramenta de insert/update para corrigir o registro `a8336c61-4b9e-462b-9ca3-0dab0d8ca999`:
 
-Também atualizar o `cargo_catalogo_id` do employee para apontar para "SDR Inside N1" (`d035345f-8fe3-41b4-8bba-28d0596c5bed`) em vez do N2.
+```sql
+UPDATE sdr_comp_plan 
+SET fixo_valor = 2800, 
+    variavel_total = 1200, 
+    ote_total = 4000, 
+    cargo_catalogo_id = 'd035345f-8fe3-41b4-8bba-28d0596c5bed'
+WHERE id = 'a8336c61-4b9e-462b-9ca3-0dab0d8ca999';
+```
 
-Após a migration, será necessário recalcular o payout de março para refletir os novos valores de fixo/variável.
+Após isso, recalcular o payout de março para refletir os novos valores.
 
