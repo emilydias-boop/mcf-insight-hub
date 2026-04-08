@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, UserPlus, X, Loader2, Copy, Trash2, ArrowRightLeft } from 'lucide-react';
+import { CheckCircle2, UserPlus, X, Loader2, Copy, Trash2, ArrowRightLeft, FolderOutput } from 'lucide-react';
 
 interface BulkActionsBarProps {
   selectedCount: number;
@@ -12,6 +12,8 @@ interface BulkActionsBarProps {
   isDeleting?: boolean;
   onMoveStage?: () => void;
   isMovingStage?: boolean;
+  onMovePipeline?: () => void;
+  isMovingPipeline?: boolean;
 }
 
 export const BulkActionsBar = ({
@@ -25,6 +27,8 @@ export const BulkActionsBar = ({
   isDeleting = false,
   onMoveStage,
   isMovingStage = false,
+  onMovePipeline,
+  isMovingPipeline = false,
 }: BulkActionsBarProps) => {
   if (selectedCount === 0) return null;
 
