@@ -191,7 +191,7 @@ const Negocios = () => {
     }
     
     return undefined;
-  }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdr, buMapping, activeBU]);
+  }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdr, buMapping, activeBU, sdrOriginOverride]);
   
   // Definir pipeline padrão APENAS na primeira montagem
   // Prioridade: defaultOrigin do banco > grupo único > SDR origin > BU_DEFAULT_ORIGIN_MAP > fallback
