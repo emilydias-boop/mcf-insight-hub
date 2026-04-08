@@ -1,29 +1,25 @@
 
-# Remover filtro de pipeline (originIds) na busca R2
+
+# Adicionar botão "Mover" na aba Pré-Agendados R2
 
 ## Problema
 
-O modal R2 ainda filtra por `originIds` do BU ativo (linha 100-101). O lead "fabio carneiro de azevedo" pode estar numa origin que não está mapeada no `bu_origin_mapping` do BU "incorporador", mesmo que o deal exista nessa BU.
+Na aba "Pré-Agendados", quando o horário não funciona para o closer, não há como mover o lead para outro horário/closer. Só existe "Confirmar" ou "Cancelar".
 
-## Mudança
+## Solução
+
+Adicionar um botão **"Mover"** (com ícone de transferência) ao lado de "Confirmar" e "Cancelar", que abre o `R2AttendeeTransferModal` já existente. Isso permite escolher outro closer, data e horário disponível.
+
+## Mudanças
 
 | Arquivo | Alteração |
 |---|---|
-| `src/components/crm/R2QuickScheduleModal.tsx` | Remover o uso de `buOriginIds` na chamada de `useSearchDealsForSchedule`, passando `undefined` para liberar a busca em todas as pipelines |
+| `src/components/crm/R2PreScheduledTab.tsx` | Importar `R2AttendeeTransferModal`, adicionar state para controlar modal e lead selecionado, renderizar botão "Mover" e o modal |
 
-### Detalhe (linhas 95-101)
+### Detalhes
 
-```typescript
-// De:
-const activeBU = useActiveBU();
-const { role, user } = useAuth();
-const { data: originIds } = useBUOriginIds(activeBU);
+1. **State novo**: `transferTarget` com `{ attendee, meeting }` ou `null`
+2. **Botão "Mover"**: Aparece antes de "Confirmar", com ícone `ArrowRightLeft` e cor neutra
+3. **Adaptação dos dados**: Converter o `lead` do pré-agendamento para os tipos `R2AttendeeExtended` e `R2MeetingRow` que o modal espera (mapear `id`, `name`, `phone`, `deal_id`, `status` do attendee e `id`, `scheduled_at`, `closer` do meeting)
+4. **Após transferir**: O lead sai da lista de pré-agendados automaticamente (pois muda de status), sem necessidade de invalidação extra
 
-const buOriginIds = originIds && originIds.length > 0 ? originIds : undefined;
-const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, buOriginIds, undefined);
-
-// Para:
-const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, undefined, undefined);
-```
-
-Remover também os imports não usados (`useActiveBU`, `useBUOriginIds`, `useAuth`) se não forem usados em outro lugar do componente.
