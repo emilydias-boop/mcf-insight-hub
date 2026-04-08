@@ -819,7 +819,27 @@ serve(async (req) => {
         }
 
         // ===== AUTO-SYNC: Sincronizar comp_plan com cargo_catalogo se divergirem =====
-        if (compPlan && cargoInfo && (
+        // SKIP sync when comp_plan has its own cargo_catalogo_id different from employee's
+        // (indicates a deliberate temporary level override, e.g. N1→N2 for a specific month)
+        const compPlanHasOwnCargo = compPlan?.cargo_catalogo_id && 
+          employeeData?.cargo_catalogo_id && 
+          compPlan.cargo_catalogo_id !== employeeData.cargo_catalogo_id;
+        
+        if (compPlanHasOwnCargo) {
+          // Use the comp_plan's cargo info instead of employee's for this calculation
+          const { data: compPlanCargoData } = await supabase
+            .from('cargos_catalogo')
+            .select('ote_total, fixo_valor, variavel_valor, nivel, nome_exibicao')
+            .eq('id', compPlan.cargo_catalogo_id)
+            .single();
+          
+          if (compPlanCargoData) {
+            cargoInfo = compPlanCargoData as CargoInfo & { nivel?: number; nome_exibicao?: string };
+            console.log(`   📋 Override de nível detectado: usando cargo do comp_plan (${cargoInfo.nome_exibicao}) em vez do employee`);
+          }
+        }
+        
+        if (compPlan && cargoInfo && !compPlanHasOwnCargo && (
           compPlan.fixo_valor !== cargoInfo.fixo_valor ||
           compPlan.variavel_total !== cargoInfo.variavel_valor ||
           compPlan.ote_total !== cargoInfo.ote_total
