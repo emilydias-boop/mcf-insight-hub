@@ -250,7 +250,7 @@ const Negocios = () => {
         setSelectedPipelineId(pipelines[0].id);
       }
     }
-  }, [pipelines, isSdr, activeBU, isLoadingBU, buMapping, buAllowedGroups]);
+  }, [pipelines, isSdr, activeBU, isLoadingBU, buMapping, buAllowedGroups, sdrOriginOverride]);
   
   // Buscar email do usuário logado
   const { data: userProfile } = useQuery({
