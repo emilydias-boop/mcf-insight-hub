@@ -1,0 +1,1 @@
+UPDATE sdr_comp_plan SET vigencia_fim = '2026-02-28' WHERE id = '4884ed45-2e58-4564-b7a0-77aa474a7b36' AND vigencia_fim IS NULL;
