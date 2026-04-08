@@ -89,13 +89,7 @@ export function R2QuickScheduleModal({
   const [r2Observations, setR2Observations] = useState<string>('');
   const [isPreSchedule, setIsPreSchedule] = useState(false);
 
-  // BU filtering
-  const activeBU = useActiveBU();
-  const { role, user } = useAuth();
-  const { data: originIds } = useBUOriginIds(activeBU);
-
-  const buOriginIds = originIds && originIds.length > 0 ? originIds : undefined;
-  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, buOriginIds, undefined);
+  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, undefined, undefined);
   const createMeeting = useCreateR2Meeting();
   const { data: r2Bookers = [] } = useR2Bookers();
 
