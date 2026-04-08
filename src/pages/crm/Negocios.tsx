@@ -36,6 +36,7 @@ import { useBulkA010Check, detectSalesChannel, SalesChannel } from '@/hooks/useB
 import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useActiveBU } from '@/hooks/useActiveBU';
+import { useSDROriginOverride } from '@/hooks/useSDROriginOverride';
 import { differenceInDays } from 'date-fns';
 import { useDealOwnerOptions } from '@/hooks/useDealOwnerOptions';
 import { useUniqueDealTags } from '@/hooks/useUniqueDealTags';
@@ -95,6 +96,9 @@ const Negocios = () => {
   const activeBU = useActiveBU();
   const isLoadingBU = false; // useActiveBU é síncrono
   
+  // Buscar override individual de pipelines do SDR (se configurado)
+  const { data: sdrOriginOverride } = useSDROriginOverride();
+  
   // Verificar se é SDR (acesso restrito ao Pipeline Inside Sales)
   // Usa allRoles para suportar usuários com múltiplas roles (ex: SDR + Closer)
   const isSdr = isSdrRole(role, allRoles);
@@ -135,6 +139,14 @@ const Negocios = () => {
   const effectiveOriginId = useMemo(() => {
     // Para SDRs
     if (isSdr) {
+      // Prioridade 0: override individual do SDR (allowed_origin_ids)
+      if (sdrOriginOverride && sdrOriginOverride.length > 0) {
+        if (selectedOriginId && sdrOriginOverride.includes(selectedOriginId)) {
+          return selectedOriginId;
+        }
+        return sdrOriginOverride[0];
+      }
+      
       // SDRs de BUs com multi-pipeline podem navegar manualmente
       if (activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU)) {
         if (selectedOriginId) return selectedOriginId;
@@ -179,13 +191,19 @@ const Negocios = () => {
     }
     
     return undefined;
-  }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdr, buMapping, activeBU]);
+  }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdr, buMapping, activeBU, sdrOriginOverride]);
   
   // Definir pipeline padrão APENAS na primeira montagem
   // Prioridade: defaultOrigin do banco > grupo único > SDR origin > BU_DEFAULT_ORIGIN_MAP > fallback
   useEffect(() => {
     if (pipelines && pipelines.length > 0 && !hasSetDefault.current && !isLoadingBU) {
       hasSetDefault.current = true;
+      
+      // 0. Se SDR tem override individual, usar o primeiro como default
+      if (isSdr && sdrOriginOverride && sdrOriginOverride.length > 0) {
+        setSelectedPipelineId(sdrOriginOverride[0]);
+        return;
+      }
       
       // 1. Se buMapping tem um defaultOrigin definido no banco, usar ele
       if (buMapping?.defaultOrigin) {
@@ -232,7 +250,7 @@ const Negocios = () => {
         setSelectedPipelineId(pipelines[0].id);
       }
     }
-  }, [pipelines, isSdr, activeBU, isLoadingBU, buMapping, buAllowedGroups]);
+  }, [pipelines, isSdr, activeBU, isLoadingBU, buMapping, buAllowedGroups, sdrOriginOverride]);
   
   // Buscar email do usuário logado
   const { data: userProfile } = useQuery({
@@ -657,11 +675,14 @@ const Negocios = () => {
   };
   
   // Determinar se deve mostrar a sidebar
+  // SDRs com override individual: esconder sidebar se só tem 1 pipeline no override
+  const sdrHasOverride = isSdr && sdrOriginOverride && sdrOriginOverride.length > 0;
+  const sdrOverrideSingle = sdrHasOverride && sdrOriginOverride!.length === 1;
   // SDRs de BUs com multi-pipeline podem ver a sidebar e navegar
-  const sdrCanSeeSidebar = isSdr && activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU);
+  const sdrCanSeeSidebar = (isSdr && activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU)) || (sdrHasOverride && !sdrOverrideSingle);
   const totalMappedPipelines = buAllowedGroups.length + (buMapping?.origins?.length || 0);
   const hasSinglePipeline = totalMappedPipelines === 1;
-  const showSidebar = (!isSdr || sdrCanSeeSidebar) && !hasSinglePipeline;
+  const showSidebar = (!isSdr || sdrCanSeeSidebar) && !hasSinglePipeline && !sdrOverrideSingle;
   
   // Auto-seleção de single pipeline agora está integrada no useEffect principal de default (linha 156+)
   

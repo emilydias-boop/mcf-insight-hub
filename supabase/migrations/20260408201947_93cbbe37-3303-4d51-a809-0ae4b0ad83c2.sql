@@ -1,0 +1,3 @@
+UPDATE public.sdr 
+SET allowed_origin_ids = ARRAY['7431cf4a-dc29-4208-95a6-28a499a06dac']
+WHERE id = '11111111-0001-0001-0001-000000000005';
