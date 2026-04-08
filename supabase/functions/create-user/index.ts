@@ -176,7 +176,6 @@ Deno.serve(async (req) => {
             user_id: newUser.user.id,
             nome_completo: full_name,
             email_pessoal: email,
-            email_corporativo: email,
             cargo_catalogo_id: cargo_id,
         };
         // Set squad on employee so the trigger syncs everything
