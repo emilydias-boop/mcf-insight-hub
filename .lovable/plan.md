@@ -1,43 +1,61 @@
 
 
-# Fix: useActiveMetricsForSdr picking wrong comp_plan for month
+# Adicionar métrica R2 Agendadas no cálculo de variável dos Closers
 
-## Problem
+## Problema
 
-In `src/hooks/useActiveMetricsForSdr.ts` (lines 74-81), the query to get `cargo_catalogo_id` from `sdr_comp_plan` simply orders by `vigencia_inicio DESC` and takes the first result. This means:
+A edge function `recalculate-sdr-payout` calcula a variável dos Closers somando apenas 4 métricas:
 
-- **Julio March**: picks April plan (N1, `2026-04-01`) instead of March plan (N2, `2026-03-01`) → gets 30% instead of 35%
-- **Thayna March**: picks April plan (N2, `2026-04-01`) instead of March plan (N3, `2026-03-01`) → gets 35% instead of 40%
-
-## Fix
-
-Filter the comp_plan query to only match plans whose vigencia covers the requested `anoMes`:
-
-```typescript
-// Lines 74-81 in useActiveMetricsForSdr.ts
-const monthStart = `${anoMes}-01`;
-const { data: compPlanData } = await supabase
-  .from('sdr_comp_plan')
-  .select('cargo_catalogo_id')
-  .eq('sdr_id', sdrId)
-  .neq('status', 'REJECTED')
-  .lte('vigencia_inicio', monthStart)
-  .or(`vigencia_fim.gte.${monthStart},vigencia_fim.is.null`)
-  .order('vigencia_inicio', { ascending: false })
-  .limit(1)
-  .maybeSingle();
+```
+valorVariavelTotal = valorContratos + valorOrganizacao + valorRealizadas + valorVendasParceria
 ```
 
-This ensures for March (`2026-03-01`):
-- Julio: matches the March plan (N2, vigencia `03-01` to `03-31`) → cargo N2 → meta_percentual=35%
-- Thayna: matches the March plan (N3, vigencia `03-01` to `03-31`) → cargo N3 → meta_percentual=40%
+A métrica **r2_agendadas** (peso 50%) está completamente ausente do cálculo. Por isso:
+- **Thayna**: mostra R$675 (só contratos) em vez de R$675 + R$945 = R$1.620
+- **Julio**: mostra R$1.200 (só contratos) em vez de R$1.200 + R$600 = R$1.800
 
-Additionally, fix the failed migration for Thayna's old plan. The previous migration used UUID `4884ed45-6f6b-4b5b-a2da-4b2e2b4a7e5a` but the actual ID is `4884ed45-2e58-4564-b7a0-77aa474a7b36`. Need a new migration with the correct UUID.
+## Correção
 
-## Files
+Adicionar o bloco de cálculo de `r2_agendadas` na edge function, seguindo o mesmo padrão das outras métricas (buscar peso, calcular meta como % dos contratos pagos, aplicar multiplicador).
 
-| File | Change |
+## Arquivo
+
+| Arquivo | Alteração |
 |---|---|
-| `src/hooks/useActiveMetricsForSdr.ts` | Filter comp_plan query by anoMes period |
-| `supabase/migrations/*.sql` | Close Thayna's old plan with correct UUID |
+| `supabase/functions/recalculate-sdr-payout/index.ts` | Adicionar bloco de cálculo para `r2_agendadas` entre vendas_parceria e o total |
+
+## Detalhes técnicos
+
+No arquivo `supabase/functions/recalculate-sdr-payout/index.ts`, após o bloco de vendas_parceria (linha ~1178), adicionar:
+
+```typescript
+// Calcular R2 Agendadas
+const metricaR2 = metricasAtivas.find(m => m.nome_metrica === 'r2_agendadas');
+let valorR2Agendadas = 0;
+
+if (metricaR2 && metricaR2.peso_percentual > 0) {
+  const pesoR2 = metricaR2.peso_percentual;
+  const valorBaseR2 = (cargoInfo.variavel_valor * pesoR2) / 100;
+  
+  // Meta = % dos contratos pagos (default 100%)
+  const pctR2 = metricaR2.meta_percentual && metricaR2.meta_percentual > 0 
+    ? metricaR2.meta_percentual : 100;
+  const metaR2 = Math.round((contratosPagos * pctR2) / 100);
+  
+  // Valor realizado do KPI
+  const r2Real = kpi.r2_agendadas || 0;
+  const pctR2Atingido = metaR2 > 0 ? (r2Real / metaR2) * 100 : 0;
+  const multR2 = getMultiplier(Math.min(pctR2Atingido, 120));
+  valorR2Agendadas = valorBaseR2 * multR2;
+  
+  console.log(`   📊 R2 Agendadas: Real=${r2Real}, Meta=${metaR2}, %=${pctR2Atingido.toFixed(1)}%, Mult=${multR2}, Valor=R$ ${valorR2Agendadas.toFixed(2)}`);
+}
+```
+
+E atualizar a soma:
+```typescript
+const valorVariavelTotal = valorContratos + valorOrganizacao + valorRealizadas + valorVendasParceria + valorR2Agendadas;
+```
+
+Após o deploy, recalcular os payouts de Março para Julio e Thayna.
 
