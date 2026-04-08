@@ -1,30 +1,43 @@
 
 
-# Corrigir comp plan de março do Antony para N1
+# Corrigir busca por email retornando resultados errados no agendamento R2
 
 ## Problema
 
-A migration anterior atualizou `sdr.nivel` e `employees.nivel/cargo_catalogo_id`, mas não atualizou o `sdr_comp_plan` de 2026-03 que ainda tem valores de N2:
+Ao buscar por `victorsaraiva1777@gmail.com`, o sistema:
+1. Extrai os dígitos do texto: `"1777"`
+2. Como tem 4+ dígitos, adiciona filtro `phone.ilike.%1777%`
+3. Isso retorna contatos como Bruna (`19998871777`) que contêm "1777" no telefone
 
-| Campo | Atual (N2) | Correto (N1) |
-|---|---|---|
-| `fixo_valor` | 3150 | 2800 |
-| `variavel_total` | 1350 | 1200 |
-| `ote_total` | 4500 | 4000 |
-| `cargo_catalogo_id` | `9e3d43e9...` (N2) | `d035345f...` (N1) |
+## Causa raiz
 
-## Mudança
-
-Usar a ferramenta de insert/update para corrigir o registro `a8336c61-4b9e-462b-9ca3-0dab0d8ca999`:
-
-```sql
-UPDATE sdr_comp_plan 
-SET fixo_valor = 2800, 
-    variavel_total = 1200, 
-    ote_total = 4000, 
-    cargo_catalogo_id = 'd035345f-8fe3-41b4-8bba-28d0596c5bed'
-WHERE id = 'a8336c61-4b9e-462b-9ca3-0dab0d8ca999';
+Linha 873-874 de `useAgendaData.ts`:
+```typescript
+const normalizedQuery = query.replace(/\D/g, '');
+const phoneFilter = normalizedQuery.length >= 4 ? ... : '';
 ```
 
-Após isso, recalcular o payout de março para refletir os novos valores.
+Não distingue se o input é email ou telefone — extrai dígitos de qualquer texto.
+
+## Solução
+
+No `useSearchDealsForSchedule` (`src/hooks/useAgendaData.ts`, linhas 872-875):
+
+Só aplicar o filtro de telefone quando a query original parecer um número de telefone (maioria dos caracteres são dígitos), e não quando for claramente um email ou nome:
+
+```typescript
+// Antes
+const normalizedQuery = query.replace(/\D/g, '');
+const phoneFilter = normalizedQuery.length >= 4 ? `,phone.ilike.%${normalizedQuery}%` : '';
+
+// Depois
+const normalizedQuery = query.replace(/\D/g, '');
+const isLikelyPhone = normalizedQuery.length >= 4 && (normalizedQuery.length / query.length) > 0.5;
+const phoneFilter = isLikelyPhone ? `,phone.ilike.%${normalizedQuery}%` : '';
+```
+
+A heurística `normalizedQuery.length / query.length > 0.5` garante que:
+- `"86988436557"` → 100% dígitos → busca por telefone ✓
+- `"victorsaraiva1777@gmail.com"` → 4/28 = 14% dígitos → NÃO busca por telefone ✓
+- `"43998693444"` → 100% dígitos → busca por telefone ✓
 
