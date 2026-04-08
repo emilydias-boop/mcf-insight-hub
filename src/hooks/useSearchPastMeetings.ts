@@ -63,7 +63,8 @@ export function useSearchPastMeetings(query: string, closerId?: string, daysBack
       }
 
       // Search by name OR phone
-      if (phoneDigits.length >= 4) {
+      const isLikelyPhone = phoneDigits.length >= 4 && (phoneDigits.length / query.length) > 0.5;
+      if (isLikelyPhone) {
         attendeeQuery = attendeeQuery.or(
           `attendee_name.ilike.%${normalizedQuery}%,attendee_phone.ilike.%${phoneDigits}%`
         );
