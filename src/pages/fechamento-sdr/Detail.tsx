@@ -154,6 +154,7 @@ const FechamentoSDRDetail = () => {
     diasUteisTrabalhados: payout?.dias_uteis_trabalhados,
   });
 
+  const removeAdjustment = useRemoveAdjustment();
   const isAdmin = role === "admin";
   const isManager = role === "manager" || role === "coordenador";
   const canEdit = (isAdmin || isManager) && payout?.status !== "LOCKED";
