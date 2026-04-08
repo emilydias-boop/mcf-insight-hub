@@ -71,6 +71,7 @@ export function R2PreScheduledTab() {
   const confirmMutation = useConfirmR2PreScheduled();
   const cancelMutation = useCancelR2PreScheduled();
   const { data: slotChecks = {} } = usePreScheduledSlotCheck(leads);
+  const [transferTarget, setTransferTarget] = useState<{ attendee: R2AttendeeExtended; meeting: R2MeetingRow } | null>(null);
 
   if (isLoading) {
     return (
