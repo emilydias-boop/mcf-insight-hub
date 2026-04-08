@@ -48,6 +48,7 @@ import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import { ExportDealsDialog } from '@/components/crm/ExportDealsDialog';
 import { DeleteDealsConfirmDialog } from '@/components/crm/DeleteDealsConfirmDialog';
 import { BulkMoveStageDialog } from '@/components/crm/BulkMoveStageDialog';
+import { BulkMovePipelineDialog } from '@/components/crm/BulkMovePipelineDialog';
 import { useBulkDeleteDeals } from '@/hooks/useDeleteDeals';
 import { Download } from 'lucide-react';
 
@@ -85,6 +86,7 @@ const Negocios = () => {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [moveStageDialogOpen, setMoveStageDialogOpen] = useState(false);
+  const [movePipelineDialogOpen, setMovePipelineDialogOpen] = useState(false);
   const bulkTransfer = useBulkTransfer();
   const bulkDelete = useBulkDeleteDeals();
   const canDelete = ['admin', 'manager', 'coordenador'].includes(role || '');
@@ -876,6 +878,7 @@ const Negocios = () => {
         onDelete={canDelete ? () => setDeleteDialogOpen(true) : undefined}
         isDeleting={bulkDelete.isPending}
         onMoveStage={() => setMoveStageDialogOpen(true)}
+        onMovePipeline={() => setMovePipelineDialogOpen(true)}
       />
       
       {/* Dialog de confirmação de exclusão em massa */}
@@ -908,6 +911,14 @@ const Negocios = () => {
         onOpenChange={setMoveStageDialogOpen}
         selectedDealIds={Array.from(selectedDealIds)}
         originId={effectiveOriginId}
+        onSuccess={handleClearSelection}
+      />
+      
+      {/* Dialog de mover pipeline em massa */}
+      <BulkMovePipelineDialog
+        open={movePipelineDialogOpen}
+        onOpenChange={setMovePipelineDialogOpen}
+        selectedDealIds={Array.from(selectedDealIds)}
         onSuccess={handleClearSelection}
       />
       
