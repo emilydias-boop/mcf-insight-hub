@@ -8537,6 +8537,7 @@ export type Database = {
       sdr: {
         Row: {
           active: boolean | null
+          allowed_origin_ids: string[] | null
           aprovado_em: string | null
           aprovado_por: string | null
           created_at: string | null
@@ -8555,6 +8556,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean | null
+          allowed_origin_ids?: string[] | null
           aprovado_em?: string | null
           aprovado_por?: string | null
           created_at?: string | null
@@ -8573,6 +8575,7 @@ export type Database = {
         }
         Update: {
           active?: boolean | null
+          allowed_origin_ids?: string[] | null
           aprovado_em?: string | null
           aprovado_por?: string | null
           created_at?: string | null
