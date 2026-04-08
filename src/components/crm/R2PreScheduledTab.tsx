@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Check, X, Phone, Calendar, User, Loader2, Clock, AlertTriangle, StickyNote } from 'lucide-react';
+import { Check, X, Phone, Calendar, User, Loader2, Clock, AlertTriangle, StickyNote, ArrowRightLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -25,6 +26,8 @@ import {
 } from '@/components/ui/table';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { R2AttendeeTransferModal } from './R2AttendeeTransferModal';
+import { R2AttendeeExtended, R2MeetingRow } from '@/types/r2Agenda';
 
 // Hook to check which pre-scheduled leads have configured daily slots
 function usePreScheduledSlotCheck(leads: ReturnType<typeof useR2PreScheduledLeads>['data']) {
@@ -68,6 +71,7 @@ export function R2PreScheduledTab() {
   const confirmMutation = useConfirmR2PreScheduled();
   const cancelMutation = useCancelR2PreScheduled();
   const { data: slotChecks = {} } = usePreScheduledSlotCheck(leads);
+  const [transferTarget, setTransferTarget] = useState<{ attendee: R2AttendeeExtended; meeting: R2MeetingRow } | null>(null);
 
   if (isLoading) {
     return (
@@ -189,6 +193,54 @@ export function R2PreScheduledTab() {
                     <Button
                       size="sm"
                       variant="outline"
+                      disabled={isPending}
+                      onClick={() => {
+                        if (!meetingSlot) return;
+                        setTransferTarget({
+                          attendee: {
+                            id: lead.id,
+                            name: name,
+                            phone: phone !== '-' ? phone : null,
+                            email: null,
+                            status: lead.status,
+                            deal_id: lead.deal_id,
+                            already_builds: null,
+                            partner_name: null,
+                            lead_profile: null,
+                            video_status: null,
+                            r2_status_id: null,
+                            thermometer_ids: [],
+                            r2_confirmation: null,
+                            r2_observations: lead.r2_observations || null,
+                            meeting_link: null,
+                            updated_by: null,
+                            updated_at: null,
+                            r1_qualification_note: null,
+                            sales_channel: 'A010',
+                            is_decision_maker: null,
+                            decision_maker_type: null,
+                            is_reschedule: null,
+                            parent_attendee_id: null,
+                          },
+                          meeting: {
+                            id: meetingSlot.id,
+                            scheduled_at: meetingSlot.scheduled_at,
+                            status: 'pre_scheduled',
+                            created_at: lead.created_at,
+                            meeting_type: 'r2',
+                            notes: lead.notes,
+                            closer: meetingSlot.closer || null,
+                            attendees: [],
+                          },
+                        });
+                      }}
+                    >
+                      <ArrowRightLeft className="h-4 w-4 mr-1" />
+                      Mover
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
                       className="text-green-600 border-green-300 hover:bg-green-50 dark:hover:bg-green-950/30"
                       disabled={isPending}
                       onClick={() => confirmMutation.mutate(lead.id)}
@@ -221,6 +273,16 @@ export function R2PreScheduledTab() {
           })}
         </TableBody>
       </Table>
+
+      {transferTarget && (
+        <R2AttendeeTransferModal
+          open={!!transferTarget}
+          onOpenChange={(open) => { if (!open) setTransferTarget(null); }}
+          attendee={transferTarget.attendee}
+          meeting={transferTarget.meeting}
+          onSuccess={() => setTransferTarget(null)}
+        />
+      )}
     </div>
   );
 }
