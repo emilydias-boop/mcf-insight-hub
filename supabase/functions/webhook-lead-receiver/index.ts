@@ -185,12 +185,14 @@ serve(async (req) => {
     // 7b. Buscar por email
     const emailTrimmed = (payload.email || '').trim();
     if (!existingContact && emailTrimmed) {
-      const { data: contactByEmail } = await supabase
+      const { data: contactsByEmail } = await supabase
         .from('crm_contacts')
         .select('id')
         .ilike('email', emailTrimmed)
-        .maybeSingle();
-      existingContact = contactByEmail;
+        .eq('is_archived', false)
+        .order('created_at', { ascending: true })
+        .limit(1);
+      existingContact = contactsByEmail?.[0] || null;
     }
 
     // 7c. Fallback: buscar por telefone (últimos 9 dígitos) — usa limit(1) para evitar erro com múltiplos matches
@@ -307,11 +309,32 @@ serve(async (req) => {
         .single();
       
       if (contactError) {
-        console.error('[WEBHOOK-RECEIVER] Erro ao criar contato:', contactError);
-        throw contactError;
+        // Handle race condition: another concurrent request just created this contact
+        if (contactError.code === '23505' && emailTrimmed) {
+          console.log('[WEBHOOK-RECEIVER] ⚠️ Race condition detectada (23505), buscando contato recém-criado...');
+          const { data: raceContacts } = await supabase
+            .from('crm_contacts')
+            .select('id')
+            .ilike('email', emailTrimmed)
+            .eq('is_archived', false)
+            .order('created_at', { ascending: true })
+            .limit(1);
+          if (raceContacts?.[0]) {
+            contactId = raceContacts[0].id;
+            existingContact = raceContacts[0];
+            console.log('[WEBHOOK-RECEIVER] ✅ Contato encontrado após race condition:', contactId);
+          } else {
+            console.error('[WEBHOOK-RECEIVER] Erro ao criar contato (23505 mas não encontrou):', contactError);
+            throw contactError;
+          }
+        } else {
+          console.error('[WEBHOOK-RECEIVER] Erro ao criar contato:', contactError);
+          throw contactError;
+        }
+      } else {
+        contactId = newContact.id;
+        console.log('[WEBHOOK-RECEIVER] Novo contato criado:', contactId);
       }
-      contactId = newContact.id;
-      console.log('[WEBHOOK-RECEIVER] Novo contato criado:', contactId);
     }
 
     // 8. Check for existing deal (any deal for same contact+origin, respecting UNIQUE constraint)
