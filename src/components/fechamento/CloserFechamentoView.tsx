@@ -4,6 +4,17 @@ import { SdrPayoutWithDetails, SdrMonthKpi, SdrCompPlan } from '@/types/sdr-fech
 import { CloserMetrics } from '@/hooks/useOwnFechamento';
 import { DynamicIndicatorsGrid } from '@/components/fechamento/DynamicIndicatorCard';
 import { useActiveMetricsForSdr } from '@/hooks/useActiveMetricsForSdr';
+import {
+  DollarSign,
+  Target,
+  Wallet,
+  CreditCard,
+  UtensilsCrossed,
+  TrendingUp,
+  AlertTriangle,
+  Sparkles,
+  CalendarPlus,
+} from 'lucide-react';
 
 interface CloserFechamentoViewProps {
   payout: SdrPayoutWithDetails;

@@ -3,6 +3,13 @@ import { formatCurrency } from '@/lib/formatters';
 import { SdrPayoutWithDetails, SdrMonthKpi, SdrCompPlan } from '@/types/sdr-fechamento';
 import { DynamicIndicatorsGrid } from '@/components/fechamento/DynamicIndicatorCard';
 import { useActiveMetricsForSdr } from '@/hooks/useActiveMetricsForSdr';
+import {
+  DollarSign,
+  Target,
+  Wallet,
+  CreditCard,
+  UtensilsCrossed,
+} from 'lucide-react';
 
 interface SdrFechamentoViewProps {
   payout: SdrPayoutWithDetails;
