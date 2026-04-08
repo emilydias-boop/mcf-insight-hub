@@ -38,6 +38,7 @@ import {
   type WebhookEndpoint,
 } from '@/hooks/useWebhookEndpoints';
 import { IncomingWebhookFormDialog } from './IncomingWebhookFormDialog';
+import { MoveWebhookDialog } from './MoveWebhookDialog';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
