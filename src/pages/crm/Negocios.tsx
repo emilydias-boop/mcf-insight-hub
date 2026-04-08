@@ -199,6 +199,12 @@ const Negocios = () => {
     if (pipelines && pipelines.length > 0 && !hasSetDefault.current && !isLoadingBU) {
       hasSetDefault.current = true;
       
+      // 0. Se SDR tem override individual, usar o primeiro como default
+      if (isSdr && sdrOriginOverride && sdrOriginOverride.length > 0) {
+        setSelectedPipelineId(sdrOriginOverride[0]);
+        return;
+      }
+      
       // 1. Se buMapping tem um defaultOrigin definido no banco, usar ele
       if (buMapping?.defaultOrigin) {
         setSelectedPipelineId(buMapping.defaultOrigin);
