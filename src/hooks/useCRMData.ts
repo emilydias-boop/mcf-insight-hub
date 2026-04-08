@@ -443,8 +443,13 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
         query = query.eq('owner_profile_id', filters.ownerProfileId);
       }
       
-      // Note: searchTerm filtering is done on the frontend (Negocios.tsx)
-      // to search across deal.name, contact.name, email, and phone
+      // Server-side search across deal name, contact name, email and phone
+      if (filters.searchTerm && filters.searchTerm.trim().length >= 2) {
+        const term = filters.searchTerm.trim();
+        query = query.or(
+          `name.ilike.%${term}%,crm_contacts.name.ilike.%${term}%,crm_contacts.email.ilike.%${term}%,crm_contacts.phone.ilike.%${term}%`
+        );
+      }
       
       const { data, error } = await query;
       
