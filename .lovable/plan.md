@@ -1,46 +1,29 @@
 
 
-# Adicionar botão de excluir ajuste no fechamento SDR + preservar ajustes no recálculo
+# Reverter Antony Elias para Nível 1 (N1)
 
-## Problema
+## Situação atual
 
-1. **Sem botão de excluir**: O histórico de ajustes no Detail.tsx mostra os ajustes mas não tem botão de remover (diferente do consórcio que já tem `useRemoveConsorcioAjuste`)
-2. **Recálculo apaga ajustes**: Quando recalcula o payout, o edge function sobrescreve `valor_variavel_total` e `total_conta` sem somar os ajustes existentes
+Antony Elias está registrado como **N2** em 3 locais:
+- `sdr.nivel = 2`
+- `employees.nivel = 2`
+- `sdr_comp_plan` de 2026-03 com valores de N2 (Fixo R$3.150, OTE R$4.500)
 
-## Mudanças
+## O que será feito
 
-| Arquivo | Alteração |
-|---|---|
-| `src/hooks/useSdrFechamento.ts` | Criar `useRemoveAdjustment` (seguindo padrão do `useRemoveConsorcioAjuste`) |
-| `src/pages/fechamento-sdr/Detail.tsx` | Adicionar botão Trash2 ao lado de cada ajuste no histórico, importar e usar `useRemoveAdjustment` |
+Criar uma migration SQL para reverter tudo para N1:
 
-### 1. Hook `useRemoveAdjustment` (useSdrFechamento.ts)
+| Tabela | Campo | De | Para |
+|---|---|---|---|
+| `sdr` | `nivel` | 2 | 1 |
+| `employees` | `nivel` | 2 | 1 |
+| `employees` | `salario_base` | 2800 (ok) | 2800 |
+| `employees` | `ote_mensal` | 1200 | 1200 |
+| `sdr_comp_plan` (2026-03) | `fixo_valor` | 3150 | 2800 |
+| `sdr_comp_plan` (2026-03) | `variavel_total` | 1350 | 1200 |
+| `sdr_comp_plan` (2026-03) | `ote_total` | 4500 | 4000 |
 
-Recebe `{ payoutId, index }`, busca o payout, remove o ajuste do array `ajustes_json`, e subtrai o valor do `valor_variavel_total` e `total_conta`:
+Também atualizar o `cargo_catalogo_id` do employee para apontar para "SDR Inside N1" (`d035345f-8fe3-41b4-8bba-28d0596c5bed`) em vez do N2.
 
-```typescript
-export const useRemoveAdjustment = () => {
-  // Mesma lógica do useRemoveConsorcioAjuste mas para sdr_month_payout
-  // - Busca payout atual
-  // - Verifica se status não é 'locked'/'approved'
-  // - Remove ajuste pelo índice
-  // - Subtrai valor do total_conta e valor_variavel_total
-  // - Registra no audit log
-};
-```
-
-### 2. Botão de excluir no Detail.tsx
-
-No mapa de ajustes (linhas 614-628), adicionar um botão `Trash2` ao lado do valor:
-
-```tsx
-<Button variant="ghost" size="icon" 
-  onClick={() => removeAdjustment.mutate({ payoutId: payout.id, index: idx })}
-  disabled={!canEdit}
->
-  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-</Button>
-```
-
-O botão só aparece quando `canEdit` é true (admin/manager com payout não locked).
+Após a migration, será necessário recalcular o payout de março para refletir os novos valores de fixo/variável.
 
