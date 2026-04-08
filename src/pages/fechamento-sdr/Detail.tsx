@@ -32,6 +32,7 @@ import {
   Gift,
   CheckCircle,
   Download,
+  Trash2,
   User,
 } from "lucide-react";
 
