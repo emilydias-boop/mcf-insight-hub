@@ -1,35 +1,39 @@
 
 
-# Fix: Trigger references non-existent column `email_corporativo`
+# Fix: Search not finding deals beyond 10,000 limit
 
 ## Problem
 
-The error `record "new" has no field "email_corporativo"` occurs when updating an employee because the trigger function `sync_employee_squad_to_profile` references `NEW.email_corporativo` on line 52 of its body, but the `employees` table only has `email_pessoal` -- there is no `email_corporativo` column.
+The Pipeline de Vendas has 10,000+ deals. The current implementation:
+1. Fetches up to 10,000 deals client-side (`limit: 10000` in Negocios.tsx line 259)
+2. Search filtering happens **in the browser** on those 10,000 deals (lines 401-420)
+3. Deals beyond the 10,000 limit are invisible to search
 
-The same issue exists in the `create-user` Edge Function which tries to insert `email_corporativo` when creating employees.
+Simply increasing the limit (e.g., to 50,000) is not viable -- it would make the page extremely slow and use excessive memory.
 
-## Fix
+## Solution: Move search to the backend (Supabase query)
 
-### 1. Database migration: Fix the trigger function
+When the user types a search term, apply the filter **server-side** using Supabase's `or()` and `ilike()` operators. This way, the search queries the entire database, not just the first 10,000 rows.
 
-Replace `NEW.email_corporativo` with `NEW.email_pessoal` in the `sync_employee_squad_to_profile` function:
-
-```sql
-CREATE OR REPLACE FUNCTION sync_employee_squad_to_profile()
-...
-  -- Change this line:
-  WHERE LOWER(email) = LOWER(NEW.email_corporativo)
-  -- To:
-  WHERE LOWER(email) = LOWER(NEW.email_pessoal)
-...
-```
-
-### 2. Edge Function: Fix `create-user`
-
-Remove `email_corporativo` from the employee insert payload in `supabase/functions/create-user/index.ts` (line 179).
+## Changes
 
 | File | Change |
 |---|---|
-| `supabase/migrations/*.sql` | Replace `email_corporativo` with `email_pessoal` in trigger function |
-| `supabase/functions/create-user/index.ts` | Remove `email_corporativo` from insert payload |
+| `src/hooks/useCRMData.ts` | In `useCRMDeals`, when `searchTerm` is present, add `.or()` filter to query `name`, `crm_contacts.name`, `crm_contacts.email`, `crm_contacts.phone` server-side |
+| `src/pages/crm/Negocios.tsx` | Remove the client-side search filter in `filteredDeals` (lines 407-420) since it's now handled by the backend |
+
+## Technical detail
+
+In `useCRMData.ts`, after line 444, add:
+
+```typescript
+if (filters.searchTerm && filters.searchTerm.trim().length >= 2) {
+  const term = filters.searchTerm.trim();
+  query = query.or(
+    `name.ilike.%${term}%,crm_contacts.name.ilike.%${term}%,crm_contacts.email.ilike.%${term}%,crm_contacts.phone.ilike.%${term}%`
+  );
+}
+```
+
+This ensures search works across **all** deals in the database, regardless of the limit. The 10,000 limit still applies to the results shown (but a search for "João" will find all matches, not just within the first 10k).
 
