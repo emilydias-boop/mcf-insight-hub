@@ -273,6 +273,16 @@ export function R2PreScheduledTab() {
           })}
         </TableBody>
       </Table>
+
+      {transferTarget && (
+        <R2AttendeeTransferModal
+          open={!!transferTarget}
+          onOpenChange={(open) => { if (!open) setTransferTarget(null); }}
+          attendee={transferTarget.attendee}
+          meeting={transferTarget.meeting}
+          onSuccess={() => setTransferTarget(null)}
+        />
+      )}
     </div>
   );
 }
