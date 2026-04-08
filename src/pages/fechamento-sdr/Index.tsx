@@ -115,7 +115,12 @@ const FechamentoSDRList = () => {
   const monthOptions = generateMonthOptions();
 
   const getCompPlanForSdr = (sdrId: string) => {
-    return compPlans?.find((cp) => cp.sdr_id === sdrId);
+    const plans = compPlans?.filter((cp) => cp.sdr_id === sdrId);
+    if (!plans || plans.length === 0) return undefined;
+    // Prefer most recent vigencia_inicio (most specific plan for the month)
+    return plans.sort((a, b) => 
+      b.vigencia_inicio.localeCompare(a.vigencia_inicio)
+    )[0];
   };
 
   // Calculate financial summary using saved payout values
