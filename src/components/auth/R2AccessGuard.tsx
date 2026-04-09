@@ -41,9 +41,9 @@ export const R2AccessGuard = ({ children, fallback }: R2AccessGuardProps) => {
 
   const hasRoleAccess = role && R2_ALLOWED_ROLES.includes(role);
   
-  // Closers R2 também têm acesso
-  const isR2Closer = !!myR2Closer?.id;
-  const hasCloserAccess = (role === 'closer' || allRoles?.includes('closer')) && isR2Closer;
+  // Qualquer closer (R1 ou R2) tem acesso à Agenda R2
+  const isCloserRole = role === 'closer' || allRoles?.includes('closer');
+  const hasCloserAccess = !!isCloserRole;
 
   // Permissão individual via user_permissions
   const hasUserPermission = r2Permission?.permission_level && 
