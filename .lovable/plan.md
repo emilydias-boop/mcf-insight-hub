@@ -1,38 +1,44 @@
 
 
-# Permitir closers R1 acessarem a Agenda R2 para agendamento
+# Corrigir bulk move: atualizar deals existentes na pipeline destino
 
 ## Problema
 
-Closers de R1 (role `closer`, mas que NÃO estão cadastrados como closers R2) são bloqueados pelo `R2AccessGuard` ao tentar acessar `/crm/agenda-r2`. Quando marcam R1 como "Realizada", o sistema sugere "Agendar R2 Agora" e navega para a Agenda R2, mas o guard bloqueia o acesso mostrando "Acesso Negado".
-
-O guard atual permite acesso apenas para:
-- admin, manager, coordenador (por role)
-- Closers que estão na tabela `closers` com `meeting_type = 'r2'`
-- Usuários com permissão individual em `user_permissions`
-
-Closers R1 não se encaixam em nenhum desses critérios.
+Ao mover leads em massa para outra pipeline, o constraint `crm_deals_contact_origin_unique` bloqueia quando o contato já tem um deal na pipeline destino (com `data_source = 'webhook'`). Ex: leads de "anamnese incompleta" que completaram o fluxo e já existem na pipeline destino.
 
 ## Solução
 
-Permitir que **qualquer closer** acesse a Agenda R2, não apenas closers R2. A página já tem filtros e restrições visuais adequadas.
+Processar deals individualmente. Quando o UPDATE falhar por duplicata:
+1. Buscar o deal existente na pipeline destino (mesmo `contact_id` + `origin_id`)
+2. Atualizar o deal existente com: `stage_id`, `tags`, `custom_fields`, `name` e `updated_at` do deal de origem -- para que as informações atualizadas (ex: anamnese completa) sejam refletidas
+3. Reportar ao usuário quantos foram movidos vs. atualizados
 
 | Arquivo | Alteração |
 |---|---|
-| `src/components/auth/R2AccessGuard.tsx` | Alterar `hasCloserAccess` para incluir qualquer closer, não apenas R2 closers |
+| `src/components/crm/BulkMovePipelineDialog.tsx` | Refatorar `handleMove` para processar individualmente, e em caso de duplicata, mesclar dados no deal existente |
 
-### Detalhe
+### Lógica do handleMove
 
-```typescript
-// Antes:
-const isR2Closer = !!myR2Closer?.id;
-const hasCloserAccess = (role === 'closer' || allRoles?.includes('closer')) && isR2Closer;
+```text
+Para cada dealId selecionado:
+  1. Buscar deal atual (contact_id, tags, custom_fields, name)
+  2. Tentar UPDATE (origin_id + stage_id)
+  3. Se erro de unique constraint:
+     a. Buscar deal existente na pipeline destino (contact_id + origin_id)
+     b. Mesclar tags (union) e custom_fields (merge) do deal origem → deal destino
+     c. Atualizar deal destino com stage + dados mesclados
+     d. Contabilizar como "atualizado"
+  4. Se sucesso: contabilizar como "movido"
 
-// Depois:
-const hasCloserAccess = role === 'closer' || allRoles?.includes('closer');
+Toast final: "X movido(s), Y atualizado(s)"
 ```
 
-Com isso, qualquer closer (R1 ou R2) pode acessar a página. O botão "Agendar R2" já aparece para não-R2-closers (`!isR2Closer`), e a busca de leads funciona sem restrição de role. A experiência do closer R2 (ver apenas sua agenda) permanece inalterada pois é controlada por `isR2Closer` dentro de `AgendaR2.tsx`.
+### Dados que serão mesclados no deal existente
 
-Também remover a dependência de `useMyR2Closer` no loading do guard para closers genéricos, evitando delay desnecessário.
+- `stage_id` → novo estágio selecionado
+- `tags` → união das tags dos dois deals (sem duplicar)
+- `custom_fields` → merge (campos do deal sendo movido sobrescrevem)
+- `updated_at` → now()
+
+Assim, quando leads de anamnese incompleta completaram o fluxo, as informações atualizadas (tags, custom_fields) são transferidas para o deal existente na pipeline destino.
 
