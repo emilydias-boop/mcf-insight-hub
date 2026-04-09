@@ -55,15 +55,90 @@ export const BulkMovePipelineDialog = ({
     if (!selectedOriginId || !selectedStageId || selectedDealIds.length === 0) return;
 
     setIsMoving(true);
+    let moved = 0;
+    let updated = 0;
+    let errors = 0;
+
     try {
-      const { error } = await supabase
-        .from('crm_deals')
-        .update({ origin_id: selectedOriginId, stage_id: selectedStageId })
-        .in('id', selectedDealIds);
+      for (const dealId of selectedDealIds) {
+        // 1. Fetch source deal data
+        const { data: sourceDeal } = await supabase
+          .from('crm_deals')
+          .select('contact_id, tags, custom_fields, name')
+          .eq('id', dealId)
+          .single();
 
-      if (error) throw error;
+        if (!sourceDeal) {
+          errors++;
+          continue;
+        }
 
-      toast.success(`${selectedDealIds.length} lead(s) movido(s) para nova pipeline`);
+        // 2. Try normal move
+        const { error } = await supabase
+          .from('crm_deals')
+          .update({ origin_id: selectedOriginId, stage_id: selectedStageId })
+          .eq('id', dealId);
+
+        if (error) {
+          if (error.message?.includes('crm_deals_contact_origin_unique')) {
+            // 3. Find existing deal in target pipeline
+            const { data: existingDeal } = await supabase
+              .from('crm_deals')
+              .select('id, tags, custom_fields')
+              .eq('contact_id', sourceDeal.contact_id)
+              .eq('origin_id', selectedOriginId)
+              .single();
+
+            if (existingDeal) {
+              // 4. Merge tags (union) and custom_fields (source overwrites)
+              const mergedTags = Array.from(new Set([
+                ...((existingDeal.tags as string[]) || []),
+                ...((sourceDeal.tags as string[]) || []),
+              ]));
+              const mergedCustomFields = {
+                ...((existingDeal.custom_fields as Record<string, any>) || {}),
+                ...((sourceDeal.custom_fields as Record<string, any>) || {}),
+              };
+
+              const { error: updateError } = await supabase
+                .from('crm_deals')
+                .update({
+                  stage_id: selectedStageId,
+                  tags: mergedTags,
+                  custom_fields: mergedCustomFields,
+                  name: sourceDeal.name || undefined,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', existingDeal.id);
+
+              if (updateError) {
+                console.error('Erro ao atualizar deal existente:', updateError);
+                errors++;
+              } else {
+                updated++;
+              }
+            } else {
+              errors++;
+            }
+          } else {
+            console.error('Erro ao mover deal:', dealId, error);
+            errors++;
+          }
+        } else {
+          moved++;
+        }
+      }
+
+      if (moved > 0 || updated > 0) {
+        const parts: string[] = [];
+        if (moved > 0) parts.push(`${moved} movido(s)`);
+        if (updated > 0) parts.push(`${updated} atualizado(s)`);
+        toast.success(parts.join(', '));
+      }
+      if (errors > 0) {
+        toast.warning(`${errors} lead(s) com erro ao mover`);
+      }
+
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
       onOpenChange(false);
       onSuccess();
