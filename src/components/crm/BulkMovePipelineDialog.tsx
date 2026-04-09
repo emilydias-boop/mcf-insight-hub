@@ -115,6 +115,11 @@ export const BulkMovePipelineDialog = ({
                 console.error('Erro ao atualizar deal existente:', updateError);
                 errors++;
               } else {
+                // Remover o deal de origem para não ficar duplicado
+                await supabase
+                  .from('crm_deals')
+                  .delete()
+                  .eq('id', dealId);
                 updated++;
               }
             } else {
