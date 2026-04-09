@@ -49,9 +49,8 @@ export const R2AccessGuard = ({ children, fallback }: R2AccessGuardProps) => {
   const hasUserPermission = r2Permission?.permission_level && 
     r2Permission.permission_level !== 'none';
 
-  // Show loading while checking R2 closer status or individual permission
-  const isCloser = role === 'closer' || allRoles?.includes('closer');
-  if ((loadingR2Closer && isCloser) || loadingPermission) {
+  // Show loading while checking individual permission
+  if (loadingPermission) {
     return null;
   }
 
