@@ -1,41 +1,31 @@
 
 
-# Corrigir leads ficando em ambas as pipelines
+# Auto-expandir grupos na sidebar de Origens
 
 ## Problema
 
-Quando o bulk move encontra um conflito de unique constraint (contato já existe na pipeline destino), o código atual:
-1. Atualiza o deal **existente** na pipeline destino com os dados mesclados
-2. **Mas não remove o deal de origem** da pipeline original
-
-Resultado: o lead aparece nas duas pipelines.
+A sidebar de origens mostra grupos colapsados por padrão. Quando o usuário tem poucas origens (ex: 2 pipelines no grupo "Perpétuo - X1"), ele precisa clicar no grupo para ver as origens. Isso é desnecessário.
 
 ## Solução
 
-Após atualizar com sucesso o deal existente na pipeline destino, **deletar o deal de origem** da pipeline original. Isso garante que o lead só existe em uma pipeline.
+Adicionar um `useEffect` no `OriginsSidebar.tsx` que, após os dados carregarem, auto-expande todos os grupos quando o total de origens é pequeno (≤ 10).
 
 | Arquivo | Alteração |
 |---|---|
-| `src/components/crm/BulkMovePipelineDialog.tsx` | Após o update do deal existente (linha 103-112), adicionar um DELETE do deal de origem (`dealId`) |
+| `src/components/crm/OriginsSidebar.tsx` | Adicionar `useEffect` após linha ~182 que calcula total de origens e seta `expandedGroups` com todos os IDs de grupo se total ≤ 10 |
 
-### Detalhe
+### Lógica
 
 ```typescript
-// Após o update do deal existente com sucesso (linha 117):
-if (updateError) {
-  errors++;
-} else {
-  // Remover o deal de origem para não ficar duplicado
-  await supabase
-    .from('crm_deals')
-    .delete()
-    .eq('id', dealId);
-  updated++;
-}
+useEffect(() => {
+  if (!dataToUse || !isGroupedTree) return;
+  const groups = dataToUse as Group[];
+  const totalOrigins = groups.reduce((sum, g) => sum + g.children.length, 0);
+  if (totalOrigins <= 10) {
+    setExpandedGroups(new Set(groups.map(g => g.id)));
+  }
+}, [dataToUse, isGroupedTree]);
 ```
 
-Isso garante que:
-- Caso normal (sem duplicata): deal é movido normalmente (origin_id + stage_id atualizados)
-- Caso duplicata: deal existente na destino recebe dados mesclados, deal de origem é removido
-- O lead aparece em apenas uma pipeline
+Resultado: com poucas origens (como o caso do SDR que vê apenas 2), os grupos já aparecem expandidos mostrando as origens diretamente. Com muitas origens (admin), continua colapsado.
 
