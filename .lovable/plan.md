@@ -1,47 +1,38 @@
 
 
-# Restringir Antony para ver apenas PILOTO ANAMNESE / INDICAÇÃO
+# Permitir closers R1 acessarem a Agenda R2 para agendamento
 
 ## Problema
 
-O Antony (SDR, BU incorporador) precisa ver **apenas** a pipeline "PILOTO ANAMNESE / INDICAÇÃO" e **não** a "Inside Sales". Atualmente, SDRs do incorporador são fixados na Inside Sales sem opção de troca.
+Closers de R1 (role `closer`, mas que NÃO estão cadastrados como closers R2) são bloqueados pelo `R2AccessGuard` ao tentar acessar `/crm/agenda-r2`. Quando marcam R1 como "Realizada", o sistema sugere "Agendar R2 Agora" e navega para a Agenda R2, mas o guard bloqueia o acesso mostrando "Acesso Negado".
+
+O guard atual permite acesso apenas para:
+- admin, manager, coordenador (por role)
+- Closers que estão na tabela `closers` com `meeting_type = 'r2'`
+- Usuários com permissão individual em `user_permissions`
+
+Closers R1 não se encaixam em nenhum desses critérios.
 
 ## Solução
 
-Adicionar uma coluna `allowed_origin_ids` (TEXT[]) na tabela `sdr` para override individual de pipelines. Quando preenchida, o SDR vê **apenas** essas pipelines em vez do padrão da BU.
-
-### 1. Migration: adicionar coluna na tabela `sdr`
-
-```sql
-ALTER TABLE public.sdr ADD COLUMN allowed_origin_ids TEXT[] DEFAULT NULL;
-
--- Configurar Antony para ver apenas PILOTO ANAMNESE
-UPDATE public.sdr 
-SET allowed_origin_ids = ARRAY['7431cf4a-dc29-4208-95a6-28a499a06dac']
-WHERE id = '11111111-0001-0001-0001-000000000005';
-```
-
-### 2. Hook para buscar override do SDR
-
-Criar `src/hooks/useSDROriginOverride.ts` — busca `allowed_origin_ids` do SDR logado. Se preenchido, retorna esses IDs; se null, retorna null (usa padrão da BU).
-
-### 3. Alterar `Negocios.tsx`
-
-No cálculo de `effectiveOriginId` e no `useEffect` de auto-seleção:
-- Se SDR tem `allowed_origin_ids`, usar o primeiro como default e restringir sidebar/dropdown a essas origens
-- Se não tem override, manter comportamento atual (padrão da BU)
-
-No `showSidebar`: se SDR tem override com 1 pipeline, esconder sidebar (single pipeline). Se tem múltiplas no override, mostrar sidebar.
+Permitir que **qualquer closer** acesse a Agenda R2, não apenas closers R2. A página já tem filtros e restrições visuais adequadas.
 
 | Arquivo | Alteração |
 |---|---|
-| Migration SQL | Adicionar `allowed_origin_ids TEXT[]` na tabela `sdr` + setar Antony |
-| `src/hooks/useSDROriginOverride.ts` | Novo hook para buscar override |
-| `src/pages/crm/Negocios.tsx` | Usar override quando disponível no effectiveOriginId e sidebar |
+| `src/components/auth/R2AccessGuard.tsx` | Alterar `hasCloserAccess` para incluir qualquer closer, não apenas R2 closers |
 
-### Resultado
+### Detalhe
 
-- Antony verá **apenas** PILOTO ANAMNESE / INDICAÇÃO (sem sidebar, pipeline fixa)
-- Outros SDRs do incorporador continuam vendo Inside Sales normalmente
-- Futuramente, basta editar `allowed_origin_ids` no admin/RH para mudar a pipeline de qualquer SDR
+```typescript
+// Antes:
+const isR2Closer = !!myR2Closer?.id;
+const hasCloserAccess = (role === 'closer' || allRoles?.includes('closer')) && isR2Closer;
+
+// Depois:
+const hasCloserAccess = role === 'closer' || allRoles?.includes('closer');
+```
+
+Com isso, qualquer closer (R1 ou R2) pode acessar a página. O botão "Agendar R2" já aparece para não-R2-closers (`!isR2Closer`), e a busca de leads funciona sem restrição de role. A experiência do closer R2 (ver apenas sua agenda) permanece inalterada pois é controlada por `isR2Closer` dentro de `AgendaR2.tsx`.
+
+Também remover a dependência de `useMyR2Closer` no loading do guard para closers genéricos, evitando delay desnecessário.
 
