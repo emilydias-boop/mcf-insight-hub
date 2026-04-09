@@ -200,7 +200,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
         if (inst) {
           await supabase
             .from('consortium_installments')
-            .update({ data_vencimento: dataVencimento.toISOString().split('T')[0] })
+            .update({ data_vencimento: format(dataVencimento, 'yyyy-MM-dd') })
             .eq('id', inst.id);
         }
       }

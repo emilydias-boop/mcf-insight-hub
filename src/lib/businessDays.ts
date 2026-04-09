@@ -187,7 +187,7 @@ export function recalcularDatasAPartirDe(
   const resultado: Array<{ numeroParcela: number; dataVencimento: Date }> = [];
 
   for (let i = parcelaInicial; i <= totalParcelas; i++) {
-    const offset = i - parcelaInicial; // parcela 1 = offset 0, parcela 2 = offset 1, etc.
+    const offset = i - parcelaInicial + 1; // próxima parcela = +1 mês a partir da data base
     
     const mesAlvo = dataBase.getMonth() + offset;
     const anoAlvo = dataBase.getFullYear() + Math.floor(mesAlvo / 12);
