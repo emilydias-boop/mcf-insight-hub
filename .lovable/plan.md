@@ -1,57 +1,44 @@
 
 
-# Bloquear leads A010 de entrarem em pipelines que não sejam Inside Sales
+# Corrigir cálculo de datas na recalculação de parcelas
 
 ## Problema
 
-Leads que já compraram A010 estão sendo criados na pipeline "PILOTO ANAMNESE / INDICAÇÃO" via webhooks de anamnese (completa ou incompleta). Esses leads deveriam ficar exclusivamente na PIPELINE INSIDE SALES.
+Dois bugs na recalculação de datas de parcelas do consórcio:
+
+1. **Timezone**: `dataVencimento.toISOString().split('T')[0]` converte para UTC, deslocando a data em -1 dia (meia-noite BRT = 21h UTC do dia anterior). Resultado: 20/05 vira 19/05.
+
+2. **Offset errado**: Em `recalcularDatasAPartirDe`, o offset da primeira parcela recalculada começa em 0, fazendo ela cair no **mesmo mês** da data base. A parcela seguinte deveria ser 1 mês depois.
 
 ## Solução
 
-Adicionar verificação de compra A010 em dois pontos:
-
-### 1. Edge Function `webhook-lead-receiver` (proteção na entrada)
-
-Após resolver o contato (seção 7) e antes de criar o deal (seção 11), adicionar check:
-
-- Se o `origin_id` do endpoint **não** é o da PIPELINE INSIDE SALES
-- Verificar se o email/telefone do lead tem transação confirmada em `hubla_transactions` com `product_category = 'a010'` e `sale_status = 'completed'`
-- Se sim: **bloquear criação** na pipeline atual
-- Em vez disso, verificar se já existe deal na Inside Sales. Se não, criar lá (com owner via round-robin). Se sim, apenas atualizar o profile
-- Retornar resposta indicando redirecionamento
-
-```text
-Fluxo:
-  1. Resolver contato (existente)
-  2. Verificar se origin_id != INSIDE_SALES_ORIGIN
-  3. Se diferente → checar hubla_transactions por A010 completed
-  4. Se tem A010:
-     a. Buscar origin_id da PIPELINE INSIDE SALES
-     b. Checar se já tem deal lá → se sim, atualizar profile e retornar
-     c. Se não tem deal → criar deal na Inside Sales (não na pipeline do endpoint)
-     d. Log: "Lead A010 redirecionado para Inside Sales"
-  5. Se não tem A010 → fluxo normal
-```
-
-### 2. Frontend `BulkMovePipelineDialog` (proteção na movimentação manual)
-
-Antes de mover cada deal, verificar se o lead tem tag A010 ou compra A010. Se o destino não é Inside Sales, bloquear e avisar via toast.
-
 | Arquivo | Alteração |
 |---|---|
-| `supabase/functions/webhook-lead-receiver/index.ts` | Adicionar check A010 antes da criação do deal (~linha 515), com redirecionamento para Inside Sales |
-| `src/components/crm/BulkMovePipelineDialog.tsx` | Adicionar check A010 no loop de `handleMove`, bloqueando movimentação para fora de Inside Sales |
+| `src/lib/businessDays.ts` | Corrigir offset: `offset = i - parcelaInicial + 1` para que a próxima parcela caia 1 mês depois da data editada |
+| `src/components/consorcio/ConsorcioCardDrawer.tsx` | Usar `format(dataVencimento, 'yyyy-MM-dd')` do date-fns em vez de `toISOString().split('T')[0]` para evitar shift de timezone |
 
-### Detalhes técnicos
+### Correção 1 - Offset (`businessDays.ts` linha 190)
 
-**No webhook-lead-receiver**, a query de verificação:
-```sql
-SELECT id FROM hubla_transactions 
-WHERE product_category = 'a010' 
-  AND sale_status = 'completed'
-  AND (customer_email = :email OR customer_phone LIKE '%' || :phone9)
-LIMIT 1
+```typescript
+// ANTES:
+const offset = i - parcelaInicial; // parcela seguinte = offset 0 = mesmo mês (ERRADO)
+
+// DEPOIS:
+const offset = i - parcelaInicial + 1; // parcela seguinte = offset 1 = próximo mês (CORRETO)
 ```
 
-**No BulkMovePipelineDialog**, usar o email do contato do deal para verificar contra `hubla_transactions` antes de permitir o move. Deals com A010 sendo movidos para fora de Inside Sales serão contabilizados como "bloqueados" com toast explicativo.
+### Correção 2 - Timezone (`ConsorcioCardDrawer.tsx` linha 203)
+
+```typescript
+// ANTES:
+.update({ data_vencimento: dataVencimento.toISOString().split('T')[0] })
+
+// DEPOIS:
+.update({ data_vencimento: format(dataVencimento, 'yyyy-MM-dd') })
+```
+
+Com essas duas correções:
+- Parcela 1 editada para 20/05/2026 → salva como 20/05/2026 (sem shift)
+- Parcela 2 recalculada → 22/06/2026 (próximo mês, dia útil)
+- Parcela 3 → 22/07/2026, etc.
 
