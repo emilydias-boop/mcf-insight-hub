@@ -184,6 +184,16 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
   // Verificar se é uma lista flat (pipeline específico) ou árvore (todos os funis)
   const isGroupedTree = dataToUse && Array.isArray(dataToUse) && dataToUse.length > 0 && 'children' in dataToUse[0];
   
+  // Auto-expandir grupos quando há poucas origens (≤ 10)
+  useEffect(() => {
+    if (!dataToUse || !isGroupedTree) return;
+    const groups = dataToUse as Group[];
+    const totalOrigins = groups.reduce((sum, g) => sum + g.children.length, 0);
+    if (totalOrigins <= 10) {
+      setExpandedGroups(new Set(groups.map(g => g.id)));
+    }
+  }, [dataToUse, isGroupedTree]);
+  
   // Filtrar origens por busca
   const filterBySearch = (items: any[]) => {
     if (!searchTerm) return items;
