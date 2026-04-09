@@ -54,23 +54,70 @@ export const BulkMovePipelineDialog = ({
   const handleMove = async () => {
     if (!selectedOriginId || !selectedStageId || selectedDealIds.length === 0) return;
 
+    const INSIDE_SALES_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
+
     setIsMoving(true);
     let moved = 0;
     let updated = 0;
     let errors = 0;
+    let blocked = 0;
 
     try {
       for (const dealId of selectedDealIds) {
         // 1. Fetch source deal data
         const { data: sourceDeal } = await supabase
           .from('crm_deals')
-          .select('contact_id, tags, custom_fields, name')
+          .select('contact_id, tags, custom_fields, name, origin_id')
           .eq('id', dealId)
           .single();
 
         if (!sourceDeal) {
           errors++;
           continue;
+        }
+
+        // TRAVA A010: Bloquear movimentação de compradores A010 para fora de Inside Sales
+        if (selectedOriginId !== INSIDE_SALES_ORIGIN_ID) {
+          // Buscar email do contato
+          const { data: contactData } = await supabase
+            .from('crm_contacts')
+            .select('email, phone')
+            .eq('id', sourceDeal.contact_id)
+            .single();
+
+          if (contactData?.email) {
+            const { data: a010Check } = await supabase
+              .from('hubla_transactions')
+              .select('id')
+              .eq('product_category', 'a010')
+              .eq('sale_status', 'completed')
+              .ilike('customer_email', contactData.email.toLowerCase())
+              .limit(1);
+
+            if (a010Check && a010Check.length > 0) {
+              blocked++;
+              continue;
+            }
+          }
+
+          // Fallback: check por telefone
+          if (contactData?.phone) {
+            const phoneSuffix = contactData.phone.replace(/\D/g, '').slice(-9);
+            if (phoneSuffix.length === 9) {
+              const { data: a010PhoneCheck } = await supabase
+                .from('hubla_transactions')
+                .select('id')
+                .eq('product_category', 'a010')
+                .eq('sale_status', 'completed')
+                .ilike('customer_phone', `%${phoneSuffix}`)
+                .limit(1);
+
+              if (a010PhoneCheck && a010PhoneCheck.length > 0) {
+                blocked++;
+                continue;
+              }
+            }
+          }
         }
 
         // 2. Try normal move
@@ -139,6 +186,9 @@ export const BulkMovePipelineDialog = ({
         if (moved > 0) parts.push(`${moved} movido(s)`);
         if (updated > 0) parts.push(`${updated} atualizado(s)`);
         toast.success(parts.join(', '));
+      }
+      if (blocked > 0) {
+        toast.warning(`${blocked} lead(s) A010 bloqueado(s) — compradores A010 devem ficar na Inside Sales`);
       }
       if (errors > 0) {
         toast.warning(`${errors} lead(s) com erro ao mover`);

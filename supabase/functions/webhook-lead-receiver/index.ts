@@ -337,6 +337,160 @@ serve(async (req) => {
       }
     }
 
+    // ======= TRAVA A010: Leads compradores não devem entrar em pipelines fora de Inside Sales =======
+    const INSIDE_SALES_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
+    
+    if (endpoint.origin_id !== INSIDE_SALES_ORIGIN_ID) {
+      // Verificar se o lead tem compra A010 confirmada
+      const contactEmailLower = (payload.email || '').trim().toLowerCase();
+      const phoneSuffix9 = normalizedPhone ? normalizedPhone.replace(/\D/g, '').slice(-9) : '';
+      
+      let isA010Buyer = false;
+      
+      if (contactEmailLower) {
+        const { data: a010ByEmail } = await supabase
+          .from('hubla_transactions')
+          .select('id')
+          .eq('product_category', 'a010')
+          .eq('sale_status', 'completed')
+          .ilike('customer_email', contactEmailLower)
+          .limit(1);
+        
+        if (a010ByEmail && a010ByEmail.length > 0) {
+          isA010Buyer = true;
+        }
+      }
+      
+      if (!isA010Buyer && phoneSuffix9.length === 9) {
+        const { data: a010ByPhone } = await supabase
+          .from('hubla_transactions')
+          .select('id')
+          .eq('product_category', 'a010')
+          .eq('sale_status', 'completed')
+          .ilike('customer_phone', `%${phoneSuffix9}`)
+          .limit(1);
+        
+        if (a010ByPhone && a010ByPhone.length > 0) {
+          isA010Buyer = true;
+        }
+      }
+      
+      if (isA010Buyer) {
+        console.log(`[WEBHOOK-RECEIVER] ⛔ Lead A010 detectado — bloqueando criação na pipeline ${endpoint.origin_id}, redirecionando para Inside Sales`);
+        
+        // Verificar se já tem deal na Inside Sales
+        const { data: insideSalesDeal } = await supabase
+          .from('crm_deals')
+          .select('id, tags, custom_fields')
+          .eq('contact_id', contactId)
+          .eq('origin_id', INSIDE_SALES_ORIGIN_ID)
+          .limit(1)
+          .maybeSingle();
+        
+        if (insideSalesDeal) {
+          // Já tem deal na Inside Sales — apenas atualizar profile e tags
+          console.log('[WEBHOOK-RECEIVER] ✅ Deal já existe na Inside Sales:', insideSalesDeal.id);
+          
+          const currentTags: string[] = (insideSalesDeal.tags as string[]) || [];
+          const mergedTags = [...new Set([...currentTags, ...autoTags])];
+          if (mergedTags.length !== currentTags.length) {
+            await supabase.from('crm_deals').update({ tags: mergedTags }).eq('id', insideSalesDeal.id);
+          }
+          
+          await upsertLeadProfile(supabase, contactId, insideSalesDeal.id, payload, cpfClean, normalizedPhone);
+          await updateEndpointMetrics(supabase, endpoint.id);
+          
+          return new Response(
+            JSON.stringify({
+              success: true,
+              action: 'a010_blocked',
+              reason: 'a010_buyer_redirected_to_inside_sales',
+              deal_id: insideSalesDeal.id,
+              contact_id: contactId,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        } else {
+          // Não tem deal na Inside Sales — criar lá em vez da pipeline original
+          console.log('[WEBHOOK-RECEIVER] 🔄 Criando deal na Inside Sales para comprador A010');
+          
+          // Buscar primeiro estágio da Inside Sales
+          let insideSalesStageId: string | null = null;
+          const { data: isStage } = await supabase
+            .from('crm_stages')
+            .select('id')
+            .eq('origin_id', INSIDE_SALES_ORIGIN_ID)
+            .order('stage_order', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          insideSalesStageId = isStage?.id || null;
+          
+          // Buscar owner via round-robin da Inside Sales
+          let isOwner: string | null = null;
+          let isOwnerProfileId: string | null = null;
+          const { data: nextOwner } = await supabase.rpc('get_next_lead_owner', { p_origin_id: INSIDE_SALES_ORIGIN_ID });
+          if (nextOwner) {
+            isOwner = nextOwner;
+            const { data: ownerProfile } = await supabase.from('profiles').select('id').eq('email', nextOwner).maybeSingle();
+            isOwnerProfileId = ownerProfile?.id || null;
+          }
+          
+          const isCustomFields: Record<string, unknown> = {
+            source: payload.source || slug,
+            lead_channel: slug.toUpperCase(),
+            webhook_endpoint: endpoint.name,
+            a010_redirect: true,
+            original_origin_id: endpoint.origin_id,
+          };
+          
+          const { data: newDeal } = await supabase
+            .from('crm_deals')
+            .insert({
+              clint_id: `a010-redirect-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+              name: payload.name || payload.nome_completo,
+              value: 0,
+              contact_id: contactId,
+              origin_id: INSIDE_SALES_ORIGIN_ID,
+              stage_id: insideSalesStageId,
+              owner_id: isOwner,
+              owner_profile_id: isOwnerProfileId,
+              product_name: 'A010',
+              tags: [...new Set([...autoTags, 'A010'])],
+              custom_fields: isCustomFields,
+              data_source: 'webhook',
+              stage_moved_at: new Date().toISOString(),
+            })
+            .select('id')
+            .single();
+          
+          if (newDeal) {
+            await upsertLeadProfile(supabase, contactId, newDeal.id, payload, cpfClean, normalizedPhone);
+            
+            await supabase.from('deal_activities').insert({
+              deal_id: newDeal.id,
+              activity_type: 'lead_entered',
+              description: `Lead A010 redirecionado de ${endpoint.name} para PIPELINE INSIDE SALES`,
+              metadata: { source: 'webhook', original_slug: slug, a010_redirect: true },
+            });
+          }
+          
+          await updateEndpointMetrics(supabase, endpoint.id);
+          
+          return new Response(
+            JSON.stringify({
+              success: true,
+              action: 'a010_redirected',
+              reason: 'a010_buyer_created_in_inside_sales',
+              deal_id: newDeal?.id,
+              contact_id: contactId,
+              assigned_owner: isOwner,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    }
+
     // 8. Check for existing deal (any deal for same contact+origin, respecting UNIQUE constraint)
     const { data: existingDeal } = await supabase
       .from('crm_deals')
