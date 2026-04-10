@@ -326,6 +326,7 @@ export default function R2Carrinho() {
           <R2AccumulatedList
             leads={accumulatedLeads}
             isLoading={accumulatedLoading}
+            onSchedule={handleScheduleAccumulated}
           />
         </TabsContent>
 
