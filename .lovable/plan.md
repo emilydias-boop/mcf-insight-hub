@@ -1,98 +1,109 @@
 
-# Diagnóstico do corte do Carrinho R2
+## Diagnóstico real do problema
 
-## O que já foi aplicado
-- Em `src/lib/carrinhoWeekBoundaries.ts`, o fim de `r2Meetings` foi trocado para `friCartCutoff`.
-- Com isso, as abas que usam `boundaries.r2Meetings` (`useR2CarrinhoData`, `useR2CarrinhoKPIs`, `useR2ForaDoCarrinhoData`) passaram a respeitar o corte no **fim** da janela.
-- A aba de `aprovados` já usava corte no fim via `boundaries.aprovados`.
+O que já está certo hoje:
+- `src/pages/crm/R2Carrinho.tsx` já carrega **config da semana atual** e **config da semana anterior**.
+- `useR2CarrinhoData`, `useR2CarrinhoKPIs`, `useR2ForaDoCarrinhoData` e `useR2CarrinhoVendas` já recebem `previousConfig` e já reagem ao `horario_corte` no `queryKey`.
 
-## Por que ainda não está funcionando
-1. **Só o fim foi corrigido; o início não.**  
-   Hoje o início continua em `friAfterPrevCart` = sexta `00:00`.  
-   Então o sistema ainda **não “puxa” para a próxima semana** o que foi feito **após o corte da sexta anterior**.
+O que está errado de fato:
+1. **A sexta usada no cálculo está uma semana adiantada**
+   - Em `src/lib/carrinhoWeekBoundaries.ts`, o início usa:
+     ```ts
+     const friAfterPrevCartDate = addDays(weekStart, 1)
+     ```
+     Para a semana `09/04 - 15/04`, isso vira **10/04**.
+     Mas o início esperado da janela era a **sexta anterior: 03/04**.
 
-2. **A semana seguinte não lê o corte da sexta anterior.**  
-   `getCarrinhoMetricBoundaries(...)` recebe só a `config` da semana atual e usa:
-   ```ts
-   config?.carrinhos?.[0]?.horario_corte
-   ```
-   Ou seja: se você ajustou o corte “da outra sexta”, essa informação **não entra** no cálculo da semana seguinte.
+   - O fim usa:
+     ```ts
+     const friCartCutoffDate = addDays(weekEnd, 2)
+     ```
+     Para `09/04 - 15/04`, isso vira **17/04**.
+     Mas o fim esperado era a **sexta do carrinho dessa safra: 10/04**.
 
-3. **As queries não reagem automaticamente à mudança de config.**  
-   Os hooks do carrinho usam `queryKey` sem incluir o corte/config:
-   - `useR2CarrinhoData`
-   - `useR2CarrinhoKPIs`
-   - `useR2ForaDoCarrinhoData`
-   - `useR2CarrinhoVendas`
-   
-   E `saveConfig` invalida só:
-   ```ts
-   ['carrinho-config', weekKey]
-   ```
-   então a tela pode continuar com dados antigos até refresh manual/troca de semana.
+2. **O corte está sendo montado em UTC**
+   - Hoje o helper usa `Date.UTC(...)`.
+   - Então `12:00` vira **12:00 UTC**, que no Brasil aparece como **09:00 local**.
+   - Isso bate com o sintoma do print: a lista está começando na sexta **10/04 às 09:00**, que é exatamente o efeito de “12:00 UTC”.
 
-4. **Há risco de fuso horário no corte.**  
-   O corte é montado com `Date.UTC(...)`. Se a regra do negócio é “12h horário local”, pode existir deslocamento no instante real aplicado.
+## Resumo do erro com o seu exemplo
 
-## Conclusão objetiva
-O sistema hoje respeita o corte **para fechar a semana atual**, mas **não usa esse corte para abrir a semana seguinte**.  
-Por isso, leads feitos **após 12h da sexta anterior** não entram onde você espera.
+Para a safra `09/04 - 15/04`, o esperado era:
 
-## Plano de correção
-1. **Separar corte de abertura e corte de fechamento**
-   - `previousFridayCutoff` = sexta anterior no horário de corte da semana anterior
-   - `currentFridayCutoff` = sexta atual no horário de corte da semana atual
-
-2. **Mudar a janela operacional**
-   - `r2Meetings.start` deve virar `previousFridayCutoff`
-   - `r2Meetings.end` deve virar `currentFridayCutoff`
-   - mesmo ajuste para `aprovados` quando a regra precisar ser contínua entre semanas
-
-3. **Ler também a config da semana anterior**
-   - `R2Carrinho.tsx` precisa carregar:
-     - config da semana aberta
-     - config da semana anterior
-   - e passar ambas para o cálculo das boundaries
-
-4. **Fazer os dados atualizarem ao salvar corte**
-   - incluir dados relevantes da config no `queryKey`, ou
-   - invalidar no `onSuccess` do save:
-     - `r2-carrinho-data`
-     - `r2-carrinho-kpis`
-     - `r2-fora-carrinho-data`
-     - `r2-carrinho-vendas`
-     - `r2-accumulated-leads`
-
-5. **Revisar fuso**
-   - confirmar se 12:00 é regra local
-   - se for, ajustar a criação das datas para não aplicar o corte em UTC “puro”
-
-## Arquivos envolvidos
-- `src/lib/carrinhoWeekBoundaries.ts`
-- `src/hooks/useCarrinhoConfig.ts`
-- `src/pages/crm/R2Carrinho.tsx`
-- `src/hooks/useR2CarrinhoData.ts`
-- `src/hooks/useR2CarrinhoKPIs.ts`
-- `src/hooks/useR2ForaDoCarrinhoData.ts`
-- `src/hooks/useR2CarrinhoVendas.ts`
-- possivelmente `src/hooks/useR2AccumulatedLeads.ts` se os acumulados também precisarem seguir o mesmo corte
-
-## Detalhes técnicos
 ```text
-Hoje:
-  semana N   = sexta 00:00 -> sexta corte
-  semana N+1 = sexta 00:00 -> sexta corte
-
 Esperado:
-  semana N   = sexta anterior no corte -> sexta atual no corte
-  semana N+1 = sexta atual no corte    -> próxima sexta no corte
+R2s da semana = 03/04 12:00 -> 10/04 12:00
 ```
 
-## Validação depois da correção
-- salvar corte 12:00 na sexta de origem
-- conferir um lead criado antes de 12:00 e outro depois de 12:00
-- validar que:
-  - antes de 12:00 fica na semana original
-  - depois de 12:00 aparece na semana seguinte
-  - KPIs e abas mostram a mesma regra
-  - salvar a config reflete sem precisar trocar de semana
+Hoje o código está fazendo algo equivalente a:
+
+```text
+Atual:
+R2s da semana = 10/04 09:00 local -> 17/04 09:00 local
+```
+
+Por isso:
+- os leads feitos **após 12h da sexta anterior** não entram;
+- a tela começa mostrando registros da **sexta atual às 09h**;
+- parece que o corte “não respeita”, quando na prática a janela inteira está deslocada.
+
+## Plano de correção
+
+### 1) Corrigir a matemática da janela em `carrinhoWeekBoundaries.ts`
+Trocar a lógica para usar a sexta correta da safra selecionada:
+
+- `currentFriday = addDays(weekStart, 1)`  
+- `previousFriday = subDays(currentFriday, 7)`
+
+E montar:
+- `previousFridayCutoff` com o `horario_corte` da `previousConfig`
+- `currentFridayCutoff` com o `horario_corte` da `config`
+
+Aplicando:
+- `r2Meetings: { start: previousFridayCutoff, end: currentFridayCutoff }`
+- `aprovados: { start: previousFridayCutoff, end: currentFridayCutoff }`
+
+### 2) Parar de usar `Date.UTC` para o corte
+Construir o horário de corte em **horário local do negócio** (12:00 real que o usuário configurou), para não deslocar 3 horas.
+
+Objetivo:
+- `12:00` configurado precisa virar **12:00 visível na regra**, não `09:00`.
+
+### 3) Ajustar também a janela de vendas
+A `vendasParceria` hoje também está baseada na sexta errada.
+Ela deve passar a usar a **sexta do carrinho da safra selecionada**, não a sexta da semana seguinte.
+
+### 4) Alinhar as views secundárias que ainda não seguem a mesma regra
+Mesmo corrigindo a helper principal, ainda existem pontos do Carrinho que continuam incompletos:
+- `src/hooks/useR2MetricsData.ts` recebe só a config atual
+- `src/components/crm/R2MetricsPanel.tsx` não passa `previousConfig`
+- `src/hooks/useR2AccumulatedLeads.ts` varre semanas anteriores sem usar as configs históricas dessas semanas
+
+Plano:
+- passar `previousConfig` para `R2MetricsPanel` / `useR2MetricsData`
+- incluir os cortes no `queryKey`
+- revisar `useR2AccumulatedLeads` para usar a config correta de cada semana escaneada
+
+## Arquivos a ajustar
+
+- `src/lib/carrinhoWeekBoundaries.ts`
+- `src/pages/crm/R2Carrinho.tsx`
+- `src/components/crm/R2MetricsPanel.tsx`
+- `src/hooks/useR2MetricsData.ts`
+- `src/hooks/useR2AccumulatedLeads.ts`
+
+Possivelmente também, para manter tudo consistente:
+- `src/hooks/useCloserCarrinhoMetrics.ts`
+- `src/hooks/useSDRCarrinhoMetrics.ts`
+
+## Validação após a correção
+
+Cenário de teste:
+- semana `02/04 - 08/04` com corte `12:00`
+- abrir semana `09/04 - 15/04`
+
+Resultado esperado:
+- lead criado em `03/04 11:59` fica na semana anterior
+- lead criado em `03/04 12:01` entra em `09/04 - 15/04`
+- a lista não pode começar em `10/04 09:00` por efeito de UTC
+- KPIs, “Todas R2s”, “Fora do Carrinho”, “Aprovados” e “Vendas” precisam bater com a mesma janela
