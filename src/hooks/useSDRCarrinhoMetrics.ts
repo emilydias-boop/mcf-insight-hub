@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { useSdrsFromSquad } from "./useSdrsFromSquad";
 import { getCarrinhoMetricBoundaries } from "@/lib/carrinhoWeekBoundaries";
+import { CarrinhoConfig } from "@/hooks/useCarrinhoConfig";
 
 export interface SDRCarrinhoMetric {
   sdr_id: string;
