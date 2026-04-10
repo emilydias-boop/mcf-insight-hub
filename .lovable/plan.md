@@ -1,44 +1,39 @@
 
 
-# Corrigir cálculo de datas na recalculação de parcelas
+# Permitir busca de leads "Contrato Pago" no agendamento R2
 
 ## Problema
 
-Dois bugs na recalculação de datas de parcelas do consórcio:
+Closers de R1 não conseguem encontrar leads no modal "Agendar Reunião R2" porque o hook `useSearchDealsForSchedule` filtra deals com status "won" (incluindo "Contrato Pago"). Isso impede o agendamento de R2 para leads que já pagaram contrato na R1.
 
-1. **Timezone**: `dataVencimento.toISOString().split('T')[0]` converte para UTC, deslocando a data em -1 dia (meia-noite BRT = 21h UTC do dia anterior). Resultado: 20/05 vira 19/05.
+## Causa raiz
 
-2. **Offset errado**: Em `recalcularDatasAPartirDe`, o offset da primeira parcela recalculada começa em 0, fazendo ela cair no **mesmo mês** da data base. A parcela seguinte deveria ser 1 mês depois.
+Em `src/hooks/useAgendaData.ts` (linha 942-947), a busca exclui todos os deals cujo estágio é classificado como "won" por `getDealStatusFromStage`. Como "Contrato Pago" está na lista de `WON_KEYWORDS`, esses leads nunca aparecem nos resultados.
 
 ## Solução
 
+Modificar `useSearchDealsForSchedule` para aceitar um parâmetro opcional `includeWon` que, quando `true`, inclui deals com status "won" nos resultados. O modal R2 passará `includeWon: true`.
+
 | Arquivo | Alteração |
 |---|---|
-| `src/lib/businessDays.ts` | Corrigir offset: `offset = i - parcelaInicial + 1` para que a próxima parcela caia 1 mês depois da data editada |
-| `src/components/consorcio/ConsorcioCardDrawer.tsx` | Usar `format(dataVencimento, 'yyyy-MM-dd')` do date-fns em vez de `toISOString().split('T')[0]` para evitar shift de timezone |
+| `src/hooks/useAgendaData.ts` | Adicionar parâmetro `includeWon?: boolean` ao hook. Na linha 943, mudar filtro para: `status === 'open' \|\| (includeWon && status === 'won')` |
+| `src/components/crm/R2QuickScheduleModal.tsx` | Passar `includeWon: true` na chamada: `useSearchDealsForSchedule(searchQuery, undefined, undefined, true)` |
 
-### Correção 1 - Offset (`businessDays.ts` linha 190)
-
-```typescript
-// ANTES:
-const offset = i - parcelaInicial; // parcela seguinte = offset 0 = mesmo mês (ERRADO)
-
-// DEPOIS:
-const offset = i - parcelaInicial + 1; // parcela seguinte = offset 1 = próximo mês (CORRETO)
-```
-
-### Correção 2 - Timezone (`ConsorcioCardDrawer.tsx` linha 203)
+### Detalhe da alteração principal
 
 ```typescript
-// ANTES:
-.update({ data_vencimento: dataVencimento.toISOString().split('T')[0] })
+// useAgendaData.ts - assinatura
+export function useSearchDealsForSchedule(
+  query: string, originIds?: string[], ownerEmail?: string, includeWon?: boolean
+)
 
-// DEPOIS:
-.update({ data_vencimento: format(dataVencimento, 'yyyy-MM-dd') })
+// Filtro (linha 943)
+const openDeals = normalizedDeals.filter(deal => {
+  const stageName = deal.stage?.stage_name;
+  const status = getDealStatusFromStage(stageName);
+  return status === 'open' || (includeWon && status === 'won');
+});
 ```
 
-Com essas duas correções:
-- Parcela 1 editada para 20/05/2026 → salva como 20/05/2026 (sem shift)
-- Parcela 2 recalculada → 22/06/2026 (próximo mês, dia útil)
-- Parcela 3 → 22/07/2026, etc.
+Isso mantém o comportamento atual do R1 (que não precisa ver deals ganhos) e libera a busca de "Contrato Pago" apenas no contexto R2.
 
