@@ -28,6 +28,7 @@ import { CarrinhoConfigDialog } from '@/components/crm/CarrinhoConfigDialog';
 import { R2QuickScheduleModal } from '@/components/crm/R2QuickScheduleModal';
 import { useActiveR2Closers } from '@/hooks/useR2AgendaData';
 import { R2AccumulatedLead } from '@/hooks/useR2AccumulatedLeads';
+import { useEncaixarNoCarrinho } from '@/hooks/useEncaixarNoCarrinho';
 
 export default function R2Carrinho() {
   const [weekDate, setWeekDate] = useState(new Date());
