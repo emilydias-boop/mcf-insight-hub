@@ -328,7 +328,7 @@ Deno.serve(async (req) => {
               numero_parcela: i,
               valor_original: valorOriginalInst,
               valor_pago: valorPago,
-              valor_liquido: paid.net_value || null,
+              valor_liquido: i === 1 ? valorLiquido : (paid.net_value || null),
               data_vencimento: paid.sale_date,
               data_pagamento: paid.sale_date,
               status: "pago",
