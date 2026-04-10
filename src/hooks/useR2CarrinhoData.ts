@@ -31,11 +31,11 @@ export interface R2CarrinhoAttendee {
 }
 
 
-export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados', carrinhoConfig?: CarrinhoConfig) {
+export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados', carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
   return useQuery({
-    queryKey: ['r2-carrinho-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), filter],
+    queryKey: ['r2-carrinho-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), filter, carrinhoConfig?.carrinhos?.[0]?.horario_corte, previousConfig?.carrinhos?.[0]?.horario_corte],
     queryFn: async (): Promise<R2CarrinhoAttendee[]> => {
-      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig);
+      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
 
       // Use operational window for aprovados (with cutoff) or r2Meetings for all others
       const useBoundary = filter === 'aprovados' ? boundaries.aprovados : boundaries.r2Meetings;
