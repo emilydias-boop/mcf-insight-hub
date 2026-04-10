@@ -39,6 +39,7 @@ export default function R2Carrinho() {
   const [activeTab, setActiveTab] = useState('agendadas');
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [selectedAccLead, setSelectedAccLead] = useState<R2AccumulatedLead | null>(null);
+  const [encaixandoId, setEncaixandoId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const weekStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
@@ -59,6 +60,7 @@ export default function R2Carrinho() {
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
   const { data: r2Closers = [] } = useActiveR2Closers();
+  const encaixarMutation = useEncaixarNoCarrinho();
 
   // Fetch data for each tab
   const { data: rawAgendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekStart, weekEnd, 'agendadas', config, prevConfig);
