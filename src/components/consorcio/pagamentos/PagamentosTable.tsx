@@ -106,6 +106,8 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
       return;
     }
     window.open(data.signedUrl, '_blank');
+  };
+
   const handleCopyLinhaDigitavel = (e: React.MouseEvent, linha: string) => {
     e.stopPropagation();
     navigator.clipboard.writeText(linha);
