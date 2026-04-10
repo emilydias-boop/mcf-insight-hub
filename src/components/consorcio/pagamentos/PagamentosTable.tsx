@@ -2,7 +2,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ChevronLeft, ChevronRight, CheckCircle, FileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, FileText, Copy } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -42,17 +42,19 @@ interface Props {
   onSelectionChange: (ids: Set<string>) => void;
   bulkMode: boolean;
   filtroBoleto: string;
+  tipoFilter?: 'cliente' | 'empresa';
 }
 
-export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange, bulkMode, filtroBoleto }: Props) {
+export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange, bulkMode, filtroBoleto, tipoFilter }: Props) {
   const payInstallment = usePayInstallment();
   const installmentIds = data.map(r => r.id);
   const { data: boletos } = useBoletosByInstallments(installmentIds);
+  const isEmpresa = tipoFilter === 'empresa';
 
-  const boletoMap = new Map<string, { storage_path: string | null; id: string }>();
+  const boletoMap = new Map<string, { storage_path: string | null; id: string; linha_digitavel: string | null }>();
   (boletos || []).forEach(b => {
     if (b.installment_id) {
-      boletoMap.set(b.installment_id, { storage_path: b.storage_path, id: b.id });
+      boletoMap.set(b.installment_id, { storage_path: b.storage_path, id: b.id, linha_digitavel: b.linha_digitavel });
     }
   });
 
