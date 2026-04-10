@@ -127,7 +127,7 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
         const { data: contacts } = await supabase
           .from('crm_contacts')
           .select('id, name, email, phone')
-          .in('email', emails);
+          .in('email', allEmailVariants);
 
         const emailToContact = new Map<string, { id: string; name: string | null; email: string | null; phone: string | null }>();
         for (const c of contacts || []) {
