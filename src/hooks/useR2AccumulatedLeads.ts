@@ -87,6 +87,8 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
         }
         const uniqueContracts = Array.from(emailMap.values());
         const emails = uniqueContracts.map(t => (t.customer_email || '').toLowerCase().trim()).filter(Boolean);
+        const originalEmails = uniqueContracts.map(t => (t.customer_email || '').trim()).filter(Boolean);
+        const allEmailVariants = [...new Set([...emails, ...originalEmails])];
         if (emails.length === 0) continue;
 
         // Check partnership purchases — exclude leads who already bought
@@ -125,7 +127,7 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
         const { data: contacts } = await supabase
           .from('crm_contacts')
           .select('id, name, email, phone')
-          .in('email', emails);
+          .in('email', allEmailVariants);
 
         const emailToContact = new Map<string, { id: string; name: string | null; email: string | null; phone: string | null }>();
         for (const c of contacts || []) {
