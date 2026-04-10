@@ -91,34 +91,16 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
         const allEmailVariants = [...new Set([...emails, ...originalEmails])];
         if (emails.length === 0) continue;
 
-        // Check partnership purchases — exclude leads who already bought
-        const { data: partnershipTx } = await supabase
+        // Check partnership/incorporador purchases — exclude only leads who bought specific products
+        const { data: partnerTx } = await supabase
           .from('hubla_transactions')
           .select('customer_email')
-          .in('customer_email', emails)
+          .in('customer_email', allEmailVariants)
           .eq('sale_status', 'completed')
-          .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify']);
+          .or('product_name.ilike.%A001%,product_name.ilike.%A002%,product_name.ilike.%A003%,product_name.ilike.%A004%,product_name.ilike.%A009%,product_name.ilike.%INCORPORADOR%,product_name.ilike.%ANTICRISE%');
 
         const resolvedEmails = new Set<string>();
-        for (const tx of partnershipTx || []) {
-          const email = (tx.customer_email || '').toLowerCase().trim();
-          // We already have contract emails; if they have ANY other completed transaction, 
-          // we need to check it's not just another A000
-          // We'll do a more precise check below
-        }
-
-        // More precise: get non-contract transactions for these emails
-        const { data: nonContractTx } = await supabase
-          .from('hubla_transactions')
-          .select('customer_email, product_name')
-          .in('customer_email', emails)
-          .eq('sale_status', 'completed')
-          .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify']);
-
-        for (const tx of nonContractTx || []) {
-          const pName = (tx.product_name || '').toLowerCase();
-          if (pName.includes('a000') || pName.includes('contrato')) continue;
-          // Has a non-contract purchase → resolved
+        for (const tx of partnerTx || []) {
           const email = (tx.customer_email || '').toLowerCase().trim();
           if (email) resolvedEmails.add(email);
         }
