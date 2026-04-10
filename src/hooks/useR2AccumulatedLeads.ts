@@ -9,6 +9,8 @@ export interface R2AccumulatedLead {
   attendee_phone: string | null;
   contact_phone: string | null;
   deal_name: string | null;
+  deal_id: string | null;
+  contact_id: string | null;
   closer_name: string | null;
   closer_color: string | null;
   scheduled_at: string;
@@ -122,16 +124,29 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
         // Resolve contacts
         const { data: contacts } = await supabase
           .from('crm_contacts')
-          .select('id, email, phone')
+          .select('id, name, email, phone')
           .in('email', emails);
 
-        const emailToContact = new Map<string, { id: string; email: string | null; phone: string | null }>();
+        const emailToContact = new Map<string, { id: string; name: string | null; email: string | null; phone: string | null }>();
         for (const c of contacts || []) {
           if (c.email) emailToContact.set(c.email.toLowerCase().trim(), c);
         }
 
         const contactIds = Array.from(new Set(Array.from(emailToContact.values()).map(c => c.id)));
         if (contactIds.length === 0) continue;
+
+        // Fetch deals for contacts (to get deal_id and deal_name for sem_r2 leads)
+        const { data: contactDeals } = await supabase
+          .from('crm_deals')
+          .select('id, name, contact_id')
+          .in('contact_id', contactIds);
+
+        const contactDealMap = new Map<string, { id: string; name: string }>();
+        for (const d of contactDeals || []) {
+          if (d.contact_id && !contactDealMap.has(d.contact_id)) {
+            contactDealMap.set(d.contact_id, { id: d.id, name: d.name });
+          }
+        }
 
         // Build contactId → saleDate + email
         const contactToSaleInfo = new Map<string, { saleDate: string; email: string }>();
