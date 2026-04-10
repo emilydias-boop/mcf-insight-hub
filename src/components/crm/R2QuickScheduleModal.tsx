@@ -89,7 +89,7 @@ export function R2QuickScheduleModal({
   const [r2Observations, setR2Observations] = useState<string>('');
   const [isPreSchedule, setIsPreSchedule] = useState(false);
 
-  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, undefined, undefined);
+  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, undefined, undefined, true);
   const createMeeting = useCreateR2Meeting();
   const { data: r2Bookers = [] } = useR2Bookers();
 

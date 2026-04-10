@@ -845,7 +845,7 @@ export function useSearchDealsByEmail(emailQuery: string, originIds?: string[]) 
   });
 }
 
-export function useSearchDealsForSchedule(query: string, originIds?: string[], ownerEmail?: string) {
+export function useSearchDealsForSchedule(query: string, originIds?: string[], ownerEmail?: string, includeWon?: boolean) {
   return useQuery({
     queryKey: ['schedule-search', query, originIds, ownerEmail],
     queryFn: async () => {
@@ -943,7 +943,7 @@ export function useSearchDealsForSchedule(query: string, originIds?: string[], o
       const openDeals = normalizedDeals.filter(deal => {
         const stageName = deal.stage?.stage_name;
         const status = getDealStatusFromStage(stageName);
-        return status === 'open'; // Excluir 'won' e 'lost'
+        return status === 'open' || (includeWon && status === 'won');
       });
 
       // 8. Adicionar informação do último attendee aos deals
