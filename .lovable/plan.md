@@ -1,36 +1,38 @@
 
 
-# Busca + Paginação na aba Acumulados
+# Fix: Encaixar atualiza status para Aprovado
 
-## Alterações
+## Problema
+Ao encaixar um lead, só o `carrinho_week_start` é atualizado. O `r2_status_id` permanece como "Próxima Semana", então o lead não aparece na aba Aprovados da semana de encaixe.
 
-**Arquivo:** `src/components/crm/R2AccumulatedList.tsx`
+## Correção
 
-### 1. Campo de busca
-Adicionar um `Input` com ícone de `Search` acima da tabela, ao lado dos filtros de tipo. A busca filtra client-side por:
-- Nome (`attendee_name`, `deal_name`)
-- Telefone (`attendee_phone`, `contact_phone`)
-- E-mail (`contact_email`)
+**Arquivo:** `src/hooks/useEncaixarNoCarrinho.ts`
 
-Busca case-insensitive, aplicada após o filtro de tipo.
+Na mutation, antes do update:
+1. Buscar o ID do status "Aprovado" em `r2_status_options`
+2. Atualizar tanto `carrinho_week_start` quanto `r2_status_id` no mesmo update
 
-### 2. Paginação
-- Seletor de itens por página: 20, 50, 100
-- Controles Anterior/Próximo com indicador "Página X de Y"
-- Estado local: `currentPage` (reset ao mudar filtro/busca), `pageSize`
-- Slice dos resultados filtrados: `filteredLeads.slice((page-1)*size, page*size)`
+```typescript
+// Buscar status Aprovado
+const { data: statusOptions } = await supabase
+  .from('r2_status_options')
+  .select('id, name')
+  .eq('is_active', true);
 
-### 3. Layout
-```text
-[🔍 Buscar por nome, telefone ou email...    ] [Tipo: Todos | Próx. Semana | Sem R2]
+const aprovadoId = statusOptions?.find(s => 
+  s.name.toLowerCase().includes('aprovado')
+)?.id;
 
-[Tabela com leads paginados]
-
-[◀ Anterior] Página 1 de 4 [Próximo ▶]  |  Exibindo 20 por página [20 ▼]
+// Update duplo
+const { error } = await supabase
+  .from('meeting_slot_attendees')
+  .update({ 
+    carrinho_week_start: weekStartStr,
+    r2_status_id: aprovadoId
+  })
+  .eq('id', attendeeId);
 ```
 
-### Detalhes técnicos
-- Imports adicionais: `Input` de `@/components/ui/input`, `Search` de `lucide-react`, `Select` para page size
-- Contadores nos botões de tipo continuam refletindo o total (não paginado), mas consideram a busca
-- `useMemo` para performance do filtro de busca + tipo combinados
+Resultado: lead encaixado aparece como Aprovado na semana escolhida.
 
