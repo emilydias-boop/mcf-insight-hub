@@ -229,12 +229,15 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
 
           if (validR2s.length === 0) {
             // No R2 at all → sem_r2
+            const contactDeal = contactDealMap.get(contactId);
             results.push({
               id: `sem-r2-${contactId}-${i}`,
-              attendee_name: null,
+              attendee_name: contactData?.name || null,
               attendee_phone: null,
               contact_phone: contactData?.phone || null,
-              deal_name: null,
+              deal_name: contactDeal?.name || null,
+              deal_id: contactDeal?.id || null,
+              contact_id: contactId,
               closer_name: null,
               closer_color: null,
               scheduled_at: saleInfo.saleDate,
@@ -263,10 +266,12 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
           if (hasProximaSemana) {
             results.push({
               id: att.id,
-              attendee_name: att.attendee_name,
+              attendee_name: att.attendee_name || contactData?.name || null,
               attendee_phone: att.attendee_phone,
               contact_phone: contactData?.phone || null,
               deal_name: deal?.name || null,
+              deal_id: att.deal_id || contactDealMap.get(contactId)?.id || null,
+              contact_id: contactId,
               closer_name: closerData?.name || null,
               closer_color: closerData?.color || null,
               scheduled_at: slot.scheduled_at,
@@ -287,10 +292,12 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
           // No status set on latest → sem_r2 (pending)
           results.push({
             id: att.id,
-            attendee_name: att.attendee_name,
+            attendee_name: att.attendee_name || contactData?.name || null,
             attendee_phone: att.attendee_phone,
             contact_phone: contactData?.phone || null,
             deal_name: deal?.name || null,
+            deal_id: att.deal_id || contactDealMap.get(contactId)?.id || null,
+            contact_id: contactId,
             closer_name: closerData?.name || null,
             closer_color: closerData?.color || null,
             scheduled_at: slot.scheduled_at,
