@@ -140,6 +140,19 @@ export default function R2Carrinho() {
     setScheduleModalOpen(true);
   }, []);
 
+  const handleEncaixarAccumulated = useCallback((lead: R2AccumulatedLead) => {
+    if (!lead.id) return;
+    // For leads that are synthetic (sem-r2-...), we need the real attendee id
+    // meeting_id presence means the lead has an existing attendee record
+    setEncaixandoId(lead.id);
+    encaixarMutation.mutate(
+      { attendeeId: lead.id, weekStart },
+      {
+        onSettled: () => setEncaixandoId(null),
+      }
+    );
+  }, [encaixarMutation, weekStart]);
+
   const weekLabel = useMemo(() => {
     return `${format(weekStart, 'dd/MM', { locale: ptBR })} - ${format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}`;
   }, [weekStart, weekEnd]);
