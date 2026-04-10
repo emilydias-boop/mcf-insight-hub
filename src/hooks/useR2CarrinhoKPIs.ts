@@ -14,11 +14,11 @@ export interface R2CarrinhoKPIs {
   emAnalise: number;
 }
 
-export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig) {
+export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
   return useQuery({
-    queryKey: ['r2-carrinho-kpis', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
+    queryKey: ['r2-carrinho-kpis', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), carrinhoConfig?.carrinhos?.[0]?.horario_corte, previousConfig?.carrinhos?.[0]?.horario_corte],
     queryFn: async (): Promise<R2CarrinhoKPIs> => {
-      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig);
+      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
 
       // ===== CONTRATOS PAGOS (safra Qui-Qua) =====
       const { data: contratosTx } = await supabase

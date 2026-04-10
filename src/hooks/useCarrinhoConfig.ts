@@ -91,6 +91,11 @@ export function useCarrinhoConfig(weekStart?: Date) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['carrinho-config', weekKey] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-vendas'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-accumulated-leads'] });
       toast.success('Configuração do carrinho salva!');
     },
     onError: () => toast.error('Erro ao salvar configuração'),

@@ -22,11 +22,11 @@ export interface R2ForaDoCarrinhoAttendee {
 
 const FORA_DO_CARRINHO_STATUSES = ['Reembolso', 'Desistente', 'Reprovado', 'Próxima Semana', 'Cancelado'];
 
-export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig) {
+export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
   return useQuery({
-    queryKey: ['r2-fora-carrinho-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
+    queryKey: ['r2-fora-carrinho-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), carrinhoConfig?.carrinhos?.[0]?.horario_corte, previousConfig?.carrinhos?.[0]?.horario_corte],
     queryFn: async (): Promise<R2ForaDoCarrinhoAttendee[]> => {
-      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig);
+      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
 
       // ===== STEP 1: Fetch status options =====
       const { data: statusOptions } = await supabase

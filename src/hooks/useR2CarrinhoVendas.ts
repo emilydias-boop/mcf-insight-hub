@@ -65,11 +65,11 @@ export interface R2CarrinhoVenda {
   r2_scheduled_at?: string;
 }
 
-export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig) {
+export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
   return useQuery({
-    queryKey: ['r2-carrinho-vendas', weekStart.toISOString(), weekEnd.toISOString()],
+    queryKey: ['r2-carrinho-vendas', weekStart.toISOString(), weekEnd.toISOString(), carrinhoConfig?.carrinhos?.[0]?.horario_corte, previousConfig?.carrinhos?.[0]?.horario_corte],
     queryFn: async () => {
-      const { vendasParceria: { start: effectiveStart, end: effectiveEnd }, aprovados: aprovadosWindow } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig);
+      const { vendasParceria: { start: effectiveStart, end: effectiveEnd }, aprovados: aprovadosWindow } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
       // 1. Buscar attendees aprovados da janela operacional (Sex-Sex com corte)
       // Isso garante que vendas façam match contra os mesmos leads da aba "Aprovados"
       const { data: approvedAttendees, error: attendeesError } = await supabase

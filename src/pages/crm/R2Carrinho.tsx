@@ -37,21 +37,27 @@ export default function R2Carrinho() {
 
   const weekStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
   const weekEnd = useMemo(() => getCartWeekEnd(weekDate), [weekDate]);
+  const prevWeekStart = useMemo(() => subWeeks(weekStart, 1), [weekStart]);
 
   const { config, saveConfig, copyFromPreviousWeek } = useCarrinhoConfig(weekStart);
+  const { config: prevConfig } = useCarrinhoConfig(prevWeekStart);
+
+  // Cutoff string for queryKey reactivity
+  const cutoffKey = config?.carrinhos?.[0]?.horario_corte || '12:00';
+  const prevCutoffKey = prevConfig?.carrinhos?.[0]?.horario_corte || '12:00';
 
   // Fetch KPIs
-  const { data: kpis, isLoading: kpisLoading, refetch: refetchKpis } = useR2CarrinhoKPIs(weekStart, weekEnd, config);
+  const { data: kpis, isLoading: kpisLoading, refetch: refetchKpis } = useR2CarrinhoKPIs(weekStart, weekEnd, config, prevConfig);
   
   // Fetch status options
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
 
   // Fetch data for each tab
-  const { data: rawAgendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekStart, weekEnd, 'agendadas', config);
-  const { data: rawForaCarrinhoData = [], isLoading: foraCarrinhoLoading } = useR2ForaDoCarrinhoData(weekStart, weekEnd, config);
-  const { data: rawAprovadosData = [], isLoading: aprovadosLoading } = useR2CarrinhoData(weekStart, weekEnd, 'aprovados', config);
-  const { data: rawVendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd, config);
+  const { data: rawAgendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekStart, weekEnd, 'agendadas', config, prevConfig);
+  const { data: rawForaCarrinhoData = [], isLoading: foraCarrinhoLoading } = useR2ForaDoCarrinhoData(weekStart, weekEnd, config, prevConfig);
+  const { data: rawAprovadosData = [], isLoading: aprovadosLoading } = useR2CarrinhoData(weekStart, weekEnd, 'aprovados', config, prevConfig);
+  const { data: rawVendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd, config, prevConfig);
 
   // Filter data by selected carrinho
   const agendadasData = useMemo(() => 
