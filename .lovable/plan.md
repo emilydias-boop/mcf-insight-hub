@@ -1,34 +1,41 @@
 
 
-# Ocultar pré-agendamentos da grade R2 (manter apenas na aba Pré-Agendados)
+# Filtrar pré-agendados também no hook useR2MeetingsExtended
 
 ## Problema
 
-Leads pré-agendados aparecem na grade do calendário R2 com badge "Pré", poluindo a visualização. O usuário quer que pré-agendamentos fiquem **exclusivamente na aba "Pré-Agendados"** e só apareçam na grade quando confirmados.
+O filtro de `pre_scheduled` foi aplicado apenas em `useR2AgendaMeetings.ts` (usado pela aba "Calendário"), mas a aba **"Por Sócio"** e outras views usam `useR2MeetingsExtended.ts`, que não filtra attendees pré-agendados. Por isso os badges "Pré" continuam aparecendo na grade.
 
 ## Solução
 
-Filtrar attendees com status `pre_scheduled` nas queries que alimentam a grade do calendário.
-
 | Arquivo | Alteração |
 |---|---|
-| `src/hooks/useR2AgendaMeetings.ts` | Na função `useR2AgendaMeetings` (linha 91) e `useR2MeetingsByCloser` (linha 147), adicionar filtro para excluir attendees com `status === 'pre_scheduled'` junto com o filtro existente de `cancelled` |
+| `src/hooks/useR2MeetingsExtended.ts` | Na linha ~265 onde os attendees são mapeados, adicionar filtro para excluir `pre_scheduled` antes do `.map()` |
 
-### Alteração
-
-Nas duas funções do arquivo, o filtro de attendees muda de:
+### Alteração (linha ~265)
 
 ```typescript
-.filter((att) => att.status !== 'cancelled')
+// ANTES:
+attendees: attendeesArr.map(att => {
+
+// DEPOIS:
+attendees: attendeesArr
+  .filter(att => (att.status as string) !== 'pre_scheduled' && (att.status as string) !== 'cancelled')
+  .map(att => {
 ```
 
-Para:
+E na linha ~226, o filtro de meetings vazios já existe (`attendeesArr.length > 0`), mas precisa considerar o filtro de attendees. Ajustar para filtrar attendees **antes** de verificar se o meeting tem attendees:
 
 ```typescript
-.filter((att) => att.status !== 'cancelled' && att.status !== 'pre_scheduled')
+// Linha ~226-228: mover o filtro de attendees para antes da verificação
+return (meetings || []).filter(meeting => {
+  const attendeesArr = ((meeting as Record<string, unknown>).attendees || []) as Array<Record<string, unknown>>;
+  const visibleAttendees = attendeesArr.filter(att => 
+    (att.status as string) !== 'pre_scheduled' && (att.status as string) !== 'cancelled'
+  );
+  return visibleAttendees.length > 0;
+}).map(meeting => {
 ```
 
-Como meetings sem attendees visíveis já são filtrados (`.filter(meeting => meeting.attendees.length > 0)`), slots que só têm pré-agendados desaparecerão automaticamente da grade.
-
-O fluxo de pré-agendamento continua funcionando normalmente: o lead é criado com status `pre_scheduled`, aparece na aba "Pré-Agendados", e ao confirmar o status muda para `invited` -- momento em que passa a aparecer na grade.
+Isso remove pré-agendados de **todas** as views da Agenda R2 (Por Sócio, Lista, Calendário), mantendo-os apenas na aba "Pré-Agendados".
 
