@@ -122,8 +122,15 @@ Deno.serve(async (req) => {
         const first = txList[0];
         const totalInstallments = first.total_installments || txList.length;
         const valorBruto = first.product_price || 0;
-        const valorLiquido = first.net_value || 0;
-        const valorTotal = valorBruto + Math.max(totalInstallments - 1, 0) * valorLiquido;
+        // Smart net value: prefer P2+ net_value (more reliable), fallback with heuristic
+        const p2tx = txList.find(tx => (tx.installment_number || 1) > 1);
+        const valorLiquidoPerInstallment = p2tx
+          ? (p2tx.net_value || p2tx.product_price || 0)
+          : (first.net_value && first.net_value <= (first.product_price || 0) * 2
+              ? first.net_value
+              : first.product_price || 0);
+        const valorLiquido = valorLiquidoPerInstallment;
+        const valorTotal = valorBruto + Math.max(totalInstallments - 1, 0) * valorLiquidoPerInstallment;
         const distinctPaidNumbers = new Set(txList.map(tx => tx.installment_number || 1));
         const paidCount = distinctPaidNumbers.size;
         const now = new Date();
