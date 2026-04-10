@@ -6934,6 +6934,7 @@ export type Database = {
           calendly_invitee_uri: string | null
           carrinho_status: string | null
           carrinho_updated_at: string | null
+          carrinho_week_start: string | null
           closer_notes: string | null
           confirmed_at: string | null
           confirmed_by: string | null
@@ -6971,6 +6972,7 @@ export type Database = {
           calendly_invitee_uri?: string | null
           carrinho_status?: string | null
           carrinho_updated_at?: string | null
+          carrinho_week_start?: string | null
           closer_notes?: string | null
           confirmed_at?: string | null
           confirmed_by?: string | null
@@ -7008,6 +7010,7 @@ export type Database = {
           calendly_invitee_uri?: string | null
           carrinho_status?: string | null
           carrinho_updated_at?: string | null
+          carrinho_week_start?: string | null
           closer_notes?: string | null
           confirmed_at?: string | null
           confirmed_by?: string | null

@@ -1,0 +1,1 @@
+ALTER TABLE public.meeting_slot_attendees ADD COLUMN carrinho_week_start date;
