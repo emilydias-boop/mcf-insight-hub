@@ -124,13 +124,19 @@ Deno.serve(async (req) => {
         const valorBruto = first.product_price || 0;
         // Smart net value: prefer P2+ net_value (more reliable), fallback with heuristic
         const p2tx = txList.find(tx => (tx.installment_number || 1) > 1);
+        // Bruto per installment: usa product_price (não net_value)
+        const valorBrutoPerInstallment = p2tx
+          ? (p2tx.product_price || first.product_price || 0)
+          : (first.product_price || 0);
+        // Líquido per installment: usa net_value
         const valorLiquidoPerInstallment = p2tx
           ? (p2tx.net_value || p2tx.product_price || 0)
           : (first.net_value && first.net_value <= (first.product_price || 0) * 2
               ? first.net_value
               : first.product_price || 0);
         const valorLiquido = valorLiquidoPerInstallment;
-        const valorTotal = valorBruto + Math.max(totalInstallments - 1, 0) * valorLiquidoPerInstallment;
+        // valor_total usa BRUTO (product_price)
+        const valorTotal = valorBruto + Math.max(totalInstallments - 1, 0) * valorBrutoPerInstallment;
         const distinctPaidNumbers = new Set(txList.map(tx => tx.installment_number || 1));
         const paidCount = distinctPaidNumbers.size;
         const now = new Date();
@@ -322,7 +328,7 @@ Deno.serve(async (req) => {
             const valorPago = i === 1
               ? (paid.product_price || valorBruto)
               : (paid.net_value ?? 0);
-            const valorOriginalInst = i === 1 ? valorBruto : valorLiquido;
+            const valorOriginalInst = i === 1 ? valorBruto : valorBrutoPerInstallment;
             allInstallmentsToInsert.push({
               subscription_id: subId,
               numero_parcela: i,
@@ -349,7 +355,7 @@ Deno.serve(async (req) => {
           } else {
             const dueDate = new Date(firstDate);
             dueDate.setDate(dueDate.getDate() + batchIntervalDays * (i - 1));
-            const valorOriginalUnpaid = i === 1 ? valorBruto : valorLiquido;
+            const valorOriginalUnpaid = i === 1 ? valorBruto : valorBrutoPerInstallment;
             allInstallmentsToInsert.push({
               subscription_id: subId,
               numero_parcela: i,
