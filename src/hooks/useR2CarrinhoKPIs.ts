@@ -65,13 +65,13 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
           .from('meeting_slot_attendees')
           .select(`id, status, r2_status_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type)`)
           .eq('meeting_slot.meeting_type', 'r2')
-          .eq('carrinho_week_start' as any, weekStartStr),
+        .eq('carrinho_week_start', weekStartStr),
         // Encaixados for aprovados count
         supabase
           .from('meeting_slot_attendees')
           .select('id, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)')
           .eq('meeting_slot.meeting_type', 'r2')
-          .eq('carrinho_week_start' as any, weekStartStr),
+          .eq('carrinho_week_start', weekStartStr),
       ]);
 
       const statusOptions = statusOptionsResult.data || [];

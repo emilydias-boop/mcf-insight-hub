@@ -164,7 +164,7 @@ async function fetchEncaixadosForWeek(
       )
     `)
     .eq('meeting_slot.meeting_type', 'r2')
-    .eq('carrinho_week_start' as any, weekStartStr);
+    .eq('carrinho_week_start', weekStartStr);
 
   let filteredAttendees = data || [];
   if (filter === 'aprovados' && aprovadoStatusId) {
