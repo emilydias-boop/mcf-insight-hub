@@ -217,9 +217,14 @@ export function useConsorcioPagamentos(
     return withStatus;
   }, [rawData, globalStats]);
 
+  // Apply tipoFilter before KPIs/alerts
+  const tipoFilteredData = useMemo(() => {
+    return tipoFilter ? processedData.filter(r => r.tipo === tipoFilter) : processedData;
+  }, [processedData, tipoFilter]);
+
   // KPIs
   const kpis = useMemo((): PagamentosKPIData => {
-    if (!processedData.length) return {
+    if (!tipoFilteredData.length) return {
       totalRecebido: 0, totalPendente: 0, totalAtraso: 0,
       parcelasPagas: 0, parcelasPendentes: 0, parcelasVencidas: 0,
       cotasInadimplentes: 0, cotasQuitadas: 0,
@@ -228,7 +233,7 @@ export function useConsorcioPagamentos(
     let totalRecebido = 0, totalPendente = 0, totalAtraso = 0;
     let parcelasPagas = 0, parcelasPendentes = 0, parcelasVencidas = 0;
 
-    for (const p of processedData) {
+    for (const p of tipoFilteredData) {
       if (p.status_calculado === 'paga') {
         totalRecebido += Number(p.valor_parcela);
         parcelasPagas++;
@@ -242,7 +247,7 @@ export function useConsorcioPagamentos(
     }
 
     const byCard = new Map<string, SituacaoCota>();
-    for (const p of processedData) {
+    for (const p of tipoFilteredData) {
       byCard.set(p.card_id, p.situacao_cota);
     }
     let cotasInadimplentes = 0, cotasQuitadas = 0;
@@ -252,11 +257,11 @@ export function useConsorcioPagamentos(
     }
 
     return { totalRecebido, totalPendente, totalAtraso, parcelasPagas, parcelasPendentes, parcelasVencidas, cotasInadimplentes, cotasQuitadas };
-  }, [processedData]);
+  }, [tipoFilteredData]);
 
   // Apply filters
   const filteredData = useMemo(() => {
-    let result = tipoFilter ? processedData.filter(r => r.tipo === tipoFilter) : processedData;
+    let result = tipoFilteredData;
     
     if (filters.search) {
       const q = filters.search.toLowerCase();
@@ -285,7 +290,7 @@ export function useConsorcioPagamentos(
     }
 
     return result;
-  }, [processedData, filters, tipoFilter]);
+  }, [tipoFilteredData, filters]);
 
   // Pagination
   const totalItems = filteredData.length;
@@ -298,7 +303,7 @@ export function useConsorcioPagamentos(
   // Unique values for filter dropdowns
   const filterOptions = useMemo(() => {
     const dias = new Set<number>();
-    for (const p of processedData) {
+    for (const p of tipoFilteredData) {
       if (p.data_vencimento) {
         const d = new Date(p.data_vencimento + 'T00:00:00');
         dias.add(d.getDate());
@@ -307,17 +312,17 @@ export function useConsorcioPagamentos(
     return {
       diasVencimento: Array.from(dias).sort((a, b) => a - b),
     };
-  }, [processedData]);
+  }, [tipoFilteredData]);
 
   // Alert data
   const alertData = useMemo(() => {
-    const parcelasAtraso = processedData.filter(p => p.status_calculado === 'atrasada').length;
-    const cotasComAtraso = new Set(processedData.filter(p => p.situacao_cota === 'em_atraso').map(p => p.card_id)).size;
-    const valorAberto = processedData
+    const parcelasAtraso = tipoFilteredData.filter(p => p.status_calculado === 'atrasada').length;
+    const cotasComAtraso = new Set(tipoFilteredData.filter(p => p.situacao_cota === 'em_atraso').map(p => p.card_id)).size;
+    const valorAberto = tipoFilteredData
       .filter(p => p.status_calculado === 'atrasada')
       .reduce((sum, p) => sum + Number(p.valor_parcela), 0);
     return { parcelasAtraso, cotasComAtraso, valorAberto };
-  }, [processedData]);
+  }, [tipoFilteredData]);
 
   return {
     data: paginatedData,
