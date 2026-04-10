@@ -1,39 +1,34 @@
 
 
-# Permitir busca de leads "Contrato Pago" no agendamento R2
+# Ocultar pré-agendamentos da grade R2 (manter apenas na aba Pré-Agendados)
 
 ## Problema
 
-Closers de R1 não conseguem encontrar leads no modal "Agendar Reunião R2" porque o hook `useSearchDealsForSchedule` filtra deals com status "won" (incluindo "Contrato Pago"). Isso impede o agendamento de R2 para leads que já pagaram contrato na R1.
-
-## Causa raiz
-
-Em `src/hooks/useAgendaData.ts` (linha 942-947), a busca exclui todos os deals cujo estágio é classificado como "won" por `getDealStatusFromStage`. Como "Contrato Pago" está na lista de `WON_KEYWORDS`, esses leads nunca aparecem nos resultados.
+Leads pré-agendados aparecem na grade do calendário R2 com badge "Pré", poluindo a visualização. O usuário quer que pré-agendamentos fiquem **exclusivamente na aba "Pré-Agendados"** e só apareçam na grade quando confirmados.
 
 ## Solução
 
-Modificar `useSearchDealsForSchedule` para aceitar um parâmetro opcional `includeWon` que, quando `true`, inclui deals com status "won" nos resultados. O modal R2 passará `includeWon: true`.
+Filtrar attendees com status `pre_scheduled` nas queries que alimentam a grade do calendário.
 
 | Arquivo | Alteração |
 |---|---|
-| `src/hooks/useAgendaData.ts` | Adicionar parâmetro `includeWon?: boolean` ao hook. Na linha 943, mudar filtro para: `status === 'open' \|\| (includeWon && status === 'won')` |
-| `src/components/crm/R2QuickScheduleModal.tsx` | Passar `includeWon: true` na chamada: `useSearchDealsForSchedule(searchQuery, undefined, undefined, true)` |
+| `src/hooks/useR2AgendaMeetings.ts` | Na função `useR2AgendaMeetings` (linha 91) e `useR2MeetingsByCloser` (linha 147), adicionar filtro para excluir attendees com `status === 'pre_scheduled'` junto com o filtro existente de `cancelled` |
 
-### Detalhe da alteração principal
+### Alteração
+
+Nas duas funções do arquivo, o filtro de attendees muda de:
 
 ```typescript
-// useAgendaData.ts - assinatura
-export function useSearchDealsForSchedule(
-  query: string, originIds?: string[], ownerEmail?: string, includeWon?: boolean
-)
-
-// Filtro (linha 943)
-const openDeals = normalizedDeals.filter(deal => {
-  const stageName = deal.stage?.stage_name;
-  const status = getDealStatusFromStage(stageName);
-  return status === 'open' || (includeWon && status === 'won');
-});
+.filter((att) => att.status !== 'cancelled')
 ```
 
-Isso mantém o comportamento atual do R1 (que não precisa ver deals ganhos) e libera a busca de "Contrato Pago" apenas no contexto R2.
+Para:
+
+```typescript
+.filter((att) => att.status !== 'cancelled' && att.status !== 'pre_scheduled')
+```
+
+Como meetings sem attendees visíveis já são filtrados (`.filter(meeting => meeting.attendees.length > 0)`), slots que só têm pré-agendados desaparecerão automaticamente da grade.
+
+O fluxo de pré-agendamento continua funcionando normalmente: o lead é criado com status `pre_scheduled`, aparece na aba "Pré-Agendados", e ao confirmar o status muda para `invited` -- momento em que passa a aparecer na grade.
 
