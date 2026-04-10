@@ -1,41 +1,33 @@
 
 
-# Filtrar pré-agendados também no hook useR2MeetingsExtended
+# Aplicar horário de corte na aba "Todas R2s" (agendadas)
 
 ## Problema
 
-O filtro de `pre_scheduled` foi aplicado apenas em `useR2AgendaMeetings.ts` (usado pela aba "Calendário"), mas a aba **"Por Sócio"** e outras views usam `useR2MeetingsExtended.ts`, que não filtra attendees pré-agendados. Por isso os badges "Pré" continuam aparecendo na grade.
+A boundary `r2Meetings` vai até o **final do dia** da sexta-feira do carrinho atual (`friCurrentCart = endOfDay(wedEnd + 2)`). Isso significa que reuniões agendadas **após o horário de corte** na sexta aparecem no carrinho da semana atual, quando deveriam pertencer à próxima semana.
+
+O horário de corte só é aplicado na boundary `aprovados`, mas não em `r2Meetings` -- que é usada por `agendadas`, `no_show`, `realizadas` e pelos KPIs.
 
 ## Solução
 
+Criar uma nova boundary `r2MeetingsCutoff` que respeita o horário de corte na sexta, e usá-la em todos os filtros que alimentam a grade do carrinho.
+
 | Arquivo | Alteração |
 |---|---|
-| `src/hooks/useR2MeetingsExtended.ts` | Na linha ~265 onde os attendees são mapeados, adicionar filtro para excluir `pre_scheduled` antes do `.map()` |
+| `src/lib/carrinhoWeekBoundaries.ts` | Alterar `r2Meetings.end` para usar o horário de corte da sexta (`friCartCutoff`) em vez de `endOfDay(friCurrentCart)` |
+| `src/hooks/useR2CarrinhoKPIs.ts` | Os KPIs de R2 (agendadas, realizadas, etc.) passarão a respeitar o corte automaticamente via a boundary corrigida |
 
-### Alteração (linha ~265)
+### Alteração principal (`carrinhoWeekBoundaries.ts`)
 
 ```typescript
-// ANTES:
-attendees: attendeesArr.map(att => {
+// ANTES (linha 105):
+r2Meetings: { start: friAfterPrevCart, end: friCurrentCart },
 
 // DEPOIS:
-attendees: attendeesArr
-  .filter(att => (att.status as string) !== 'pre_scheduled' && (att.status as string) !== 'cancelled')
-  .map(att => {
+r2Meetings: { start: friAfterPrevCart, end: friCartCutoff },
 ```
 
-E na linha ~226, o filtro de meetings vazios já existe (`attendeesArr.length > 0`), mas precisa considerar o filtro de attendees. Ajustar para filtrar attendees **antes** de verificar se o meeting tem attendees:
+Isso faz com que **todas** as queries que usam `boundaries.r2Meetings` (agendadas, no_show, realizadas, KPIs) respeitem o horário de corte configurado. Reuniões após o corte na sexta pertencerão ao carrinho da próxima semana.
 
-```typescript
-// Linha ~226-228: mover o filtro de attendees para antes da verificação
-return (meetings || []).filter(meeting => {
-  const attendeesArr = ((meeting as Record<string, unknown>).attendees || []) as Array<Record<string, unknown>>;
-  const visibleAttendees = attendeesArr.filter(att => 
-    (att.status as string) !== 'pre_scheduled' && (att.status as string) !== 'cancelled'
-  );
-  return visibleAttendees.length > 0;
-}).map(meeting => {
-```
-
-Isso remove pré-agendados de **todas** as views da Agenda R2 (Por Sócio, Lista, Calendário), mantendo-os apenas na aba "Pré-Agendados".
+A boundary `aprovados` já usa `friCartCutoff`, então não muda. A boundary de `vendasParceria` continua independente (Sex 00:00 → Seg 23:59).
 
