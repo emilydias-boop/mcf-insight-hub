@@ -88,7 +88,7 @@ export function useR2AgendaMeetings(startDate: Date, endDate: Date) {
         .map(meeting => ({
           ...meeting,
           attendees: (meeting.attendees || [])
-            .filter((att: Record<string, unknown>) => att.status !== 'cancelled')
+            .filter((att: Record<string, unknown>) => att.status !== 'cancelled' && att.status !== 'pre_scheduled')
             .map((att: Record<string, unknown>) => ({
               ...att,
               name: att.attendee_name as string | null,
@@ -144,7 +144,7 @@ export function useR2MeetingsByCloser(closerId: string, startDate: Date, endDate
         .map(meeting => ({
           ...meeting,
           attendees: (meeting.attendees || [])
-            .filter((att: Record<string, unknown>) => att.status !== 'cancelled')
+            .filter((att: Record<string, unknown>) => att.status !== 'cancelled' && att.status !== 'pre_scheduled')
             .map((att: Record<string, unknown>) => ({
               ...att,
               name: att.attendee_name as string | null,
