@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { format, addWeeks, subWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, RefreshCw, ShoppingCart, Settings } from 'lucide-react';
@@ -25,6 +25,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useCarrinhoConfig, filterByCarrinho } from '@/hooks/useCarrinhoConfig';
 import { CarrinhoConfigDialog } from '@/components/crm/CarrinhoConfigDialog';
+import { R2QuickScheduleModal } from '@/components/crm/R2QuickScheduleModal';
+import { useActiveR2Closers } from '@/hooks/useR2AgendaData';
+import { R2AccumulatedLead } from '@/hooks/useR2AccumulatedLeads';
 
 export default function R2Carrinho() {
   const [weekDate, setWeekDate] = useState(new Date());
@@ -33,6 +36,8 @@ export default function R2Carrinho() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [selectedCarrinhoId, setSelectedCarrinhoId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState('agendadas');
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [selectedAccLead, setSelectedAccLead] = useState<R2AccumulatedLead | null>(null);
   const queryClient = useQueryClient();
 
   const weekStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
