@@ -128,7 +128,9 @@ async function fetchEncaixadosForWeek(
   filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados',
   aprovadoStatusId?: string,
 ): Promise<R2CarrinhoAttendee[]> {
-  const { data } = await supabase
+  // Use rpc-style workaround: query with filter on carrinho_week_start via raw
+  // Since the column isn't in generated types yet, we cast the query
+  const query = supabase
     .from('meeting_slot_attendees')
     .select(`
       id,
@@ -142,7 +144,6 @@ async function fetchEncaixadosForWeek(
       contact_id,
       partner_name,
       contract_paid_at,
-      carrinho_week_start,
       deal:crm_deals(
         id,
         name,
@@ -163,10 +164,12 @@ async function fetchEncaixadosForWeek(
         )
       )
     `)
-    .eq('meeting_slot.meeting_type', 'r2')
-    .eq('carrinho_week_start', weekStartStr);
+    .eq('meeting_slot.meeting_type', 'r2');
 
-  let filteredAttendees = data || [];
+  // Apply filter on the new column
+  (query as any).eq('carrinho_week_start', weekStartStr);
+
+  const { data } = await query;
   if (filter === 'aprovados' && aprovadoStatusId) {
     filteredAttendees = filteredAttendees.filter((att: any) => att.r2_status_id === aprovadoStatusId);
   }
