@@ -14,10 +14,25 @@ export function useEncaixarNoCarrinho() {
       attendeeId: string;
       weekStart: Date;
     }) => {
+      // Buscar status "Aprovado"
+      const { data: statusOptions } = await supabase
+        .from('r2_status_options')
+        .select('id, name')
+        .eq('is_active', true);
+
+      const aprovadoId = statusOptions?.find(s =>
+        s.name.toLowerCase().includes('aprovado')
+      )?.id;
+
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+      const updatePayload: any = { carrinho_week_start: weekStartStr };
+      if (aprovadoId) {
+        updatePayload.r2_status_id = aprovadoId;
+      }
+
       const { error } = await supabase
         .from('meeting_slot_attendees')
-        .update({ carrinho_week_start: weekStartStr } as any)
+        .update(updatePayload)
         .eq('id', attendeeId);
 
       if (error) throw error;
