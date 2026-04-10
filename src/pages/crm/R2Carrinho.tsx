@@ -343,6 +343,9 @@ export default function R2Carrinho() {
             leads={accumulatedLeads}
             isLoading={accumulatedLoading}
             onSchedule={handleScheduleAccumulated}
+            onEncaixar={handleEncaixarAccumulated}
+            isEncaixando={encaixarMutation.isPending}
+            encaixandoId={encaixandoId}
           />
         </TabsContent>
 
