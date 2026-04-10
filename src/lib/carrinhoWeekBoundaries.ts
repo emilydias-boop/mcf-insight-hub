@@ -66,7 +66,8 @@ export interface CarrinhoMetricBoundaries {
 export function getCarrinhoMetricBoundaries(
   weekStart: Date,
   weekEnd: Date,
-  config?: CarrinhoConfig
+  config?: CarrinhoConfig,
+  previousConfig?: CarrinhoConfig
 ): CarrinhoMetricBoundaries {
   // Helper: meia-noite UTC para uma data (evita fuso local do startOfDay)
   const utcStartOfDay = (d: Date) =>
@@ -80,11 +81,19 @@ export function getCarrinhoMetricBoundaries(
   const wedEnd = utcEndOfDay(new Date(weekEnd));
 
   // Sexta após o carrinho anterior = dia seguinte ao thuStart (Qui+1 = Sex)
-  const friAfterPrevCart = utcStartOfDay(addDays(new Date(weekStart), 1));
-  // Sexta do carrinho atual = wedEnd + 2 dias (Qua+2 = Sex)
-  const friCurrentCart = utcEndOfDay(addDays(new Date(weekEnd), 2));
+  const friAfterPrevCartDate = addDays(new Date(weekStart), 1);
 
-  // Horário de corte da sexta (default 12:00)
+  // Horário de corte da sexta anterior (usa config da semana anterior, fallback para config atual)
+  const prevHorarioCorte = previousConfig?.carrinhos?.[0]?.horario_corte
+    || config?.carrinhos?.[0]?.horario_corte
+    || '12:00';
+  const [prevCutHour, prevCutMinute] = prevHorarioCorte.split(':').map(Number);
+  const previousFridayCutoff = new Date(Date.UTC(
+    friAfterPrevCartDate.getFullYear(), friAfterPrevCartDate.getMonth(), friAfterPrevCartDate.getDate(),
+    prevCutHour, prevCutMinute || 0, 0, 0
+  ));
+
+  // Horário de corte da sexta atual (default 12:00)
   const horarioCorte = config?.carrinhos?.[0]?.horario_corte || '12:00';
   const [cutHour, cutMinute] = horarioCorte.split(':').map(Number);
 
@@ -102,8 +111,8 @@ export function getCarrinhoMetricBoundaries(
 
   return {
     contratos: { start: thuStart, end: wedEnd },
-    r2Meetings: { start: friAfterPrevCart, end: friCartCutoff },
-    aprovados: { start: friAfterPrevCart, end: friCartCutoff },
+    r2Meetings: { start: previousFridayCutoff, end: friCartCutoff },
+    aprovados: { start: previousFridayCutoff, end: friCartCutoff },
     vendasParceria: { start: friCartStart, end: monAfterCart },
     r1Meetings: { start: thuStart, end: wedEnd },
   };
