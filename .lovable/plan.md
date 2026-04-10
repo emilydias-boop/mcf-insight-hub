@@ -1,38 +1,20 @@
 
 
-# Fix: Encaixar atualiza status para Aprovado
+# Fix: Atualizar leads encaixados que ficaram com status errado
 
 ## Problema
-Ao encaixar um lead, só o `carrinho_week_start` é atualizado. O `r2_status_id` permanece como "Próxima Semana", então o lead não aparece na aba Aprovados da semana de encaixe.
+Os leads encaixados antes da correção anterior (João Marcos zenni, Guilherme José Palhari, Marratma Gandhi, Márcio Barros) têm `carrinho_week_start = 2026-04-09` mas `r2_status_id` ainda é "Próxima Semana". Precisam ser "Aprovado" para aparecerem na aba correta.
 
 ## Correção
 
-**Arquivo:** `src/hooks/useEncaixarNoCarrinho.ts`
+**Migration SQL** — atualizar os 4 registros existentes:
 
-Na mutation, antes do update:
-1. Buscar o ID do status "Aprovado" em `r2_status_options`
-2. Atualizar tanto `carrinho_week_start` quanto `r2_status_id` no mesmo update
-
-```typescript
-// Buscar status Aprovado
-const { data: statusOptions } = await supabase
-  .from('r2_status_options')
-  .select('id, name')
-  .eq('is_active', true);
-
-const aprovadoId = statusOptions?.find(s => 
-  s.name.toLowerCase().includes('aprovado')
-)?.id;
-
-// Update duplo
-const { error } = await supabase
-  .from('meeting_slot_attendees')
-  .update({ 
-    carrinho_week_start: weekStartStr,
-    r2_status_id: aprovadoId
-  })
-  .eq('id', attendeeId);
+```sql
+UPDATE meeting_slot_attendees
+SET r2_status_id = '24d9a326-378b-4191-a4b3-d0ec8b9d23eb'
+WHERE carrinho_week_start IS NOT NULL
+  AND r2_status_id = '1b805ad7-5cab-4797-bc2d-2afd60a95870';
 ```
 
-Resultado: lead encaixado aparece como Aprovado na semana escolhida.
+Isso corrige retroativamente todos os leads que foram encaixados antes do fix, mudando de "Próxima Semana" para "Aprovado". A partir de agora, novos encaixes já fazem essa atualização automaticamente (fix anterior no `useEncaixarNoCarrinho.ts`).
 
