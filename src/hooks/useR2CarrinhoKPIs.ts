@@ -46,6 +46,19 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       const contratosPagos = emailMap.size;
 
       // ===== R2 KPIs from operational window (Sex-Sex) + encaixados =====
+      // Build encaixados queries separately to work around missing type for carrinho_week_start
+      const encaixadosQuery1 = supabase
+        .from('meeting_slot_attendees')
+        .select(`id, status, r2_status_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type)`)
+        .eq('meeting_slot.meeting_type', 'r2');
+      (encaixadosQuery1 as any).eq('carrinho_week_start', weekStartStr);
+
+      const encaixadosQuery2 = supabase
+        .from('meeting_slot_attendees')
+        .select('id, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)')
+        .eq('meeting_slot.meeting_type', 'r2');
+      (encaixadosQuery2 as any).eq('carrinho_week_start', weekStartStr);
+
       const [statusOptionsResult, r2AttendeesResult, opAprovadosResult, encaixadosResult, encaixadosAprovadosResult] = await Promise.all([
         supabase.from('r2_status_options').select('id, name').eq('is_active', true),
         supabase
@@ -60,18 +73,8 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
           .eq('meeting_slot.meeting_type', 'r2')
           .gte('meeting_slot.scheduled_at', boundaries.aprovados.start.toISOString())
           .lte('meeting_slot.scheduled_at', boundaries.aprovados.end.toISOString()),
-        // Encaixados for r2Meetings counts
-        supabase
-          .from('meeting_slot_attendees')
-          .select(`id, status, r2_status_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type)`)
-          .eq('meeting_slot.meeting_type', 'r2')
-        .eq('carrinho_week_start', weekStartStr),
-        // Encaixados for aprovados count
-        supabase
-          .from('meeting_slot_attendees')
-          .select('id, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)')
-          .eq('meeting_slot.meeting_type', 'r2')
-          .eq('carrinho_week_start', weekStartStr),
+        encaixadosQuery1,
+        encaixadosQuery2,
       ]);
 
       const statusOptions = statusOptionsResult.data || [];
