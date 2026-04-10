@@ -132,6 +132,11 @@ export default function R2Carrinho() {
     setDrawerOpen(true);
   };
 
+  const handleScheduleAccumulated = useCallback((lead: R2AccumulatedLead) => {
+    setSelectedAccLead(lead);
+    setScheduleModalOpen(true);
+  }, []);
+
   const weekLabel = useMemo(() => {
     return `${format(weekStart, 'dd/MM', { locale: ptBR })} - ${format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}`;
   }, [weekStart, weekEnd]);
