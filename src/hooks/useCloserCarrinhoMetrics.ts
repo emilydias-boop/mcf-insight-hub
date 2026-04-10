@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { getCarrinhoMetricBoundaries } from "@/lib/carrinhoWeekBoundaries";
+import { CarrinhoConfig } from "@/hooks/useCarrinhoConfig";
 
 export interface CloserCarrinhoMetric {
   closer_id: string;
@@ -10,11 +11,13 @@ export interface CloserCarrinhoMetric {
   aprovados: number;
 }
 
-export function useCloserCarrinhoMetrics(weekStart: Date, weekEnd: Date) {
+export function useCloserCarrinhoMetrics(weekStart: Date, weekEnd: Date, config?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
+  const cutoffKey = config?.carrinhos?.[0]?.horario_corte || '12:00';
+  const prevCutoffKey = previousConfig?.carrinhos?.[0]?.horario_corte || '12:00';
   return useQuery({
-    queryKey: ['closer-carrinho-metrics', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
+    queryKey: ['closer-carrinho-metrics', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), cutoffKey, prevCutoffKey],
     queryFn: async (): Promise<CloserCarrinhoMetric[]> => {
-      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd);
+      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, config, previousConfig);
 
       // 1. Fetch contracts of the safra (Thu-Wed)
       const { data: contratosTx } = await supabase

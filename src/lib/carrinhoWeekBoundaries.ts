@@ -41,11 +41,11 @@ export function getCartWeekEnd(date: Date): Date {
 export interface CarrinhoMetricBoundaries {
   /** Contratos pagos: Qui 00:00 → Qua 23:59:59.999 */
   contratos: { start: Date; end: Date };
-  /** R2 meetings: Sex 00:00 (pós-carrinho anterior) → Sex 23:59 (dia do carrinho atual) */
+  /** R2 meetings: Sex anterior no corte → Sex atual no corte */
   r2Meetings: { start: Date; end: Date };
-  /** Aprovados: Sex pós-carrinho anterior 00:00 → Sex do carrinho atual HH:mm (corte) */
+  /** Aprovados: Sex anterior no corte → Sex atual no corte */
   aprovados: { start: Date; end: Date };
-  /** Vendas parceria: Sex do carrinho HH:mm (corte) → Seg 23:59 */
+  /** Vendas parceria: Sex do carrinho 00:00 → Seg 23:59 */
   vendasParceria: { start: Date; end: Date };
   /** R1 realizadas: mesma janela dos contratos */
   r1Meetings: { start: Date; end: Date };
@@ -54,11 +54,12 @@ export interface CarrinhoMetricBoundaries {
 /**
  * Calcula janelas de data específicas por tipo de métrica do carrinho.
  *
- * Ciclo do carrinho (exemplo: carrinho sexta 28/03):
- * - Contratos:       Qui 20/03 00:00 → Qua 26/03 23:59
- * - R2 Agendadas:    Sex 21/03 00:00 → Sex 28/03 23:59
- * - Vendas Parceria: Sex 28/03 00:00 → Seg 31/03 23:59
- * - R1 Realizadas:   Qui 20/03 00:00 → Qua 26/03 23:59
+ * Ciclo do carrinho (exemplo: safra Qui 03/04 - Qua 09/04, carrinho sexta 10/04):
+ * - Contratos:       Qui 03/04 00:00 → Qua 09/04 23:59
+ * - R2 Agendadas:    Sex 03/04 12:00 (corte anterior) → Sex 10/04 12:00 (corte atual)
+ * - Aprovados:       Sex 03/04 12:00 (corte anterior) → Sex 10/04 12:00 (corte atual)
+ * - Vendas Parceria: Sex 10/04 00:00 → Seg 13/04 23:59
+ * - R1 Realizadas:   Qui 03/04 00:00 → Qua 09/04 23:59
  *
  * @param weekStart Quinta-feira início da semana (Thu-Wed)
  * @param weekEnd   Quarta-feira fim da semana (Thu-Wed)
@@ -69,50 +70,54 @@ export function getCarrinhoMetricBoundaries(
   config?: CarrinhoConfig,
   previousConfig?: CarrinhoConfig
 ): CarrinhoMetricBoundaries {
-  // Helper: meia-noite UTC para uma data (evita fuso local do startOfDay)
-  const utcStartOfDay = (d: Date) =>
-    new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0));
-  // Helper: 23:59:59.999 UTC para uma data (evita fuso local do endOfDay)
-  const utcEndOfDay = (d: Date) =>
-    new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999));
+  // Helper: meia-noite local para uma data
+  const localStartOfDay = (d: Date) => {
+    const r = new Date(d);
+    r.setHours(0, 0, 0, 0);
+    return r;
+  };
+  // Helper: 23:59:59.999 local para uma data
+  const localEndOfDay = (d: Date) => {
+    const r = new Date(d);
+    r.setHours(23, 59, 59, 999);
+    return r;
+  };
 
   // weekStart = Quinta, weekEnd = Quarta
-  const thuStart = utcStartOfDay(new Date(weekStart));
-  const wedEnd = utcEndOfDay(new Date(weekEnd));
+  const thuStart = localStartOfDay(new Date(weekStart));
+  const wedEnd = localEndOfDay(new Date(weekEnd));
 
-  // Sexta após o carrinho anterior = dia seguinte ao thuStart (Qui+1 = Sex)
-  const friAfterPrevCartDate = addDays(new Date(weekStart), 1);
+  // Sexta do carrinho atual = Qui + 1 dia (sexta da mesma semana)
+  const currentFriday = addDays(new Date(weekStart), 1);
+  // Sexta anterior = uma semana antes
+  const previousFriday = subDays(currentFriday, 7);
 
-  // Horário de corte da sexta anterior (usa config da semana anterior, fallback para config atual)
+  // Horário de corte da sexta anterior (usa previousConfig, fallback config, fallback 12:00)
   const prevHorarioCorte = previousConfig?.carrinhos?.[0]?.horario_corte
     || config?.carrinhos?.[0]?.horario_corte
     || '12:00';
   const [prevCutHour, prevCutMinute] = prevHorarioCorte.split(':').map(Number);
-  const previousFridayCutoff = new Date(Date.UTC(
-    friAfterPrevCartDate.getFullYear(), friAfterPrevCartDate.getMonth(), friAfterPrevCartDate.getDate(),
+  const previousFridayCutoff = new Date(
+    previousFriday.getFullYear(), previousFriday.getMonth(), previousFriday.getDate(),
     prevCutHour, prevCutMinute || 0, 0, 0
-  ));
+  );
 
   // Horário de corte da sexta atual (default 12:00)
   const horarioCorte = config?.carrinhos?.[0]?.horario_corte || '12:00';
   const [cutHour, cutMinute] = horarioCorte.split(':').map(Number);
-
-  // Sexta do carrinho atual com corte de horário (UTC)
-  const friCartCutoffDate = addDays(new Date(weekEnd), 2);
-  const friCartCutoff = new Date(Date.UTC(
-    friCartCutoffDate.getFullYear(), friCartCutoffDate.getMonth(), friCartCutoffDate.getDate(),
+  const currentFridayCutoff = new Date(
+    currentFriday.getFullYear(), currentFriday.getMonth(), currentFriday.getDate(),
     cutHour, cutMinute || 0, 0, 0
-  ));
+  );
 
-  // Vendas parceria: Sex do carrinho 00:00 UTC → Seg 23:59:59 UTC
-  const friDate = addDays(new Date(weekEnd), 2);
-  const friCartStart = utcStartOfDay(friDate);
-  const monAfterCart = utcEndOfDay(addDays(friDate, 3));
+  // Vendas parceria: Sex do carrinho atual 00:00 → Seg 23:59:59
+  const friCartStart = localStartOfDay(currentFriday);
+  const monAfterCart = localEndOfDay(addDays(currentFriday, 3));
 
   return {
     contratos: { start: thuStart, end: wedEnd },
-    r2Meetings: { start: previousFridayCutoff, end: friCartCutoff },
-    aprovados: { start: previousFridayCutoff, end: friCartCutoff },
+    r2Meetings: { start: previousFridayCutoff, end: currentFridayCutoff },
+    aprovados: { start: previousFridayCutoff, end: currentFridayCutoff },
     vendasParceria: { start: friCartStart, end: monAfterCart },
     r1Meetings: { start: thuStart, end: wedEnd },
   };

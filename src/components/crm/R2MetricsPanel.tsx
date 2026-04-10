@@ -33,6 +33,7 @@ interface R2MetricsPanelProps {
   weekEnd: Date;
   aprovadosOverride?: number;
   carrinhoConfig?: CarrinhoConfig;
+  previousConfig?: CarrinhoConfig;
 }
 
 interface MetricCardProps {
@@ -73,10 +74,10 @@ function MetricCard({ icon, label, value, color, badge, onClick }: MetricCardPro
   );
 }
 
-export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig, aprovadosOverride }: R2MetricsPanelProps) {
-  const { data: metrics, isLoading } = useR2MetricsData(weekStart, weekEnd, carrinhoConfig);
-  const { data: sdrCarrinhoMetrics, isLoading: sdrLoading } = useSDRCarrinhoMetrics(weekStart, weekEnd);
-  const { data: closerCarrinhoMetrics, isLoading: closerLoading } = useCloserCarrinhoMetrics(weekStart, weekEnd);
+export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig, previousConfig, aprovadosOverride }: R2MetricsPanelProps) {
+  const { data: metrics, isLoading } = useR2MetricsData(weekStart, weekEnd, carrinhoConfig, previousConfig);
+  const { data: sdrCarrinhoMetrics, isLoading: sdrLoading } = useSDRCarrinhoMetrics(weekStart, weekEnd, 'incorporador', carrinhoConfig, previousConfig);
+  const { data: closerCarrinhoMetrics, isLoading: closerLoading } = useCloserCarrinhoMetrics(weekStart, weekEnd, carrinhoConfig, previousConfig);
 
   const handleRescheduleNoShows = () => {
     window.location.href = '/crm/agenda-r2?tab=noshows';
