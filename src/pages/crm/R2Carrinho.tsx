@@ -57,6 +57,7 @@ export default function R2Carrinho() {
   // Fetch status options
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
+  const { data: r2Closers = [] } = useActiveR2Closers();
 
   // Fetch data for each tab
   const { data: rawAgendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekStart, weekEnd, 'agendadas', config, prevConfig);
