@@ -179,6 +179,17 @@ export const PAYMENT_METHOD_LABELS: Record<BillingPaymentMethod, string> = {
 
 export const PARCELED_METHODS: BillingPaymentMethod[] = ['boleto_parcelado', 'cartao_parcelado', 'pix_parcelado'];
 
+export const ASSINATURA_CATEGORIES = ['a010', 'incorporador', 'ob_vitalicio', 'ob_construir_alugar', 'efeito_alavanca', 'clube_arremate', 'imersao', 'imersao_socios', 'projetos', 'outros'] as const;
+export const PARCELADO_CATEGORIES = ['contrato', 'renovacao', 'contrato_clube_arremate'] as const;
+
+export type SubscriptionType = 'assinatura' | 'parcelado';
+
+export const getSubscriptionType = (sub: BillingSubscription): SubscriptionType => {
+  const cat = sub.product_category || '';
+  if ((PARCELADO_CATEGORIES as readonly string[]).includes(cat)) return 'parcelado';
+  return 'assinatura';
+};
+
 export const HISTORY_TYPE_LABELS: Record<BillingHistoryType, string> = {
   entrada_paga: 'Entrada paga',
   parcela_paga: 'Parcela paga',
