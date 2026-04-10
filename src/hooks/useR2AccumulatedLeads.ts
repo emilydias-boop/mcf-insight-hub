@@ -313,6 +313,23 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
         }
       }
 
+      // Filter out leads that have been encaixados (carrinho_week_start set)
+      const realAttendeeIds = results
+        .filter(r => r.meeting_id && !r.id.startsWith('sem-r2-'))
+        .map(r => r.id);
+
+      if (realAttendeeIds.length > 0) {
+        const encaixadosQuery = supabase
+          .from('meeting_slot_attendees')
+          .select('id, carrinho_week_start')
+          .in('id', realAttendeeIds)
+          .not('carrinho_week_start' as any, 'is', null);
+
+        const { data: encaixados } = await encaixadosQuery;
+        const encaixadosSet = new Set((encaixados || []).map((e: any) => e.id));
+        return results.filter(r => !encaixadosSet.has(r.id));
+      }
+
       return results;
     },
     staleTime: 5 * 60 * 1000,
