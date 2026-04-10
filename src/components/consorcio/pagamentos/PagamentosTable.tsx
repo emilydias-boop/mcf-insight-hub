@@ -2,7 +2,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ChevronLeft, ChevronRight, CheckCircle, FileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, FileText, Copy } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -42,17 +42,19 @@ interface Props {
   onSelectionChange: (ids: Set<string>) => void;
   bulkMode: boolean;
   filtroBoleto: string;
+  tipoFilter?: 'cliente' | 'empresa';
 }
 
-export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange, bulkMode, filtroBoleto }: Props) {
+export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange, bulkMode, filtroBoleto, tipoFilter }: Props) {
   const payInstallment = usePayInstallment();
   const installmentIds = data.map(r => r.id);
   const { data: boletos } = useBoletosByInstallments(installmentIds);
+  const isEmpresa = tipoFilter === 'empresa';
 
-  const boletoMap = new Map<string, { storage_path: string | null; id: string }>();
+  const boletoMap = new Map<string, { storage_path: string | null; id: string; linha_digitavel: string | null }>();
   (boletos || []).forEach(b => {
     if (b.installment_id) {
-      boletoMap.set(b.installment_id, { storage_path: b.storage_path, id: b.id });
+      boletoMap.set(b.installment_id, { storage_path: b.storage_path, id: b.id, linha_digitavel: b.linha_digitavel });
     }
   });
 
@@ -104,6 +106,10 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
       return;
     }
     window.open(data.signedUrl, '_blank');
+  const handleCopyLinhaDigitavel = (e: React.MouseEvent, linha: string) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(linha);
+    toast.success('Linha digitável copiada!');
   };
 
   if (isLoading) {
@@ -132,13 +138,14 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
             <TableHead>Grupo</TableHead>
             <TableHead>Cota</TableHead>
             <TableHead className="text-center">Nº</TableHead>
-            <TableHead>Tipo</TableHead>
+            {!isEmpresa && <TableHead>Tipo</TableHead>}
             <TableHead className="text-right">Valor</TableHead>
             <TableHead>Vencimento</TableHead>
             <TableHead>Pagamento</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Situação Cota</TableHead>
-            <TableHead>Responsável</TableHead>
+            {!isEmpresa && <TableHead>Responsável</TableHead>}
+            {isEmpresa && <TableHead>Cód. Barras</TableHead>}
             <TableHead className="text-center">Boleto</TableHead>
             <TableHead className="text-center">Ações</TableHead>
           </TableRow>
@@ -146,7 +153,7 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
         <TableBody>
           {filteredData.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={bulkMode ? 14 : 13} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={isEmpresa ? 12 : (bulkMode ? 14 : 13)} className="text-center text-muted-foreground py-8">
                 Nenhuma parcela encontrada
               </TableCell>
             </TableRow>
@@ -180,7 +187,7 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
                   <TableCell>{row.grupo}</TableCell>
                   <TableCell>{row.cota}</TableCell>
                   <TableCell className="text-center">{row.numero_parcela}</TableCell>
-                  <TableCell className="capitalize">{row.tipo}</TableCell>
+                  {!isEmpresa && <TableCell className="capitalize">{row.tipo}</TableCell>}
                   <TableCell className="text-right">{formatCurrency(Number(row.valor_parcela))}</TableCell>
                   <TableCell>{formatDate(row.data_vencimento)}</TableCell>
                   <TableCell>{row.data_pagamento ? formatDate(row.data_pagamento) : '-'}</TableCell>
@@ -190,7 +197,35 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
                   <TableCell>
                     <Badge variant="outline" className={situacaoCfg.className}>{situacaoCfg.label}</Badge>
                   </TableCell>
-                  <TableCell className="max-w-[120px] truncate">{row.vendedor_name || '-'}</TableCell>
+                  {!isEmpresa && <TableCell className="max-w-[120px] truncate">{row.vendedor_name || '-'}</TableCell>}
+                  {isEmpresa && (
+                    <TableCell className="max-w-[200px]" onClick={e => e.stopPropagation()}>
+                      {boleto?.linha_digitavel ? (
+                        <div className="flex items-center gap-1">
+                          <code className="text-[10px] bg-muted p-1 rounded truncate font-mono flex-1">
+                            {boleto.linha_digitavel}
+                          </code>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 shrink-0"
+                                  onClick={(e) => handleCopyLinhaDigitavel(e, boleto.linha_digitavel!)}
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Copiar linha digitável</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="text-center">
                     {boleto ? (
                       <TooltipProvider>

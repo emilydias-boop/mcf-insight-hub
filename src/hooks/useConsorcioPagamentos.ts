@@ -90,7 +90,8 @@ export function useConsorcioPagamentos(
   filters: PagamentosFiltersState,
   page: number,
   pageSize: number = 50,
-  selectedMonth?: { start: string; end: string }
+  selectedMonth?: { start: string; end: string },
+  tipoFilter?: 'cliente' | 'empresa'
 ) {
   // Fetch installments filtered by selected month
   const { data: rawData, isLoading: isLoadingMain, refetch } = useQuery({
@@ -255,7 +256,7 @@ export function useConsorcioPagamentos(
 
   // Apply filters
   const filteredData = useMemo(() => {
-    let result = processedData;
+    let result = tipoFilter ? processedData.filter(r => r.tipo === tipoFilter) : processedData;
     
     if (filters.search) {
       const q = filters.search.toLowerCase();
@@ -284,7 +285,7 @@ export function useConsorcioPagamentos(
     }
 
     return result;
-  }, [processedData, filters]);
+  }, [processedData, filters, tipoFilter]);
 
   // Pagination
   const totalItems = filteredData.length;

@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ConsorcioPagamentosTab } from '@/components/consorcio/pagamentos/ConsorcioPagamentosTab';
 import { BoletoUploadDialog } from '@/components/consorcio/pagamentos/BoletoUploadDialog';
 import { BoletoReviewDialog } from '@/components/consorcio/pagamentos/BoletoReviewDialog';
@@ -17,7 +18,7 @@ import { CobrancaAlertPanel } from '@/components/shared/CobrancaAlertPanel';
 import { CobrancaHistoryPanel } from '@/components/shared/CobrancaHistoryPanel';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, User, Building2 } from 'lucide-react';
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
   const date = subMonths(new Date(), i);
@@ -46,6 +47,11 @@ export default function ConsorcioPagamentosPage() {
     dias_para_vencer: a.dias_para_vencer,
     priority: a.priority,
   }));
+
+  const monthRange = {
+    start: format(selectedMonth.start, 'yyyy-MM-dd'),
+    end: format(selectedMonth.end, 'yyyy-MM-dd'),
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -87,12 +93,25 @@ export default function ConsorcioPagamentosPage() {
         </div>
       </div>
 
-      <ConsorcioPagamentosTab
-        selectedMonth={{
-          start: format(selectedMonth.start, 'yyyy-MM-dd'),
-          end: format(selectedMonth.end, 'yyyy-MM-dd'),
-        }}
-      />
+      <Tabs defaultValue="cliente" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="cliente" className="gap-1.5">
+            <User className="h-4 w-4" />
+            Cliente
+          </TabsTrigger>
+          <TabsTrigger value="empresa" className="gap-1.5">
+            <Building2 className="h-4 w-4" />
+            Empresa
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="cliente">
+          <ConsorcioPagamentosTab selectedMonth={monthRange} tipoFilter="cliente" />
+        </TabsContent>
+        <TabsContent value="empresa">
+          <ConsorcioPagamentosTab selectedMonth={monthRange} tipoFilter="empresa" />
+        </TabsContent>
+      </Tabs>
+
       <BoletoReviewDialog open={reviewOpen} onOpenChange={setReviewOpen} />
     </div>
   );

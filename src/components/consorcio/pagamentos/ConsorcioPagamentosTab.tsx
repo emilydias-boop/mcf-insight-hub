@@ -14,9 +14,10 @@ import { toast } from 'sonner';
 
 interface Props {
   selectedMonth: { start: string; end: string };
+  tipoFilter?: 'cliente' | 'empresa';
 }
 
-export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
+export function ConsorcioPagamentosTab({ selectedMonth, tipoFilter }: Props) {
   const [filters, setFilters] = useState<PagamentosFiltersState>(defaultFilters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(200);
@@ -27,7 +28,7 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
   const [isSending, setIsSending] = useState(false);
   const [sendProgress, setSendProgress] = useState({ current: 0, total: 0, skipped: 0 });
 
-  const { data, allData, isLoading, kpis, alertData, totalItems, totalPages, filterOptions } = useConsorcioPagamentos(filters, page, pageSize, selectedMonth);
+  const { data, allData, isLoading, kpis, alertData, totalItems, totalPages, filterOptions } = useConsorcioPagamentos(filters, page, pageSize, selectedMonth, tipoFilter);
 
   const handleFilterChange = (f: PagamentosFiltersState) => {
     setFilters(f);
@@ -192,6 +193,7 @@ export function ConsorcioPagamentosTab({ selectedMonth }: Props) {
         onSelectionChange={setSelectedIds}
         bulkMode={bulkMode}
         filtroBoleto={filters.filtroBoleto}
+        tipoFilter={tipoFilter}
       />
 
       <PagamentoDetailDrawer
