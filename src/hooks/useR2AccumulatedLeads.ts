@@ -87,6 +87,8 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
         }
         const uniqueContracts = Array.from(emailMap.values());
         const emails = uniqueContracts.map(t => (t.customer_email || '').toLowerCase().trim()).filter(Boolean);
+        const originalEmails = uniqueContracts.map(t => (t.customer_email || '').trim()).filter(Boolean);
+        const allEmailVariants = [...new Set([...emails, ...originalEmails])];
         if (emails.length === 0) continue;
 
         // Check partnership purchases — exclude leads who already bought
