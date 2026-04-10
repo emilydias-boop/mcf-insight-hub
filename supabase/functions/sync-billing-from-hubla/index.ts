@@ -328,7 +328,7 @@ Deno.serve(async (req) => {
             const valorPago = i === 1
               ? (paid.product_price || valorBruto)
               : (paid.net_value ?? 0);
-            const valorOriginalInst = i === 1 ? valorBruto : valorLiquido;
+            const valorOriginalInst = i === 1 ? valorBruto : valorBrutoPerInstallment;
             allInstallmentsToInsert.push({
               subscription_id: subId,
               numero_parcela: i,
@@ -355,7 +355,7 @@ Deno.serve(async (req) => {
           } else {
             const dueDate = new Date(firstDate);
             dueDate.setDate(dueDate.getDate() + batchIntervalDays * (i - 1));
-            const valorOriginalUnpaid = i === 1 ? valorBruto : valorLiquido;
+            const valorOriginalUnpaid = i === 1 ? valorBruto : valorBrutoPerInstallment;
             allInstallmentsToInsert.push({
               subscription_id: subId,
               numero_parcela: i,
