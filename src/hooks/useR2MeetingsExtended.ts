@@ -225,7 +225,10 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
       // Filter out orphan meetings (no attendees) and enrich with status/thermometer objects
       return (meetings || []).filter(meeting => {
         const attendeesArr = ((meeting as Record<string, unknown>).attendees || []) as Array<Record<string, unknown>>;
-        return attendeesArr.length > 0;
+        const visibleAttendees = attendeesArr.filter(att => 
+          (att.status as string) !== 'pre_scheduled' && (att.status as string) !== 'cancelled'
+        );
+        return visibleAttendees.length > 0;
       }).map(meeting => {
         const meetingObj = meeting as Record<string, unknown>;
         const attendeesArr = (meetingObj.attendees || []) as Array<Record<string, unknown>>;
@@ -262,7 +265,9 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
           sdr,
           r1_closer: r1Closer,
           booked_by: bookedById ? profilesById[bookedById] || { id: bookedById, name: null } : null,
-        attendees: attendeesArr.map(att => {
+        attendees: attendeesArr
+          .filter(att => (att.status as string) !== 'pre_scheduled' && (att.status as string) !== 'cancelled')
+          .map(att => {
           const thermIds = (att.thermometer_ids as string[]) || [];
           const statusId = att.r2_status_id as string | null;
           const attDealId = att.deal_id as string | null;
