@@ -1,109 +1,68 @@
 
-## Diagnóstico real do problema
 
-O que já está certo hoje:
-- `src/pages/crm/R2Carrinho.tsx` já carrega **config da semana atual** e **config da semana anterior**.
-- `useR2CarrinhoData`, `useR2CarrinhoKPIs`, `useR2ForaDoCarrinhoData` e `useR2CarrinhoVendas` já recebem `previousConfig` e já reagem ao `horario_corte` no `queryKey`.
+# Corrigir nomes e adicionar "Encaixar no Carrinho" na aba Acumulados
 
-O que está errado de fato:
-1. **A sexta usada no cálculo está uma semana adiantada**
-   - Em `src/lib/carrinhoWeekBoundaries.ts`, o início usa:
-     ```ts
-     const friAfterPrevCartDate = addDays(weekStart, 1)
-     ```
-     Para a semana `09/04 - 15/04`, isso vira **10/04**.
-     Mas o início esperado da janela era a **sexta anterior: 03/04**.
+## Problema 1: Nomes mostrando como e-mail
+Na coluna "Nome", leads do tipo "Sem R2" aparecem com o e-mail porque o hook `useR2AccumulatedLeads` busca contatos apenas com `id, email, phone` (linha 125) -- sem o campo `name`. Como `attendee_name` e `deal_name` são nulos para esses leads, o fallback exibe o e-mail.
 
-   - O fim usa:
-     ```ts
-     const friCartCutoffDate = addDays(weekEnd, 2)
-     ```
-     Para `09/04 - 15/04`, isso vira **17/04**.
-     Mas o fim esperado era a **sexta do carrinho dessa safra: 10/04**.
+**Correção**: Adicionar `name` na query de `crm_contacts` e também buscar o deal name via `crm_deals` para os contatos sem R2.
 
-2. **O corte está sendo montado em UTC**
-   - Hoje o helper usa `Date.UTC(...)`.
-   - Então `12:00` vira **12:00 UTC**, que no Brasil aparece como **09:00 local**.
-   - Isso bate com o sintoma do print: a lista está começando na sexta **10/04 às 09:00**, que é exatamente o efeito de “12:00 UTC”.
+## Problema 2: Encaixar lead acumulado no carrinho atual
+O usuário quer poder pegar um lead acumulado e agendar uma R2 no carrinho da semana atual. Isso será feito abrindo o `R2QuickScheduleModal` com o deal pré-selecionado.
 
-## Resumo do erro com o seu exemplo
+---
 
-Para a safra `09/04 - 15/04`, o esperado era:
+## Alterações
 
-```text
-Esperado:
-R2s da semana = 03/04 12:00 -> 10/04 12:00
+### 1. `src/hooks/useR2AccumulatedLeads.ts`
+- Adicionar `name` na query de `crm_contacts` (linha 125): `select('id, name, email, phone')`
+- Buscar deals associados a esses contatos via `crm_deals` para ter o nome do deal e o `deal_id` mesmo quando não há R2
+- Adicionar `deal_id` e `contact_id` ao interface `R2AccumulatedLead`
+- Nos leads "sem_r2", popular `attendee_name` com o nome do contato e `deal_name` com o nome do deal
+
+### 2. `src/components/crm/R2AccumulatedList.tsx`
+- Adicionar botão "Encaixar" em cada linha de lead acumulado
+- Ao clicar, chamar um callback `onSchedule(lead)` passado via props
+- O callback abrirá o `R2QuickScheduleModal` com o deal pré-selecionado
+
+### 3. `src/pages/crm/R2Carrinho.tsx`
+- Importar e renderizar o `R2QuickScheduleModal`
+- Passar `onSchedule` para `R2AccumulatedList` que abre o modal com o deal do lead selecionado
+- Após agendar, invalidar as queries de acumulados
+
+### Detalhes técnicos
+
+Interface atualizada:
+```typescript
+export interface R2AccumulatedLead {
+  // ... existentes
+  deal_id: string | null;    // novo
+  contact_id: string | null; // novo
+}
 ```
 
-Hoje o código está fazendo algo equivalente a:
-
-```text
-Atual:
-R2s da semana = 10/04 09:00 local -> 17/04 09:00 local
+Na query de contatos:
+```typescript
+const { data: contacts } = await supabase
+  .from('crm_contacts')
+  .select('id, name, email, phone')  // adicionar name
+  .in('email', emails);
 ```
 
-Por isso:
-- os leads feitos **após 12h da sexta anterior** não entram;
-- a tela começa mostrando registros da **sexta atual às 09h**;
-- parece que o corte “não respeita”, quando na prática a janela inteira está deslocada.
+Para "sem_r2", buscar deals do contato:
+```typescript
+const { data: contactDeals } = await supabase
+  .from('crm_deals')
+  .select('id, name, contact_id')
+  .in('contact_id', contactIds);
+```
 
-## Plano de correção
+Botão na lista:
+```tsx
+<TableCell>
+  <Button size="sm" variant="outline" onClick={() => onSchedule?.(lead)}>
+    Encaixar
+  </Button>
+</TableCell>
+```
 
-### 1) Corrigir a matemática da janela em `carrinhoWeekBoundaries.ts`
-Trocar a lógica para usar a sexta correta da safra selecionada:
-
-- `currentFriday = addDays(weekStart, 1)`  
-- `previousFriday = subDays(currentFriday, 7)`
-
-E montar:
-- `previousFridayCutoff` com o `horario_corte` da `previousConfig`
-- `currentFridayCutoff` com o `horario_corte` da `config`
-
-Aplicando:
-- `r2Meetings: { start: previousFridayCutoff, end: currentFridayCutoff }`
-- `aprovados: { start: previousFridayCutoff, end: currentFridayCutoff }`
-
-### 2) Parar de usar `Date.UTC` para o corte
-Construir o horário de corte em **horário local do negócio** (12:00 real que o usuário configurou), para não deslocar 3 horas.
-
-Objetivo:
-- `12:00` configurado precisa virar **12:00 visível na regra**, não `09:00`.
-
-### 3) Ajustar também a janela de vendas
-A `vendasParceria` hoje também está baseada na sexta errada.
-Ela deve passar a usar a **sexta do carrinho da safra selecionada**, não a sexta da semana seguinte.
-
-### 4) Alinhar as views secundárias que ainda não seguem a mesma regra
-Mesmo corrigindo a helper principal, ainda existem pontos do Carrinho que continuam incompletos:
-- `src/hooks/useR2MetricsData.ts` recebe só a config atual
-- `src/components/crm/R2MetricsPanel.tsx` não passa `previousConfig`
-- `src/hooks/useR2AccumulatedLeads.ts` varre semanas anteriores sem usar as configs históricas dessas semanas
-
-Plano:
-- passar `previousConfig` para `R2MetricsPanel` / `useR2MetricsData`
-- incluir os cortes no `queryKey`
-- revisar `useR2AccumulatedLeads` para usar a config correta de cada semana escaneada
-
-## Arquivos a ajustar
-
-- `src/lib/carrinhoWeekBoundaries.ts`
-- `src/pages/crm/R2Carrinho.tsx`
-- `src/components/crm/R2MetricsPanel.tsx`
-- `src/hooks/useR2MetricsData.ts`
-- `src/hooks/useR2AccumulatedLeads.ts`
-
-Possivelmente também, para manter tudo consistente:
-- `src/hooks/useCloserCarrinhoMetrics.ts`
-- `src/hooks/useSDRCarrinhoMetrics.ts`
-
-## Validação após a correção
-
-Cenário de teste:
-- semana `02/04 - 08/04` com corte `12:00`
-- abrir semana `09/04 - 15/04`
-
-Resultado esperado:
-- lead criado em `03/04 11:59` fica na semana anterior
-- lead criado em `03/04 12:01` entra em `09/04 - 15/04`
-- a lista não pode começar em `10/04 09:00` por efeito de UTC
-- KPIs, “Todas R2s”, “Fora do Carrinho”, “Aprovados” e “Vendas” precisam bater com a mesma janela
