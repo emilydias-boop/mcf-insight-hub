@@ -1,30 +1,18 @@
 
 
-# Fix: KPIs devem acompanhar a aba ativa (Cliente/Empresa)
+# Fix: KPIs devem acompanhar todos os filtros ativos
 
 ## Problema
-Os KPIs e alertas são calculados sobre `processedData` (todos os dados), mas o filtro `tipoFilter` (cliente/empresa) só é aplicado depois, na `filteredData` usada pela tabela. Isso faz com que ambas as abas mostrem os mesmos valores nos KPIs.
+Os KPIs usam `tipoFilteredData` (filtrado apenas por tipo cliente/empresa), mas ignoram os demais filtros (dia de vencimento, status, busca, etc.). Quando o usuário seleciona "Dia 10", a tabela filtra mas os KPIs continuam mostrando o total geral da aba.
 
 ## Correção
 
 ### Arquivo: `src/hooks/useConsorcioPagamentos.ts`
 
-Aplicar o `tipoFilter` **antes** de calcular KPIs e alertas:
+Alterar os cálculos de `kpis` e `alertData` para usar `filteredData` (que já tem todos os filtros aplicados) em vez de `tipoFilteredData`.
 
-1. Criar um `tipoFilteredData` logo após `processedData` (linha ~218):
-```typescript
-const tipoFilteredData = useMemo(() => {
-  return tipoFilter ? processedData.filter(r => r.tipo === tipoFilter) : processedData;
-}, [processedData, tipoFilter]);
-```
+- `kpis` (linha ~226): trocar dependência de `tipoFilteredData` para `filteredData`
+- `alertData` (linha ~270): trocar dependência de `tipoFilteredData` para `filteredData`
 
-2. Alterar o cálculo de `kpis` (linha 231) para iterar sobre `tipoFilteredData` em vez de `processedData`
-
-3. Alterar o cálculo de `alertData` para usar `tipoFilteredData`
-
-4. Alterar `filteredData` para partir de `tipoFilteredData` (remover o filtro de tipo duplicado na linha 259)
-
-5. Alterar `filterOptions` para usar `tipoFilteredData`
-
-Resultado: cada aba mostra seus próprios totais de recebido, pendente, atraso, parcelas, e cotas.
+Isso garante que KPIs, contadores e alertas reflitam exatamente o que o usuário está vendo na tabela.
 
