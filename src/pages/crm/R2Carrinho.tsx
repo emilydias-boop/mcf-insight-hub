@@ -379,6 +379,28 @@ export default function R2Carrinho() {
         onCopyFromPrevious={handleCopyFromPrevious}
         isCopying={copyFromPreviousWeek.isPending}
       />
+
+      {/* Quick Schedule Modal for accumulated leads */}
+      <R2QuickScheduleModal
+        open={scheduleModalOpen}
+        onOpenChange={(open) => {
+          setScheduleModalOpen(open);
+          if (!open) setSelectedAccLead(null);
+        }}
+        closers={r2Closers}
+        statusOptions={statusOptions}
+        thermometerOptions={thermometerOptions}
+        preselectedDeal={selectedAccLead?.deal_id ? {
+          id: selectedAccLead.deal_id,
+          name: selectedAccLead.deal_name || selectedAccLead.attendee_name || '',
+          contact: selectedAccLead.contact_id ? {
+            id: selectedAccLead.contact_id,
+            name: selectedAccLead.attendee_name || '',
+            phone: selectedAccLead.attendee_phone || selectedAccLead.contact_phone || null,
+            email: selectedAccLead.contact_email || null,
+          } : null,
+        } : undefined}
+      />
     </div>
   );
 }
