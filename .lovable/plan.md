@@ -1,41 +1,30 @@
 
 
-# Separar Pagamentos Consórcio por Cliente vs Empresa + Acesso rápido ao código de barras
+# Fix: KPIs devem acompanhar a aba ativa (Cliente/Empresa)
 
-## Resumo
-Adicionar abas "Cliente" e "Empresa" na tela de Pagamentos Consórcio para separar as parcelas por tipo. Na aba "Empresa", incluir acesso rápido ao código de barras (copiar com 1 clique) e botão para abrir o boleto PDF + marcar como pago de forma mais ágil.
+## Problema
+Os KPIs e alertas são calculados sobre `processedData` (todos os dados), mas o filtro `tipoFilter` (cliente/empresa) só é aplicado depois, na `filteredData` usada pela tabela. Isso faz com que ambas as abas mostrem os mesmos valores nos KPIs.
 
-## O que muda para o usuário
+## Correção
 
-1. **Duas abas na página**: "Cliente" (parcelas tipo `cliente`) e "Empresa" (parcelas tipo `empresa`) — cada uma com seus próprios KPIs e filtros
-2. **Coluna "Código de Barras" na aba Empresa**: mostra a linha digitável truncada com botão de copiar (1 clique copia para a área de transferência)
-3. **Ações rápidas na aba Empresa**: botão de abrir boleto PDF + botão de marcar como pago lado a lado, sem precisar abrir drawer
-4. A aba "Cliente" mantém o comportamento atual (WhatsApp, envio em massa, etc.)
+### Arquivo: `src/hooks/useConsorcioPagamentos.ts`
 
-## Detalhes técnicos
+Aplicar o `tipoFilter` **antes** de calcular KPIs e alertas:
 
-### 1. Página `Pagamentos.tsx` — Adicionar Tabs
-Envolver o `ConsorcioPagamentosTab` em `Tabs` com duas abas: "Cliente" e "Empresa". Cada aba passa um filtro `tipoFilter` ao componente.
+1. Criar um `tipoFilteredData` logo após `processedData` (linha ~218):
+```typescript
+const tipoFilteredData = useMemo(() => {
+  return tipoFilter ? processedData.filter(r => r.tipo === tipoFilter) : processedData;
+}, [processedData, tipoFilter]);
+```
 
-### 2. `ConsorcioPagamentosTab.tsx` — Receber prop `tipoFilter`
-Nova prop `tipoFilter: 'cliente' | 'empresa'` que é passada ao hook para filtrar os dados.
+2. Alterar o cálculo de `kpis` (linha 231) para iterar sobre `tipoFilteredData` em vez de `processedData`
 
-### 3. `useConsorcioPagamentos.ts` — Filtro por tipo
-Adicionar `tipoFilter` aos filtros. Aplicar filtro no `processedData` pelo campo `tipo` do installment.
+3. Alterar o cálculo de `alertData` para usar `tipoFilteredData`
 
-### 4. `PagamentosTable.tsx` — Variante Empresa
-Quando `tipoFilter === 'empresa'`:
-- Adicionar coluna "Cód. Barras" que mostra a `linha_digitavel` do boleto com botão de copiar (ícone clipboard)
-- O `boletoMap` já carrega os dados; basta incluir `linha_digitavel` no mapeamento
-- Botões de ação (abrir PDF + marcar pago) ficam mais proeminentes e lado a lado
+4. Alterar `filteredData` para partir de `tipoFilteredData` (remover o filtro de tipo duplicado na linha 259)
 
-### 5. `useBoletosByInstallments` — Incluir `linha_digitavel`
-O hook já retorna `*` (todos os campos), então `linha_digitavel` já está disponível. Basta atualizar o `boletoMap` no `PagamentosTable` para incluir esse campo.
+5. Alterar `filterOptions` para usar `tipoFilteredData`
 
-### Fluxo esperado (Empresa)
-1. Financeiro abre aba "Empresa"
-2. Vê a lista de parcelas pendentes com código de barras visível
-3. Clica no ícone de copiar → linha digitável copiada
-4. Cola no app do banco e paga
-5. Volta e clica no check verde para marcar como pago
+Resultado: cada aba mostra seus próprios totais de recebido, pendente, atraso, parcelas, e cotas.
 
