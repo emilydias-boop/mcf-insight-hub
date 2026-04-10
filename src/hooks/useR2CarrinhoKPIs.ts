@@ -19,6 +19,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
     queryKey: ['r2-carrinho-kpis', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), carrinhoConfig?.carrinhos?.[0]?.horario_corte, previousConfig?.carrinhos?.[0]?.horario_corte],
     queryFn: async (): Promise<R2CarrinhoKPIs> => {
       const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
+      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
 
       // ===== CONTRATOS PAGOS (safra Qui-Qua) =====
       const { data: contratosTx } = await supabase
@@ -44,33 +45,33 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       }
       const contratosPagos = emailMap.size;
 
-      // ===== R2 KPIs from operational window (Sex-Sex) =====
-      const [statusOptionsResult, r2AttendeesResult, opAprovadosResult] = await Promise.all([
+      // ===== R2 KPIs from operational window (Sex-Sex) + encaixados =====
+      const [statusOptionsResult, r2AttendeesResult, opAprovadosResult, encaixadosResult, encaixadosAprovadosResult] = await Promise.all([
         supabase.from('r2_status_options').select('id, name').eq('is_active', true),
-        // R2 attendees in the r2Meetings window (Sex-Sex)
         supabase
           .from('meeting_slot_attendees')
-          .select(`
-            id,
-            status,
-            r2_status_id,
-            meeting_slot:meeting_slots!inner(
-              id,
-              status,
-              scheduled_at,
-              meeting_type
-            )
-          `)
+          .select(`id, status, r2_status_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type)`)
           .eq('meeting_slot.meeting_type', 'r2')
           .gte('meeting_slot.scheduled_at', boundaries.r2Meetings.start.toISOString())
           .lte('meeting_slot.scheduled_at', boundaries.r2Meetings.end.toISOString()),
-        // Aprovados from operational window with cutoff (Sex-Sex)
         supabase
           .from('meeting_slot_attendees')
           .select('id, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)')
           .eq('meeting_slot.meeting_type', 'r2')
           .gte('meeting_slot.scheduled_at', boundaries.aprovados.start.toISOString())
           .lte('meeting_slot.scheduled_at', boundaries.aprovados.end.toISOString()),
+        // Encaixados for r2Meetings counts
+        supabase
+          .from('meeting_slot_attendees')
+          .select(`id, status, r2_status_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type)`)
+          .eq('meeting_slot.meeting_type', 'r2')
+          .eq('carrinho_week_start' as any, weekStartStr),
+        // Encaixados for aprovados count
+        supabase
+          .from('meeting_slot_attendees')
+          .select('id, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)')
+          .eq('meeting_slot.meeting_type', 'r2')
+          .eq('carrinho_week_start' as any, weekStartStr),
       ]);
 
       const statusOptions = statusOptionsResult.data || [];
@@ -88,33 +89,50 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
         .filter(s => foraDoCarrinhoNames.some(name => s.name.toLowerCase().includes(name)))
         .map(s => s.id);
 
-      // Count aprovados from operational window (with cutoff)
+      // Merge encaixados into r2Attendees (dedupe by id)
+      const r2AttendeeIds = new Set((r2AttendeesResult.data || []).map((a: any) => a.id));
+      const mergedR2 = [...(r2AttendeesResult.data || [])];
+      for (const enc of encaixadosResult.data || []) {
+        if (!r2AttendeeIds.has(enc.id)) {
+          mergedR2.push(enc);
+          r2AttendeeIds.add(enc.id);
+        }
+      }
+
+      // Merge encaixados into aprovados (dedupe by id)
+      const opAprovadosIds = new Set((opAprovadosResult.data || []).map((a: any) => a.id));
+      const mergedAprovados = [...(opAprovadosResult.data || [])];
+      for (const enc of encaixadosAprovadosResult.data || []) {
+        if (!opAprovadosIds.has(enc.id)) {
+          mergedAprovados.push(enc);
+          opAprovadosIds.add(enc.id);
+        }
+      }
+
+      // Count aprovados
       const aprovados = aprovadoStatusId
-        ? (opAprovadosResult.data || []).filter((a: any) => a.r2_status_id === aprovadoStatusId).length
+        ? mergedAprovados.filter((a: any) => a.r2_status_id === aprovadoStatusId).length
         : 0;
 
-      // Count R2 metrics from r2Meetings window
+      // Count R2 metrics
       let r2Agendadas = 0;
       let r2Realizadas = 0;
       let foraDoCarrinho = 0;
       let pendentes = 0;
       let emAnalise = 0;
 
-      for (const att of r2AttendeesResult.data || []) {
+      for (const att of mergedR2) {
         const slot = (att as any).meeting_slot;
         if (!slot) continue;
 
-        // Exclude cancelled/rescheduled for agendadas count
         if (slot.status !== 'cancelled' && slot.status !== 'rescheduled') {
           r2Agendadas++;
         }
 
-        // Realizadas
         if (att.status === 'completed' || att.status === 'presente' || slot.status === 'completed') {
           r2Realizadas++;
         }
 
-        // Status counts
         if (att.r2_status_id === pendenteStatusId) pendentes++;
         else if (att.r2_status_id === emAnaliseStatusId) emAnalise++;
         else if (att.r2_status_id && foraDoCarrinhoStatusIds.includes(att.r2_status_id)) foraDoCarrinho++;

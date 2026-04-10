@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AlertTriangle, Phone, User, Calendar, Filter, CalendarPlus } from 'lucide-react';
+import { AlertTriangle, Phone, User, Calendar, Filter, CalendarPlus, ShoppingCart, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,6 +11,9 @@ interface R2AccumulatedListProps {
   leads: R2AccumulatedLead[];
   isLoading?: boolean;
   onSchedule?: (lead: R2AccumulatedLead) => void;
+  onEncaixar?: (lead: R2AccumulatedLead) => void;
+  isEncaixando?: boolean;
+  encaixandoId?: string | null;
 }
 
 const TYPE_FILTERS = [
@@ -19,7 +22,7 @@ const TYPE_FILTERS = [
   { value: 'sem_r2', label: '⚠️ Sem R2' },
 ];
 
-export function R2AccumulatedList({ leads, isLoading, onSchedule }: R2AccumulatedListProps) {
+export function R2AccumulatedList({ leads, isLoading, onSchedule, onEncaixar, isEncaixando, encaixandoId }: R2AccumulatedListProps) {
   const [typeFilter, setTypeFilter] = useState('all');
 
   const filteredLeads = typeFilter === 'all'
@@ -41,6 +44,9 @@ export function R2AccumulatedList({ leads, isLoading, onSchedule }: R2Accumulate
 
   const proximaSemanaCount = leads.filter(l => l.origin_type === 'proxima_semana').length;
   const semR2Count = leads.filter(l => l.origin_type === 'sem_r2').length;
+
+  // Check if a lead has an existing meeting (can be encaixado directly)
+  const canEncaixar = (lead: R2AccumulatedLead) => !!lead.meeting_id;
 
   return (
     <div className="space-y-4">
@@ -83,7 +89,7 @@ export function R2AccumulatedList({ leads, isLoading, onSchedule }: R2Accumulate
               <TableHead>Telefone</TableHead>
               <TableHead>Closer</TableHead>
               <TableHead>Status R2</TableHead>
-              {onSchedule && <TableHead className="text-right">Ação</TableHead>}
+              <TableHead className="text-right">Ação</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -151,19 +157,34 @@ export function R2AccumulatedList({ leads, isLoading, onSchedule }: R2Accumulate
                     <span className="text-sm text-muted-foreground">-</span>
                   )}
                 </TableCell>
-                {onSchedule && (
-                  <TableCell className="text-right">
+                <TableCell className="text-right">
+                  {canEncaixar(lead) ? (
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => onSchedule(lead)}
+                      onClick={() => onEncaixar?.(lead)}
+                      disabled={isEncaixando && encaixandoId === lead.id}
+                      className="flex items-center gap-1"
+                    >
+                      {isEncaixando && encaixandoId === lead.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <ShoppingCart className="h-3.5 w-3.5" />
+                      )}
+                      Encaixar
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onSchedule?.(lead)}
                       className="flex items-center gap-1"
                     >
                       <CalendarPlus className="h-3.5 w-3.5" />
-                      Encaixar
+                      Agendar R2
                     </Button>
-                  </TableCell>
-                )}
+                  )}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

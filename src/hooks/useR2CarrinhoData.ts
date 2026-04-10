@@ -30,116 +30,228 @@ export interface R2CarrinhoAttendee {
   contract_paid_at: string | null;
 }
 
+async function fetchAttendeesFromQuery(
+  meetingType: string,
+  startISO: string,
+  endISO: string,
+  statusMap: Record<string, string>,
+  filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados',
+  aprovadoStatusId?: string,
+): Promise<R2CarrinhoAttendee[]> {
+  const { data } = await supabase
+    .from('meeting_slot_attendees')
+    .select(`
+      id,
+      attendee_name,
+      attendee_phone,
+      status,
+      r2_status_id,
+      carrinho_status,
+      carrinho_updated_at,
+      deal_id,
+      contact_id,
+      partner_name,
+      contract_paid_at,
+      deal:crm_deals(
+        id,
+        name,
+        contact:crm_contacts(
+          phone,
+          email
+        )
+      ),
+      meeting_slot:meeting_slots!inner(
+        id,
+        status,
+        scheduled_at,
+        meeting_type,
+        closer:closers!meeting_slots_closer_id_fkey(
+          id,
+          name,
+          color
+        )
+      )
+    `)
+    .eq('meeting_slot.meeting_type', meetingType)
+    .gte('meeting_slot.scheduled_at', startISO)
+    .lte('meeting_slot.scheduled_at', endISO);
+
+  let filteredAttendees = data || [];
+  if (filter === 'aprovados' && aprovadoStatusId) {
+    filteredAttendees = filteredAttendees.filter((att: any) => att.r2_status_id === aprovadoStatusId);
+  }
+
+  const attendees: R2CarrinhoAttendee[] = [];
+  for (const att of filteredAttendees) {
+    const slot = (att as any).meeting_slot;
+    const closerData = slot?.closer;
+
+    if (filter === 'agendadas') {
+      if (slot.status === 'cancelled' || slot.status === 'rescheduled') continue;
+    } else if (filter === 'no_show') {
+      if (slot.status !== 'no_show') continue;
+    } else if (filter === 'realizadas') {
+      if (slot.status !== 'completed') continue;
+    }
+
+    attendees.push({
+      id: att.id,
+      attendee_name: att.attendee_name,
+      attendee_phone: att.attendee_phone,
+      status: att.status,
+      r2_status_id: att.r2_status_id,
+      r2_status_name: att.r2_status_id ? statusMap[att.r2_status_id] : null,
+      carrinho_status: (att as any).carrinho_status,
+      carrinho_updated_at: (att as any).carrinho_updated_at,
+      deal_id: att.deal_id,
+      meeting_id: slot.id,
+      meeting_status: slot.status,
+      scheduled_at: slot.scheduled_at,
+      closer_id: closerData?.id || null,
+      closer_name: closerData?.name || null,
+      closer_color: closerData?.color || null,
+      deal_name: (att as any).deal?.name || null,
+      contact_phone: (att as any).deal?.contact?.phone || null,
+      contact_email: (att as any).deal?.contact?.email || null,
+      partner_name: (att as any).partner_name,
+      r1_date: null,
+      r1_closer_name: null,
+      contract_paid_at: (att as any).contract_paid_at,
+    });
+  }
+  return attendees;
+}
+
+async function fetchEncaixadosForWeek(
+  weekStartStr: string,
+  statusMap: Record<string, string>,
+  filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados',
+  aprovadoStatusId?: string,
+): Promise<R2CarrinhoAttendee[]> {
+  const { data } = await supabase
+    .from('meeting_slot_attendees')
+    .select(`
+      id,
+      attendee_name,
+      attendee_phone,
+      status,
+      r2_status_id,
+      carrinho_status,
+      carrinho_updated_at,
+      deal_id,
+      contact_id,
+      partner_name,
+      contract_paid_at,
+      carrinho_week_start,
+      deal:crm_deals(
+        id,
+        name,
+        contact:crm_contacts(
+          phone,
+          email
+        )
+      ),
+      meeting_slot:meeting_slots!inner(
+        id,
+        status,
+        scheduled_at,
+        meeting_type,
+        closer:closers!meeting_slots_closer_id_fkey(
+          id,
+          name,
+          color
+        )
+      )
+    `)
+    .eq('meeting_slot.meeting_type', 'r2')
+    .eq('carrinho_week_start' as any, weekStartStr);
+
+  let filteredAttendees = data || [];
+  if (filter === 'aprovados' && aprovadoStatusId) {
+    filteredAttendees = filteredAttendees.filter((att: any) => att.r2_status_id === aprovadoStatusId);
+  }
+
+  const attendees: R2CarrinhoAttendee[] = [];
+  for (const att of filteredAttendees) {
+    const slot = (att as any).meeting_slot;
+    const closerData = slot?.closer;
+
+    if (filter === 'agendadas') {
+      if (slot.status === 'cancelled' || slot.status === 'rescheduled') continue;
+    } else if (filter === 'no_show') {
+      if (slot.status !== 'no_show') continue;
+    } else if (filter === 'realizadas') {
+      if (slot.status !== 'completed') continue;
+    }
+
+    attendees.push({
+      id: att.id,
+      attendee_name: att.attendee_name,
+      attendee_phone: att.attendee_phone,
+      status: att.status,
+      r2_status_id: att.r2_status_id,
+      r2_status_name: att.r2_status_id ? statusMap[att.r2_status_id] : null,
+      carrinho_status: (att as any).carrinho_status,
+      carrinho_updated_at: (att as any).carrinho_updated_at,
+      deal_id: att.deal_id,
+      meeting_id: slot.id,
+      meeting_status: slot.status,
+      scheduled_at: slot.scheduled_at,
+      closer_id: closerData?.id || null,
+      closer_name: closerData?.name || null,
+      closer_color: closerData?.color || null,
+      deal_name: (att as any).deal?.name || null,
+      contact_phone: (att as any).deal?.contact?.phone || null,
+      contact_email: (att as any).deal?.contact?.email || null,
+      partner_name: (att as any).partner_name,
+      r1_date: null,
+      r1_closer_name: null,
+      contract_paid_at: (att as any).contract_paid_at,
+    });
+  }
+  return attendees;
+}
 
 export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados', carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
   return useQuery({
     queryKey: ['r2-carrinho-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), filter, carrinhoConfig?.carrinhos?.[0]?.horario_corte, previousConfig?.carrinhos?.[0]?.horario_corte],
     queryFn: async (): Promise<R2CarrinhoAttendee[]> => {
       const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
-
-      // Use operational window for aprovados (with cutoff) or r2Meetings for all others
       const useBoundary = filter === 'aprovados' ? boundaries.aprovados : boundaries.r2Meetings;
 
-      const [statusOptionsResult, r2AttendeesResult] = await Promise.all([
-        supabase.from('r2_status_options').select('id, name'),
-        supabase
-          .from('meeting_slot_attendees')
-          .select(`
-            id,
-            attendee_name,
-            attendee_phone,
-            status,
-            r2_status_id,
-            carrinho_status,
-            carrinho_updated_at,
-            deal_id,
-            contact_id,
-            partner_name,
-            contract_paid_at,
-            deal:crm_deals(
-              id,
-              name,
-              contact:crm_contacts(
-                phone,
-                email
-              )
-            ),
-            meeting_slot:meeting_slots!inner(
-              id,
-              status,
-              scheduled_at,
-              meeting_type,
-              closer:closers!meeting_slots_closer_id_fkey(
-                id,
-                name,
-                color
-              )
-            )
-          `)
-          .eq('meeting_slot.meeting_type', 'r2')
-          .gte('meeting_slot.scheduled_at', useBoundary.start.toISOString())
-          .lte('meeting_slot.scheduled_at', useBoundary.end.toISOString()),
-      ]);
-
-      const statusOptions = statusOptionsResult.data || [];
+      const { data: statusOptionsData } = await supabase.from('r2_status_options').select('id, name');
+      const statusOptions = statusOptionsData || [];
       const statusMap = statusOptions.reduce((acc, s) => {
         acc[s.id] = s.name;
         return acc;
       }, {} as Record<string, string>);
 
-      // For aprovados filter, only include approved status
-      let filteredAttendees = r2AttendeesResult.data || [];
-      if (filter === 'aprovados') {
-        const aprovadoStatusId = statusOptions.find(s =>
-          s.name.toLowerCase().includes('aprovado') || s.name.toLowerCase().includes('approved')
-        )?.id;
-        if (!aprovadoStatusId) return [];
-        filteredAttendees = filteredAttendees.filter((att: any) => att.r2_status_id === aprovadoStatusId);
-      }
+      const aprovadoStatusId = statusOptions.find(s =>
+        s.name.toLowerCase().includes('aprovado') || s.name.toLowerCase().includes('approved')
+      )?.id;
 
-      const attendees: R2CarrinhoAttendee[] = [];
+      if (filter === 'aprovados' && !aprovadoStatusId) return [];
 
-      for (const att of filteredAttendees) {
-        const slot = (att as any).meeting_slot;
-        const closerData = slot?.closer;
+      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
 
-        // Apply slot-level filters for non-aprovados
-        if (filter === 'agendadas') {
-          if (slot.status === 'cancelled' || slot.status === 'rescheduled') continue;
-        } else if (filter === 'no_show') {
-          if (slot.status !== 'no_show') continue;
-        } else if (filter === 'realizadas') {
-          if (slot.status !== 'completed') continue;
+      // Fetch both: regular boundary attendees + encaixados for this week
+      const [regularAttendees, encaixados] = await Promise.all([
+        fetchAttendeesFromQuery('r2', useBoundary.start.toISOString(), useBoundary.end.toISOString(), statusMap, filter, aprovadoStatusId),
+        fetchEncaixadosForWeek(weekStartStr, statusMap, filter, aprovadoStatusId),
+      ]);
+
+      // Merge, avoiding duplicates by id
+      const idSet = new Set(regularAttendees.map(a => a.id));
+      const merged = [...regularAttendees];
+      for (const enc of encaixados) {
+        if (!idSet.has(enc.id)) {
+          merged.push(enc);
+          idSet.add(enc.id);
         }
-
-        attendees.push({
-          id: att.id,
-          attendee_name: att.attendee_name,
-          attendee_phone: att.attendee_phone,
-          status: att.status,
-          r2_status_id: att.r2_status_id,
-          r2_status_name: att.r2_status_id ? statusMap[att.r2_status_id] : null,
-          carrinho_status: (att as any).carrinho_status,
-          carrinho_updated_at: (att as any).carrinho_updated_at,
-          deal_id: att.deal_id,
-          meeting_id: slot.id,
-          meeting_status: slot.status,
-          scheduled_at: slot.scheduled_at,
-          closer_id: closerData?.id || null,
-          closer_name: closerData?.name || null,
-          closer_color: closerData?.color || null,
-          deal_name: (att as any).deal?.name || null,
-          contact_phone: (att as any).deal?.contact?.phone || null,
-          contact_email: (att as any).deal?.contact?.email || null,
-          partner_name: (att as any).partner_name,
-          r1_date: null,
-          r1_closer_name: null,
-          contract_paid_at: (att as any).contract_paid_at,
-        });
       }
 
       // Fetch R1 data
-      const dealIds = [...new Set(attendees.map(a => a.deal_id).filter(Boolean) as string[])];
+      const dealIds = [...new Set(merged.map(a => a.deal_id).filter(Boolean) as string[])];
       if (dealIds.length > 0) {
         const { data: r1Meetings } = await supabase
           .from('meeting_slots')
@@ -162,7 +274,7 @@ export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agen
           });
         });
 
-        for (const att of attendees) {
+        for (const att of merged) {
           if (att.deal_id && r1Map.has(att.deal_id)) {
             att.r1_date = r1Map.get(att.deal_id)!.date;
             att.r1_closer_name = r1Map.get(att.deal_id)!.closer_name;
@@ -170,8 +282,8 @@ export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agen
         }
       }
 
-      attendees.sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
-      return attendees;
+      merged.sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+      return merged;
     },
   });
 }
