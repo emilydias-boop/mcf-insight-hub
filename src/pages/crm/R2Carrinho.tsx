@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { format, addWeeks, subWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, RefreshCw, ShoppingCart, Settings } from 'lucide-react';
@@ -25,6 +25,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useCarrinhoConfig, filterByCarrinho } from '@/hooks/useCarrinhoConfig';
 import { CarrinhoConfigDialog } from '@/components/crm/CarrinhoConfigDialog';
+import { R2QuickScheduleModal } from '@/components/crm/R2QuickScheduleModal';
+import { useActiveR2Closers } from '@/hooks/useR2AgendaData';
+import { R2AccumulatedLead } from '@/hooks/useR2AccumulatedLeads';
 
 export default function R2Carrinho() {
   const [weekDate, setWeekDate] = useState(new Date());
@@ -33,6 +36,8 @@ export default function R2Carrinho() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [selectedCarrinhoId, setSelectedCarrinhoId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState('agendadas');
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [selectedAccLead, setSelectedAccLead] = useState<R2AccumulatedLead | null>(null);
   const queryClient = useQueryClient();
 
   const weekStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
@@ -52,6 +57,7 @@ export default function R2Carrinho() {
   // Fetch status options
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
+  const { data: r2Closers = [] } = useActiveR2Closers();
 
   // Fetch data for each tab
   const { data: rawAgendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekStart, weekEnd, 'agendadas', config, prevConfig);
@@ -125,6 +131,11 @@ export default function R2Carrinho() {
     setSelectedMeetingId(attendee.meeting_id);
     setDrawerOpen(true);
   };
+
+  const handleScheduleAccumulated = useCallback((lead: R2AccumulatedLead) => {
+    setSelectedAccLead(lead);
+    setScheduleModalOpen(true);
+  }, []);
 
   const weekLabel = useMemo(() => {
     return `${format(weekStart, 'dd/MM', { locale: ptBR })} - ${format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}`;
@@ -315,6 +326,7 @@ export default function R2Carrinho() {
           <R2AccumulatedList
             leads={accumulatedLeads}
             isLoading={accumulatedLoading}
+            onSchedule={handleScheduleAccumulated}
           />
         </TabsContent>
 
@@ -366,6 +378,28 @@ export default function R2Carrinho() {
         weekEnd={weekEnd}
         onCopyFromPrevious={handleCopyFromPrevious}
         isCopying={copyFromPreviousWeek.isPending}
+      />
+
+      {/* Quick Schedule Modal for accumulated leads */}
+      <R2QuickScheduleModal
+        open={scheduleModalOpen}
+        onOpenChange={(open) => {
+          setScheduleModalOpen(open);
+          if (!open) setSelectedAccLead(null);
+        }}
+        closers={r2Closers}
+        statusOptions={statusOptions}
+        thermometerOptions={thermometerOptions}
+        preselectedDeal={selectedAccLead?.deal_id ? {
+          id: selectedAccLead.deal_id,
+          name: selectedAccLead.deal_name || selectedAccLead.attendee_name || '',
+          contact: selectedAccLead.contact_id ? {
+            id: selectedAccLead.contact_id,
+            name: selectedAccLead.attendee_name || '',
+            phone: selectedAccLead.attendee_phone || selectedAccLead.contact_phone || null,
+            email: selectedAccLead.contact_email || null,
+          } : null,
+        } : undefined}
       />
     </div>
   );
