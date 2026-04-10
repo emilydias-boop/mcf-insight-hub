@@ -1,81 +1,44 @@
 
 
-# Fix: Valores incorretos nas parcelas do billing sync
+# Fix: Valor Líquido inflado na Parcela 1
 
-## Problema raiz
+## Problema
+A migration anterior corrigiu `valor_original` (Bruto) mas **não corrigiu `valor_liquido`** na parcela 1 da Nathália (e possivelmente outros). A P1 tem `valor_liquido = 8021.00` (valor total do contrato) enquanto deveria ser proporcional ao bruto.
 
-No sync Hubla (`sync-billing-from-hubla/index.ts`), linhas 124-126:
-```
-valorBruto = first.product_price  // 85 (correto por parcela)
-valorLiquido = first.net_value    // 8021 (ERRADO - é o valor total do contrato, não por parcela)
-valorTotal = valorBruto + (total - 1) * valorLiquido  // inflado
-```
+Dados atuais da Nathália:
+- P1: `valor_original = 85.00`, `valor_liquido = 8021.00` (ERRADO)
+- P2-P5: `valor_original = 66.32`, `valor_liquido = 66.32` (OK)
+- P6-P10: `valor_original = 66.32`, `valor_liquido = 0` (pendentes, OK)
 
-Para algumas assinaturas, a Hubla envia `net_value` da P1 como o valor total do contrato (ex: 8021), não o valor líquido por parcela (ex: 66.32). O sync usa esse valor para todas as parcelas não pagas, inflando `valor_original` e `valor_total_contrato`.
+O drawer soma todos os `valor_liquido` = 8021 + 66.32×4 = **R$ 8.286,28** (inflado).
 
-## Correção — 2 partes
+## Solução — 2 partes
 
-### 1. Fix no sync (`supabase/functions/sync-billing-from-hubla/index.ts`)
-
-Na seção de cálculo de valores (linhas ~124-126 e ~258-259), usar lógica mais inteligente para `valorLiquido`:
-
-```typescript
-// Tentar pegar net_value de uma P2+ (mais confiável)
-const p2tx = txList.find(tx => (tx.installment_number || 1) > 1);
-const valorLiquidoPerInstallment = p2tx 
-  ? (p2tx.net_value || p2tx.product_price || 0)
-  : (first.net_value && first.net_value <= first.product_price * 2 
-      ? first.net_value 
-      : first.product_price || 0);
-
-const valorTotal = valorBruto + Math.max(totalInstallments - 1, 0) * valorLiquidoPerInstallment;
-```
-
-Mesma lógica na seção de criação de installments (linha ~258-259):
-```typescript
-const valorLiquido = valorLiquidoPerInstallment; // em vez de first.net_value
-```
-
-A heurística `net_value <= product_price * 2` protege contra o caso onde P1 `net_value` é o total do contrato.
-
-### 2. Migration para corrigir dados existentes
-
-SQL para recalcular `valor_original` das parcelas pendentes/atrasadas usando o valor correto de uma P2+ paga da mesma subscription:
+### 1. Migration SQL
+Corrigir `valor_liquido` inflado usando a mesma lógica da migration anterior: pegar o `valor_liquido` de uma P2+ paga como referência e corrigir P1 quando estiver absurdamente maior.
 
 ```sql
--- Corrigir installments com valor_original inflado
-WITH correct_values AS (
-  SELECT DISTINCT ON (i.subscription_id)
-    i.subscription_id,
-    i.valor_original as correct_value
-  FROM billing_installments i
-  WHERE i.numero_parcela > 1
-    AND i.status = 'pago'
-    AND i.valor_pago > 0
-  ORDER BY i.subscription_id, i.numero_parcela
+-- Corrigir valor_liquido da P1 quando inflado
+WITH ref AS (
+  SELECT DISTINCT ON (subscription_id)
+    subscription_id, valor_liquido as ref_val
+  FROM billing_installments
+  WHERE numero_parcela > 1 AND status = 'pago' AND valor_liquido > 0
+  ORDER BY subscription_id, numero_parcela
 )
 UPDATE billing_installments bi
-SET valor_original = cv.correct_value
-FROM correct_values cv
-WHERE bi.subscription_id = cv.subscription_id
-  AND bi.numero_parcela > 1
-  AND bi.status IN ('pendente', 'atrasado')
-  AND bi.valor_original > cv.correct_value * 3;
-
--- Recalcular valor_total_contrato nas subscriptions afetadas
-UPDATE billing_subscriptions bs
-SET valor_total_contrato = sub_totals.total
-FROM (
-  SELECT subscription_id, SUM(valor_original) as total
-  FROM billing_installments
-  GROUP BY subscription_id
-) sub_totals
-WHERE bs.id = sub_totals.subscription_id
-  AND ABS(bs.valor_total_contrato - sub_totals.total) > 100;
+SET valor_liquido = r.ref_val
+FROM ref r
+WHERE bi.subscription_id = r.subscription_id
+  AND bi.numero_parcela = 1
+  AND bi.valor_liquido > r.ref_val * 3;
 ```
 
-### Resultado esperado
-- Nathália: parcelas 6-10 passam de R$ 8.021 para R$ 66.32, Valor Bruto correto ~R$ 681
-- Todos os outros casos similares corrigidos automaticamente
-- Novos syncs não reintroduzem o problema
+### 2. Fix no sync function
+Na mesma seção onde já fixamos `valorLiquidoPerInstallment`, garantir que o `valor_liquido` da P1 no banco também use o valor por parcela (não o `net_value` total do contrato).
+
+### Resultado
+- Nathália P1: `valor_liquido` passa de 8021 para ~66.32
+- Valor Líquido no drawer: ~350 (correto)
+- Saldo Devedor: corrigido proporcionalmente
 
