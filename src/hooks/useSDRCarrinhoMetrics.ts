@@ -11,16 +11,18 @@ export interface SDRCarrinhoMetric {
   aprovados: number;
 }
 
-export function useSDRCarrinhoMetrics(weekStart: Date, weekEnd: Date, squad: string = 'incorporador') {
+export function useSDRCarrinhoMetrics(weekStart: Date, weekEnd: Date, squad: string = 'incorporador', config?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
   const sdrsQuery = useSdrsFromSquad(squad);
+  const cutoffKey = config?.carrinhos?.[0]?.horario_corte || '12:00';
+  const prevCutoffKey = previousConfig?.carrinhos?.[0]?.horario_corte || '12:00';
 
   return useQuery({
-    queryKey: ['sdr-carrinho-metrics', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), squad],
+    queryKey: ['sdr-carrinho-metrics', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), squad, cutoffKey, prevCutoffKey],
     queryFn: async (): Promise<SDRCarrinhoMetric[]> => {
       const sdrs = sdrsQuery.data || [];
       const validSdrEmails = new Set(sdrs.map(s => s.email.toLowerCase()));
       const sdrNameMap = new Map(sdrs.map(s => [s.email.toLowerCase(), s.name]));
-      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd);
+      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, config, previousConfig);
 
       // 1. Fetch contracts of the safra (Thu-Wed)
       const { data: contratosTx } = await supabase

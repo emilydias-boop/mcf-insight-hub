@@ -40,11 +40,13 @@ const normalizePhone = (phone: string | null): string | null => {
   return phone.replace(/\D/g, '').slice(-11);
 };
 
-export function useR2MetricsData(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig) {
+export function useR2MetricsData(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
+  const cutoffKey = carrinhoConfig?.carrinhos?.[0]?.horario_corte || '12:00';
+  const prevCutoffKey = previousConfig?.carrinhos?.[0]?.horario_corte || '12:00';
   return useQuery({
-    queryKey: ['r2-metrics-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
+    queryKey: ['r2-metrics-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), cutoffKey, prevCutoffKey],
     queryFn: async (): Promise<R2MetricsData> => {
-      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig);
+      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
 
       // ===== STEP 1: Safra contracts (Thu-Wed) =====
       const { data: contratosTx } = await supabase
