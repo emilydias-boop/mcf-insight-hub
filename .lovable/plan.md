@@ -1,34 +1,36 @@
 
 
-# Fix: Leads com produtos não-parceria sendo excluídos dos Acumulados
+# Busca + Paginação na aba Acumulados
 
-## Problema
-O lead "João Marcos zenni" (joaozenni@gmail.com) tem status "Próxima Semana" na R2 de 30/03, mas não aparece nos Acumulados. Motivo: ele comprou o produto **A010 - Consultoria Construa para Vender sem Dinheiro** e o código atual exclui QUALQUER lead que tenha uma transação com produto diferente de "A000 - Contrato". Isso é errado — só deveria excluir quem comprou produtos de **parceria/incorporador** (A001, A002, A003, A004, A009, Anticrise, Incorporador).
+## Alterações
 
-## Correção
+**Arquivo:** `src/components/crm/R2AccumulatedList.tsx`
 
-**Arquivo:** `src/hooks/useR2AccumulatedLeads.ts` (linhas 111-124)
+### 1. Campo de busca
+Adicionar um `Input` com ícone de `Search` acima da tabela, ao lado dos filtros de tipo. A busca filtra client-side por:
+- Nome (`attendee_name`, `deal_name`)
+- Telefone (`attendee_phone`, `contact_phone`)
+- E-mail (`contact_email`)
 
-Substituir a query genérica de "non-contract transactions" por um filtro específico de produtos de parceria, igual ao padrão já usado em `useOutsideDetectionForDeals.ts`:
+Busca case-insensitive, aplicada após o filtro de tipo.
 
-```typescript
-// Antes (errado): exclui qualquer produto que não seja A000/Contrato
-const { data: nonContractTx } = await supabase
-  .from('hubla_transactions')
-  .select('customer_email, product_name')
-  .in('customer_email', emails)
-  .eq('sale_status', 'completed');
+### 2. Paginação
+- Seletor de itens por página: 20, 50, 100
+- Controles Anterior/Próximo com indicador "Página X de Y"
+- Estado local: `currentPage` (reset ao mudar filtro/busca), `pageSize`
+- Slice dos resultados filtrados: `filteredLeads.slice((page-1)*size, page*size)`
 
-// Depois (correto): exclui apenas produtos de parceria/incorporador
-const { data: partnerTx } = await supabase
-  .from('hubla_transactions')
-  .select('customer_email, product_name')
-  .in('customer_email', allEmailVariants)
-  .eq('sale_status', 'completed')
-  .or('product_name.ilike.%A001%,product_name.ilike.%A002%,product_name.ilike.%A003%,product_name.ilike.%A004%,product_name.ilike.%A009%,product_name.ilike.%INCORPORADOR%,product_name.ilike.%ANTICRISE%');
+### 3. Layout
+```text
+[🔍 Buscar por nome, telefone ou email...    ] [Tipo: Todos | Próx. Semana | Sem R2]
+
+[Tabela com leads paginados]
+
+[◀ Anterior] Página 1 de 4 [Próximo ▶]  |  Exibindo 20 por página [20 ▼]
 ```
 
-E simplificar o loop de resolvedEmails para apenas adicionar os e-mails encontrados (sem precisar filtrar por product_name novamente).
-
-Também remover o bloco morto das linhas 95-108 (partnershipTx que não faz nada).
+### Detalhes técnicos
+- Imports adicionais: `Input` de `@/components/ui/input`, `Search` de `lucide-react`, `Select` para page size
+- Contadores nos botões de tipo continuam refletindo o total (não paginado), mas consideram a busca
+- `useMemo` para performance do filtro de busca + tipo combinados
 
