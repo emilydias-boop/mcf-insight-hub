@@ -102,7 +102,7 @@ export function getCarrinhoMetricBoundaries(
 
   return {
     contratos: { start: thuStart, end: wedEnd },
-    r2Meetings: { start: friAfterPrevCart, end: friCurrentCart },
+    r2Meetings: { start: friAfterPrevCart, end: friCartCutoff },
     aprovados: { start: friAfterPrevCart, end: friCartCutoff },
     vendasParceria: { start: friCartStart, end: monAfterCart },
     r1Meetings: { start: thuStart, end: wedEnd },
