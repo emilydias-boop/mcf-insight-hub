@@ -1,44 +1,94 @@
 
 
-# Fix: Valor Líquido inflado na Parcela 1
+# Fix: Valor Bruto usando net_value em vez de product_price
 
-## Problema
-A migration anterior corrigiu `valor_original` (Bruto) mas **não corrigiu `valor_liquido`** na parcela 1 da Nathália (e possivelmente outros). A P1 tem `valor_liquido = 8021.00` (valor total do contrato) enquanto deveria ser proporcional ao bruto.
+## Problema raiz
 
-Dados atuais da Nathália:
-- P1: `valor_original = 85.00`, `valor_liquido = 8021.00` (ERRADO)
-- P2-P5: `valor_original = 66.32`, `valor_liquido = 66.32` (OK)
-- P6-P10: `valor_original = 66.32`, `valor_liquido = 0` (pendentes, OK)
+O sync usa `valorLiquidoPerInstallment` (que é o `net_value` da Hubla, valor APÓS taxas) como `valor_original` das parcelas P2+. Mas `valor_original` é o Bruto — deveria usar `product_price`.
 
-O drawer soma todos os `valor_liquido` = 8021 + 66.32×4 = **R$ 8.286,28** (inflado).
+Exemplo Guilherme (A000 - Contrato, 12 parcelas):
+- Hubla P1: product_price=497, net_value=388.10
+- Hoje no banco: P3-P12 `valor_original`=388.10 (net_value, ERRADO)
+- Correto: P3-P12 `valor_original`=497 (product_price)
+- Valor Bruto mostrado: R$4.378 (usando net). Correto: R$5.467
 
-## Solução — 2 partes
+O mesmo problema afeta centenas de subscriptions.
 
-### 1. Migration SQL
-Corrigir `valor_liquido` inflado usando a mesma lógica da migration anterior: pegar o `valor_liquido` de uma P2+ paga como referência e corrigir P1 quando estiver absurdamente maior.
+## Correção — 2 partes
 
-```sql
--- Corrigir valor_liquido da P1 quando inflado
-WITH ref AS (
-  SELECT DISTINCT ON (subscription_id)
-    subscription_id, valor_liquido as ref_val
-  FROM billing_installments
-  WHERE numero_parcela > 1 AND status = 'pago' AND valor_liquido > 0
-  ORDER BY subscription_id, numero_parcela
-)
-UPDATE billing_installments bi
-SET valor_liquido = r.ref_val
-FROM ref r
-WHERE bi.subscription_id = r.subscription_id
-  AND bi.numero_parcela = 1
-  AND bi.valor_liquido > r.ref_val * 3;
+### 1. Fix no sync function
+
+Adicionar `valorBrutoPerInstallment` separado do `valorLiquidoPerInstallment`:
+
+```typescript
+// Bruto per installment: usa product_price (não net_value)
+const valorBrutoPerInstallment = p2tx
+  ? (p2tx.product_price || first.product_price || 0)
+  : (first.product_price || 0);
+
+// Líquido per installment (mantém lógica atual)
+const valorLiquidoPerInstallment = p2tx
+  ? (p2tx.net_value || p2tx.product_price || 0)
+  : (first.net_value && first.net_value <= (first.product_price || 0) * 2
+      ? first.net_value : first.product_price || 0);
+
+// valor_total usa BRUTO
+const valorTotal = valorBruto + Math.max(totalInstallments - 1, 0) * valorBrutoPerInstallment;
 ```
 
-### 2. Fix no sync function
-Na mesma seção onde já fixamos `valorLiquidoPerInstallment`, garantir que o `valor_liquido` da P1 no banco também use o valor por parcela (não o `net_value` total do contrato).
+Nas linhas de criação de installments (325, 352):
+```typescript
+valor_original: i === 1 ? valorBruto : valorBrutoPerInstallment,  // BRUTO
+valor_liquido: i === 1 ? valorLiquido : valorLiquidoInst,         // LÍQUIDO
+```
 
-### Resultado
-- Nathália P1: `valor_liquido` passa de 8021 para ~66.32
-- Valor Líquido no drawer: ~350 (correto)
-- Saldo Devedor: corrigido proporcionalmente
+### 2. Migration para corrigir dados existentes
+
+Dois passos SQL:
+
+**Passo A**: Corrigir installments pagos que têm `hubla_transaction_id` — usar `product_price` da transação:
+```sql
+UPDATE billing_installments bi
+SET valor_original = ht.product_price
+FROM hubla_transactions ht
+WHERE bi.hubla_transaction_id = ht.id
+  AND bi.numero_parcela > 1
+  AND bi.valor_original != ht.product_price;
+```
+
+**Passo B**: Corrigir installments pendentes/atrasados sem transação — usar `product_price` de um P2+ pago da mesma subscription:
+```sql
+WITH ref AS (
+  SELECT DISTINCT ON (bi.subscription_id)
+    bi.subscription_id, ht.product_price as correct_bruto
+  FROM billing_installments bi
+  JOIN hubla_transactions ht ON ht.id = bi.hubla_transaction_id
+  WHERE bi.numero_parcela > 1
+  ORDER BY bi.subscription_id, bi.numero_parcela
+)
+UPDATE billing_installments bi
+SET valor_original = r.correct_bruto
+FROM ref r
+WHERE bi.subscription_id = r.subscription_id
+  AND bi.numero_parcela > 1
+  AND bi.status IN ('pendente', 'atrasado');
+```
+
+**Passo C**: Recalcular `valor_total_contrato` das subscriptions:
+```sql
+UPDATE billing_subscriptions bs
+SET valor_total_contrato = sub_totals.total
+FROM (
+  SELECT subscription_id, SUM(valor_original) as total
+  FROM billing_installments
+  GROUP BY subscription_id
+) sub_totals
+WHERE bs.id = sub_totals.subscription_id
+  AND bs.valor_total_contrato != sub_totals.total;
+```
+
+### Resultado esperado
+- Guilherme: parcelas P3-P12 passam de R$388.10 para R$497, Bruto corrigido
+- Todos os demais com o mesmo padrão corrigidos
+- Novos syncs usam product_price para bruto
 
