@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { AlertTriangle, Phone, User, Calendar, Filter, CalendarPlus, ShoppingCart, Loader2 } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { AlertTriangle, Phone, User, Calendar, Filter, CalendarPlus, ShoppingCart, Loader2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { R2AccumulatedLead } from '@/hooks/useR2AccumulatedLeads';
 
 interface R2AccumulatedListProps {
@@ -22,12 +22,60 @@ const TYPE_FILTERS = [
   { value: 'sem_r2', label: '⚠️ Sem R2' },
 ];
 
+const PAGE_SIZE_OPTIONS = ['20', '50', '100'];
+
 export function R2AccumulatedList({ leads, isLoading, onSchedule, onEncaixar, isEncaixando, encaixandoId }: R2AccumulatedListProps) {
   const [typeFilter, setTypeFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
-  const filteredLeads = typeFilter === 'all'
-    ? leads
-    : leads.filter(l => l.origin_type === typeFilter);
+  const searchFiltered = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    let result = leads;
+
+    if (q) {
+      result = result.filter(l =>
+        (l.attendee_name || '').toLowerCase().includes(q) ||
+        (l.deal_name || '').toLowerCase().includes(q) ||
+        (l.attendee_phone || '').toLowerCase().includes(q) ||
+        (l.contact_phone || '').toLowerCase().includes(q) ||
+        (l.contact_email || '').toLowerCase().includes(q)
+      );
+    }
+
+    return result;
+  }, [leads, searchQuery]);
+
+  const filteredLeads = useMemo(() => {
+    return typeFilter === 'all'
+      ? searchFiltered
+      : searchFiltered.filter(l => l.origin_type === typeFilter);
+  }, [searchFiltered, typeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedLeads = filteredLeads.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const proximaSemanaCount = searchFiltered.filter(l => l.origin_type === 'proxima_semana').length;
+  const semR2Count = searchFiltered.filter(l => l.origin_type === 'sem_r2').length;
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  };
+
+  const handleTypeFilterChange = (value: string) => {
+    setTypeFilter(value);
+    setCurrentPage(1);
+  };
+
+  const handlePageSizeChange = (value: string) => {
+    setPageSize(Number(value));
+    setCurrentPage(1);
+  };
+
+  const canEncaixar = (lead: R2AccumulatedLead) => !!lead.meeting_id;
 
   if (isLoading) {
     return <div className="flex justify-center py-8">Carregando...</div>;
@@ -42,41 +90,46 @@ export function R2AccumulatedList({ leads, isLoading, onSchedule, onEncaixar, is
     );
   }
 
-  const proximaSemanaCount = leads.filter(l => l.origin_type === 'proxima_semana').length;
-  const semR2Count = leads.filter(l => l.origin_type === 'sem_r2').length;
-
-  // Check if a lead has an existing meeting (can be encaixado directly)
-  const canEncaixar = (lead: R2AccumulatedLead) => !!lead.meeting_id;
-
   return (
     <div className="space-y-4">
-      {/* Type Filter Buttons */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Filter className="h-4 w-4 text-muted-foreground" />
-        {TYPE_FILTERS.map((filter) => {
-          const count = filter.value === 'all'
-            ? leads.length
-            : filter.value === 'proxima_semana'
-              ? proximaSemanaCount
-              : semR2Count;
+      {/* Search + Type Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome, telefone ou email..."
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          {TYPE_FILTERS.map((filter) => {
+            const count = filter.value === 'all'
+              ? searchFiltered.length
+              : filter.value === 'proxima_semana'
+                ? proximaSemanaCount
+                : semR2Count;
 
-          if (filter.value !== 'all' && count === 0) return null;
+            if (filter.value !== 'all' && count === 0) return null;
 
-          return (
-            <Button
-              key={filter.value}
-              variant={typeFilter === filter.value ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setTypeFilter(filter.value)}
-              className="flex items-center gap-1"
-            >
-              {filter.label}
-              <span className="text-xs bg-background/20 px-1.5 py-0.5 rounded-full">
-                {count}
-              </span>
-            </Button>
-          );
-        })}
+            return (
+              <Button
+                key={filter.value}
+                variant={typeFilter === filter.value ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleTypeFilterChange(filter.value)}
+                className="flex items-center gap-1"
+              >
+                {filter.label}
+                <span className="text-xs bg-background/20 px-1.5 py-0.5 rounded-full">
+                  {count}
+                </span>
+              </Button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="border rounded-lg">
@@ -93,7 +146,7 @@ export function R2AccumulatedList({ leads, isLoading, onSchedule, onEncaixar, is
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredLeads.map((lead) => (
+            {paginatedLeads.map((lead) => (
               <TableRow
                 key={lead.id}
                 className={lead.origin_type === 'proxima_semana'
@@ -194,6 +247,53 @@ export function R2AccumulatedList({ leads, isLoading, onSchedule, onEncaixar, is
       {filteredLeads.length === 0 && (
         <div className="text-center py-8 text-muted-foreground">
           Nenhum lead encontrado com esse filtro
+        </div>
+      )}
+
+      {/* Pagination */}
+      {filteredLeads.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-sm">
+          <div className="text-muted-foreground">
+            {filteredLeads.length} lead{filteredLeads.length !== 1 ? 's' : ''} encontrado{filteredLeads.length !== 1 ? 's' : ''}
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Por página:</span>
+              <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+                <SelectTrigger className="w-[70px] h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map(opt => (
+                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Anterior
+              </Button>
+              <span className="text-muted-foreground whitespace-nowrap">
+                Página {safePage} de {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage >= totalPages}
+              >
+                Próximo
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
