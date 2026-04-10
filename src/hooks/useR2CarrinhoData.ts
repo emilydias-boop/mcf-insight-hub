@@ -170,6 +170,7 @@ async function fetchEncaixadosForWeek(
   (query as any).eq('carrinho_week_start', weekStartStr);
 
   const { data } = await query;
+  let filteredAttendees = data || [];
   if (filter === 'aprovados' && aprovadoStatusId) {
     filteredAttendees = filteredAttendees.filter((att: any) => att.r2_status_id === aprovadoStatusId);
   }
