@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Download, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Users, Calendar, ShieldAlert, BarChart3, MapPin } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ChevronLeft, ChevronRight, Download, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Users, Calendar, ShieldAlert, BarChart3, MapPin, PieChart as PieChartIcon } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
@@ -14,6 +15,7 @@ import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { DateRange } from 'react-day-picker';
 import { BrazilMap, BrazilMapStateData } from './BrazilMap';
+import { PostSaleFunnelPanel } from './PostSaleFunnelPanel';
 
 type PeriodType = 'semana' | 'mes' | 'personalizado';
 
@@ -198,7 +200,23 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
       )}
 
       {data && (
-        <>
+        <Tabs defaultValue="funil_pos_venda" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="funil_pos_venda" className="flex items-center gap-1">
+              <PieChartIcon className="h-4 w-4" />
+              Funil Pós-Venda
+            </TabsTrigger>
+            <TabsTrigger value="analise_completa" className="flex items-center gap-1">
+              <BarChart3 className="h-4 w-4" />
+              Análise Completa
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="funil_pos_venda">
+            <PostSaleFunnelPanel leads={data.leads} periodLabel={periodLabel} />
+          </TabsContent>
+
+          <TabsContent value="analise_completa" className="space-y-6">
           {/* KPI Cards */}
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-2">
             {[
@@ -587,7 +605,8 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
               </div>
             </CardContent>
           </Card>
-        </>
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );
