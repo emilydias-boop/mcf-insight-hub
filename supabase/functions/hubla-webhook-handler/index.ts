@@ -1930,9 +1930,9 @@ serve(async (req) => {
           const utmCampaign = paymentUtm.campaign || invoice?.utm_campaign || null;
           const utmContent = paymentUtm.content || invoice?.utm_content || null;
           
-          // Extrair offer_id e offer_name (sem items)
-          const offerIdNoItems = body.event?.groupId || invoice?.products?.[0]?.offers?.[0]?.id || null;
-          const offerNameNoItems = invoice?.products?.[0]?.offers?.[0]?.name || null;
+          // Extrair offer_id e offer_name (sem items) - body.event.products é fonte primária
+          const offerIdNoItems = body.event?.groupId || body.event?.products?.[0]?.offers?.[0]?.id || invoice?.products?.[0]?.offers?.[0]?.id || null;
+          const offerNameNoItems = body.event?.products?.[0]?.offers?.[0]?.name || invoice?.products?.[0]?.offers?.[0]?.name || null;
 
           const transactionData = {
             hubla_id: invoice?.id || `invoice-${Date.now()}`,
