@@ -605,7 +605,8 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
               </div>
             </CardContent>
           </Card>
-        </>
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );
