@@ -1,27 +1,83 @@
 
 
-# Fix: CPU Time Exceeded no sync-billing-from-hubla
+# Plano: Sync automatico e non-blocking + investigar valores enormes
 
-## Problema
-A function ainda estoura o limite de CPU (2s) porque busca 1000 transacoes por chamada, gerando centenas de grupos e fazendo dezenas de queries sequenciais (updates individuais para cada subscription e installment).
+## Diagnostico
 
-## Causa raiz
-- `.range(offset, offset + 999)` busca 1000 transacoes
-- Cada grupo gera updates individuais via `await` sequencial (linhas 234-236 para subs, 384-418 para installments, 422-433 para due dates)
-- Mesmo com `batchSize=50`, os 1000 registros criam muitos grupos
+### 1. Sync bloqueia a tela
+O hook `useSyncBillingFromHubla` executa um loop `while(hasMore)` no frontend, fazendo chamadas sequenciais a edge function. Enquanto roda, o botao mostra "Sincronizando..." e o usuario nao pode sair sem perder o progresso. Com ~1800+ transacoes processadas em batches de 200, isso leva varios minutos.
 
-## Correcao
+### 2. Valores enormes
+A sync **ainda esta rodando** (logs mostram `nextOffset: 1800, hasMore: true`). Alguns valores ja foram corrigidos mas nem todos os registros foram processados. Alem disso, existe um problema estrutural: quando ha multiplas transacoes P1 com `product_price` diferentes para o mesmo email+produto (ex: Breno Salgado tem P1 com 25.086, 20.997 e 19.500), o `first` depende da ordenacao e pode pegar o valor errado.
 
-### `supabase/functions/sync-billing-from-hubla/index.ts`
+## Correcoes propostas
 
-1. **Reduzir range de 1000 para 200** transacoes por chamada (linha 33: `offset + 199`)
-2. **Atualizar `hasMore`** (linha 640: `transactions.length >= 200`)
-3. **Atualizar `nextOffset`** (linha 651: `offset + 200`)
-4. **Reduzir batchSize default** de 50 para 20 (linha 23)
+### A. Sync non-blocking no frontend
+Mudar o hook para disparar a sync como "fire-and-forget" com toast de progresso, ao inves de bloquear a UI:
 
-### `src/hooks/useSyncBillingFromHubla.ts`
+**`src/hooks/useSyncBillingFromHubla.ts`**:
+- Disparar a primeira chamada e mostrar toast
+- Processar batches com `toast.loading` mostrando progresso (offset atual)
+- Usar `mutateAsync` em background sem bloquear navegacao
+- Se o usuario sair da pagina, a sync continua normalmente (cada chamada e independente)
 
-- Manter `batchSize: 20` no body para acompanhar
+### B. Sync automatico via pg_cron
+Criar um cron job que roda a sync automaticamente a cada 6 horas, eliminando a necessidade de clicar no botao:
 
-Resultado: cada invocacao processa ~200 transacoes (~30-50 grupos), mantendo dentro do limite de 2s de CPU.
+- Usar `pg_cron` + `pg_net` para invocar `sync-billing-from-hubla` periodicamente
+- Cada invocacao processa 200 transacoes; o cron roda a cada 6h para manter dados atualizados
+
+### C. Corrigir selecao do `product_price` para P1
+Quando ha multiplas transacoes P1, usar a mediana do `product_price` (excluindo outliers) ao inves do primeiro valor:
+
+**`supabase/functions/sync-billing-from-hubla/index.ts`**:
+- Antes de calcular `valorBruto`, filtrar transacoes com `installment_number=1`
+- Se houver multiplas, usar o valor mais frequente (moda) do `product_price`
+- Isso evita que um valor anomalo (como 25.086 vs 19.500) distorca o `valor_total_contrato`
+
+## Arquivos alterados
+
+| Arquivo | Alteracao |
+|---|---|
+| `src/hooks/useSyncBillingFromHubla.ts` | Tornar sync non-blocking com toast de progresso |
+| `supabase/functions/sync-billing-from-hubla/index.ts` | Corrigir selecao do product_price quando ha multiplas P1 |
+| SQL (via insert tool) | Criar cron job pg_cron para sync automatico a cada 6h |
+
+## Detalhes tecnicos
+
+### Non-blocking sync
+```typescript
+// Hook dispara batches em background
+mutationFn: async () => {
+  const toastId = toast.loading('Sincronizando...');
+  // loop com toast.loading update a cada batch
+  // se erro, toast.error; se sucesso, toast.success
+  // invalidateQueries ao final
+}
+```
+
+### Cron job
+```sql
+select cron.schedule(
+  'sync-billing-hubla-auto',
+  '0 */6 * * *',
+  $$ select net.http_post(
+    url:='https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/sync-billing-from-hubla',
+    headers:='{"Content-Type":"application/json","Authorization":"Bearer <anon_key>"}'::jsonb,
+    body:='{"batchSize":20,"skipSingleTx":true}'::jsonb
+  ) $$
+);
+```
+
+Nota: o cron processa apenas 200 transacoes por invocacao. Para cobrir todas as transacoes, a edge function precisara de logica de auto-paginacao (detectar offset pendente e continuar).
+
+### Selecao de product_price
+```typescript
+// Ao inves de first.product_price, usar moda das P1
+const p1Txs = txList.filter(tx => (tx.installment_number || 1) === 1);
+const prices = p1Txs.map(tx => tx.product_price || 0);
+const valorBruto = prices.length > 1
+  ? prices.sort((a,b) => a-b)[Math.floor(prices.length/2)] // mediana
+  : (first.product_price || 0);
+```
 
