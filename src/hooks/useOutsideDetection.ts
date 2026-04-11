@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { isOutsideOffer } from './outsideOfferConstants';
 
 interface OutsideInfo {
   isOutside: boolean;
@@ -12,9 +13,6 @@ interface AttendeeForCheck {
   meetingDate: string;
 }
 
-/**
- * Executes a Supabase .in() query in batches to avoid URL length limits.
- */
 async function batchedInOutside<T>(
   queryFn: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: any }>,
   items: string[],
@@ -34,17 +32,12 @@ async function batchedInOutside<T>(
   return allData;
 }
 
-/**
- * Batch hook to detect "Outside" leads - leads who purchased a contract BEFORE their first meeting (R1)
- * This is detected by comparing hubla_transactions.sale_date with the meeting scheduled_at date
- */
 export const useOutsideDetectionBatch = (attendees: AttendeeForCheck[]) => {
   return useQuery({
     queryKey: ['outside-detection-batch', attendees.map(a => `${a.id}:${a.email}`).join(',')],
     queryFn: async (): Promise<Record<string, OutsideInfo>> => {
       if (!attendees.length) return {};
 
-      // Get unique emails (lowercase, non-null)
       const emails = [...new Set(
         attendees
           .map(a => a.email?.toLowerCase().trim())
@@ -53,44 +46,71 @@ export const useOutsideDetectionBatch = (attendees: AttendeeForCheck[]) => {
 
       if (!emails.length) return {};
 
-      // Fetch contract transactions for these emails (batched)
-      const contracts = await batchedInOutside<{
-        customer_email: string | null;
-        sale_date: string;
-        product_name: string | null;
-        product_category: string | null;
-      }>(
-        (chunk) => supabase
-          .from('hubla_transactions')
-          .select('customer_email, sale_date, product_name, product_category')
-          .in('customer_email', chunk)
-          .in('product_category', ['contrato', 'incorporador'])
-          .ilike('product_name', '%contrato%')
-          .eq('sale_status', 'completed')
-          .order('sale_date', { ascending: true }),
-        emails
-      );
+      // Fetch contracts WITH offer_name, plus CLS/partner checks in parallel
+      const [contracts, clsContracts, partnerTransactions] = await Promise.all([
+        // Outside-eligible contracts
+        batchedInOutside<{
+          customer_email: string | null;
+          sale_date: string;
+          offer_name: string | null;
+        }>(
+          (chunk) => supabase
+            .from('hubla_transactions')
+            .select('customer_email, sale_date, offer_name')
+            .in('customer_email', chunk)
+            .in('product_category', ['contrato', 'incorporador'])
+            .ilike('product_name', '%contrato%')
+            .eq('sale_status', 'completed')
+            .order('sale_date', { ascending: true }),
+          emails
+        ),
+        // CLS contracts (disqualifies outside)
+        batchedInOutside<{ customer_email: string | null }>(
+          (chunk) => supabase
+            .from('hubla_transactions')
+            .select('customer_email')
+            .in('customer_email', chunk)
+            .eq('sale_status', 'completed')
+            .ilike('offer_name', 'Contrato CLS%'),
+          emails
+        ),
+        // Partner products (disqualifies outside)
+        batchedInOutside<{ customer_email: string | null }>(
+          (chunk) => supabase
+            .from('hubla_transactions')
+            .select('customer_email')
+            .in('customer_email', chunk)
+            .eq('sale_status', 'completed')
+            .or('product_name.ilike.%A001%,product_name.ilike.%A002%,product_name.ilike.%A003%,product_name.ilike.%A004%,product_name.ilike.%A009%,product_name.ilike.%INCORPORADOR%,product_name.ilike.%ANTICRISE%'),
+          emails
+        ),
+      ]);
 
-      // Map result by attendee id
+      // Build disqualification sets
+      const clsEmails = new Set(clsContracts.map(c => c.customer_email?.toLowerCase().trim()).filter(Boolean));
+      const partnerEmails = new Set(partnerTransactions.map(c => c.customer_email?.toLowerCase().trim()).filter(Boolean));
+
       const result: Record<string, OutsideInfo> = {};
 
       for (const att of attendees) {
         const email = att.email?.toLowerCase().trim();
         if (!email) continue;
 
-        // Find the earliest contract for this email
-        const contract = contracts?.find(
-          c => c.customer_email?.toLowerCase().trim() === email
+        // Disqualify: has CLS or partner products
+        if (clsEmails.has(email) || partnerEmails.has(email)) continue;
+
+        // Find earliest outside-eligible contract
+        const outsideContract = contracts.find(
+          c => c.customer_email?.toLowerCase().trim() === email && isOutsideOffer(c.offer_name)
         );
 
-        if (contract) {
-          const contractDate = new Date(contract.sale_date);
+        if (outsideContract) {
+          const contractDate = new Date(outsideContract.sale_date);
           const meetingDate = new Date(att.meetingDate);
 
-          // Outside = contract purchased BEFORE meeting
           result[att.id] = {
             isOutside: contractDate < meetingDate,
-            contractDate: contract.sale_date
+            contractDate: outsideContract.sale_date
           };
         }
       }
@@ -98,7 +118,7 @@ export const useOutsideDetectionBatch = (attendees: AttendeeForCheck[]) => {
       return result;
     },
     enabled: attendees.length > 0,
-    staleTime: 60000, // 1 minute cache
-    gcTime: 300000, // 5 minutes
+    staleTime: 60000,
+    gcTime: 300000,
   });
 };
