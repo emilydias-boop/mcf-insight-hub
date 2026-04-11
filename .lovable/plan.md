@@ -1,83 +1,51 @@
 
 
-# Plano: Sync automatico e non-blocking + investigar valores enormes
+# Plano: Classificar leads sem R1 como Outside
 
-## Diagnostico
+## Problema
+Atualmente, o sistema so classifica como "Outside" leads que tem contrato pago E uma R1 agendada posterior. Leads que pagaram contrato mas nao tem nenhuma R1 no sistema sao ignorados — 22 casos so em abril. O usuario confirma que esses tambem sao Outsides, pois precisam ser identificados e colocados na R1.
 
-### 1. Sync bloqueia a tela
-O hook `useSyncBillingFromHubla` executa um loop `while(hasMore)` no frontend, fazendo chamadas sequenciais a edge function. Enquanto roda, o botao mostra "Sincronizando..." e o usuario nao pode sair sem perder o progresso. Com ~1800+ transacoes processadas em batches de 200, isso leva varios minutos.
+## Estado atual por hook
 
-### 2. Valores enormes
-A sync **ainda esta rodando** (logs mostram `nextOffset: 1800, hasMore: true`). Alguns valores ja foram corrigidos mas nem todos os registros foram processados. Alem disso, existe um problema estrutural: quando ha multiplas transacoes P1 com `product_price` diferentes para o mesmo email+produto (ex: Breno Salgado tem P1 com 25.086, 20.997 e 19.500), o `first` depende da ordenacao e pode pegar o valor errado.
+| Hook | Sem R1 = Outside? | Acao |
+|---|---|---|
+| `useOutsideDetectionForDeals` (Kanban) | Ja trata (linha 259-260) | Nenhuma |
+| `useOutsideDetectionBatch` (Agenda R1) | N/A — so recebe attendees que ja tem meeting | Nenhuma |
+| `useSdrOutsideMetrics` (Metricas SDR) | **NAO** — retorna 0 se nao achar R1 | **Corrigir** |
+| `useCloserAgendaMetrics` | Exclui outsides do closer — logica similar | **Verificar** |
 
-## Correcoes propostas
+## Correcao principal: `useSdrOutsideMetrics.ts`
 
-### A. Sync non-blocking no frontend
-Mudar o hook para disparar a sync como "fire-and-forget" com toast de progresso, ao inves de bloquear a UI:
+O problema esta nas linhas 115-116: se nenhum attendee R1 e encontrado para os deal_ids, o hook retorna `{ totalOutside: 0 }` imediatamente, perdendo todos os leads sem R1.
 
-**`src/hooks/useSyncBillingFromHubla.ts`**:
-- Disparar a primeira chamada e mostrar toast
-- Processar batches com `toast.loading` mostrando progresso (offset atual)
-- Usar `mutateAsync` em background sem bloquear navegacao
-- Se o usuario sair da pagina, a sync continua normalmente (cada chamada e independente)
+**Correcao**: Apos o loop dos attendees com R1, iterar sobre `contractEmails` que nao foram contabilizados (sem R1 encontrada). Para esses, buscar o `deal owner` como SDR responsavel e contar como Outside.
 
-### B. Sync automatico via pg_cron
-Criar um cron job que roda a sync automaticamente a cada 6 horas, eliminando a necessidade de clicar no botao:
-
-- Usar `pg_cron` + `pg_net` para invocar `sync-billing-from-hubla` periodicamente
-- Cada invocacao processa 200 transacoes; o cron roda a cada 6h para manter dados atualizados
-
-### C. Corrigir selecao do `product_price` para P1
-Quando ha multiplas transacoes P1, usar a mediana do `product_price` (excluindo outliers) ao inves do primeiro valor:
-
-**`supabase/functions/sync-billing-from-hubla/index.ts`**:
-- Antes de calcular `valorBruto`, filtrar transacoes com `installment_number=1`
-- Se houver multiplas, usar o valor mais frequente (moda) do `product_price`
-- Isso evita que um valor anomalo (como 25.086 vs 19.500) distorca o `valor_total_contrato`
+```
+Fluxo corrigido:
+1. Buscar contratos no periodo (ja existe)
+2. Buscar deals/contacts (ja existe)  
+3. Buscar R1 attendees (ja existe)
+4. Contar outsides COM R1 (contrato < meeting) (ja existe)
+5. [NOVO] Para emails com contrato mas SEM R1:
+   - Buscar deal owner (crm_deals.owner_id -> profiles.email)
+   - Se owner e um SDR valido, contar como Outside
+```
 
 ## Arquivos alterados
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/hooks/useSyncBillingFromHubla.ts` | Tornar sync non-blocking com toast de progresso |
-| `supabase/functions/sync-billing-from-hubla/index.ts` | Corrigir selecao do product_price quando ha multiplas P1 |
-| SQL (via insert tool) | Criar cron job pg_cron para sync automatico a cada 6h |
+| `src/hooks/useSdrOutsideMetrics.ts` | Adicionar logica para contar contratos sem R1 como Outside, atribuindo ao deal owner |
 
 ## Detalhes tecnicos
 
-### Non-blocking sync
-```typescript
-// Hook dispara batches em background
-mutationFn: async () => {
-  const toastId = toast.loading('Sincronizando...');
-  // loop com toast.loading update a cada batch
-  // se erro, toast.error; se sucesso, toast.success
-  // invalidateQueries ao final
-}
-```
+Apos o loop existente (linha 140-161), adicionar:
 
-### Cron job
-```sql
-select cron.schedule(
-  'sync-billing-hubla-auto',
-  '0 */6 * * *',
-  $$ select net.http_post(
-    url:='https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/sync-billing-from-hubla',
-    headers:='{"Content-Type":"application/json","Authorization":"Bearer <anon_key>"}'::jsonb,
-    body:='{"batchSize":20,"skipSingleTx":true}'::jsonb
-  ) $$
-);
-```
+1. Coletar emails ja contados (`countedEmails`)
+2. Para cada `contractEmail` que nao esta em `countedEmails`:
+   - Buscar o `crm_deals.owner_id` do deal correspondente
+   - Mapear `owner_id` -> email via `profiles`
+   - Se email do owner esta em `validSdrEmails`, incrementar `outsideBySdr` e `totalOutside`
 
-Nota: o cron processa apenas 200 transacoes por invocacao. Para cobrir todas as transacoes, a edge function precisara de logica de auto-paginacao (detectar offset pendente e continuar).
-
-### Selecao de product_price
-```typescript
-// Ao inves de first.product_price, usar moda das P1
-const p1Txs = txList.filter(tx => (tx.installment_number || 1) === 1);
-const prices = p1Txs.map(tx => tx.product_price || 0);
-const valorBruto = prices.length > 1
-  ? prices.sort((a,b) => a-b)[Math.floor(prices.length/2)] // mediana
-  : (first.product_price || 0);
-```
+Isso adiciona ~1 query extra (deal owners) mas captura os ~22 leads perdidos.
 
