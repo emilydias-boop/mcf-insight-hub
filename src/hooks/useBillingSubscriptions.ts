@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { BillingSubscription, BillingFilters, BillingKPIs, SubscriptionType, PARCELADO_CATEGORIES } from '@/types/billing';
+import { BillingSubscription, BillingFilters, BillingKPIs } from '@/types/billing';
 import { useAuth } from '@/contexts/AuthContext';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
 import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
