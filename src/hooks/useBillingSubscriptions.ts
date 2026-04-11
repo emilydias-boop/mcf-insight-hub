@@ -178,6 +178,8 @@ export const useBillingKPIs = (month?: Date, subscriptionType?: SubscriptionType
       const { data: subs, error: subsError } = await subsQuery;
       if (subsError) throw subsError;
 
+      const subscriptions = (subs || []) as unknown as { id: string; valor_total_contrato: number; status: string; status_quitacao: string; total_parcelas: number }[];
+
       // Fetch installments (filtered by month and subscription type)
       const subIdsList = subscriptions.map(s => s.id);
       let instQuery = supabase
@@ -188,11 +190,9 @@ export const useBillingKPIs = (month?: Date, subscriptionType?: SubscriptionType
         instQuery = instQuery.gte('data_vencimento', monthStart).lte('data_vencimento', monthEnd);
       }
 
-      // Filter installments by the subscription IDs matching the type
       if (subIdsList.length > 0) {
         instQuery = instQuery.in('subscription_id', subIdsList.slice(0, 200));
       } else if (subscriptionType) {
-        // No subs of this type, return empty
         return {
           valorTotalContratado: 0, valorTotalPago: 0, saldoDevedor: 0,
           assinaturasAtivas: 0, assinaturasAtrasadas: 0, assinaturasQuitadas: 0,
@@ -203,7 +203,6 @@ export const useBillingKPIs = (month?: Date, subscriptionType?: SubscriptionType
       const { data: installments, error: instError } = await instQuery;
       if (instError) throw instError;
 
-      const subscriptions = (subs || []) as unknown as { id: string; valor_total_contrato: number; status: string; status_quitacao: string; total_parcelas: number }[];
       const instList = (installments || []) as unknown as { valor_pago: number; status: string }[];
 
       const valorTotalContratado = subscriptions.reduce((s, sub) => s + (sub.valor_total_contrato || 0), 0);
