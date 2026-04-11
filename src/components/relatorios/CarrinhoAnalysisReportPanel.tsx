@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Download, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Users, Calendar, ShieldAlert, BarChart3, MapPin } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ChevronLeft, ChevronRight, Download, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Users, Calendar, ShieldAlert, BarChart3, MapPin, PieChart as PieChartIcon } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
@@ -14,6 +15,7 @@ import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { DateRange } from 'react-day-picker';
 import { BrazilMap, BrazilMapStateData } from './BrazilMap';
+import { PostSaleFunnelPanel } from './PostSaleFunnelPanel';
 
 type PeriodType = 'semana' | 'mes' | 'personalizado';
 
