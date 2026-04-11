@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { BillingSubscription, BillingFilters, BillingKPIs, SubscriptionType, PARCELADO_CATEGORIES } from '@/types/billing';
+import { BillingSubscription, BillingFilters, BillingKPIs } from '@/types/billing';
 import { useAuth } from '@/contexts/AuthContext';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
 import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
@@ -136,9 +136,9 @@ function applyFilters(query: any, filters: BillingFilters) {
   return query;
 }
 
-export const useBillingKPIs = (month?: Date, subscriptionType?: SubscriptionType) => {
+export const useBillingKPIs = (month?: Date) => {
   return useQuery({
-    queryKey: ['billing-kpis', month?.toISOString(), subscriptionType],
+    queryKey: ['billing-kpis', month?.toISOString()],
     queryFn: async () => {
       let subIds: string[] | null = null;
       let monthStart: string | null = null;
@@ -156,13 +156,6 @@ export const useBillingKPIs = (month?: Date, subscriptionType?: SubscriptionType
         .select('id, valor_total_contrato, status, status_quitacao, total_parcelas')
         .in('product_name', ALLOWED_BILLING_PRODUCTS);
 
-      if (subscriptionType === 'parcelado') {
-        subsQuery = subsQuery.in('product_category', [...PARCELADO_CATEGORIES]);
-      } else if (subscriptionType === 'assinatura') {
-        for (const cat of PARCELADO_CATEGORIES) {
-          subsQuery = subsQuery.neq('product_category', cat);
-        }
-      }
 
       if (subIds) {
         if (subIds.length === 0) {
@@ -192,12 +185,6 @@ export const useBillingKPIs = (month?: Date, subscriptionType?: SubscriptionType
 
       if (subIdsList.length > 0) {
         instQuery = instQuery.in('subscription_id', subIdsList.slice(0, 200));
-      } else if (subscriptionType) {
-        return {
-          valorTotalContratado: 0, valorTotalPago: 0, saldoDevedor: 0,
-          assinaturasAtivas: 0, assinaturasAtrasadas: 0, assinaturasQuitadas: 0,
-          parcelasPagas: 0, parcelasTotais: 0,
-        } as BillingKPIs;
       }
 
       const { data: installments, error: instError } = await instQuery;
