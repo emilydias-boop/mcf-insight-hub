@@ -14,7 +14,7 @@ import { CobrancaReembolsosTab } from './CobrancaReembolsosTab';
 import { CobrancaResumoAnual } from './CobrancaResumoAnual';
 import { CobrancaDetailDrawer } from './CobrancaDetailDrawer';
 import { CreateSubscriptionModal } from './CreateSubscriptionModal';
-import { CobrancaQueue } from './CobrancaQueue';
+
 import { CobrancaAlertPanel } from '@/components/shared/CobrancaAlertPanel';
 import { CobrancaHistoryPanel } from '@/components/shared/CobrancaHistoryPanel';
 import { Plus, RefreshCw, Download, Undo2, LayoutList, CalendarRange, TrendingUp, DollarSign, CheckCircle2, AlertTriangle } from 'lucide-react';
@@ -60,10 +60,6 @@ export const FinanceiroCobrancas = () => {
     }
   };
 
-  const handleSelect = (sub: BillingSubscription) => {
-    setSelectedSub(sub);
-    setDrawerOpen(true);
-  };
 
   const handleExportExcel = () => {
     if (rows.length === 0) {
@@ -119,7 +115,7 @@ export const FinanceiroCobrancas = () => {
         </div>
       )}
 
-      <CobrancaQueue onSelect={handleSelect} />
+      
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start">
