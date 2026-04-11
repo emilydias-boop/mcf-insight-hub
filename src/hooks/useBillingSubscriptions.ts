@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { BillingSubscription, BillingFilters, BillingKPIs } from '@/types/billing';
 import { useAuth } from '@/contexts/AuthContext';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
+import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
 const fetchSubscriptionIdsForMonth = async (month: Date): Promise<string[]> => {
   const start = format(startOfMonth(month), 'yyyy-MM-dd');

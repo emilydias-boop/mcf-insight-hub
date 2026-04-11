@@ -6,6 +6,7 @@ import { BillingFilters, SUBSCRIPTION_STATUS_LABELS, PAYMENT_METHOD_LABELS } fro
 import { Search } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
 interface CobrancaFiltersProps {
   filters: BillingFilters;
@@ -22,7 +23,8 @@ export const CobrancaFilters = ({ filters, onFiltersChange }: CobrancaFiltersPro
         .order('product_name');
       if (error) throw error;
       const uniqueProducts = [...new Map((data || []).map(p => [p.product_name, p])).values()];
-      return uniqueProducts as { product_name: string; product_category: string | null }[];
+      return (uniqueProducts as { product_name: string; product_category: string | null }[])
+        .filter(p => ALLOWED_BILLING_PRODUCTS.includes(p.product_name));
     },
   });
 
