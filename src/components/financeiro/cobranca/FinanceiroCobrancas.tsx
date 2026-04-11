@@ -66,6 +66,9 @@ export const FinanceiroCobrancas = () => {
     };
   }, [rows, allRows, monthData?.kpis]);
 
+  // For detail drawer
+  const { data: subscriptions = [] } = useBillingSubscriptions({ month: currentMonth });
+
   const handleSelectSubscription = (subscriptionId: string) => {
     const sub = subscriptions.find(s => s.id === subscriptionId);
     if (sub) {
