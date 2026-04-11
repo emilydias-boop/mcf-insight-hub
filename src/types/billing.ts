@@ -1,6 +1,6 @@
 export type BillingSubscriptionStatus = 'em_dia' | 'atrasada' | 'cancelada' | 'finalizada' | 'quitada';
 export type BillingQuitacaoStatus = 'em_aberto' | 'parcialmente_pago' | 'quitado';
-export type BillingInstallmentStatus = 'pendente' | 'pago' | 'atrasado' | 'cancelado';
+export type BillingInstallmentStatus = 'pendente' | 'pago' | 'atrasado' | 'cancelado' | 'reembolso' | 'nao_sera_pago';
 export type BillingAgreementStatus = 'em_aberto' | 'em_andamento' | 'cumprido' | 'quebrado';
 export type BillingHistoryType = 'entrada_paga' | 'parcela_paga' | 'parcela_atrasada' | 'boleto_gerado' | 'tentativa_cobranca' | 'acordo_realizado' | 'cancelamento' | 'quitacao' | 'observacao';
 export type BillingPaymentMethod = 'pix' | 'credit_card' | 'bank_slip' | 'boleto' | 'outro' | 'boleto_parcelado' | 'cartao_parcelado' | 'pix_parcelado';
@@ -157,6 +157,8 @@ export const INSTALLMENT_STATUS_LABELS: Record<BillingInstallmentStatus, string>
   pago: 'Pago',
   atrasado: 'Atrasado',
   cancelado: 'Cancelado',
+  reembolso: 'Reembolso',
+  nao_sera_pago: 'Não será pago',
 };
 
 export const AGREEMENT_STATUS_LABELS: Record<BillingAgreementStatus, string> = {

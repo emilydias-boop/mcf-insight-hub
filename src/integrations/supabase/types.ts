@@ -1455,6 +1455,7 @@ export type Database = {
           created_at: string
           data_pagamento: string | null
           data_vencimento: string
+          exclusao_motivo: string | null
           forma_pagamento:
             | Database["public"]["Enums"]["billing_payment_method"]
             | null
@@ -1473,6 +1474,7 @@ export type Database = {
           created_at?: string
           data_pagamento?: string | null
           data_vencimento: string
+          exclusao_motivo?: string | null
           forma_pagamento?:
             | Database["public"]["Enums"]["billing_payment_method"]
             | null
@@ -1491,6 +1493,7 @@ export type Database = {
           created_at?: string
           data_pagamento?: string | null
           data_vencimento?: string
+          exclusao_motivo?: string | null
           forma_pagamento?:
             | Database["public"]["Enums"]["billing_payment_method"]
             | null
@@ -1586,6 +1589,7 @@ export type Database = {
             | Database["public"]["Enums"]["billing_payment_method"]
             | null
           id: string
+          link_assinatura_enviado: boolean | null
           observacoes: string | null
           product_category: string | null
           product_name: string
@@ -1612,6 +1616,7 @@ export type Database = {
             | Database["public"]["Enums"]["billing_payment_method"]
             | null
           id?: string
+          link_assinatura_enviado?: boolean | null
           observacoes?: string | null
           product_category?: string | null
           product_name: string
@@ -1638,6 +1643,7 @@ export type Database = {
             | Database["public"]["Enums"]["billing_payment_method"]
             | null
           id?: string
+          link_assinatura_enviado?: boolean | null
           observacoes?: string | null
           product_category?: string | null
           product_name?: string
@@ -11193,7 +11199,13 @@ export type Database = {
         | "cancelamento"
         | "quitacao"
         | "observacao"
-      billing_installment_status: "pendente" | "pago" | "atrasado" | "cancelado"
+      billing_installment_status:
+        | "pendente"
+        | "pago"
+        | "atrasado"
+        | "cancelado"
+        | "reembolso"
+        | "nao_sera_pago"
       billing_payment_method:
         | "pix"
         | "credit_card"
@@ -11477,7 +11489,14 @@ export const Constants = {
         "quitacao",
         "observacao",
       ],
-      billing_installment_status: ["pendente", "pago", "atrasado", "cancelado"],
+      billing_installment_status: [
+        "pendente",
+        "pago",
+        "atrasado",
+        "cancelado",
+        "reembolso",
+        "nao_sera_pago",
+      ],
       billing_payment_method: [
         "pix",
         "credit_card",
