@@ -1,42 +1,25 @@
 
 
-# Filtrar produtos na página de Cobranças
+# Fix: KPIs devem acompanhar a aba ativa (Assinaturas / Parcelados)
 
-## Objetivo
-Limitar o dropdown de produtos e os dados exibidos na aba "Parcelados" para mostrar apenas 5 produtos específicos.
+## Problema
+Os KPIs globais (`CobrancaKPIs`) e os KPIs do mes (`CobrancaMonthKPIs`) buscam dados de **todas** as subscriptions, sem filtrar pelo tipo da aba ativa (assinatura vs parcelado). Ambas as abas mostram os mesmos valores.
 
-## Mapeamento (nome solicitado → produto no banco)
+## Correção
 
-| Produto solicitado | `product_name` no banco |
-|---|---|
-| Incorporador 50k Completo | `A001 - MCF INCORPORADOR COMPLETO` |
-| Incorporador 50k Completo + The Club | `A009 - MCF INCORPORADOR COMPLETO + THE CLUB` e `A009 - MCF INCORPORADOR + THE CLUB` |
-| Anticrise Completo | `A003 - MCF Plano Anticrise Completo` |
-| Anticrise Básico | `A004 - MCF Plano Anticrise Básico` |
-| Plano Construtor Básico | `A002 - MCF INCORPORADOR BÁSICO` |
+### 1. `useBillingMonthKPIs.ts` — filtrar por tipo
+- Receber novo parametro `subscriptionType: 'assinatura' | 'parcelado' | undefined`
+- Antes de calcular, buscar os `subscription_id`s que pertencem ao tipo correto (join com `billing_subscriptions` filtrando por `product_category` usando a logica de `getSubscriptionType` / `PARCELADO_CATEGORIES`)
+- Filtrar installments apenas dos subscription_ids do tipo ativo
 
-**Nota:** Não existe "Plano Construtor Básico" no banco. Assumo que se refere ao `A002 - MCF INCORPORADOR BÁSICO`. Se for outro produto, me avise.
+### 2. `useBillingKPIs` em `useBillingSubscriptions.ts` — filtrar por tipo
+- Receber novo parametro `subscriptionType: 'assinatura' | 'parcelado' | undefined`
+- Adicionar filtro na query de subscriptions: para 'parcelado', filtrar `product_category` in PARCELADO_CATEGORIES; para 'assinatura', filtrar NOT in PARCELADO_CATEGORIES
+- Filtrar installments correspondentes
 
-## Alteração
+### 3. `FinanceiroCobrancas.tsx` — passar aba ativa
+- Passar `activeTab` para os hooks `useBillingKPIs(currentMonth, activeTab)` e `useBillingMonthKPIs(currentMonth, activeTab)`
+- Mapear `activeTab` ('assinaturas' -> 'assinatura', 'parcelados' -> 'parcelado', 'acordos' -> undefined)
 
-### Arquivo: `src/components/financeiro/cobranca/CobrancaFilters.tsx`
-
-Adicionar uma constante com os produtos permitidos e filtrar a lista retornada do banco para mostrar apenas esses no dropdown:
-
-```typescript
-const ALLOWED_PRODUCTS = [
-  'A001 - MCF INCORPORADOR COMPLETO',
-  'A009 - MCF INCORPORADOR COMPLETO + THE CLUB',
-  'A009 - MCF INCORPORADOR + THE CLUB',
-  'A003 - MCF Plano Anticrise Completo',
-  'A004 - MCF Plano Anticrise Básico',
-  'A002 - MCF INCORPORADOR BÁSICO',
-];
-```
-
-Filtrar `products` no `useMemo` ou diretamente no render para exibir somente os permitidos.
-
-### Arquivo: `src/hooks/useBillingSubscriptions.ts`
-
-Adicionar filtro na query do Supabase para retornar apenas subscriptions com `product_name` dentro da lista permitida (usando `.in('product_name', ALLOWED_PRODUCTS)`). Isso garante que KPIs, tabela e contadores reflitam apenas esses produtos.
+Resultado: cada aba mostra KPIs exclusivos do seu tipo de subscription.
 
