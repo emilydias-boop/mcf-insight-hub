@@ -1,51 +1,70 @@
 
 
-# Plano: Classificar leads sem R1 como Outside
+# Plano: Detecção de Outside via offer_name
 
-## Problema
-Atualmente, o sistema so classifica como "Outside" leads que tem contrato pago E uma R1 agendada posterior. Leads que pagaram contrato mas nao tem nenhuma R1 no sistema sao ignorados — 22 casos so em abril. O usuario confirma que esses tambem sao Outsides, pois precisam ser identificados e colocados na R1.
+## Ofertas que identificam Outside
 
-## Estado atual por hook
+Apenas contratos com estas duas ofertas podem ser Outside:
+1. `Contrato - Curso R$ 97,00`
+2. `Contrato Perfil A - Vitrine A010`
 
-| Hook | Sem R1 = Outside? | Acao |
-|---|---|---|
-| `useOutsideDetectionForDeals` (Kanban) | Ja trata (linha 259-260) | Nenhuma |
-| `useOutsideDetectionBatch` (Agenda R1) | N/A — so recebe attendees que ja tem meeting | Nenhuma |
-| `useSdrOutsideMetrics` (Metricas SDR) | **NAO** — retorna 0 se nao achar R1 | **Corrigir** |
-| `useCloserAgendaMetrics` | Exclui outsides do closer — logica similar | **Verificar** |
+Todas as outras ofertas (CLS-XX, MCF, Caução, Sócio, etc.) NÃO são Outside.
 
-## Correcao principal: `useSdrOutsideMetrics.ts`
+## Regra completa (validada em abril com 0 falsos positivos)
 
-O problema esta nas linhas 115-116: se nenhum attendee R1 e encontrado para os deal_ids, o hook retorna `{ totalOutside: 0 }` imediatamente, perdendo todos os leads sem R1.
+Um contrato é **OUTSIDE** somente se:
+1. Offer = `"Contrato - Curso R$ 97,00"` OU `"Contrato Perfil A - Vitrine A010"`
+2. **E** NÃO é RECO (sem contrato A000 anterior ao período)
+3. **E** NÃO tem oferta `Contrato CLS%` para o email (closer)
+4. **E** NÃO comprou A010 antes do contrato (inside sales)
+5. **E** contrato ANTES da R1 ou SEM R1
 
-**Correcao**: Apos o loop dos attendees com R1, iterar sobre `contractEmails` que nao foram contabilizados (sem R1 encontrada). Para esses, buscar o `deal owner` como SDR responsavel e contar como Outside.
+## Implementação (3 passos)
 
+### Passo 1: Fix webhook -- offer_name extraction
+**Arquivo:** `supabase/functions/hubla-webhook-handler/index.ts`
+
+Adicionar `body.event.products` como fonte primária:
+```typescript
+const offerNameNoItems = body.event?.products?.[0]?.offers?.[0]?.name 
+  || invoice?.products?.[0]?.offers?.[0]?.name || null;
 ```
-Fluxo corrigido:
-1. Buscar contratos no periodo (ja existe)
-2. Buscar deals/contacts (ja existe)  
-3. Buscar R1 attendees (ja existe)
-4. Contar outsides COM R1 (contrato < meeting) (ja existe)
-5. [NOVO] Para emails com contrato mas SEM R1:
-   - Buscar deal owner (crm_deals.owner_id -> profiles.email)
-   - Se owner e um SDR valido, contar como Outside
+
+### Passo 2: Backfill offer_name via migration SQL
+```sql
+UPDATE hubla_transactions
+SET offer_name = raw_data->'event'->'products'->0->'offers'->0->>'name'
+WHERE offer_name IS NULL
+AND raw_data->'event'->'products'->0->'offers'->0->>'name' IS NOT NULL;
 ```
 
-## Arquivos alterados
+### Passo 3: Atualizar 3 hooks de detecção
 
-| Arquivo | Alteracao |
-|---|---|
-| `src/hooks/useSdrOutsideMetrics.ts` | Adicionar logica para contar contratos sem R1 como Outside, atribuindo ao deal owner |
+**Arquivos:**
+- `src/hooks/useSdrOutsideMetrics.ts`
+- `src/hooks/useOutsideDetectionForDeals.ts`
+- `src/hooks/useOutsideDetection.ts`
 
-## Detalhes tecnicos
+Alterações em cada hook:
+1. Buscar `offer_name` junto com contratos (adicionar campo na query)
+2. Filtrar: só considerar contratos com offer = `Contrato - Curso R$ 97,00` ou `Contrato Perfil A - Vitrine A010`
+3. Adicionar check de RECO: buscar se email tem contrato A000 antes do período
+4. Adicionar check de CLS: buscar se email tem oferta `Contrato CLS%`
+5. Adicionar check de A010: buscar se email comprou A010 antes do contrato
+6. Manter lógica existente de data (contrato antes R1)
 
-Apos o loop existente (linha 140-161), adicionar:
+### Nota sobre matching de email
 
-1. Coletar emails ja contados (`countedEmails`)
-2. Para cada `contractEmail` que nao esta em `countedEmails`:
-   - Buscar o `crm_deals.owner_id` do deal correspondente
-   - Mapear `owner_id` -> email via `profiles`
-   - Se email do owner esta em `validSdrEmails`, incrementar `outsideBySdr` e `totalOutside`
+A simulação revelou que emails com typos no CRM (ex: `rockrtmaol.com` vs `rocketmail.com`) impedem o match. Isso é uma limitação conhecida, mas o lead seria classificado corretamente como NORMAL se o email batesse (contrato após R1). Não será tratado neste escopo.
 
-Isso adiciona ~1 query extra (deal owners) mas captura os ~22 leads perdidos.
+```text
+Fluxo de decisão:
+  Email tem contrato A000 no período?
+    └─ Offer ≠ "Curso R$ 97,00" e ≠ "Perfil A - Vitrine A010"? → IGNORAR
+    └─ Tem oferta "Contrato CLS%"? → NÃO é Outside
+    └─ É recompra? → NÃO é Outside  
+    └─ Comprou A010 antes? → NÃO é Outside
+    └─ Contrato antes da R1 ou sem R1? → OUTSIDE ✓
+    └─ Contrato depois da R1? → NORMAL
+```
 
