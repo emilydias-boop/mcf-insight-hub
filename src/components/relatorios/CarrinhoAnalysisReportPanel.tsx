@@ -200,7 +200,23 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
       )}
 
       {data && (
-        <>
+        <Tabs defaultValue="funil_pos_venda" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="funil_pos_venda" className="flex items-center gap-1">
+              <PieChartIcon className="h-4 w-4" />
+              Funil Pós-Venda
+            </TabsTrigger>
+            <TabsTrigger value="analise_completa" className="flex items-center gap-1">
+              <BarChart3 className="h-4 w-4" />
+              Análise Completa
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="funil_pos_venda">
+            <PostSaleFunnelPanel leads={data.leads} periodLabel={periodLabel} />
+          </TabsContent>
+
+          <TabsContent value="analise_completa" className="space-y-6">
           {/* KPI Cards */}
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-2">
             {[
