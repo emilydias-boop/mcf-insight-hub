@@ -1,70 +1,82 @@
 
 
-# Plano: Detecção de Outside via offer_name
+# Plano: Evolução da Tela de Cobranças para Visão Financeira
 
-## Ofertas que identificam Outside
+## Objetivo
+Transformar a tela de cobranças de uma visão de gestão de assinaturas para uma visão de **fluxo de caixa mensal** (previsto vs realizado), com controle de exceções e rastreabilidade por cliente.
 
-Apenas contratos com estas duas ofertas podem ser Outside:
-1. `Contrato - Curso R$ 97,00`
-2. `Contrato Perfil A - Vitrine A010`
+## O que muda
 
-Todas as outras ofertas (CLS-XX, MCF, Caução, Sócio, etc.) NÃO são Outside.
+A tela atual mostra assinaturas e seus status. A nova versão foca nas **parcelas do mês**, mostrando o que cada cliente deve pagar naquele período, com controle de reembolsos e exclusões.
 
-## Regra completa (validada em abril com 0 falsos positivos)
+---
 
-Um contrato é **OUTSIDE** somente se:
-1. Offer = `"Contrato - Curso R$ 97,00"` OU `"Contrato Perfil A - Vitrine A010"`
-2. **E** NÃO é RECO (sem contrato A000 anterior ao período)
-3. **E** NÃO tem oferta `Contrato CLS%` para o email (closer)
-4. **E** NÃO comprou A010 antes do contrato (inside sales)
-5. **E** contrato ANTES da R1 ou SEM R1
+## Estrutura da Nova Interface
 
-## Implementação (3 passos)
+### Layout Principal
+- Seletor de mês (mantido) + **novo filtro por semana** dentro do mês
+- 3 abas: **Cobranças** (principal) | **Reembolsos** | **Resumo Anual**
+- KPIs do mês: Valor Estimado de Recebimento e Valor Efetivamente Recebido
 
-### Passo 1: Fix webhook -- offer_name extraction
-**Arquivo:** `supabase/functions/hubla-webhook-handler/index.ts`
+### Aba "Cobranças" -- Tabela por parcela do mês
 
-Adicionar `body.event.products` como fonte primária:
-```typescript
-const offerNameNoItems = body.event?.products?.[0]?.offers?.[0]?.name 
-  || invoice?.products?.[0]?.offers?.[0]?.name || null;
-```
+Cada linha = uma parcela com vencimento no mês selecionado:
 
-### Passo 2: Backfill offer_name via migration SQL
-```sql
-UPDATE hubla_transactions
-SET offer_name = raw_data->'event'->'products'->0->'offers'->0->>'name'
-WHERE offer_name IS NULL
-AND raw_data->'event'->'products'->0->'offers'->0->>'name' IS NOT NULL;
-```
+| Coluna | Fonte |
+|--------|-------|
+| Cliente (nome + telefone) | `billing_subscriptions.customer_name/phone` |
+| Saldo devedor no mês | Soma de parcelas pendentes/atrasadas do mês para aquela subscription |
+| Status | `billing_installments.status` (pago/pendente/atrasado/reembolso/cancelado) |
+| Data da cobrança | `billing_installments.data_vencimento` |
+| Entrada (valor + método) | `billing_subscriptions.valor_entrada` + `forma_pagamento` |
+| Restante (tipo) | Derivado de `total_parcelas` e `forma_pagamento` |
+| Link enviado (assinaturas) | Novo campo na subscription ou installment |
 
-### Passo 3: Atualizar 3 hooks de detecção
+### Aba "Reembolsos"
+- Lista parcelas marcadas como "reembolso" no mês
+- Esses valores são subtraidos do estimado
 
-**Arquivos:**
-- `src/hooks/useSdrOutsideMetrics.ts`
-- `src/hooks/useOutsideDetectionForDeals.ts`
-- `src/hooks/useOutsideDetection.ts`
+### Aba "Resumo Anual"
+- Grid 12 meses com: Total Previsto, Recebido, Em Risco, Reembolsado
 
-Alterações em cada hook:
-1. Buscar `offer_name` junto com contratos (adicionar campo na query)
-2. Filtrar: só considerar contratos com offer = `Contrato - Curso R$ 97,00` ou `Contrato Perfil A - Vitrine A010`
-3. Adicionar check de RECO: buscar se email tem contrato A000 antes do período
-4. Adicionar check de CLS: buscar se email tem oferta `Contrato CLS%`
-5. Adicionar check de A010: buscar se email comprou A010 antes do contrato
-6. Manter lógica existente de data (contrato antes R1)
+---
 
-### Nota sobre matching de email
+## Implementação Técnica (6 passos)
 
-A simulação revelou que emails com typos no CRM (ex: `rockrtmaol.com` vs `rocketmail.com`) impedem o match. Isso é uma limitação conhecida, mas o lead seria classificado corretamente como NORMAL se o email batesse (contrato após R1). Não será tratado neste escopo.
+### Passo 1: Migração SQL -- Novos campos e status
 
-```text
-Fluxo de decisão:
-  Email tem contrato A000 no período?
-    └─ Offer ≠ "Curso R$ 97,00" e ≠ "Perfil A - Vitrine A010"? → IGNORAR
-    └─ Tem oferta "Contrato CLS%"? → NÃO é Outside
-    └─ É recompra? → NÃO é Outside  
-    └─ Comprou A010 antes? → NÃO é Outside
-    └─ Contrato antes da R1 ou sem R1? → OUTSIDE ✓
-    └─ Contrato depois da R1? → NORMAL
-```
+Adicionar à tabela `billing_installments`:
+- Novo enum value `reembolso` e `nao_sera_pago` ao tipo `billing_installment_status`
+- Campo `exclusao_motivo` (text, nullable) para registrar por que foi excluído do fluxo
+
+Adicionar à tabela `billing_subscriptions`:
+- Campo `link_assinatura_enviado` (boolean, default false) para controle de envio de link
+
+### Passo 2: Hook `useBillingMonthInstallments` (novo)
+
+Busca parcelas do mês agrupadas por cliente, com dados enriquecidos da subscription (telefone, entrada, forma de pagamento). Suporta filtro por semana (semana 1-4 derivada da data de vencimento). Calcula KPIs: estimado (excluindo reembolso/nao_sera_pago) e recebido.
+
+### Passo 3: Componente `CobrancaMonthTable` (novo)
+
+Nova tabela focada em parcelas do mês (não em subscriptions como hoje). Colunas: Cliente+Telefone, Saldo Devedor Mês, Status, Data Cobrança, Entrada, Restante, Link Enviado (se assinatura).
+
+### Passo 4: Componente `CobrancaReembolsosTab` (novo)
+
+Filtra parcelas com status `reembolso` no mês. Mostra lista com cliente, valor, data e motivo.
+
+### Passo 5: Componente `CobrancaResumoAnual` (novo)
+
+Busca dados de jan-dez do ano corrente. Grid com cards mensais mostrando: Previsto, Recebido, Em Risco (atrasado), Reembolsado.
+
+### Passo 6: Refatorar `FinanceiroCobrancas.tsx`
+
+- Substituir tabs atuais (Cobranças/Acordos) por 3 tabs (Cobranças/Reembolsos/Resumo Anual)
+- Mover Acordos para dentro do drawer de detalhes ou subtab
+- Adicionar filtro de semana ao lado do seletor de mês
+- Atualizar KPIs para mostrar Estimado vs Recebido
+- Ações de "Marcar como Reembolso" e "Não será pago" nas linhas da tabela
+
+### Nota sobre dados existentes
+
+Os dados já disponíveis no banco cobrem: nome, telefone, valor_entrada, forma_pagamento, parcelas com vencimento/valor/status. Os novos campos (exclusao_motivo, link_enviado) são opcionais e não quebram a interface existente.
 
