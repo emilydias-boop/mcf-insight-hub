@@ -12,7 +12,6 @@ import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { useCarrinhoAnalysisReport, LeadCarrinhoCompleto } from '@/hooks/useCarrinhoAnalysisReport';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { useCarrinhoConfig } from '@/hooks/useCarrinhoConfig';
-import { subWeeks } from 'date-fns';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { DateRange } from 'react-day-picker';
