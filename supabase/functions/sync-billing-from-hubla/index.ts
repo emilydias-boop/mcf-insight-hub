@@ -20,8 +20,9 @@ Deno.serve(async (req) => {
     // Parse optional pagination params
     let body: any = {};
     try { body = await req.json(); } catch { /* empty */ }
-    const batchSize = body.batchSize || 200;
+    const batchSize = body.batchSize || 50;
     const offset = body.offset || 0;
+    const skipSingleTx = body.skipSingleTx ?? false;
 
     // 1. Fetch installment transactions in paginated batches
     const { data: transactions, error: txError } = await supabase
@@ -29,7 +30,7 @@ Deno.serve(async (req) => {
       .select("id, customer_email, customer_name, customer_phone, product_name, product_category, product_price, net_value, installment_number, total_installments, sale_date, sale_status, event_type")
       .gt("total_installments", 1)
       .order("sale_date", { ascending: true })
-      .range(offset, offset + 4999);
+      .range(offset, offset + 999);
 
     if (txError) throw txError;
     if (!transactions || transactions.length === 0) {
@@ -460,9 +461,9 @@ Deno.serve(async (req) => {
     }
 
     // 4b. Process single-installment transactions (total_installments=1)
-    // Optimized: batch queries instead of per-group loops
+    // Only run when not skipped (heavy operation)
     let singleTxMatched = 0;
-    {
+    if (!skipSingleTx) {
       // Fetch all subscriptions
       const allSubs: { id: string; customer_email: string; product_name: string }[] = [];
       let subOffset = 0;
@@ -636,7 +637,7 @@ Deno.serve(async (req) => {
     // 5. Run overdue status update
     await supabase.rpc('update_overdue_billing_status');
 
-    const hasMore = transactions.length >= 5000;
+    const hasMore = transactions.length >= 1000;
     const result = {
       message: "Sincronização concluída",
       totalGroups: groupKeys.length,
@@ -647,7 +648,7 @@ Deno.serve(async (req) => {
       singleTxMatched,
       historyInserted,
       hasMore,
-      nextOffset: hasMore ? offset + 5000 : null,
+      nextOffset: hasMore ? offset + 1000 : null,
     };
 
     console.log("Sync result:", result);
