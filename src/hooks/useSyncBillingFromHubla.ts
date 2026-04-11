@@ -16,7 +16,7 @@ export const useSyncBillingFromHubla = () => {
 
       while (hasMore) {
         const { data, error } = await supabase.functions.invoke('sync-billing-from-hubla', {
-          body: { offset, batchSize: 50, skipSingleTx: true },
+          body: { offset, batchSize: 20, skipSingleTx: true },
         });
         if (error) throw error;
         
