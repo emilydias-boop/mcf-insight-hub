@@ -461,9 +461,9 @@ Deno.serve(async (req) => {
     }
 
     // 4b. Process single-installment transactions (total_installments=1)
-    // Optimized: batch queries instead of per-group loops
+    // Only run when not skipped (heavy operation)
     let singleTxMatched = 0;
-    {
+    if (!skipSingleTx) {
       // Fetch all subscriptions
       const allSubs: { id: string; customer_email: string; product_name: string }[] = [];
       let subOffset = 0;
@@ -637,7 +637,7 @@ Deno.serve(async (req) => {
     // 5. Run overdue status update
     await supabase.rpc('update_overdue_billing_status');
 
-    const hasMore = transactions.length >= 5000;
+    const hasMore = transactions.length >= 1000;
     const result = {
       message: "Sincronização concluída",
       totalGroups: groupKeys.length,
@@ -648,7 +648,7 @@ Deno.serve(async (req) => {
       singleTxMatched,
       historyInserted,
       hasMore,
-      nextOffset: hasMore ? offset + 5000 : null,
+      nextOffset: hasMore ? offset + 1000 : null,
     };
 
     console.log("Sync result:", result);
