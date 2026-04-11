@@ -122,13 +122,17 @@ Deno.serve(async (req) => {
         const [email, productName] = key.split("::");
         const first = txList[0];
         const totalInstallments = first.total_installments || txList.length;
-        const valorBruto = first.product_price || 0;
+        // Use median of P1 product_prices to avoid outliers
+        const p1Prices = txList.filter(tx => (tx.installment_number || 1) === 1).map(tx => tx.product_price || 0).filter(p => p > 0);
+        const valorBruto = p1Prices.length > 1
+          ? p1Prices.sort((a: number, b: number) => a - b)[Math.floor(p1Prices.length / 2)]
+          : (first.product_price || 0);
         // Smart net value: prefer P2+ net_value (more reliable), fallback with heuristic
         const p2tx = txList.find(tx => (tx.installment_number || 1) > 1);
         // Bruto per installment: usa product_price (não net_value)
         const valorBrutoPerInstallment = p2tx
-          ? (p2tx.product_price || first.product_price || 0)
-          : (first.product_price || 0);
+          ? (p2tx.product_price || valorBruto)
+          : valorBruto;
         // Líquido per installment: usa net_value
         const valorLiquidoPerInstallment = p2tx
           ? (p2tx.net_value || p2tx.product_price || 0)
@@ -269,7 +273,11 @@ Deno.serve(async (req) => {
 
         const first = txList[0];
         const totalInstallments = first.total_installments || txList.length;
-        const valorBruto = first.product_price || 0;
+        // Use median of P1 product_prices to avoid outliers
+        const p1Prices = txList.filter(tx => (tx.installment_number || 1) === 1).map(tx => tx.product_price || 0).filter(p => p > 0);
+        const valorBruto = p1Prices.length > 1
+          ? p1Prices.sort((a: number, b: number) => a - b)[Math.floor(p1Prices.length / 2)]
+          : (first.product_price || 0);
         // Recompute smart net value for installment creation
         const p2txInst = txList.find(tx => (tx.installment_number || 1) > 1);
         const valorLiquidoInst = p2txInst
@@ -281,8 +289,8 @@ Deno.serve(async (req) => {
         // Bruto per installment (must be recalculated here, not reused from outer loop)
         const p2txBruto = txList.find(tx => (tx.installment_number || 1) > 1);
         const valorBrutoPerInstallment = p2txBruto
-          ? (p2txBruto.product_price || first.product_price || 0)
-          : (first.product_price || 0);
+          ? (p2txBruto.product_price || valorBruto)
+          : valorBruto;
         const existingNums = existingInstNums.get(subId) || new Set();
         const statusMap = existingInstStatus.get(subId) || new Map();
         const now = new Date();

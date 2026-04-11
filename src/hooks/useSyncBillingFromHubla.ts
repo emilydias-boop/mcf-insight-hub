@@ -7,38 +7,48 @@ export const useSyncBillingFromHubla = () => {
 
   return useMutation({
     mutationFn: async () => {
+      const toastId = toast.loading('Sincronizando dados da Hubla... (iniciando)');
+      
       let offset = 0;
       let totalSubsCreated = 0;
       let totalSubsUpdated = 0;
       let totalInstallments = 0;
       let totalInstallmentsUpdated = 0;
       let hasMore = true;
+      let batchCount = 0;
 
-      while (hasMore) {
-        const { data, error } = await supabase.functions.invoke('sync-billing-from-hubla', {
-          body: { offset, batchSize: 20, skipSingleTx: true },
-        });
-        if (error) throw error;
-        
-        totalSubsCreated += data.subsCreated || 0;
-        totalSubsUpdated += data.subsUpdated || 0;
-        totalInstallments += data.installmentsCreated || 0;
-        totalInstallmentsUpdated += data.installmentsUpdated || 0;
-        hasMore = data.hasMore === true;
-        offset = data.nextOffset || 0;
+      try {
+        while (hasMore) {
+          batchCount++;
+          toast.loading(`Sincronizando... lote ${batchCount} (offset ${offset})`, { id: toastId });
+
+          const { data, error } = await supabase.functions.invoke('sync-billing-from-hubla', {
+            body: { offset, batchSize: 20, skipSingleTx: true },
+          });
+          if (error) throw error;
+          
+          totalSubsCreated += data.subsCreated || 0;
+          totalSubsUpdated += data.subsUpdated || 0;
+          totalInstallments += data.installmentsCreated || 0;
+          totalInstallmentsUpdated += data.installmentsUpdated || 0;
+          hasMore = data.hasMore === true;
+          offset = data.nextOffset || 0;
+        }
+
+        toast.success(
+          `Sincronização concluída: ${totalSubsCreated} criadas, ${totalSubsUpdated} atualizadas, ${totalInstallments} parcelas criadas, ${totalInstallmentsUpdated} parcelas atualizadas`,
+          { id: toastId }
+        );
+
+        return { subsCreated: totalSubsCreated, subsUpdated: totalSubsUpdated, installmentsCreated: totalInstallments, installmentsUpdated: totalInstallmentsUpdated };
+      } catch (err: any) {
+        toast.error(`Erro na sincronização: ${err.message}`, { id: toastId });
+        throw err;
       }
-
-      return { subsCreated: totalSubsCreated, subsUpdated: totalSubsUpdated, installmentsCreated: totalInstallments, installmentsUpdated: totalInstallmentsUpdated };
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['billing-subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['billing-kpis'] });
-      toast.success(
-        `Sincronização concluída: ${data.subsCreated} criadas, ${data.subsUpdated} atualizadas, ${data.installmentsCreated} parcelas criadas, ${data.installmentsUpdated} parcelas atualizadas`
-      );
-    },
-    onError: (error: any) => {
-      toast.error(`Erro na sincronização: ${error.message}`);
     },
   });
 };
