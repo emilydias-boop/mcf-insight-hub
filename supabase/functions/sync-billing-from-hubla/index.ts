@@ -277,6 +277,11 @@ Deno.serve(async (req) => {
               ? first.net_value
               : first.product_price || 0);
         const valorLiquido = valorLiquidoInst;
+        // Bruto per installment (must be recalculated here, not reused from outer loop)
+        const p2txBruto = txList.find(tx => (tx.installment_number || 1) > 1);
+        const valorBrutoPerInstallment = p2txBruto
+          ? (p2txBruto.product_price || first.product_price || 0)
+          : (first.product_price || 0);
         const existingNums = existingInstNums.get(subId) || new Set();
         const statusMap = existingInstStatus.get(subId) || new Map();
         const now = new Date();
@@ -313,10 +318,13 @@ Deno.serve(async (req) => {
               const correctDueDate = new Date(firstDate);
               correctDueDate.setDate(correctDueDate.getDate() + batchIntervalDays * (i - 1));
               const newStatus = correctDueDate < now ? "atrasado" : "pendente";
+              // Also fix valor_original if it was set incorrectly
+              const correctValorOriginal = i === 1 ? valorBruto : valorBrutoPerInstallment;
               installmentsDueDateUpdates.push({
                 subId, numero: i,
                 newDueDate: correctDueDate.toISOString(),
                 newStatus,
+                correctValorOriginal,
               });
             }
             continue;
@@ -344,7 +352,7 @@ Deno.serve(async (req) => {
             historyEntries.push({
               subscription_id: subId,
               tipo: "parcela_paga",
-              valor: paid.net_value || valorParcela,
+              valor: paid.net_value || paid.product_price,
               forma_pagamento: mapPaymentMethod(paid.sale_status || paid.event_type || ""),
               responsavel: "Sistema (Hubla Sync)",
               descricao: `Parcela ${i}/${totalInstallments} paga via Hubla (sync automático)`,
@@ -409,17 +417,19 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Update due dates for existing unpaid installments
+      // Update due dates and fix valor_original for existing unpaid installments
       for (const upd of installmentsDueDateUpdates) {
         await supabase
           .from("billing_installments")
           .update({
             data_vencimento: upd.newDueDate,
             status: upd.newStatus,
+            valor_original: upd.correctValorOriginal,
             updated_at: new Date().toISOString(),
           })
           .eq("subscription_id", upd.subId)
           .eq("numero_parcela", upd.numero);
+        installmentsUpdated++;
       }
 
       // Bulk insert installments in chunks of 500
