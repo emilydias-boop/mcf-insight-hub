@@ -20,8 +20,9 @@ Deno.serve(async (req) => {
     // Parse optional pagination params
     let body: any = {};
     try { body = await req.json(); } catch { /* empty */ }
-    const batchSize = body.batchSize || 200;
+    const batchSize = body.batchSize || 50;
     const offset = body.offset || 0;
+    const skipSingleTx = body.skipSingleTx ?? false;
 
     // 1. Fetch installment transactions in paginated batches
     const { data: transactions, error: txError } = await supabase
@@ -29,7 +30,7 @@ Deno.serve(async (req) => {
       .select("id, customer_email, customer_name, customer_phone, product_name, product_category, product_price, net_value, installment_number, total_installments, sale_date, sale_status, event_type")
       .gt("total_installments", 1)
       .order("sale_date", { ascending: true })
-      .range(offset, offset + 4999);
+      .range(offset, offset + 999);
 
     if (txError) throw txError;
     if (!transactions || transactions.length === 0) {
