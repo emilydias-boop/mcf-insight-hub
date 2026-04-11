@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BillingSubscription } from '@/types/billing';
 import { useBillingSubscriptions } from '@/hooks/useBillingSubscriptions';
-import { useBillingMonthInstallments } from '@/hooks/useBillingMonthInstallments';
+import { useBillingMonthInstallments, MonthInstallmentRow } from '@/hooks/useBillingMonthInstallments';
 import { useSyncBillingFromHubla } from '@/hooks/useSyncBillingFromHubla';
-import { useBillingCobrancaAlerts } from '@/hooks/useCobrancaAlerts';
 import { CobrancaMonthSelector } from './CobrancaMonthSelector';
 import { CobrancaWeekFilter } from './CobrancaWeekFilter';
 import { CobrancaMonthTable } from './CobrancaMonthTable';
@@ -14,15 +14,19 @@ import { CobrancaReembolsosTab } from './CobrancaReembolsosTab';
 import { CobrancaResumoAnual } from './CobrancaResumoAnual';
 import { CobrancaDetailDrawer } from './CobrancaDetailDrawer';
 import { CreateSubscriptionModal } from './CreateSubscriptionModal';
+import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
-import { CobrancaAlertPanel } from '@/components/shared/CobrancaAlertPanel';
-import { CobrancaHistoryPanel } from '@/components/shared/CobrancaHistoryPanel';
-import { Plus, RefreshCw, Download, Undo2, LayoutList, CalendarRange, TrendingUp, DollarSign, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Plus, RefreshCw, Download, Undo2, LayoutList, CalendarRange, TrendingUp, DollarSign, CheckCircle2, AlertTriangle, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { formatCurrency } from '@/lib/formatters';
+
+const PRODUCT_GROUPS: Record<string, string[]> = {
+  'Incorporador': ALLOWED_BILLING_PRODUCTS.filter(p => p.startsWith('A001') || p.startsWith('A002') || p.startsWith('A009')),
+  'Anticrise': ALLOWED_BILLING_PRODUCTS.filter(p => p.startsWith('A003') || p.startsWith('A004')),
+};
 
 export const FinanceiroCobrancas = () => {
   const [selectedSub, setSelectedSub] = useState<BillingSubscription | null>(null);
@@ -31,26 +35,39 @@ export const FinanceiroCobrancas = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [weekFilter, setWeekFilter] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState('cobrancas');
+  const [productFilter, setProductFilter] = useState<string>('todos');
   const syncMutation = useSyncBillingFromHubla();
-  const { data: billingAlerts = [], isLoading: loadingBillingAlerts } = useBillingCobrancaAlerts();
 
   const { data: monthData, isLoading: loadingMonth } = useBillingMonthInstallments(currentMonth, weekFilter);
-  const rows = monthData?.rows || [];
-  const kpis = monthData?.kpis;
+  const allRows = monthData?.rows || [];
 
-  // For detail drawer - need to fetch subscription by id
+  // Apply product filter client-side
+  const rows = useMemo(() => {
+    if (productFilter === 'todos') return allRows;
+    // Check if it's a group key
+    const group = PRODUCT_GROUPS[productFilter];
+    if (group) return allRows.filter(r => group.includes(r.product_name));
+    // Individual product
+    return allRows.filter(r => r.product_name === productFilter);
+  }, [allRows, productFilter]);
+
+  // Recalculate KPIs based on filtered rows
+  const kpis = useMemo(() => {
+    if (rows.length === 0 && allRows.length === 0) return monthData?.kpis;
+    const activeRows = rows.filter(r => r.status !== 'reembolso' && r.status !== 'nao_sera_pago' && r.status !== 'cancelado');
+    return {
+      valorEstimado: activeRows.reduce((s, r) => s + r.valor_original, 0),
+      valorRecebido: rows.filter(r => r.status === 'pago').reduce((s, r) => s + (r.valor_pago || 0), 0),
+      totalParcelas: rows.length,
+      parcelasPagas: rows.filter(r => r.status === 'pago').length,
+      parcelasAtrasadas: rows.filter(r => r.status === 'atrasado').length,
+      parcelasReembolso: rows.filter(r => r.status === 'reembolso').length,
+      parcelasExcluidas: rows.filter(r => r.status === 'nao_sera_pago').length,
+    };
+  }, [rows, allRows, monthData?.kpis]);
+
+  // For detail drawer
   const { data: subscriptions = [] } = useBillingSubscriptions({ month: currentMonth });
-
-  const billingAlertItems = billingAlerts.map(a => ({
-    id: a.installment_id,
-    label: a.customer_name,
-    sublabel: a.product_name || undefined,
-    numero_parcela: a.numero_parcela,
-    valor: a.valor_original,
-    data_vencimento: a.data_vencimento,
-    dias_para_vencer: a.dias_para_vencer,
-    priority: a.priority,
-  }));
 
   const handleSelectSubscription = (subscriptionId: string) => {
     const sub = subscriptions.find(s => s.id === subscriptionId);
@@ -90,13 +107,30 @@ export const FinanceiroCobrancas = () => {
 
   return (
     <div className="space-y-4">
-      <CobrancaAlertPanel
-        alerts={billingAlertItems}
-        isLoading={loadingBillingAlerts}
-        type="billing"
-        title="Parcelas com Vencimento Próximo"
-      />
-      <CobrancaHistoryPanel type="billing" />
+      {/* Filtro de Parceria/Produto */}
+      <div className="flex items-center gap-2">
+        <Filter className="h-4 w-4 text-muted-foreground" />
+        <Select value={productFilter} onValueChange={setProductFilter}>
+          <SelectTrigger className="w-[280px]">
+            <SelectValue placeholder="Filtrar por produto" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os produtos</SelectItem>
+            <SelectGroup>
+              <SelectLabel>Grupos</SelectLabel>
+              {Object.keys(PRODUCT_GROUPS).map(group => (
+                <SelectItem key={group} value={group}>{group}</SelectItem>
+              ))}
+            </SelectGroup>
+            <SelectGroup>
+              <SelectLabel>Produtos</SelectLabel>
+              {ALLOWED_BILLING_PRODUCTS.map(p => (
+                <SelectItem key={p} value={p}>{p}</SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </div>
       
       {/* KPIs - Estimado vs Recebido */}
       {kpis && (
