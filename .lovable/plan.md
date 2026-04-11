@@ -1,36 +1,42 @@
 
 
-# Fix: Transações manuais não contam no Bruto e Líquido
+# Filtrar produtos na página de Cobranças
 
-## Problema identificado
+## Objetivo
+Limitar o dropdown de produtos e os dados exibidos na aba "Parcelados" para mostrar apenas 5 produtos específicos.
 
-As transações adicionadas manualmente (source='manual') possuem `linked_attendee_id` que aponta para reuniões R2 de semanas anteriores. O sistema calcula `is_extra = true` para essas vendas, e o KPI "Bruto (Semana)" **exclui** todas as extras:
+## Mapeamento (nome solicitado → produto no banco)
 
-```js
-const vendasNormais = vendas.filter(v => !v.is_extra && !v.excluded_from_cart);
-const brutoTotal = vendasNormais.reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
+| Produto solicitado | `product_name` no banco |
+|---|---|
+| Incorporador 50k Completo | `A001 - MCF INCORPORADOR COMPLETO` |
+| Incorporador 50k Completo + The Club | `A009 - MCF INCORPORADOR COMPLETO + THE CLUB` e `A009 - MCF INCORPORADOR + THE CLUB` |
+| Anticrise Completo | `A003 - MCF Plano Anticrise Completo` |
+| Anticrise Básico | `A004 - MCF Plano Anticrise Básico` |
+| Plano Construtor Básico | `A002 - MCF INCORPORADOR BÁSICO` |
+
+**Nota:** Não existe "Plano Construtor Básico" no banco. Assumo que se refere ao `A002 - MCF INCORPORADOR BÁSICO`. Se for outro produto, me avise.
+
+## Alteração
+
+### Arquivo: `src/components/financeiro/cobranca/CobrancaFilters.tsx`
+
+Adicionar uma constante com os produtos permitidos e filtrar a lista retornada do banco para mostrar apenas esses no dropdown:
+
+```typescript
+const ALLOWED_PRODUCTS = [
+  'A001 - MCF INCORPORADOR COMPLETO',
+  'A009 - MCF INCORPORADOR COMPLETO + THE CLUB',
+  'A009 - MCF INCORPORADOR + THE CLUB',
+  'A003 - MCF Plano Anticrise Completo',
+  'A004 - MCF Plano Anticrise Básico',
+  'A002 - MCF INCORPORADOR BÁSICO',
+];
 ```
 
-As 3 transações manuais da semana (WANDER, Guilherme, Paulo Henrique) são todas extras, então R$ 42.500 de bruto e seus líquidos são excluídos do KPI.
+Filtrar `products` no `useMemo` ou diretamente no render para exibir somente os permitidos.
 
-## Correção
+### Arquivo: `src/hooks/useBillingSubscriptions.ts`
 
-### Arquivo: `src/components/crm/R2VendasList.tsx` (~linha 102)
-
-Alterar o cálculo de `totals` para incluir **todas** as vendas no Bruto e Líquido, separando apenas a contagem de "Vendas da Semana" vs "Extras":
-
-```js
-// Bruto: incluir TODAS as vendas não excluídas (normais + extras)
-const vendasAtivas = vendas.filter(v => !v.excluded_from_cart);
-const brutoTotal = vendasAtivas.reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
-
-// Contagem separada para os cards
-const vendasNormais = vendas.filter(v => !v.is_extra && !v.excluded_from_cart);
-const vendasExtras = vendas.filter(v => v.is_extra && !v.excluded_from_cart);
-
-// Líquido: todas as vendas (já estava correto, mas garantir)
-const liquidoTotal = vendasAtivas.reduce((sum, v) => sum + (v.net_value || 0), 0);
-```
-
-Isso garante que transações manuais (e extras em geral) contribuam para Bruto e Líquido. A contagem "Vendas da Semana" e "Vendas Extras" permanece separada.
+Adicionar filtro na query do Supabase para retornar apenas subscriptions com `product_name` dentro da lista permitida (usando `.in('product_name', ALLOWED_PRODUCTS)`). Isso garante que KPIs, tabela e contadores reflitam apenas esses produtos.
 
