@@ -11,6 +11,8 @@ import { ptBR } from 'date-fns/locale';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { useCarrinhoAnalysisReport, LeadCarrinhoCompleto } from '@/hooks/useCarrinhoAnalysisReport';
 import { BusinessUnit } from '@/hooks/useMyBU';
+import { useCarrinhoConfig } from '@/hooks/useCarrinhoConfig';
+import { subWeeks } from 'date-fns';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { DateRange } from 'react-day-picker';
@@ -60,7 +62,12 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
     return { startDate: null as Date | null, endDate: null as Date | null };
   }, [periodType, weekDate, monthDate, customRange]);
 
-  const { data, isLoading } = useCarrinhoAnalysisReport(startDate, endDate);
+  // Carrinho configs for dynamic cutoff alignment
+  const prevWeekStart = useMemo(() => startDate ? subWeeks(startDate, 1) : undefined, [startDate]);
+  const { config } = useCarrinhoConfig(startDate ?? undefined);
+  const { config: prevConfig } = useCarrinhoConfig(prevWeekStart);
+
+  const { data, isLoading } = useCarrinhoAnalysisReport(startDate, endDate, config, prevConfig);
 
   const filteredLeads = useMemo(() => {
     if (!data) return [];
@@ -213,7 +220,7 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
           </TabsList>
 
           <TabsContent value="funil_pos_venda">
-            <PostSaleFunnelPanel leads={data.leads} periodLabel={periodLabel} />
+            <PostSaleFunnelPanel leads={filteredLeads} periodLabel={periodLabel} />
           </TabsContent>
 
           <TabsContent value="analise_completa" className="space-y-6">

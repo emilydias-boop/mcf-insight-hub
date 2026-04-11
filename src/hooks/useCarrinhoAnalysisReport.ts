@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
+import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
 import { getUFFromPhone, getClusterFromUF } from '@/lib/dddToUF';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
@@ -303,15 +304,18 @@ function pickBestPhoneMatchedContact(
   });
 }
 
-export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date | null) {
+export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date | null, config?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
+  const cutoffKey = config?.carrinhos?.[0]?.horario_corte || '12:00';
+  const prevCutoffKey = previousConfig?.carrinhos?.[0]?.horario_corte || '12:00';
+
   return useQuery({
-    queryKey: ['carrinho-analysis-v2', startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ['carrinho-analysis-v2', startDate?.toISOString(), endDate?.toISOString(), cutoffKey, prevCutoffKey],
     enabled: !!startDate && !!endDate,
     queryFn: async (): Promise<CarrinhoAnalysisData> => {
       if (!startDate || !endDate) throw new Error('Datas não definidas');
 
       // Use metric-specific boundaries for consistency with Carrinho R2
-      const boundaries = getCarrinhoMetricBoundaries(startDate, endDate);
+      const boundaries = getCarrinhoMetricBoundaries(startDate, endDate, config, previousConfig);
       const effectiveStart = boundaries.contratos.start;
       const effectiveEnd = boundaries.contratos.end;
       const startStr = format(startDate, 'yyyy-MM-dd');
