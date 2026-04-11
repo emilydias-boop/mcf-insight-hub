@@ -178,13 +178,26 @@ export const useBillingKPIs = (month?: Date, subscriptionType?: SubscriptionType
       const { data: subs, error: subsError } = await subsQuery;
       if (subsError) throw subsError;
 
-      // Fetch installments (filtered by month if needed)
+      // Fetch installments (filtered by month and subscription type)
+      const subIdsList = subscriptions.map(s => s.id);
       let instQuery = supabase
         .from('billing_installments')
         .select('valor_pago, status');
 
       if (monthStart && monthEnd) {
         instQuery = instQuery.gte('data_vencimento', monthStart).lte('data_vencimento', monthEnd);
+      }
+
+      // Filter installments by the subscription IDs matching the type
+      if (subIdsList.length > 0) {
+        instQuery = instQuery.in('subscription_id', subIdsList.slice(0, 200));
+      } else if (subscriptionType) {
+        // No subs of this type, return empty
+        return {
+          valorTotalContratado: 0, valorTotalPago: 0, saldoDevedor: 0,
+          assinaturasAtivas: 0, assinaturasAtrasadas: 0, assinaturasQuitadas: 0,
+          parcelasPagas: 0, parcelasTotais: 0,
+        } as BillingKPIs;
       }
 
       const { data: installments, error: instError } = await instQuery;
