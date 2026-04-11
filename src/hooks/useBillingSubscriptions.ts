@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { BillingSubscription, BillingFilters, BillingKPIs } from '@/types/billing';
 import { useAuth } from '@/contexts/AuthContext';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
+import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
 const fetchSubscriptionIdsForMonth = async (month: Date): Promise<string[]> => {
   const start = format(startOfMonth(month), 'yyyy-MM-dd');
@@ -107,6 +108,7 @@ export const useBillingSubscriptions = (filters: BillingFilters) => {
 };
 
 function applyFilters(query: any, filters: BillingFilters) {
+  query = query.in('product_name', ALLOWED_BILLING_PRODUCTS);
   if (filters.status && filters.status !== 'todos') {
     query = query.eq('status', filters.status);
   }
@@ -151,7 +153,8 @@ export const useBillingKPIs = (month?: Date) => {
       // Fetch subscriptions (filtered by month if needed)
       let subsQuery = supabase
         .from('billing_subscriptions')
-        .select('id, valor_total_contrato, status, status_quitacao, total_parcelas');
+        .select('id, valor_total_contrato, status, status_quitacao, total_parcelas')
+        .in('product_name', ALLOWED_BILLING_PRODUCTS);
 
       if (subIds) {
         if (subIds.length === 0) {
