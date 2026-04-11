@@ -68,7 +68,7 @@ export const CobrancaDetailDrawer = ({ subscription, open, onOpenChange }: Cobra
   const totalBruto = installments.reduce((s, i) => s + (i.valor_original || 0), 0);
   const totalLiquido = installments.reduce((s, i) => s + (i.valor_liquido || 0), 0);
   const totalPago = installments.filter(i => i.status === 'pago').reduce((s, i) => s + (i.valor_pago || 0), 0);
-  const saldoDevedor = (totalLiquido > 0 ? totalLiquido : totalBruto) - totalPago;
+  const saldoDevedor = totalBruto - totalPago;
   const parcelasPagas = installments.filter(i => i.status === 'pago').length;
   const formaPgtoLabel = subscription.forma_pagamento
     ? PAYMENT_METHOD_LABELS[subscription.forma_pagamento as BillingPaymentMethod] || subscription.forma_pagamento
