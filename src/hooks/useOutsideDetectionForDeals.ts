@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { isOutsideOffer } from './outsideOfferConstants';
 
 interface DealForOutsideCheck {
   id: string;
@@ -9,9 +10,6 @@ interface DealForOutsideCheck {
   } | null;
 }
 
-/**
- * Executes a Supabase .in() query in batches to avoid URL length limits.
- */
 async function batchedIn<T>(
   queryFn: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: any }>,
   items: string[],
@@ -31,15 +29,6 @@ async function batchedIn<T>(
   return allData;
 }
 
-/**
- * Hook to detect "Outside" deals in the Kanban board.
- * A deal is "Outside" if its contact has a completed contract transaction
- * (hubla_transactions with product_name ILIKE '%Contrato%') AND either:
- *   - No R1 meeting exists for that deal, OR
- *   - The contract sale_date is <= the earliest R1 meeting scheduled_at
- *
- * Returns a Map<dealId, boolean>.
- */
 export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
   const keyParts = deals.map(d => `${d.id}:${d.crm_contacts?.email || ''}`).join(',');
 
@@ -72,7 +61,6 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         uniqueEmails
       );
 
-      // Build email -> all deal_ids map (including sibling deals from other pipelines)
       const emailToAllDealIds = new Map<string, Set<string>>();
       for (const d of allDealsForEmails) {
         const email = (d.crm_contacts as any)?.email?.toLowerCase().trim();
@@ -81,21 +69,19 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         emailToAllDealIds.get(email)!.add(d.id);
       }
 
-      // Expanded deal IDs: current deals + all sibling deals from same contacts
       const expandedDealIds = new Set<string>(deals.map(d => d.id));
       for (const dealSet of emailToAllDealIds.values()) {
         for (const id of dealSet) expandedDealIds.add(id);
       }
       const allDealIds = Array.from(expandedDealIds);
 
-      // 3. Fetch contract transactions, non-contract products, R1 meetings, AND partner transactions in parallel
-      const [contracts, nonContractProducts, r1Attendees, partnerTransactions] = await Promise.all([
-        // Contracts (for outside detection) - now also fetch linked_attendee_id
-        batchedIn<{ customer_email: string | null; sale_date: string; product_name: string | null; linked_attendee_id: string | null }>(
+      // 3. Fetch contracts (with offer_name), non-contract products, R1 meetings, partner products, CLS contracts
+      const [contracts, nonContractProducts, r1Attendees, partnerTransactions, clsContracts] = await Promise.all([
+        batchedIn<{ customer_email: string | null; sale_date: string; product_name: string | null; offer_name: string | null; linked_attendee_id: string | null }>(
           (chunk) =>
             supabase
               .from('hubla_transactions')
-              .select('customer_email, sale_date, product_name, linked_attendee_id')
+              .select('customer_email, sale_date, product_name, offer_name, linked_attendee_id')
               .in('customer_email', chunk)
               .in('product_category', ['contrato', 'incorporador'])
               .ilike('product_name', '%contrato%')
@@ -103,7 +89,6 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
               .order('sale_date', { ascending: true }),
           uniqueEmails
         ),
-        // Non-contract products (partnership/course names to display)
         batchedIn<{ customer_email: string | null; sale_date: string; product_name: string | null }>(
           (chunk) =>
             supabase
@@ -115,7 +100,6 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
               .order('sale_date', { ascending: false }),
           uniqueEmails
         ),
-        // R1 meetings by expanded deal_ids (includes sibling deals from other pipelines)
         batchedIn<{ deal_id: string | null; meeting_slots: { scheduled_at: string; meeting_type: string | null } }>(
           (chunk) =>
             supabase
@@ -125,7 +109,6 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
               .eq('meeting_slots.meeting_type', 'r1') as any,
           allDealIds
         ),
-        // Partner products: detect emails that already bought partnership products
         batchedIn<{ customer_email: string | null }>(
           (chunk) =>
             supabase
@@ -136,21 +119,37 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
               .or('product_name.ilike.%A001%,product_name.ilike.%A002%,product_name.ilike.%A003%,product_name.ilike.%A004%,product_name.ilike.%A009%,product_name.ilike.%INCORPORADOR%,product_name.ilike.%ANTICRISE%'),
           uniqueEmails
         ),
+        // CLS contracts check
+        batchedIn<{ customer_email: string | null }>(
+          (chunk) =>
+            supabase
+              .from('hubla_transactions')
+              .select('customer_email')
+              .in('customer_email', chunk)
+              .eq('sale_status', 'completed')
+              .ilike('offer_name', 'Contrato CLS%'),
+          uniqueEmails
+        ),
       ]);
 
-      // Build set of partner emails (those who bought non-contract, non-ignored products)
+      // Build disqualification sets
       const partnerEmails = new Set<string>();
       for (const pt of partnerTransactions) {
         const email = pt.customer_email?.toLowerCase().trim();
         if (email) partnerEmails.add(email);
       }
+      const clsEmails = new Set<string>();
+      for (const c of clsContracts) {
+        const email = c.customer_email?.toLowerCase().trim();
+        if (email) clsEmails.add(email);
+      }
 
-      // 3b. Now fetch the deal_ids for linked_attendee_ids from contracts
+      // 3b. Linked attendee → deal mapping
       const linkedAttendeeIds = contracts
         .map(c => c.linked_attendee_id)
         .filter((id): id is string => !!id);
       
-      const linkedAttendeeDealMap = new Map<string, string>(); // attendee_id -> deal_id
+      const linkedAttendeeDealMap = new Map<string, string>();
       if (linkedAttendeeIds.length > 0) {
         const attendeeResults = await batchedIn<{ id: string; deal_id: string | null }>(
           (chunk) =>
@@ -161,19 +160,16 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
           linkedAttendeeIds
         );
         for (const a of attendeeResults) {
-          if (a.deal_id) {
-            linkedAttendeeDealMap.set(a.id, a.deal_id);
-          }
+          if (a.deal_id) linkedAttendeeDealMap.set(a.id, a.deal_id);
         }
       }
 
-      // 4. Build email -> earliest contract date + product name
-      //    BUT skip contracts that are linked to a specific deal (via linked_attendee_id)
-      //    We'll handle the linked logic per-deal in step 6
+      // 4. Build email → contracts (only outside-eligible offers)
       const contractsByEmail = new Map<string, { date: Date; productName: string | null; linkedDealId: string | null }[]>();
       for (const c of contracts) {
         const email = c.customer_email?.toLowerCase().trim();
         if (!email) continue;
+        if (!isOutsideOffer(c.offer_name)) continue; // ONLY outside-eligible offers
         const saleDate = new Date(c.sale_date);
         const linkedDealId = c.linked_attendee_id ? (linkedAttendeeDealMap.get(c.linked_attendee_id) || null) : null;
         const existing = contractsByEmail.get(email) || [];
@@ -181,7 +177,7 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         contractsByEmail.set(email, existing);
       }
 
-      // 4b. Build email -> most recent non-contract product name
+      // 4b. Non-contract product name for display
       const nonContractProductName = new Map<string, string>();
       for (const p of nonContractProducts) {
         const email = p.customer_email?.toLowerCase().trim();
@@ -191,7 +187,7 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         }
       }
 
-      // 5. Build dealId -> earliest R1 scheduled_at (across all pipelines)
+      // 5. Build dealId -> earliest R1
       const earliestR1 = new Map<string, Date>();
       for (const a of r1Attendees) {
         if (!a.deal_id) continue;
@@ -203,13 +199,10 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         }
       }
 
-      // 5b. Map R1s from sibling deals back to current deals via email
-      //     If a sibling deal has an R1, the current deal should also "see" it
+      // 5b. Map R1s from sibling deals
       for (const [email, currentDealEntries] of emailToDealIds) {
         const allSiblingDealIds = emailToAllDealIds.get(email);
         if (!allSiblingDealIds) continue;
-
-        // Find earliest R1 across ALL deals for this email
         let earliestR1ForEmail: Date | undefined;
         for (const siblingId of allSiblingDealIds) {
           const r1Date = earliestR1.get(siblingId);
@@ -217,10 +210,7 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
             earliestR1ForEmail = r1Date;
           }
         }
-
         if (!earliestR1ForEmail) continue;
-
-        // Apply to all current deals for this email
         for (const entry of currentDealEntries) {
           const existing = earliestR1.get(entry.dealId);
           if (!existing || earliestR1ForEmail < existing) {
@@ -229,19 +219,16 @@ export const useOutsideDetectionForDeals = (deals: DealForOutsideCheck[]) => {
         }
       }
 
-      // 6. Determine Outside: has contract AND (no R1 OR contract <= R1)
-      //    NEW: Skip partners (emails that bought A001, A009, etc.) — they are NOT outside
-      //    NEW: Skip contracts that are linked to a DIFFERENT deal's attendee
+      // 6. Determine Outside
       for (const [email, dealEntries] of emailToDealIds) {
-        // Skip partners entirely — their contract is a legitimate sale, not "outside"
-        if (partnerEmails.has(email)) continue;
+        // Skip partners and CLS emails
+        if (partnerEmails.has(email) || clsEmails.has(email)) continue;
 
         const emailContracts = contractsByEmail.get(email);
         if (!emailContracts || emailContracts.length === 0) continue;
 
         const displayName = nonContractProductName.get(email) || emailContracts[0].productName;
 
-        // If there are linked contracts, ignore unlinked ones (they're duplicates/orphans)
         const hasLinkedContracts = emailContracts.some(c => c.linkedDealId !== null);
 
         for (const entry of dealEntries) {
