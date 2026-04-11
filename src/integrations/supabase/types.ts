@@ -3738,6 +3738,44 @@ export type Database = {
           },
         ]
       }
+      contract_post_sale_tracking: {
+        Row: {
+          created_at: string
+          id: string
+          status_pos_venda: Database["public"]["Enums"]["contract_pos_venda_status"]
+          sub_status: string | null
+          transaction_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          status_pos_venda: Database["public"]["Enums"]["contract_pos_venda_status"]
+          sub_status?: string | null
+          transaction_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          status_pos_venda?: Database["public"]["Enums"]["contract_pos_venda_status"]
+          sub_status?: string | null
+          transaction_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_post_sale_tracking_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
+            referencedRelation: "hubla_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_video_control: {
         Row: {
           attendee_id: string
@@ -11227,6 +11265,15 @@ export type Database = {
         | "lead_respondeu"
         | "sem_retorno"
         | "pago_confirmado"
+      contract_pos_venda_status:
+        | "desistiu_antes_r2"
+        | "nao_responde"
+        | "tentando_agendar"
+        | "agendado"
+        | "r2_realizada"
+        | "no_show"
+        | "desistiu_apos_r2"
+        | "aprovado"
       flag_category:
         | "desempenho"
         | "comportamento"
@@ -11520,6 +11567,16 @@ export const Constants = {
         "lead_respondeu",
         "sem_retorno",
         "pago_confirmado",
+      ],
+      contract_pos_venda_status: [
+        "desistiu_antes_r2",
+        "nao_responde",
+        "tentando_agendar",
+        "agendado",
+        "r2_realizada",
+        "no_show",
+        "desistiu_apos_r2",
+        "aprovado",
       ],
       flag_category: [
         "desempenho",
