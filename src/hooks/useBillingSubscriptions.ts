@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { BillingSubscription, BillingFilters, BillingKPIs } from '@/types/billing';
+import { BillingSubscription, BillingFilters, BillingKPIs, SubscriptionType, PARCELADO_CATEGORIES } from '@/types/billing';
 import { useAuth } from '@/contexts/AuthContext';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
 import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
@@ -136,9 +136,9 @@ function applyFilters(query: any, filters: BillingFilters) {
   return query;
 }
 
-export const useBillingKPIs = (month?: Date) => {
+export const useBillingKPIs = (month?: Date, subscriptionType?: SubscriptionType) => {
   return useQuery({
-    queryKey: ['billing-kpis', month?.toISOString()],
+    queryKey: ['billing-kpis', month?.toISOString(), subscriptionType],
     queryFn: async () => {
       let subIds: string[] | null = null;
       let monthStart: string | null = null;
@@ -156,6 +156,14 @@ export const useBillingKPIs = (month?: Date) => {
         .select('id, valor_total_contrato, status, status_quitacao, total_parcelas')
         .in('product_name', ALLOWED_BILLING_PRODUCTS);
 
+      if (subscriptionType === 'parcelado') {
+        subsQuery = subsQuery.in('product_category', [...PARCELADO_CATEGORIES]);
+      } else if (subscriptionType === 'assinatura') {
+        for (const cat of PARCELADO_CATEGORIES) {
+          subsQuery = subsQuery.neq('product_category', cat);
+        }
+      }
+
       if (subIds) {
         if (subIds.length === 0) {
           return {
@@ -170,7 +178,10 @@ export const useBillingKPIs = (month?: Date) => {
       const { data: subs, error: subsError } = await subsQuery;
       if (subsError) throw subsError;
 
-      // Fetch installments (filtered by month if needed)
+      const subscriptions = (subs || []) as unknown as { id: string; valor_total_contrato: number; status: string; status_quitacao: string; total_parcelas: number }[];
+
+      // Fetch installments (filtered by month and subscription type)
+      const subIdsList = subscriptions.map(s => s.id);
       let instQuery = supabase
         .from('billing_installments')
         .select('valor_pago, status');
@@ -179,10 +190,19 @@ export const useBillingKPIs = (month?: Date) => {
         instQuery = instQuery.gte('data_vencimento', monthStart).lte('data_vencimento', monthEnd);
       }
 
+      if (subIdsList.length > 0) {
+        instQuery = instQuery.in('subscription_id', subIdsList.slice(0, 200));
+      } else if (subscriptionType) {
+        return {
+          valorTotalContratado: 0, valorTotalPago: 0, saldoDevedor: 0,
+          assinaturasAtivas: 0, assinaturasAtrasadas: 0, assinaturasQuitadas: 0,
+          parcelasPagas: 0, parcelasTotais: 0,
+        } as BillingKPIs;
+      }
+
       const { data: installments, error: instError } = await instQuery;
       if (instError) throw instError;
 
-      const subscriptions = (subs || []) as unknown as { id: string; valor_total_contrato: number; status: string; status_quitacao: string; total_parcelas: number }[];
       const instList = (installments || []) as unknown as { valor_pago: number; status: string }[];
 
       const valorTotalContratado = subscriptions.reduce((s, sub) => s + (sub.valor_total_contrato || 0), 0);

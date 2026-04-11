@@ -34,9 +34,10 @@ export const FinanceiroCobrancas = () => {
   const syncMutation = useSyncBillingFromHubla();
   const { data: billingAlerts = [], isLoading: loadingBillingAlerts } = useBillingCobrancaAlerts();
 
-  const { data: kpis, isLoading: loadingKpis } = useBillingKPIs(currentMonth);
+  const subType = activeTab === 'assinaturas' ? 'assinatura' as const : activeTab === 'parcelados' ? 'parcelado' as const : undefined;
+  const { data: kpis, isLoading: loadingKpis } = useBillingKPIs(currentMonth, subType);
   const { data: subscriptions = [], isLoading: loadingSubs } = useBillingSubscriptions({ ...filters, month: currentMonth });
-  const { data: monthKpis, isLoading: loadingMonthKpis } = useBillingMonthKPIs(currentMonth);
+  const { data: monthKpis, isLoading: loadingMonthKpis } = useBillingMonthKPIs(currentMonth, subType);
 
   const { assinaturas, parcelados } = useMemo(() => {
     const assinaturas: BillingSubscription[] = [];
