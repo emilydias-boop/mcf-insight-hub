@@ -1,25 +1,22 @@
 
 
-# Fix: KPIs devem acompanhar a aba ativa (Assinaturas / Parcelados)
+# Unificar abas de Cobranças em uma só
 
 ## Problema
-Os KPIs globais (`CobrancaKPIs`) e os KPIs do mes (`CobrancaMonthKPIs`) buscam dados de **todas** as subscriptions, sem filtrar pelo tipo da aba ativa (assinatura vs parcelado). Ambas as abas mostram os mesmos valores.
+Todos os 5 produtos permitidos têm `product_category = 'incorporador'`, que cai na aba "Assinaturas". A aba "Parcelados" fica vazia. O usuário quer tudo em uma aba única.
 
-## Correção
+## Alterações
 
-### 1. `useBillingMonthKPIs.ts` — filtrar por tipo
-- Receber novo parametro `subscriptionType: 'assinatura' | 'parcelado' | undefined`
-- Antes de calcular, buscar os `subscription_id`s que pertencem ao tipo correto (join com `billing_subscriptions` filtrando por `product_category` usando a logica de `getSubscriptionType` / `PARCELADO_CATEGORIES`)
-- Filtrar installments apenas dos subscription_ids do tipo ativo
+### `src/components/financeiro/cobranca/FinanceiroCobrancas.tsx`
 
-### 2. `useBillingKPIs` em `useBillingSubscriptions.ts` — filtrar por tipo
-- Receber novo parametro `subscriptionType: 'assinatura' | 'parcelado' | undefined`
-- Adicionar filtro na query de subscriptions: para 'parcelado', filtrar `product_category` in PARCELADO_CATEGORIES; para 'assinatura', filtrar NOT in PARCELADO_CATEGORIES
-- Filtrar installments correspondentes
+1. Remover as abas "Assinaturas" e "Parcelados" — manter apenas "Acordos" como aba separada
+2. Remover a separação `assinaturas`/`parcelados` via `getSubscriptionType` — usar `subscriptions` direto
+3. Remover o state `activeTab` e a lógica de `subType` — KPIs passam `undefined` (sem filtro de tipo)
+4. Renderizar o conteúdo principal (month selector, KPIs do mês, filtros, tabela) diretamente, com a aba "Acordos" abaixo ou como toggle
 
-### 3. `FinanceiroCobrancas.tsx` — passar aba ativa
-- Passar `activeTab` para os hooks `useBillingKPIs(currentMonth, activeTab)` e `useBillingMonthKPIs(currentMonth, activeTab)`
-- Mapear `activeTab` ('assinaturas' -> 'assinatura', 'parcelados' -> 'parcelado', 'acordos' -> undefined)
+### `src/hooks/useBillingSubscriptions.ts` e `src/hooks/useBillingMonthKPIs.ts`
 
-Resultado: cada aba mostra KPIs exclusivos do seu tipo de subscription.
+- Remover o parâmetro `subscriptionType` dos hooks de KPIs (ou ignorá-lo) — não há mais necessidade de filtrar por tipo
+
+Layout final: conteúdo único com todos os produtos + seção de Acordos acessível via aba ou botão.
 
