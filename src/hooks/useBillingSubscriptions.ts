@@ -136,9 +136,9 @@ function applyFilters(query: any, filters: BillingFilters) {
   return query;
 }
 
-export const useBillingKPIs = (month?: Date, subscriptionType?: SubscriptionType) => {
+export const useBillingKPIs = (month?: Date) => {
   return useQuery({
-    queryKey: ['billing-kpis', month?.toISOString(), subscriptionType],
+    queryKey: ['billing-kpis', month?.toISOString()],
     queryFn: async () => {
       let subIds: string[] | null = null;
       let monthStart: string | null = null;

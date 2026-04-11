@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { BillingSubscription, BillingFilters, SUBSCRIPTION_STATUS_LABELS, PAYMENT_METHOD_LABELS, getSubscriptionType } from '@/types/billing';
+import { BillingSubscription, BillingFilters, SUBSCRIPTION_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/billing';
 import { useBillingSubscriptions, useBillingKPIs } from '@/hooks/useBillingSubscriptions';
 import { useBillingMonthKPIs } from '@/hooks/useBillingMonthKPIs';
 import { useSyncBillingFromHubla } from '@/hooks/useSyncBillingFromHubla';
@@ -18,7 +18,7 @@ import { CobrancaQueue } from './CobrancaQueue';
 import { CobrancaAcordosTab } from './CobrancaAcordosTab';
 import { CobrancaAlertPanel } from '@/components/shared/CobrancaAlertPanel';
 import { CobrancaHistoryPanel } from '@/components/shared/CobrancaHistoryPanel';
-import { Plus, RefreshCw, Download, CreditCard, Repeat, Handshake } from 'lucide-react';
+import { Plus, RefreshCw, Download, Handshake, LayoutList } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -30,29 +30,13 @@ export const FinanceiroCobrancas = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [activeTab, setActiveTab] = useState('assinaturas');
+  const [activeTab, setActiveTab] = useState('cobrancas');
   const syncMutation = useSyncBillingFromHubla();
   const { data: billingAlerts = [], isLoading: loadingBillingAlerts } = useBillingCobrancaAlerts();
 
-  const subType = activeTab === 'assinaturas' ? 'assinatura' as const : activeTab === 'parcelados' ? 'parcelado' as const : undefined;
-  const { data: kpis, isLoading: loadingKpis } = useBillingKPIs(currentMonth, subType);
+  const { data: kpis, isLoading: loadingKpis } = useBillingKPIs(currentMonth);
   const { data: subscriptions = [], isLoading: loadingSubs } = useBillingSubscriptions({ ...filters, month: currentMonth });
-  const { data: monthKpis, isLoading: loadingMonthKpis } = useBillingMonthKPIs(currentMonth, subType);
-
-  const { assinaturas, parcelados } = useMemo(() => {
-    const assinaturas: BillingSubscription[] = [];
-    const parcelados: BillingSubscription[] = [];
-    for (const sub of subscriptions) {
-      if (getSubscriptionType(sub) === 'parcelado') {
-        parcelados.push(sub);
-      } else {
-        assinaturas.push(sub);
-      }
-    }
-    return { assinaturas, parcelados };
-  }, [subscriptions]);
-
-  const currentList = activeTab === 'assinaturas' ? assinaturas : parcelados;
+  const { data: monthKpis, isLoading: loadingMonthKpis } = useBillingMonthKPIs(currentMonth);
 
   const billingAlertItems = billingAlerts.map(a => ({
     id: a.installment_id,
@@ -73,12 +57,12 @@ export const FinanceiroCobrancas = () => {
   };
 
   const handleExportExcel = () => {
-    if (currentList.length === 0) {
+    if (subscriptions.length === 0) {
       toast.error('Nenhum dado para exportar');
       return;
     }
 
-    const rows = currentList.map(sub => ({
+    const rows = subscriptions.map(sub => ({
       'Cliente': sub.customer_name,
       'Email': sub.customer_email || '',
       'Telefone': sub.customer_phone || '',
@@ -94,8 +78,8 @@ export const FinanceiroCobrancas = () => {
 
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, activeTab === 'assinaturas' ? 'Assinaturas' : 'Parcelados');
-    XLSX.writeFile(wb, `cobrancas_${activeTab}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'Cobranças');
+    XLSX.writeFile(wb, `cobrancas_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
     toast.success(`${rows.length} registros exportados`);
   };
 
@@ -113,15 +97,10 @@ export const FinanceiroCobrancas = () => {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start">
-          <TabsTrigger value="assinaturas" className="gap-1.5">
-            <Repeat className="h-4 w-4" />
-            Assinaturas
-            <Badge count={assinaturas.length} />
-          </TabsTrigger>
-          <TabsTrigger value="parcelados" className="gap-1.5">
-            <CreditCard className="h-4 w-4" />
-            Parcelados
-            <Badge count={parcelados.length} />
+          <TabsTrigger value="cobrancas" className="gap-1.5">
+            <LayoutList className="h-4 w-4" />
+            Cobranças
+            <BadgeCount count={subscriptions.length} />
           </TabsTrigger>
           <TabsTrigger value="acordos" className="gap-1.5">
             <Handshake className="h-4 w-4" />
@@ -129,42 +108,36 @@ export const FinanceiroCobrancas = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="assinaturas">
-          <SubscriptionTabContent
-            subscriptions={assinaturas}
-            isLoading={loadingSubs}
-            filters={filters}
-            onFiltersChange={setFilters}
-            onSelect={handleSelect}
-            currentMonth={currentMonth}
-            onMonthChange={setCurrentMonth}
-            monthKpis={monthKpis}
-            loadingMonthKpis={loadingMonthKpis}
-            monthLabel={monthLabel}
-            onExport={handleExportExcel}
-            onSync={() => syncMutation.mutate()}
-            syncPending={syncMutation.isPending}
-            onCreateNew={() => setShowCreateModal(true)}
-          />
-        </TabsContent>
+        <TabsContent value="cobrancas">
+          <div className="space-y-4 mt-4">
+            <div className="flex items-center justify-between">
+              <CobrancaMonthSelector currentMonth={currentMonth} onMonthChange={setCurrentMonth} />
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={handleExportExcel} disabled={subscriptions.length === 0} className="shrink-0">
+                  <Download className="h-4 w-4 mr-1" /> Exportar Excel
+                </Button>
+                <Button variant="outline" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending} className="shrink-0">
+                  <RefreshCw className={`h-4 w-4 mr-1 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+                  {syncMutation.isPending ? 'Sincronizando...' : 'Sincronizar Hubla'}
+                </Button>
+                <Button onClick={() => setShowCreateModal(true)} className="shrink-0">
+                  <Plus className="h-4 w-4 mr-1" /> Nova Assinatura
+                </Button>
+              </div>
+            </div>
 
-        <TabsContent value="parcelados">
-          <SubscriptionTabContent
-            subscriptions={parcelados}
-            isLoading={loadingSubs}
-            filters={filters}
-            onFiltersChange={setFilters}
-            onSelect={handleSelect}
-            currentMonth={currentMonth}
-            onMonthChange={setCurrentMonth}
-            monthKpis={monthKpis}
-            loadingMonthKpis={loadingMonthKpis}
-            monthLabel={monthLabel}
-            onExport={handleExportExcel}
-            onSync={() => syncMutation.mutate()}
-            syncPending={syncMutation.isPending}
-            onCreateNew={() => setShowCreateModal(true)}
-          />
+            <CobrancaMonthKPIs data={monthKpis} isLoading={loadingMonthKpis} monthLabel={monthLabel} />
+
+            <div className="flex items-center justify-between gap-4">
+              <CobrancaFilters filters={filters} onFiltersChange={setFilters} />
+            </div>
+
+            <Card>
+              <CardContent className="p-0">
+                <CobrancaTable subscriptions={subscriptions} isLoading={loadingSubs} onSelect={handleSelect} />
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="acordos">
@@ -186,63 +159,8 @@ export const FinanceiroCobrancas = () => {
   );
 };
 
-// Inline badge counter
-const Badge = ({ count }: { count: number }) => (
+const BadgeCount = ({ count }: { count: number }) => (
   <span className="ml-1 inline-flex items-center justify-center rounded-full bg-muted-foreground/20 px-1.5 py-0.5 text-[10px] font-medium leading-none">
     {count}
   </span>
-);
-
-// Shared content for Assinaturas and Parcelados tabs
-interface SubscriptionTabContentProps {
-  subscriptions: BillingSubscription[];
-  isLoading: boolean;
-  filters: BillingFilters;
-  onFiltersChange: (f: BillingFilters) => void;
-  onSelect: (sub: BillingSubscription) => void;
-  currentMonth: Date;
-  onMonthChange: (d: Date) => void;
-  monthKpis: any;
-  loadingMonthKpis: boolean;
-  monthLabel: string;
-  onExport: () => void;
-  onSync: () => void;
-  syncPending: boolean;
-  onCreateNew: () => void;
-}
-
-const SubscriptionTabContent = ({
-  subscriptions, isLoading, filters, onFiltersChange, onSelect,
-  currentMonth, onMonthChange, monthKpis, loadingMonthKpis, monthLabel,
-  onExport, onSync, syncPending, onCreateNew,
-}: SubscriptionTabContentProps) => (
-  <div className="space-y-4 mt-4">
-    <div className="flex items-center justify-between">
-      <CobrancaMonthSelector currentMonth={currentMonth} onMonthChange={onMonthChange} />
-      <div className="flex items-center gap-2">
-        <Button variant="outline" onClick={onExport} disabled={subscriptions.length === 0} className="shrink-0">
-          <Download className="h-4 w-4 mr-1" /> Exportar Excel
-        </Button>
-        <Button variant="outline" onClick={onSync} disabled={syncPending} className="shrink-0">
-          <RefreshCw className={`h-4 w-4 mr-1 ${syncPending ? 'animate-spin' : ''}`} />
-          {syncPending ? 'Sincronizando...' : 'Sincronizar Hubla'}
-        </Button>
-        <Button onClick={onCreateNew} className="shrink-0">
-          <Plus className="h-4 w-4 mr-1" /> Nova Assinatura
-        </Button>
-      </div>
-    </div>
-
-    <CobrancaMonthKPIs data={monthKpis} isLoading={loadingMonthKpis} monthLabel={monthLabel} />
-
-    <div className="flex items-center justify-between gap-4">
-      <CobrancaFilters filters={filters} onFiltersChange={onFiltersChange} />
-    </div>
-
-    <Card>
-      <CardContent className="p-0">
-        <CobrancaTable subscriptions={subscriptions} isLoading={isLoading} onSelect={onSelect} />
-      </CardContent>
-    </Card>
-  </div>
 );
