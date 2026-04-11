@@ -1,63 +1,27 @@
 
 
-# Fix: Valor Bruto incorreto nas parcelas de cobranca
+# Fix: CPU Time Exceeded no sync-billing-from-hubla
 
-## Problema raiz identificado
+## Problema
+A function ainda estoura o limite de CPU (2s) porque busca 1000 transacoes por chamada, gerando centenas de grupos e fazendo dezenas de queries sequenciais (updates individuais para cada subscription e installment).
 
-Existem **dois bugs** causando valores brutos incorretos:
+## Causa raiz
+- `.range(offset, offset + 999)` busca 1000 transacoes
+- Cada grupo gera updates individuais via `await` sequencial (linhas 234-236 para subs, 384-418 para installments, 422-433 para due dates)
+- Mesmo com `batchSize=50`, os 1000 registros criam muitos grupos
 
-### Bug 1: Variavel `valorBrutoPerInstallment` nao definida no loop de criacao de parcelas (Edge Function)
+## Correcao
 
-Na edge function `sync-billing-from-hubla`, a variavel `valorBrutoPerInstallment` e calculada no **primeiro loop** (criacao de subscriptions, linha 128), mas referenciada no **segundo loop** (criacao de installments, linhas 331 e 358) sem ser recalculada. Isso causa:
+### `supabase/functions/sync-billing-from-hubla/index.ts`
 
-- Parcelas 2-12 recebem `valor_original` de outra subscription processada anteriormente
-- Exemplo: Delbert Nickerson tem parcela 1 = R$14.500 (correto), mas parcelas 2-12 = R$17.324,28 (valor de OUTRO cliente)
-- Resultado: sum(valor_original) = R$205.067 vs valor_total_contrato = R$174.000
+1. **Reduzir range de 1000 para 200** transacoes por chamada (linha 33: `offset + 199`)
+2. **Atualizar `hasMore`** (linha 640: `transactions.length >= 200`)
+3. **Atualizar `nextOffset`** (linha 651: `offset + 200`)
+4. **Reduzir batchSize default** de 50 para 20 (linha 23)
 
-Dados confirmados: 15+ subscriptions com divergencia entre `valor_total_contrato` e soma de `valor_original` das parcelas.
+### `src/hooks/useSyncBillingFromHubla.ts`
 
-### Bug 2: Saldo Devedor mostra R$ 0,00 incorretamente (Detail Drawer)
+- Manter `batchSize: 20` no body para acompanhar
 
-No `CobrancaDetailDrawer.tsx`, o calculo:
-```
-saldoDevedor = (totalLiquido > 0 ? totalLiquido : totalBruto) - totalPago
-```
-Quando so a parcela 1 tem `valor_liquido` preenchido, `totalLiquido = 9.429,69` e `totalPago = 9.429,69`, resultando em saldo = 0. As 11 parcelas pendentes sao ignoradas.
-
-## Correcoes
-
-### 1. Edge Function `sync-billing-from-hubla/index.ts`
-
-No segundo loop (linha 264), adicionar o calculo de `valorBrutoPerInstallment`:
-
-```typescript
-// Adicionar apos linha 271 (const valorBruto = ...)
-const p2txBruto = txList.find(tx => (tx.installment_number || 1) > 1);
-const valorBrutoPerInstallment = p2txBruto
-  ? (p2txBruto.product_price || first.product_price || 0)
-  : (first.product_price || 0);
-```
-
-Tambem corrigir a referencia `valorParcela` (linha 347) que nao esta definida - trocar por `paid.net_value || paid.product_price`.
-
-### 2. `CobrancaDetailDrawer.tsx` - Saldo Devedor
-
-Corrigir o calculo para usar o bruto quando o liquido nao esta disponivel para todas as parcelas:
-
-```typescript
-const saldoDevedor = totalBruto - totalPago;
-```
-
-Isso garante que o saldo devedor reflita o total bruto menos o que ja foi pago.
-
-### 3. Re-sync para corrigir dados existentes
-
-Apos o deploy da edge function corrigida, sera necessario rodar a sincronizacao novamente para recalcular os `valor_original` de todas as parcelas afetadas. Porem, como a sync so cria parcelas **novas** (verifica `existingNums`), precisaremos tambem atualizar as parcelas existentes. Vou adicionar logica na sync para atualizar `valor_original` de parcelas nao-pagas quando o valor esta incorreto.
-
-## Arquivos alterados
-
-| Arquivo | Alteracao |
-|---|---|
-| `supabase/functions/sync-billing-from-hubla/index.ts` | Adicionar `valorBrutoPerInstallment` no segundo loop + corrigir `valorParcela` + atualizar valor_original de parcelas existentes |
-| `src/components/financeiro/cobranca/CobrancaDetailDrawer.tsx` | Corrigir calculo do saldo devedor |
+Resultado: cada invocacao processa ~200 transacoes (~30-50 grupos), mantendo dentro do limite de 2s de CPU.
 
