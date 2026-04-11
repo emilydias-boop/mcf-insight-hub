@@ -98,14 +98,16 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas, carrinhoConfi
   const [agreementModalOpen, setAgreementModalOpen] = useState(false);
   const [agreementSubId, setAgreementSubId] = useState<string | null>(null);
 
-  // Calcular totais - separando normais e extras
+  // Calcular totais - incluindo TODAS as vendas (normais + extras) no bruto e líquido
   const totals = useMemo(() => {
+    const vendasAtivas = vendas.filter(v => !v.excluded_from_cart);
     const vendasNormais = vendas.filter(v => !v.is_extra && !v.excluded_from_cart);
     const vendasExtras = vendas.filter(v => v.is_extra && !v.excluded_from_cart);
     
-    const brutoTotal = vendasNormais.reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
+    // Bruto e Líquido incluem TODAS as vendas ativas (normais + extras)
+    const brutoTotal = vendasAtivas.reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
     const brutoExtras = vendasExtras.reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
-    const liquidoTotal = vendas.reduce((sum, v) => sum + (v.net_value || 0), 0);
+    const liquidoTotal = vendasAtivas.reduce((sum, v) => sum + (v.net_value || 0), 0);
 
     // Count vendas with active agreement
     let comAcordo = 0;
