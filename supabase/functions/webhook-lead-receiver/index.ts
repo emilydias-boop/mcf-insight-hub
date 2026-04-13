@@ -536,6 +536,74 @@ serve(async (req) => {
       }
     }
 
+    // ======= TRAVA PARCEIRO/RENOVAÇÃO: Bloquear na Inside Sales (Incorporador) =======
+    if (endpoint.origin_id === INSIDE_SALES_ORIGIN_ID && (emailTrimmed || normalizedPhone)) {
+      const partnerCheckEmail = emailTrimmed ? emailTrimmed.toLowerCase() : '';
+      let partnerCheck = { isPartner: false, product: null as string | null };
+      
+      if (partnerCheckEmail) {
+        partnerCheck = await checkIfPartner(supabase, partnerCheckEmail);
+      }
+      
+      // Fallback: check by phone suffix if email didn't match
+      if (!partnerCheck.isPartner && normalizedPhone) {
+        const phoneSuffix9 = normalizedPhone.replace(/\D/g, '').slice(-9);
+        if (phoneSuffix9.length >= 9) {
+          try {
+            const { data: phoneTxs } = await supabase
+              .from('hubla_transactions')
+              .select('product_name, customer_email')
+              .eq('sale_status', 'completed')
+              .ilike('customer_phone', `%${phoneSuffix9}`);
+            
+            for (const tx of phoneTxs || []) {
+              if (!tx.product_name) continue;
+              const upper = tx.product_name.toUpperCase();
+              if (PARTNER_PATTERNS.some(p => upper.includes(p))) {
+                partnerCheck = { isPartner: true, product: tx.product_name };
+                break;
+              }
+            }
+          } catch (phoneErr) {
+            console.error('[WEBHOOK-RECEIVER] Erro ao verificar parceiro por telefone:', phoneErr);
+          }
+        }
+      }
+      
+      if (partnerCheck.isPartner) {
+        console.log(`[WEBHOOK-RECEIVER] ⛔ Parceiro/Renovação detectado na Inside Sales: ${partnerCheckEmail || normalizedPhone} (${partnerCheck.product}) — bloqueando`);
+        
+        try {
+          await supabase.from('partner_returns').insert({
+            contact_id: contactId,
+            contact_email: partnerCheckEmail || null,
+            contact_name: payload.name || payload.nome_completo || null,
+            partner_product: partnerCheck.product || 'parceria',
+            return_source: `webhook-${slug}`,
+            return_product: endpoint.name,
+            return_value: 0,
+            blocked: true,
+            notes: `Parceiro/Renovação bloqueado na Inside Sales via webhook-lead-receiver (${slug}).`,
+          } as any);
+        } catch (prErr) {
+          console.error('[WEBHOOK-RECEIVER] Erro ao registrar partner_returns:', prErr);
+        }
+        
+        await updateEndpointMetrics(supabase, endpoint.id);
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            action: 'partner_blocked',
+            reason: 'partner_or_renewal_blocked_from_inside_sales',
+            contact_id: contactId,
+            partner_product: partnerCheck.product,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     // 8. Check for existing deal (any deal for same contact+origin, respecting UNIQUE constraint)
     const { data: existingDeal } = await supabase
       .from('crm_deals')
@@ -1153,7 +1221,12 @@ async function getContractPaidStageIds(supabaseClient: any, originId: string): P
 
 // ============ PARTNER DETECTION ============
 
-const PARTNER_PATTERNS = ['A001', 'A002', 'A003', 'A004', 'A009', 'INCORPORADOR', 'ANTICRISE'];
+const PARTNER_PATTERNS = [
+  'A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A007', 'A008', 'A009',
+  'INCORPORADOR', 'ANTICRISE', 'RENOVAÇÃO', 'RENOVACAO',
+  'R001', 'R004', 'R005', 'R006', 'R009', 'R21',
+  'MCF PLANO', 'MCF INCORPORADOR',
+];
 
 async function checkIfPartner(
   supabaseClient: any,
