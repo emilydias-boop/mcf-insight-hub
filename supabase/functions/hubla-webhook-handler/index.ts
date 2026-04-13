@@ -499,18 +499,33 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
     
     // === CONTINUAR COM CRIAÇÃO DE DEAL SE NÃO EXISTIR ===
     
-    // 6. Buscar estágio "Novo Lead" para a origem
+    // 6. Buscar estágio "Novo Lead" para a origem (por nome, não por ordem)
     let stageId: string | null = null;
     if (originId) {
-      const { data: stage } = await supabase
+      // Primeiro: buscar stage "Novo Lead" por nome
+      const { data: novoLeadStage } = await supabase
         .from('crm_stages')
         .select('id')
         .eq('origin_id', originId)
-        .order('stage_order', { ascending: true })
+        .ilike('stage_name', '%Novo Lead%')
         .limit(1)
         .maybeSingle();
       
-      stageId = stage?.id;
+      if (novoLeadStage) {
+        stageId = novoLeadStage.id;
+        console.log(`[CRM] Stage "Novo Lead" encontrado por nome: ${stageId}`);
+      } else {
+        // Fallback: primeira stage por ordem (caso não exista "Novo Lead")
+        const { data: fallbackStage } = await supabase
+          .from('crm_stages')
+          .select('id')
+          .eq('origin_id', originId)
+          .order('stage_order', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        stageId = fallbackStage?.id;
+        console.log(`[CRM] Stage fallback por ordem: ${stageId}`);
+      }
     }
     
     // Se não encontrou stage da origem, buscar stage genérico "Novo Lead"
