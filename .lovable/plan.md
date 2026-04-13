@@ -1,37 +1,26 @@
 
 
-## Plano: Corrigir acesso ao "Meu Fechamento" para todos os cargos relevantes
+## Plano: Mostrar valor sugerido da NFSe para PJ com salario fixo
 
 ### Problema
 
-A rota `/meu-fechamento` e o link na sidebar estao restritos apenas aos cargos `sdr` e `closer`. Emily (admin) e qualquer outro cargo (manager, coordenador, financeiro, rh, etc.) recebem "Acesso Negado".
-
-### Causa raiz
-
-Dois arquivos restringem o acesso:
-
-1. **`src/App.tsx` (linha 220)**: `RoleGuard allowedRoles={['sdr', 'closer']}`
-2. **`src/components/layout/AppSidebar.tsx` (linha 293)**: `requiredRoles: ["sdr", "closer"]`
+Colaboradores PJ que nao sao SDR/Closer (sem fechamento calculado) precisam digitar o valor da NFSe manualmente no modal do Meu RH, sem saber qual valor a empresa espera.
 
 ### Solucao
 
-Expandir os cargos permitidos para incluir `admin`, `manager`, `coordenador` e demais cargos que possam ter um registro de SDR/Closer vinculado. A pagina ja trata graciosamente o caso de "nao cadastrado" com uma mensagem amigavel, entao nao ha risco de erro.
+No `EnviarNfseModal`, receber o `salario_base` do colaborador como prop e pre-preencher o campo "Valor da NFSe" com esse valor, permitindo edicao.
 
-| Arquivo | Alteracao |
-|---------|-----------|
-| `src/App.tsx` (linha 220) | Adicionar `admin`, `manager`, `coordenador`, `financeiro`, `rh` aos `allowedRoles` |
-| `src/components/layout/AppSidebar.tsx` (linha 293) | Remover `requiredRoles` ou expandir para os mesmos cargos, tornando visivel para todos os autenticados |
+### Alteracoes
 
-### Detalhe tecnico
+**1. `src/components/meu-rh/EnviarNfseModal.tsx`**
+- Adicionar prop opcional `valorSugerido?: number`
+- Inicializar `valorNfse` com `valorSugerido` formatado (ex: "4000,00") quando fornecido
+- Exibir label auxiliar abaixo do campo: "Valor sugerido com base no seu salario: R$ X.XXX,XX"
 
-A pagina `MeuFechamento` ja possui fallback para usuarios sem registro:
-```
-"Voce nao esta cadastrado no sistema de fechamento."
-```
+**2. `src/components/meu-rh/MeuRHNfseSection.tsx`**
+- Passar `valorSugerido={employee.salario_base}` ao `EnviarNfseModal`
 
-Portanto, liberar o acesso nao causa problemas -- quem nao tiver fechamento simplesmente vera a mensagem informativa.
+### Resultado
 
-### Recomendacao
-
-Remover completamente o `requiredRoles` da sidebar e o `RoleGuard` da rota, deixando acessivel para qualquer usuario autenticado. Isso simplifica a logica e a pagina ja se protege sozinha.
+O colaborador PJ abre o modal e ja ve o campo preenchido com seu salario base. Pode editar se necessario (ajustes, bonus, etc.), mas nao precisa adivinhar o valor.
 
