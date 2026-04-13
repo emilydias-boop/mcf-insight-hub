@@ -19,6 +19,7 @@ interface EnviarNfseModalProps {
   onOpenChange: (open: boolean) => void;
   employeeId: string;
   onSuccess: () => void;
+  valorSugerido?: number;
 }
 
 async function sendNfseEmails(employeeId: string, monthLabel: string, numeroNfse: string, valorNfse: string) {
@@ -81,11 +82,13 @@ async function sendNfseEmails(employeeId: string, monthLabel: string, numeroNfse
   }
 }
 
-export function EnviarNfseModal({ open, onOpenChange, employeeId, onSuccess }: EnviarNfseModalProps) {
+export function EnviarNfseModal({ open, onOpenChange, employeeId, onSuccess, valorSugerido }: EnviarNfseModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [numeroNfse, setNumeroNfse] = useState('');
-  const [valorNfse, setValorNfse] = useState('');
+  const [valorNfse, setValorNfse] = useState(() =>
+    valorSugerido ? valorSugerido.toFixed(2).replace('.', ',') : ''
+  );
   const [observacoes, setObservacoes] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
@@ -213,6 +216,11 @@ export function EnviarNfseModal({ open, onOpenChange, employeeId, onSuccess }: E
               placeholder="Ex: 4000,00"
               className="h-9 text-xs"
             />
+            {valorSugerido && (
+              <p className="text-[10px] text-muted-foreground">
+                Valor sugerido com base no seu salário: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorSugerido)}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
