@@ -1,42 +1,87 @@
 
-Objetivo: corrigir a divergência restante de 22 vs 23 no detalhe do closer sem mexer em backend/query, porque agora o problema está na classificação exibida no frontend.
 
-Diagnóstico confirmado
-- `src/hooks/useCloserDetailData.ts` já foi corrigido e hoje normaliza o status pelo período:
-  - pagamento dentro do período => `status: 'contract_paid'`
-  - pagamento fora do período => mantém o status original da reunião
-- O problema restante está em `src/components/closer/CloserLeadsTable.tsx`, que continua ignorando esse status normalizado e reclassifica a lead com base em `contract_paid_at`:
-```ts
-const displayStatus = l.contract_paid_at ? 'contract_paid' : l.status;
+## Plano: Bloquear Parceiros/Renovações na Inside Sales (Incorporador)
+
+### Problema
+
+Leads que já são parceiros ou fizeram renovação (ex: A006 - Renovação Parceiro MCF) estão entrando como "Novo Lead" na Pipeline Inside Sales da BU Incorporador. O sistema detecta parceiros somente DEPOIS de criar o deal (linha 828) e os move para "Venda Realizada" — mas os patterns estão incompletos (faltam A005, A006, A007, A008, RENOVAÇÃO).
+
+### Correção
+
+**Arquivo: `supabase/functions/webhook-lead-receiver/index.ts`**
+
+#### 1. Expandir PARTNER_PATTERNS (linha 1156)
+
+```typescript
+// De:
+const PARTNER_PATTERNS = ['A001', 'A002', 'A003', 'A004', 'A009', 'INCORPORADOR', 'ANTICRISE'];
+
+// Para:
+const PARTNER_PATTERNS = [
+  'A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A007', 'A008', 'A009',
+  'INCORPORADOR', 'ANTICRISE', 'RENOVAÇÃO', 'RENOVACAO',
+  'R001', 'R004', 'R005', 'R006', 'R009', 'R21',
+  'MCF PLANO', 'MCF INCORPORADOR',
+];
 ```
-- Isso afeta diretamente:
-  - chips de contagem
-  - filtro por status
-  - badge da linha
-  - status exportado no Excel
-- Resultado: um lead com `contract_paid_at` histórico fora do período ainda aparece como “Contrato Pago” no front, mesmo que o hook já tenha marcado a linha como “Realizada” para abril.
 
-Implementação
-1. Ajustar `src/components/closer/CloserLeadsTable.tsx` para usar `lead.status` como fonte única de verdade.
-2. Remover a inferência por `contract_paid_at` nestes pontos:
-   - geração de `statuses`
-   - `statusCounts`
-   - filtro `statusFilter`
-   - `handleExport`
-   - `getStatusBadge`
-3. Manter `contract_paid_at` apenas como dado da lead, sem usá-lo para decidir contagem ou badge.
-4. Não alterar `useCloserDetailData`, Supabase nem a aba de Faturamento.
+#### 2. Adicionar trava ANTES da criação do deal, apenas para Inside Sales
 
-Impacto esperado
-- O chip “Contrato Pago” deve cair de 23 para 22.
-- O filtro “Contrato Pago” deve listar 22.
-- O lead do Luiz Valentin deve continuar na aba, mas com badge “Realizada”.
-- O caso do Caio reembolsado continua correto para o Mateus quando o pagamento estiver no período, porque o hook já converte esse caso para `status = 'contract_paid'`.
+Inserir entre a trava A010 (linha 537) e o check de deal existente (linha 539). A lógica:
 
-Validação
-- Abrir `/crm/reunioes-equipe/closer/2396c873-a59c-4e07-bcd8-82b6f330b969?preset=month&month=2026-04`
-- Confirmar:
-  - KPI “Contratos Pagos” = 22
-  - chip/filtro “Contrato Pago” = 22
-  - Luiz Valentin aparece como “Realizada”
-  - exportação Excel traz o mesmo status mostrado na tela
+- Se `endpoint.origin_id === INSIDE_SALES_ORIGIN_ID`, verificar se o lead é parceiro/renovação via `checkIfPartner`
+- Se for parceiro: **bloquear** criação do deal, retornar `partner_blocked`
+- Registrar em `partner_returns` com `blocked: true`
+- Se NÃO for Inside Sales: não bloquear (outras BUs decidem seus próprios fluxos)
+
+```typescript
+// ======= TRAVA PARCEIRO/RENOVAÇÃO: Bloquear na Inside Sales (Incorporador) =======
+if (endpoint.origin_id === INSIDE_SALES_ORIGIN_ID && contactEmail) {
+  const partnerCheck = await checkIfPartner(supabase, contactEmail);
+  if (partnerCheck.isPartner) {
+    console.log(`[WEBHOOK-RECEIVER] ⛔ Parceiro/Renovação detectado na Inside Sales: ${contactEmail} (${partnerCheck.product}) — bloqueando`);
+    
+    // Registrar auditoria
+    try {
+      await supabase.from('partner_returns').insert({
+        contact_id: contactId,
+        contact_email: contactEmail,
+        contact_name: payload.name || payload.nome_completo || null,
+        partner_product: partnerCheck.product || 'parceria',
+        return_source: `webhook-${slug}`,
+        return_product: endpoint.name,
+        return_value: 0,
+        blocked: true,
+        notes: `Parceiro/Renovação bloqueado na Inside Sales via webhook-lead-receiver (${slug}).`,
+      } as any);
+    } catch (prErr) {
+      console.error('[WEBHOOK-RECEIVER] Erro ao registrar partner_returns:', prErr);
+    }
+    
+    await updateEndpointMetrics(supabase, endpoint.id);
+    
+    return new Response(
+      JSON.stringify({
+        success: true,
+        action: 'partner_blocked',
+        reason: 'partner_or_renewal_blocked_from_inside_sales',
+        contact_id: contactId,
+        partner_product: partnerCheck.product,
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}
+```
+
+#### 3. Manter a detecção pós-criação (linha 828) como está
+
+Para pipelines que NÃO são Inside Sales, o comportamento atual (criar deal e mover para Venda Realizada) continua funcionando. Não remover.
+
+### Impacto
+
+- Parceiros e renovações (A001-A009, RENOVAÇÃO, R001, etc.) serão **bloqueados** de entrar como novo lead na Inside Sales (Incorporador)
+- Outras pipelines/BUs não são afetadas
+- Auditoria em `partner_returns` com `blocked: true`
+- Leads genuinamente novos continuam entrando normalmente
+
