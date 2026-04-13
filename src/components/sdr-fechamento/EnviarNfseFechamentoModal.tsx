@@ -45,7 +45,7 @@ async function sendNfseEmails(
     // Fetch payout details
     const { data: payout } = await supabase
       .from('sdr_month_payout')
-      .select('aprovado_por, aprovado_em, valor_fixo, valor_variavel_total, total_conta, total_ifood, ifood_mensal, ifood_ultrameta, pct_reunioes_agendadas, valor_reunioes_agendadas, pct_reunioes_realizadas, valor_reunioes_realizadas, pct_tentativas, valor_tentativas, pct_organizacao, valor_organizacao, valor_no_show')
+      .select('aprovado_por, aprovado_em, valor_fixo, valor_variavel_total, total_conta, total_ifood, ifood_mensal, ifood_ultrameta, pct_reunioes_agendadas, valor_reunioes_agendadas, pct_reunioes_realizadas, valor_reunioes_realizadas, pct_tentativas, valor_tentativas, pct_organizacao, valor_organizacao')
       .eq('id', payoutId)
       .single();
 
@@ -98,7 +98,7 @@ async function sendNfseEmails(
         pct_organizacao: payout.pct_organizacao,
         valor_organizacao: payout.valor_organizacao,
         pct_no_show: null,
-        valor_no_show: payout.valor_no_show,
+        valor_no_show: null,
       } : undefined,
     });
 
