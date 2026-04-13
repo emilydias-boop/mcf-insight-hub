@@ -626,9 +626,9 @@ export default function ReunioesEquipe() {
         </CardContent>
       </Card>
 
-      {/* KPI Cards */}
+      {/* KPI Cards - SDR tab uses teamKPIs (SDR perspective), Closers tab uses enrichedKPIs (closer perspective) */}
       <TeamKPICards 
-        kpis={enrichedKPIs} 
+        kpis={activeTab === 'sdrs' ? teamKPIs : enrichedKPIs} 
         isLoading={isLoading}
         isToday={datePreset === "today"}
         pendentesHoje={pendentesHoje}
