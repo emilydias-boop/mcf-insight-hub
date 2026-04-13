@@ -61,7 +61,6 @@ function getMessageForAction(
     }
     return `${employeeName} enviou "${documentTitle}". Verifique e tome as ações necessárias.`;
   }
-  // sentBy === 'gestor'
   if (perspective === 'self') {
     return `${gestorName} disponibilizou "${documentTitle}" para você.`;
   }
@@ -72,7 +71,7 @@ function getEmployeeEmail(emp: { email_pessoal?: string | null }): string | null
   return emp.email_pessoal || null;
 }
 
-function buildEmailHtml(subject: string, message: string): string {
+export function buildEmailHtml(subject: string, message: string): string {
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
       <div style="background: #1a1a2e; padding: 24px; text-align: center;">
@@ -103,18 +102,18 @@ async function sendDocumentEmail(
   action: DocumentAction
 ): Promise<void> {
   try {
-    const content = buildEmailHtml(subject, message);
-    await supabase.functions.invoke('activecampaign-send', {
+    const htmlContent = buildEmailHtml(subject, message);
+    await supabase.functions.invoke('brevo-send', {
       body: {
-        email: to,
+        to,
         name: recipientName,
         subject,
-        content,
+        htmlContent,
         tags: ['notificacao_documento', action],
       },
     });
   } catch (err) {
-    console.error('Erro ao enviar email de documento via ActiveCampaign:', err);
+    console.error('Erro ao enviar email de documento via Brevo:', err);
   }
 }
 
@@ -125,7 +124,6 @@ export async function notifyDocumentAction({
   sentBy,
 }: NotifyDocumentActionParams): Promise<void> {
   try {
-    // 1. Fetch employee with profile_id, gestor_id, and emails
     const { data: emp } = await supabase
       .from('employees')
       .select('profile_id, gestor_id, nome_completo, email_pessoal')
@@ -134,7 +132,6 @@ export async function notifyDocumentAction({
 
     if (!emp) return;
 
-    // 2. Fetch gestor profile_id and emails
     let gestorProfileId: string | null = null;
     let gestorName = 'Gestor';
     let gestorEmail: string | null = null;
@@ -154,7 +151,6 @@ export async function notifyDocumentAction({
     const employeeName = emp.nome_completo || 'Colaborador';
     const employeeEmail = getEmployeeEmail(emp);
 
-    // 3. Build notifications
     const notifications: Array<{
       user_id: string;
       title: string;
@@ -167,7 +163,6 @@ export async function notifyDocumentAction({
     const gestorTitle = getTitleForAction(action, sentBy === 'gestor' ? 'self' : 'other', sentBy);
     const gestorMessage = getMessageForAction(action, documentTitle, sentBy === 'gestor' ? 'self' : 'other', sentBy, employeeName, gestorName);
 
-    // Notification for the employee
     if (emp.profile_id) {
       notifications.push({
         user_id: emp.profile_id,
@@ -177,7 +172,6 @@ export async function notifyDocumentAction({
       });
     }
 
-    // Notification for the manager
     if (gestorProfileId) {
       notifications.push({
         user_id: gestorProfileId,
@@ -187,12 +181,10 @@ export async function notifyDocumentAction({
       });
     }
 
-    // 4. Insert notifications
     if (notifications.length > 0) {
       await supabase.from('user_notifications').insert(notifications);
     }
 
-    // 5. Send emails (fire-and-forget)
     if (employeeEmail) {
       sendDocumentEmail(employeeEmail, employeeName, empTitle, empMessage, action);
     }
@@ -200,7 +192,6 @@ export async function notifyDocumentAction({
       sendDocumentEmail(gestorEmail, gestorName, gestorTitle, gestorMessage, action);
     }
   } catch (err) {
-    // Notifications should never break the main flow
     console.error('Erro ao enviar notificações de documento:', err);
   }
 }

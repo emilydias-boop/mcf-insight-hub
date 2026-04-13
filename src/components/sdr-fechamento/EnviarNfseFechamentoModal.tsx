@@ -5,12 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { notifyDocumentAction } from "@/lib/notifyDocumentAction";
+import { notifyDocumentAction, buildEmailHtml } from "@/lib/notifyDocumentAction";
 import { toast } from "sonner";
 import { format, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Loader2, Upload } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
+
+const FINANCEIRO_EMAIL = 'financeiro@minhacasafinanciada.com';
 
 interface EnviarNfseFechamentoModalProps {
   open: boolean;
@@ -20,6 +22,60 @@ interface EnviarNfseFechamentoModalProps {
   anoMes: string;
   valorEsperado: number;
   onSuccess: () => void;
+}
+
+async function sendNfseEmails(employeeId: string, monthLabel: string, numeroNfse: string, valorNfse: string) {
+  try {
+    const { data: emp } = await supabase
+      .from('employees')
+      .select('nome_completo, gestor_id, email_pessoal')
+      .eq('id', employeeId)
+      .single();
+
+    if (!emp) return;
+
+    const employeeName = emp.nome_completo || 'Colaborador';
+    const subject = `Nova NFSe Fechamento — ${employeeName}`;
+    const message = `${employeeName} enviou a NFSe de fechamento referente a <strong>${monthLabel}</strong>.<br/><br/>
+      <strong>Número:</strong> ${numeroNfse || 'Não informado'}<br/>
+      <strong>Valor:</strong> R$ ${valorNfse}`;
+
+    const htmlContent = buildEmailHtml(subject, message);
+
+    // 1. Email para o financeiro
+    supabase.functions.invoke('brevo-send', {
+      body: {
+        to: FINANCEIRO_EMAIL,
+        name: 'Financeiro MCF',
+        subject,
+        htmlContent,
+        tags: ['nfse_fechamento', 'financeiro'],
+      },
+    }).catch(err => console.error('Erro email financeiro:', err));
+
+    // 2. Email para o supervisor
+    if (emp.gestor_id) {
+      const { data: gestor } = await supabase
+        .from('employees')
+        .select('email_pessoal, nome_completo')
+        .eq('id', emp.gestor_id)
+        .single();
+
+      if (gestor?.email_pessoal) {
+        supabase.functions.invoke('brevo-send', {
+          body: {
+            to: gestor.email_pessoal,
+            name: gestor.nome_completo || 'Supervisor',
+            subject,
+            htmlContent,
+            tags: ['nfse_fechamento', 'supervisor'],
+          },
+        }).catch(err => console.error('Erro email supervisor:', err));
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao enviar emails de NFSe:', err);
+  }
 }
 
 export function EnviarNfseFechamentoModal({ 
@@ -37,7 +93,6 @@ export function EnviarNfseFechamentoModal({
   const [observacoes, setObservacoes] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
-  // Parse anoMes to get month and year
   const [year, month] = anoMes.split('-').map(Number);
   const monthLabel = format(parse(anoMes, 'yyyy-MM', new Date()), 'MMMM yyyy', { locale: ptBR });
 
@@ -56,7 +111,6 @@ export function EnviarNfseFechamentoModal({
     setIsSubmitting(true);
 
     try {
-      // 1. Upload do arquivo
       const fileExt = file.name.split('.').pop();
       const fileName = `${employeeId}/nfse-fechamento-${year}-${month}.${fileExt}`;
       
@@ -66,7 +120,6 @@ export function EnviarNfseFechamentoModal({
 
       if (uploadError) throw uploadError;
 
-      // 2. Inserir registro na tabela rh_nfse
       const { data: nfseData, error: insertError } = await supabase
         .from('rh_nfse')
         .insert({
@@ -86,7 +139,6 @@ export function EnviarNfseFechamentoModal({
 
       if (insertError) throw insertError;
 
-      // 3. Atualizar o payout com o nfse_id
       const { error: updateError } = await supabase
         .from('sdr_month_payout')
         .update({ nfse_id: nfseData.id })
@@ -102,8 +154,10 @@ export function EnviarNfseFechamentoModal({
         documentTitle: `NFSe Fechamento ${monthLabel}`,
         sentBy: 'colaborador',
       });
+
+      // Send emails to financeiro and supervisor
+      sendNfseEmails(employeeId, monthLabel, numeroNfse, valorNfse);
       
-      // Reset form
       setNumeroNfse('');
       setValorNfse(valorEsperado.toFixed(2).replace('.', ','));
       setObservacoes('');
