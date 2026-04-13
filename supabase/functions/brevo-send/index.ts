@@ -35,7 +35,7 @@ serve(async (req) => {
     const payload: Record<string, unknown> = {
       sender: {
         name: 'MCF Gestão',
-        email: 'notificacoes@minhacasafinanciada.com',
+        email: 'marketing@minhacasafinanciada.com',
       },
       to: [{ email: to, name: name || to }],
       subject,
