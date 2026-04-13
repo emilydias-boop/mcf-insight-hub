@@ -1,87 +1,81 @@
 
 
-## Plano: Bloquear Parceiros/Renovações na Inside Sales (Incorporador)
+## Plano: Migrar Emails para Brevo + Novos Fluxos (NFSe → Financeiro/Supervisor, Relatório Semanal)
 
-### Problema
+### Resumo
 
-Leads que já são parceiros ou fizeram renovação (ex: A006 - Renovação Parceiro MCF) estão entrando como "Novo Lead" na Pipeline Inside Sales da BU Incorporador. O sistema detecta parceiros somente DEPOIS de criar o deal (linha 828) e os move para "Venda Realizada" — mas os patterns estão incompletos (faltam A005, A006, A007, A008, RENOVAÇÃO).
+Substituir ActiveCampaign e Resend por **Brevo (API v3)** como provedor único de email transacional, e adicionar 3 novos fluxos de envio.
 
-### Correção
+### Sobre o remetente (pergunta 3)
 
-**Arquivo: `supabase/functions/webhook-lead-receiver/index.ts`**
+Para descobrir qual email remetente está verificado no Brevo:
+- Acesse **app.brevo.com → Configurações → Remetentes, domínios e IPs dedicados → Remetentes**
+- Lá você verá os emails verificados (ex: `notificacoes@minhacasafinanciada.com`)
+- Me informe qual é, e eu configuro no sistema
 
-#### 1. Expandir PARTNER_PATTERNS (linha 1156)
+Enquanto isso, vou preparar a implementação usando um placeholder que você substituirá.
 
-```typescript
-// De:
-const PARTNER_PATTERNS = ['A001', 'A002', 'A003', 'A004', 'A009', 'INCORPORADOR', 'ANTICRISE'];
+---
 
-// Para:
-const PARTNER_PATTERNS = [
-  'A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A007', 'A008', 'A009',
-  'INCORPORADOR', 'ANTICRISE', 'RENOVAÇÃO', 'RENOVACAO',
-  'R001', 'R004', 'R005', 'R006', 'R009', 'R21',
-  'MCF PLANO', 'MCF INCORPORADOR',
-];
-```
+### Fase 1: Criar Edge Function `brevo-send`
 
-#### 2. Adicionar trava ANTES da criação do deal, apenas para Inside Sales
+**Novo arquivo:** `supabase/functions/brevo-send/index.ts`
 
-Inserir entre a trava A010 (linha 537) e o check de deal existente (linha 539). A lógica:
+- Endpoint centralizado que substitui `activecampaign-send` e `send-document-email`
+- Usa `POST https://api.brevo.com/v3/smtp/email` com header `api-key`
+- Aceita: `to` (email), `name`, `subject`, `htmlContent`, `cc` (array opcional), `tags` (array opcional)
+- Remetente: placeholder `MCF Gestão <notificacoes@minhacasafinanciada.com>` (ajustaremos quando você confirmar)
+- **Requer secret:** `BREVO_API_KEY`
 
-- Se `endpoint.origin_id === INSIDE_SALES_ORIGIN_ID`, verificar se o lead é parceiro/renovação via `checkIfPartner`
-- Se for parceiro: **bloquear** criação do deal, retornar `partner_blocked`
-- Registrar em `partner_returns` com `blocked: true`
-- Se NÃO for Inside Sales: não bloquear (outras BUs decidem seus próprios fluxos)
+### Fase 2: Migrar chamadas existentes
 
-```typescript
-// ======= TRAVA PARCEIRO/RENOVAÇÃO: Bloquear na Inside Sales (Incorporador) =======
-if (endpoint.origin_id === INSIDE_SALES_ORIGIN_ID && contactEmail) {
-  const partnerCheck = await checkIfPartner(supabase, contactEmail);
-  if (partnerCheck.isPartner) {
-    console.log(`[WEBHOOK-RECEIVER] ⛔ Parceiro/Renovação detectado na Inside Sales: ${contactEmail} (${partnerCheck.product}) — bloqueando`);
-    
-    // Registrar auditoria
-    try {
-      await supabase.from('partner_returns').insert({
-        contact_id: contactId,
-        contact_email: contactEmail,
-        contact_name: payload.name || payload.nome_completo || null,
-        partner_product: partnerCheck.product || 'parceria',
-        return_source: `webhook-${slug}`,
-        return_product: endpoint.name,
-        return_value: 0,
-        blocked: true,
-        notes: `Parceiro/Renovação bloqueado na Inside Sales via webhook-lead-receiver (${slug}).`,
-      } as any);
-    } catch (prErr) {
-      console.error('[WEBHOOK-RECEIVER] Erro ao registrar partner_returns:', prErr);
-    }
-    
-    await updateEndpointMetrics(supabase, endpoint.id);
-    
-    return new Response(
-      JSON.stringify({
-        success: true,
-        action: 'partner_blocked',
-        reason: 'partner_or_renewal_blocked_from_inside_sales',
-        contact_id: contactId,
-        partner_product: partnerCheck.product,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-}
-```
+| Arquivo | De | Para |
+|---------|-----|------|
+| `src/lib/notifyDocumentAction.ts` | `activecampaign-send` | `brevo-send` |
+| `supabase/functions/automation-processor/index.ts` | `activecampaign-send` | `brevo-send` |
 
-#### 3. Manter a detecção pós-criação (linha 828) como está
+A Edge Function `send-document-email` (Resend) fica obsoleta mas não será deletada ainda — apenas deixa de ser chamada.
 
-Para pipelines que NÃO são Inside Sales, o comportamento atual (criar deal e mover para Venda Realizada) continua funcionando. Não remover.
+### Fase 3: NFSe → Email para Financeiro + Supervisor
 
-### Impacto
+Quando colaborador envia NFSe (nos modais `EnviarNfseModal` e `EnviarNfseFechamentoModal`):
 
-- Parceiros e renovações (A001-A009, RENOVAÇÃO, R001, etc.) serão **bloqueados** de entrar como novo lead na Inside Sales (Incorporador)
-- Outras pipelines/BUs não são afetadas
-- Auditoria em `partner_returns` com `blocked: true`
-- Leads genuinamente novos continuam entrando normalmente
+1. **Email para `financeiro@minhacasafinanciada.com`**: contendo nome do colaborador, mês de referência, número da NFSe, valor
+2. **Email para o supervisor (gestor)**: buscar `gestor_id` do colaborador na tabela `employees`, pegar o `email_pessoal` do gestor, enviar notificação
+
+Ambos via `brevo-send`, usando o template HTML padrão MCF já existente em `notifyDocumentAction.ts`.
+
+### Fase 4: Relatório Semanal por BU → Diretor
+
+**Novo arquivo:** `supabase/functions/weekly-bu-report/index.ts`
+
+- Busca dados de performance da semana anterior (Sábado a Sexta) de cada BU:
+  - Incorporador: receita bruta via `hubla_transactions`
+  - Consórcio: via `consortium_cards`
+  - Crédito: se disponível
+- Monta email HTML com tabela resumo (BU, meta semanal, apurado, % atingimento)
+- Envia para `grimaldo.neto@minhacasafinanciada.com` via `brevo-send`
+- **Agendamento:** pg_cron toda segunda-feira às 07:00 (primeiro horário do dia)
+
+### Fase 5: Config e Deploy
+
+- Adicionar `brevo-send` e `weekly-bu-report` ao `supabase/config.toml`
+- Solicitar o secret `BREVO_API_KEY` ao usuário
+- Deploy de todas as functions modificadas
+
+### Arquivos criados/modificados
+
+| Ação | Arquivo |
+|------|---------|
+| Criar | `supabase/functions/brevo-send/index.ts` |
+| Criar | `supabase/functions/weekly-bu-report/index.ts` |
+| Editar | `src/lib/notifyDocumentAction.ts` |
+| Editar | `supabase/functions/automation-processor/index.ts` |
+| Editar | `src/components/meu-rh/EnviarNfseModal.tsx` |
+| Editar | `src/components/sdr-fechamento/EnviarNfseFechamentoModal.tsx` |
+| Editar | `supabase/config.toml` |
+
+### Pré-requisito
+
+Preciso que você adicione o secret `BREVO_API_KEY` — vou solicitar na implementação.
 
