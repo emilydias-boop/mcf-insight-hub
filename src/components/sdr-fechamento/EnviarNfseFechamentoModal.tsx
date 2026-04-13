@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { notifyDocumentAction, buildEmailHtml } from "@/lib/notifyDocumentAction";
+import { notifyDocumentAction } from "@/lib/notifyDocumentAction";
+import { buildNfseDetailedEmailHtml } from "@/lib/nfseEmailBuilder";
 import { toast } from "sonner";
 import { format, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -24,7 +25,14 @@ interface EnviarNfseFechamentoModalProps {
   onSuccess: () => void;
 }
 
-async function sendNfseEmails(employeeId: string, monthLabel: string, numeroNfse: string, valorNfse: string) {
+async function sendNfseEmails(
+  employeeId: string,
+  monthLabel: string,
+  numeroNfse: string,
+  valorNfse: string,
+  payoutId: string,
+  storagePath: string
+) {
   try {
     const { data: emp } = await supabase
       .from('employees')
@@ -34,15 +42,65 @@ async function sendNfseEmails(employeeId: string, monthLabel: string, numeroNfse
 
     if (!emp) return;
 
+    // Fetch payout details
+    const { data: payout } = await supabase
+      .from('sdr_month_payout')
+      .select('aprovado_por, aprovado_em, valor_fixo, valor_variavel_total, total_conta, total_ifood, ifood_mensal, ifood_ultrameta, pct_reunioes_agendadas, valor_reunioes_agendadas, pct_reunioes_realizadas, valor_reunioes_realizadas, pct_tentativas, valor_tentativas, pct_organizacao, valor_organizacao, pct_no_show, valor_no_show')
+      .eq('id', payoutId)
+      .single();
+
+    // Fetch approver name
+    let aprovadorNome = '—';
+    if (payout?.aprovado_por) {
+      const { data: aprovador } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', payout.aprovado_por)
+        .single();
+      aprovadorNome = aprovador?.full_name || '—';
+    }
+
+    // Generate signed URL for PDF (7 days)
+    let pdfUrl: string | undefined;
+    const { data: signedData } = await supabase.storage
+      .from('user-files')
+      .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+    if (signedData?.signedUrl) pdfUrl = signedData.signedUrl;
+
     const employeeName = emp.nome_completo || 'Colaborador';
     const senderEmail = emp.email_pessoal || undefined;
     const senderName = employeeName;
     const subject = `Nova NFSe Fechamento — ${employeeName}`;
-    const message = `${employeeName} enviou a NFSe de fechamento referente a <strong>${monthLabel}</strong>.<br/><br/>
-      <strong>Número:</strong> ${numeroNfse || 'Não informado'}<br/>
-      <strong>Valor:</strong> R$ ${valorNfse}`;
+    const dataEnvio = format(new Date(), "dd/MM/yyyy 'às' HH:mm");
 
-    const htmlContent = buildEmailHtml(subject, message);
+    const htmlContent = buildNfseDetailedEmailHtml({
+      employeeName,
+      monthLabel,
+      numeroNfse,
+      valorNfse,
+      dataEnvio,
+      pdfUrl,
+      payout: payout ? {
+        aprovado_por_nome: aprovadorNome,
+        aprovado_em: payout.aprovado_em,
+        valor_fixo: payout.valor_fixo,
+        valor_variavel_total: payout.valor_variavel_total,
+        total_conta: payout.total_conta,
+        total_ifood: payout.total_ifood,
+        ifood_mensal: payout.ifood_mensal,
+        ifood_ultrameta: payout.ifood_ultrameta,
+        pct_reunioes_agendadas: payout.pct_reunioes_agendadas,
+        valor_reunioes_agendadas: payout.valor_reunioes_agendadas,
+        pct_reunioes_realizadas: payout.pct_reunioes_realizadas,
+        valor_reunioes_realizadas: payout.valor_reunioes_realizadas,
+        pct_tentativas: payout.pct_tentativas,
+        valor_tentativas: payout.valor_tentativas,
+        pct_organizacao: payout.pct_organizacao,
+        valor_organizacao: payout.valor_organizacao,
+        pct_no_show: payout.pct_no_show,
+        valor_no_show: payout.valor_no_show,
+      } : undefined,
+    });
 
     // 1. Email para o financeiro
     supabase.functions.invoke('brevo-send', {
