@@ -99,7 +99,9 @@ async function sendDocumentEmail(
   recipientName: string,
   subject: string,
   message: string,
-  action: DocumentAction
+  action: DocumentAction,
+  senderEmail?: string,
+  senderName?: string,
 ): Promise<void> {
   try {
     const htmlContent = buildEmailHtml(subject, message);
@@ -110,6 +112,8 @@ async function sendDocumentEmail(
         subject,
         htmlContent,
         tags: ['notificacao_documento', action],
+        senderEmail,
+        senderName,
       },
     });
   } catch (err) {

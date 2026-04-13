@@ -35,6 +35,8 @@ async function sendNfseEmails(employeeId: string, monthLabel: string, numeroNfse
     if (!emp) return;
 
     const employeeName = emp.nome_completo || 'Colaborador';
+    const senderEmail = emp.email_pessoal || undefined;
+    const senderName = employeeName;
     const subject = `Nova NFSe Fechamento — ${employeeName}`;
     const message = `${employeeName} enviou a NFSe de fechamento referente a <strong>${monthLabel}</strong>.<br/><br/>
       <strong>Número:</strong> ${numeroNfse || 'Não informado'}<br/>
@@ -50,6 +52,8 @@ async function sendNfseEmails(employeeId: string, monthLabel: string, numeroNfse
         subject,
         htmlContent,
         tags: ['nfse_fechamento', 'financeiro'],
+        senderEmail,
+        senderName,
       },
     }).catch(err => console.error('Erro email financeiro:', err));
 
@@ -69,6 +73,8 @@ async function sendNfseEmails(employeeId: string, monthLabel: string, numeroNfse
             subject,
             htmlContent,
             tags: ['nfse_fechamento', 'supervisor'],
+            senderEmail,
+            senderName,
           },
         }).catch(err => console.error('Erro email supervisor:', err));
       }
