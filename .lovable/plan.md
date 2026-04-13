@@ -1,53 +1,27 @@
 
 
-# Plano: Corrigir stage padrão para "Novo Lead" nos endpoints e edge functions
+# Plano: Unificar fonte de dados dos KPIs com a tabela de SDRs
 
-## Diagnóstico
+## Problema
+Os KPIs do topo são sobrescritos com dados vindos de `useR1CloserMetrics` (perspectiva closer), enquanto a tabela de SDRs mostra dados de `useSdrMetricsFromAgenda` (perspectiva SDR). Isso gera números conflitantes: No-Shows 105 (closer) vs 189 (SDR).
 
-Os 3 webhook endpoints da PIPELINE INSIDE SALES já possuem `stage_id` explícito:
-- **Bio Instagram** → Lead Instagram (intencional)
-- **Lead_form_50k** → Lead Gratuito (intencional)
-- **Lead Live Campanha Janeiro** → Lead Gratuito (inativo)
+## Causa técnica
+Em `ReunioesEquipe.tsx` linhas 317-331, o `enrichedKPIs` substitui `totalNoShows`, `totalRealizadas`, `totalContratos` e taxas com valores dos closers, mas a tabela continua usando `bySDR` da RPC do SDR.
 
-Nenhum desses aponta para "ANAMNESE INCOMPLETA". **O problema real está nas edge functions** que criam deals diretamente na Inside Sales usando fallback `ORDER BY stage_order ASC LIMIT 1`, que pega "ANAMNESE INCOMPLETA" (stage_order=0) em vez de "Novo Lead" (stage_order=3).
+## Solução proposta
 
-### Funções afetadas:
+### Opção A — KPIs seguem a aba ativa
+Quando a aba "SDRs" está selecionada, os KPIs usam os totais da tabela de SDRs (`teamKPIs`). Quando a aba "Closers" está selecionada, usam os totais dos closers (`r1FromClosers`). Isso é o mesmo padrão já usado no Painel de Equipe do Consórcio (conforme memória `bu-consorcio-kpi-alignment-logic`).
 
-| Função | Comportamento atual | Problema |
-|--------|-------------------|----------|
-| `hubla-webhook-handler` (linha 505) | `order('stage_order', asc).limit(1)` | Pega ANAMNESE INCOMPLETA |
-| `webhook-lead-receiver` (linha 418) | `order('stage_order', asc).limit(1)` (redirect A010) | Pega ANAMNESE INCOMPLETA |
-| `webhook-lead-receiver` (linha 124-150) | Fallback quando endpoint sem stage_id | Pega ANAMNESE INCOMPLETA |
-| `webhook-make-a010` (linha 429) | `ilike('stage_name', '%Novo Lead%')` | **OK - já busca por nome** |
+### Alterações
 
-## Alterações
+**`src/pages/crm/ReunioesEquipe.tsx`**:
+1. Manter o `enrichedKPIs` como está (dados de closer)
+2. Criar um `sdrKPIs` que use os totais da tabela de SDRs (já existem em `teamKPIs`)
+3. Passar para `TeamKPICards` o KPI correto baseado na aba ativa (`activeTab === 'sdrs' ? sdrKPIs : enrichedKPIs`)
 
-### 1. `hubla-webhook-handler/index.ts` (~linha 505)
-Substituir o fallback genérico por busca explícita pelo nome "Novo Lead":
-```typescript
-// DE: order('stage_order', { ascending: true }).limit(1)
-// PARA:
-.ilike('stage_name', '%Novo Lead%').limit(1).maybeSingle();
-// Com fallback para stage_order se não encontrar
-```
-
-### 2. `webhook-lead-receiver/index.ts` (~linha 418-426)
-Mesmo ajuste no trecho que redireciona compradores A010 para Inside Sales:
-```typescript
-// Buscar stage "Novo Lead" por nome em vez de primeira stage
-.ilike('stage_name', '%Novo Lead%').limit(1).maybeSingle();
-```
-
-### 3. `webhook-lead-receiver/index.ts` (~linha 123-151)
-Ajustar o fallback genérico para preferir "Novo Lead" por nome antes de usar stage_order:
-```typescript
-// Primeiro tentar por nome "Novo Lead", depois fallback stage_order
-```
-
-### 4. Deploy das 2 edge functions
-- `webhook-lead-receiver`
-- `hubla-webhook-handler`
-
-## Resultado
-Todos os novos leads cairão em "Novo Lead" (stage_id: `cf4a369c-c4a6-4299-933d-5ae3dcc39d4b`) em vez de "ANAMNESE INCOMPLETA", independente da ordem dos stages na pipeline.
+### Resultado
+- Aba SDRs: KPIs = 363 agendamentos, 189 no-shows, taxa ~51% — consistente com a tabela
+- Aba Closers: KPIs = dados dos closers (105 no-shows, 29.7%) — consistente com a tabela de closers
+- Zero inconsistência visual
 
