@@ -463,17 +463,20 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         });
       });
 
-      // Process meetings
+      // ========== DEDUPLICATION: max 2x per deal_id ==========
+      // Same-day reschedule = 1x, different days = max 2x
+      // Realizada: 1x per deal if at least one attendee has final status
+      const closerDealMap = new Map<string, Map<string, { days: Set<string>; realized: boolean }>>();
+
       meetings?.forEach(meeting => {
         const closerId = meeting.closer_id;
         if (!closerId) return;
 
+        // Ensure metric exists
         let metric = metricsMap.get(closerId);
         if (!metric) {
-          // Only create metrics for closers that belong to the current BU
           const closerInfo = closers?.find(c => c.id === closerId);
-          if (!closerInfo) return; // Skip meetings from closers in other BUs
-          
+          if (!closerInfo) return;
           metric = {
             closer_id: closerId,
             closer_name: closerInfo.name,
@@ -488,29 +491,30 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           metricsMap.set(closerId, metric);
         }
 
-        // Count attendees by status - all attendees regardless of SDR status
         meeting.meeting_slot_attendees?.forEach(att => {
-          // Skip partners (sócios) from all metrics
           if ((att as any).is_partner) return;
-
-          // Outside leads are counted in R1 metrics (Agendada, Realizada, No-show)
-          // to keep parity with SDR tab. Outside is tracked separately.
-
+          if (!att.deal_id) return;
           const status = att.status;
-          
-          // R1 Agendada: only statuses in allowedAgendadaStatuses
-          if (allowedAgendadaStatuses.includes(status)) {
-            metric!.r1_agendada++;
-          }
-          
-          // R1 Realizada: completed OR contract_paid OR refunded
-          if (['completed', 'contract_paid', 'refunded'].includes(status)) {
-            metric!.r1_realizada++;
-          }
-          
-          // No-show é calculado por subtração após o loop
-          
-          // Contrato Pago - NÃO contar aqui, já é contado por contract_paid_at acima
+          if (!allowedAgendadaStatuses.includes(status)) return;
+
+          const day = format(new Date(meeting.scheduled_at), 'yyyy-MM-dd');
+
+          if (!closerDealMap.has(closerId)) closerDealMap.set(closerId, new Map());
+          const dealMap = closerDealMap.get(closerId)!;
+          if (!dealMap.has(att.deal_id)) dealMap.set(att.deal_id, { days: new Set(), realized: false });
+          const entry = dealMap.get(att.deal_id)!;
+          entry.days.add(day);
+          if (['completed', 'contract_paid', 'refunded'].includes(status)) entry.realized = true;
+        });
+      });
+
+      // Apply deduplicated metrics
+      closerDealMap.forEach((dealMap, closerId) => {
+        const metric = metricsMap.get(closerId);
+        if (!metric) return;
+        dealMap.forEach(({ days, realized }) => {
+          metric.r1_agendada += days.size >= 2 ? 2 : 1;
+          if (realized) metric.r1_realizada++;
         });
       });
 
