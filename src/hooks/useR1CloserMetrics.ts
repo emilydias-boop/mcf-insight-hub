@@ -79,7 +79,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       ]);
 
       // Statuses that count as "Agendada" - explicitly defined to avoid counting canceled/rescheduled
-      const allowedAgendadaStatuses = ['scheduled', 'invited', 'completed', 'no_show', 'contract_paid', 'refunded'];
+      const allowedAgendadaStatuses = ['scheduled', 'invited', 'completed', 'no_show', 'contract_paid', 'refunded', 'rescheduled'];
 
       // Fetch R1 meeting slots with attendees in the period
       const { data: meetings, error: meetingsError } = await supabase
@@ -493,13 +493,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           // Skip partners (sócios) from all metrics
           if ((att as any).is_partner) return;
 
-          // Skip outsides from ALL closer metrics (R1 Agendada, Realizada, No-show)
-          // Only applies to incorporador BU
-          if (bu === 'incorporador') {
-            const attEmail = att.deal_id ? dealEmailMap.get(att.deal_id) : undefined;
-            const isOutsideLead = attEmail && emailContractDate.has(attEmail) && emailContractDate.get(attEmail)! < new Date(meeting.scheduled_at);
-            if (isOutsideLead) return;
-          }
+          // Outside leads are counted in R1 metrics (Agendada, Realizada, No-show)
+          // to keep parity with SDR tab. Outside is tracked separately.
 
           const status = att.status;
           
