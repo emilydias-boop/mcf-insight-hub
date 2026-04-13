@@ -6,17 +6,73 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { notifyDocumentAction } from "@/lib/notifyDocumentAction";
+import { notifyDocumentAction, buildEmailHtml } from "@/lib/notifyDocumentAction";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Loader2, Upload } from "lucide-react";
+
+const FINANCEIRO_EMAIL = 'financeiro@minhacasafinanciada.com';
 
 interface EnviarNfseModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   employeeId: string;
   onSuccess: () => void;
+}
+
+async function sendNfseEmails(employeeId: string, monthLabel: string, numeroNfse: string, valorNfse: string) {
+  try {
+    const { data: emp } = await supabase
+      .from('employees')
+      .select('nome_completo, gestor_id, email_pessoal')
+      .eq('id', employeeId)
+      .single();
+
+    if (!emp) return;
+
+    const employeeName = emp.nome_completo || 'Colaborador';
+    const subject = `Nova NFSe recebida — ${employeeName}`;
+    const message = `${employeeName} enviou a NFSe referente a <strong>${monthLabel}</strong>.<br/><br/>
+      <strong>Número:</strong> ${numeroNfse || 'Não informado'}<br/>
+      <strong>Valor:</strong> R$ ${valorNfse}`;
+
+    const htmlContent = buildEmailHtml(subject, message);
+
+    // 1. Email para o financeiro
+    supabase.functions.invoke('brevo-send', {
+      body: {
+        to: FINANCEIRO_EMAIL,
+        name: 'Financeiro MCF',
+        subject,
+        htmlContent,
+        tags: ['nfse', 'financeiro'],
+      },
+    }).catch(err => console.error('Erro email financeiro:', err));
+
+    // 2. Email para o supervisor
+    if (emp.gestor_id) {
+      const { data: gestor } = await supabase
+        .from('employees')
+        .select('email_pessoal, nome_completo')
+        .eq('id', emp.gestor_id)
+        .single();
+
+      if (gestor?.email_pessoal) {
+        supabase.functions.invoke('brevo-send', {
+          body: {
+            to: gestor.email_pessoal,
+            name: gestor.nome_completo || 'Supervisor',
+            subject,
+            htmlContent,
+            tags: ['nfse', 'supervisor'],
+          },
+        }).catch(err => console.error('Erro email supervisor:', err));
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao enviar emails de NFSe:', err);
+  }
 }
 
 export function EnviarNfseModal({ open, onOpenChange, employeeId, onSuccess }: EnviarNfseModalProps) {
@@ -27,7 +83,6 @@ export function EnviarNfseModal({ open, onOpenChange, employeeId, onSuccess }: E
   const [observacoes, setObservacoes] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
-  // Gerar últimos 3 meses para o select
   const monthOptions = Array.from({ length: 3 }, (_, i) => {
     const date = subMonths(startOfMonth(new Date()), i);
     return {
@@ -56,7 +111,6 @@ export function EnviarNfseModal({ open, onOpenChange, employeeId, onSuccess }: E
     setIsSubmitting(true);
 
     try {
-      // 1. Upload do arquivo
       const fileExt = file.name.split('.').pop();
       const fileName = `${employeeId}/nfse-${selectedOption.ano}-${selectedOption.mes}.${fileExt}`;
       
@@ -66,7 +120,6 @@ export function EnviarNfseModal({ open, onOpenChange, employeeId, onSuccess }: E
 
       if (uploadError) throw uploadError;
 
-      // 2. Inserir registro na tabela
       const { error: insertError } = await supabase
         .from('rh_nfse')
         .insert({
@@ -87,14 +140,17 @@ export function EnviarNfseModal({ open, onOpenChange, employeeId, onSuccess }: E
       toast.success('NFSe enviada com sucesso!');
       
       const selectedLabel = monthOptions.find(m => m.value === selectedMonth)?.label || selectedMonth;
+      
       notifyDocumentAction({
         employeeId,
         action: 'nfse_enviada',
         documentTitle: `NFSe ${selectedLabel}`,
         sentBy: 'colaborador',
       });
+
+      // Send emails to financeiro and supervisor
+      sendNfseEmails(employeeId, selectedLabel, numeroNfse, valorNfse);
       
-      // Reset form
       setNumeroNfse('');
       setValorNfse('');
       setObservacoes('');

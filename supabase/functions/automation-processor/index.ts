@@ -340,14 +340,14 @@ async function sendEmail(
       return { success: false, error: 'No email address' };
     }
 
-    // Call the activecampaign-send edge function
-    const { data, error } = await supabase.functions.invoke('activecampaign-send', {
+    // Call the brevo-send edge function
+    const { data, error } = await supabase.functions.invoke('brevo-send', {
       body: {
-        email: params.to,
+        to: params.to,
         name: params.name,
         subject: params.subject,
-        content: params.content,
-        templateId: params.templateId
+        htmlContent: params.content,
+        tags: ['automation', params.templateId || 'generic'],
       }
     });
 

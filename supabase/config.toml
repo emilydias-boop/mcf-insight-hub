@@ -235,3 +235,9 @@ verify_jwt = false
 
 [functions.admin-send-reset]
 verify_jwt = false
+
+[functions.brevo-send]
+verify_jwt = false
+
+[functions.weekly-bu-report]
+verify_jwt = false
