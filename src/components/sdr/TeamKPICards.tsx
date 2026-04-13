@@ -89,7 +89,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje }: TeamKP
       icon: AlertTriangle,
       color: "text-orange-500",
       bgColor: "bg-orange-500/10",
-      tooltip: "No-Shows / Total Agendamentos × 100"
+      tooltip: "No-Shows / R1 Agendada × 100"
     },
   ];
 

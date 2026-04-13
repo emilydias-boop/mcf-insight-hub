@@ -493,13 +493,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           // Skip partners (sócios) from all metrics
           if ((att as any).is_partner) return;
 
-          // Skip outsides from ALL closer metrics (R1 Agendada, Realizada, No-show)
-          // Only applies to incorporador BU
-          if (bu === 'incorporador') {
-            const attEmail = att.deal_id ? dealEmailMap.get(att.deal_id) : undefined;
-            const isOutsideLead = attEmail && emailContractDate.has(attEmail) && emailContractDate.get(attEmail)! < new Date(meeting.scheduled_at);
-            if (isOutsideLead) return;
-          }
+          // Outside leads are counted in R1 metrics (Agendada, Realizada, No-show)
+          // to keep parity with SDR tab. Outside is tracked separately.
 
           const status = att.status;
           
