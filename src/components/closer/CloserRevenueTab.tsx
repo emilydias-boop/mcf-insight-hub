@@ -62,7 +62,7 @@ export function CloserRevenueTab({ closerId, startDate, endDate }: CloserRevenue
           meeting_slots!inner(closer_id),
           crm_deals!deal_id(crm_contacts!contact_id(email, phone))
         `)
-        .eq('status', 'contract_paid')
+        .not('contract_paid_at', 'is', null)
         .eq('meeting_slots.closer_id', closerId)
         .gte('contract_paid_at', startDate.toISOString())
         .lte('contract_paid_at', endDateMax.toISOString());
