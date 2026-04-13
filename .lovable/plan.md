@@ -1,23 +1,23 @@
 
 
-## Plan: Remove Pipeline Selector and Search from Incorporador Sidebar
+## Plan: Fix Sidebar — Remove Pipeline Selector and Search, Keep Only "Criar Pipeline"
 
-**What the user wants:** In the Incorporador BU CRM page, the sidebar currently shows a "Funil" dropdown with many pipelines and a search bar. Since only 2 pipelines are active (PILOTO ANAMNESE / INDICACAO and PIPELINE INSIDE SALES), the user wants to remove the dropdown and search, showing only those 2 pipelines directly.
+**Problem:** The previous change tied `hideFilters` to `buAllowedGroups.length > 0`, but `buAllowedGroups` is empty when `activeBU` is `null` (e.g., admin users or users on the global `/crm/negocios` route without a BU profile). So the filter still shows.
+
+**User wants:** Remove the "Funil" dropdown and search bar completely. Keep only the "Criar Pipeline" button and the pipeline origins tree.
 
 ### Changes
 
 **File: `src/components/crm/OriginsSidebar.tsx`**
 
-1. Add a new prop `hideFilters?: boolean` to `OriginsSidebarProps`
-2. When `hideFilters` is true, skip rendering the PipelineSelector section (lines 407-423) and the search bar section (lines 425-436)
-3. This keeps the sidebar clean — just favorites + the origin tree/list
+1. Split the current `hideFilters` block so that:
+   - The `PipelineSelector` dropdown and search bar are hidden when `hideFilters` is true
+   - The "Criar Pipeline" button is **always shown** (moved outside the `hideFilters` conditional)
+2. Restructure the render so the "Criar Pipeline" button appears in its own `<div>` block that renders regardless of `hideFilters`
 
 **File: `src/pages/crm/Negocios.tsx`**
 
-1. Pass `hideFilters={true}` to `OriginsSidebar` when the BU has a small number of allowed origins (i.e., when `allowedOriginIds` or `allowedGroupIds` are defined and the BU filter is active)
-2. Alternatively, derive this from the BU context — if `activeBU === 'incorporador'`, hide filters
-
-### Technical Detail
-
-The simplest approach: when `allowedGroupIds` is provided and has entries, we know the BU is restricting pipelines. If the filtered pipeline count is small (<=5 or just always when BU-filtered), hide the selector and search. The origins will still be filtered by `allowedOriginIds`/`allowedGroupIds` as they are today.
+1. Change the `hideFilters` condition to also trigger when the sidebar has a small number of visible pipelines, or simply always pass `hideFilters={true}` since the user wants a clean sidebar
+2. Simplest approach: `hideFilters={(!!buAllowedGroups && buAllowedGroups.length > 0) || activeBU === 'incorporador'}`
+   - This catches both BU-mapped scenarios AND the direct incorporador case regardless of how `buAllowedGroups` resolves
 
