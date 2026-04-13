@@ -702,7 +702,11 @@ const Negocios = () => {
       {showSidebar && (
         <div className="hidden md:block">
           <OriginsSidebar
-            pipelineId={selectedPipelineId}
+            pipelineId={
+              (!!buAllowedGroups && buAllowedGroups.length > 0) || activeBU === 'incorporador'
+                ? null
+                : selectedPipelineId
+            }
             selectedOriginId={selectedOriginId}
             onSelectOrigin={setSelectedOriginId}
             onSelectPipeline={handlePipelineChange}
