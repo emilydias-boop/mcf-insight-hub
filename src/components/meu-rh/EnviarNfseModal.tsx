@@ -171,7 +171,7 @@ export function EnviarNfseModal({ open, onOpenChange, employeeId, onSuccess, val
       });
 
       // Send emails to financeiro and supervisor
-      sendNfseEmails(employeeId, selectedLabel, numeroNfse, valorNfse);
+      sendNfseEmails(employeeId, selectedLabel, numeroNfse, valorNfse, fileName);
       
       setNumeroNfse('');
       setValorNfse('');
