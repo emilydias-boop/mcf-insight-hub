@@ -60,11 +60,8 @@ export function useR2CloserMetrics(startDate: Date, endDate: Date) {
           return m.status === 'completed' || attendee?.status === 'completed';
         }).length;
         
-        // No-show = reuniões com status 'no_show' ou attendee status 'no_show'
-        const noshow = closerMeetings.filter(m => {
-          const attendee = m.attendees?.[0];
-          return m.status === 'no_show' || attendee?.status === 'no_show';
-        }).length;
+        // No-show = R2 Agendada - R1 Realizada (subtração)
+        const noshow = Math.max(0, r2_agendada - r1_realizada);
         
         // R1 Agendada = scheduled + rescheduled
         const r1_agendada = closerMeetings.filter(m => 

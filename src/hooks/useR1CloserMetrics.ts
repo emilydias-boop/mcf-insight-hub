@@ -513,13 +513,15 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
             metric!.r1_realizada++;
           }
           
-          // No-show
-          if (status === 'no_show') {
-            metric!.noshow++;
-          }
+          // No-show é calculado por subtração após o loop
           
           // Contrato Pago - NÃO contar aqui, já é contado por contract_paid_at acima
         });
+      });
+
+      // Calcular no-show por subtração: R1 Agendada - R1 Realizada
+      metricsMap.forEach(metric => {
+        metric.noshow = Math.max(0, metric.r1_agendada - metric.r1_realizada);
       });
 
       // Convert to array and sort by r1_agendada desc
