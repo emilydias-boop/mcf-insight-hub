@@ -519,6 +519,11 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         });
       });
 
+      // Calcular no-show por subtração: R1 Agendada - R1 Realizada
+      metricsMap.forEach(metric => {
+        metric.noshow = Math.max(0, metric.r1_agendada - metric.r1_realizada);
+      });
+
       // Convert to array and sort by r1_agendada desc
       return Array.from(metricsMap.values()).sort((a, b) => b.r1_agendada - a.r1_agendada);
     },
