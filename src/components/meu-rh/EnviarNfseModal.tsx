@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { notifyDocumentAction, buildEmailHtml } from "@/lib/notifyDocumentAction";
+import { notifyDocumentAction } from "@/lib/notifyDocumentAction";
+import { buildNfseDetailedEmailHtml } from "@/lib/nfseEmailBuilder";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -22,7 +23,7 @@ interface EnviarNfseModalProps {
   valorSugerido?: number;
 }
 
-async function sendNfseEmails(employeeId: string, monthLabel: string, numeroNfse: string, valorNfse: string) {
+async function sendNfseEmails(employeeId: string, monthLabel: string, numeroNfse: string, valorNfse: string, storagePath: string) {
   try {
     const { data: emp } = await supabase
       .from('employees')
@@ -32,15 +33,27 @@ async function sendNfseEmails(employeeId: string, monthLabel: string, numeroNfse
 
     if (!emp) return;
 
+    // Generate signed URL for PDF (7 days)
+    let pdfUrl: string | undefined;
+    const { data: signedData } = await supabase.storage
+      .from('user-files')
+      .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+    if (signedData?.signedUrl) pdfUrl = signedData.signedUrl;
+
     const employeeName = emp.nome_completo || 'Colaborador';
     const senderEmail = emp.email_pessoal || undefined;
     const senderName = employeeName;
     const subject = `Nova NFSe recebida — ${employeeName}`;
-    const message = `${employeeName} enviou a NFSe referente a <strong>${monthLabel}</strong>.<br/><br/>
-      <strong>Número:</strong> ${numeroNfse || 'Não informado'}<br/>
-      <strong>Valor:</strong> R$ ${valorNfse}`;
+    const dataEnvio = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 
-    const htmlContent = buildEmailHtml(subject, message);
+    const htmlContent = buildNfseDetailedEmailHtml({
+      employeeName,
+      monthLabel,
+      numeroNfse,
+      valorNfse,
+      dataEnvio,
+      pdfUrl,
+    });
 
     // 1. Email para o financeiro
     supabase.functions.invoke('brevo-send', {
