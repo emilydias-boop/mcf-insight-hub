@@ -1,76 +1,37 @@
 
 
-## Plano: Remetente individual quando email @mcf verificado no Brevo
+## Plano: Corrigir acesso ao "Meu Fechamento" para todos os cargos relevantes
 
-### Contexto
+### Problema
 
-O Brevo exige que o `sender.email` seja um remetente verificado na plataforma. Pelo print, dois emails estao verificados:
-- `matheus.rodrigues@minhacasafinanciada.com`
-- `marketing@minhacasafinanciada.com`
+A rota `/meu-fechamento` e o link na sidebar estao restritos apenas aos cargos `sdr` e `closer`. Emily (admin) e qualquer outro cargo (manager, coordenador, financeiro, rh, etc.) recebem "Acesso Negado".
 
-A ideia e: se o colaborador tiver email `@minhacasafinanciada.com`, usar esse email como remetente real. Caso contrario, usar `marketing@` como fallback.
+### Causa raiz
 
-### Logica
+Dois arquivos restringem o acesso:
 
-O dominio `minhacasafinanciada.com` esta com DKIM e DMARC configurados no Brevo, entao qualquer email `@minhacasafinanciada.com` pode ser usado como remetente (o Brevo aceita envios de qualquer endereco do dominio verificado, nao apenas os listados individualmente).
+1. **`src/App.tsx` (linha 220)**: `RoleGuard allowedRoles={['sdr', 'closer']}`
+2. **`src/components/layout/AppSidebar.tsx` (linha 293)**: `requiredRoles: ["sdr", "closer"]`
 
-### Alteracoes
+### Solucao
 
-**1. `supabase/functions/brevo-send/index.ts`**
-- Aceitar campos opcionais `senderEmail` e `senderName` no body da request
-- Se `senderEmail` for informado e terminar com `@minhacasafinanciada.com`, usar como `sender.email` e `senderName` como `sender.name`
-- Caso contrario, manter `MCF Gestao` / `marketing@minhacasafinanciada.com` como fallback
-- Adicionar `replyTo` com o email do colaborador quando `senderEmail` for fornecido
+Expandir os cargos permitidos para incluir `admin`, `manager`, `coordenador` e demais cargos que possam ter um registro de SDR/Closer vinculado. A pagina ja trata graciosamente o caso de "nao cadastrado" com uma mensagem amigavel, entao nao ha risco de erro.
 
-**2. `src/components/meu-rh/EnviarNfseModal.tsx`**
-- Na funcao `sendNfseEmails`, buscar `email_pessoal` do colaborador (ja busca)
-- Passar `senderEmail` e `senderName` nas chamadas ao `brevo-send`
+| Arquivo | Alteracao |
+|---------|-----------|
+| `src/App.tsx` (linha 220) | Adicionar `admin`, `manager`, `coordenador`, `financeiro`, `rh` aos `allowedRoles` |
+| `src/components/layout/AppSidebar.tsx` (linha 293) | Remover `requiredRoles` ou expandir para os mesmos cargos, tornando visivel para todos os autenticados |
 
-**3. `src/components/sdr-fechamento/EnviarNfseFechamentoModal.tsx`**
-- Mesma alteracao: passar dados do colaborador como remetente
+### Detalhe tecnico
 
-**4. `src/lib/notifyDocumentAction.ts`**
-- Na funcao `sendDocumentEmail`, aceitar e repassar `senderEmail`/`senderName` opcionais ao `brevo-send`
-- Quando a acao for do colaborador (`sentBy: 'colaborador'`), passar o email do colaborador como remetente
-
-### Exemplo de payload resultante
-
-Quando Matheus envia uma NFSe:
-```json
-{
-  "sender": {
-    "name": "Matheus Rodrigues",
-    "email": "matheus.rodrigues@minhacasafinanciada.com"
-  },
-  "replyTo": {
-    "email": "matheus.rodrigues@minhacasafinanciada.com",
-    "name": "Matheus Rodrigues"
-  }
-}
+A pagina `MeuFechamento` ja possui fallback para usuarios sem registro:
+```
+"Voce nao esta cadastrado no sistema de fechamento."
 ```
 
-Quando um colaborador sem email @mcf envia:
-```json
-{
-  "sender": {
-    "name": "MCF Gestão",
-    "email": "marketing@minhacasafinanciada.com"
-  },
-  "replyTo": {
-    "email": "colaborador@gmail.com",
-    "name": "Nome do Colaborador"
-  }
-}
-```
+Portanto, liberar o acesso nao causa problemas -- quem nao tiver fechamento simplesmente vera a mensagem informativa.
 
-### Arquivos afetados
+### Recomendacao
 
-| Acao | Arquivo |
-|------|---------|
-| Editar | `supabase/functions/brevo-send/index.ts` |
-| Editar | `src/components/meu-rh/EnviarNfseModal.tsx` |
-| Editar | `src/components/sdr-fechamento/EnviarNfseFechamentoModal.tsx` |
-| Editar | `src/lib/notifyDocumentAction.ts` |
-
-Apos as alteracoes, redeploy da function `brevo-send`.
+Remover completamente o `requiredRoles` da sidebar e o `RoleGuard` da rota, deixando acessivel para qualquer usuario autenticado. Isso simplifica a logica e a pagina ja se protege sozinha.
 
