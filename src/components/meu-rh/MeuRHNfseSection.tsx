@@ -187,6 +187,7 @@ export function MeuRHNfseSection({ employee }: MeuRHNfseSectionProps) {
         open={modalOpen}
         onOpenChange={setModalOpen}
         employeeId={employee.id}
+        valorSugerido={employee.salario_base ?? undefined}
         onSuccess={() => {
           refetch();
           setModalOpen(false);
