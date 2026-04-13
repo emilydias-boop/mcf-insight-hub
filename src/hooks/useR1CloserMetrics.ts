@@ -513,10 +513,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
             metric!.r1_realizada++;
           }
           
-          // No-show
-          if (status === 'no_show') {
-            metric!.noshow++;
-          }
+          // No-show é calculado por subtração após o loop
           
           // Contrato Pago - NÃO contar aqui, já é contado por contract_paid_at acima
         });
