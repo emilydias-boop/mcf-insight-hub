@@ -177,7 +177,8 @@ export function useCloserDetailData({
       meetings?.forEach(meeting => {
         meeting.meeting_slot_attendees?.forEach(att => {
           const hasRelevantStatus = relevantStatuses.includes(att.status);
-          const hasContractPaid = !!(att as any).contract_paid_at;
+          const contractPaidAt = (att as any).contract_paid_at;
+          const hasContractPaid = !!contractPaidAt && contractPaidAt >= start && contractPaidAt <= end;
           
           if (att.deal_id && (hasRelevantStatus || hasContractPaid)) {
             attendeesMap.set(att.id, {
