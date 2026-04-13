@@ -25,6 +25,7 @@ interface OriginsSidebarProps {
   onSelectPipeline: (pipelineId: string | null) => void;
   allowedOriginIds?: string[]; // IDs das origens permitidas pela BU
   allowedGroupIds?: string[];  // IDs dos grupos permitidos pela BU (para filtrar dropdown)
+  hideFilters?: boolean; // Esconder seletor de pipeline, busca e botão criar
 }
 
 interface Group {

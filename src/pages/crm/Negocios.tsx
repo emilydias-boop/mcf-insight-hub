@@ -708,6 +708,7 @@ const Negocios = () => {
             onSelectPipeline={handlePipelineChange}
             allowedOriginIds={buAuthorizedOrigins}
             allowedGroupIds={buAllowedGroups}
+            hideFilters={!!buAllowedGroups && buAllowedGroups.length > 0}
           />
         </div>
       )}
