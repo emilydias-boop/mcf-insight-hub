@@ -99,7 +99,9 @@ async function sendDocumentEmail(
   recipientName: string,
   subject: string,
   message: string,
-  action: DocumentAction
+  action: DocumentAction,
+  senderEmail?: string,
+  senderName?: string,
 ): Promise<void> {
   try {
     const htmlContent = buildEmailHtml(subject, message);
@@ -110,6 +112,8 @@ async function sendDocumentEmail(
         subject,
         htmlContent,
         tags: ['notificacao_documento', action],
+        senderEmail,
+        senderName,
       },
     });
   } catch (err) {
@@ -185,11 +189,15 @@ export async function notifyDocumentAction({
       await supabase.from('user_notifications').insert(notifications);
     }
 
+    // When the employee is the sender, use their email as the Brevo sender
+    const senderEmail = sentBy === 'colaborador' ? (employeeEmail || undefined) : undefined;
+    const senderNameValue = sentBy === 'colaborador' ? employeeName : undefined;
+
     if (employeeEmail) {
-      sendDocumentEmail(employeeEmail, employeeName, empTitle, empMessage, action);
+      sendDocumentEmail(employeeEmail, employeeName, empTitle, empMessage, action, senderEmail, senderNameValue);
     }
     if (gestorEmail) {
-      sendDocumentEmail(gestorEmail, gestorName, gestorTitle, gestorMessage, action);
+      sendDocumentEmail(gestorEmail, gestorName, gestorTitle, gestorMessage, action, senderEmail, senderNameValue);
     }
   } catch (err) {
     console.error('Erro ao enviar notificações de documento:', err);

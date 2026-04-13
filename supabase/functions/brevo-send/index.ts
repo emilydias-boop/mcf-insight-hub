@@ -5,6 +5,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const MCF_DOMAIN = '@minhacasafinanciada.com';
+const DEFAULT_SENDER_EMAIL = `marketing${MCF_DOMAIN}`;
+const DEFAULT_SENDER_NAME = 'MCF Gestão';
+
 interface BrevoSendRequest {
   to: string;
   name?: string;
@@ -12,6 +16,8 @@ interface BrevoSendRequest {
   htmlContent: string;
   cc?: Array<{ email: string; name?: string }>;
   tags?: string[];
+  senderEmail?: string;
+  senderName?: string;
 }
 
 serve(async (req) => {
@@ -26,21 +32,34 @@ serve(async (req) => {
     }
 
     const body: BrevoSendRequest = await req.json();
-    const { to, name, subject, htmlContent, cc, tags } = body;
+    const { to, name, subject, htmlContent, cc, tags, senderEmail, senderName } = body;
 
     if (!to || !subject || !htmlContent) {
       throw new Error('Missing required fields: to, subject, htmlContent');
     }
 
+    // Use individual @mcf email as sender if provided, otherwise fallback
+    const useMcfSender = senderEmail && senderEmail.endsWith(MCF_DOMAIN);
+    const finalSenderEmail = useMcfSender ? senderEmail : DEFAULT_SENDER_EMAIL;
+    const finalSenderName = useMcfSender && senderName ? senderName : DEFAULT_SENDER_NAME;
+
     const payload: Record<string, unknown> = {
       sender: {
-        name: 'MCF Gestão',
-        email: 'marketing@minhacasafinanciada.com',
+        name: finalSenderName,
+        email: finalSenderEmail,
       },
       to: [{ email: to, name: name || to }],
       subject,
       htmlContent,
     };
+
+    // Add replyTo when a sender email is provided
+    if (senderEmail) {
+      payload.replyTo = {
+        email: senderEmail,
+        name: senderName || senderEmail,
+      };
+    }
 
     if (cc && cc.length > 0) {
       payload.cc = cc;
@@ -50,7 +69,7 @@ serve(async (req) => {
       payload.tags = tags;
     }
 
-    console.log(`[BREVO-SEND] Sending to ${to}, subject: ${subject}`);
+    console.log(`[BREVO-SEND] Sending from ${finalSenderEmail} to ${to}, subject: ${subject}`);
 
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
