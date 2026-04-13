@@ -413,17 +413,21 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
                 onSelectPipeline={onSelectPipeline}
                 allowedGroupIds={allowedGroupIds}
               />
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="w-full mt-2" 
-                onClick={() => setWizardOpen(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Criar Pipeline
-              </Button>
             </div>
           )}
+
+          {/* Botão Criar Pipeline - sempre visível */}
+          <div className="p-3 border-b">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full" 
+              onClick={() => setWizardOpen(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Criar Pipeline
+            </Button>
+          </div>
           
           {/* Busca - oculta quando hideFilters */}
           {!hideFilters && (

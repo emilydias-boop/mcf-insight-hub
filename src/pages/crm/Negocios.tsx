@@ -708,7 +708,7 @@ const Negocios = () => {
             onSelectPipeline={handlePipelineChange}
             allowedOriginIds={buAuthorizedOrigins}
             allowedGroupIds={buAllowedGroups}
-            hideFilters={!!buAllowedGroups && buAllowedGroups.length > 0}
+            hideFilters={(!!buAllowedGroups && buAllowedGroups.length > 0) || activeBU === 'incorporador'}
           />
         </div>
       )}
