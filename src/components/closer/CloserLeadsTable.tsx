@@ -44,10 +44,7 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
   // Get unique statuses
   const statuses = useMemo(() => {
     const set = new Set<string>();
-    leads.forEach(l => {
-      const displayStatus = l.contract_paid_at ? 'contract_paid' : l.status;
-      set.add(displayStatus);
-    });
+    leads.forEach(l => set.add(l.status));
     return Array.from(set).sort();
   }, [leads]);
 
@@ -69,8 +66,7 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     leads.forEach(l => {
-      const displayStatus = l.contract_paid_at ? 'contract_paid' : l.status;
-      counts[displayStatus] = (counts[displayStatus] || 0) + 1;
+      counts[l.status] = (counts[l.status] || 0) + 1;
     });
     return counts;
   }, [leads]);
@@ -89,10 +85,7 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
     }
 
     if (statusFilter !== "all") {
-      filtered = filtered.filter(l => {
-        const displayStatus = l.contract_paid_at ? 'contract_paid' : l.status;
-        return displayStatus === statusFilter;
-      });
+      filtered = filtered.filter(l => l.status === statusFilter);
     }
 
     if (sdrFilter !== "all") {
@@ -110,7 +103,7 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
       "Nome": l.contact_name,
       "Telefone": l.contact_phone || "",
       "Email": l.contact_email || "",
-      "Status": statusLabel(l.contract_paid_at ? 'contract_paid' : l.status),
+      "Status": statusLabel(l.status),
       "SDR": l.booked_by_name || "",
       "Origem": l.origin_name || "",
     }));
@@ -139,10 +132,8 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
     );
   }
 
-  const getStatusBadge = (status: string, contractPaidAt?: string | null) => {
-    const displayStatus = contractPaidAt ? 'contract_paid' : status;
-    
-    switch (displayStatus) {
+  const getStatusBadge = (status: string) => {
+    switch (status) {
       case 'contract_paid':
         return (
           <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center gap-1">
@@ -302,7 +293,7 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
                       </TableCell>
                     )}
                     <TableCell className="flex items-center gap-1">
-                      {getStatusBadge(lead.status, lead.contract_paid_at)}
+                      {getStatusBadge(lead.status)}
                     {lead.is_followup && (
                         <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30 text-[10px] px-1.5">
                           Follow-up
