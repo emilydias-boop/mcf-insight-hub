@@ -1,36 +1,35 @@
 
 
-## Plano: Incluir leads reembolsados no Faturamento do Closer
+## Plano: Alinhar contagem de "Contrato Pago" entre KPI e aba Leads
 
-### Problema Identificado
+### Problema
 
-O Caio Vasconcelos tem:
-- `status: refunded` no attendee
-- `contract_paid_at: 2026-04-08` (preenchido)
-- `closer_id: Mateus Macedo`
+Na página de detalhe do closer Mateus Macedo:
+- **KPI "Contratos Pagos"** (Visão Geral) = **22** (via `useR1CloserMetrics`, filtra `contract_paid_at` dentro do período)
+- **Aba "Leads Realizados" filtrado por Contrato Pago** = **23** (via `useCloserDetailData`, NÃO filtra `contract_paid_at` por período)
 
-Na aba **Faturamento** do closer, a query busca apenas attendees com `status = 'contract_paid'` (linha 65 do `CloserRevenueTab.tsx`). O Caio tem `status = refunded`, então é excluído — resultando em 0 transações e R$ 0,00.
-
-Na aba **Leads Realizados**, a lógica é mais abrangente: inclui qualquer attendee com `contract_paid_at IS NOT NULL`, independente do status. Por isso o Caio aparece lá (23 contratos) mas não no Faturamento (22 no KPI overview).
+O lead **Luiz Valentin Morello Filho** tem reunião em 10/04 mas pagou em 06/02. A Query 1 do `useCloserDetailData` (linha 180) marca como "Contrato Pago" qualquer attendee com `contract_paid_at IS NOT NULL`, sem verificar se a data está no período selecionado.
 
 ### Correção
 
-**Arquivo: `src/components/closer/CloserRevenueTab.tsx`**
+**Arquivo: `src/hooks/useCloserDetailData.ts`** — linha 180
 
-Alterar a query de attendees (linha 65) de:
-```
-.eq('status', 'contract_paid')
-```
-Para:
-```
-.not('contract_paid_at', 'is', null)
+```typescript
+// De:
+const hasContractPaid = !!(att as any).contract_paid_at;
+
+// Para:
+const contractPaidAt = (att as any).contract_paid_at;
+const hasContractPaid = !!contractPaidAt 
+  && contractPaidAt >= start 
+  && contractPaidAt <= end;
 ```
 
-Isso alinha a lógica do Faturamento com a mesma fonte de verdade usada pelo R1CloserMetrics: **`contract_paid_at IS NOT NULL`**, independente do status do attendee. Assim, leads que pagaram e depois reembolsaram (como Caio Vasconcelos) continuarão aparecendo no faturamento do closer.
+Isso garante que apenas pagamentos **dentro do período selecionado** sejam marcados como "Contrato Pago" na aba de leads. Pagamentos fora do período (como o Luiz Valentin em fevereiro) aparecerão como "Realizada" em vez de "Contrato Pago", alinhando a contagem com o KPI (22).
 
 ### Impacto
 
-- Caio Vasconcelos aparecerá na aba Faturamento do Mateus Macedo
-- Qualquer outro lead reembolsado com `contract_paid_at` preenchido também será incluído
-- Sem alteração no frontend além da query — a tabela já exibe o badge de status corretamente
+- Contagem "Contrato Pago" na aba Leads passará de 23 para 22, alinhada com o KPI
+- Luiz Valentin continuará visível na aba "Leads Realizados" com status "Realizada" (não será removido)
+- A Query 2 (follow-ups) já filtra `contract_paid_at` no período — sem alteração necessária
 
