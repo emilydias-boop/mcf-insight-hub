@@ -95,7 +95,7 @@ const useFavorites = () => {
   return { favorites, toggleFavorite, isFavorite };
 };
 
-export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, onSelectPipeline, allowedOriginIds, allowedGroupIds }: OriginsSidebarProps) => {
+export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, onSelectPipeline, allowedOriginIds, allowedGroupIds, hideFilters }: OriginsSidebarProps) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -405,36 +405,40 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
       {/* Conteúdo expandido */}
       {!isCollapsed && (
         <>
-          {/* Seletor de Pipeline */}
-          <div className="p-3 border-b">
-            <PipelineSelector
-              selectedPipelineId={pipelineId || null}
-              onSelectPipeline={onSelectPipeline}
-              allowedGroupIds={allowedGroupIds}
-            />
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="w-full mt-2" 
-              onClick={() => setWizardOpen(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Criar Pipeline
-            </Button>
-          </div>
-          
-          {/* Busca */}
-          <div className="p-3 border-b">
-            <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar origem..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 h-9"
+          {/* Seletor de Pipeline - oculto quando hideFilters */}
+          {!hideFilters && (
+            <div className="p-3 border-b">
+              <PipelineSelector
+                selectedPipelineId={pipelineId || null}
+                onSelectPipeline={onSelectPipeline}
+                allowedGroupIds={allowedGroupIds}
               />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full mt-2" 
+                onClick={() => setWizardOpen(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Criar Pipeline
+              </Button>
             </div>
-          </div>
+          )}
+          
+          {/* Busca - oculta quando hideFilters */}
+          {!hideFilters && (
+            <div className="p-3 border-b">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar origem..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8 h-9"
+                />
+              </div>
+            </div>
+          )}
           
           <ScrollArea className="flex-1">
             <div className="p-2 space-y-1">
