@@ -121,32 +121,63 @@ serve(async (req) => {
     }
     
     if (!stageId) {
-      const { data: localStage } = await supabase
+      // Tentar buscar stage "Novo Lead" por nome primeiro (local_pipeline_stages)
+      const { data: localNovoLead } = await supabase
         .from('local_pipeline_stages')
         .select('id')
         .eq('origin_id', endpoint.origin_id)
         .eq('is_active', true)
-        .order('stage_order', { ascending: true })
+        .ilike('name', '%Novo Lead%')
         .limit(1)
         .maybeSingle();
-      
-      if (localStage) {
-        stageId = localStage.id;
-        console.log('[WEBHOOK-RECEIVER] Usando primeira stage de local_pipeline_stages:', stageId);
+
+      if (localNovoLead) {
+        stageId = localNovoLead.id;
+        console.log('[WEBHOOK-RECEIVER] Stage "Novo Lead" encontrado em local_pipeline_stages:', stageId);
       } else {
-        const { data: legacyStage } = await supabase
-          .from('crm_stages')
+        // Fallback: primeira stage por ordem em local_pipeline_stages
+        const { data: localStage } = await supabase
+          .from('local_pipeline_stages')
           .select('id')
           .eq('origin_id', endpoint.origin_id)
+          .eq('is_active', true)
           .order('stage_order', { ascending: true })
           .limit(1)
           .maybeSingle();
-        
-        if (legacyStage) {
-          stageId = legacyStage.id;
-          console.log('[WEBHOOK-RECEIVER] Usando primeira stage de crm_stages:', stageId);
+
+        if (localStage) {
+          stageId = localStage.id;
+          console.log('[WEBHOOK-RECEIVER] Usando primeira stage de local_pipeline_stages:', stageId);
         } else {
-          console.log('[WEBHOOK-RECEIVER] Nenhuma stage encontrada, deal será criado sem stage_id');
+          // Tentar crm_stages: buscar "Novo Lead" por nome
+          const { data: crmNovoLead } = await supabase
+            .from('crm_stages')
+            .select('id')
+            .eq('origin_id', endpoint.origin_id)
+            .ilike('stage_name', '%Novo Lead%')
+            .limit(1)
+            .maybeSingle();
+
+          if (crmNovoLead) {
+            stageId = crmNovoLead.id;
+            console.log('[WEBHOOK-RECEIVER] Stage "Novo Lead" encontrado em crm_stages:', stageId);
+          } else {
+            // Último fallback: primeira stage por ordem em crm_stages
+            const { data: legacyStage } = await supabase
+              .from('crm_stages')
+              .select('id')
+              .eq('origin_id', endpoint.origin_id)
+              .order('stage_order', { ascending: true })
+              .limit(1)
+              .maybeSingle();
+
+            if (legacyStage) {
+              stageId = legacyStage.id;
+              console.log('[WEBHOOK-RECEIVER] Usando primeira stage de crm_stages:', stageId);
+            } else {
+              console.log('[WEBHOOK-RECEIVER] Nenhuma stage encontrada, deal será criado sem stage_id');
+            }
+          }
         }
       }
     }
@@ -414,16 +445,30 @@ serve(async (req) => {
           // Não tem deal na Inside Sales — criar lá em vez da pipeline original
           console.log('[WEBHOOK-RECEIVER] 🔄 Criando deal na Inside Sales para comprador A010');
           
-          // Buscar primeiro estágio da Inside Sales
+          // Buscar estágio "Novo Lead" da Inside Sales por nome
           let insideSalesStageId: string | null = null;
-          const { data: isStage } = await supabase
+          const { data: isNovoLead } = await supabase
             .from('crm_stages')
             .select('id')
             .eq('origin_id', INSIDE_SALES_ORIGIN_ID)
-            .order('stage_order', { ascending: true })
+            .ilike('stage_name', '%Novo Lead%')
             .limit(1)
             .maybeSingle();
-          insideSalesStageId = isStage?.id || null;
+          if (isNovoLead) {
+            insideSalesStageId = isNovoLead.id;
+            console.log('[WEBHOOK-RECEIVER] Stage "Novo Lead" para Inside Sales:', insideSalesStageId);
+          } else {
+            // Fallback por ordem caso "Novo Lead" não exista
+            const { data: isStage } = await supabase
+              .from('crm_stages')
+              .select('id')
+              .eq('origin_id', INSIDE_SALES_ORIGIN_ID)
+              .order('stage_order', { ascending: true })
+              .limit(1)
+              .maybeSingle();
+            insideSalesStageId = isStage?.id || null;
+            console.log('[WEBHOOK-RECEIVER] Fallback stage Inside Sales:', insideSalesStageId);
+          }
           
           // Buscar owner via round-robin da Inside Sales
           let isOwner: string | null = null;
