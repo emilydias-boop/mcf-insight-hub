@@ -176,16 +176,18 @@ async function buildIncorporadorReport(supabase: any) {
   const safraStartISO = safraStart.toISOString();
   const safraEndISO = safraEnd.toISOString();
 
-  const carrinhoStartStr = fmtDate(carrinhoStart);
-  const carrinhoEndStr = fmtDate(carrinhoEnd);
-  const safraStartStr = fmtDate(safraStart);
-  const safraEndStr = fmtDate(safraEnd);
+  // Use raw dates for labels (not BRT-shifted)
+  const { labels } = periods;
+  const carrinhoStartStr = fmtDate(labels.carrinhoStart);
+  const carrinhoEndStr = fmtDate(labels.carrinhoEnd);
+  const safraStartStr = fmtDate(labels.safraStart);
+  const safraEndStr = fmtDate(labels.safraEnd);
 
   const periodLabel = `${carrinhoStartStr.split('-').reverse().join('/')} a ${carrinhoEndStr.split('-').reverse().join('/')}`;
   const safraLabel = `${safraStartStr.split('-').reverse().join('/')} a ${safraEndStr.split('-').reverse().join('/')}`;
 
-  // ── SDR list (profiles with role=sdr and squad=incorporador) ──
-  const { data: sdrProfiles } = await supabase
+  // ── Carrinho week start for encaixados query (use label date, not BRT shifted) ──
+  const weekStartStr = fmtDate(labels.carrinhoStart);
     .from('profiles')
     .select('id, full_name')
     .contains('squad', ['incorporador']);
