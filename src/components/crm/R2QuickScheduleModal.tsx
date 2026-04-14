@@ -117,15 +117,22 @@ export function R2QuickScheduleModal({
     return closerSlots.availableSlots;
   }, [closerSlots]);
 
-  // Generate full 08:00-21:00 time slots for pre-schedule mode
+  const MAX_PRE_SCHEDULE_PER_SLOT = 2;
+
+  // Generate 09:00-20:00 time slots for pre-schedule mode
   const allFreeTimeSlots = useMemo(() => {
     const slots: string[] = [];
-    for (let h = 8; h <= 21; h++) {
+    for (let h = 9; h <= 20; h++) {
       slots.push(`${String(h).padStart(2, '0')}:00`);
-      if (h < 21) slots.push(`${String(h).padStart(2, '0')}:30`);
+      if (h < 20) slots.push(`${String(h).padStart(2, '0')}:30`);
     }
     return slots;
   }, []);
+
+  // Pre-scheduled counts from hook
+  const preScheduledCounts = useMemo(() => {
+    return closerSlots?.preScheduledCounts || {};
+  }, [closerSlots]);
 
   // Check if selected time is configured in the grid
   const isTimeConfigured = useMemo(() => {

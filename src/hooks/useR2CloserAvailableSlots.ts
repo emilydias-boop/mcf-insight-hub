@@ -121,12 +121,31 @@ export function useR2CloserAvailableSlots(
         };
       });
 
+      // 6. Fetch pre-scheduled attendee counts per time slot for capacity limiting
+      const { data: attendeeData, error: attendeeError } = await supabase
+        .from('meeting_slot_attendees')
+        .select('meeting_slots!inner(scheduled_at, closer_id)')
+        .in('status', ['pre_scheduled', 'invited', 'scheduled', 'confirmed'])
+        .eq('meeting_slots.closer_id', closerId)
+        .gte('meeting_slots.scheduled_at', startOfDayStr)
+        .lte('meeting_slots.scheduled_at', endOfDayStr);
+
+      if (attendeeError) throw attendeeError;
+
+      const preScheduledCounts: Record<string, number> = {};
+      (attendeeData || []).forEach((a: any) => {
+        const d = new Date(a.meeting_slots.scheduled_at);
+        const time = format(d, 'HH:mm');
+        preScheduledCounts[time] = (preScheduledCounts[time] || 0) + 1;
+      });
+
       return {
         configuredSlots,
         bookedTimes,
         availableSlots,
         source,
         maxLeadsPerSlot,
+        preScheduledCounts,
       };
     },
     enabled: !!closerId && !!date,
