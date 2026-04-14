@@ -78,9 +78,47 @@ export function MeuRHRemuneracaoSection({ employee }: MeuRHRemuneracaoSectionPro
     );
   }
 
+  const hasVariavel = employee.tipo_variavel === 'modelo_sdr' || (payout?.valor_variavel_total != null && payout.valor_variavel_total > 0);
+
   const statusConfig = STATUS_LABELS[payout?.status || "DRAFT"] || STATUS_LABELS.DRAFT;
   const formatCurrency = (value: number | null | undefined) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
+
+  // Layout simplificado para colaboradores sem variável
+  if (!hasVariavel) {
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <DollarSign className="h-4 w-4" />
+            Remuneração
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {isLoading ? (
+            <Skeleton className="h-16 w-48" />
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="space-y-1 p-3 rounded-md bg-primary/10 border border-primary/20">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Salário Base</p>
+                <p className="text-lg font-semibold text-primary">
+                  {formatCurrency(employee.salario_base)}
+                </p>
+              </div>
+              <div className="space-y-1 p-3 rounded-md bg-muted/30">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Nível</p>
+                <p className="text-lg font-semibold">{employee.nivel || 1}</p>
+              </div>
+              <div className="space-y-1 p-3 rounded-md bg-muted/30">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Tipo</p>
+                <p className="text-sm font-medium">{employee.tipo_variavel || "Fixo"}</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -114,13 +152,10 @@ export function MeuRHRemuneracaoSection({ employee }: MeuRHRemuneracaoSectionPro
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Month title and status */}
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground capitalize">Fechamento de {monthDisplay}</p>
               <Badge className={`${statusConfig.color} text-white text-[10px]`}>{statusConfig.label}</Badge>
             </div>
-
-            {/* Values grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-1 p-3 rounded-md bg-muted/30">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">OTE Total</p>
