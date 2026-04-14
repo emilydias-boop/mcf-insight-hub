@@ -1,75 +1,55 @@
 
 
-## Plano: Corrigir classificação ANAMNESE usando deal_activities (stage UUID + nome)
+## Plano: Corrigir boundaries R2 no relatório (e no dashboard)
 
-### Problema
+### Causa raiz encontrada
 
-A detecção de leads ANAMNESE via tags/origin falha porque:
-- Tags nunca contêm "anamnese" (ex: Heloiza tem tags SDR-JO, A000-Contrato)
-- Origin é sempre "PIPELINE INSIDE SALES" (ou outra pipeline genérica)
-- O caminho correto é verificar se o deal **passou por um stage de anamnese** via `deal_activities`
+O relatório usa **boundary de cutoff** (Sexta 12:00 BRT → Sexta 12:00 BRT) para contar R2 Agendadas/Realizadas. Isso **exclui 5 reuniões na sexta-feira à tarde** (após 12:00 BRT). O cutoff serve para determinar a qual SAFRA do carrinho a reunião pertence, mas para contar agendadas/realizadas, deveria usar a **semana operacional completa** (Sáb 00:00 BRT → Sex 23:59 BRT).
 
-### Descoberta no banco
+### Verificação no banco
 
-- `deal_activities.from_stage` e `to_stage` são `text` e armazenam **tanto UUIDs quanto nomes de stages**
-- Stage ANAMNESE INCOMPLETA tem UUID `e6fab26d-f16d-4b00-900f-ca915cbfe9d9`
-- Existem registros com `to_stage = 'ANAMNESE COMPLETA'` e `to_stage = 'ANAMNESE INCOMPLETA'` (como texto)
-- Heloiza (deal `b0a81eb8`) tem `from_stage = 'e6fab26d...'` (UUID do stage ANAMNESE INCOMPLETA) -- confirmado no banco
-- Ela está na R2 agenda (slot_date 2026-04-10), mas a classificação atual mostra 0 ANAMNESE
+| Boundary | Agendadas | Realizadas |
+|----------|-----------|------------|
+| Cutoff (atual) | 43 + 4 enc = **47** | **43** |
+| Semana completa | 49 + 3 enc = **52** ✓ | **45** ✓ |
 
-### Alteração em `supabase/functions/weekly-manager-report/index.ts`
+As 5 reuniões faltantes estão na sexta 10/04 entre 15:00-22:00 UTC (12:00-19:00 BRT).
 
-**Substituir** a lógica de classificação ANAMNESE (linhas 408-468) para usar `deal_activities` em vez de tags/origin:
+### Correção em `supabase/functions/weekly-manager-report/index.ts`
+
+**Alterar o boundary R2 de cutoff para semana operacional completa:**
 
 ```ts
-// 1. Buscar IDs dos stages de anamnese
-const { data: anamnaseStages } = await supabase
-  .from('crm_stages')
-  .select('id')
-  .ilike('stage_name', '%anamnes%');
-const anamnaseStageIds = new Set(
-  (anamnaseStages || []).map((s: any) => s.id)
-);
+// ANTES: cutoff-based
+const r2Start = new Date(previousFriday);
+r2Start.setHours(prevCutH + 3, prevCutM, 0, 0);
+const r2End = new Date(currentFriday);
+r2End.setHours(currCutH + 3, currCutM, 0, 0);
 
-// 2. Buscar deal_activities dos R2 deals
-const { data: dealActivities } = await supabase
-  .from('deal_activities')
-  .select('deal_id, to_stage, from_stage')
-  .in('deal_id', r2DealIds);
-
-// 3. Criar set de deals que passaram por anamnese
-//    Verificar tanto por UUID do stage quanto por nome textual
-const anamneseDealIds = new Set<string>();
-for (const da of dealActivities || []) {
-  const toStage = da.to_stage || '';
-  const fromStage = da.from_stage || '';
-  if (
-    anamnaseStageIds.has(toStage) || anamnaseStageIds.has(fromStage) ||
-    toStage.toUpperCase().includes('ANAMNES') ||
-    fromStage.toUpperCase().includes('ANAMNES')
-  ) {
-    anamneseDealIds.add(da.deal_id);
-  }
-}
-
-// 4. Na classificação: A010 > ANAMNESE > LIVE
-if (email && a010EmailSet.has(email)) originA010++;
-else if (att.deal_id && anamneseDealIds.has(att.deal_id)) originAnamnese++;
-else originLive++;
+// DEPOIS: full operational week (Sáb 00:00 BRT → Sex 23:59 BRT)
+const r2Start = new Date(labels.carrinhoStart); // Saturday
+r2Start.setHours(3, 0, 0, 0); // 00:00 BRT = 03:00 UTC
+const r2End = new Date(labels.carrinhoEnd); // Friday
+r2End.setHours(26, 59, 59, 999); // 23:59 BRT = 02:59 UTC next day
 ```
 
-### Também corrigir (do plano anterior aprovado)
+### Discrepâncias pendentes
 
-- **R2 Agendadas**: contar todos os `r2NonPartner` (remover filtro de status)
-- **R2 Realizadas**: contar todos exceto no-shows reais (`att.status === 'no_show'` e slot não completed)
+| Métrica | Com semana completa | Usuário espera | Diferença |
+|---------|-------------------|----------------|-----------|
+| Agendadas | **52** | 52 | ✓ |
+| Realizadas | **45** | 45 | ✓ |
+| Aprovados | **31** | 35 | **-4** |
+| Próx. Semana | **3** | 3 | ✓ |
+| Fora Carrinho | **7** (6 reembolso + 1 reprovado) | 2 | **-5** |
 
-### Deploy e teste
+**Aprovados (31 vs 35)**: No banco existem 31 attendees com `r2_status_id = Aprovado`. Os 4 encaixados já estão incluídos. Não encontrei mais 4 aprovados. Possível que 4 leads foram aprovados operacionalmente mas ainda não tiveram o status atualizado no sistema.
 
-Enviar apenas para Bellini (`buFilter: "incorporador"`) para validar.
+**Fora do Carrinho (7 vs 2)**: O relatório conta Reembolso(6) + Desistente(0) + Reprovado(1) + Cancelado(0) = 7. O usuário diz que deveria ser 2 — preciso entender qual é a definição correta de "fora do carrinho" para o relatório.
 
-### Resultado esperado
+### Ação
 
-- R2 Agendadas: **52**
-- R2 Realizadas: **45**
-- Origem: A010 com prioridade, ANAMNESE detectada via histórico de stages (Heloiza e outros), LIVE para os demais
+1. Corrigir o boundary R2 para semana operacional completa → resolve Agendadas (52) e Realizadas (45)
+2. Deploy e enviar para Bellini com `buFilter: "incorporador"`
+3. Investigar com o usuário a diferença nos Aprovados e Fora do Carrinho
 
