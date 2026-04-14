@@ -29,19 +29,7 @@ const DESISTENTE_ID = '407b14d6-8561-45ef-9c40-c9ca1e1c89e7';
 const CANCELADO_ID = 'b1d37f3e-ed3c-4edc-aa51-05fde410cdda';
 const FORA_IDS = [REEMBOLSO_ID, DESISTENTE_ID, REPROVADO_ID, CANCELADO_ID]; // Próxima Semana contada separadamente
 
-// ── Closer IDs from closers table (incorporador, active) ──
-const R1_CLOSER_IDS = [
-  { id: 'ae78cf12-a9aa-4c51-855f-a64f5373d339', name: 'Cristiane Gomes' },
-  { id: '1ed213d0-c4ff-466a-abac-2e50400963e4', name: 'Jessica Bellini' },
-  { id: '697b1c04-6dd0-4955-8f33-2e0bcfaad007', name: 'Julio' },
-  { id: '2396c873-a59c-4e07-bcd8-82b6f330b969', name: 'Mateus Macedo' },
-  { id: '1c10697f-2456-48ff-bbdb-ee6cbe5f4e4a', name: 'Thayna' },
-];
-const R2_CLOSER_IDS = [
-  { id: 'f598dc41-8468-4372-a720-14fb0250d95a', name: 'Claudia Carielo' },
-  { id: 'a762c12f-3ee0-49b9-aec7-3feef61e9976', name: 'Jessica Bellini' },
-  { id: '76ede8f4-92fa-4fce-95bf-0db0fed1a0fd', name: 'Jessica Martins' },
-];
+// Closers are now fetched dynamically from the database
 
 // ── Date helpers ──
 function fmtDate(d: Date) {
