@@ -252,11 +252,14 @@ async function buildIncorporadorReport(supabase: any) {
   const contratosReembolsados = allContratos.filter((t: any) => t.sale_status === 'refunded' && (t.installment_number || 1) <= 1).length; // e.g. 11
   const contratosLiquidos = contratosComReembolso - contratosReembolsados; // e.g. 27
 
-  // ══ 2. R1 MEETINGS (carrinho week Sáb-Sex) ══
+  // ══ 2. R1 MEETINGS (carrinho week Sáb-Sex) — filtered by BU incorporador ══
+  // Only count R1 attendees whose closer belongs to incorporador BU
+  const incorporadorCloserIds = R1_CLOSER_IDS.map(c => c.id);
   const { data: r1Attendees } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, booked_by, is_partner, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type, booked_by)')
     .eq('meeting_slot.meeting_type', 'r1')
+    .in('meeting_slot.closer_id', incorporadorCloserIds)
     .gte('meeting_slot.scheduled_at', carrinhoStartISO)
     .lte('meeting_slot.scheduled_at', carrinhoEndISO);
 
@@ -276,16 +279,64 @@ async function buildIncorporadorReport(supabase: any) {
     }
   }
 
-  // ══ 3. R2 MEETINGS (carrinho week Sáb-Sex) ══
+  // ══ 3. R2 MEETINGS — use carrinho config boundaries (horario_corte) ══
+  // Fetch carrinho config for current and previous week to get cutoff times
+  const carrinhoWeekKey = `carrinho_config_${fmtDate(labels.carrinhoStart)}`;
+  const prevWeekStart = new Date(labels.carrinhoStart);
+  prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+  const prevCarrinhoWeekKey = `carrinho_config_${fmtDate(prevWeekStart)}`;
+
+  const [configResult, prevConfigResult] = await Promise.all([
+    supabase.from('settings').select('value').eq('key', carrinhoWeekKey).maybeSingle(),
+    supabase.from('settings').select('value').eq('key', prevCarrinhoWeekKey).maybeSingle(),
+  ]);
+
+  // Fallback to global config, then default 12:00
+  let currentCutoff = '12:00';
+  let previousCutoff = '12:00';
+  if (configResult.data?.value?.carrinhos?.[0]?.horario_corte) {
+    currentCutoff = configResult.data.value.carrinhos[0].horario_corte;
+  } else {
+    // Try global fallback
+    const { data: globalConfig } = await supabase.from('settings').select('value').eq('key', 'carrinho_config').maybeSingle();
+    if (globalConfig?.value?.carrinhos?.[0]?.horario_corte) currentCutoff = globalConfig.value.carrinhos[0].horario_corte;
+  }
+  if (prevConfigResult.data?.value?.carrinhos?.[0]?.horario_corte) {
+    previousCutoff = prevConfigResult.data.value.carrinhos[0].horario_corte;
+  } else {
+    previousCutoff = currentCutoff; // fallback to current
+  }
+
+  // R2 boundaries: previousFriday@previousCutoff → currentFriday@currentCutoff (in BRT, converted to UTC)
+  // carrinhoStart = Saturday BRT, so Friday = Saturday - 1 day
+  const currentFriday = new Date(labels.carrinhoStart);
+  currentFriday.setDate(currentFriday.getDate() + 6); // Sat + 6 = Fri (end of week)
+  const previousFriday = new Date(currentFriday);
+  previousFriday.setDate(previousFriday.getDate() - 7);
+
+  const [prevCutH, prevCutM] = previousCutoff.split(':').map(Number);
+  const [currCutH, currCutM] = currentCutoff.split(':').map(Number);
+
+  // Build UTC ISO strings from BRT cutoff times
+  const r2Start = new Date(previousFriday);
+  r2Start.setHours(prevCutH + 3, prevCutM || 0, 0, 0); // BRT→UTC: +3h
+  const r2End = new Date(currentFriday);
+  r2End.setHours(currCutH + 3, currCutM || 0, 0, 0); // BRT→UTC: +3h
+
+  const r2StartISO = r2Start.toISOString();
+  const r2EndISO = r2End.toISOString();
+
+  console.log(`[INCORP] R2 boundaries: ${r2StartISO} → ${r2EndISO} (cutoffs: ${previousCutoff} → ${currentCutoff})`);
+
   const { data: r2Attendees } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
     .eq('meeting_slot.meeting_type', 'r2')
-    .gte('meeting_slot.scheduled_at', carrinhoStartISO)
-    .lte('meeting_slot.scheduled_at', carrinhoEndISO);
+    .gte('meeting_slot.scheduled_at', r2StartISO)
+    .lte('meeting_slot.scheduled_at', r2EndISO);
 
   // Also include encaixados for this carrinho week
-  const weekStartStr = fmtDate(carrinhoStart);
+  const weekStartStr = fmtDate(labels.carrinhoStart);
   const { data: encaixados } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
