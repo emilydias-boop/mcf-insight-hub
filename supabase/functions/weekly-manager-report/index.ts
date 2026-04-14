@@ -240,20 +240,17 @@ async function buildIncorporadorReport(supabase: any) {
     .gte('sale_date', safraStartISO)
     .lte('sale_date', safraEndISO);
 
-  const validContratos = (contratosTx || []).filter((t: any) => {
+  // Remove newsale- prefix entries and make-sourced "contrato" entries
+  const allContratos = (contratosTx || []).filter((t: any) => {
     if (t.hubla_id?.startsWith('newsale-')) return false;
     if (t.source === 'make' && t.product_name?.toLowerCase() === 'contrato') return false;
-    if (t.installment_number && t.installment_number > 1) return false;
     return true;
   });
-  const emailSet = new Set(validContratos.map((t: any) => (t.customer_email || '').toLowerCase().trim()).filter(Boolean));
-  const contratosTotal = emailSet.size;
-  const contratosReembolsados = new Set(
-    validContratos.filter((t: any) => t.sale_status === 'refunded')
-      .map((t: any) => (t.customer_email || '').toLowerCase().trim())
-      .filter(Boolean)
-  ).size;
-  const contratosLiquidos = contratosTotal - contratosReembolsados;
+  const totalComRecorrencia = allContratos.length; // e.g. 41
+  const recorrencias = allContratos.filter((t: any) => (t.installment_number || 0) > 1).length; // e.g. 3
+  const contratosComReembolso = totalComRecorrencia - recorrencias; // e.g. 38
+  const contratosReembolsados = allContratos.filter((t: any) => t.sale_status === 'refunded' && (t.installment_number || 1) <= 1).length; // e.g. 11
+  const contratosLiquidos = contratosComReembolso - contratosReembolsados; // e.g. 27
 
   // ══ 2. R1 MEETINGS (carrinho week Sáb-Sex) ══
   const { data: r1Attendees } = await supabase
