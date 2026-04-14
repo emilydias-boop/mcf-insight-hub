@@ -362,26 +362,18 @@ async function buildIncorporadorReport(supabase: any) {
     previousCutoff = currentCutoff; // fallback to current
   }
 
-  // R2 boundaries: previousFriday@previousCutoff → currentFriday@currentCutoff (in BRT, converted to UTC)
-  // currentFriday = carrinhoThursday + 1 day (Fri of the cart week)
-  const currentFriday = new Date(labels.carrinhoThursday);
-  currentFriday.setDate(currentFriday.getDate() + 1);
-  const previousFriday = new Date(currentFriday);
-  previousFriday.setDate(previousFriday.getDate() - 7);
-
-  const [prevCutH, prevCutM] = previousCutoff.split(':').map(Number);
-  const [currCutH, currCutM] = currentCutoff.split(':').map(Number);
-
-  // Build UTC ISO strings from BRT cutoff times
-  const r2Start = new Date(previousFriday);
-  r2Start.setHours(prevCutH + 3, prevCutM || 0, 0, 0); // BRT→UTC: +3h
-  const r2End = new Date(currentFriday);
-  r2End.setHours(currCutH + 3, currCutM || 0, 0, 0); // BRT→UTC: +3h
+  // R2 boundaries: full operational week (Sáb 00:00 BRT → Sex 23:59 BRT)
+  // carrinhoStart = Saturday, carrinhoEnd = Friday
+  const r2Start = new Date(labels.carrinhoStart);
+  r2Start.setHours(3, 0, 0, 0); // 00:00 BRT = 03:00 UTC
+  const r2End = new Date(labels.carrinhoEnd);
+  r2End.setDate(r2End.getDate() + 1);
+  r2End.setHours(2, 59, 59, 999); // 23:59:59 BRT = 02:59:59 UTC next day
 
   const r2StartISO = r2Start.toISOString();
   const r2EndISO = r2End.toISOString();
 
-  console.log(`[INCORP] R2 boundaries: ${r2StartISO} → ${r2EndISO} (cutoffs: ${previousCutoff} → ${currentCutoff})`);
+  console.log(`[INCORP] R2 boundaries (full week): ${r2StartISO} → ${r2EndISO}`);
 
   const { data: r2Attendees } = await supabase
     .from('meeting_slot_attendees')
