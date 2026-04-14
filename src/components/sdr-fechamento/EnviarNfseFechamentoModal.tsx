@@ -68,7 +68,8 @@ async function sendNfseEmails(
     if (signedData?.signedUrl) pdfUrl = signedData.signedUrl;
 
     const employeeName = emp.nome_completo || 'Colaborador';
-    const senderEmail = emp.email_pessoal || undefined;
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    const senderEmail = authUser?.email || emp.email_pessoal || undefined;
     const senderName = employeeName;
     const subject = `Nova NFSe Fechamento — ${employeeName}`;
     const dataEnvio = format(new Date(), "dd/MM/yyyy 'às' HH:mm");
