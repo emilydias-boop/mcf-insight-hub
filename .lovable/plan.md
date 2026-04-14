@@ -1,36 +1,42 @@
 
 
-## Plano: Usar email de login (auth) como remetente nos emails de NFSe
+## Plano: Corrigir filtros de periodo e tentativas no CRM para coordenadores
 
-### Problema
+### Causa raiz
 
-Os emails de NFSe estao sendo enviados com `email_pessoal` do colaborador como remetente. Esse email pode ser pessoal (ex: gmail), que a Brevo rejeita por nao pertencer ao dominio verificado `@minhacasafinanciada.com`. O correto e usar o email de login (auth), que e o email corporativo cadastrado no Supabase Auth.
+A tabela `calls` possui uma politica RLS de SELECT que so permite acesso para:
+- O proprio usuario (`user_id = auth.uid()`)
+- Admins (`has_role('admin')`)
+- Managers (`has_role('manager')`)
+
+Thobson tem a role `coordenador`, que nao esta incluida. Ele nao fez nenhuma ligacao pessoalmente — as ligacoes dos deals dele foram feitas por SDRs. Resultado: o hook `useBatchDealActivitySummary` retorna `totalCalls = 0` e `lastContactAttempt = null` para todos os deals dele.
+
+Isso faz com que:
+- **Filtro de inatividade** (`+ de 3 dias`): como `lastContactAttempt` e null, o codigo assume "sem atividade = muito inativo" e TODOS os deals passam no filtro
+- **Filtro de tentativas** (`0 a 1`): como `totalCalls = 0` para todos, TODOS os deals passam no filtro (0 esta entre 0 e 1)
+
+Os filtros parecem nao funcionar, mas na verdade funcionam — so que com dados zerados por falta de permissao de leitura.
 
 ### Alteracao
 
-**Dois arquivos afetados:**
+**Migracao SQL** — Alterar a RLS da tabela `calls` para incluir `coordenador`:
 
-1. **`src/components/meu-rh/EnviarNfseModal.tsx`** (funcao `sendNfseEmails`, linha ~44)
-   - Buscar o email do usuario logado via `supabase.auth.getUser()` dentro de `sendNfseEmails`
-   - Usar esse email como `senderEmail` em vez de `emp.email_pessoal`
+```sql
+DROP POLICY "Users can view their own calls" ON public.calls;
 
-2. **`src/components/sdr-fechamento/EnviarNfseFechamentoModal.tsx`** (funcao `sendNfseEmails`, linha ~71)
-   - Mesma correcao: buscar `supabase.auth.getUser()` e usar o email de auth como `senderEmail`
-
-### Logica
-
-```ts
-// Antes:
-const senderEmail = emp.email_pessoal || undefined;
-
-// Depois:
-const { data: { user: authUser } } = await supabase.auth.getUser();
-const senderEmail = authUser?.email || emp.email_pessoal || undefined;
+CREATE POLICY "Users can view their own calls"
+ON public.calls
+FOR SELECT
+TO public
+USING (
+  user_id = auth.uid()
+  OR has_role(auth.uid(), 'admin'::app_role)
+  OR has_role(auth.uid(), 'manager'::app_role)
+  OR has_role(auth.uid(), 'coordenador'::app_role)
+);
 ```
-
-O email de auth (login) e priorizado. Se por algum motivo nao existir, faz fallback para `email_pessoal`. O `brevo-send` ja valida se o email pertence ao dominio `@minhacasafinanciada.com` antes de usa-lo como sender — caso contrario, usa o fallback `marketing@minhacasafinanciada.com`.
 
 ### Resultado
 
-Os emails de NFSe serao enviados com o email corporativo do colaborador (o mesmo usado para login), garantindo que a Brevo aceite como remetente verificado.
+Coordenadores como Thobson poderao ler as ligacoes de todos os deals, fazendo com que os filtros de inatividade e tentativas funcionem corretamente — filtrando deals com base nos dados reais de atividade.
 
