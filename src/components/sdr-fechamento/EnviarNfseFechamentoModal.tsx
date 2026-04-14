@@ -34,42 +34,50 @@ async function sendNfseEmails(
   storagePath: string
 ) {
   try {
-    const { data: emp } = await supabase
+    const { data: emp, error: empError } = await supabase
       .from('employees')
       .select('nome_completo, gestor_id, email_pessoal')
       .eq('id', employeeId)
       .single();
 
+    if (empError) console.error('[sendNfseEmails] Erro ao buscar employee:', empError);
     if (!emp) return;
 
     // Fetch payout details
-    const { data: payout } = await supabase
+    const { data: payout, error: payoutError } = await supabase
       .from('sdr_month_payout')
       .select('aprovado_por, aprovado_em, valor_fixo, valor_variavel_total, total_conta, total_ifood, ifood_mensal, ifood_ultrameta, pct_reunioes_agendadas, valor_reunioes_agendadas, pct_reunioes_realizadas, valor_reunioes_realizadas, pct_tentativas, valor_tentativas, pct_organizacao, valor_organizacao')
       .eq('id', payoutId)
       .single();
 
+    if (payoutError) console.error('[sendNfseEmails] Erro ao buscar payout:', payoutError);
+
     // Fetch approver name
     let aprovadorNome = '—';
     if (payout?.aprovado_por) {
-      const { data: aprovador } = await supabase
+      const { data: aprovador, error: aprovadorError } = await supabase
         .from('profiles')
         .select('full_name')
         .eq('id', payout.aprovado_por)
         .single();
+      if (aprovadorError) console.error('[sendNfseEmails] Erro ao buscar aprovador:', aprovadorError);
       aprovadorNome = aprovador?.full_name || '—';
     }
 
     // Generate signed URL for PDF (7 days)
     let pdfUrl: string | undefined;
-    const { data: signedData } = await supabase.storage
+    const { data: signedData, error: signedError } = await supabase.storage
       .from('user-files')
       .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+    if (signedError) console.error('[sendNfseEmails] Erro ao gerar signed URL:', signedError);
     if (signedData?.signedUrl) pdfUrl = signedData.signedUrl;
 
     const employeeName = emp.nome_completo || 'Colaborador';
     const { data: { user: authUser } } = await supabase.auth.getUser();
-    const senderEmail = authUser?.email || emp.email_pessoal || undefined;
+    
+    // Priorizar email de login (auth) como remetente — é o corporativo do domínio verificado
+    const authEmail = authUser?.email;
+    const senderEmail = authEmail || emp.email_pessoal || undefined;
     const senderName = employeeName;
     const subject = `Nova NFSe Fechamento — ${employeeName}`;
     const dataEnvio = format(new Date(), "dd/MM/yyyy 'às' HH:mm");
@@ -114,15 +122,17 @@ async function sendNfseEmails(
         senderEmail,
         senderName,
       },
-    }).catch(err => console.error('Erro email financeiro:', err));
+    }).catch(err => console.error('[sendNfseEmails] Erro email financeiro:', err));
 
     // 2. Email para o supervisor
     if (emp.gestor_id) {
-      const { data: gestor } = await supabase
+      const { data: gestor, error: gestorError } = await supabase
         .from('employees')
         .select('email_pessoal, nome_completo')
         .eq('id', emp.gestor_id)
         .single();
+
+      if (gestorError) console.error('[sendNfseEmails] Erro ao buscar gestor:', gestorError);
 
       if (gestor?.email_pessoal) {
         supabase.functions.invoke('brevo-send', {
@@ -135,11 +145,26 @@ async function sendNfseEmails(
             senderEmail,
             senderName,
           },
-        }).catch(err => console.error('Erro email supervisor:', err));
+        }).catch(err => console.error('[sendNfseEmails] Erro email supervisor:', err));
       }
     }
+
+    // 3. Email para o próprio colaborador (email de login / auth)
+    if (authEmail) {
+      supabase.functions.invoke('brevo-send', {
+        body: {
+          to: authEmail,
+          name: employeeName,
+          subject,
+          htmlContent,
+          tags: ['nfse_fechamento', 'colaborador'],
+          senderEmail,
+          senderName,
+        },
+      }).catch(err => console.error('[sendNfseEmails] Erro email colaborador:', err));
+    }
   } catch (err) {
-    console.error('Erro ao enviar emails de NFSe:', err);
+    console.error('[sendNfseEmails] Erro geral ao enviar emails de NFSe:', err);
   }
 }
 
