@@ -315,7 +315,7 @@ async function buildIncorporadorReport(supabase: any) {
     { label: 'Em Análise', value: emAnalise, color: '#3b82f6' },
     { label: 'Próxima Sem.', value: proximaSemana, color: '#8b5cf6' },
     { label: 'Reprovados', value: reprovados, color: '#ef4444' },
-    { label: 'Fora', value: foraDoCarrinho - reprovados - proximaSemana > 0 ? foraDoCarrinho - reprovados - proximaSemana : 0, color: '#6b7280' },
+    { label: 'Fora (Outros)', value: foraDoCarrinho, color: '#6b7280' },
   ].filter(d => d.value > 0);
   const pieTotal = pieData.reduce((s, d) => s + d.value, 0);
 
