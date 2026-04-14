@@ -156,12 +156,22 @@ const STYLES = `
 // INCORPORADOR REPORT (4 SECTIONS)
 // ══════════════════════════════════════════════════
 async function buildIncorporadorReport(supabase: any) {
-  const { start, end } = getIncorpWeek();
-  const startISO = start.toISOString();
-  const endISO = end.toISOString();
-  const startStr = fmtDate(start);
-  const endStr = fmtDate(end);
-  const periodLabel = `${startStr.split('-').reverse().join('/')} a ${endStr.split('-').reverse().join('/')}`;
+  const periods = getIncorpPeriods();
+  const { start: carrinhoStart, end: carrinhoEnd } = periods.carrinhoWeek;
+  const { start: safraStart, end: safraEnd } = periods.safraContratos;
+
+  const carrinhoStartISO = carrinhoStart.toISOString();
+  const carrinhoEndISO = carrinhoEnd.toISOString();
+  const safraStartISO = safraStart.toISOString();
+  const safraEndISO = safraEnd.toISOString();
+
+  const carrinhoStartStr = fmtDate(carrinhoStart);
+  const carrinhoEndStr = fmtDate(carrinhoEnd);
+  const safraStartStr = fmtDate(safraStart);
+  const safraEndStr = fmtDate(safraEnd);
+
+  const periodLabel = `${carrinhoStartStr.split('-').reverse().join('/')} a ${carrinhoEndStr.split('-').reverse().join('/')}`;
+  const safraLabel = `${safraStartStr.split('-').reverse().join('/')} a ${safraEndStr.split('-').reverse().join('/')}`;
 
   // ── SDR list (profiles with role=sdr and squad=incorporador) ──
   const { data: sdrProfiles } = await supabase
@@ -186,7 +196,7 @@ async function buildIncorporadorReport(supabase: any) {
     .select('id, user_id, nome_completo')
     .in('user_id', sdrIds);
 
-  const employeeIdMap = new Map<string, string>(); // user_id -> employee_id
+  const employeeIdMap = new Map<string, string>();
   for (const e of sdrEmployees || []) employeeIdMap.set(e.user_id, e.id);
 
   const employeeIds = (sdrEmployees || []).map((e: any) => e.id);
@@ -194,28 +204,26 @@ async function buildIncorporadorReport(supabase: any) {
     .from('sdr_comp_plan')
     .select('sdr_id, meta_reunioes_agendadas, dias_uteis, vigencia_inicio, vigencia_fim')
     .in('sdr_id', employeeIds.length > 0 ? employeeIds : ['none'])
-    .gte('vigencia_fim', startStr)
-    .lte('vigencia_inicio', endStr);
+    .gte('vigencia_fim', carrinhoStartStr)
+    .lte('vigencia_inicio', carrinhoEndStr);
 
-  // Map employee_id -> meta semanal
   const metaMap = new Map<string, number>();
   for (const cp of compPlans || []) {
     const metaMensal = cp.meta_reunioes_agendadas || 0;
     const diasUteis = cp.dias_uteis || 20;
-    // Weekly meta = monthly / dias_uteis * 5 (typical work week)
     const metaSemanal = Math.round((metaMensal / diasUteis) * 5);
     metaMap.set(cp.sdr_id, metaSemanal);
   }
 
-  // ══ 1. CONTRATOS PAGOS ══
+  // ══ 1. CONTRATOS PAGOS (safra Qui-Qua) ══
   const { data: contratosTx } = await supabase
     .from('hubla_transactions')
     .select('id, customer_email, hubla_id, source, product_name, installment_number, sale_status')
     .eq('product_name', 'A000 - Contrato')
     .in('sale_status', ['completed', 'refunded'])
     .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
-    .gte('sale_date', startISO)
-    .lte('sale_date', endISO);
+    .gte('sale_date', safraStartISO)
+    .lte('sale_date', safraEndISO);
 
   const validContratos = (contratosTx || []).filter((t: any) => {
     if (t.hubla_id?.startsWith('newsale-')) return false;
@@ -224,8 +232,13 @@ async function buildIncorporadorReport(supabase: any) {
     return true;
   });
   const emailSet = new Set(validContratos.map((t: any) => (t.customer_email || '').toLowerCase().trim()).filter(Boolean));
-  const contratosPagos = emailSet.size;
-  const contratosReembolsados = validContratos.filter((t: any) => t.sale_status === 'refunded').length;
+  const contratosTotal = emailSet.size;
+  const contratosReembolsados = new Set(
+    validContratos.filter((t: any) => t.sale_status === 'refunded')
+      .map((t: any) => (t.customer_email || '').toLowerCase().trim())
+      .filter(Boolean)
+  ).size;
+  const contratosLiquidos = contratosTotal - contratosReembolsados;
 
   // ══ 2. R1 MEETINGS ══
   const { data: r1Attendees } = await supabase
