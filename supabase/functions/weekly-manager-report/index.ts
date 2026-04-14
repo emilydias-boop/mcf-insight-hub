@@ -385,7 +385,7 @@ async function buildIncorporadorReport(supabase: any) {
 
   const { data: r2Attendees } = await supabase
     .from('meeting_slot_attendees')
-    .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
+    .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, deal_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
     .eq('meeting_slot.meeting_type', 'r2')
     .gte('meeting_slot.scheduled_at', r2StartISO)
     .lte('meeting_slot.scheduled_at', r2EndISO);
@@ -394,7 +394,7 @@ async function buildIncorporadorReport(supabase: any) {
   const weekStartStr = carrinhoThuStr;
   const { data: encaixados } = await supabase
     .from('meeting_slot_attendees')
-    .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
+    .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, deal_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
     .eq('meeting_slot.meeting_type', 'r2')
     .eq('carrinho_week_start', weekStartStr);
 
@@ -405,8 +405,47 @@ async function buildIncorporadorReport(supabase: any) {
   }
   const r2NonPartner = merged.filter((a: any) => !a.is_partner);
 
+  // ── Classify R2 lead origins: A010 > ANAMNESE > LIVE ──
+  const r2DealIds = r2NonPartner.map((a: any) => a.deal_id).filter(Boolean);
+  let dealContactMap: Record<string, { email: string | null; tags: string[]; originName: string }> = {};
+  let a010EmailSet = new Set<string>();
+
+  if (r2DealIds.length > 0) {
+    // Fetch deal → contact (email, tags) and origin name
+    const { data: dealContacts } = await supabase
+      .from('crm_deals')
+      .select('id, crm_contacts(email, tags), crm_origins(name)')
+      .in('id', r2DealIds);
+
+    for (const dc of dealContacts || []) {
+      const contact = (dc as any).crm_contacts;
+      const origin = (dc as any).crm_origins;
+      dealContactMap[dc.id] = {
+        email: contact?.email || null,
+        tags: Array.isArray(contact?.tags) ? contact.tags : [],
+        originName: origin?.name || '',
+      };
+    }
+
+    // Batch check which emails are A010 buyers
+    const allEmails = Object.values(dealContactMap)
+      .map(c => c.email?.toLowerCase())
+      .filter(Boolean) as string[];
+    const uniqueEmails = [...new Set(allEmails)];
+
+    if (uniqueEmails.length > 0) {
+      const { data: a010Records } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email')
+        .eq('product_category', 'a010')
+        .in('sale_status', ['completed', 'paid'])
+        .in('customer_email', uniqueEmails);
+      a010EmailSet = new Set((a010Records || []).map((r: any) => r.customer_email?.toLowerCase()).filter(Boolean));
+    }
+  }
+
   let r2Agendadas = 0, r2Realizadas = 0, aprovados = 0, pendentes = 0, emAnalise = 0, foraDoCarrinho = 0, proximaSemana = 0, reprovados = 0;
-  let originLive = 0, originA010 = 0;
+  let originA010 = 0, originAnamnese = 0, originLive = 0;
 
   for (const att of r2NonPartner) {
     const slot = (att as any).meeting_slot;
@@ -414,8 +453,18 @@ async function buildIncorporadorReport(supabase: any) {
     // R2 Agendadas: excluir cancelled, rescheduled E pre_scheduled
     if (att.status !== 'cancelled' && att.status !== 'rescheduled' && att.status !== 'pre_scheduled') {
       r2Agendadas++;
-      if (slot.lead_type === 'A') originA010++;
-      else if (slot.lead_type === 'B') originLive++;
+      // Classify origin: A010 > ANAMNESE > LIVE
+      const dcInfo = dealContactMap[(att as any).deal_id];
+      const email = dcInfo?.email?.toLowerCase();
+      const tags = dcInfo?.tags || [];
+      const originName = dcInfo?.originName || '';
+      if (email && a010EmailSet.has(email)) {
+        originA010++;
+      } else if (tags.some((t: string) => t.toLowerCase().includes('anamnese')) || originName.toLowerCase().includes('anamnese')) {
+        originAnamnese++;
+      } else {
+        originLive++;
+      }
     }
     if (att.status === 'completed' || att.status === 'presente' || slot.status === 'completed') r2Realizadas++;
     if (att.r2_status_id === APROVADO_ID) aprovados++;
@@ -728,9 +777,9 @@ async function buildIncorporadorReport(supabase: any) {
 
     <div class="sub-title">Origem dos Leads (R2)</div>
     <div class="kpi-row">
-      <div class="kpi blue"><div class="value">${originLive}</div><div class="label">LIVE</div></div>
-      <div class="kpi"><div class="value">${originA010}</div><div class="label">A010</div></div>
-      <div class="kpi"><div class="value">${r2Agendadas - originLive - originA010}</div><div class="label">Outros / N/A</div></div>
+      <div class="kpi" style="border-top:3px solid #f59e0b"><div class="value">${originA010}</div><div class="label">A010</div></div>
+      <div class="kpi blue"><div class="value">${originAnamnese}</div><div class="label">ANAMNESE</div></div>
+      <div class="kpi green"><div class="value">${originLive}</div><div class="label">LIVE</div></div>
     </div>
 
     <div class="sub-title">Distribuição R2 — Status</div>
