@@ -27,7 +27,7 @@ const REPROVADO_ID = '66fd400b-2172-4aef-a883-53812ff6ef43';
 const REEMBOLSO_ID = 'b97f3afa-1b19-4621-966d-b32c61de6c2e';
 const DESISTENTE_ID = '407b14d6-8561-45ef-9c40-c9ca1e1c89e7';
 const CANCELADO_ID = 'b1d37f3e-ed3c-4edc-aa51-05fde410cdda';
-const FORA_IDS = [REEMBOLSO_ID, DESISTENTE_ID, REPROVADO_ID, PROXIMA_SEMANA_ID, CANCELADO_ID];
+const FORA_IDS = [REEMBOLSO_ID, DESISTENTE_ID, REPROVADO_ID, CANCELADO_ID]; // Próxima Semana contada separadamente
 
 // ── Closer IDs from closers table (incorporador, active) ──
 const R1_CLOSER_IDS = [
