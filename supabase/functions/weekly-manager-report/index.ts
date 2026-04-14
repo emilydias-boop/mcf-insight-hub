@@ -29,19 +29,7 @@ const DESISTENTE_ID = '407b14d6-8561-45ef-9c40-c9ca1e1c89e7';
 const CANCELADO_ID = 'b1d37f3e-ed3c-4edc-aa51-05fde410cdda';
 const FORA_IDS = [REEMBOLSO_ID, DESISTENTE_ID, REPROVADO_ID, CANCELADO_ID]; // Próxima Semana contada separadamente
 
-// ── Closer IDs from closers table (incorporador, active) ──
-const R1_CLOSER_IDS = [
-  { id: 'ae78cf12-a9aa-4c51-855f-a64f5373d339', name: 'Cristiane Gomes' },
-  { id: '1ed213d0-c4ff-466a-abac-2e50400963e4', name: 'Jessica Bellini' },
-  { id: '697b1c04-6dd0-4955-8f33-2e0bcfaad007', name: 'Julio' },
-  { id: '2396c873-a59c-4e07-bcd8-82b6f330b969', name: 'Mateus Macedo' },
-  { id: '1c10697f-2456-48ff-bbdb-ee6cbe5f4e4a', name: 'Thayna' },
-];
-const R2_CLOSER_IDS = [
-  { id: 'f598dc41-8468-4372-a720-14fb0250d95a', name: 'Claudia Carielo' },
-  { id: 'a762c12f-3ee0-49b9-aec7-3feef61e9976', name: 'Jessica Bellini' },
-  { id: '76ede8f4-92fa-4fce-95bf-0db0fed1a0fd', name: 'Jessica Martins' },
-];
+// Closers are now fetched dynamically from the database
 
 // ── Date helpers ──
 function fmtDate(d: Date) {
@@ -67,6 +55,7 @@ function toBRT(d: Date, offsetMs: number = BRT_OFFSET_MS): Date {
 /** Incorporador periods: two distinct ranges
  *  - carrinhoWeek: Sáb 00:00 BRT → Sex 23:59:59 BRT (operational week for R1, R2, SDR, Closers)
  *  - safraContratos: Qui 00:00 BRT → Qua 23:59:59 BRT (offset for contract counting)
+ *  - carrinhoThursday: Thu within the Fri of the carrinho week (for carrinho_config key)
  *  All returned dates are in UTC but represent BRT boundaries (+3h offset applied)
  */
 function getIncorpPeriods() {
@@ -93,12 +82,17 @@ function getIncorpPeriods() {
   wed.setDate(fri.getDate() - 2);
   wed.setHours(23, 59, 59, 999);
 
+  // Carrinho Thursday = Friday - 1 day (Thu within the operational week, used for config key)
+  const carrinhoThu = new Date(fri);
+  carrinhoThu.setDate(fri.getDate() - 1);
+  carrinhoThu.setHours(0, 0, 0, 0);
+
   // Apply BRT offset so UTC queries match BRT boundaries
   return {
     carrinhoWeek: { start: toBRT(sat), end: toBRT(fri) },
     safraContratos: { start: toBRT(thu), end: toBRT(wed) },
     // Keep raw dates for labels
-    labels: { carrinhoStart: sat, carrinhoEnd: fri, safraStart: thu, safraEnd: wed },
+    labels: { carrinhoStart: sat, carrinhoEnd: fri, safraStart: thu, safraEnd: wed, carrinhoThursday: carrinhoThu },
   };
 }
 
@@ -175,6 +169,9 @@ async function buildIncorporadorReport(supabase: any) {
   const carrinhoEndISO = carrinhoEnd.toISOString();
   const safraStartISO = safraStart.toISOString();
   const safraEndISO = safraEnd.toISOString();
+
+  console.log(`[INCORP] Carrinho week: ${carrinhoStartISO} → ${carrinhoEndISO}`);
+  console.log(`[INCORP] Safra contratos: ${safraStartISO} → ${safraEndISO}`);
 
   // Use raw dates for labels (not BRT-shifted)
   const { labels } = periods;
@@ -253,13 +250,23 @@ async function buildIncorporadorReport(supabase: any) {
   const contratosLiquidos = contratosComReembolso - contratosReembolsados; // e.g. 27
 
   // ══ 2. R1 MEETINGS (carrinho week Sáb-Sex) — filtered by BU incorporador ══
-  // Only count R1 attendees whose closer belongs to incorporador BU
-  const incorporadorCloserIds = R1_CLOSER_IDS.map(c => c.id);
+  // Dynamically fetch R1 closers from DB instead of hardcoded list
+  const { data: r1ClosersDB } = await supabase
+    .from('closers')
+    .select('id, name')
+    .eq('bu', 'incorporador')
+    .eq('is_active', true)
+    .or('meeting_type.is.null,meeting_type.eq.r1');
+
+  const R1_CLOSER_IDS = (r1ClosersDB || []).map((c: any) => ({ id: c.id, name: c.name }));
+  const incorporadorCloserIds = R1_CLOSER_IDS.map((c: any) => c.id);
+  console.log(`[INCORP] R1 closers (dynamic): ${R1_CLOSER_IDS.map((c: any) => c.name).join(', ')} (${incorporadorCloserIds.length} total)`);
+
   const { data: r1Attendees } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, booked_by, is_partner, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type, booked_by)')
     .eq('meeting_slot.meeting_type', 'r1')
-    .in('meeting_slot.closer_id', incorporadorCloserIds)
+    .in('meeting_slot.closer_id', incorporadorCloserIds.length > 0 ? incorporadorCloserIds : ['none'])
     .gte('meeting_slot.scheduled_at', carrinhoStartISO)
     .lte('meeting_slot.scheduled_at', carrinhoEndISO);
 
@@ -269,7 +276,8 @@ async function buildIncorporadorReport(supabase: any) {
   for (const att of r1NonPartner) {
     const slot = (att as any).meeting_slot;
     if (!slot) continue;
-    if (att.status !== 'cancelled' && att.status !== 'rescheduled') {
+    // Include rescheduled in agendadas (consistent with dashboard useR1CloserMetrics)
+    if (att.status !== 'cancelled') {
       r1Agendadas++;
       if (att.status === 'completed' || att.status === 'presente' || att.status === 'contract_paid') {
         r1Realizadas++;
@@ -280,11 +288,25 @@ async function buildIncorporadorReport(supabase: any) {
   }
 
   // ══ 3. R2 MEETINGS — use carrinho config boundaries (horario_corte) ══
-  // Fetch carrinho config for current and previous week to get cutoff times
-  const carrinhoWeekKey = `carrinho_config_${fmtDate(labels.carrinhoStart)}`;
-  const prevWeekStart = new Date(labels.carrinhoStart);
-  prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-  const prevCarrinhoWeekKey = `carrinho_config_${fmtDate(prevWeekStart)}`;
+  // Dynamically fetch R2 closers from DB
+  const { data: r2ClosersDB } = await supabase
+    .from('closers')
+    .select('id, name')
+    .eq('bu', 'incorporador')
+    .eq('is_active', true)
+    .eq('meeting_type', 'r2');
+
+  const R2_CLOSER_IDS = (r2ClosersDB || []).map((c: any) => ({ id: c.id, name: c.name }));
+  console.log(`[INCORP] R2 closers (dynamic): ${R2_CLOSER_IDS.map((c: any) => c.name).join(', ')} (${R2_CLOSER_IDS.length} total)`);
+
+  // Use carrinhoThursday for config key (cart system uses Thu as week start)
+  const carrinhoThuStr = fmtDate(labels.carrinhoThursday);
+  const carrinhoWeekKey = `carrinho_config_${carrinhoThuStr}`;
+  const prevThursday = new Date(labels.carrinhoThursday);
+  prevThursday.setDate(prevThursday.getDate() - 7);
+  const prevCarrinhoWeekKey = `carrinho_config_${fmtDate(prevThursday)}`;
+
+  console.log(`[INCORP] Carrinho config keys: ${carrinhoWeekKey} / ${prevCarrinhoWeekKey}`);
 
   const [configResult, prevConfigResult] = await Promise.all([
     supabase.from('settings').select('value').eq('key', carrinhoWeekKey).maybeSingle(),
@@ -308,9 +330,9 @@ async function buildIncorporadorReport(supabase: any) {
   }
 
   // R2 boundaries: previousFriday@previousCutoff → currentFriday@currentCutoff (in BRT, converted to UTC)
-  // carrinhoStart = Saturday BRT, so Friday = Saturday - 1 day
-  const currentFriday = new Date(labels.carrinhoStart);
-  currentFriday.setDate(currentFriday.getDate() + 6); // Sat + 6 = Fri (end of week)
+  // currentFriday = carrinhoThursday + 1 day (Fri of the cart week)
+  const currentFriday = new Date(labels.carrinhoThursday);
+  currentFriday.setDate(currentFriday.getDate() + 1);
   const previousFriday = new Date(currentFriday);
   previousFriday.setDate(previousFriday.getDate() - 7);
 
@@ -335,8 +357,8 @@ async function buildIncorporadorReport(supabase: any) {
     .gte('meeting_slot.scheduled_at', r2StartISO)
     .lte('meeting_slot.scheduled_at', r2EndISO);
 
-  // Also include encaixados for this carrinho week
-  const weekStartStr = fmtDate(labels.carrinhoStart);
+  // Also include encaixados for this carrinho week (uses Thu date as week start)
+  const weekStartStr = carrinhoThuStr;
   const { data: encaixados } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
@@ -425,7 +447,7 @@ async function buildIncorporadorReport(supabase: any) {
     const booker = slot.booked_by || att.booked_by;
     if (booker && sdrStatsMap.has(booker)) {
       const st = sdrStatsMap.get(booker)!;
-      if (att.status !== 'cancelled' && att.status !== 'rescheduled') {
+      if (att.status !== 'cancelled') {
         st.agendados++;
         if (att.status === 'completed' || att.status === 'presente' || att.status === 'contract_paid') {
           st.r1Realizadas++;
@@ -495,7 +517,7 @@ async function buildIncorporadorReport(supabase: any) {
     const cid = slot.closer_id;
     if (cid && closerR1Map.has(cid)) {
       const st = closerR1Map.get(cid)!;
-      if (att.status !== 'cancelled' && att.status !== 'rescheduled') {
+      if (att.status !== 'cancelled') {
         st.r1Agendadas++;
         if (att.status === 'completed' || att.status === 'presente' || att.status === 'contract_paid') st.r1Realizadas++;
         if (att.status === 'contract_paid' || att.contract_paid_at) st.contratos++;
@@ -536,7 +558,7 @@ async function buildIncorporadorReport(supabase: any) {
     const cid = slot.closer_id;
     if (cid && closerR2Map.has(cid)) {
       const st = closerR2Map.get(cid)!;
-      if (att.status !== 'cancelled' && att.status !== 'rescheduled') st.r2Agendadas++;
+      if (att.status !== 'cancelled' && att.status !== 'rescheduled') st.r2Agendadas++; // R2 keeps excluding rescheduled
       if (att.status === 'completed' || att.status === 'presente' || slot.status === 'completed') st.r2Realizadas++;
       if (att.r2_status_id === APROVADO_ID) st.aprovados++;
       if (att.r2_status_id === REPROVADO_ID) st.reprovados++;
