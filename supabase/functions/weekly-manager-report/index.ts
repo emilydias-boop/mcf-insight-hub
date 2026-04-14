@@ -407,23 +407,21 @@ async function buildIncorporadorReport(supabase: any) {
 
   // ── Classify R2 lead origins: A010 > ANAMNESE > LIVE ──
   const r2DealIds = r2NonPartner.map((a: any) => a.deal_id).filter(Boolean);
-  let dealContactMap: Record<string, { email: string | null; tags: string[]; originName: string }> = {};
+  let dealContactMap: Record<string, { email: string | null }> = {};
   let a010EmailSet = new Set<string>();
+  let anamneseDealIds = new Set<string>();
 
   if (r2DealIds.length > 0) {
-    // Fetch deal → contact (email, tags) and origin name
+    // Fetch deal → contact email
     const { data: dealContacts } = await supabase
       .from('crm_deals')
-      .select('id, crm_contacts(email, tags), crm_origins(name)')
+      .select('id, crm_contacts(email)')
       .in('id', r2DealIds);
 
     for (const dc of dealContacts || []) {
       const contact = (dc as any).crm_contacts;
-      const origin = (dc as any).crm_origins;
       dealContactMap[dc.id] = {
         email: contact?.email || null,
-        tags: Array.isArray(contact?.tags) ? contact.tags : [],
-        originName: origin?.name || '',
       };
     }
 
@@ -442,31 +440,59 @@ async function buildIncorporadorReport(supabase: any) {
         .in('customer_email', uniqueEmails);
       a010EmailSet = new Set((a010Records || []).map((r: any) => r.customer_email?.toLowerCase()).filter(Boolean));
     }
+
+    // Detect ANAMNESE via deal_activities (stage UUID + name)
+    const { data: anamnaseStages } = await supabase
+      .from('crm_stages')
+      .select('id')
+      .ilike('stage_name', '%anamnes%');
+    const anamnaseStageIds = new Set((anamnaseStages || []).map((s: any) => s.id));
+
+    const { data: dealActivities } = await supabase
+      .from('deal_activities')
+      .select('deal_id, to_stage, from_stage')
+      .in('deal_id', r2DealIds);
+
+    for (const da of dealActivities || []) {
+      const toStage = (da as any).to_stage || '';
+      const fromStage = (da as any).from_stage || '';
+      if (
+        anamnaseStageIds.has(toStage) || anamnaseStageIds.has(fromStage) ||
+        toStage.toUpperCase().includes('ANAMNES') ||
+        fromStage.toUpperCase().includes('ANAMNES')
+      ) {
+        anamneseDealIds.add((da as any).deal_id);
+      }
+    }
+    console.log(`[INCORP] Anamnese stages found: ${anamnaseStageIds.size}, deals with anamnese: ${anamneseDealIds.size}`);
   }
 
   let r2Agendadas = 0, r2Realizadas = 0, aprovados = 0, pendentes = 0, emAnalise = 0, foraDoCarrinho = 0, proximaSemana = 0, reprovados = 0;
   let originA010 = 0, originAnamnese = 0, originLive = 0;
 
+  // R2 Agendadas = total non-partner (no status filter)
+  r2Agendadas = r2NonPartner.length;
+
   for (const att of r2NonPartner) {
     const slot = (att as any).meeting_slot;
     if (!slot) continue;
-    // R2 Agendadas: excluir cancelled, rescheduled E pre_scheduled
-    if (att.status !== 'cancelled' && att.status !== 'rescheduled' && att.status !== 'pre_scheduled') {
-      r2Agendadas++;
-      // Classify origin: A010 > ANAMNESE > LIVE
-      const dcInfo = dealContactMap[(att as any).deal_id];
-      const email = dcInfo?.email?.toLowerCase();
-      const tags = dcInfo?.tags || [];
-      const originName = dcInfo?.originName || '';
-      if (email && a010EmailSet.has(email)) {
-        originA010++;
-      } else if (tags.some((t: string) => t.toLowerCase().includes('anamnese')) || originName.toLowerCase().includes('anamnese')) {
-        originAnamnese++;
-      } else {
-        originLive++;
-      }
+
+    // Classify origin: A010 > ANAMNESE > LIVE (for ALL agendadas)
+    const dcInfo = dealContactMap[(att as any).deal_id];
+    const email = dcInfo?.email?.toLowerCase();
+    if (email && a010EmailSet.has(email)) {
+      originA010++;
+    } else if ((att as any).deal_id && anamneseDealIds.has((att as any).deal_id)) {
+      originAnamnese++;
+    } else {
+      originLive++;
     }
-    if (att.status === 'completed' || att.status === 'presente' || slot.status === 'completed') r2Realizadas++;
+
+    // R2 Realizadas: all except true no-shows (no_show + slot not completed)
+    if (!(att.status === 'no_show' && slot.status !== 'completed')) {
+      r2Realizadas++;
+    }
+
     if (att.r2_status_id === APROVADO_ID) aprovados++;
     else if (att.r2_status_id === PENDENTE_ID) pendentes++;
     else if (att.r2_status_id === EM_ANALISE_ID) emAnalise++;
