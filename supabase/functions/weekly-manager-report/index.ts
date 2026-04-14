@@ -57,9 +57,17 @@ function pct(num: number, den: number) {
   return `${Math.round((num / den) * 100)}%`;
 }
 
+/** BRT offset: +3h to align UTC queries with BRT midnight/end-of-day */
+const BRT_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+function toBRT(d: Date, offsetMs: number = BRT_OFFSET_MS): Date {
+  return new Date(d.getTime() + offsetMs);
+}
+
 /** Incorporador periods: two distinct ranges
- *  - carrinhoWeek: Sáb 00:00 → Sex 23:59:59 (operational week for R1, R2, SDR, Closers)
- *  - safraContratos: Qui 00:00 → Qua 23:59:59 (offset for contract counting)
+ *  - carrinhoWeek: Sáb 00:00 BRT → Sex 23:59:59 BRT (operational week for R1, R2, SDR, Closers)
+ *  - safraContratos: Qui 00:00 BRT → Qua 23:59:59 BRT (offset for contract counting)
+ *  All returned dates are in UTC but represent BRT boundaries (+3h offset applied)
  */
 function getIncorpPeriods() {
   const now = new Date();
@@ -85,9 +93,12 @@ function getIncorpPeriods() {
   wed.setDate(fri.getDate() - 2);
   wed.setHours(23, 59, 59, 999);
 
+  // Apply BRT offset so UTC queries match BRT boundaries
   return {
-    carrinhoWeek: { start: sat, end: fri },
-    safraContratos: { start: thu, end: wed },
+    carrinhoWeek: { start: toBRT(sat), end: toBRT(fri) },
+    safraContratos: { start: toBRT(thu), end: toBRT(wed) },
+    // Keep raw dates for labels
+    labels: { carrinhoStart: sat, carrinhoEnd: fri, safraStart: thu, safraEnd: wed },
   };
 }
 
@@ -165,13 +176,17 @@ async function buildIncorporadorReport(supabase: any) {
   const safraStartISO = safraStart.toISOString();
   const safraEndISO = safraEnd.toISOString();
 
-  const carrinhoStartStr = fmtDate(carrinhoStart);
-  const carrinhoEndStr = fmtDate(carrinhoEnd);
-  const safraStartStr = fmtDate(safraStart);
-  const safraEndStr = fmtDate(safraEnd);
+  // Use raw dates for labels (not BRT-shifted)
+  const { labels } = periods;
+  const carrinhoStartStr = fmtDate(labels.carrinhoStart);
+  const carrinhoEndStr = fmtDate(labels.carrinhoEnd);
+  const safraStartStr = fmtDate(labels.safraStart);
+  const safraEndStr = fmtDate(labels.safraEnd);
 
   const periodLabel = `${carrinhoStartStr.split('-').reverse().join('/')} a ${carrinhoEndStr.split('-').reverse().join('/')}`;
   const safraLabel = `${safraStartStr.split('-').reverse().join('/')} a ${safraEndStr.split('-').reverse().join('/')}`;
+
+  // ── Carrinho week start for encaixados query (use label date, not BRT shifted) ──
 
   // ── SDR list (profiles with role=sdr and squad=incorporador) ──
   const { data: sdrProfiles } = await supabase
@@ -225,26 +240,26 @@ async function buildIncorporadorReport(supabase: any) {
     .gte('sale_date', safraStartISO)
     .lte('sale_date', safraEndISO);
 
-  const validContratos = (contratosTx || []).filter((t: any) => {
+  // Remove newsale- prefix entries and make-sourced "contrato" entries
+  const allContratos = (contratosTx || []).filter((t: any) => {
     if (t.hubla_id?.startsWith('newsale-')) return false;
     if (t.source === 'make' && t.product_name?.toLowerCase() === 'contrato') return false;
-    if (t.installment_number && t.installment_number > 1) return false;
     return true;
   });
-  const emailSet = new Set(validContratos.map((t: any) => (t.customer_email || '').toLowerCase().trim()).filter(Boolean));
-  const contratosTotal = emailSet.size;
-  const contratosReembolsados = new Set(
-    validContratos.filter((t: any) => t.sale_status === 'refunded')
-      .map((t: any) => (t.customer_email || '').toLowerCase().trim())
-      .filter(Boolean)
-  ).size;
-  const contratosLiquidos = contratosTotal - contratosReembolsados;
+  const totalComRecorrencia = allContratos.length; // e.g. 41
+  const recorrencias = allContratos.filter((t: any) => (t.installment_number || 0) > 1).length; // e.g. 3
+  const contratosComReembolso = totalComRecorrencia - recorrencias; // e.g. 38
+  const contratosReembolsados = allContratos.filter((t: any) => t.sale_status === 'refunded' && (t.installment_number || 1) <= 1).length; // e.g. 11
+  const contratosLiquidos = contratosComReembolso - contratosReembolsados; // e.g. 27
 
-  // ══ 2. R1 MEETINGS (carrinho week Sáb-Sex) ══
+  // ══ 2. R1 MEETINGS (carrinho week Sáb-Sex) — filtered by BU incorporador ══
+  // Only count R1 attendees whose closer belongs to incorporador BU
+  const incorporadorCloserIds = R1_CLOSER_IDS.map(c => c.id);
   const { data: r1Attendees } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, booked_by, is_partner, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type, booked_by)')
     .eq('meeting_slot.meeting_type', 'r1')
+    .in('meeting_slot.closer_id', incorporadorCloserIds)
     .gte('meeting_slot.scheduled_at', carrinhoStartISO)
     .lte('meeting_slot.scheduled_at', carrinhoEndISO);
 
@@ -264,16 +279,64 @@ async function buildIncorporadorReport(supabase: any) {
     }
   }
 
-  // ══ 3. R2 MEETINGS (carrinho week Sáb-Sex) ══
+  // ══ 3. R2 MEETINGS — use carrinho config boundaries (horario_corte) ══
+  // Fetch carrinho config for current and previous week to get cutoff times
+  const carrinhoWeekKey = `carrinho_config_${fmtDate(labels.carrinhoStart)}`;
+  const prevWeekStart = new Date(labels.carrinhoStart);
+  prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+  const prevCarrinhoWeekKey = `carrinho_config_${fmtDate(prevWeekStart)}`;
+
+  const [configResult, prevConfigResult] = await Promise.all([
+    supabase.from('settings').select('value').eq('key', carrinhoWeekKey).maybeSingle(),
+    supabase.from('settings').select('value').eq('key', prevCarrinhoWeekKey).maybeSingle(),
+  ]);
+
+  // Fallback to global config, then default 12:00
+  let currentCutoff = '12:00';
+  let previousCutoff = '12:00';
+  if (configResult.data?.value?.carrinhos?.[0]?.horario_corte) {
+    currentCutoff = configResult.data.value.carrinhos[0].horario_corte;
+  } else {
+    // Try global fallback
+    const { data: globalConfig } = await supabase.from('settings').select('value').eq('key', 'carrinho_config').maybeSingle();
+    if (globalConfig?.value?.carrinhos?.[0]?.horario_corte) currentCutoff = globalConfig.value.carrinhos[0].horario_corte;
+  }
+  if (prevConfigResult.data?.value?.carrinhos?.[0]?.horario_corte) {
+    previousCutoff = prevConfigResult.data.value.carrinhos[0].horario_corte;
+  } else {
+    previousCutoff = currentCutoff; // fallback to current
+  }
+
+  // R2 boundaries: previousFriday@previousCutoff → currentFriday@currentCutoff (in BRT, converted to UTC)
+  // carrinhoStart = Saturday BRT, so Friday = Saturday - 1 day
+  const currentFriday = new Date(labels.carrinhoStart);
+  currentFriday.setDate(currentFriday.getDate() + 6); // Sat + 6 = Fri (end of week)
+  const previousFriday = new Date(currentFriday);
+  previousFriday.setDate(previousFriday.getDate() - 7);
+
+  const [prevCutH, prevCutM] = previousCutoff.split(':').map(Number);
+  const [currCutH, currCutM] = currentCutoff.split(':').map(Number);
+
+  // Build UTC ISO strings from BRT cutoff times
+  const r2Start = new Date(previousFriday);
+  r2Start.setHours(prevCutH + 3, prevCutM || 0, 0, 0); // BRT→UTC: +3h
+  const r2End = new Date(currentFriday);
+  r2End.setHours(currCutH + 3, currCutM || 0, 0, 0); // BRT→UTC: +3h
+
+  const r2StartISO = r2Start.toISOString();
+  const r2EndISO = r2End.toISOString();
+
+  console.log(`[INCORP] R2 boundaries: ${r2StartISO} → ${r2EndISO} (cutoffs: ${previousCutoff} → ${currentCutoff})`);
+
   const { data: r2Attendees } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
     .eq('meeting_slot.meeting_type', 'r2')
-    .gte('meeting_slot.scheduled_at', carrinhoStartISO)
-    .lte('meeting_slot.scheduled_at', carrinhoEndISO);
+    .gte('meeting_slot.scheduled_at', r2StartISO)
+    .lte('meeting_slot.scheduled_at', r2EndISO);
 
   // Also include encaixados for this carrinho week
-  const weekStartStr = fmtDate(carrinhoStart);
+  const weekStartStr = fmtDate(labels.carrinhoStart);
   const { data: encaixados } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
@@ -575,7 +638,9 @@ async function buildIncorporadorReport(supabase: any) {
 
     <div class="sub-title">Contratos (Safra ${safraLabel})</div>
     <div class="kpi-row">
-      <div class="kpi"><div class="value">${contratosTotal}</div><div class="label">Total c/ Reemb.</div></div>
+      <div class="kpi"><div class="value">${totalComRecorrencia}</div><div class="label">Total Transações</div></div>
+      <div class="kpi"><div class="value">${recorrencias}</div><div class="label">Recorrências</div></div>
+      <div class="kpi blue"><div class="value">${contratosComReembolso}</div><div class="label">Com Reembolso</div></div>
       <div class="kpi red"><div class="value">${contratosReembolsados}</div><div class="label">Reembolsos</div></div>
       <div class="kpi green"><div class="value">${contratosLiquidos}</div><div class="label">Contratos Líq.</div></div>
     </div>
