@@ -971,6 +971,7 @@ serve(async (req) => {
     }
 
     // 2. Consórcio report for Thobson
+    if (!buFilter || buFilter === 'consorcio') {
     try {
       const consorcioHtml = await buildConsorcioReport(supabase);
       const { data: sendResult, error: sendError } = await supabase.functions.invoke('brevo-send', {
@@ -988,6 +989,7 @@ serve(async (req) => {
     } catch (e: any) {
       console.error('[WEEKLY-MANAGER] Error sending consórcio report:', e.message);
       results.push({ bu: 'consorcio', manager: MANAGERS.consorcio.name, success: false, error: e.message });
+    }
     }
 
     return new Response(JSON.stringify({ success: true, results }), {
