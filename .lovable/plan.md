@@ -1,72 +1,54 @@
 
 
-## Plano: Alinhar números do relatório com os dashboards
+## Plano: Usar "Agendamento" (booked_at) em vez de "R1 Agendada" (scheduled_at)
 
-### Diagnóstico
+### Problema
 
-Investiguei os dados diretamente no banco e encontrei 3 causas raiz:
+O relatório conta R1 por `scheduled_at` (data da reunião) = 247, mas o dashboard mostra **Agendamento** por `booked_at` (data que o SDR criou) = 293. São métricas diferentes:
 
-| Métrica | Relatório | Dashboard | Causa |
-|---------|-----------|-----------|-------|
-| R1 Agendadas | 247 | 293 | Edge function calcula datas erradas e exclui `rescheduled` |
-| R1 No-Show | 85 | 94 | Mesmo problema de range de datas |
-| R2 Agendadas | 41 | 52 | Boundaries do carrinho não usam a semana correta (weekStart = Thu Apr 9) |
+| Métrica | Base | Valor | Significado |
+|---------|------|-------|-------------|
+| **Agendamento** | `booked_at` / `created_at` | 293 | Quantas reuniões o SDR criou no período |
+| **R1 Agendada** | `scheduled_at` | 247 | Quantas reuniões estão marcadas PARA o período |
 
-### Causa raiz principal: cálculo de datas
+O relatório do gestor deve mostrar **Agendamento = 293** (produção dos SDRs), não R1 Agendada.
 
-O dashboard usa `AT TIME ZONE 'America/Sao_Paulo'` para converter datas (via RPC `get_sdr_meetings_from_agenda`), enquanto a edge function usa offsets manuais em UTC que produzem ranges diferentes. Além disso, o dashboard `useR1CloserMetrics` inclui `rescheduled` nas agendadas (via `allowedAgendadaStatuses`), mas a edge function exclui.
+No-shows também divergem: o dashboard calcula `no_shows = r1_agendada - r1_realizada` = 94, enquanto a edge function conta status `no_show` diretamente (85).
 
-**Verificação no banco:**
-- Sat 5/Apr → Fri 11/Apr (BRT dates), BU incorporador: **293 total** (120 completed + 103 no_show + 58 contract_paid + 6 invited + 3 rescheduled + 2 sem_sucesso + 1 refunded) ✓
+### Correção em `supabase/functions/weekly-manager-report/index.ts`
 
-### Correções em `supabase/functions/weekly-manager-report/index.ts`
+**1. Chamar a RPC `get_sdr_metrics_from_agenda` diretamente**
 
-**1. Usar semana Sáb-Sex correta (mesma lógica de `getCustomWeekStart`)**
+Em vez de fazer query manual na `meeting_slot_attendees`, chamar a mesma RPC que o dashboard usa:
 
-Substituir `getIncorpPeriods()` para calcular:
-- carrinhoWeek: Sáb → Sex (mesma lógica de `getCustomWeekStart` do dashboard)
-- safraContratos: Qui → Qua (Sáb - 2 → Sex - 2)
-- Usar `AT TIME ZONE` no SQL ou calcular boundaries BRT com mais precisão
-
-**2. R1 — incluir `rescheduled` em agendadas (como o dashboard faz)**
-
-Atualmente o código faz:
-```
-if (att.status !== 'cancelled' && att.status !== 'rescheduled') r1Agendadas++
-```
-Mudar para incluir rescheduled (consistente com `allowedAgendadaStatuses` do `useR1CloserMetrics`):
-```
-if (att.status !== 'cancelled') r1Agendadas++
+```ts
+const { data: sdrMetrics } = await supabase.rpc('get_sdr_metrics_from_agenda', {
+  start_date: fmtDate(labels.carrinhoStart),  // '2026-04-04'
+  end_date: fmtDate(labels.carrinhoEnd),       // '2026-04-10'
+  sdr_email_filter: null,
+  bu_filter: 'incorporador'
+});
 ```
 
-**3. R1 — buscar closers dinamicamente em vez de hardcoded**
+**2. Agregar os totais da RPC**
 
-Substituir `R1_CLOSER_IDS` constante por query dinâmica:
-```sql
-SELECT id, name FROM closers WHERE bu = 'incorporador' AND is_active = true AND (meeting_type IS NULL OR meeting_type = 'r1')
-```
-Isso garante que novos closers (ex: William Ferreira) sejam incluídos automaticamente.
+Somar `agendamentos`, `r1_agendada`, `r1_realizada`, `no_shows` e `contratos` de todos os SDRs retornados (filtrando pelos SDRs do squad incorporador, como o dashboard faz via `useSdrsFromSquad`).
 
-**4. R2 — usar weekStart correto do carrinho (Thu, não Sat)**
+**3. Usar os valores corretos no HTML**
 
-O carrinho R2 usa `weekStart = Thursday` (config key `carrinho_config_2026-04-09`). A edge function precisa:
-- Calcular o Thursday da semana anterior como weekStart do carrinho
-- Buscar `carrinho_config_{weekStart}` para obter cutoff times
-- currentFriday = weekStart + 1 dia
-- previousFriday = currentFriday - 7 dias
-- R2 range: previousFriday@prevCutoff → currentFriday@currCutoff
-- Incluir encaixados via `carrinho_week_start = weekStart`
+- "Agendamentos" = soma de `agendamentos` (293)
+- "R1 Realizadas" = soma de `r1_realizada` (153)
+- "No-Shows" = soma de `no_shows` (94, calculado como `r1_agendada - r1_realizada` pela RPC)
+- Manter "R1 Agendada" como métrica secundária se desejado (247)
 
-**5. R2 — buscar closers R2 dinamicamente também**
+**4. Filtrar por SDRs do squad incorporador**
 
-Substituir `R2_CLOSER_IDS` por query:
-```sql
-SELECT id, name FROM closers WHERE bu = 'incorporador' AND is_active = true AND meeting_type = 'r2'
-```
+Buscar emails dos SDRs via `squads` + `profiles` (mesma lógica de `useSdrsFromSquad`) e filtrar os resultados da RPC para incluir apenas esses SDRs.
 
-### Resultado esperado (semana carrinho 09/04)
+### Resultado esperado
 
-- R1: 293 agendadas, ~153 realizadas, ~94 no-shows (Sáb 05 → Sex 11)
-- R2: 52 agendadas, 45 realizadas, 35 aprovados, 3 próxima semana, 2 fora
-- Contratos: 41 total, 3 recorrências, 38 com reembolso, 11 reembolsos, 27 líquidos ✓
+- Agendamentos: **293** (igual ao dashboard)
+- R1 Realizada: **153**
+- No-Shows: **94**
+- Contratos: **54**
 
