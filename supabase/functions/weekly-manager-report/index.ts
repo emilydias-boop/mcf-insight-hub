@@ -240,13 +240,13 @@ async function buildIncorporadorReport(supabase: any) {
   ).size;
   const contratosLiquidos = contratosTotal - contratosReembolsados;
 
-  // ══ 2. R1 MEETINGS ══
+  // ══ 2. R1 MEETINGS (carrinho week Sáb-Sex) ══
   const { data: r1Attendees } = await supabase
     .from('meeting_slot_attendees')
-    .select('id, status, booked_by, is_partner, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type, booked_by)')
+    .select('id, status, booked_by, is_partner, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type, booked_by)')
     .eq('meeting_slot.meeting_type', 'r1')
-    .gte('meeting_slot.scheduled_at', startISO)
-    .lte('meeting_slot.scheduled_at', endISO);
+    .gte('meeting_slot.scheduled_at', carrinhoStartISO)
+    .lte('meeting_slot.scheduled_at', carrinhoEndISO);
 
   const r1NonPartner = (r1Attendees || []).filter((a: any) => !a.is_partner);
 
@@ -264,15 +264,16 @@ async function buildIncorporadorReport(supabase: any) {
     }
   }
 
-  // ══ 3. R2 MEETINGS ══
+  // ══ 3. R2 MEETINGS (carrinho week Sáb-Sex) ══
   const { data: r2Attendees } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
     .eq('meeting_slot.meeting_type', 'r2')
-    .gte('meeting_slot.scheduled_at', startISO)
-    .lte('meeting_slot.scheduled_at', endISO);
+    .gte('meeting_slot.scheduled_at', carrinhoStartISO)
+    .lte('meeting_slot.scheduled_at', carrinhoEndISO);
 
-  const weekStartStr = fmtDate(start);
+  // Also include encaixados for this carrinho week
+  const weekStartStr = fmtDate(carrinhoStart);
   const { data: encaixados } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
@@ -292,9 +293,9 @@ async function buildIncorporadorReport(supabase: any) {
   for (const att of r2NonPartner) {
     const slot = (att as any).meeting_slot;
     if (!slot) continue;
-    if (att.status !== 'cancelled' && att.status !== 'rescheduled') {
+    // R2 Agendadas: excluir cancelled, rescheduled E pre_scheduled
+    if (att.status !== 'cancelled' && att.status !== 'rescheduled' && att.status !== 'pre_scheduled') {
       r2Agendadas++;
-      // Lead origin
       if (slot.lead_type === 'A') originA010++;
       else if (slot.lead_type === 'B') originLive++;
     }
