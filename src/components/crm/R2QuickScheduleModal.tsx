@@ -423,12 +423,16 @@ export function R2QuickScheduleModal({
                       allFreeTimeSlots.map(time => {
                         const configured = allConfiguredSlots.find(s => s.time === time);
                         const isOccupied = configured && !configured.isAvailable;
+                        const count = preScheduledCounts[time] || 0;
+                        const isFull = count >= MAX_PRE_SCHEDULE_PER_SLOT;
                         return (
-                          <SelectItem key={time} value={time}>
+                          <SelectItem key={time} value={time} disabled={isFull}>
                             <span className="flex items-center gap-2">
                               {time}
-                              {isOccupied && <span className="text-xs text-amber-600">(ocupado)</span>}
-                              {!configured && <span className="text-xs text-amber-600">(encaixe)</span>}
+                              {isFull && <span className="text-xs text-destructive font-medium">(lotado)</span>}
+                              {!isFull && count > 0 && <span className="text-xs text-amber-600">({count}/{MAX_PRE_SCHEDULE_PER_SLOT})</span>}
+                              {!isFull && isOccupied && <span className="text-xs text-amber-600">(ocupado)</span>}
+                              {!isFull && !configured && <span className="text-xs text-amber-600">(encaixe)</span>}
                             </span>
                           </SelectItem>
                         );
