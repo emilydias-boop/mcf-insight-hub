@@ -1,60 +1,63 @@
 
 
-## Plano: Corrigir datas e números do relatório Incorporador
+## Plano: Corrigir números do relatório Incorporador (3 problemas raiz)
 
-### Problema
+### Diagnóstico
 
-O relatório usa uma única janela Thu-Wed para tudo. Na verdade existem dois períodos:
-- **Semana do Carrinho** (Sáb-Sex): e.g. 04/04-10/04 — usado para R1, R2, SDR, Closers
-- **Safra de Contratos** (Qui-Qua): e.g. 02/04-08/04 — usado apenas para contratos pagos
+Verifiquei os números diretamente no banco e identifiquei 3 causas raiz:
 
-Além disso:
-- R2 Agendadas conta `pre_scheduled` indevidamente — deve excluir
-- Contratos não mostram breakdown visual (total com reembolso vs líquido)
-- "Fora do Carrinho" mistura próxima semana no total
+| Métrica | Relatório atual | Esperado | Causa |
+|---------|----------------|----------|-------|
+| Contratos | 33 (dedup email) | 38 (41 - 3 recorrências) | Deduplicação por email elimina transações válidas |
+| R1 Agendadas | 320 | 293 | Sem filtro de BU — inclui Consórcio (73 extras) |
+| R2 Agendadas | 47 | 52 | Período errado (Sáb-Sex) e sem carrinho config (horário de corte) |
 
-### Alterações em `supabase/functions/weekly-manager-report/index.ts`
+Além disso, todas as datas estão em UTC, mas o dashboard usa BRT (UTC-3), causando diferenças de 1 transação nos limites.
 
-**1. Novo cálculo de datas**
+### Correções em `supabase/functions/weekly-manager-report/index.ts`
 
-Substituir `getIncorpWeek()` por uma função que retorna dois ranges:
+**1. Timezone — aplicar offset BRT em todos os boundaries**
 
-```text
-getIncorpPeriods() → {
-  carrinhoWeek: { start: Sat, end: Fri }    // Sáb 00:00 → Sex 23:59
-  safraContratos: { start: Thu, end: Wed }   // Qui 00:00 → Qua 23:59 (Thu = Sat - 2 days)
-}
-```
+Todas as datas de início/fim precisam de +3h no ISO para representar meia-noite/fim-de-dia BRT:
+- `00:00 BRT` = `03:00 UTC`
+- `23:59 BRT` = `02:59 UTC do dia seguinte`
 
-- O label do período mostrará a semana do carrinho (Sáb-Sex)
-- Contratos usam `safraContratos`
-- R1, R2, SDR, Closers, Financeiro usam `carrinhoWeek`
+**2. Contratos — contar transações, não emails únicos**
 
-**2. Contratos — breakdown visual**
+Remover a deduplicação por `emailSet`. Contar:
+- `totalComRecorrencia` = todos os registros válidos (41)
+- `recorrencias` = `installment_number > 1` (3)
+- `totalComReembolso` = total - recorrencias (38)
+- `reembolsos` = refunded com installment <= 1 (11)
+- `liquidos` = totalComReembolso - reembolsos (27)
 
-- Contar total de contratos (completed + refunded) = "Total com Reembolsos"
-- Contar refunded separadamente
-- Calcular líquido = total - reembolsos
-- Mostrar mini gráfico de pizza ou cards lado a lado: "38 Total → 11 Reembolsos → 27 Líquidos" com cores verde/vermelho
+**3. R1 — filtrar por BU incorporador**
 
-**3. R2 Agendadas — excluir pre_scheduled**
+Adicionar JOIN com tabela `closers` e filtro `bu = 'incorporador'` na query de R1 attendees. Isso reduz de 320 para os 293 corretos (que é o que o Fechamento Equipe mostra).
 
-Adicionar filtro: `att.status !== 'pre_scheduled'` ao contar R2 agendadas (além de cancelled/rescheduled já existentes).
+**4. R2 — usar boundaries do carrinho com horário de corte**
 
-**4. Fora do Carrinho — separação clara**
+Substituir o range fixo Sáb-Sex por:
+- Buscar `carrinho_config` da tabela `settings` para a semana atual e anterior
+- Calcular: `previousFriday + horario_corte_anterior` → `currentFriday + horario_corte_atual`
+- Incluir encaixados via `carrinho_week_start`
+- Aplicar offset BRT nos horários de corte
 
-Manter contagem separada:
-- `proximaSemana` (status Próxima Semana)
-- `foraDoCarrinho` = reprovados + reembolsos + desistentes + cancelados (sem incluir próxima semana)
+Para a semana 02/04-08/04:
+- Config anterior (26/03): corte 18:00 BRT → Fri 27/03 21:00 UTC
+- Config atual (02/04): corte 12:00 BRT → Fri 03/04 15:00 UTC
+- Resultado: 52 agendadas, 45 realizadas, 35 aprovados, 3 próx. semana, 2 fora ✓
 
-Atualmente `FORA_IDS` inclui `PROXIMA_SEMANA_ID` — remover de lá e contar separadamente.
+**5. HTML — mostrar breakdown completo de contratos**
 
-### Resultado esperado (semana 04/04-10/04)
+Atualizar os cards para mostrar a cadeia completa:
+- Card 1: "41 TOTAL" (todas as transações)
+- Card 2: "3 RECORRÊNCIAS" (installment > 1)
+- Card 3: "38 COM REEMB." (total - recorrências)
+- Card 4: "11 REEMBOLSOS" (vermelho)
+- Card 5: "27 LÍQUIDOS" (verde)
 
-- Contratos: 38 total, 11 reembolsos, 27 líquidos
-- R2 Agendadas: 52 (sem pre_scheduled)
-- R2 Realizadas: 49
-- Aprovados: 35
-- Próxima Semana: 3
-- Fora do Carrinho: 2 (1 reprovado + 1 reembolso)
+### Resultado esperado
+
+Números do email passarão a bater exatamente com os dashboards (Fechamento Equipe, Carrinho R2, Vendas).
 
