@@ -1,78 +1,27 @@
 
 
-## Plano: Email completo de NFSe com detalhamento do fechamento
+## Plano: Corrigir seção de Remuneração no Meu RH para colaboradores sem variável
 
-### Problema atual
+### Problema
 
-Os emails de NFSe enviados ao financeiro e supervisor contem apenas: nome, mes, numero e valor. Faltam informacoes criticas para o financeiro validar:
-- Link para download da nota fiscal (PDF)
-- Data de envio
-- Quem aprovou o fechamento e quando
-- Detalhamento dos indicadores que geraram o valor (para quem tem OTE)
+A seção "Remuneração do mês atual" mostra OTE, Fixo, Variável e Total para todos os colaboradores que possuem registro na tabela `sdr`. Emily, por exemplo, tem um registro SDR vinculado, mas não tem remuneração variável — o componente deveria mostrar apenas o salário fixo.
 
-### Solucao
+### Solução
 
-Enriquecer a funcao `sendNfseEmails` em ambos os modais para buscar dados adicionais do payout e montar um email completo.
+Usar o campo `employee.tipo_variavel` (e opcionalmente `employee.modelo_fechamento`) para decidir qual layout exibir:
 
-### Alteracoes
+- **Com variável** (`tipo_variavel = 'modelo_sdr'` ou payout existente com valores): layout atual com OTE, Fixo, Variável, Total e link para "Meu Fechamento"
+- **Sem variável** (sem `tipo_variavel` ou tipo diferente de `modelo_sdr` e sem payout com variável): layout simplificado mostrando apenas Salário Base do cadastro do colaborador, sem OTE/Variável
 
-**1. `src/components/sdr-fechamento/EnviarNfseFechamentoModal.tsx`**
+### Alteração
 
-Expandir `sendNfseEmails` para:
-- Receber `payoutId` e `storagePath` como parametros
-- Buscar dados do payout: `aprovado_por`, `aprovado_em`, `valor_fixo`, `valor_variavel_total`, KPIs (pct e mult de cada indicador)
-- Buscar nome de quem aprovou via `profiles` ou `employees`
-- Gerar signed URL do PDF via `supabase.storage`
-- Montar email HTML com tabela estruturada:
+**`src/components/meu-rh/MeuRHRemuneracaoSection.tsx`**
 
-```text
-+-------------------------------------------+
-| NFSe Fechamento — [Nome] — [Mes/Ano]      |
-+-------------------------------------------+
-| Data de envio: 13/04/2026                  |
-| Numero NFSe: 12345                         |
-| Valor: R$ 4.500,00                         |
-| [Botao: Baixar NFSe PDF]                   |
-+-------------------------------------------+
-| APROVACAO                                  |
-| Aprovado por: Fulano                       |
-| Data aprovacao: 10/04/2026                 |
-+-------------------------------------------+
-| COMPOSICAO DO VALOR (se payout existe)     |
-| Fixo: R$ 2.000,00                          |
-| Variavel: R$ 2.500,00                      |
-|   - Reunioes Agendadas: 120% → R$ 800     |
-|   - Reunioes Realizadas: 95% → R$ 700     |
-|   - Tentativas: 110% → R$ 600             |
-|   - Organizacao: 100% → R$ 400            |
-| iFood: R$ 0,00                             |
-| Total Conta: R$ 4.500,00                   |
-+-------------------------------------------+
-```
-
-**2. `src/components/meu-rh/EnviarNfseModal.tsx`**
-
-Expandir `sendNfseEmails` para:
-- Receber `storagePath`
-- Gerar signed URL do PDF
-- Incluir link de download e data de envio no email
-- Sem detalhamento de OTE (nao se aplica a esse fluxo)
-
-**3. `src/lib/notifyDocumentAction.ts`**
-
-Criar funcao auxiliar `buildNfseDetailedEmailHtml` para gerar o template HTML rico com tabelas e botao de download, reutilizavel por ambos os modais.
-
-### Dados disponiveis
-
-Do `sdr_month_payout`:
-- `aprovado_por` (user_id), `aprovado_em` (timestamp)
-- `valor_fixo`, `valor_variavel_total`, `total_conta`
-- `pct_reunioes_agendadas/realizadas/tentativas/organizacao` + respectivos `valor_*`
-- `ifood_mensal`, `ifood_ultrameta`, `total_ifood`
-
-O signed URL tem validade limitada (usaremos 7 dias para o financeiro ter tempo de baixar).
+1. Verificar se `employee.tipo_variavel === 'modelo_sdr'` ou se existe payout com `valor_variavel_total > 0`
+2. Se **não** tiver variável: mostrar card simples com apenas "Salário Base" do `employee.salario_base`, sem link para fechamento
+3. Se **tiver** variável: manter o layout atual com OTE, Fixo, Variável, Total e botão "Ver detalhes"
 
 ### Resultado
 
-O financeiro recebe um email completo e auto-suficiente para validar e processar o pagamento, com link direto para a nota e toda a composicao do valor.
+Colaboradores como Emily verão apenas seu salário fixo (R$ 2.800,00) sem campos de OTE e Variável que não se aplicam ao seu modelo de remuneração.
 
