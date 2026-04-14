@@ -227,6 +227,53 @@ async function buildIncorporadorReport(supabase: any) {
     metaMap.set(cp.sdr_id, metaSemanal);
   }
 
+  // ══ 0. SDR METRICS VIA RPC (same as dashboard) ══
+  // Fetch SDR emails from sdr table (same logic as useSdrsFromSquad)
+  const { data: sdrTableRows } = await supabase
+    .from('sdr')
+    .select('id, name, email, role_type')
+    .eq('active', true)
+    .eq('squad', 'incorporador')
+    .eq('role_type', 'sdr');
+
+  const validSdrEmails = new Set(
+    (sdrTableRows || [])
+      .filter((s: any) => s.email)
+      .map((s: any) => s.email.toLowerCase())
+  );
+
+  console.log(`[INCORP] Valid SDR emails from sdr table: ${validSdrEmails.size}`);
+
+  // Call the same RPC the dashboard uses for SDR metrics
+  const { data: rpcMetricsRaw, error: rpcError } = await supabase.rpc('get_sdr_metrics_from_agenda', {
+    start_date: carrinhoStartStr,
+    end_date: carrinhoEndStr,
+    sdr_email_filter: null,
+    bu_filter: 'incorporador'
+  });
+
+  if (rpcError) console.error('[INCORP] RPC get_sdr_metrics_from_agenda error:', rpcError);
+
+  // Parse RPC response (may return { metrics: [...] } or direct array)
+  const rpcResponse = rpcMetricsRaw as any;
+  const rpcMetrics: any[] = rpcResponse?.metrics || (Array.isArray(rpcResponse) ? rpcResponse : []);
+
+  // Filter by valid SDR emails
+  const filteredRpcMetrics = rpcMetrics.filter((m: any) =>
+    validSdrEmails.has(m.sdr_email?.toLowerCase() || '')
+  );
+
+  // Aggregate RPC totals for KPIs
+  const rpcTotals = filteredRpcMetrics.reduce((acc: any, m: any) => ({
+    agendamentos: acc.agendamentos + (m.agendamentos || 0),
+    r1_agendada: acc.r1_agendada + (m.r1_agendada || 0),
+    r1_realizada: acc.r1_realizada + (m.r1_realizada || 0),
+    no_shows: acc.no_shows + (m.no_shows || 0),
+    contratos: acc.contratos + (m.contratos || 0),
+  }), { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0 });
+
+  console.log(`[INCORP] RPC totals: agendamentos=${rpcTotals.agendamentos}, r1_agendada=${rpcTotals.r1_agendada}, r1_realizada=${rpcTotals.r1_realizada}, no_shows=${rpcTotals.no_shows}`);
+
   // ══ 1. CONTRATOS PAGOS (safra Qui-Qua) ══
   const { data: contratosTx } = await supabase
     .from('hubla_transactions')
@@ -243,11 +290,11 @@ async function buildIncorporadorReport(supabase: any) {
     if (t.source === 'make' && t.product_name?.toLowerCase() === 'contrato') return false;
     return true;
   });
-  const totalComRecorrencia = allContratos.length; // e.g. 41
-  const recorrencias = allContratos.filter((t: any) => (t.installment_number || 0) > 1).length; // e.g. 3
-  const contratosComReembolso = totalComRecorrencia - recorrencias; // e.g. 38
-  const contratosReembolsados = allContratos.filter((t: any) => t.sale_status === 'refunded' && (t.installment_number || 1) <= 1).length; // e.g. 11
-  const contratosLiquidos = contratosComReembolso - contratosReembolsados; // e.g. 27
+  const totalComRecorrencia = allContratos.length;
+  const recorrencias = allContratos.filter((t: any) => (t.installment_number || 0) > 1).length;
+  const contratosComReembolso = totalComRecorrencia - recorrencias;
+  const contratosReembolsados = allContratos.filter((t: any) => t.sale_status === 'refunded' && (t.installment_number || 1) <= 1).length;
+  const contratosLiquidos = contratosComReembolso - contratosReembolsados;
 
   // ══ 2. R1 MEETINGS (carrinho week Sáb-Sex) — filtered by BU incorporador ══
   // Dynamically fetch R1 closers from DB instead of hardcoded list
@@ -262,6 +309,7 @@ async function buildIncorporadorReport(supabase: any) {
   const incorporadorCloserIds = R1_CLOSER_IDS.map((c: any) => c.id);
   console.log(`[INCORP] R1 closers (dynamic): ${R1_CLOSER_IDS.map((c: any) => c.name).join(', ')} (${incorporadorCloserIds.length} total)`);
 
+  // Still fetch R1 attendees for closer breakdown (uses scheduled_at which is correct for closer view)
   const { data: r1Attendees } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, booked_by, is_partner, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type, booked_by)')
@@ -271,21 +319,6 @@ async function buildIncorporadorReport(supabase: any) {
     .lte('meeting_slot.scheduled_at', carrinhoEndISO);
 
   const r1NonPartner = (r1Attendees || []).filter((a: any) => !a.is_partner);
-
-  let r1Agendadas = 0, r1Realizadas = 0, r1NoShow = 0;
-  for (const att of r1NonPartner) {
-    const slot = (att as any).meeting_slot;
-    if (!slot) continue;
-    // Include rescheduled in agendadas (consistent with dashboard useR1CloserMetrics)
-    if (att.status !== 'cancelled') {
-      r1Agendadas++;
-      if (att.status === 'completed' || att.status === 'presente' || att.status === 'contract_paid') {
-        r1Realizadas++;
-      } else if (att.status === 'no_show') {
-        r1NoShow++;
-      }
-    }
-  }
 
   // ══ 3. R2 MEETINGS — use carrinho config boundaries (horario_corte) ══
   // Dynamically fetch R2 closers from DB
@@ -422,8 +455,26 @@ async function buildIncorporadorReport(supabase: any) {
     `<div><span class="pie-legend-dot" style="background:${d.color}"></span>${d.label}: <strong>${d.value}</strong> (${pct(d.value, pieTotal)})</div>`
   ).join('');
 
-  // ══ 4. SDR RANKING ══
-  // For each SDR: R1 agendadas, R1 realizadas, no-show, contratos (via contract_paid_at on R1 attendees booked by them)
+  // ══ 4. SDR RANKING (from RPC data — same source as dashboard) ══
+  // Build a map of SDR profile id → email for calls lookup
+  const sdrIdToEmail = new Map<string, string>();
+  for (const s of sdrs) {
+    // Find email from profiles (sdrs has id + full_name from profiles query)
+    const profile = (sdrProfiles || []).find((p: any) => p.id === s.id);
+    // We need email - fetch from profiles
+  }
+  // Fetch SDR profile emails
+  const { data: sdrProfileEmails } = await supabase
+    .from('profiles')
+    .select('id, email')
+    .in('id', sdrIds.length > 0 ? sdrIds : ['none']);
+  
+  for (const p of sdrProfileEmails || []) {
+    if (p.email) sdrIdToEmail.set(p.id, p.email.toLowerCase());
+  }
+  const sdrEmailToId = new Map<string, string>();
+  for (const [id, email] of sdrIdToEmail) sdrEmailToId.set(email, id);
+
   interface SdrStats {
     name: string;
     meta: number;
@@ -440,24 +491,16 @@ async function buildIncorporadorReport(supabase: any) {
     sdrStatsMap.set(s.id, { name: s.full_name, meta, agendados: 0, r1Realizadas: 0, noShow: 0, contratos: 0, calls: 0 });
   }
 
-  // Count R1 metrics per SDR (booked_by = SDR user_id on the slot)
-  for (const att of r1NonPartner) {
-    const slot = (att as any).meeting_slot;
-    if (!slot) continue;
-    const booker = slot.booked_by || att.booked_by;
-    if (booker && sdrStatsMap.has(booker)) {
-      const st = sdrStatsMap.get(booker)!;
-      if (att.status !== 'cancelled') {
-        st.agendados++;
-        if (att.status === 'completed' || att.status === 'presente' || att.status === 'contract_paid') {
-          st.r1Realizadas++;
-        } else if (att.status === 'no_show') {
-          st.noShow++;
-        }
-        if (att.status === 'contract_paid' || att.contract_paid_at) {
-          st.contratos++;
-        }
-      }
+  // Populate SDR stats from RPC metrics (agendamentos = booked_at based, matching dashboard)
+  for (const m of filteredRpcMetrics) {
+    const email = m.sdr_email?.toLowerCase() || '';
+    const userId = sdrEmailToId.get(email);
+    if (userId && sdrStatsMap.has(userId)) {
+      const st = sdrStatsMap.get(userId)!;
+      st.agendados = m.agendamentos || 0;
+      st.r1Realizadas = m.r1_realizada || 0;
+      st.noShow = m.no_shows || 0;
+      st.contratos = m.contratos || 0;
     }
   }
 
@@ -669,9 +712,9 @@ async function buildIncorporadorReport(supabase: any) {
 
     <div class="sub-title">Reuniões R1</div>
     <div class="kpi-row">
-      <div class="kpi"><div class="value">${r1Agendadas}</div><div class="label">R1 Agendada</div></div>
-      <div class="kpi"><div class="value">${r1Realizadas}</div><div class="label">R1 Realizada</div></div>
-      <div class="kpi red"><div class="value">${r1NoShow}</div><div class="label">No-Show R1</div></div>
+      <div class="kpi"><div class="value">${rpcTotals.agendamentos}</div><div class="label">Agendamentos</div></div>
+      <div class="kpi"><div class="value">${rpcTotals.r1_realizada}</div><div class="label">R1 Realizada</div></div>
+      <div class="kpi red"><div class="value">${rpcTotals.no_shows}</div><div class="label">No-Show R1</div></div>
     </div>
 
     <div class="sub-title">Reuniões R2</div>
