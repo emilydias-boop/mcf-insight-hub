@@ -209,6 +209,7 @@ export const useSdrPayouts = (anoMes: string, filters?: {
           cargo, 
           sdr_id, 
           status,
+          data_demissao,
           cargo_catalogo_id,
           fechamento_manual,
           cargo_catalogo:cargo_catalogo_id (
@@ -233,6 +234,7 @@ export const useSdrPayouts = (anoMes: string, filters?: {
         departamento: string | null;
         cargo: string | null;
         nome_completo: string;
+        data_demissao: string | null;
         cargo_catalogo_id: string | null;
         fechamento_manual: boolean | null;
         cargo_catalogo: {
@@ -254,6 +256,7 @@ export const useSdrPayouts = (anoMes: string, filters?: {
             departamento: emp.departamento,
             cargo: emp.cargo,
             nome_completo: emp.nome_completo,
+            data_demissao: (emp as any).data_demissao || null,
             cargo_catalogo_id: emp.cargo_catalogo_id,
             fechamento_manual: (emp as any).fechamento_manual || false,
             cargo_catalogo: emp.cargo_catalogo as EmployeeWithCargo['cargo_catalogo'],
@@ -274,8 +277,13 @@ export const useSdrPayouts = (anoMes: string, filters?: {
       
       // Apply filters
       if (filters) {
-        // Show active SDRs + inactive SDRs that have a payout (desligados with closing data)
-        result = result.filter(p => p.sdr?.active !== false || p.dias_uteis_trabalhados != null);
+        // Show active SDRs; for inactive (desligados), only show if terminated in the selected month
+        result = result.filter(p => {
+          if (p.sdr?.active !== false) return true;
+          const employee = (p as any).employee as EmployeeWithCargo | null;
+          if (!employee?.data_demissao) return false;
+          return employee.data_demissao.substring(0, 7) === anoMes;
+        });
         
         // Exclude R2 Partners (sócios) from closing
         result = result.filter(p => {
