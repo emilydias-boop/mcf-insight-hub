@@ -187,7 +187,9 @@ async function buildIncorporadorReport(supabase: any) {
   const safraLabel = `${safraStartStr.split('-').reverse().join('/')} a ${safraEndStr.split('-').reverse().join('/')}`;
 
   // ── Carrinho week start for encaixados query (use label date, not BRT shifted) ──
-  const weekStartStr = fmtDate(labels.carrinhoStart);
+
+  // ── SDR list (profiles with role=sdr and squad=incorporador) ──
+  const { data: sdrProfiles } = await supabase
     .from('profiles')
     .select('id, full_name')
     .contains('squad', ['incorporador']);
