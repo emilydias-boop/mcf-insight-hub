@@ -57,9 +57,17 @@ function pct(num: number, den: number) {
   return `${Math.round((num / den) * 100)}%`;
 }
 
+/** BRT offset: +3h to align UTC queries with BRT midnight/end-of-day */
+const BRT_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+function toBRT(d: Date, offsetMs: number = BRT_OFFSET_MS): Date {
+  return new Date(d.getTime() + offsetMs);
+}
+
 /** Incorporador periods: two distinct ranges
- *  - carrinhoWeek: Sáb 00:00 → Sex 23:59:59 (operational week for R1, R2, SDR, Closers)
- *  - safraContratos: Qui 00:00 → Qua 23:59:59 (offset for contract counting)
+ *  - carrinhoWeek: Sáb 00:00 BRT → Sex 23:59:59 BRT (operational week for R1, R2, SDR, Closers)
+ *  - safraContratos: Qui 00:00 BRT → Qua 23:59:59 BRT (offset for contract counting)
+ *  All returned dates are in UTC but represent BRT boundaries (+3h offset applied)
  */
 function getIncorpPeriods() {
   const now = new Date();
@@ -85,9 +93,12 @@ function getIncorpPeriods() {
   wed.setDate(fri.getDate() - 2);
   wed.setHours(23, 59, 59, 999);
 
+  // Apply BRT offset so UTC queries match BRT boundaries
   return {
-    carrinhoWeek: { start: sat, end: fri },
-    safraContratos: { start: thu, end: wed },
+    carrinhoWeek: { start: toBRT(sat), end: toBRT(fri) },
+    safraContratos: { start: toBRT(thu), end: toBRT(wed) },
+    // Keep raw dates for labels
+    labels: { carrinhoStart: sat, carrinhoEnd: fri, safraStart: thu, safraEnd: wed },
   };
 }
 
