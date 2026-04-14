@@ -79,14 +79,14 @@ export const BulkMovePipelineDialog = ({
       const emails = activeSDRs.map(s => s.user_email);
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, email, display_name')
+        .select('id, email, full_name')
         .in('email', emails);
 
       sdrProfiles = activeSDRs.map(sdr => {
         const profile = profiles?.find((p: any) => p.email === sdr.user_email);
         return {
           email: sdr.user_email,
-          name: sdr.user_name || profile?.display_name || sdr.user_email.split('@')[0],
+          name: sdr.user_name || profile?.full_name || sdr.user_email.split('@')[0],
           profileId: profile?.id || '',
         };
       });
