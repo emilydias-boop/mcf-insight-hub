@@ -57,20 +57,38 @@ function pct(num: number, den: number) {
   return `${Math.round((num / den) * 100)}%`;
 }
 
-/** Incorporador week: Thu 00:00 → Wed 23:59 of last completed week */
-function getIncorpWeek() {
+/** Incorporador periods: two distinct ranges
+ *  - carrinhoWeek: Sáb 00:00 → Sex 23:59:59 (operational week for R1, R2, SDR, Closers)
+ *  - safraContratos: Qui 00:00 → Qua 23:59:59 (offset for contract counting)
+ */
+function getIncorpPeriods() {
   const now = new Date();
-  const day = now.getDay();
-  const daysSinceWed = (day + 7 - 3) % 7 || 7;
-  const wed = new Date(now);
-  wed.setDate(now.getDate() - daysSinceWed);
-  wed.setHours(23, 59, 59, 999);
+  const day = now.getDay(); // 0=Sun..6=Sat
 
-  const thu = new Date(wed);
-  thu.setDate(wed.getDate() - 6);
+  // Find last Friday (end of carrinho week)
+  const daysSinceFri = (day + 7 - 5) % 7 || 7;
+  const fri = new Date(now);
+  fri.setDate(now.getDate() - daysSinceFri);
+  fri.setHours(23, 59, 59, 999);
+
+  // Saturday = Friday - 6 days
+  const sat = new Date(fri);
+  sat.setDate(fri.getDate() - 6);
+  sat.setHours(0, 0, 0, 0);
+
+  // Safra contratos: Thu = Sat - 2 days, Wed = Fri - 2 days
+  const thu = new Date(sat);
+  thu.setDate(sat.getDate() - 2);
   thu.setHours(0, 0, 0, 0);
 
-  return { start: thu, end: wed };
+  const wed = new Date(fri);
+  wed.setDate(fri.getDate() - 2);
+  wed.setHours(23, 59, 59, 999);
+
+  return {
+    carrinhoWeek: { start: sat, end: fri },
+    safraContratos: { start: thu, end: wed },
+  };
 }
 
 /** Consórcio week: Mon 00:00 → Sun 23:59 of last completed week */
