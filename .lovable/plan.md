@@ -1,50 +1,41 @@
 
 
-## Plano: Relatórios semanais personalizados por BU para gestores
+## Plano: Limitar pré-agendamentos a 2 por horário + restringir faixa 09:00-20:00
 
-### Objetivo
+### Problema
 
-Criar uma nova edge function `weekly-manager-report` que envia relatórios semanais detalhados e personalizados para cada gestor de BU, com dados do time completo da semana anterior.
+No modo pré-agendamento, todos os horários de 08:00 a 21:00 são exibidos sem verificação de capacidade. Qualquer quantidade de leads pode ser pré-agendada no mesmo horário.
 
-### Destinatarios
+### Alterações
 
-| Gestor | Email | BU | Conteudo |
-|--------|-------|----|----------|
-| Jessica Bellini | jessica.bellini.r2@minhacasafinanciada.com | Incorporador | Carrinho R2 + performance SDRs/Closers |
-| Thobson Motta | thobson.motta@minhacasafinanciada.com | Consorcio | Vendas de cartas por dia + performance SDRs/Closers |
+**1. `src/hooks/useR2CloserAvailableSlots.ts`**
 
-### Conteudo do email — Incorporador (Jessica)
+- Adicionar uma query extra que busca `meeting_slot_attendees` (via join com `meeting_slots`) para contar attendees ativos (`pre_scheduled`, `invited`, `scheduled`) por horário do closer na data selecionada
+- Expor um novo campo `preScheduledCounts: Record<string, number>` no retorno do hook (mapa de "HH:mm" para quantidade de attendees)
 
-1. **KPIs do Carrinho**: Contratos pagos, R2 agendadas/realizadas, aprovados
-2. **Tabela SDRs**: Nome, aprovados no carrinho (dados de `meeting_slot_attendees` + `hubla_transactions`)
-3. **Tabela Closers**: Nome, aprovados no carrinho
-4. **Resumo financeiro**: Vendas A010, contratos, faturamento total da semana
-5. Periodo: semana do carrinho (Qui-Qua / corte na Sexta)
+**2. `src/components/crm/R2QuickScheduleModal.tsx`**
 
-### Conteudo do email — Consorcio (Thobson)
+- Alterar `allFreeTimeSlots` para gerar horários de **09:00 a 20:00** (em vez de 08:00 a 21:00)
+- No modo pré-agendamento, usar `preScheduledCounts` do hook para:
+  - Mostrar "(1/2)" quando há 1 attendee no horário
+  - Mostrar "(lotado)" em vermelho e `disabled` quando há 2+ attendees
+- Constante `MAX_PRE_SCHEDULE_PER_SLOT = 2`
+- Horários fora da faixa 09:00-20:00 não aparecem para pré-agendamento; se o responsável da agenda quiser agendar fora desse range, usará o modo normal (não pré-agendamento)
 
-1. **KPIs**: Total de cartas vendidas, valor de credito total, comissao
-2. **Vendas por dia**: Tabela com data_contratacao agrupada por dia da semana (Seg-Dom)
-3. **Tabela SDRs**: Nome do vendedor, cartas vendidas, valor de credito
-4. **Tabela Closers**: Nome, cartas atribuidas
-5. Periodo: semana Seg-Dom (padrao consorcio)
+### Detalhes técnicos
 
-### Alteracoes
+A query de contagem usará:
+```sql
+meeting_slot_attendees(count) 
+  via meeting_slots(closer_id, scheduled_at)
+  where status in ('pre_scheduled','invited','scheduled')
+```
 
-**Novo arquivo**: `supabase/functions/weekly-manager-report/index.ts`
+Agrupada por horário formatado `HH:mm`, retornando a contagem total de attendees por slot.
 
-- Funcao que busca os SDRs e closers de cada squad via `sdr` table
-- Para **Incorporador**: busca `hubla_transactions` (contratos A000), `meeting_slot_attendees` (R2 aprovados), `closers`, e agrega por SDR/closer
-- Para **Consorcio**: busca `consortium_cards` com `data_contratacao` no periodo, agrupa por dia e por `vendedor_name`
-- Gera HTML personalizado para cada BU
-- Envia via `brevo-send` para cada gestor
+### Resultado
 
-**Agendamento**: Adicionar pg_cron job para disparar toda segunda-feira as 07:30 (BRT), 30 min apos o relatorio do diretor
-
-### Detalhes tecnicos
-
-- Reutiliza a mesma logica de boundaries do carrinho (Qui-Qua com corte na sexta) para o relatorio de incorporador
-- Para consorcio usa Seg-Dom conforme padrao da BU
-- Emails dos gestores sao constantes na edge function (simples e direto)
-- Cada gestor recebe APENAS o relatorio da sua BU
+- Pré-agendamentos limitados a 2 leads por horário por closer
+- Faixa de horários reduzida para 09:00-20:00 no modo pré-agendamento
+- Horários fora dessa faixa ficam a critério do responsável da agenda via modo normal
 
