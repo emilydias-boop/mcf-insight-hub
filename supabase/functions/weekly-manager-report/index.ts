@@ -455,8 +455,26 @@ async function buildIncorporadorReport(supabase: any) {
     `<div><span class="pie-legend-dot" style="background:${d.color}"></span>${d.label}: <strong>${d.value}</strong> (${pct(d.value, pieTotal)})</div>`
   ).join('');
 
-  // ══ 4. SDR RANKING ══
-  // For each SDR: R1 agendadas, R1 realizadas, no-show, contratos (via contract_paid_at on R1 attendees booked by them)
+  // ══ 4. SDR RANKING (from RPC data — same source as dashboard) ══
+  // Build a map of SDR profile id → email for calls lookup
+  const sdrIdToEmail = new Map<string, string>();
+  for (const s of sdrs) {
+    // Find email from profiles (sdrs has id + full_name from profiles query)
+    const profile = (sdrProfiles || []).find((p: any) => p.id === s.id);
+    // We need email - fetch from profiles
+  }
+  // Fetch SDR profile emails
+  const { data: sdrProfileEmails } = await supabase
+    .from('profiles')
+    .select('id, email')
+    .in('id', sdrIds.length > 0 ? sdrIds : ['none']);
+  
+  for (const p of sdrProfileEmails || []) {
+    if (p.email) sdrIdToEmail.set(p.id, p.email.toLowerCase());
+  }
+  const sdrEmailToId = new Map<string, string>();
+  for (const [id, email] of sdrIdToEmail) sdrEmailToId.set(email, id);
+
   interface SdrStats {
     name: string;
     meta: number;
@@ -473,24 +491,16 @@ async function buildIncorporadorReport(supabase: any) {
     sdrStatsMap.set(s.id, { name: s.full_name, meta, agendados: 0, r1Realizadas: 0, noShow: 0, contratos: 0, calls: 0 });
   }
 
-  // Count R1 metrics per SDR (booked_by = SDR user_id on the slot)
-  for (const att of r1NonPartner) {
-    const slot = (att as any).meeting_slot;
-    if (!slot) continue;
-    const booker = slot.booked_by || att.booked_by;
-    if (booker && sdrStatsMap.has(booker)) {
-      const st = sdrStatsMap.get(booker)!;
-      if (att.status !== 'cancelled') {
-        st.agendados++;
-        if (att.status === 'completed' || att.status === 'presente' || att.status === 'contract_paid') {
-          st.r1Realizadas++;
-        } else if (att.status === 'no_show') {
-          st.noShow++;
-        }
-        if (att.status === 'contract_paid' || att.contract_paid_at) {
-          st.contratos++;
-        }
-      }
+  // Populate SDR stats from RPC metrics (agendamentos = booked_at based, matching dashboard)
+  for (const m of filteredRpcMetrics) {
+    const email = m.sdr_email?.toLowerCase() || '';
+    const userId = sdrEmailToId.get(email);
+    if (userId && sdrStatsMap.has(userId)) {
+      const st = sdrStatsMap.get(userId)!;
+      st.agendados = m.agendamentos || 0;
+      st.r1Realizadas = m.r1_realizada || 0;
+      st.noShow = m.no_shows || 0;
+      st.contratos = m.contratos || 0;
     }
   }
 
