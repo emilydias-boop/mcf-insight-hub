@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { notifyDocumentAction } from "@/lib/notifyDocumentAction";
+
 import { buildNfseDetailedEmailHtml } from "@/lib/nfseEmailBuilder";
 import { toast } from "sonner";
 import { format, parse } from "date-fns";
@@ -238,14 +238,7 @@ export function EnviarNfseFechamentoModal({
 
       toast.success('NFSe enviada com sucesso!');
       
-      notifyDocumentAction({
-        employeeId,
-        action: 'nfse_enviada',
-        documentTitle: `NFSe Fechamento ${monthLabel}`,
-        sentBy: 'colaborador',
-      });
-
-      // Send emails to financeiro and supervisor
+      // Send detailed emails to financeiro, supervisor and colaborador
       sendNfseEmails(employeeId, monthLabel, numeroNfse, valorNfse, payoutId, fileName);
       
       setNumeroNfse('');
