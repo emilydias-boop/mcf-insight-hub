@@ -1,35 +1,60 @@
 
 
-## Plano: Distribuição igualitária ao mover leads em massa
+## Plano: Corrigir datas e números do relatório Incorporador
 
-### Situação atual
+### Problema
 
-O dialog "Mover para outra Pipeline" move os leads mas **não altera o owner** — eles chegam na pipeline destino sem atribuição ou mantendo o owner anterior. Não há opção de distribuir entre os SDRs da pipeline destino.
+O relatório usa uma única janela Thu-Wed para tudo. Na verdade existem dois períodos:
+- **Semana do Carrinho** (Sáb-Sex): e.g. 04/04-10/04 — usado para R1, R2, SDR, Closers
+- **Safra de Contratos** (Qui-Qua): e.g. 02/04-08/04 — usado apenas para contratos pagos
 
-### Solução
+Além disso:
+- R2 Agendadas conta `pre_scheduled` indevidamente — deve excluir
+- Contratos não mostram breakdown visual (total com reembolso vs líquido)
+- "Fora do Carrinho" mistura próxima semana no total
 
-Adicionar um **checkbox "Distribuir igualitariamente entre SDRs"** no `BulkMovePipelineDialog`. Quando ativado, após mover cada deal, o sistema atribui o owner usando round-robin entre os SDRs ativos da pipeline destino (via `lead_distribution_config` ou `get_next_lead_owner` RPC).
+### Alterações em `supabase/functions/weekly-manager-report/index.ts`
 
-### Alterações
+**1. Novo cálculo de datas**
 
-**Arquivo**: `src/components/crm/BulkMovePipelineDialog.tsx`
+Substituir `getIncorpWeek()` por uma função que retorna dois ranges:
 
-1. Adicionar state `distributeEqually: boolean` (default false)
-2. Quando `selectedOriginId` é selecionado, buscar os SDRs configurados na `lead_distribution_config` daquela origin (usando `useDistributionConfig`)
-3. Mostrar checkbox "Distribuir igualitariamente entre SDRs da pipeline" com preview dos SDRs configurados
-4. No `handleMove()`, se `distributeEqually` estiver ativo:
-   - Buscar SDRs da config de distribuição da pipeline destino
-   - Fazer round-robin simples: deal 1 → SDR A, deal 2 → SDR B, deal 3 → SDR C, deal 4 → SDR A...
-   - Atualizar `owner_id` (email) e `owner_profile_id` (UUID) de cada deal junto com a movimentação
-5. Se não houver config de distribuição na pipeline destino, chamar o RPC `get_next_lead_owner(p_origin_id)` para cada deal como fallback
+```text
+getIncorpPeriods() → {
+  carrinhoWeek: { start: Sat, end: Fri }    // Sáb 00:00 → Sex 23:59
+  safraContratos: { start: Thu, end: Wed }   // Qui 00:00 → Qua 23:59 (Thu = Sat - 2 days)
+}
+```
 
-### UI
+- O label do período mostrará a semana do carrinho (Sáb-Sex)
+- Contratos usam `safraContratos`
+- R1, R2, SDR, Closers, Financeiro usam `carrinhoWeek`
 
-- Checkbox com label "Distribuir igualitariamente entre SDRs"
-- Abaixo do checkbox, mostrar lista dos SDRs que receberão (nomes + quantidade estimada por SDR: "~X leads cada")
-- Se não houver SDRs configurados, mostrar aviso "Nenhum SDR configurado na pipeline destino"
+**2. Contratos — breakdown visual**
 
-### Resultado
+- Contar total de contratos (completed + refunded) = "Total com Reembolsos"
+- Contar refunded separadamente
+- Calcular líquido = total - reembolsos
+- Mostrar mini gráfico de pizza ou cards lado a lado: "38 Total → 11 Reembolsos → 27 Líquidos" com cores verde/vermelho
 
-Os 447 leads serão movidos para a pipeline destino E distribuídos igualmente entre os SDRs configurados, sem precisar fazer transferência manual depois.
+**3. R2 Agendadas — excluir pre_scheduled**
+
+Adicionar filtro: `att.status !== 'pre_scheduled'` ao contar R2 agendadas (além de cancelled/rescheduled já existentes).
+
+**4. Fora do Carrinho — separação clara**
+
+Manter contagem separada:
+- `proximaSemana` (status Próxima Semana)
+- `foraDoCarrinho` = reprovados + reembolsos + desistentes + cancelados (sem incluir próxima semana)
+
+Atualmente `FORA_IDS` inclui `PROXIMA_SEMANA_ID` — remover de lá e contar separadamente.
+
+### Resultado esperado (semana 04/04-10/04)
+
+- Contratos: 38 total, 11 reembolsos, 27 líquidos
+- R2 Agendadas: 52 (sem pre_scheduled)
+- R2 Realizadas: 49
+- Aprovados: 35
+- Próxima Semana: 3
+- Fora do Carrinho: 2 (1 reprovado + 1 reembolso)
 
