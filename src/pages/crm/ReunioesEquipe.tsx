@@ -292,7 +292,7 @@ export default function ReunioesEquipe() {
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end);
 
   // Fetch pending meetings for today (only used when preset is "today")
-  const { data: pendentesHoje } = useMeetingsPendentesHoje(activeBU || 'incorporador');
+  const { data: pendentesHoje } = useMeetingsPendentesHoje('incorporador');
 
   // Fetch Outside metrics for the selected period
   
