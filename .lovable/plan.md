@@ -1,63 +1,72 @@
 
 
-## Plano: Corrigir números do relatório Incorporador (3 problemas raiz)
+## Plano: Alinhar números do relatório com os dashboards
 
 ### Diagnóstico
 
-Verifiquei os números diretamente no banco e identifiquei 3 causas raiz:
+Investiguei os dados diretamente no banco e encontrei 3 causas raiz:
 
-| Métrica | Relatório atual | Esperado | Causa |
-|---------|----------------|----------|-------|
-| Contratos | 33 (dedup email) | 38 (41 - 3 recorrências) | Deduplicação por email elimina transações válidas |
-| R1 Agendadas | 320 | 293 | Sem filtro de BU — inclui Consórcio (73 extras) |
-| R2 Agendadas | 47 | 52 | Período errado (Sáb-Sex) e sem carrinho config (horário de corte) |
+| Métrica | Relatório | Dashboard | Causa |
+|---------|-----------|-----------|-------|
+| R1 Agendadas | 247 | 293 | Edge function calcula datas erradas e exclui `rescheduled` |
+| R1 No-Show | 85 | 94 | Mesmo problema de range de datas |
+| R2 Agendadas | 41 | 52 | Boundaries do carrinho não usam a semana correta (weekStart = Thu Apr 9) |
 
-Além disso, todas as datas estão em UTC, mas o dashboard usa BRT (UTC-3), causando diferenças de 1 transação nos limites.
+### Causa raiz principal: cálculo de datas
+
+O dashboard usa `AT TIME ZONE 'America/Sao_Paulo'` para converter datas (via RPC `get_sdr_meetings_from_agenda`), enquanto a edge function usa offsets manuais em UTC que produzem ranges diferentes. Além disso, o dashboard `useR1CloserMetrics` inclui `rescheduled` nas agendadas (via `allowedAgendadaStatuses`), mas a edge function exclui.
+
+**Verificação no banco:**
+- Sat 5/Apr → Fri 11/Apr (BRT dates), BU incorporador: **293 total** (120 completed + 103 no_show + 58 contract_paid + 6 invited + 3 rescheduled + 2 sem_sucesso + 1 refunded) ✓
 
 ### Correções em `supabase/functions/weekly-manager-report/index.ts`
 
-**1. Timezone — aplicar offset BRT em todos os boundaries**
+**1. Usar semana Sáb-Sex correta (mesma lógica de `getCustomWeekStart`)**
 
-Todas as datas de início/fim precisam de +3h no ISO para representar meia-noite/fim-de-dia BRT:
-- `00:00 BRT` = `03:00 UTC`
-- `23:59 BRT` = `02:59 UTC do dia seguinte`
+Substituir `getIncorpPeriods()` para calcular:
+- carrinhoWeek: Sáb → Sex (mesma lógica de `getCustomWeekStart` do dashboard)
+- safraContratos: Qui → Qua (Sáb - 2 → Sex - 2)
+- Usar `AT TIME ZONE` no SQL ou calcular boundaries BRT com mais precisão
 
-**2. Contratos — contar transações, não emails únicos**
+**2. R1 — incluir `rescheduled` em agendadas (como o dashboard faz)**
 
-Remover a deduplicação por `emailSet`. Contar:
-- `totalComRecorrencia` = todos os registros válidos (41)
-- `recorrencias` = `installment_number > 1` (3)
-- `totalComReembolso` = total - recorrencias (38)
-- `reembolsos` = refunded com installment <= 1 (11)
-- `liquidos` = totalComReembolso - reembolsos (27)
+Atualmente o código faz:
+```
+if (att.status !== 'cancelled' && att.status !== 'rescheduled') r1Agendadas++
+```
+Mudar para incluir rescheduled (consistente com `allowedAgendadaStatuses` do `useR1CloserMetrics`):
+```
+if (att.status !== 'cancelled') r1Agendadas++
+```
 
-**3. R1 — filtrar por BU incorporador**
+**3. R1 — buscar closers dinamicamente em vez de hardcoded**
 
-Adicionar JOIN com tabela `closers` e filtro `bu = 'incorporador'` na query de R1 attendees. Isso reduz de 320 para os 293 corretos (que é o que o Fechamento Equipe mostra).
+Substituir `R1_CLOSER_IDS` constante por query dinâmica:
+```sql
+SELECT id, name FROM closers WHERE bu = 'incorporador' AND is_active = true AND (meeting_type IS NULL OR meeting_type = 'r1')
+```
+Isso garante que novos closers (ex: William Ferreira) sejam incluídos automaticamente.
 
-**4. R2 — usar boundaries do carrinho com horário de corte**
+**4. R2 — usar weekStart correto do carrinho (Thu, não Sat)**
 
-Substituir o range fixo Sáb-Sex por:
-- Buscar `carrinho_config` da tabela `settings` para a semana atual e anterior
-- Calcular: `previousFriday + horario_corte_anterior` → `currentFriday + horario_corte_atual`
-- Incluir encaixados via `carrinho_week_start`
-- Aplicar offset BRT nos horários de corte
+O carrinho R2 usa `weekStart = Thursday` (config key `carrinho_config_2026-04-09`). A edge function precisa:
+- Calcular o Thursday da semana anterior como weekStart do carrinho
+- Buscar `carrinho_config_{weekStart}` para obter cutoff times
+- currentFriday = weekStart + 1 dia
+- previousFriday = currentFriday - 7 dias
+- R2 range: previousFriday@prevCutoff → currentFriday@currCutoff
+- Incluir encaixados via `carrinho_week_start = weekStart`
 
-Para a semana 02/04-08/04:
-- Config anterior (26/03): corte 18:00 BRT → Fri 27/03 21:00 UTC
-- Config atual (02/04): corte 12:00 BRT → Fri 03/04 15:00 UTC
-- Resultado: 52 agendadas, 45 realizadas, 35 aprovados, 3 próx. semana, 2 fora ✓
+**5. R2 — buscar closers R2 dinamicamente também**
 
-**5. HTML — mostrar breakdown completo de contratos**
+Substituir `R2_CLOSER_IDS` por query:
+```sql
+SELECT id, name FROM closers WHERE bu = 'incorporador' AND is_active = true AND meeting_type = 'r2'
+```
 
-Atualizar os cards para mostrar a cadeia completa:
-- Card 1: "41 TOTAL" (todas as transações)
-- Card 2: "3 RECORRÊNCIAS" (installment > 1)
-- Card 3: "38 COM REEMB." (total - recorrências)
-- Card 4: "11 REEMBOLSOS" (vermelho)
-- Card 5: "27 LÍQUIDOS" (verde)
+### Resultado esperado (semana carrinho 09/04)
 
-### Resultado esperado
-
-Números do email passarão a bater exatamente com os dashboards (Fechamento Equipe, Carrinho R2, Vendas).
+- R1: 293 agendadas, ~153 realizadas, ~94 no-shows (Sáb 05 → Sex 11)
+- R2: 52 agendadas, 45 realizadas, 35 aprovados, 3 próxima semana, 2 fora
+- Contratos: 41 total, 3 recorrências, 38 com reembolso, 11 reembolsos, 27 líquidos ✓
 
