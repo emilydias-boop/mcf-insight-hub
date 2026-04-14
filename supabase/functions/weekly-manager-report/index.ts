@@ -381,8 +381,8 @@ async function buildIncorporadorReport(supabase: any) {
     .from('calls')
     .select('user_id')
     .in('user_id', sdrIds.length > 0 ? sdrIds : ['none'])
-    .gte('started_at', startISO)
-    .lte('started_at', endISO);
+    .gte('started_at', carrinhoStartISO)
+    .lte('started_at', carrinhoEndISO);
 
   for (const c of callsData || []) {
     if (sdrStatsMap.has(c.user_id)) {
