@@ -712,9 +712,9 @@ async function buildIncorporadorReport(supabase: any) {
 
     <div class="sub-title">Reuniões R1</div>
     <div class="kpi-row">
-      <div class="kpi"><div class="value">${r1Agendadas}</div><div class="label">R1 Agendada</div></div>
-      <div class="kpi"><div class="value">${r1Realizadas}</div><div class="label">R1 Realizada</div></div>
-      <div class="kpi red"><div class="value">${r1NoShow}</div><div class="label">No-Show R1</div></div>
+      <div class="kpi"><div class="value">${rpcTotals.agendamentos}</div><div class="label">Agendamentos</div></div>
+      <div class="kpi"><div class="value">${rpcTotals.r1_realizada}</div><div class="label">R1 Realizada</div></div>
+      <div class="kpi red"><div class="value">${rpcTotals.no_shows}</div><div class="label">No-Show R1</div></div>
     </div>
 
     <div class="sub-title">Reuniões R2</div>
