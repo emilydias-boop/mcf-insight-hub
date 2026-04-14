@@ -1,42 +1,31 @@
 
 
-## Plano: Corrigir filtros de periodo e tentativas no CRM para coordenadores
+## Plano: Corrigir email de NFSe do fechamento
 
-### Causa raiz
+### Problema
 
-A tabela `calls` possui uma politica RLS de SELECT que so permite acesso para:
-- O proprio usuario (`user_id = auth.uid()`)
-- Admins (`has_role('admin')`)
-- Managers (`has_role('manager')`)
+Quando o colaborador envia a NFSe pelo fechamento, **dois sistemas de email disparam simultaneamente**:
 
-Thobson tem a role `coordenador`, que nao esta incluida. Ele nao fez nenhuma ligacao pessoalmente — as ligacoes dos deals dele foram feitas por SDRs. Resultado: o hook `useBatchDealActivitySummary` retorna `totalCalls = 0` e `lastContactAttempt = null` para todos os deals dele.
+1. **`notifyDocumentAction`** (linha 216) — envia um email **simples** (apenas texto genérico + botão "Ver no Sistema") para o colaborador e o gestor
+2. **`sendNfseEmails`** (linha 224) — envia o email **detalhado** (com tabela de composição, aprovação, link do PDF) para o financeiro e o gestor
 
-Isso faz com que:
-- **Filtro de inatividade** (`+ de 3 dias`): como `lastContactAttempt` e null, o codigo assume "sem atividade = muito inativo" e TODOS os deals passam no filtro
-- **Filtro de tentativas** (`0 a 1`): como `totalCalls = 0` para todos, TODOS os deals passam no filtro (0 esta entre 0 e 1)
+O email que chegou (screenshot) é o da `notifyDocumentAction` — formato simples, sem a composição do valor, sem link do PDF, sem dados de aprovação. O email detalhado de `sendNfseEmails` provavelmente falhou silenciosamente (todos os erros são capturados com `catch`) ou foi para outro destinatário.
 
-Os filtros parecem nao funcionar, mas na verdade funcionam — so que com dados zerados por falta de permissao de leitura.
+### Alterações
 
-### Alteracao
+**`src/components/sdr-fechamento/EnviarNfseFechamentoModal.tsx`**
 
-**Migracao SQL** — Alterar a RLS da tabela `calls` para incluir `coordenador`:
+1. **Remover a chamada `notifyDocumentAction`** do fluxo de NFSe fechamento (manter apenas a notificação in-app se necessário, mas não o email simples duplicado)
 
-```sql
-DROP POLICY "Users can view their own calls" ON public.calls;
+2. **Ampliar os destinatários de `sendNfseEmails`** para incluir também o próprio colaborador (email de login via `authUser.email`), além de financeiro e gestor. Assim todos recebem o email detalhado com:
+   - Dados da nota (número, valor, data de envio)
+   - Link para download do PDF (signed URL)
+   - Composição do valor (fixo, variável, KPIs)
+   - Dados de aprovação
 
-CREATE POLICY "Users can view their own calls"
-ON public.calls
-FOR SELECT
-TO public
-USING (
-  user_id = auth.uid()
-  OR has_role(auth.uid(), 'admin'::app_role)
-  OR has_role(auth.uid(), 'manager'::app_role)
-  OR has_role(auth.uid(), 'coordenador'::app_role)
-);
-```
+3. **Adicionar logs de erro mais visíveis** nas queries internas de `sendNfseEmails` (payout, profiles) para diagnosticar falhas futuras sem que sejam silenciosas
 
 ### Resultado
 
-Coordenadores como Thobson poderao ler as ligacoes de todos os deals, fazendo com que os filtros de inatividade e tentativas funcionem corretamente — filtrando deals com base nos dados reais de atividade.
+Todos os destinatários (colaborador, gestor, financeiro) receberão o **mesmo email detalhado** com a composição completa do valor, link do PDF e dados de aprovação. Não haverá mais o email simples duplicado.
 
