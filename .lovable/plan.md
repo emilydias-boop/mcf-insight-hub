@@ -1,45 +1,50 @@
 
 
-## Diagnostico: Relatório Semanal `weekly-bu-report`
+## Plano: Relatórios semanais personalizados por BU para gestores
 
-### Problemas encontrados
+### Objetivo
 
-A edge function `weekly-bu-report` está consultando **colunas que não existem** na tabela `weekly_metrics`:
+Criar uma nova edge function `weekly-manager-report` que envia relatórios semanais detalhados e personalizados para cada gestor de BU, com dados do time completo da semana anterior.
 
-```text
-Colunas consultadas (INEXISTENTES):    Colunas reais no banco:
-─────────────────────────────────      ─────────────────────
-origin_name                            start_date / end_date
-leads_count                            a010_sales / contract_sales
-meetings_scheduled                     faturamento_total / total_revenue
-deals_won                              ads_cost / total_cost
-revenue                                roi / roas / clint_revenue
-```
+### Destinatarios
 
-**Resultado**: O Supabase retorna `null` para todas essas colunas, gerando um email com todos os valores **zerados** (0 leads, 0 reuniões, 0 vendas, R$ 0,00).
+| Gestor | Email | BU | Conteudo |
+|--------|-------|----|----------|
+| Jessica Bellini | jessica.bellini.r2@minhacasafinanciada.com | Incorporador | Carrinho R2 + performance SDRs/Closers |
+| Thobson Motta | thobson.motta@minhacasafinanciada.com | Consorcio | Vendas de cartas por dia + performance SDRs/Closers |
 
-Além disso, a semana do relatório usa segunda a domingo, mas os `weekly_metrics` usam **sábado a sexta** — o filtro por `week_start` nunca vai bater.
+### Conteudo do email — Incorporador (Jessica)
 
-### Plano de correção
+1. **KPIs do Carrinho**: Contratos pagos, R2 agendadas/realizadas, aprovados
+2. **Tabela SDRs**: Nome, aprovados no carrinho (dados de `meeting_slot_attendees` + `hubla_transactions`)
+3. **Tabela Closers**: Nome, aprovados no carrinho
+4. **Resumo financeiro**: Vendas A010, contratos, faturamento total da semana
+5. Periodo: semana do carrinho (Qui-Qua / corte na Sexta)
 
-**Arquivo**: `supabase/functions/weekly-bu-report/index.ts`
+### Conteudo do email — Consorcio (Thobson)
 
-1. **Corrigir a query de `weekly_metrics`**: Usar `start_date`/`end_date` e os campos reais (`a010_sales`, `contract_sales`, `faturamento_total`, `ads_cost`, `total_cost`, `roi`, `roas`, `incorporador_50k`, `clint_revenue`, etc.)
+1. **KPIs**: Total de cartas vendidas, valor de credito total, comissao
+2. **Vendas por dia**: Tabela com data_contratacao agrupada por dia da semana (Seg-Dom)
+3. **Tabela SDRs**: Nome do vendedor, cartas vendidas, valor de credito
+4. **Tabela Closers**: Nome, cartas atribuidas
+5. Periodo: semana Seg-Dom (padrao consorcio)
 
-2. **Ajustar o range de data**: Em vez de procurar por `week_start`, buscar a semana cujo `start_date` cai dentro do periodo (a semana customizada sáb-sex mais recente completada)
+### Alteracoes
 
-3. **Buscar dados de Consórcio**: Usar `consortium_cards` com `created_at` no periodo (já funciona, mas sem dados recentes)
+**Novo arquivo**: `supabase/functions/weekly-manager-report/index.ts`
 
-4. **Adicionar dados de Crédito**: Buscar transações de crédito de `hubla_transactions` onde `product_category = 'credito'`
+- Funcao que busca os SDRs e closers de cada squad via `sdr` table
+- Para **Incorporador**: busca `hubla_transactions` (contratos A000), `meeting_slot_attendees` (R2 aprovados), `closers`, e agrega por SDR/closer
+- Para **Consorcio**: busca `consortium_cards` com `data_contratacao` no periodo, agrupa por dia e por `vendedor_name`
+- Gera HTML personalizado para cada BU
+- Envia via `brevo-send` para cada gestor
 
-5. **Melhorar o HTML do email**: Mostrar as métricas reais do negócio:
-   - **Incorporador**: Vendas A010, Contratos, Faturamento, Incorporador 50K, ROI, ROAS
-   - **Consórcio**: Cartas vendidas, valor de crédito
-   - **Crédito**: Vendas e receita
+**Agendamento**: Adicionar pg_cron job para disparar toda segunda-feira as 07:30 (BRT), 30 min apos o relatorio do diretor
 
-6. **Adicionar KPIs financeiros**: ROI, ROAS, Custo total, Lucro operacional — dados que já existem na tabela
+### Detalhes tecnicos
 
-### Resultado esperado
-
-O email semanal chegará com os dados reais do dashboard em vez de zeros, mostrando a performance consolidada das 3 BUs com métricas financeiras relevantes.
+- Reutiliza a mesma logica de boundaries do carrinho (Qui-Qua com corte na sexta) para o relatorio de incorporador
+- Para consorcio usa Seg-Dom conforme padrao da BU
+- Emails dos gestores sao constantes na edge function (simples e direto)
+- Cada gestor recebe APENAS o relatorio da sua BU
 
