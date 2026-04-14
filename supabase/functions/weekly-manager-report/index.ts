@@ -486,8 +486,8 @@ async function buildIncorporadorReport(supabase: any) {
     .select('id, product_name, net_value, customer_email, linked_attendee_id')
     .or('product_name.ilike.%A001%,product_name.ilike.%A009%')
     .in('sale_status', ['completed', 'refunded'])
-    .gte('sale_date', startISO)
-    .lte('sale_date', endISO);
+    .gte('sale_date', carrinhoStartISO)
+    .lte('sale_date', carrinhoEndISO);
 
   // Map attendee_id -> closer_id for R2 attendees
   const attendeeCloserMap = new Map<string, string>();
@@ -534,8 +534,8 @@ async function buildIncorporadorReport(supabase: any) {
     .select('id, net_value')
     .eq('product_category', 'a010')
     .in('sale_status', ['completed', 'refunded'])
-    .gte('sale_date', startISO)
-    .lte('sale_date', endISO);
+    .gte('sale_date', carrinhoStartISO)
+    .lte('sale_date', carrinhoEndISO);
   const a010Count = (a010Sales || []).length;
   const a010Revenue = (a010Sales || []).reduce((s: number, t: any) => s + (t.net_value || 0), 0);
 
@@ -551,7 +551,7 @@ async function buildIncorporadorReport(supabase: any) {
 
   const finRows = [
     `<tr><td>Vendas A010</td><td style="text-align:center">${a010Count}</td><td style="text-align:right">${fmtBRL(a010Revenue)}</td></tr>`,
-    `<tr><td>Contratos (A000)</td><td style="text-align:center">${contratosPagos}</td><td style="text-align:right">-</td></tr>`,
+    `<tr><td>Contratos (A000)</td><td style="text-align:center">${contratosLiquidos}</td><td style="text-align:right">-</td></tr>`,
   ];
   for (const [prod, stats] of [...parceriaByProduct.entries()].sort((a, b) => b[1].count - a[1].count)) {
     finRows.push(`<tr><td>Parceria — ${prod}</td><td style="text-align:center">${stats.count}</td><td style="text-align:right">${fmtBRL(stats.revenue)}</td></tr>`);
