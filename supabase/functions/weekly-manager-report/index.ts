@@ -27,7 +27,7 @@ const REPROVADO_ID = '66fd400b-2172-4aef-a883-53812ff6ef43';
 const REEMBOLSO_ID = 'b97f3afa-1b19-4621-966d-b32c61de6c2e';
 const DESISTENTE_ID = '407b14d6-8561-45ef-9c40-c9ca1e1c89e7';
 const CANCELADO_ID = 'b1d37f3e-ed3c-4edc-aa51-05fde410cdda';
-const FORA_IDS = [REEMBOLSO_ID, DESISTENTE_ID, REPROVADO_ID, PROXIMA_SEMANA_ID, CANCELADO_ID];
+const FORA_IDS = [REEMBOLSO_ID, DESISTENTE_ID, REPROVADO_ID, CANCELADO_ID]; // Próxima Semana contada separadamente
 
 // ── Closer IDs from closers table (incorporador, active) ──
 const R1_CLOSER_IDS = [
@@ -57,20 +57,38 @@ function pct(num: number, den: number) {
   return `${Math.round((num / den) * 100)}%`;
 }
 
-/** Incorporador week: Thu 00:00 → Wed 23:59 of last completed week */
-function getIncorpWeek() {
+/** Incorporador periods: two distinct ranges
+ *  - carrinhoWeek: Sáb 00:00 → Sex 23:59:59 (operational week for R1, R2, SDR, Closers)
+ *  - safraContratos: Qui 00:00 → Qua 23:59:59 (offset for contract counting)
+ */
+function getIncorpPeriods() {
   const now = new Date();
-  const day = now.getDay();
-  const daysSinceWed = (day + 7 - 3) % 7 || 7;
-  const wed = new Date(now);
-  wed.setDate(now.getDate() - daysSinceWed);
-  wed.setHours(23, 59, 59, 999);
+  const day = now.getDay(); // 0=Sun..6=Sat
 
-  const thu = new Date(wed);
-  thu.setDate(wed.getDate() - 6);
+  // Find last Friday (end of carrinho week)
+  const daysSinceFri = (day + 7 - 5) % 7 || 7;
+  const fri = new Date(now);
+  fri.setDate(now.getDate() - daysSinceFri);
+  fri.setHours(23, 59, 59, 999);
+
+  // Saturday = Friday - 6 days
+  const sat = new Date(fri);
+  sat.setDate(fri.getDate() - 6);
+  sat.setHours(0, 0, 0, 0);
+
+  // Safra contratos: Thu = Sat - 2 days, Wed = Fri - 2 days
+  const thu = new Date(sat);
+  thu.setDate(sat.getDate() - 2);
   thu.setHours(0, 0, 0, 0);
 
-  return { start: thu, end: wed };
+  const wed = new Date(fri);
+  wed.setDate(fri.getDate() - 2);
+  wed.setHours(23, 59, 59, 999);
+
+  return {
+    carrinhoWeek: { start: sat, end: fri },
+    safraContratos: { start: thu, end: wed },
+  };
 }
 
 /** Consórcio week: Mon 00:00 → Sun 23:59 of last completed week */
@@ -138,12 +156,22 @@ const STYLES = `
 // INCORPORADOR REPORT (4 SECTIONS)
 // ══════════════════════════════════════════════════
 async function buildIncorporadorReport(supabase: any) {
-  const { start, end } = getIncorpWeek();
-  const startISO = start.toISOString();
-  const endISO = end.toISOString();
-  const startStr = fmtDate(start);
-  const endStr = fmtDate(end);
-  const periodLabel = `${startStr.split('-').reverse().join('/')} a ${endStr.split('-').reverse().join('/')}`;
+  const periods = getIncorpPeriods();
+  const { start: carrinhoStart, end: carrinhoEnd } = periods.carrinhoWeek;
+  const { start: safraStart, end: safraEnd } = periods.safraContratos;
+
+  const carrinhoStartISO = carrinhoStart.toISOString();
+  const carrinhoEndISO = carrinhoEnd.toISOString();
+  const safraStartISO = safraStart.toISOString();
+  const safraEndISO = safraEnd.toISOString();
+
+  const carrinhoStartStr = fmtDate(carrinhoStart);
+  const carrinhoEndStr = fmtDate(carrinhoEnd);
+  const safraStartStr = fmtDate(safraStart);
+  const safraEndStr = fmtDate(safraEnd);
+
+  const periodLabel = `${carrinhoStartStr.split('-').reverse().join('/')} a ${carrinhoEndStr.split('-').reverse().join('/')}`;
+  const safraLabel = `${safraStartStr.split('-').reverse().join('/')} a ${safraEndStr.split('-').reverse().join('/')}`;
 
   // ── SDR list (profiles with role=sdr and squad=incorporador) ──
   const { data: sdrProfiles } = await supabase
@@ -168,7 +196,7 @@ async function buildIncorporadorReport(supabase: any) {
     .select('id, user_id, nome_completo')
     .in('user_id', sdrIds);
 
-  const employeeIdMap = new Map<string, string>(); // user_id -> employee_id
+  const employeeIdMap = new Map<string, string>();
   for (const e of sdrEmployees || []) employeeIdMap.set(e.user_id, e.id);
 
   const employeeIds = (sdrEmployees || []).map((e: any) => e.id);
@@ -176,28 +204,26 @@ async function buildIncorporadorReport(supabase: any) {
     .from('sdr_comp_plan')
     .select('sdr_id, meta_reunioes_agendadas, dias_uteis, vigencia_inicio, vigencia_fim')
     .in('sdr_id', employeeIds.length > 0 ? employeeIds : ['none'])
-    .gte('vigencia_fim', startStr)
-    .lte('vigencia_inicio', endStr);
+    .gte('vigencia_fim', carrinhoStartStr)
+    .lte('vigencia_inicio', carrinhoEndStr);
 
-  // Map employee_id -> meta semanal
   const metaMap = new Map<string, number>();
   for (const cp of compPlans || []) {
     const metaMensal = cp.meta_reunioes_agendadas || 0;
     const diasUteis = cp.dias_uteis || 20;
-    // Weekly meta = monthly / dias_uteis * 5 (typical work week)
     const metaSemanal = Math.round((metaMensal / diasUteis) * 5);
     metaMap.set(cp.sdr_id, metaSemanal);
   }
 
-  // ══ 1. CONTRATOS PAGOS ══
+  // ══ 1. CONTRATOS PAGOS (safra Qui-Qua) ══
   const { data: contratosTx } = await supabase
     .from('hubla_transactions')
     .select('id, customer_email, hubla_id, source, product_name, installment_number, sale_status')
     .eq('product_name', 'A000 - Contrato')
     .in('sale_status', ['completed', 'refunded'])
     .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
-    .gte('sale_date', startISO)
-    .lte('sale_date', endISO);
+    .gte('sale_date', safraStartISO)
+    .lte('sale_date', safraEndISO);
 
   const validContratos = (contratosTx || []).filter((t: any) => {
     if (t.hubla_id?.startsWith('newsale-')) return false;
@@ -206,16 +232,21 @@ async function buildIncorporadorReport(supabase: any) {
     return true;
   });
   const emailSet = new Set(validContratos.map((t: any) => (t.customer_email || '').toLowerCase().trim()).filter(Boolean));
-  const contratosPagos = emailSet.size;
-  const contratosReembolsados = validContratos.filter((t: any) => t.sale_status === 'refunded').length;
+  const contratosTotal = emailSet.size;
+  const contratosReembolsados = new Set(
+    validContratos.filter((t: any) => t.sale_status === 'refunded')
+      .map((t: any) => (t.customer_email || '').toLowerCase().trim())
+      .filter(Boolean)
+  ).size;
+  const contratosLiquidos = contratosTotal - contratosReembolsados;
 
-  // ══ 2. R1 MEETINGS ══
+  // ══ 2. R1 MEETINGS (carrinho week Sáb-Sex) ══
   const { data: r1Attendees } = await supabase
     .from('meeting_slot_attendees')
-    .select('id, status, booked_by, is_partner, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type, booked_by)')
+    .select('id, status, booked_by, is_partner, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type, booked_by)')
     .eq('meeting_slot.meeting_type', 'r1')
-    .gte('meeting_slot.scheduled_at', startISO)
-    .lte('meeting_slot.scheduled_at', endISO);
+    .gte('meeting_slot.scheduled_at', carrinhoStartISO)
+    .lte('meeting_slot.scheduled_at', carrinhoEndISO);
 
   const r1NonPartner = (r1Attendees || []).filter((a: any) => !a.is_partner);
 
@@ -233,15 +264,16 @@ async function buildIncorporadorReport(supabase: any) {
     }
   }
 
-  // ══ 3. R2 MEETINGS ══
+  // ══ 3. R2 MEETINGS (carrinho week Sáb-Sex) ══
   const { data: r2Attendees } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
     .eq('meeting_slot.meeting_type', 'r2')
-    .gte('meeting_slot.scheduled_at', startISO)
-    .lte('meeting_slot.scheduled_at', endISO);
+    .gte('meeting_slot.scheduled_at', carrinhoStartISO)
+    .lte('meeting_slot.scheduled_at', carrinhoEndISO);
 
-  const weekStartStr = fmtDate(start);
+  // Also include encaixados for this carrinho week
+  const weekStartStr = fmtDate(carrinhoStart);
   const { data: encaixados } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
@@ -261,9 +293,9 @@ async function buildIncorporadorReport(supabase: any) {
   for (const att of r2NonPartner) {
     const slot = (att as any).meeting_slot;
     if (!slot) continue;
-    if (att.status !== 'cancelled' && att.status !== 'rescheduled') {
+    // R2 Agendadas: excluir cancelled, rescheduled E pre_scheduled
+    if (att.status !== 'cancelled' && att.status !== 'rescheduled' && att.status !== 'pre_scheduled') {
       r2Agendadas++;
-      // Lead origin
       if (slot.lead_type === 'A') originA010++;
       else if (slot.lead_type === 'B') originLive++;
     }
@@ -283,7 +315,7 @@ async function buildIncorporadorReport(supabase: any) {
     { label: 'Em Análise', value: emAnalise, color: '#3b82f6' },
     { label: 'Próxima Sem.', value: proximaSemana, color: '#8b5cf6' },
     { label: 'Reprovados', value: reprovados, color: '#ef4444' },
-    { label: 'Fora', value: foraDoCarrinho - reprovados - proximaSemana > 0 ? foraDoCarrinho - reprovados - proximaSemana : 0, color: '#6b7280' },
+    { label: 'Fora (Outros)', value: foraDoCarrinho, color: '#6b7280' },
   ].filter(d => d.value > 0);
   const pieTotal = pieData.reduce((s, d) => s + d.value, 0);
 
@@ -349,8 +381,8 @@ async function buildIncorporadorReport(supabase: any) {
     .from('calls')
     .select('user_id')
     .in('user_id', sdrIds.length > 0 ? sdrIds : ['none'])
-    .gte('started_at', startISO)
-    .lte('started_at', endISO);
+    .gte('started_at', carrinhoStartISO)
+    .lte('started_at', carrinhoEndISO);
 
   for (const c of callsData || []) {
     if (sdrStatsMap.has(c.user_id)) {
@@ -454,8 +486,8 @@ async function buildIncorporadorReport(supabase: any) {
     .select('id, product_name, net_value, customer_email, linked_attendee_id')
     .or('product_name.ilike.%A001%,product_name.ilike.%A009%')
     .in('sale_status', ['completed', 'refunded'])
-    .gte('sale_date', startISO)
-    .lte('sale_date', endISO);
+    .gte('sale_date', carrinhoStartISO)
+    .lte('sale_date', carrinhoEndISO);
 
   // Map attendee_id -> closer_id for R2 attendees
   const attendeeCloserMap = new Map<string, string>();
@@ -502,8 +534,8 @@ async function buildIncorporadorReport(supabase: any) {
     .select('id, net_value')
     .eq('product_category', 'a010')
     .in('sale_status', ['completed', 'refunded'])
-    .gte('sale_date', startISO)
-    .lte('sale_date', endISO);
+    .gte('sale_date', carrinhoStartISO)
+    .lte('sale_date', carrinhoEndISO);
   const a010Count = (a010Sales || []).length;
   const a010Revenue = (a010Sales || []).reduce((s: number, t: any) => s + (t.net_value || 0), 0);
 
@@ -519,7 +551,7 @@ async function buildIncorporadorReport(supabase: any) {
 
   const finRows = [
     `<tr><td>Vendas A010</td><td style="text-align:center">${a010Count}</td><td style="text-align:right">${fmtBRL(a010Revenue)}</td></tr>`,
-    `<tr><td>Contratos (A000)</td><td style="text-align:center">${contratosPagos}</td><td style="text-align:right">-</td></tr>`,
+    `<tr><td>Contratos (A000)</td><td style="text-align:center">${contratosLiquidos}</td><td style="text-align:right">-</td></tr>`,
   ];
   for (const [prod, stats] of [...parceriaByProduct.entries()].sort((a, b) => b[1].count - a[1].count)) {
     finRows.push(`<tr><td>Parceria — ${prod}</td><td style="text-align:center">${stats.count}</td><td style="text-align:right">${fmtBRL(stats.revenue)}</td></tr>`);
@@ -533,25 +565,35 @@ async function buildIncorporadorReport(supabase: any) {
 <div class="container">
   <div class="header">
     <h1>📊 Relatório Semanal — Incorporador</h1>
-    <p>Período: ${periodLabel} (Ciclo Carrinho Qui-Qua)</p>
+    <p>Semana do Carrinho: ${periodLabel} (Sáb-Sex)</p>
+    <p style="font-size:11px;opacity:0.7">Safra Contratos: ${safraLabel} (Qui-Qua)</p>
   </div>
   <div class="content">
 
     <!-- SEÇÃO 1: KPIs DO CARRINHO -->
     <div class="section-title">1. KPIs do Carrinho</div>
+
+    <div class="sub-title">Contratos (Safra ${safraLabel})</div>
     <div class="kpi-row">
-      <div class="kpi green"><div class="value">${contratosPagos}</div><div class="label">Contratos Pagos</div></div>
-      <div class="kpi${contratosReembolsados > 0 ? ' red' : ''}"><div class="value">${contratosReembolsados}</div><div class="label">Reembolsos</div></div>
+      <div class="kpi"><div class="value">${contratosTotal}</div><div class="label">Total c/ Reemb.</div></div>
+      <div class="kpi red"><div class="value">${contratosReembolsados}</div><div class="label">Reembolsos</div></div>
+      <div class="kpi green"><div class="value">${contratosLiquidos}</div><div class="label">Contratos Líq.</div></div>
+    </div>
+
+    <div class="sub-title">Reuniões R1</div>
+    <div class="kpi-row">
       <div class="kpi"><div class="value">${r1Agendadas}</div><div class="label">R1 Agendada</div></div>
       <div class="kpi"><div class="value">${r1Realizadas}</div><div class="label">R1 Realizada</div></div>
       <div class="kpi red"><div class="value">${r1NoShow}</div><div class="label">No-Show R1</div></div>
     </div>
+
+    <div class="sub-title">Reuniões R2</div>
     <div class="kpi-row">
       <div class="kpi"><div class="value">${r2Agendadas}</div><div class="label">R2 Agendada</div></div>
       <div class="kpi"><div class="value">${r2Realizadas}</div><div class="label">R2 Realizada</div></div>
       <div class="kpi green"><div class="value">${aprovados}</div><div class="label">Aprovados</div></div>
       <div class="kpi purple"><div class="value">${proximaSemana}</div><div class="label">Próx. Semana</div></div>
-      <div class="kpi"><div class="value">${foraDoCarrinho}</div><div class="label">Fora Carrinho</div></div>
+      <div class="kpi red"><div class="value">${foraDoCarrinho}</div><div class="label">Fora Carrinho</div></div>
     </div>
 
     <div class="sub-title">Origem dos Leads (R2)</div>
