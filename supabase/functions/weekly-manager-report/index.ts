@@ -638,7 +638,9 @@ async function buildIncorporadorReport(supabase: any) {
 
     <div class="sub-title">Contratos (Safra ${safraLabel})</div>
     <div class="kpi-row">
-      <div class="kpi"><div class="value">${contratosTotal}</div><div class="label">Total c/ Reemb.</div></div>
+      <div class="kpi"><div class="value">${totalComRecorrencia}</div><div class="label">Total Transações</div></div>
+      <div class="kpi"><div class="value">${recorrencias}</div><div class="label">Recorrências</div></div>
+      <div class="kpi blue"><div class="value">${contratosComReembolso}</div><div class="label">Com Reembolso</div></div>
       <div class="kpi red"><div class="value">${contratosReembolsados}</div><div class="label">Reembolsos</div></div>
       <div class="kpi green"><div class="value">${contratosLiquidos}</div><div class="label">Contratos Líq.</div></div>
     </div>
