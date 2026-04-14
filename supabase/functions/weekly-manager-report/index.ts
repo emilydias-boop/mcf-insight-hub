@@ -939,6 +939,9 @@ serve(async (req) => {
   }
 
   try {
+    const body = await req.json().catch(() => ({}));
+    const buFilter = body?.buFilter || null;
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -946,6 +949,7 @@ serve(async (req) => {
     const results: { bu: string; manager: string; success: boolean; error?: string }[] = [];
 
     // 1. Incorporador report for Jessica
+    if (!buFilter || buFilter === 'incorporador') {
     try {
       const incorpHtml = await buildIncorporadorReport(supabase);
       const { data: sendResult, error: sendError } = await supabase.functions.invoke('brevo-send', {
@@ -964,8 +968,10 @@ serve(async (req) => {
       console.error('[WEEKLY-MANAGER] Error sending incorporador report:', e.message);
       results.push({ bu: 'incorporador', manager: MANAGERS.incorporador.name, success: false, error: e.message });
     }
+    }
 
     // 2. Consórcio report for Thobson
+    if (!buFilter || buFilter === 'consorcio') {
     try {
       const consorcioHtml = await buildConsorcioReport(supabase);
       const { data: sendResult, error: sendError } = await supabase.functions.invoke('brevo-send', {
@@ -983,6 +989,7 @@ serve(async (req) => {
     } catch (e: any) {
       console.error('[WEEKLY-MANAGER] Error sending consórcio report:', e.message);
       results.push({ bu: 'consorcio', manager: MANAGERS.consorcio.name, success: false, error: e.message });
+    }
     }
 
     return new Response(JSON.stringify({ success: true, results }), {
