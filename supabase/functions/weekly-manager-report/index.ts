@@ -247,13 +247,23 @@ async function buildIncorporadorReport(supabase: any) {
   const contratosLiquidos = contratosComReembolso - contratosReembolsados; // e.g. 27
 
   // ══ 2. R1 MEETINGS (carrinho week Sáb-Sex) — filtered by BU incorporador ══
-  // Only count R1 attendees whose closer belongs to incorporador BU
-  const incorporadorCloserIds = R1_CLOSER_IDS.map(c => c.id);
+  // Dynamically fetch R1 closers from DB instead of hardcoded list
+  const { data: r1ClosersDB } = await supabase
+    .from('closers')
+    .select('id, name')
+    .eq('bu', 'incorporador')
+    .eq('is_active', true)
+    .or('meeting_type.is.null,meeting_type.eq.r1');
+
+  const R1_CLOSER_IDS = (r1ClosersDB || []).map((c: any) => ({ id: c.id, name: c.name }));
+  const incorporadorCloserIds = R1_CLOSER_IDS.map((c: any) => c.id);
+  console.log(`[INCORP] R1 closers (dynamic): ${R1_CLOSER_IDS.map((c: any) => c.name).join(', ')} (${incorporadorCloserIds.length} total)`);
+
   const { data: r1Attendees } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, booked_by, is_partner, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type, booked_by)')
     .eq('meeting_slot.meeting_type', 'r1')
-    .in('meeting_slot.closer_id', incorporadorCloserIds)
+    .in('meeting_slot.closer_id', incorporadorCloserIds.length > 0 ? incorporadorCloserIds : ['none'])
     .gte('meeting_slot.scheduled_at', carrinhoStartISO)
     .lte('meeting_slot.scheduled_at', carrinhoEndISO);
 
@@ -263,7 +273,8 @@ async function buildIncorporadorReport(supabase: any) {
   for (const att of r1NonPartner) {
     const slot = (att as any).meeting_slot;
     if (!slot) continue;
-    if (att.status !== 'cancelled' && att.status !== 'rescheduled') {
+    // Include rescheduled in agendadas (consistent with dashboard useR1CloserMetrics)
+    if (att.status !== 'cancelled') {
       r1Agendadas++;
       if (att.status === 'completed' || att.status === 'presente' || att.status === 'contract_paid') {
         r1Realizadas++;
@@ -274,11 +285,25 @@ async function buildIncorporadorReport(supabase: any) {
   }
 
   // ══ 3. R2 MEETINGS — use carrinho config boundaries (horario_corte) ══
-  // Fetch carrinho config for current and previous week to get cutoff times
-  const carrinhoWeekKey = `carrinho_config_${fmtDate(labels.carrinhoStart)}`;
-  const prevWeekStart = new Date(labels.carrinhoStart);
-  prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-  const prevCarrinhoWeekKey = `carrinho_config_${fmtDate(prevWeekStart)}`;
+  // Dynamically fetch R2 closers from DB
+  const { data: r2ClosersDB } = await supabase
+    .from('closers')
+    .select('id, name')
+    .eq('bu', 'incorporador')
+    .eq('is_active', true)
+    .eq('meeting_type', 'r2');
+
+  const R2_CLOSER_IDS = (r2ClosersDB || []).map((c: any) => ({ id: c.id, name: c.name }));
+  console.log(`[INCORP] R2 closers (dynamic): ${R2_CLOSER_IDS.map((c: any) => c.name).join(', ')} (${R2_CLOSER_IDS.length} total)`);
+
+  // Use carrinhoThursday for config key (cart system uses Thu as week start)
+  const carrinhoThuStr = fmtDate(labels.carrinhoThursday);
+  const carrinhoWeekKey = `carrinho_config_${carrinhoThuStr}`;
+  const prevThursday = new Date(labels.carrinhoThursday);
+  prevThursday.setDate(prevThursday.getDate() - 7);
+  const prevCarrinhoWeekKey = `carrinho_config_${fmtDate(prevThursday)}`;
+
+  console.log(`[INCORP] Carrinho config keys: ${carrinhoWeekKey} / ${prevCarrinhoWeekKey}`);
 
   const [configResult, prevConfigResult] = await Promise.all([
     supabase.from('settings').select('value').eq('key', carrinhoWeekKey).maybeSingle(),
@@ -302,9 +327,9 @@ async function buildIncorporadorReport(supabase: any) {
   }
 
   // R2 boundaries: previousFriday@previousCutoff → currentFriday@currentCutoff (in BRT, converted to UTC)
-  // carrinhoStart = Saturday BRT, so Friday = Saturday - 1 day
-  const currentFriday = new Date(labels.carrinhoStart);
-  currentFriday.setDate(currentFriday.getDate() + 6); // Sat + 6 = Fri (end of week)
+  // currentFriday = carrinhoThursday + 1 day (Fri of the cart week)
+  const currentFriday = new Date(labels.carrinhoThursday);
+  currentFriday.setDate(currentFriday.getDate() + 1);
   const previousFriday = new Date(currentFriday);
   previousFriday.setDate(previousFriday.getDate() - 7);
 
@@ -329,8 +354,8 @@ async function buildIncorporadorReport(supabase: any) {
     .gte('meeting_slot.scheduled_at', r2StartISO)
     .lte('meeting_slot.scheduled_at', r2EndISO);
 
-  // Also include encaixados for this carrinho week
-  const weekStartStr = fmtDate(labels.carrinhoStart);
+  // Also include encaixados for this carrinho week (uses Thu date as week start)
+  const weekStartStr = carrinhoThuStr;
   const { data: encaixados } = await supabase
     .from('meeting_slot_attendees')
     .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
