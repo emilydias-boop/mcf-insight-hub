@@ -170,6 +170,9 @@ async function buildIncorporadorReport(supabase: any) {
   const safraStartISO = safraStart.toISOString();
   const safraEndISO = safraEnd.toISOString();
 
+  console.log(`[INCORP] Carrinho week: ${carrinhoStartISO} → ${carrinhoEndISO}`);
+  console.log(`[INCORP] Safra contratos: ${safraStartISO} → ${safraEndISO}`);
+
   // Use raw dates for labels (not BRT-shifted)
   const { labels } = periods;
   const carrinhoStartStr = fmtDate(labels.carrinhoStart);
