@@ -117,15 +117,22 @@ export function R2QuickScheduleModal({
     return closerSlots.availableSlots;
   }, [closerSlots]);
 
-  // Generate full 08:00-21:00 time slots for pre-schedule mode
+  const MAX_PRE_SCHEDULE_PER_SLOT = 2;
+
+  // Generate 09:00-20:00 time slots for pre-schedule mode
   const allFreeTimeSlots = useMemo(() => {
     const slots: string[] = [];
-    for (let h = 8; h <= 21; h++) {
+    for (let h = 9; h <= 20; h++) {
       slots.push(`${String(h).padStart(2, '0')}:00`);
-      if (h < 21) slots.push(`${String(h).padStart(2, '0')}:30`);
+      if (h < 20) slots.push(`${String(h).padStart(2, '0')}:30`);
     }
     return slots;
   }, []);
+
+  // Pre-scheduled counts from hook
+  const preScheduledCounts = useMemo(() => {
+    return closerSlots?.preScheduledCounts || {};
+  }, [closerSlots]);
 
   // Check if selected time is configured in the grid
   const isTimeConfigured = useMemo(() => {
@@ -416,12 +423,16 @@ export function R2QuickScheduleModal({
                       allFreeTimeSlots.map(time => {
                         const configured = allConfiguredSlots.find(s => s.time === time);
                         const isOccupied = configured && !configured.isAvailable;
+                        const count = preScheduledCounts[time] || 0;
+                        const isFull = count >= MAX_PRE_SCHEDULE_PER_SLOT;
                         return (
-                          <SelectItem key={time} value={time}>
+                          <SelectItem key={time} value={time} disabled={isFull}>
                             <span className="flex items-center gap-2">
                               {time}
-                              {isOccupied && <span className="text-xs text-amber-600">(ocupado)</span>}
-                              {!configured && <span className="text-xs text-amber-600">(encaixe)</span>}
+                              {isFull && <span className="text-xs text-destructive font-medium">(lotado)</span>}
+                              {!isFull && count > 0 && <span className="text-xs text-amber-600">({count}/{MAX_PRE_SCHEDULE_PER_SLOT})</span>}
+                              {!isFull && isOccupied && <span className="text-xs text-amber-600">(ocupado)</span>}
+                              {!isFull && !configured && <span className="text-xs text-amber-600">(encaixe)</span>}
                             </span>
                           </SelectItem>
                         );
