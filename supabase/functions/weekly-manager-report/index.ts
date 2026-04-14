@@ -444,7 +444,7 @@ async function buildIncorporadorReport(supabase: any) {
     const booker = slot.booked_by || att.booked_by;
     if (booker && sdrStatsMap.has(booker)) {
       const st = sdrStatsMap.get(booker)!;
-      if (att.status !== 'cancelled' && att.status !== 'rescheduled') {
+      if (att.status !== 'cancelled') {
         st.agendados++;
         if (att.status === 'completed' || att.status === 'presente' || att.status === 'contract_paid') {
           st.r1Realizadas++;
@@ -514,7 +514,7 @@ async function buildIncorporadorReport(supabase: any) {
     const cid = slot.closer_id;
     if (cid && closerR1Map.has(cid)) {
       const st = closerR1Map.get(cid)!;
-      if (att.status !== 'cancelled' && att.status !== 'rescheduled') {
+      if (att.status !== 'cancelled') {
         st.r1Agendadas++;
         if (att.status === 'completed' || att.status === 'presente' || att.status === 'contract_paid') st.r1Realizadas++;
         if (att.status === 'contract_paid' || att.contract_paid_at) st.contratos++;
@@ -555,7 +555,7 @@ async function buildIncorporadorReport(supabase: any) {
     const cid = slot.closer_id;
     if (cid && closerR2Map.has(cid)) {
       const st = closerR2Map.get(cid)!;
-      if (att.status !== 'cancelled' && att.status !== 'rescheduled') st.r2Agendadas++;
+      if (att.status !== 'cancelled' && att.status !== 'rescheduled') st.r2Agendadas++; // R2 keeps excluding rescheduled
       if (att.status === 'completed' || att.status === 'presente' || slot.status === 'completed') st.r2Realizadas++;
       if (att.r2_status_id === APROVADO_ID) st.aprovados++;
       if (att.r2_status_id === REPROVADO_ID) st.reprovados++;
