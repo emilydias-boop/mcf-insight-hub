@@ -565,25 +565,35 @@ async function buildIncorporadorReport(supabase: any) {
 <div class="container">
   <div class="header">
     <h1>📊 Relatório Semanal — Incorporador</h1>
-    <p>Período: ${periodLabel} (Ciclo Carrinho Qui-Qua)</p>
+    <p>Semana do Carrinho: ${periodLabel} (Sáb-Sex)</p>
+    <p style="font-size:11px;opacity:0.7">Safra Contratos: ${safraLabel} (Qui-Qua)</p>
   </div>
   <div class="content">
 
     <!-- SEÇÃO 1: KPIs DO CARRINHO -->
     <div class="section-title">1. KPIs do Carrinho</div>
+
+    <div class="sub-title">Contratos (Safra ${safraLabel})</div>
     <div class="kpi-row">
-      <div class="kpi green"><div class="value">${contratosPagos}</div><div class="label">Contratos Pagos</div></div>
-      <div class="kpi${contratosReembolsados > 0 ? ' red' : ''}"><div class="value">${contratosReembolsados}</div><div class="label">Reembolsos</div></div>
+      <div class="kpi"><div class="value">${contratosTotal}</div><div class="label">Total c/ Reemb.</div></div>
+      <div class="kpi red"><div class="value">${contratosReembolsados}</div><div class="label">Reembolsos</div></div>
+      <div class="kpi green"><div class="value">${contratosLiquidos}</div><div class="label">Contratos Líq.</div></div>
+    </div>
+
+    <div class="sub-title">Reuniões R1</div>
+    <div class="kpi-row">
       <div class="kpi"><div class="value">${r1Agendadas}</div><div class="label">R1 Agendada</div></div>
       <div class="kpi"><div class="value">${r1Realizadas}</div><div class="label">R1 Realizada</div></div>
       <div class="kpi red"><div class="value">${r1NoShow}</div><div class="label">No-Show R1</div></div>
     </div>
+
+    <div class="sub-title">Reuniões R2</div>
     <div class="kpi-row">
       <div class="kpi"><div class="value">${r2Agendadas}</div><div class="label">R2 Agendada</div></div>
       <div class="kpi"><div class="value">${r2Realizadas}</div><div class="label">R2 Realizada</div></div>
       <div class="kpi green"><div class="value">${aprovados}</div><div class="label">Aprovados</div></div>
       <div class="kpi purple"><div class="value">${proximaSemana}</div><div class="label">Próx. Semana</div></div>
-      <div class="kpi"><div class="value">${foraDoCarrinho}</div><div class="label">Fora Carrinho</div></div>
+      <div class="kpi red"><div class="value">${foraDoCarrinho}</div><div class="label">Fora Carrinho</div></div>
     </div>
 
     <div class="sub-title">Origem dos Leads (R2)</div>
