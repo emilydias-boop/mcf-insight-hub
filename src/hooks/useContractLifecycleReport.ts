@@ -317,7 +317,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       // Build maps: attendee id -> contact email/phone for cross-referencing
       const attendeeEmailMap = new Map<string, string>();
       const attendeePhoneMap = new Map<string, string>();
-      for (const att of (r1Attendees || []) as any[]) {
+      for (const att of filteredR1Attendees as any[]) {
         const email = att.deal?.contact?.email;
         if (email && att.id) {
           attendeeEmailMap.set(att.id, email.toLowerCase().trim());
@@ -332,7 +332,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const fridayCutoff = getFridayCutoff(filters.weekStart);
 
       // Step 5: Transform into rows
-      const rows: ContractLifecycleRow[] = (r1Attendees || []).map((att: any) => {
+      const rows: ContractLifecycleRow[] = filteredR1Attendees.map((att: any) => {
         const ms = att.meeting_slot;
         const deal = att.deal;
         const r2Info = att.deal_id ? r2Map[att.deal_id] : null;
