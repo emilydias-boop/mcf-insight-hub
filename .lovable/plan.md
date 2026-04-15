@@ -1,43 +1,44 @@
 
 
-## Plano: Incluir leads com R2 Aprovado fora da safra + Encaixados no relatório lifecycle
+## Plano: Alinhar R2 usada no relatório lifecycle com a janela do Carrinho
 
 ### Problema
-O relatório lifecycle só captura leads cujo `contract_paid_at` cai na safra (Qui-Qua). Faltam dois grupos:
+O relatório lifecycle seleciona a R2 mais recente por `deal_id` (qualquer data), enquanto o Carrinho filtra R2s pela janela Sex-Sex. Isso gera:
+- Carlos Magno: relatório mostra R2 do dia 16/04 (agendado), Carrinho mostra R2 do dia 10/04 (no-show)
+- KPIs de "Agendados" não batem entre as duas views
 
-1. **Contratos pagos antes da safra** — leads que pagaram em semanas anteriores mas tiveram R2 aprovado na janela do carrinho atual
-2. **Encaixados** — leads do acumulado que foram forçados para a semana via `carrinho_week_start` (botão "Encaixar no Carrinho")
+### Causa raiz
+No Step 4 do `useContractLifecycleReport.ts` (linha 453), ao buscar R2 attendees por `deal_id`, o código pega sempre a com `scheduled_at` mais recente:
+```ts
+if (!existing || (newDate && (!existing.r2Date || newDate > existing.r2Date))) {
+```
+Isso ignora a janela do carrinho — uma R2 futura (16/04) sobrepõe a da semana (10/04).
 
-O Carrinho R2 já conta ambos os grupos (via `useR2CarrinhoKPIs`), mas o relatório lifecycle não.
+### Correção em `src/hooks/useContractLifecycleReport.ts`
 
-### Solução
+**Opção: Priorizar a R2 dentro da janela do carrinho**
 
-Modificar `src/hooks/useContractLifecycleReport.ts` para adicionar dois caminhos de busca após o Step 1b:
+No Step 4, ao resolver qual R2 usar para cada deal_id, preferir a R2 que cai dentro da janela do carrinho (Sex anterior → Sex atual). Se houver uma dentro e uma fora, usar a de dentro. Se ambas estão dentro, usar a mais recente.
 
-**Step 1c — Leads com R2 Aprovado na janela do carrinho:**
-1. Buscar `r2_status_options` com nome "aprovado"
-2. Buscar R2 attendees com `r2_status_id` = aprovado, `scheduled_at` na janela Sex-Sex (usa `getCarrinhoMetricBoundaries`)
-3. Coletar `deal_id` e excluir os que já estão nos `filteredR1Attendees`
-4. Para os faltantes, buscar R1 attendees correspondentes por `deal_id` (ou por `contact_id` cross-pipeline)
-5. Se não tem R1, criar row com campos R1 nulos e `r1Status = 'outside'`
+Lógica:
+1. Calcular a janela R2 usando `getCarrinhoMetricBoundaries` (já importado)
+2. No loop que popula `r2Map`, para cada R2:
+   - Se a nova R2 está **dentro** da janela e a existente está **fora** → substituir
+   - Se ambas estão dentro (ou ambas fora) → manter a mais recente (comportamento atual)
+   - Se a nova está fora e a existente dentro → manter a existente
 
-**Step 1d — Encaixados (carrinho_week_start):**
-1. Buscar R2 attendees com `carrinho_week_start` = weekStart da safra (formato `yyyy-MM-dd`)
-2. Coletar `deal_id` e excluir os já capturados nos passos anteriores
-3. Mesma lógica: buscar R1 correspondente ou criar row com R1 nulo
+```text
+Prioridade:
+  1. Dentro da janela carrinho, mais recente
+  2. Fora da janela, mais recente (fallback)
+```
 
-**Deduplicação:** Unir os 3 conjuntos por `deal_id` antes de continuar o pipeline (Steps 2-5 existentes).
-
-**Dependência:** `filters.weekStart` já é passado pelo painel — usado para calcular a janela do carrinho e o `carrinho_week_start` string.
-
-### Resultado esperado
-- Aprovados no relatório = ~24 (alinhado com Carrinho R2)
-- Encaixados aparecem no relatório com seus dados R2 corretos
-- Leads sem R1 aparecem com campos R1 vazios
+Isso garante que:
+- Carlos Magno use a R2 de 10/04 (no-show, dentro da janela) em vez da de 16/04 (fora)
+- Os KPIs de "Agendados" e "No-show" fiquem alinhados com o Carrinho
 
 ### Seção técnica
-- Arquivo único: `src/hooks/useContractLifecycleReport.ts`
-- ~60 linhas adicionais entre Step 1b e Step 2
-- Import de `getCarrinhoMetricBoundaries` e `format` de date-fns
-- Reutiliza `getCartWeekStart` para calcular `carrinho_week_start` string a partir de `filters.weekStart`
+- Arquivo: `src/hooks/useContractLifecycleReport.ts`, Step 4 (~linhas 446-468)
+- ~10 linhas alteradas no critério de seleção de R2 por deal_id
+- Usa `boundaries.r2Meetings` para determinar se a R2 cai dentro da janela
 
