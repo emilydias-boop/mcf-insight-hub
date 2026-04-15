@@ -70,7 +70,7 @@ export default function R2Carrinho() {
 
   // Filter data by selected carrinho
   const agendadasData = useMemo(() => 
-    filterByCarrinho(rawAgendadasData, config, selectedCarrinhoId, item => item.scheduled_at),
+    filterByCarrinho(rawAgendadasData, config, selectedCarrinhoId, item => item.display_scheduled_at),
     [rawAgendadasData, config, selectedCarrinhoId]
   );
   const foraCarrinhoData = useMemo(() => 
@@ -78,7 +78,7 @@ export default function R2Carrinho() {
     [rawForaCarrinhoData, config, selectedCarrinhoId]
   );
   const aprovadosData = useMemo(() => 
-    filterByCarrinho(rawAprovadosData, config, selectedCarrinhoId, item => item.scheduled_at),
+    filterByCarrinho(rawAprovadosData, config, selectedCarrinhoId, item => item.display_scheduled_at),
     [rawAprovadosData, config, selectedCarrinhoId]
   );
   const vendasData = useMemo(() => 

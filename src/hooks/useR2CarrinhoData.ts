@@ -371,7 +371,7 @@ export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agen
         }
       }
 
-      merged.sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+      merged.sort((a, b) => new Date(a.display_scheduled_at).getTime() - new Date(b.display_scheduled_at).getTime());
       return merged;
     },
   });
