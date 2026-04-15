@@ -1,53 +1,35 @@
 
 
-## Plano: Alinhar "Total Pagos" do relatório lifecycle com o Carrinho
+## Plano: Corrigir "Total Pagos" — separar leads pagos dos não-pagos
 
 ### Problema
-- **Carrinho R2**: 62 contratos pagos — conta emails únicos de `hubla_transactions` com filtros rigorosos (product = A000, exclui newsale-, installment > 1, fontes específicas)
-- **Relatório Lifecycle**: 70 contratos pagos — conta R1 attendees com `contract_paid_at` preenchido, sem validar se existe transação real na Hubla
+O "Total Pagos" subiu de 70 para 78 porque os Steps 1c/1d adicionam leads com R2 Aprovado e Encaixados que **não pagaram contrato** ao mesmo array. O KPI conta `rows.length` (todas as rows), então inclui leads sem pagamento.
 
-A diferença de 8 vem de: deals marcados manualmente como "contrato pago" sem transação Hubla correspondente, deals duplicados para o mesmo cliente, ou transações de fontes/produtos excluídos.
+O correto seria:
+- **Total Pagos = 62** (somente os que vieram da `hubla_transactions` — Step 1a)
+- Os leads dos Steps 1c/1d aparecem no relatório mas **não contam** como "pagos"
 
 ### Correção
 
-Mudar a fonte primária do Step 1 do lifecycle para usar `hubla_transactions` (como o Carrinho faz), e depois resolver os R1 attendees a partir dos emails encontrados.
-
 **Arquivo: `src/hooks/useContractLifecycleReport.ts`**
 
-**Novo Step 1 (substituir o atual Step 1a):**
-1. Buscar transações em `hubla_transactions` com os mesmos filtros do Carrinho:
-   - `product_name = 'A000 - Contrato'`
-   - `sale_status in ('completed', 'refunded')`
-   - `source in ('hubla', 'manual', 'make', 'mcfpay', 'kiwify')`
-   - `sale_date` dentro dos boundaries de contratos (Qui-Qua)
-2. Aplicar os mesmos filtros de exclusão:
-   - Excluir `hubla_id` começando com `newsale-`
-   - Excluir `source = 'make'` com `product_name = 'contrato'`
-   - Excluir `installment_number > 1`
-3. Deduplicar por `customer_email` (lowercase)
-4. Resolver `customer_email` → `crm_contacts` → `crm_deals` → `meeting_slot_attendees` (R1)
-5. Para emails sem R1 attendee, criar rows sintéticos (como já faz no Step 1c/1d)
+Adicionar uma flag `_isPaidFromHubla: boolean` em cada row:
+- Step 1a (Hubla transactions): `_isPaidFromHubla = true`
+- Steps 1c/1d (R2 Aprovado + Encaixados sem pagamento): `_isPaidFromHubla = false`
 
-**Novo Step 1 detalhe:**
-- Buscar contacts por email
-- Buscar deals por contact_id
-- Filtrar deals por BU (incorporadorOriginIds)
-- Buscar R1 attendees por deal_id
-- Para contratos sem R1, criar row sintético com `r1Status = 'outside'`
-- Flag de refund vem direto da transação (`sale_status = 'refunded'`)
+Expor essa flag no `ContractLifecycleRow` como `isPaidContract: boolean`.
 
-**Steps 1c e 1d (R2 aprovados + encaixados)** permanecem iguais — eles adicionam leads que não pagaram na safra.
+**Arquivo: `src/components/crm/R2ContractLifecyclePanel.tsx`**
 
-**Steps 2-5** permanecem iguais — resolvem SDR, R2, e classificam situação.
+Mudar o KPI "Total Pagos" de `rows.length` para `rows.filter(r => r.isPaidContract).length`.
 
 ### Resultado esperado
 - Total Pagos = 62 (alinhado com Carrinho)
-- Deduplicação por email garante que não conte o mesmo cliente 2x
-- Reembolsos identificados diretamente pela transação Hubla
+- Leads dos Steps 1c/1d continuam visíveis na tabela mas não inflam o KPI
+- Todos os outros KPIs (Realizadas, No-show, etc.) continuam contando todas as rows normalmente
 
 ### Seção técnica
-- Arquivo único: `src/hooks/useContractLifecycleReport.ts`
-- Reescrever Step 1a (~linhas 120-182): trocar query de `meeting_slot_attendees` por `hubla_transactions` + resolução email→contact→deal→R1
-- ~80 linhas de código alteradas/adicionadas
-- Imports adicionais: nenhum (já tem tudo)
+- `useContractLifecycleReport.ts`: adicionar `_isPaidFromHubla` nas rows do Step 1a (`true`) e Steps 1c/1d (`false`), mapear para `isPaidContract` na interface
+- `R2ContractLifecyclePanel.tsx`: `kpis.total = rows.filter(r => r.isPaidContract).length`
+- ~10 linhas alteradas no total
 
