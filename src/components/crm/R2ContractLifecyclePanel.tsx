@@ -66,7 +66,8 @@ function formatPhone(phone: string | null) {
 
 // Parent KPI filter map
 const PARENT_SITUACOES: Record<string, ContractSituacao[]> = {
-  realizadas: ['realizada', 'agendado', 'proxima_semana'],
+  realizadas: ['realizada'],
+  agendados: ['agendado', 'proxima_semana'],
   pre_agendado: ['pre_agendado'],
   pendentes: ['pendente'],
   noShow: ['no_show'],
@@ -74,7 +75,7 @@ const PARENT_SITUACOES: Record<string, ContractSituacao[]> = {
 };
 
 // Parents that have children
-const EXPANDABLE_PARENTS = ['realizadas', 'pendentes'];
+const EXPANDABLE_PARENTS = ['realizadas', 'agendados', 'pendentes'];
 
 export function R2ContractLifecyclePanel() {
   const [weekDate, setWeekDate] = useState<Date>(new Date());
@@ -98,10 +99,11 @@ export function R2ContractLifecyclePanel() {
 
   // KPI counts
   const kpis = useMemo(() => {
-    if (!rows) return { total: 0, realizadas: 0, preAgendado: 0, pendentes: 0, noShow: 0, reembolso: 0 };
+    if (!rows) return { total: 0, realizadas: 0, agendados: 0, preAgendado: 0, pendentes: 0, noShow: 0, reembolso: 0 };
     return {
       total: rows.length,
-      realizadas: rows.filter(r => ['realizada', 'agendado', 'proxima_semana'].includes(r.situacao)).length,
+      realizadas: rows.filter(r => r.situacao === 'realizada').length,
+      agendados: rows.filter(r => ['agendado', 'proxima_semana'].includes(r.situacao)).length,
       preAgendado: rows.filter(r => r.situacao === 'pre_agendado').length,
       pendentes: rows.filter(r => r.situacao === 'pendente').length,
       noShow: rows.filter(r => r.situacao === 'no_show').length,
@@ -109,11 +111,24 @@ export function R2ContractLifecyclePanel() {
     };
   }, [rows]);
 
-  // Realizadas children: dynamic by r2StatusName
+  // Realizadas children: dynamic by r2StatusName (only completed/contract_paid)
   const realizadasChildren = useMemo(() => {
     if (!rows) return [];
     const map = new Map<string, { count: number; color: string | null }>();
-    rows.filter(r => ['realizada', 'agendado', 'proxima_semana'].includes(r.situacao))
+    rows.filter(r => r.situacao === 'realizada')
+      .forEach(r => {
+        const key = r.r2StatusName || 'Sem status';
+        const existing = map.get(key) || { count: 0, color: r.r2StatusColor || null };
+        map.set(key, { count: existing.count + 1, color: existing.color });
+      });
+    return Array.from(map.entries()).sort((a, b) => b[1].count - a[1].count);
+  }, [rows]);
+
+  // Agendados children: dynamic by r2StatusName (invited/scheduled)
+  const agendadosChildren = useMemo(() => {
+    if (!rows) return [];
+    const map = new Map<string, { count: number; color: string | null }>();
+    rows.filter(r => ['agendado', 'proxima_semana'].includes(r.situacao))
       .forEach(r => {
         const key = r.r2StatusName || 'Sem status';
         const existing = map.get(key) || { count: 0, color: r.r2StatusColor || null };
@@ -164,7 +179,7 @@ export function R2ContractLifecyclePanel() {
 
       // Apply sub-filter
       if (activeSubFilter) {
-        if (expandedKpi === 'realizadas') {
+        if (expandedKpi === 'realizadas' || expandedKpi === 'agendados') {
           result = result.filter(r => (r.r2StatusName || 'Sem status') === activeSubFilter);
         } else if (expandedKpi === 'pendentes') {
           if (activeSubFilter === 'recentes') {
@@ -274,7 +289,7 @@ export function R2ContractLifecyclePanel() {
 
       {/* KPIs - Parent Row */}
       <div className="space-y-2">
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
           {/* Total Pagos */}
           <Card
             className={cn(
@@ -306,6 +321,26 @@ export function R2ContractLifecyclePanel() {
                 )} />
               </div>
               <p className="text-2xl font-bold text-emerald-400">{kpis.realizadas}</p>
+            </CardContent>
+          </Card>
+
+          {/* Agendados (expandable) */}
+          <Card
+            className={cn(
+              "bg-card border-border cursor-pointer transition-all hover:shadow-md",
+              isParentActive('agendados') && "ring-2 ring-blue-500/50"
+            )}
+            onClick={() => handleParentClick('agendados')}
+          >
+            <CardContent className="pt-4 pb-3 text-center">
+              <div className="flex items-center justify-center gap-1">
+                <p className="text-xs text-muted-foreground">Agendados</p>
+                <ChevronDown className={cn(
+                  "h-3 w-3 text-muted-foreground transition-transform",
+                  isParentActive('agendados') && "rotate-180"
+                )} />
+              </div>
+              <p className="text-2xl font-bold text-blue-400">{kpis.agendados}</p>
             </CardContent>
           </Card>
 
@@ -384,6 +419,35 @@ export function R2ContractLifecyclePanel() {
                 className={cn(
                   "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
                   activeSubFilter === statusName && "ring-2 ring-emerald-500/50 bg-emerald-500/5"
+                )}
+                onClick={() => handleSubClick(statusName)}
+              >
+                <CardContent className="py-2 px-3 text-center">
+                  <p className="text-[10px] text-muted-foreground truncate">{statusName}</p>
+                  <p
+                    className="text-lg font-bold"
+                    style={{ color: color || undefined }}
+                  >
+                    {count}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {/* Children Row - Agendados */}
+        <div className={cn(
+          "overflow-hidden transition-all duration-300 ease-in-out",
+          expandedKpi === 'agendados' ? "max-h-[200px] opacity-100" : "max-h-0 opacity-0"
+        )}>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 pt-1">
+            {agendadosChildren.map(([statusName, { count, color }]) => (
+              <Card
+                key={statusName}
+                className={cn(
+                  "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
+                  activeSubFilter === statusName && "ring-2 ring-blue-500/50 bg-blue-500/5"
                 )}
                 onClick={() => handleSubClick(statusName)}
               >
