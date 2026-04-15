@@ -1,25 +1,46 @@
 
 
-## Diagnóstico
+## Plano: Navegar pelo Carrinho (Sexta) e mostrar a Safra correspondente
 
-A função `classifySituacao` não trata o status `completed` do attendee R2. Quando o lead comparece à R2 e ela é marcada como "Realizada" (`status = 'completed'`), o código cai no caso default e classifica como "Pendente".
+### Contexto
+O relatório precisa ser organizado a partir do **carrinho** (sexta-feira), mostrando a safra (Qui-Qua) que alimenta aquele carrinho. O usuário seleciona o carrinho e vê os contratos da safra correspondente.
 
-Na screenshot, leads como Sarah Coelho Almeida e outros com R2 Status "Aprovado" e R2 realizada aparecem como "Pendente" quando deveriam mostrar "Realizada".
+### Lógica
+- O carrinho é na **sexta-feira** (dia do corte)
+- A safra que alimenta esse carrinho = **Qui anterior → Qua anterior** (a semana que termina na quarta antes da sexta do carrinho)
+- Exemplo: Carrinho sexta 11/04 → Safra Qui 03/04 a Qua 09/04
+- Usa `getCartWeekStart(fridayDate - 1 dia)` para encontrar a quinta, e `getCartWeekEnd(...)` para a quarta
 
-## Correção
+### Alterações
 
-**`src/hooks/useContractLifecycleReport.ts`** — adicionar caso para `completed` na função `classifySituacao`:
+**`src/components/crm/R2ContractLifecyclePanel.tsx`**
 
-Adicionar entre o check de "Desistente" (linha 74) e o check de "Agendado" (linha 76):
+1. **Remover** `DateRange`, `Calendar`, `Popover`, `startOfMonth`, `endOfMonth`
+2. **Adicionar** estado `weekDate` (Date) para navegação por semana
+3. **Importar** `getCartWeekStart`, `getCartWeekEnd` de `carrinhoWeekBoundaries` e `addDays`, `subDays`, `addWeeks`, `subWeeks`
+4. **Calcular**:
+   - `carrinhoFriday` = sexta do carrinho da semana selecionada
+   - `safraStart` = quinta (weekStart da semana anterior à sexta) via `getCartWeekStart`
+   - `safraEnd` = quarta (weekEnd) via `getCartWeekEnd`
+5. **Exibir** header: `"Carrinho Sex 11/04 — Safra: Qui 03/04 → Qua 09/04"` com botões `<` `>` `Hoje`
+6. **Passar** `safraStart`/`safraEnd` como `startDate`/`endDate` ao hook
 
-```ts
-// 4. Realizada
-if (r2AttendeeStatus === 'completed' || r2AttendeeStatus === 'contract_paid') {
-  return { situacao: 'realizada', label: '✅ Realizada' };
-}
+**`src/hooks/useContractLifecycleReport.ts`**
+
+1. Atualizar `getFridayCutoff` para aceitar `weekStart` como parâmetro:
+   - `fridayCutoff = weekStart + 1 dia (sexta) às 12:00`
+   - Isso garante que "Próxima Semana" funcione corretamente para semanas passadas
+2. Adicionar `weekStart?: Date` opcional em `ContractLifecycleFilters`
+
+### Seção técnica
+
+A derivação das datas:
+```text
+weekDate (qualquer dia) → getCartWeekStart(weekDate) = Quinta
+                        → getCartWeekEnd(weekDate) = Quarta
+carrinhoFriday = Quinta + 8 dias = Sexta seguinte (dia do carrinho)
+
+Filtro do hook: contract_paid_at entre Quinta 00:00 e Quarta 23:59
+Corte "Próxima Semana": carrinhoFriday às 12:00
 ```
-
-Atualizar o tipo `ContractSituacao` para incluir `'realizada'`.
-
-**`src/components/crm/R2ContractLifecyclePanel.tsx`** — adicionar cor para o badge "Realizada" (verde/emerald) e incluir no KPI de "Agendados" ou criar KPI separado.
 
