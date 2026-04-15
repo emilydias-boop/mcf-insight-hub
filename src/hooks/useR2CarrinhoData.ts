@@ -262,26 +262,28 @@ export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agen
           .select(`
             scheduled_at,
             closer:closers!meeting_slots_closer_id_fkey(name),
-            meeting_slot_attendees!inner(deal_id)
+            meeting_slot_attendees!inner(deal_id, contract_paid_at)
           `)
           .eq('meeting_type', 'r1')
           .in('meeting_slot_attendees.deal_id', dealIds);
 
-        const r1Map = new Map<string, { date: string; closer_name: string | null }>();
+        const r1Map = new Map<string, { date: string; closer_name: string | null; contract_paid_at: string | null }>();
         r1Meetings?.forEach(r1 => {
-          const r1Attendees = r1.meeting_slot_attendees as Array<{ deal_id: string | null }>;
+          const r1Attendees = r1.meeting_slot_attendees as Array<{ deal_id: string | null; contract_paid_at: string | null }>;
           const r1Closer = r1.closer as { name: string } | null;
           r1Attendees.forEach(rAtt => {
             if (rAtt.deal_id && !r1Map.has(rAtt.deal_id)) {
-              r1Map.set(rAtt.deal_id, { date: r1.scheduled_at, closer_name: r1Closer?.name || null });
+              r1Map.set(rAtt.deal_id, { date: r1.scheduled_at, closer_name: r1Closer?.name || null, contract_paid_at: rAtt.contract_paid_at || null });
             }
           });
         });
 
         for (const att of merged) {
           if (att.deal_id && r1Map.has(att.deal_id)) {
-            att.r1_date = r1Map.get(att.deal_id)!.date;
-            att.r1_closer_name = r1Map.get(att.deal_id)!.closer_name;
+            const r1Data = r1Map.get(att.deal_id)!;
+            att.r1_date = r1Data.date;
+            att.r1_closer_name = r1Data.closer_name;
+            att.contract_paid_at = att.contract_paid_at || r1Data.contract_paid_at;
           }
         }
       }
