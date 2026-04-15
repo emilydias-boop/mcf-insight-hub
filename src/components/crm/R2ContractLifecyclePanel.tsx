@@ -64,11 +64,19 @@ function formatPhone(phone: string | null) {
   return phone;
 }
 
+const KPI_FILTER_MAP: Record<string, ContractSituacao[]> = {
+  agendados: ['agendado', 'proxima_semana', 'pre_agendado', 'realizada'],
+  pendentes: ['pendente'],
+  noShow: ['no_show'],
+  reembolso: ['reembolso'],
+};
+
 export function R2ContractLifecyclePanel() {
   const [weekDate, setWeekDate] = useState<Date>(new Date());
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeKpiFilter, setActiveKpiFilter] = useState<string | null>(null);
 
   // Derive safra (Thu-Wed) from current weekDate
   const safraStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
@@ -86,27 +94,53 @@ export function R2ContractLifecyclePanel() {
 
   const filteredRows = useMemo(() => {
     if (!rows) return [];
-    if (!searchTerm.trim()) return rows;
-    const term = searchTerm.toLowerCase();
-    return rows.filter(r =>
-      (r.leadName || '').toLowerCase().includes(term) ||
-      (r.phone || '').includes(term) ||
-      (r.r1CloserName || '').toLowerCase().includes(term) ||
-      (r.r2CloserName || '').toLowerCase().includes(term)
-    );
-  }, [rows, searchTerm]);
+    let result = rows;
+    // Apply KPI filter
+    if (activeKpiFilter && KPI_FILTER_MAP[activeKpiFilter]) {
+      result = result.filter(r => KPI_FILTER_MAP[activeKpiFilter]!.includes(r.situacao));
+    }
+    // Apply search
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(r =>
+        (r.leadName || '').toLowerCase().includes(term) ||
+        (r.phone || '').includes(term) ||
+        (r.r1CloserName || '').toLowerCase().includes(term) ||
+        (r.r2CloserName || '').toLowerCase().includes(term)
+      );
+    }
+    return result;
+  }, [rows, searchTerm, activeKpiFilter]);
 
-  // KPIs
+  // KPIs with sub-counters
   const kpis = useMemo(() => {
-    if (!rows) return { total: 0, agendados: 0, pendentes: 0, noShow: 0, reembolso: 0 };
+    if (!rows) return {
+      total: 0, agendados: 0, pendentes: 0, noShow: 0, reembolso: 0,
+      agendadosSub: { aprovados: 0, preAgendados: 0, proximaSemana: 0, realizadas: 0 },
+      pendentesSub: { recentes: 0, antigos: 0 },
+    };
     return {
       total: rows.length,
       agendados: rows.filter(r => ['agendado', 'proxima_semana', 'pre_agendado', 'realizada'].includes(r.situacao)).length,
       pendentes: rows.filter(r => r.situacao === 'pendente').length,
       noShow: rows.filter(r => r.situacao === 'no_show').length,
       reembolso: rows.filter(r => r.situacao === 'reembolso').length,
+      agendadosSub: {
+        aprovados: rows.filter(r => r.situacao === 'agendado').length,
+        preAgendados: rows.filter(r => r.situacao === 'pre_agendado').length,
+        proximaSemana: rows.filter(r => r.situacao === 'proxima_semana').length,
+        realizadas: rows.filter(r => r.situacao === 'realizada').length,
+      },
+      pendentesSub: {
+        recentes: rows.filter(r => r.situacao === 'pendente' && (r.diasParado ?? 0) <= 3).length,
+        antigos: rows.filter(r => r.situacao === 'pendente' && (r.diasParado ?? 0) > 3).length,
+      },
     };
   }, [rows]);
+
+  const toggleKpiFilter = (key: string) => {
+    setActiveKpiFilter(prev => prev === key ? null : key);
+  };
 
   const handleRowClick = (row: ContractLifecycleRow) => {
     if (row.dealId) {
@@ -190,33 +224,77 @@ export function R2ContractLifecyclePanel() {
         </CardContent>
       </Card>
 
-      {/* KPIs */}
+      {/* KPIs - Clickable */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Card className="bg-card border-border">
+        <Card
+          className={cn(
+            "bg-card border-border cursor-pointer transition-all hover:shadow-md",
+            activeKpiFilter === null && "ring-2 ring-primary/50"
+          )}
+          onClick={() => setActiveKpiFilter(null)}
+        >
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-xs text-muted-foreground">Total Pagos</p>
             <p className="text-2xl font-bold text-foreground">{kpis.total}</p>
           </CardContent>
         </Card>
-        <Card className="bg-card border-border">
+
+        <Card
+          className={cn(
+            "bg-card border-border cursor-pointer transition-all hover:shadow-md",
+            activeKpiFilter === 'agendados' && "ring-2 ring-emerald-500/50"
+          )}
+          onClick={() => toggleKpiFilter('agendados')}
+        >
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-xs text-muted-foreground">Agendados</p>
             <p className="text-2xl font-bold text-emerald-400">{kpis.agendados}</p>
+            <div className="flex flex-wrap justify-center gap-x-2 gap-y-0.5 mt-1">
+              <span className="text-[10px] text-blue-400">Aprov {kpis.agendadosSub.aprovados}</span>
+              <span className="text-[10px] text-purple-400">Pré {kpis.agendadosSub.preAgendados}</span>
+              <span className="text-[10px] text-green-400">Próx {kpis.agendadosSub.proximaSemana}</span>
+              <span className="text-[10px] text-emerald-400">Real {kpis.agendadosSub.realizadas}</span>
+            </div>
           </CardContent>
         </Card>
-        <Card className="bg-card border-border">
+
+        <Card
+          className={cn(
+            "bg-card border-border cursor-pointer transition-all hover:shadow-md",
+            activeKpiFilter === 'pendentes' && "ring-2 ring-amber-500/50"
+          )}
+          onClick={() => toggleKpiFilter('pendentes')}
+        >
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-xs text-muted-foreground">Pendentes</p>
             <p className="text-2xl font-bold text-amber-400">{kpis.pendentes}</p>
+            <div className="flex justify-center gap-x-2 mt-1">
+              <span className="text-[10px] text-amber-300">Recentes {kpis.pendentesSub.recentes}</span>
+              <span className="text-[10px] text-amber-600">Antigos {kpis.pendentesSub.antigos}</span>
+            </div>
           </CardContent>
         </Card>
-        <Card className="bg-card border-border">
+
+        <Card
+          className={cn(
+            "bg-card border-border cursor-pointer transition-all hover:shadow-md",
+            activeKpiFilter === 'noShow' && "ring-2 ring-red-500/50"
+          )}
+          onClick={() => toggleKpiFilter('noShow')}
+        >
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-xs text-muted-foreground">No-show</p>
             <p className="text-2xl font-bold text-red-400">{kpis.noShow}</p>
           </CardContent>
         </Card>
-        <Card className="bg-card border-border">
+
+        <Card
+          className={cn(
+            "bg-card border-border cursor-pointer transition-all hover:shadow-md",
+            activeKpiFilter === 'reembolso' && "ring-2 ring-red-400/50"
+          )}
+          onClick={() => toggleKpiFilter('reembolso')}
+        >
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-xs text-muted-foreground">Reembolso</p>
             <p className="text-2xl font-bold text-red-300">{kpis.reembolso}</p>
