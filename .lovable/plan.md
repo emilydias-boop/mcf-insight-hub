@@ -1,23 +1,18 @@
 
 
-## Plano: Permitir SDRs lerem datas liberadas da agenda
+## Plano: Adicionar coluna "Dia Compra" na tabela do Carrinho R2
 
-### Problema
-A tabela `automation_settings` tem RLS restrita a admins. SDRs não conseguem ler `agenda_released_dates_*`, então o calendário de agendamento não mostra as datas liberadas (como quinta-feira).
+### O que será feito
+Adicionar uma coluna **"Dia Compra"** na tabela da aba "Todas R2s" do Carrinho R2, mostrando a data em que o contrato foi pago (`contract_paid_at`), que já está disponível nos dados carregados.
 
-### Correção
-Criar uma migration com uma nova policy SELECT na `automation_settings` para usuários autenticados lerem apenas registros de datas liberadas:
+### Arquivo alterado
 
-```sql
-CREATE POLICY "Authenticated users can read released dates"
-ON public.automation_settings
-FOR SELECT
-TO authenticated
-USING (key LIKE 'agenda_released_dates_%');
-```
+**`src/components/crm/R2AgendadasList.tsx`**
+- Adicionar `<TableHead>` "Dia Compra" entre "Dia R1" e "Status"
+- Adicionar `<TableCell>` formatando `att.contract_paid_at` como `dd/MM` (ou `-` quando não houver)
 
-### Resultado
-- SDRs verão apenas hoje, amanhã e as datas explicitamente liberadas
-- Se você liberar apenas hoje e amanhã, eles verão somente esses dois dias
-- A restrição de escrita (apenas admins) permanece inalterada
+### Detalhes técnicos
+- O campo `contract_paid_at` já existe na interface `R2CarrinhoAttendee` e é retornado pelo hook `useR2CarrinhoData`
+- Nenhuma query ou fetch adicional necessário
+- Formato: `dd/MM` consistente com a coluna "Dia R1" existente
 
