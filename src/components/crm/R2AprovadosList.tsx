@@ -59,7 +59,7 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
   const meetingDates = useMemo(() => {
     const uniqueDates = new Set<string>();
     attendees.forEach(att => {
-      const dateStr = format(new Date(att.scheduled_at), 'yyyy-MM-dd');
+      const dateStr = format(new Date(att.display_scheduled_at), 'yyyy-MM-dd');
       uniqueDates.add(dateStr);
     });
     return Array.from(uniqueDates).sort();
@@ -121,7 +121,7 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
         
         // Date filter
         if (dateFilter !== 'all') {
-          const attDate = format(new Date(att.scheduled_at), 'yyyy-MM-dd');
+          const attDate = format(new Date(att.display_scheduled_at), 'yyyy-MM-dd');
           if (attDate !== dateFilter) {
             return false;
           }
@@ -418,7 +418,7 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
                     </div>
                   </TableCell>
                   <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                    {format(new Date(att.scheduled_at), 'dd/MM', { locale: ptBR })}
+                    {format(new Date(att.display_scheduled_at), 'dd/MM', { locale: ptBR })}
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">

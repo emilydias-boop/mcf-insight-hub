@@ -122,7 +122,7 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
   const meetingDates = useMemo(() => {
     const uniqueDates = new Set<string>();
     attendees.forEach(att => {
-      const dateStr = format(new Date(att.scheduled_at), 'yyyy-MM-dd');
+      const dateStr = format(new Date(att.display_scheduled_at), 'yyyy-MM-dd');
       uniqueDates.add(dateStr);
     });
     return Array.from(uniqueDates).sort();
@@ -178,7 +178,7 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
       
       // Date filter
       if (dateFilter !== 'all') {
-        const attDate = format(new Date(att.scheduled_at), 'yyyy-MM-dd');
+        const attDate = format(new Date(att.display_scheduled_at), 'yyyy-MM-dd');
         if (attDate !== dateFilter) {
           return false;
         }
@@ -289,7 +289,7 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
 
   // Group filtered attendees by day
   const byDay = filteredAttendees.reduce((acc, att) => {
-    const day = format(new Date(att.scheduled_at), 'yyyy-MM-dd');
+    const day = format(new Date(att.display_scheduled_at), 'yyyy-MM-dd');
     if (!acc[day]) acc[day] = [];
     acc[day].push(att);
     return acc;
@@ -423,7 +423,7 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
             const dayAttendees = byDay[day];
             // Sort by time within the day
             const sortedAttendees = [...dayAttendees].sort((a, b) => 
-              new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+              new Date(a.display_scheduled_at).getTime() - new Date(b.display_scheduled_at).getTime()
             );
 
             return (
@@ -456,7 +456,7 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
                           onClick={() => onSelectAttendee?.(att)}
                         >
                           <TableCell className="font-mono font-medium text-primary">
-                            {format(new Date(att.scheduled_at), 'HH:mm')}
+                            {format(new Date(att.display_scheduled_at), 'HH:mm')}
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-col">
