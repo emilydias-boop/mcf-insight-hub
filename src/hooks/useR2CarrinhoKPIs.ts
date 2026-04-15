@@ -103,6 +103,9 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       }
       for (const att of r2AttendeesResult.data || []) {
         const key = (att as any).deal_id || att.id;
+        const attWeekStart = (att as any).carrinho_week_start;
+        // Skip if assigned to a different week (align with useR2CarrinhoData)
+        if (attWeekStart && attWeekStart !== weekStartStr) continue;
         if (!r2LeadKeys.has(key) && !r2AttendeeIds.has(att.id)) {
           r2LeadKeys.set(key, att);
           r2AttendeeIds.add(att.id);
