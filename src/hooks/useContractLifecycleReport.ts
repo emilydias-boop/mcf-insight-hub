@@ -175,11 +175,176 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       }
       const incorporadorOriginIds = new Set(allBUOriginIds);
 
-      const filteredR1Attendees = (r1Attendees || []).filter((a: any) => {
+      let filteredR1Attendees = (r1Attendees || []).filter((a: any) => {
         const originId = a.deal?.origin_id;
         if (!originId) return true;
         return incorporadorOriginIds.has(originId);
       });
+
+      // Step 1c — Leads com R2 Aprovado na janela do carrinho (fora da safra)
+      // Step 1d — Leads encaixados via carrinho_week_start
+      if (filters.weekStart) {
+        const weekStart = filters.weekStart;
+        const weekEnd = addDays(weekStart, 6); // Qui + 6 = Qua
+
+        // Fetch aprovado status ID
+        const { data: statusOptions } = await supabase
+          .from('r2_status_options')
+          .select('id, name')
+          .eq('is_active', true);
+        const aprovadoId = statusOptions?.find((s: any) =>
+          s.name.toLowerCase().includes('aprovado')
+        )?.id;
+
+        // Carrinho metric boundaries (Friday-to-Friday window)
+        const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd);
+        const r2WindowStart = boundaries.aprovados.start;
+        const r2WindowEnd = boundaries.aprovados.end;
+
+        // Carrinho week start string for encaixados
+        const cartWeekStart = getCartWeekStart(weekStart);
+        const cartWeekStartStr = format(cartWeekStart, 'yyyy-MM-dd');
+
+        // Collect deal_ids already captured
+        const existingDealIds = new Set(
+          filteredR1Attendees.map((a: any) => a.deal_id).filter(Boolean)
+        );
+
+        // --- Step 1c: R2 Aprovado in window ---
+        let extraDealIdsFromR2: string[] = [];
+        if (aprovadoId) {
+          const { data: r2AprovadoData } = await supabase
+            .from('meeting_slot_attendees')
+            .select(`
+              deal_id,
+              meeting_slot:meeting_slots!inner(
+                scheduled_at,
+                meeting_type
+              )
+            `)
+            .eq('meeting_slot.meeting_type', 'r2')
+            .eq('r2_status_id', aprovadoId)
+            .neq('status', 'cancelled')
+            .gte('meeting_slot.scheduled_at', r2WindowStart.toISOString())
+            .lte('meeting_slot.scheduled_at', r2WindowEnd.toISOString());
+
+          if (r2AprovadoData) {
+            for (const r2 of r2AprovadoData as any[]) {
+              if (r2.deal_id && !existingDealIds.has(r2.deal_id)) {
+                extraDealIdsFromR2.push(r2.deal_id);
+                existingDealIds.add(r2.deal_id);
+              }
+            }
+          }
+        }
+
+        // --- Step 1d: Encaixados (carrinho_week_start) ---
+        let extraDealIdsFromEncaixados: string[] = [];
+        {
+          const { data: encaixadosData } = await supabase
+            .from('meeting_slot_attendees')
+            .select(`
+              deal_id,
+              meeting_slot:meeting_slots!inner(
+                meeting_type
+              )
+            `)
+            .eq('meeting_slot.meeting_type', 'r2')
+            .eq('carrinho_week_start', cartWeekStartStr)
+            .neq('status', 'cancelled');
+
+          if (encaixadosData) {
+            for (const enc of encaixadosData as any[]) {
+              if (enc.deal_id && !existingDealIds.has(enc.deal_id)) {
+                extraDealIdsFromEncaixados.push(enc.deal_id);
+                existingDealIds.add(enc.deal_id);
+              }
+            }
+          }
+        }
+
+        // --- Fetch R1 attendees for the extra deal_ids ---
+        const allExtraDealIds = [...extraDealIdsFromR2, ...extraDealIdsFromEncaixados];
+        if (allExtraDealIds.length > 0) {
+          const foundR1DealIds = new Set<string>();
+
+          // First try to find R1 attendees by deal_id
+          for (let i = 0; i < allExtraDealIds.length; i += 200) {
+            const chunk = allExtraDealIds.slice(i, i + 200);
+            const { data: extraR1 } = await supabase
+              .from('meeting_slot_attendees')
+              .select(`
+                id,
+                attendee_name,
+                attendee_phone,
+                contract_paid_at,
+                deal_id,
+                status,
+                is_partner,
+                meeting_slot:meeting_slots!inner(
+                  id,
+                  scheduled_at,
+                  meeting_type,
+                  booked_by,
+                  closer:closers!meeting_slots_closer_id_fkey(id, name)
+                ),
+                deal:crm_deals(
+                  id,
+                  name,
+                  contact_id,
+                  origin_id,
+                  contact:crm_contacts(name, phone, email)
+                )
+              `)
+              .eq('meeting_slot.meeting_type', 'r1')
+              .in('deal_id', chunk)
+              .neq('status', 'cancelled')
+              .eq('is_partner', false);
+
+            if (extraR1 && extraR1.length > 0) {
+              const validExtra = (extraR1 as any[]).filter((a: any) => {
+                const originId = a.deal?.origin_id;
+                if (!originId) return true;
+                return incorporadorOriginIds.has(originId);
+              });
+              filteredR1Attendees = [...filteredR1Attendees, ...validExtra];
+              for (const a of validExtra) {
+                if (a.deal_id) foundR1DealIds.add(a.deal_id);
+              }
+            }
+          }
+
+          // For remaining extra deal_ids (no R1 found), create synthetic rows
+          const remainingDealIds = allExtraDealIds.filter(d => !foundR1DealIds.has(d));
+          if (remainingDealIds.length > 0) {
+            for (let i = 0; i < remainingDealIds.length; i += 200) {
+              const chunk = remainingDealIds.slice(i, i + 200);
+              const { data: dealInfo } = await supabase
+                .from('crm_deals')
+                .select('id, name, contact_id, origin_id, contact:crm_contacts(name, phone, email)')
+                .in('id', chunk);
+
+              if (dealInfo) {
+                for (const deal of dealInfo as any[]) {
+                  const originId = deal.origin_id;
+                  if (originId && !incorporadorOriginIds.has(originId)) continue;
+                  filteredR1Attendees.push({
+                    id: `synthetic-${deal.id}`,
+                    attendee_name: deal.contact?.name || deal.name || null,
+                    attendee_phone: deal.contact?.phone || null,
+                    contract_paid_at: null,
+                    deal_id: deal.id,
+                    status: 'outside',
+                    is_partner: false,
+                    meeting_slot: null,
+                    deal: deal,
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
 
       // Step 2: Collect booked_by UUIDs and resolve SDR names
       const bookedByIds = [...new Set(
