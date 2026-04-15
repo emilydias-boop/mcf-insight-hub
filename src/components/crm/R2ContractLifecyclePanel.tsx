@@ -289,7 +289,7 @@ export function R2ContractLifecyclePanel() {
 
       {/* KPIs - Parent Row */}
       <div className="space-y-2">
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
           {/* Total Pagos */}
           <Card
             className={cn(
@@ -399,6 +399,35 @@ export function R2ContractLifecyclePanel() {
                 className={cn(
                   "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
                   activeSubFilter === statusName && "ring-2 ring-emerald-500/50 bg-emerald-500/5"
+                )}
+                onClick={() => handleSubClick(statusName)}
+              >
+                <CardContent className="py-2 px-3 text-center">
+                  <p className="text-[10px] text-muted-foreground truncate">{statusName}</p>
+                  <p
+                    className="text-lg font-bold"
+                    style={{ color: color || undefined }}
+                  >
+                    {count}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {/* Children Row - Agendados */}
+        <div className={cn(
+          "overflow-hidden transition-all duration-300 ease-in-out",
+          expandedKpi === 'agendados' ? "max-h-[200px] opacity-100" : "max-h-0 opacity-0"
+        )}>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 pt-1">
+            {agendadosChildren.map(([statusName, { count, color }]) => (
+              <Card
+                key={statusName}
+                className={cn(
+                  "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
+                  activeSubFilter === statusName && "ring-2 ring-blue-500/50 bg-blue-500/5"
                 )}
                 onClick={() => handleSubClick(statusName)}
               >
