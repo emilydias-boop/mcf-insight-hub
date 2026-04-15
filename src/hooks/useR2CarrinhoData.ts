@@ -221,6 +221,7 @@ async function fetchEncaixadosForWeek(
       r1_date: null,
       r1_closer_name: null,
       contract_paid_at: (att as any).contract_paid_at,
+      is_encaixado: true,
     });
   }
   return attendees;
