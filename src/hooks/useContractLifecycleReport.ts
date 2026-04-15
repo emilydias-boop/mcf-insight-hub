@@ -10,7 +10,7 @@ export interface ContractLifecycleFilters {
   situacao?: string;
 }
 
-export type ContractSituacao = 'reembolso' | 'no_show' | 'desistente' | 'proxima_semana' | 'agendado' | 'pre_agendado' | 'pendente';
+export type ContractSituacao = 'reembolso' | 'no_show' | 'desistente' | 'realizada' | 'proxima_semana' | 'agendado' | 'pre_agendado' | 'pendente';
 
 export interface ContractLifecycleRow {
   id: string;
@@ -73,7 +73,12 @@ function classifySituacao(
     return { situacao: 'desistente', label: '🚫 Desistente' };
   }
 
-  // 4 & 5. Agendado / Próxima Semana
+  // 4. Realizada
+  if (r2AttendeeStatus === 'completed' || r2AttendeeStatus === 'contract_paid') {
+    return { situacao: 'realizada', label: '✅ Realizada' };
+  }
+
+  // 5 & 6. Agendado / Próxima Semana
   if (r2AttendeeStatus === 'invited' || r2AttendeeStatus === 'scheduled') {
     if (r2Date) {
       const r2DateTime = new Date(r2Date);
