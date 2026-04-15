@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { CalendarIcon, Download, Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useContractLifecycleReport, useR1ClosersForReport, ContractLifecycleRow } from "@/hooks/useContractLifecycleReport";
+import { useContractLifecycleReport, ContractLifecycleRow } from "@/hooks/useContractLifecycleReport";
+import { DealDetailsDrawer } from "./DealDetailsDrawer";
 
 const SITUACAO_OPTIONS = [
   { value: 'all', label: 'Todas' },
@@ -70,14 +71,32 @@ function R2StatusBadge({ name, color }: { name: string | null; color: string | n
 
 function AttendanceStatusLabel({ status }: { status: string | null }) {
   if (!status) return <span className="text-muted-foreground text-xs">—</span>;
-  const labels: Record<string, string> = {
-    invited: 'Agendado',
-    scheduled: 'Agendado',
-    completed: 'Compareceu',
-    no_show: 'No-show',
-    contract_paid: 'Contrato Pago',
+  const labels: Record<string, { text: string; className: string }> = {
+    invited: { text: 'Agendado', className: 'text-blue-400' },
+    scheduled: { text: 'Agendado', className: 'text-blue-400' },
+    completed: { text: 'Compareceu', className: 'text-emerald-400' },
+    no_show: { text: 'No-show', className: 'text-red-400' },
+    contract_paid: { text: 'Contrato Pago', className: 'text-emerald-400' },
   };
-  return <span className="text-xs">{labels[status] || status}</span>;
+  const info = labels[status] || { text: status, className: '' };
+  return <span className={cn("text-xs font-medium", info.className)}>{info.text}</span>;
+}
+
+function DiasParadoBadge({ dias }: { dias: number | null }) {
+  if (dias === null || dias === undefined) return <span className="text-muted-foreground text-xs">—</span>;
+  let className = 'text-muted-foreground';
+  if (dias > 10) className = 'text-red-400 font-bold';
+  else if (dias > 5) className = 'text-amber-400 font-semibold';
+  else if (dias > 2) className = 'text-yellow-400';
+  return <span className={cn("text-xs", className)}>{dias}d</span>;
+}
+
+function formatPhone(phone: string | null) {
+  if (!phone) return '—';
+  const clean = phone.replace(/\D/g, '');
+  if (clean.length === 13) return `+${clean.slice(0,2)} (${clean.slice(2,4)}) ${clean.slice(4,9)}-${clean.slice(9)}`;
+  if (clean.length === 11) return `(${clean.slice(0,2)}) ${clean.slice(2,7)}-${clean.slice(7)}`;
+  return phone;
 }
 
 export function R2ContractLifecyclePanel() {
@@ -87,6 +106,8 @@ export function R2ContractLifecyclePanel() {
   });
   const [situacaoFilter, setSituacaoFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const filters = useMemo(() => ({
     startDate: dateRange?.from || startOfMonth(new Date()),
@@ -104,35 +125,48 @@ export function R2ContractLifecyclePanel() {
       (r.leadName || '').toLowerCase().includes(term) ||
       (r.phone || '').includes(term) ||
       (r.r1CloserName || '').toLowerCase().includes(term) ||
-      (r.r2CloserName || '').toLowerCase().includes(term)
+      (r.r2CloserName || '').toLowerCase().includes(term) ||
+      (r.sdrName || '').toLowerCase().includes(term)
     );
   }, [rows, searchTerm]);
 
   // KPIs
   const kpis = useMemo(() => {
-    if (!rows) return { total: 0, comR2: 0, semR2: 0, comStatus: 0, semStatus: 0 };
+    if (!rows) return { total: 0, comR2: 0, semR2: 0, comStatus: 0, semStatus: 0, paradosMais5d: 0 };
     const total = rows.length;
     const comR2 = rows.filter(r => r.hasR2).length;
     const semR2 = rows.filter(r => !r.hasR2).length;
     const comStatus = rows.filter(r => r.r2StatusName).length;
     const semStatus = rows.filter(r => r.hasR2 && !r.r2StatusName).length;
-    return { total, comR2, semR2, comStatus, semStatus };
+    const paradosMais5d = rows.filter(r => r.diasParado !== null && r.diasParado > 5 && r.situacao !== 'completo').length;
+    return { total, comR2, semR2, comStatus, semStatus, paradosMais5d };
   }, [rows]);
+
+  const handleRowClick = (row: ContractLifecycleRow) => {
+    if (row.dealId) {
+      setSelectedDealId(row.dealId);
+      setDrawerOpen(true);
+    }
+  };
 
   const handleExportCSV = () => {
     if (!filteredRows.length) return;
-    const headers = ['Lead', 'Contrato Pago', 'Closer R1', 'R1 Data', 'R1 Status', 'R2 Data', 'Closer R2', 'R2 Status', 'Carrinho', 'Safra', 'Situação'];
+    const headers = ['Lead', 'Telefone', 'SDR', 'Contrato Pago', 'Closer R1', 'R1 Data', 'R1 Status', 'R2 Data', 'Closer R2', 'Presença R2', 'R2 Status', 'Carrinho', 'Safra', 'Dias Parado', 'Situação'];
     const csvRows = filteredRows.map(r => [
       r.leadName || '',
+      r.phone || '',
+      r.sdrName || '',
       formatDate(r.contractPaidAt),
       r.r1CloserName || '',
       formatDate(r.r1Date),
       r.r1Status || '',
       formatDate(r.r2Date),
       r.r2CloserName || '',
+      r.r2AttendeeStatus || '',
       r.r2StatusName || '',
       r.carrinhoStatus || '',
       formatWeek(r.carrinhoWeekStart),
+      r.diasParado !== null ? `${r.diasParado}d` : '',
       r.situacaoLabel,
     ]);
     const csv = [headers, ...csvRows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
@@ -192,7 +226,7 @@ export function R2ContractLifecyclePanel() {
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar lead, telefone, closer..."
+                placeholder="Buscar lead, telefone, closer, SDR..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 className="pl-9"
@@ -208,7 +242,7 @@ export function R2ContractLifecyclePanel() {
       </Card>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <Card className="bg-card border-border">
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-xs text-muted-foreground">Total Pagos</p>
@@ -239,6 +273,12 @@ export function R2ContractLifecyclePanel() {
             <p className="text-2xl font-bold text-orange-400">{kpis.semStatus}</p>
           </CardContent>
         </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="pt-4 pb-3 text-center">
+            <p className="text-xs text-muted-foreground">Parados &gt;5d</p>
+            <p className="text-2xl font-bold text-red-400">{kpis.paradosMais5d}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Table */}
@@ -258,24 +298,36 @@ export function R2ContractLifecyclePanel() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="whitespace-nowrap">Lead</TableHead>
+                    <TableHead className="whitespace-nowrap">Telefone</TableHead>
+                    <TableHead className="whitespace-nowrap">SDR</TableHead>
                     <TableHead className="whitespace-nowrap">Contrato Pago</TableHead>
                     <TableHead className="whitespace-nowrap">Closer R1</TableHead>
                     <TableHead className="whitespace-nowrap">R1 Data</TableHead>
                     <TableHead className="whitespace-nowrap">R1 Status</TableHead>
                     <TableHead className="whitespace-nowrap">R2 Data</TableHead>
                     <TableHead className="whitespace-nowrap">Closer R2</TableHead>
+                    <TableHead className="whitespace-nowrap">Presença R2</TableHead>
                     <TableHead className="whitespace-nowrap">R2 Status</TableHead>
                     <TableHead className="whitespace-nowrap">Carrinho</TableHead>
                     <TableHead className="whitespace-nowrap">Safra</TableHead>
+                    <TableHead className="whitespace-nowrap">Dias</TableHead>
                     <TableHead className="whitespace-nowrap">Situação</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredRows.map(row => (
-                    <TableRow key={row.id}>
-                      <TableCell className="font-medium whitespace-nowrap max-w-[200px] truncate">
+                    <TableRow
+                      key={row.id}
+                      onClick={() => handleRowClick(row)}
+                      className={cn(row.dealId ? "cursor-pointer hover:bg-muted/70" : "")}
+                    >
+                      <TableCell className="font-medium whitespace-nowrap max-w-[180px] truncate">
                         {row.leadName || '—'}
                       </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                        {formatPhone(row.phone)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">{row.sdrName || '—'}</TableCell>
                       <TableCell className="whitespace-nowrap text-xs">{formatDate(row.contractPaidAt)}</TableCell>
                       <TableCell className="whitespace-nowrap text-xs">{row.r1CloserName || '—'}</TableCell>
                       <TableCell className="whitespace-nowrap text-xs">{formatDate(row.r1Date)}</TableCell>
@@ -284,9 +336,11 @@ export function R2ContractLifecyclePanel() {
                         {row.hasR2 ? formatDate(row.r2Date) : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-xs">{row.r2CloserName || '—'}</TableCell>
+                      <TableCell><AttendanceStatusLabel status={row.r2AttendeeStatus} /></TableCell>
                       <TableCell><R2StatusBadge name={row.r2StatusName} color={row.r2StatusColor} /></TableCell>
                       <TableCell className="text-xs">{row.carrinhoStatus || '—'}</TableCell>
                       <TableCell className="whitespace-nowrap text-xs">{formatWeek(row.carrinhoWeekStart)}</TableCell>
+                      <TableCell><DiasParadoBadge dias={row.diasParado} /></TableCell>
                       <TableCell><SituacaoBadge row={row} /></TableCell>
                     </TableRow>
                   ))}
@@ -296,6 +350,16 @@ export function R2ContractLifecyclePanel() {
           )}
         </CardContent>
       </Card>
+
+      {/* Deal Details Drawer */}
+      <DealDetailsDrawer
+        dealId={selectedDealId}
+        open={drawerOpen}
+        onOpenChange={(open) => {
+          setDrawerOpen(open);
+          if (!open) setSelectedDealId(null);
+        }}
+      />
     </div>
   );
 }

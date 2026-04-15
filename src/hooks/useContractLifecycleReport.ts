@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { startOfDay, endOfDay } from 'date-fns';
+import { startOfDay, endOfDay, differenceInDays } from 'date-fns';
 
 export interface ContractLifecycleFilters {
   startDate: Date;
@@ -18,13 +18,16 @@ export interface ContractLifecycleRow {
   r1Date: string | null;
   r1CloserName: string | null;
   r1Status: string | null;
+  sdrName: string | null;
   hasR2: boolean;
   r2Date: string | null;
   r2CloserName: string | null;
   r2StatusName: string | null;
   r2StatusColor: string | null;
+  r2AttendeeStatus: string | null;
   carrinhoStatus: string | null;
   carrinhoWeekStart: string | null;
+  diasParado: number | null;
   situacao: 'completo' | 'aguardando_r2' | 'sem_status' | 'pendente' | 'parado';
   situacaoLabel: string;
 }
@@ -49,6 +52,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
             id,
             scheduled_at,
             meeting_type,
+            booked_by,
             closer:closers!meeting_slots_closer_id_fkey(id, name)
           ),
           deal:crm_deals(
@@ -66,18 +70,39 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
       if (r1Error) throw r1Error;
 
-      // Step 2: Collect deal_ids to fetch R2 info
+      // Step 2: Collect booked_by UUIDs and resolve SDR names
+      const bookedByIds = [...new Set(
+        (r1Attendees || [])
+          .map((a: any) => a.meeting_slot?.booked_by)
+          .filter(Boolean) as string[]
+      )];
+
+      let profilesMap: Record<string, string> = {};
+      if (bookedByIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', bookedByIds);
+        if (profiles) {
+          for (const p of profiles) {
+            if (p.id && p.full_name) profilesMap[p.id] = p.full_name;
+          }
+        }
+      }
+
+      // Step 3: Collect deal_ids to fetch R2 info
       const dealIds = (r1Attendees || [])
         .map((a: any) => a.deal_id)
         .filter(Boolean) as string[];
 
-      // Step 3: Fetch R2 attendees for those deals
+      // Step 4: Fetch R2 attendees for those deals
       let r2Map: Record<string, {
         r2Date: string | null;
         r2CloserName: string | null;
         r2StatusName: string | null;
         r2StatusColor: string | null;
         r2StatusId: string | null;
+        r2AttendeeStatus: string | null;
         carrinhoStatus: string | null;
         carrinhoWeekStart: string | null;
       }> = {};
@@ -107,7 +132,6 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           for (const r2 of r2Data as any[]) {
             const ms = r2.meeting_slot;
             if (r2.deal_id && ms) {
-              // If multiple R2s exist for same deal, keep latest
               const existing = r2Map[r2.deal_id];
               const newDate = ms.scheduled_at;
               if (!existing || (newDate && (!existing.r2Date || newDate > existing.r2Date))) {
@@ -117,6 +141,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
                   r2StatusName: r2.r2_status?.name || null,
                   r2StatusColor: r2.r2_status?.color || null,
                   r2StatusId: r2.r2_status_id,
+                  r2AttendeeStatus: r2.status,
                   carrinhoStatus: r2.carrinho_status,
                   carrinhoWeekStart: r2.carrinho_week_start,
                 };
@@ -126,7 +151,9 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         }
       }
 
-      // Step 4: Transform R1 attendees into rows with R2 enrichment
+      const now = new Date();
+
+      // Step 5: Transform into rows
       const rows: ContractLifecycleRow[] = (r1Attendees || []).map((att: any) => {
         const ms = att.meeting_slot;
         const deal = att.deal;
@@ -151,6 +178,16 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           situacaoLabel = '⚠️ Sem Status';
         }
 
+        // Calculate dias parado for non-terminal
+        let diasParado: number | null = null;
+        if (!isTerminal && att.contract_paid_at) {
+          diasParado = differenceInDays(now, new Date(att.contract_paid_at));
+        }
+
+        // Resolve SDR name
+        const bookedBy = ms?.booked_by;
+        const sdrName = bookedBy ? (profilesMap[bookedBy] || null) : null;
+
         return {
           id: att.id,
           leadName: att.attendee_name || deal?.contact?.name || deal?.name || null,
@@ -160,13 +197,16 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           r1Date: ms?.scheduled_at || null,
           r1CloserName: ms?.closer?.name || null,
           r1Status: att.status,
+          sdrName,
           hasR2,
           r2Date: r2Info?.r2Date || null,
           r2CloserName: r2Info?.r2CloserName || null,
           r2StatusName,
           r2StatusColor: r2Info?.r2StatusColor || null,
+          r2AttendeeStatus: r2Info?.r2AttendeeStatus || null,
           carrinhoStatus: r2Info?.carrinhoStatus || null,
           carrinhoWeekStart: r2Info?.carrinhoWeekStart || null,
+          diasParado,
           situacao,
           situacaoLabel,
         };
