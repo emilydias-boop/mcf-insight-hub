@@ -255,15 +255,28 @@ export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agen
         fetchEncaixadosForWeek(weekStartStr, statusMap, filter, aprovadoStatusId),
       ]);
 
-      // Merge, avoiding duplicates by id
-      const idSet = new Set(regularAttendees.map(a => a.id));
-      const merged = [...regularAttendees];
+      // Merge, deduplicating by lead (contact_id > deal_id > id)
+      // When same lead appears in both lists, prefer the encaixado version
+      const leadKeyMap = new Map<string, R2CarrinhoAttendee>();
+      const idSet = new Set<string>();
+
+      // First pass: encaixados take priority
       for (const enc of encaixados) {
-        if (!idSet.has(enc.id)) {
-          merged.push(enc);
-          idSet.add(enc.id);
+        const key = enc.deal_id || enc.id;
+        leadKeyMap.set(key, enc);
+        idSet.add(enc.id);
+      }
+
+      // Second pass: regular attendees (only if lead not already from encaixados)
+      for (const att of regularAttendees) {
+        const key = att.deal_id || att.id;
+        if (!leadKeyMap.has(key) && !idSet.has(att.id)) {
+          leadKeyMap.set(key, att);
+          idSet.add(att.id);
         }
       }
+
+      const merged = Array.from(leadKeyMap.values());
 
       // Fetch R1 data
       const dealIds = [...new Set(merged.map(a => a.deal_id).filter(Boolean) as string[])];

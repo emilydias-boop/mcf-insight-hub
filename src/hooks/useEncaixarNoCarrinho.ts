@@ -24,6 +24,24 @@ export function useEncaixarNoCarrinho() {
         s.name.toLowerCase().includes('aprovado')
       )?.id;
 
+      // Get contact_id of this attendee to clear old overrides
+      const { data: currentAtt } = await supabase
+        .from('meeting_slot_attendees')
+        .select('contact_id, deal_id')
+        .eq('id', attendeeId)
+        .single();
+
+      // Clear any previous carrinho_week_start for other attendees of the same contact
+      if (currentAtt?.contact_id) {
+        const clearQuery = supabase
+          .from('meeting_slot_attendees')
+          .update({ carrinho_week_start: null } as any)
+          .eq('contact_id', currentAtt.contact_id)
+          .neq('id', attendeeId);
+        (clearQuery as any).not('carrinho_week_start', 'is', null);
+        await clearQuery;
+      }
+
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
       const updatePayload: any = { carrinho_week_start: weekStartStr };
       if (aprovadoId) {

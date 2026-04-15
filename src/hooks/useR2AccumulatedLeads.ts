@@ -235,19 +235,22 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
             continue;
           }
 
-          // Use the most recent R2 for display purposes
-          const att = validR2s[validR2s.length - 1] as any;
-          const slot = att.meeting_slot;
-          const closerData = Array.isArray(slot?.closer) ? slot.closer[0] : slot?.closer;
-          const status = att.r2_status_id ? statusMap.get(att.r2_status_id) : null;
-          const deal = att.deal_id ? dealMap.get(att.deal_id) : null;
-
           // Check if "Próxima Semana" (on any R2)
           const hasProximaSemana = validR2s.some((r: any) =>
             proximaSemanaStatus && r.r2_status_id === proximaSemanaStatus.id
           );
 
           if (hasProximaSemana) {
+            // Pick the CORRECT attendee: the one that actually has "Próxima Semana" status
+            const targetAtt = validR2s.find((r: any) =>
+              proximaSemanaStatus && r.r2_status_id === proximaSemanaStatus.id
+            ) || validR2s[validR2s.length - 1];
+            const att = targetAtt as any;
+            const slot = att.meeting_slot;
+            const closerData = Array.isArray(slot?.closer) ? slot.closer[0] : slot?.closer;
+            const status = att.r2_status_id ? statusMap.get(att.r2_status_id) : null;
+            const deal = att.deal_id ? dealMap.get(att.deal_id) : null;
+
             results.push({
               id: att.id,
               attendee_name: att.attendee_name || contactData?.name || null,
@@ -268,6 +271,13 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
             });
             continue;
           }
+
+          // Use the most recent R2 for display purposes (fallback for sem_r2)
+          const att = validR2s[validR2s.length - 1] as any;
+          const slot = att.meeting_slot;
+          const closerData = Array.isArray(slot?.closer) ? slot.closer[0] : slot?.closer;
+          const status = att.r2_status_id ? statusMap.get(att.r2_status_id) : null;
+          const deal = att.deal_id ? dealMap.get(att.deal_id) : null;
 
           // If ALL R2s have some status (Pendente, Em Análise, etc.) → skip (handled elsewhere)
           const allHaveStatus = validR2s.every((r: any) => !!r.r2_status_id);
