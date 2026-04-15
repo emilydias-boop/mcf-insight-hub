@@ -409,6 +409,10 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       }
 
       // Step 4: Fetch R2 attendees for expanded deal list
+      // Calculate carrinho window for R2 prioritization
+      const r2PrioBoundaries = filters.weekStart
+        ? getCarrinhoMetricBoundaries(filters.weekStart, addDays(filters.weekStart, 6))
+        : null;
       let r2Map: Record<string, {
         r2Date: string | null;
         r2CloserName: string | null;
