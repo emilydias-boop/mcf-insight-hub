@@ -1,100 +1,39 @@
 
-## Diagnóstico
 
-Eu sei qual é o problema? Sim.
+## Plano: Alinhar "Aprovado" do Relatório (30 → 27)
 
-Não existe uma única contagem de “Aprovados” hoje; o front está mostrando números diferentes porque cada área usa uma regra diferente:
+### Problema
+No Relatório (Agenda R2 → aba Relatório), ao expandir "Realizadas", o sub-KPI "Aprovado" mostra **30**. Os outros painéis (KPI Carrinho, aba Aprovados, Todas R2s filtrado) já mostram **27**.
 
-- `26` no card KPI do Carrinho: `src/hooks/useR2CarrinhoKPIs.ts` ainda tem lógica própria de merge/deduplicação e pode deixar um registro regular não-aprovado ocupar o `deal_id` antes do aprovado.
-- `27` na badge da aba **Aprovados**: vem de `useR2CarrinhoData('aprovados')` e hoje é a fonte mais próxima do “aprovado do carrinho”.
-- `26 em acompanhamento` dentro da aba **Aprovados**: não é total de aprovados; é **aprovados menos vendidos**. Então esse número nunca deveria ser obrigado a bater com o total.
-- `25 R2s filtradas` em **Todas R2s** com filtro “Aprovado”: essa tela parte do universo `agendadas`, que já exclui `cancelled/rescheduled` antes de aplicar o filtro de status.
-- `30 Aprovado` no **Lifecycle**: esse número não é “total aprovado do carrinho”; ele está vindo do agrupamento filho de **Realizadas**, em um dataset diferente (`useContractLifecycleReport`).
+### Causa raiz
+O Step 4 do `useContractLifecycleReport.ts` resolve o "melhor R2" para cada deal. Quando não existe R2 na mesma semana (`carrinho_week_start`), ele aceita R2 de **outra semana**. Esses 3 leads extras têm R2 Aprovado + Realizada em outra semana, mas como o contrato foi pago nesta safra, eles entram no relatório com `r2StatusName = 'Aprovado'`.
 
-Ou seja: não parece haver uma “trava” visual no front. O problema é que hoje existem 4 contagens diferentes sendo exibidas como se fossem a mesma métrica.
+O sub-KPI `realizadasChildren` no `R2ContractLifecyclePanel.tsx` simplesmente conta por `r2StatusName`, sem verificar se o R2 pertence à semana correta.
 
-## Plano
+### Correção
 
-### 1. Criar uma regra canônica de “Aprovados”
-Centralizar a lógica de “aprovado do carrinho” em uma única fonte compartilhada.
+**Arquivo: `src/components/crm/R2ContractLifecyclePanel.tsx`**
 
-Regra única:
-- mesma boundary do carrinho
-- mesma deduplicação por lead/deal
-- mesma prioridade para encaixados
-- mesmo tratamento de `carrinho_week_start`
+No cálculo de `realizadasChildren` (linhas ~114-125), ao contar por `r2StatusName`, verificar também `carrinhoWeekStart`. Se o row tem `carrinhoWeekStart` apontando para outra semana (diferente da semana atual selecionada), usar "Sem status" em vez do `r2StatusName` real — ou seja, não contar como "Aprovado".
 
-Vou usar como referência o comportamento que hoje gera `27`, já que esse foi o critério validado por você para encaixados.
+Alternativa mais limpa: adicionar o campo `carrinhoWeekStart` à comparação. Rows cujo R2 não pertence à semana atual não devem ser contados como "Aprovado" no sub-KPI. O `carrinhoWeekStart` já está disponível no `ContractLifecycleRow`.
 
-### 2. Corrigir o KPI do Carrinho
-Arquivo:
-- `src/hooks/useR2CarrinhoKPIs.ts`
+Lógica:
+```text
+const currentWeekStart = format(getCartWeekStart(weekStartDate), 'yyyy-MM-dd');
 
-Ajuste:
-- filtrar **regulares aprovados antes do merge/dedup**, não só os encaixados.
-- hoje ainda existe espaço para um registro não-aprovado “ganhar” o `deal_id` e derrubar 1 aprovado.
+realizadasChildren: para cada row com situacao === 'realizada':
+  - se row.carrinhoWeekStart existe E é diferente de currentWeekStart → key = 'Outra semana'
+  - senão → key = row.r2StatusName || 'Sem status'
+```
 
-Resultado esperado:
-- o KPI sobe de `26` para `27`.
+Isso remove os 3 leads de outra semana do bucket "Aprovado" e os move para "Outra semana", alinhando o "Aprovado" com 27.
 
-### 3. Corrigir a aba Aprovados para separar “total” de “em acompanhamento”
-Arquivo:
-- `src/components/crm/R2AprovadosList.tsx`
+### Resultado esperado
+- Relatório Realizadas → Aprovado = **27**
+- Alinhado com KPI, aba Aprovados e Todas R2s
 
-Ajuste:
-- deixar explícito no cabeçalho:
-  - **Total aprovados** = fonte canônica
-  - **Em acompanhamento** = aprovados menos vendidos
-- hoje o `26` dessa área confunde porque visualmente parece “total aprovados”, mas é outra fórmula.
+### Seção técnica
+- 1 arquivo: `src/components/crm/R2ContractLifecyclePanel.tsx`
+- ~5 linhas alteradas no `realizadasChildren` useMemo
 
-Também vou alinhar o cálculo de vendidos:
-- `R2AprovadosList` hoje chama `useR2CarrinhoVendas(weekStart, weekEnd)` sem `config/previousConfig`
-- a página principal usa a versão com config
-- isso pode gerar exclusão/contagem diferente da própria tela
-
-### 4. Alinhar “Todas R2s” quando o filtro for Aprovado
-Arquivos:
-- `src/pages/crm/R2Carrinho.tsx`
-- `src/components/crm/R2AgendadasList.tsx`
-
-Ajuste:
-- quando o filtro selecionado for “Aprovado”, essa visualização deve usar a **mesma fonte canônica dos aprovados**, e não o universo de `agendadas`.
-- hoje ela cai para `25` porque herda a exclusão de `cancelled/rescheduled` antes do filtro.
-
-Resultado esperado:
-- “Todas R2s” filtrado por Aprovado passa a mostrar o mesmo número da aba Aprovados.
-
-### 5. Corrigir o Lifecycle
-Arquivos:
-- `src/hooks/useContractLifecycleReport.ts`
-- `src/components/crm/R2ContractLifecyclePanel.tsx`
-
-Ajuste:
-- parar de usar o filho de **Realizadas** como se fosse “total aprovado”.
-- expor um KPI/contador explícito de **Aprovados** baseado na mesma fonte canônica do Carrinho.
-- manter o filtro de `carrinho_week_start`, mas trocar a origem do número exibido como “Aprovado”.
-
-Resultado esperado:
-- o Lifecycle deixa de mostrar `30` como se fosse o mesmo “Aprovado” do Carrinho e passa a bater com o total canônico.
-
-## Resultado esperado final
-
-Depois da implementação:
-
-- KPI Carrinho = `27`
-- Badge da aba Aprovados = `27`
-- Todas R2s filtrado por Aprovado = `27`
-- Lifecycle Aprovados = `27`
-
-E o número **“Em acompanhamento”** pode continuar diferente sem parecer erro, porque ficará claramente identificado como uma métrica secundária.
-
-## Arquivos envolvidos
-
-- `src/hooks/useR2CarrinhoKPIs.ts`
-- `src/hooks/useR2CarrinhoData.ts` ou um helper compartilhado novo para a regra canônica
-- `src/pages/crm/R2Carrinho.tsx`
-- `src/components/crm/R2AprovadosList.tsx`
-- `src/components/crm/R2AgendadasList.tsx`
-- `src/hooks/useR2CarrinhoVendas.ts`
-- `src/hooks/useContractLifecycleReport.ts`
-- `src/components/crm/R2ContractLifecyclePanel.tsx`
