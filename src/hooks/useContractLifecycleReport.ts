@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { startOfDay, endOfDay, differenceInDays, nextFriday, isFriday, startOfWeek } from 'date-fns';
+import { startOfDay, endOfDay, differenceInDays, addDays, nextFriday, isFriday, startOfWeek } from 'date-fns';
 import { getCustomWeekEnd } from '@/lib/dateHelpers';
 
 export interface ContractLifecycleFilters {
