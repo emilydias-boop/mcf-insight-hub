@@ -674,7 +674,7 @@ export default function AgendaR2() {
 
             {/* Report Tab */}
             <TabsContent value="report" className="mt-0">
-              <R2QualificationReportPanel />
+              <R2ContractLifecyclePanel />
             </TabsContent>
 
             {/* Pre-Scheduled Tab */}
