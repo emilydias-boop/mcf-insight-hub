@@ -444,13 +444,28 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
             .neq('status', 'cancelled');
 
           if (r2Data) {
+            // Use carrinho window to prioritize R2 within the correct period
+            const r2Window = boundaries.r2Meetings;
+            const isInWindow = (dateStr: string) => {
+              const d = new Date(dateStr);
+              return d >= r2Window.start && d <= r2Window.end;
+            };
+
             for (const r2 of r2Data as any[]) {
               const ms = r2.meeting_slot;
               if (r2.deal_id && ms) {
                 const mappedDealId = siblingToOriginal.get(r2.deal_id) || r2.deal_id;
                 const existing = r2Map[mappedDealId];
                 const newDate = ms.scheduled_at;
-                if (!existing || (newDate && (!existing.r2Date || newDate > existing.r2Date))) {
+                const newInWindow = newDate ? isInWindow(newDate) : false;
+                const existingInWindow = existing?.r2Date ? isInWindow(existing.r2Date) : false;
+
+                // Priority: in-window > out-of-window; within same category, most recent wins
+                const shouldReplace = !existing
+                  || (newInWindow && !existingInWindow)
+                  || (newInWindow === existingInWindow && newDate && (!existing.r2Date || newDate > existing.r2Date));
+
+                if (shouldReplace) {
                   r2Map[mappedDealId] = {
                     r2Date: ms.scheduled_at,
                     r2CloserName: ms.closer?.name || null,
