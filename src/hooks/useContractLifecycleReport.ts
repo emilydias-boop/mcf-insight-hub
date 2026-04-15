@@ -449,7 +449,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
           if (r2Data) {
             // Use carrinho window to prioritize R2 within the correct period
-            const r2Window = boundaries.r2Meetings;
+            const r2Window = r2PrioBoundaries?.r2Meetings;
             const isInWindow = (dateStr: string) => {
               const d = new Date(dateStr);
               return d >= r2Window.start && d <= r2Window.end;
