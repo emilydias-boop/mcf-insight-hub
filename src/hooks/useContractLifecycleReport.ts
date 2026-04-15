@@ -64,9 +64,10 @@ function classifySituacao(
   r2StatusName: string | null,
   r2Date: string | null,
   fridayCutoff: Date,
+  isHublaRefunded: boolean = false,
 ): { situacao: ContractSituacao; label: string } {
-  // 1. Reembolso
-  if (r1Status === 'refunded') {
+  // 1. Reembolso (R1 status OR Hubla transaction refunded)
+  if (r1Status === 'refunded' || isHublaRefunded) {
     return { situacao: 'reembolso', label: '💰 Reembolso' };
   }
 
@@ -131,7 +132,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           deal:crm_deals(
             id,
             name,
-            contact:crm_contacts(name, phone)
+            contact:crm_contacts(name, phone, email)
           )
         `)
         .eq('meeting_slot.meeting_type', 'r1')
@@ -223,6 +224,35 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         }
       }
 
+      // Step 4b: Fetch refunded Hubla transactions in the period to cross-reference
+      const refundedEmailsSet = new Set<string>();
+      {
+        const { data: refundedTx } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email, linked_attendee_id')
+          .eq('sale_status', 'refunded')
+          .ilike('product_name', '%Contrato%')
+          .gte('sale_date', startOfDay(filters.startDate).toISOString())
+          .lte('sale_date', endOfDay(filters.endDate).toISOString());
+
+        if (refundedTx) {
+          for (const tx of refundedTx) {
+            if (tx.customer_email) {
+              refundedEmailsSet.add(tx.customer_email.toLowerCase().trim());
+            }
+          }
+        }
+      }
+
+      // Build a map: attendee id -> contact email for cross-referencing
+      const attendeeEmailMap = new Map<string, string>();
+      for (const att of (r1Attendees || []) as any[]) {
+        const email = att.deal?.contact?.email;
+        if (email && att.id) {
+          attendeeEmailMap.set(att.id, email.toLowerCase().trim());
+        }
+      }
+
       const now = new Date();
       const fridayCutoff = getFridayCutoff(filters.weekStart);
 
@@ -234,6 +264,10 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
         const hasR2 = !!r2Info;
 
+        // Check if Hubla marks this as refunded
+        const contactEmail = attendeeEmailMap.get(att.id);
+        const isHublaRefunded = contactEmail ? refundedEmailsSet.has(contactEmail) : false;
+
         // Classify situacao
         const { situacao, label: situacaoLabel } = classifySituacao(
           att.status,
@@ -241,6 +275,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           r2Info?.r2StatusName || null,
           r2Info?.r2Date || null,
           fridayCutoff,
+          isHublaRefunded,
         );
 
         // Calculate dias parado for non-terminal
