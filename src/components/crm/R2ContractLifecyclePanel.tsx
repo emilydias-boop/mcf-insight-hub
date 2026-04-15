@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { CalendarIcon, Download, Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useContractLifecycleReport, ContractLifecycleRow } from "@/hooks/useContractLifecycleReport";
+import { useContractLifecycleReport, ContractLifecycleRow, ContractSituacao } from "@/hooks/useContractLifecycleReport";
 import { DealDetailsDrawer } from "./DealDetailsDrawer";
 
 function formatDate(dateStr: string | null) {
@@ -38,18 +38,23 @@ function R2StatusBadge({ name, color }: { name: string | null; color: string | n
   );
 }
 
-function AttendanceStatusLabel({ status }: { status: string | null }) {
-  if (!status) return <span className="text-muted-foreground text-xs">—</span>;
-  const labels: Record<string, { text: string; className: string }> = {
-    invited: { text: 'Agendado', className: 'text-blue-400' },
-    scheduled: { text: 'Agendado', className: 'text-blue-400' },
-    pre_scheduled: { text: 'Pré-agendado', className: 'text-purple-400' },
-    completed: { text: 'Compareceu', className: 'text-emerald-400' },
-    no_show: { text: 'No-show', className: 'text-red-400' },
-    contract_paid: { text: 'Contrato Pago', className: 'text-emerald-400' },
-  };
-  const info = labels[status] || { text: status, className: '' };
-  return <span className={cn("text-xs font-medium", info.className)}>{info.text}</span>;
+const SITUACAO_STYLES: Record<ContractSituacao, { bg: string; text: string; border: string }> = {
+  reembolso:      { bg: 'bg-red-500/15',    text: 'text-red-400',    border: 'border-red-500/30' },
+  no_show:        { bg: 'bg-red-900/20',     text: 'text-red-300',    border: 'border-red-800/30' },
+  desistente:     { bg: 'bg-zinc-500/15',    text: 'text-zinc-400',   border: 'border-zinc-500/30' },
+  proxima_semana: { bg: 'bg-emerald-500/15', text: 'text-emerald-400',border: 'border-emerald-500/30' },
+  agendado:       { bg: 'bg-blue-500/15',    text: 'text-blue-400',   border: 'border-blue-500/30' },
+  pre_agendado:   { bg: 'bg-purple-500/15',  text: 'text-purple-400', border: 'border-purple-500/30' },
+  pendente:       { bg: 'bg-amber-500/15',   text: 'text-amber-400',  border: 'border-amber-500/30' },
+};
+
+function SituacaoBadge({ situacao, label }: { situacao: ContractSituacao; label: string }) {
+  const style = SITUACAO_STYLES[situacao];
+  return (
+    <Badge variant="outline" className={cn("text-xs whitespace-nowrap", style.bg, style.text, style.border)}>
+      {label}
+    </Badge>
+  );
 }
 
 function formatPhone(phone: string | null) {
@@ -90,13 +95,14 @@ export function R2ContractLifecyclePanel() {
 
   // KPIs
   const kpis = useMemo(() => {
-    if (!rows) return { total: 0, comR2: 0, semR2: 0, comStatus: 0, semStatus: 0 };
-    const total = rows.length;
-    const comR2 = rows.filter(r => r.hasR2).length;
-    const semR2 = rows.filter(r => !r.hasR2).length;
-    const comStatus = rows.filter(r => r.r2StatusName).length;
-    const semStatus = rows.filter(r => r.hasR2 && !r.r2StatusName).length;
-    return { total, comR2, semR2, comStatus, semStatus };
+    if (!rows) return { total: 0, agendados: 0, pendentes: 0, noShow: 0, reembolso: 0 };
+    return {
+      total: rows.length,
+      agendados: rows.filter(r => ['agendado', 'proxima_semana', 'pre_agendado'].includes(r.situacao)).length,
+      pendentes: rows.filter(r => r.situacao === 'pendente').length,
+      noShow: rows.filter(r => r.situacao === 'no_show').length,
+      reembolso: rows.filter(r => r.situacao === 'reembolso').length,
+    };
   }, [rows]);
 
   const handleRowClick = (row: ContractLifecycleRow) => {
@@ -108,7 +114,7 @@ export function R2ContractLifecyclePanel() {
 
   const handleExportCSV = () => {
     if (!filteredRows.length) return;
-    const headers = ['Lead', 'Telefone', 'Contrato Pago', 'Closer R1', 'R1 Data', 'R1 Status', 'R2 Data', 'Closer R2', 'Presença R2', 'R2 Status'];
+    const headers = ['Lead', 'Telefone', 'Contrato Pago', 'Closer R1', 'R1 Data', 'R1 Status', 'Status', 'R2 Data', 'Closer R2', 'R2 Status'];
     const csvRows = filteredRows.map(r => [
       r.leadName || '',
       r.phone || '',
@@ -116,9 +122,9 @@ export function R2ContractLifecyclePanel() {
       r.r1CloserName || '',
       formatDate(r.r1Date),
       r.r1Status || '',
+      r.situacaoLabel.replace(/^[^\w]*\s*/, ''), // remove emoji
       formatDate(r.r2Date),
       r.r2CloserName || '',
-      r.r2AttendeeStatus || '',
       r.r2StatusName || '',
     ]);
     const csv = [headers, ...csvRows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
@@ -192,26 +198,26 @@ export function R2ContractLifecyclePanel() {
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="pt-4 pb-3 text-center">
-            <p className="text-xs text-muted-foreground">Com R2</p>
-            <p className="text-2xl font-bold text-emerald-400">{kpis.comR2}</p>
+            <p className="text-xs text-muted-foreground">Agendados</p>
+            <p className="text-2xl font-bold text-emerald-400">{kpis.agendados}</p>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="pt-4 pb-3 text-center">
-            <p className="text-xs text-muted-foreground">Sem R2</p>
-            <p className="text-2xl font-bold text-amber-400">{kpis.semR2}</p>
+            <p className="text-xs text-muted-foreground">Pendentes</p>
+            <p className="text-2xl font-bold text-amber-400">{kpis.pendentes}</p>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="pt-4 pb-3 text-center">
-            <p className="text-xs text-muted-foreground">Com Status</p>
-            <p className="text-2xl font-bold text-blue-400">{kpis.comStatus}</p>
+            <p className="text-xs text-muted-foreground">No-show</p>
+            <p className="text-2xl font-bold text-red-400">{kpis.noShow}</p>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="pt-4 pb-3 text-center">
-            <p className="text-xs text-muted-foreground">Sem Status</p>
-            <p className="text-2xl font-bold text-orange-400">{kpis.semStatus}</p>
+            <p className="text-xs text-muted-foreground">Reembolso</p>
+            <p className="text-2xl font-bold text-red-300">{kpis.reembolso}</p>
           </CardContent>
         </Card>
       </div>
@@ -237,10 +243,9 @@ export function R2ContractLifecyclePanel() {
                     <TableHead className="whitespace-nowrap">Contrato Pago</TableHead>
                     <TableHead className="whitespace-nowrap">Closer R1</TableHead>
                     <TableHead className="whitespace-nowrap">R1 Data</TableHead>
-                    <TableHead className="whitespace-nowrap">R1 Status</TableHead>
+                    <TableHead className="whitespace-nowrap">Status</TableHead>
                     <TableHead className="whitespace-nowrap">R2 Data</TableHead>
                     <TableHead className="whitespace-nowrap">Closer R2</TableHead>
-                    <TableHead className="whitespace-nowrap">Presença R2</TableHead>
                     <TableHead className="whitespace-nowrap">R2 Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -260,12 +265,13 @@ export function R2ContractLifecyclePanel() {
                       <TableCell className="whitespace-nowrap text-xs">{formatDate(row.contractPaidAt)}</TableCell>
                       <TableCell className="whitespace-nowrap text-xs">{row.r1CloserName || '—'}</TableCell>
                       <TableCell className="whitespace-nowrap text-xs">{formatDate(row.r1Date)}</TableCell>
-                      <TableCell><AttendanceStatusLabel status={row.r1Status} /></TableCell>
+                      <TableCell>
+                        <SituacaoBadge situacao={row.situacao} label={row.situacaoLabel} />
+                      </TableCell>
                       <TableCell className="whitespace-nowrap text-xs">
                         {row.hasR2 ? formatDate(row.r2Date) : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-xs">{row.r2CloserName || '—'}</TableCell>
-                      <TableCell><AttendanceStatusLabel status={row.r2AttendeeStatus} /></TableCell>
                       <TableCell><R2StatusBadge name={row.r2StatusName} color={row.r2StatusColor} /></TableCell>
                     </TableRow>
                   ))}

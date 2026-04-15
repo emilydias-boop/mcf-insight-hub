@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { startOfDay, endOfDay, differenceInDays } from 'date-fns';
+import { startOfDay, endOfDay, differenceInDays, nextFriday, isFriday, startOfWeek } from 'date-fns';
+import { getCustomWeekEnd } from '@/lib/dateHelpers';
 
 export interface ContractLifecycleFilters {
   startDate: Date;
@@ -8,6 +9,8 @@ export interface ContractLifecycleFilters {
   closerR1Id?: string;
   situacao?: string;
 }
+
+export type ContractSituacao = 'reembolso' | 'no_show' | 'desistente' | 'proxima_semana' | 'agendado' | 'pre_agendado' | 'pendente';
 
 export interface ContractLifecycleRow {
   id: string;
@@ -28,8 +31,66 @@ export interface ContractLifecycleRow {
   carrinhoStatus: string | null;
   carrinhoWeekStart: string | null;
   diasParado: number | null;
-  situacao: 'completo' | 'aguardando_r2' | 'sem_status' | 'pendente' | 'parado';
+  situacao: ContractSituacao;
   situacaoLabel: string;
+}
+
+/** Get the next Friday at 12:00 from now (the carrinho cutoff) */
+function getFridayCutoff(): Date {
+  const now = new Date();
+  let friday: Date;
+  if (isFriday(now)) {
+    friday = now;
+  } else {
+    friday = nextFriday(now);
+  }
+  // Also check: if today is after friday (sat/sun), get next friday
+  const weekEnd = getCustomWeekEnd(now); // this is the friday of the custom week
+  friday = weekEnd;
+  friday.setHours(12, 0, 0, 0);
+  return friday;
+}
+
+function classifySituacao(
+  r1Status: string | null,
+  r2AttendeeStatus: string | null,
+  r2StatusName: string | null,
+  r2Date: string | null,
+  fridayCutoff: Date,
+): { situacao: ContractSituacao; label: string } {
+  // 1. Reembolso
+  if (r1Status === 'refunded') {
+    return { situacao: 'reembolso', label: '💰 Reembolso' };
+  }
+
+  // 2. No-show on R2
+  if (r2AttendeeStatus === 'no_show') {
+    return { situacao: 'no_show', label: '❌ No-show' };
+  }
+
+  // 3. Desistente (via r2_status_options name)
+  if (r2StatusName && r2StatusName.toLowerCase().includes('desistente')) {
+    return { situacao: 'desistente', label: '🚫 Desistente' };
+  }
+
+  // 4 & 5. Agendado / Próxima Semana
+  if (r2AttendeeStatus === 'invited' || r2AttendeeStatus === 'scheduled') {
+    if (r2Date) {
+      const r2DateTime = new Date(r2Date);
+      if (r2DateTime >= fridayCutoff) {
+        return { situacao: 'proxima_semana', label: '📅 Próxima Semana' };
+      }
+    }
+    return { situacao: 'agendado', label: '✅ Agendado' };
+  }
+
+  // 6. Pré-agendado
+  if (r2AttendeeStatus === 'pre_scheduled') {
+    return { situacao: 'pre_agendado', label: '🔜 Pré-agendado' };
+  }
+
+  // 7. Pendente (everything else)
+  return { situacao: 'pendente', label: '⏳ Pendente' };
 }
 
 export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
@@ -151,6 +212,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       }
 
       const now = new Date();
+      const fridayCutoff = getFridayCutoff();
 
       // Step 5: Transform into rows
       const rows: ContractLifecycleRow[] = (r1Attendees || []).map((att: any) => {
@@ -159,27 +221,19 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         const r2Info = att.deal_id ? r2Map[att.deal_id] : null;
 
         const hasR2 = !!r2Info;
-        const hasR2Status = !!(r2Info?.r2StatusId);
-        const r2StatusName = r2Info?.r2StatusName || null;
-        const isTerminal = r2StatusName && ['Aprovado', 'Reprovado'].includes(r2StatusName);
 
-        let situacao: ContractLifecycleRow['situacao'] = 'pendente';
-        let situacaoLabel = '🔄 Pendente';
-
-        if (!hasR2) {
-          situacao = 'aguardando_r2';
-          situacaoLabel = '⏳ Aguardando R2';
-        } else if (isTerminal) {
-          situacao = 'completo';
-          situacaoLabel = '✅ Completo';
-        } else if (!hasR2Status) {
-          situacao = 'sem_status';
-          situacaoLabel = '⚠️ Sem Status';
-        }
+        // Classify situacao
+        const { situacao, label: situacaoLabel } = classifySituacao(
+          att.status,
+          r2Info?.r2AttendeeStatus || null,
+          r2Info?.r2StatusName || null,
+          r2Info?.r2Date || null,
+          fridayCutoff,
+        );
 
         // Calculate dias parado for non-terminal
         let diasParado: number | null = null;
-        if (!isTerminal && att.contract_paid_at) {
+        if (situacao === 'pendente' && att.contract_paid_at) {
           diasParado = differenceInDays(now, new Date(att.contract_paid_at));
         }
 
@@ -200,7 +254,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           hasR2,
           r2Date: r2Info?.r2Date || null,
           r2CloserName: r2Info?.r2CloserName || null,
-          r2StatusName,
+          r2StatusName: r2Info?.r2StatusName || null,
           r2StatusColor: r2Info?.r2StatusColor || null,
           r2AttendeeStatus: r2Info?.r2AttendeeStatus || null,
           carrinhoStatus: r2Info?.carrinhoStatus || null,
