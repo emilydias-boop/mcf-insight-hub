@@ -6,6 +6,7 @@ import { getCustomWeekEnd } from '@/lib/dateHelpers';
 export interface ContractLifecycleFilters {
   startDate: Date;
   endDate: Date;
+  weekStart?: Date;
   closerR1Id?: string;
   situacao?: string;
 }
@@ -35,19 +36,25 @@ export interface ContractLifecycleRow {
   situacaoLabel: string;
 }
 
-/** Get the next Friday at 12:00 from now (the carrinho cutoff) */
-function getFridayCutoff(): Date {
-  const now = new Date();
-  let friday: Date;
-  if (isFriday(now)) {
-    friday = now;
-  } else {
-    friday = nextFriday(now);
+/** Get the Friday cutoff for a given week start (Thursday).
+ *  If weekStart is provided, friday = weekStart + 8 days (the carrinho Friday after the safra).
+ *  Otherwise falls back to the current week's Friday.
+ */
+function getFridayCutoff(weekStart?: Date, horarioCorte?: string): Date {
+  const [cutH, cutM] = (horarioCorte || '12:00').split(':').map(Number);
+
+  if (weekStart) {
+    // Carrinho Friday = safra Thursday + 8 days
+    const friday = addDays(new Date(weekStart), 8);
+    friday.setHours(cutH, cutM || 0, 0, 0);
+    return friday;
   }
-  // Also check: if today is after friday (sat/sun), get next friday
-  const weekEnd = getCustomWeekEnd(now); // this is the friday of the custom week
-  friday = weekEnd;
-  friday.setHours(12, 0, 0, 0);
+
+  // Fallback: current week
+  const now = new Date();
+  const weekEnd = getCustomWeekEnd(now);
+  const friday = weekEnd;
+  friday.setHours(cutH, cutM || 0, 0, 0);
   return friday;
 }
 
