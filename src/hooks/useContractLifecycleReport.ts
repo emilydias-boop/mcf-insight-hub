@@ -125,8 +125,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           `)
           .eq('meeting_slot.meeting_type', 'r2')
           .in('deal_id', dealIds)
-          .neq('status', 'cancelled')
-          .neq('status', 'pre_scheduled');
+          .neq('status', 'cancelled');
 
         if (r2Data) {
           for (const r2 of r2Data as any[]) {
