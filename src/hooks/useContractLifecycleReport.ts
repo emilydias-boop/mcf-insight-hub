@@ -690,6 +690,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           diasParado,
           situacao,
           situacaoLabel,
+          isPaidContract: !!att._isPaidFromHubla,
         };
       });
 
