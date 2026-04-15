@@ -1,39 +1,41 @@
 
 
-## Diagnóstico: Reembolsos não aparecem
+## Correção: Reembolso não detectado para contatos sem email
 
-O problema é que a classificação de "Reembolso" verifica apenas `r1Status === 'refunded'`, mas na prática o status do R1 attendee **nem sempre é atualizado** quando o reembolso ocorre na Hubla.
+### Causa raiz
+O cruzamento com `hubla_transactions` para detectar reembolsos usa apenas email. Porém, Marco Aurélio Cunta e Monique Andrade têm `email = null` no `crm_contacts`. Seus reembolsos existem na Hubla (`sale_status = 'refunded'`, `product_name LIKE '%Contrato%'`), mas o match nunca acontece.
 
-Dados encontrados:
-- **Andre Ricci**: R1 status = `refunded` ✅ → aparece como Reembolso
-- **Marco Aurélio Cunta**: R1 status = `contract_paid`, R2 status = `completed` → classificado como "Realizada" em vez de "Reembolso"
-- **Monique Andrade**: R1 status = `contract_paid`, R2 status = `completed` → idem
-
-O reembolso está registrado em `hubla_transactions.sale_status = 'refunded'`, mas o hook não consulta essa tabela.
-
-## Solução
-
-Adicionar uma consulta a `hubla_transactions` para detectar reembolsos pela data de `contract_paid_at` e email/deal, e usar essa informação na classificação.
+### Solução
+Adicionar cross-reference por **telefone** como fallback quando email não está disponível.
 
 ### Alterações em `src/hooks/useContractLifecycleReport.ts`
 
-1. **Novo Step**: Após buscar R1 attendees, coletar os `contract_paid_at` timestamps e buscar em `hubla_transactions` registros com `sale_status = 'refunded'` e `product_name LIKE '%Contrato%'` no período da safra
-2. **Criar mapa de reembolsos**: por `deal_id` (via email matching com `crm_contacts`) ou diretamente por `linked_attendee_id`
-3. **Atualizar `classifySituacao`**: aceitar um parâmetro `isRefunded: boolean` e verificar **antes** dos outros checks — se `isRefunded` ou `r1Status === 'refunded'`, classificar como Reembolso
+1. **Coletar telefones refundidos**: Além de `refundedEmailsSet`, criar `refundedPhonesSet` com os `customer_phone` das transações refundidas (normalizados para sufixo de 9 dígitos)
 
-Abordagem mais simples: buscar transações refunded no período, cruzar pelo `customer_email` com os contatos dos deals dos R1 attendees.
+2. **Mapear attendee → phone**: Além de `attendeeEmailMap`, criar `attendeePhoneMap` usando `att.attendee_phone || att.deal?.contact?.phone`
 
-### Fluxo
-
-```text
-1. Buscar R1 attendees (já existe)
-2. Buscar hubla_transactions refunded no período da safra
-3. Cruzar por email: deal → crm_contacts.email vs hubla_transactions.customer_email
-4. Marcar isRefunded = true para matches
-5. classifySituacao prioriza isRefunded sobre qualquer outro status
+3. **Atualizar check de refund**: 
+```ts
+const contactEmail = attendeeEmailMap.get(att.id);
+const contactPhone = attendeePhoneMap.get(att.id);
+const isHublaRefunded = 
+  (contactEmail ? refundedEmailsSet.has(contactEmail) : false) ||
+  (contactPhone ? refundedPhonesSet.has(normalizePhone(contactPhone)) : false);
 ```
 
-### Alterações no Panel (nenhuma)
+4. **Normalização de telefone**: Usar sufixo de 9 dígitos (mesma lógica já usada no projeto para deduplicação) para evitar falsos negativos por formatação diferente (+55, com espaço, etc.)
 
-O badge e KPIs já tratam `situacao === 'reembolso'` corretamente. A correção é apenas no hook de dados.
+### Seção técnica
+
+A normalização será uma função simples:
+```ts
+function normalizePhoneSuffix(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return digits.slice(-9);
+}
+```
+
+Isso garante que `+5521985134202`, `21985134202` e `985134202` todos resolvam para o mesmo sufixo `985134202`.
+
+Nenhuma alteração no painel — apenas no hook de dados.
 
