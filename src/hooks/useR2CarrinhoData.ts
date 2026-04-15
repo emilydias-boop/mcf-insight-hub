@@ -37,6 +37,7 @@ async function fetchAttendeesFromQuery(
   statusMap: Record<string, string>,
   filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados',
   aprovadoStatusId?: string,
+  weekStartStr?: string,
 ): Promise<R2CarrinhoAttendee[]> {
   const { data } = await supabase
     .from('meeting_slot_attendees')
@@ -48,6 +49,7 @@ async function fetchAttendeesFromQuery(
       r2_status_id,
       carrinho_status,
       carrinho_updated_at,
+      carrinho_week_start,
       deal_id,
       contact_id,
       partner_name,
@@ -85,6 +87,10 @@ async function fetchAttendeesFromQuery(
   for (const att of filteredAttendees) {
     const slot = (att as any).meeting_slot;
     const closerData = slot?.closer;
+
+    // If this attendee is "encaixado" in a different week, skip it
+    const attWeekStart = (att as any).carrinho_week_start;
+    if (attWeekStart && weekStartStr && attWeekStart !== weekStartStr) continue;
 
     if (filter === 'agendadas') {
       if (slot.status === 'cancelled' || slot.status === 'rescheduled') continue;
@@ -240,7 +246,7 @@ export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agen
 
       // Fetch both: regular boundary attendees + encaixados for this week
       const [regularAttendees, encaixados] = await Promise.all([
-        fetchAttendeesFromQuery('r2', useBoundary.start.toISOString(), useBoundary.end.toISOString(), statusMap, filter, aprovadoStatusId),
+        fetchAttendeesFromQuery('r2', useBoundary.start.toISOString(), useBoundary.end.toISOString(), statusMap, filter, aprovadoStatusId, weekStartStr),
         fetchEncaixadosForWeek(weekStartStr, statusMap, filter, aprovadoStatusId),
       ]);
 
