@@ -49,13 +49,13 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       // Build encaixados queries separately to work around missing type for carrinho_week_start
       const encaixadosQuery1 = supabase
         .from('meeting_slot_attendees')
-        .select(`id, status, r2_status_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type)`)
+        .select(`id, status, r2_status_id, deal_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type)`)
         .eq('meeting_slot.meeting_type', 'r2');
       (encaixadosQuery1 as any).eq('carrinho_week_start', weekStartStr);
 
       const encaixadosQuery2 = supabase
         .from('meeting_slot_attendees')
-        .select('id, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)')
+        .select('id, r2_status_id, deal_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)')
         .eq('meeting_slot.meeting_type', 'r2');
       (encaixadosQuery2 as any).eq('carrinho_week_start', weekStartStr);
 
