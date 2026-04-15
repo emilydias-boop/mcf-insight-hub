@@ -137,6 +137,8 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           deal:crm_deals(
             id,
             name,
+            contact_id,
+            origin_id,
             contact:crm_contacts(name, phone, email)
           )
         `)
