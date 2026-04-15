@@ -88,6 +88,10 @@ async function fetchAttendeesFromQuery(
     const slot = (att as any).meeting_slot;
     const closerData = slot?.closer;
 
+    // If this attendee is "encaixado" in a different week, skip it
+    const attWeekStart = (att as any).carrinho_week_start;
+    if (attWeekStart && weekStartStr && attWeekStart !== weekStartStr) continue;
+
     if (filter === 'agendadas') {
       if (slot.status === 'cancelled' || slot.status === 'rescheduled') continue;
     } else if (filter === 'no_show') {
