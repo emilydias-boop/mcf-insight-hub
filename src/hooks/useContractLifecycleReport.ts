@@ -3,6 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { startOfDay, endOfDay, differenceInDays, addDays, nextFriday, isFriday, startOfWeek } from 'date-fns';
 import { getCustomWeekEnd } from '@/lib/dateHelpers';
 
+function normalizePhoneSuffix(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return digits.slice(-9);
+}
+
 export interface ContractLifecycleFilters {
   startDate: Date;
   endDate: Date;
@@ -226,10 +231,11 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
       // Step 4b: Fetch refunded Hubla transactions in the period to cross-reference
       const refundedEmailsSet = new Set<string>();
+      const refundedPhonesSet = new Set<string>();
       {
         const { data: refundedTx } = await supabase
           .from('hubla_transactions')
-          .select('customer_email, linked_attendee_id')
+          .select('customer_email, customer_phone, linked_attendee_id')
           .eq('sale_status', 'refunded')
           .ilike('product_name', '%Contrato%')
           .gte('sale_date', startOfDay(filters.startDate).toISOString())
@@ -240,16 +246,27 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
             if (tx.customer_email) {
               refundedEmailsSet.add(tx.customer_email.toLowerCase().trim());
             }
+            if (tx.customer_phone) {
+              const suffix = normalizePhoneSuffix(tx.customer_phone);
+              if (suffix.length >= 8) {
+                refundedPhonesSet.add(suffix);
+              }
+            }
           }
         }
       }
 
-      // Build a map: attendee id -> contact email for cross-referencing
+      // Build maps: attendee id -> contact email/phone for cross-referencing
       const attendeeEmailMap = new Map<string, string>();
+      const attendeePhoneMap = new Map<string, string>();
       for (const att of (r1Attendees || []) as any[]) {
         const email = att.deal?.contact?.email;
         if (email && att.id) {
           attendeeEmailMap.set(att.id, email.toLowerCase().trim());
+        }
+        const phone = att.attendee_phone || att.deal?.contact?.phone;
+        if (phone && att.id) {
+          attendeePhoneMap.set(att.id, phone);
         }
       }
 
@@ -264,9 +281,12 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
         const hasR2 = !!r2Info;
 
-        // Check if Hubla marks this as refunded
+        // Check if Hubla marks this as refunded (by email or phone)
         const contactEmail = attendeeEmailMap.get(att.id);
-        const isHublaRefunded = contactEmail ? refundedEmailsSet.has(contactEmail) : false;
+        const contactPhone = attendeePhoneMap.get(att.id);
+        const isHublaRefunded = 
+          (contactEmail ? refundedEmailsSet.has(contactEmail) : false) ||
+          (contactPhone ? refundedPhonesSet.has(normalizePhoneSuffix(contactPhone)) : false);
 
         // Classify situacao
         const { situacao, label: situacaoLabel } = classifySituacao(
