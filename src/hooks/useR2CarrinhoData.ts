@@ -49,6 +49,7 @@ async function fetchAttendeesFromQuery(
       r2_status_id,
       carrinho_status,
       carrinho_updated_at,
+      carrinho_week_start,
       deal_id,
       contact_id,
       partner_name,
