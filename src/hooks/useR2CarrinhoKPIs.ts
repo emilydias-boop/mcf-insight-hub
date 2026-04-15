@@ -123,6 +123,8 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       }
       for (const att of opAprovadosResult.data || []) {
         const key = (att as any).deal_id || att.id;
+        const attWeekStart = (att as any).carrinho_week_start;
+        if (attWeekStart && attWeekStart !== weekStartStr) continue;
         if (!apLeadKeys.has(key) && !opAprovadosIds.has(att.id)) {
           apLeadKeys.set(key, att);
           opAprovadosIds.add(att.id);
