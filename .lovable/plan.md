@@ -1,45 +1,43 @@
 
 
-## Plano: Corrigir cálculo de No-Show para excluir Pendentes
+## Plano: Incluir leads com R2 Aprovado fora da safra + Encaixados no relatório lifecycle
 
 ### Problema
-A RPC `get_sdr_metrics_from_agenda` calcula no-shows como `r1_agendada - r1_realizada`, o que inclui reuniões ainda pendentes (`invited`/`scheduled`) como no-show. Isso infla artificialmente o número e a taxa de no-show.
+O relatório lifecycle só captura leads cujo `contract_paid_at` cai na safra (Qui-Qua). Faltam dois grupos:
 
-**Dados de hoje (15/04):**
-- `invited` (pendentes): 23
-- `no_show` (real): 24
-- Atual: No-Shows = 41 (pendentes + no-shows reais misturados)
-- Correto: No-Shows = 24 (apenas status `no_show`)
+1. **Contratos pagos antes da safra** — leads que pagaram em semanas anteriores mas tiveram R2 aprovado na janela do carrinho atual
+2. **Encaixados** — leads do acumulado que foram forçados para a semana via `carrinho_week_start` (botão "Encaixar no Carrinho")
 
-### Correção
+O Carrinho R2 já conta ambos os grupos (via `useR2CarrinhoKPIs`), mas o relatório lifecycle não.
 
-**Arquivo: RPC `get_sdr_metrics_from_agenda`** (migração SQL)
+### Solução
 
-Na versão com deduplicação (segunda definição da function, que é a usada com `bu_filter`):
+Modificar `src/hooks/useContractLifecycleReport.ts` para adicionar dois caminhos de busca após o Step 1b:
 
-1. No CTE `dedup_agendada`, adicionar contagem de no-shows reais:
-```sql
-MAX(CASE WHEN status = 'no_show' THEN 1 ELSE 0 END) as is_noshow
-```
+**Step 1c — Leads com R2 Aprovado na janela do carrinho:**
+1. Buscar `r2_status_options` com nome "aprovado"
+2. Buscar R2 attendees com `r2_status_id` = aprovado, `scheduled_at` na janela Sex-Sex (usa `getCarrinhoMetricBoundaries`)
+3. Coletar `deal_id` e excluir os que já estão nos `filteredR1Attendees`
+4. Para os faltantes, buscar R1 attendees correspondentes por `deal_id` (ou por `contact_id` cross-pipeline)
+5. Se não tem R1, criar row com campos R1 nulos e `r1Status = 'outside'`
 
-2. No CTE `sdr_stats`, somar no-shows reais:
-```sql
-SUM(d.is_noshow)::int as no_shows
-```
+**Step 1d — Encaixados (carrinho_week_start):**
+1. Buscar R2 attendees com `carrinho_week_start` = weekStart da safra (formato `yyyy-MM-dd`)
+2. Coletar `deal_id` e excluir os já capturados nos passos anteriores
+3. Mesma lógica: buscar R1 correspondente ou criar row com R1 nulo
 
-3. No JSON final, usar `no_shows` diretamente em vez de `GREATEST(0, r1_agendada - r1_realizada)`:
-```sql
-'no_shows', no_shows
-```
+**Deduplicação:** Unir os 3 conjuntos por `deal_id` antes de continuar o pipeline (Steps 2-5 existentes).
 
-A mesma correção se aplica à primeira versão da function (sem `bu_filter`), que usa a fórmula idêntica na linha 55.
+**Dependência:** `filters.weekStart` já é passado pelo painel — usado para calcular a janela do carrinho e o `carrinho_week_start` string.
 
 ### Resultado esperado
-- No-Shows: **~24** (apenas reuniões com status `no_show`)
-- Pendentes (23) deixam de ser contados como no-show
-- Taxa No-Show cai de 63.1% para ~37% (24/65), refletindo a realidade
+- Aprovados no relatório = ~24 (alinhado com Carrinho R2)
+- Encaixados aparecem no relatório com seus dados R2 corretos
+- Leads sem R1 aparecem com campos R1 vazios
 
 ### Seção técnica
-- Migração SQL para recriar a function `get_sdr_metrics_from_agenda` com ambas as assinaturas
-- Nenhuma alteração em código TypeScript — o campo `no_shows` já é consumido corretamente pelo frontend
+- Arquivo único: `src/hooks/useContractLifecycleReport.ts`
+- ~60 linhas adicionais entre Step 1b e Step 2
+- Import de `getCarrinhoMetricBoundaries` e `format` de date-fns
+- Reutiliza `getCartWeekStart` para calcular `carrinho_week_start` string a partir de `filters.weekStart`
 
