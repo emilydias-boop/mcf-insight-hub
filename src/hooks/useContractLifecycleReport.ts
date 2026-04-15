@@ -64,9 +64,10 @@ function classifySituacao(
   r2StatusName: string | null,
   r2Date: string | null,
   fridayCutoff: Date,
+  isHublaRefunded: boolean = false,
 ): { situacao: ContractSituacao; label: string } {
-  // 1. Reembolso
-  if (r1Status === 'refunded') {
+  // 1. Reembolso (R1 status OR Hubla transaction refunded)
+  if (r1Status === 'refunded' || isHublaRefunded) {
     return { situacao: 'reembolso', label: '💰 Reembolso' };
   }
 
