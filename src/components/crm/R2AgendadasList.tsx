@@ -483,6 +483,9 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
                           <TableCell className="font-mono text-sm text-muted-foreground">
                             {att.r1_date ? format(new Date(att.r1_date), 'dd/MM') : '-'}
                           </TableCell>
+                          <TableCell className="font-mono text-sm text-muted-foreground">
+                            {att.contract_paid_at ? format(new Date(att.contract_paid_at), 'dd/MM') : '-'}
+                          </TableCell>
                           <TableCell className="text-right">
                             {renderStatusCell(att)}
                           </TableCell>
