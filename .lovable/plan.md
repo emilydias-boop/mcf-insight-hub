@@ -1,44 +1,53 @@
 
 
-## Plano: Alinhar R2 usada no relatório lifecycle com a janela do Carrinho
+## Plano: Alinhar "Total Pagos" do relatório lifecycle com o Carrinho
 
 ### Problema
-O relatório lifecycle seleciona a R2 mais recente por `deal_id` (qualquer data), enquanto o Carrinho filtra R2s pela janela Sex-Sex. Isso gera:
-- Carlos Magno: relatório mostra R2 do dia 16/04 (agendado), Carrinho mostra R2 do dia 10/04 (no-show)
-- KPIs de "Agendados" não batem entre as duas views
+- **Carrinho R2**: 62 contratos pagos — conta emails únicos de `hubla_transactions` com filtros rigorosos (product = A000, exclui newsale-, installment > 1, fontes específicas)
+- **Relatório Lifecycle**: 70 contratos pagos — conta R1 attendees com `contract_paid_at` preenchido, sem validar se existe transação real na Hubla
 
-### Causa raiz
-No Step 4 do `useContractLifecycleReport.ts` (linha 453), ao buscar R2 attendees por `deal_id`, o código pega sempre a com `scheduled_at` mais recente:
-```ts
-if (!existing || (newDate && (!existing.r2Date || newDate > existing.r2Date))) {
-```
-Isso ignora a janela do carrinho — uma R2 futura (16/04) sobrepõe a da semana (10/04).
+A diferença de 8 vem de: deals marcados manualmente como "contrato pago" sem transação Hubla correspondente, deals duplicados para o mesmo cliente, ou transações de fontes/produtos excluídos.
 
-### Correção em `src/hooks/useContractLifecycleReport.ts`
+### Correção
 
-**Opção: Priorizar a R2 dentro da janela do carrinho**
+Mudar a fonte primária do Step 1 do lifecycle para usar `hubla_transactions` (como o Carrinho faz), e depois resolver os R1 attendees a partir dos emails encontrados.
 
-No Step 4, ao resolver qual R2 usar para cada deal_id, preferir a R2 que cai dentro da janela do carrinho (Sex anterior → Sex atual). Se houver uma dentro e uma fora, usar a de dentro. Se ambas estão dentro, usar a mais recente.
+**Arquivo: `src/hooks/useContractLifecycleReport.ts`**
 
-Lógica:
-1. Calcular a janela R2 usando `getCarrinhoMetricBoundaries` (já importado)
-2. No loop que popula `r2Map`, para cada R2:
-   - Se a nova R2 está **dentro** da janela e a existente está **fora** → substituir
-   - Se ambas estão dentro (ou ambas fora) → manter a mais recente (comportamento atual)
-   - Se a nova está fora e a existente dentro → manter a existente
+**Novo Step 1 (substituir o atual Step 1a):**
+1. Buscar transações em `hubla_transactions` com os mesmos filtros do Carrinho:
+   - `product_name = 'A000 - Contrato'`
+   - `sale_status in ('completed', 'refunded')`
+   - `source in ('hubla', 'manual', 'make', 'mcfpay', 'kiwify')`
+   - `sale_date` dentro dos boundaries de contratos (Qui-Qua)
+2. Aplicar os mesmos filtros de exclusão:
+   - Excluir `hubla_id` começando com `newsale-`
+   - Excluir `source = 'make'` com `product_name = 'contrato'`
+   - Excluir `installment_number > 1`
+3. Deduplicar por `customer_email` (lowercase)
+4. Resolver `customer_email` → `crm_contacts` → `crm_deals` → `meeting_slot_attendees` (R1)
+5. Para emails sem R1 attendee, criar rows sintéticos (como já faz no Step 1c/1d)
 
-```text
-Prioridade:
-  1. Dentro da janela carrinho, mais recente
-  2. Fora da janela, mais recente (fallback)
-```
+**Novo Step 1 detalhe:**
+- Buscar contacts por email
+- Buscar deals por contact_id
+- Filtrar deals por BU (incorporadorOriginIds)
+- Buscar R1 attendees por deal_id
+- Para contratos sem R1, criar row sintético com `r1Status = 'outside'`
+- Flag de refund vem direto da transação (`sale_status = 'refunded'`)
 
-Isso garante que:
-- Carlos Magno use a R2 de 10/04 (no-show, dentro da janela) em vez da de 16/04 (fora)
-- Os KPIs de "Agendados" e "No-show" fiquem alinhados com o Carrinho
+**Steps 1c e 1d (R2 aprovados + encaixados)** permanecem iguais — eles adicionam leads que não pagaram na safra.
+
+**Steps 2-5** permanecem iguais — resolvem SDR, R2, e classificam situação.
+
+### Resultado esperado
+- Total Pagos = 62 (alinhado com Carrinho)
+- Deduplicação por email garante que não conte o mesmo cliente 2x
+- Reembolsos identificados diretamente pela transação Hubla
 
 ### Seção técnica
-- Arquivo: `src/hooks/useContractLifecycleReport.ts`, Step 4 (~linhas 446-468)
-- ~10 linhas alteradas no critério de seleção de R2 por deal_id
-- Usa `boundaries.r2Meetings` para determinar se a R2 cai dentro da janela
+- Arquivo único: `src/hooks/useContractLifecycleReport.ts`
+- Reescrever Step 1a (~linhas 120-182): trocar query de `meeting_slot_attendees` por `hubla_transactions` + resolução email→contact→deal→R1
+- ~80 linhas de código alteradas/adicionadas
+- Imports adicionais: nenhum (já tem tudo)
 
