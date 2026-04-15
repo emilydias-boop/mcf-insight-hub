@@ -241,6 +241,34 @@ export default function Agenda() {
     return `${format(rangeStart, "dd MMM", { locale: ptBR })} - ${format(rangeEnd, "dd MMM yyyy", { locale: ptBR })}`;
   }, [selectedDate, viewMode, rangeStart, rangeEnd]);
 
+  const STATUS_LABELS: Record<string, string> = {
+    invited: 'Agendada', scheduled: 'Agendada', rescheduled: 'Reagendada',
+    completed: 'Realizada', no_show: 'No-show', canceled: 'Cancelada',
+    cancelled: 'Cancelada', contract_paid: 'Contrato Pago',
+    approved: 'Aprovado', rejected: 'Rejeitado', refunded: 'Reembolsado',
+  };
+
+  const handleExportExcel = useCallback(() => {
+    const rows: Record<string, string>[] = [];
+    for (const meeting of filteredMeetings) {
+      for (const att of (meeting.attendees || [])) {
+        if (att.is_partner) continue;
+        rows.push({
+          'Data/Hora': format(parseISO(meeting.scheduled_at), 'dd/MM/yyyy HH:mm'),
+          'Lead': att.attendee_name || att.contact?.name || '',
+          'Telefone': att.attendee_phone || att.contact?.phone || '',
+          'Closer': meeting.closer?.name || '',
+          'Status': STATUS_LABELS[att.status] || att.status || '',
+        });
+      }
+    }
+    if (rows.length === 0) return;
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Agenda R1');
+    XLSX.writeFile(wb, `agenda-r1-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+  }, [filteredMeetings]);
+
   return (
     <div className="space-y-3 sm:space-y-4">
       {/* Header */}
