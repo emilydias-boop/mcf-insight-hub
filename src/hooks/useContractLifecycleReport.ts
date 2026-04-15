@@ -224,7 +224,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       }
 
       const now = new Date();
-      const fridayCutoff = getFridayCutoff();
+      const fridayCutoff = getFridayCutoff(filters.weekStart);
 
       // Step 5: Transform into rows
       const rows: ContractLifecycleRow[] = (r1Attendees || []).map((att: any) => {
