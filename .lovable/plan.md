@@ -1,18 +1,19 @@
 
 
-## Diagnóstico
+## Plano: Remover colunas redundantes do Relatório
 
-A query R2 no hook exclui attendees com `status = 'pre_scheduled'` (linha 129). Isso oculta 5 leads que **já têm R2 marcada** mas ainda estão em status pré-agendado — como o caso do "Riolando de Faria Gião Jr" que tem R2 com Jessica Martins em 16/04.
+Remover 5 colunas da tabela e do CSV export:
+- **SDR** — remover coluna e referência no search
+- **Carrinho** — dados não carregam corretamente
+- **Safra** — idem
+- **Dias** — remover coluna e KPI "Parados >5d"
+- **Situação** — informação redundante com as demais colunas
 
-A exclusão de `pre_scheduled` faz sentido nas grids de agenda (para não poluir), mas no relatório de lifecycle o objetivo é justamente ver se o lead **tem ou não R2**, independente do status de confirmação.
+### Alterações em `src/components/crm/R2ContractLifecyclePanel.tsx`
 
-## Correção
-
-**`src/hooks/useContractLifecycleReport.ts`** — uma única alteração:
-
-- **Remover** `.neq('status', 'pre_scheduled')` da query R2 (linha 129)
-- Isso vai incluir os 5 leads que hoje aparecem como "Sem R2" mas na verdade já têm R2 pré-agendada
-- O campo `r2AttendeeStatus` já captura o status do attendee, então a coluna "Presença R2" vai mostrar corretamente "Pré-agendado" para esses casos
-
-Nenhuma outra alteração necessária — o painel já renderiza `r2AttendeeStatus` na coluna de presença.
+1. Remover das `TableHead`/`TableCell`: SDR, Carrinho, Safra, Dias, Situação
+2. Remover KPI card "Parados >5d" (ajustar grid para 5 colunas)
+3. Atualizar `handleExportCSV` removendo essas 5 colunas dos headers e dados
+4. Remover do search filter a referência a `sdrName`
+5. Remover componentes não utilizados: `DiasParadoBadge`, `SituacaoBadge`, `SITUACAO_OPTIONS`, filtro de situação
 
