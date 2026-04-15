@@ -114,9 +114,12 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       const mergedR2 = Array.from(r2LeadKeys.values());
 
       // Merge encaixados into aprovados, same logic
+      // Only let encaixados with approved status participate; non-approved encaixados must not override approved regulars
       const apLeadKeys = new Map<string, any>();
       const opAprovadosIds = new Set<string>();
       for (const enc of encaixadosAprovadosResult.data || []) {
+        // Only include encaixados that are actually approved
+        if (aprovadoStatusId && enc.r2_status_id !== aprovadoStatusId) continue;
         const key = (enc as any).deal_id || enc.id;
         apLeadKeys.set(key, enc);
         opAprovadosIds.add(enc.id);
