@@ -151,18 +151,33 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
       if (r1Error) throw r1Error;
 
-      // Step 1b: Filter R1 attendees to Inside Sales pipeline only
-      const { data: insideOrigins } = await supabase
-        .from('crm_origins')
-        .select('id')
-        .ilike('name', '%inside%');
-      const insideOriginIds = new Set((insideOrigins || []).map((o: any) => o.id));
+      // Step 1b: Filter R1 attendees to BU Incorporador origins only
+      const { data: buMappings } = await supabase
+        .from('bu_origin_mapping')
+        .select('entity_type, entity_id')
+        .eq('bu', 'incorporador');
+
+      const directOriginIds = (buMappings || [])
+        .filter((m: any) => m.entity_type === 'origin')
+        .map((m: any) => m.entity_id);
+      const groupIds = (buMappings || [])
+        .filter((m: any) => m.entity_type === 'group')
+        .map((m: any) => m.entity_id);
+
+      let allBUOriginIds = [...directOriginIds];
+      if (groupIds.length > 0) {
+        const { data: childOrigins } = await supabase
+          .from('crm_origins')
+          .select('id')
+          .in('group_id', groupIds);
+        allBUOriginIds.push(...(childOrigins || []).map((o: any) => o.id));
+      }
+      const incorporadorOriginIds = new Set(allBUOriginIds);
 
       const filteredR1Attendees = (r1Attendees || []).filter((a: any) => {
         const originId = a.deal?.origin_id;
-        // If no deal or no origin_id, keep (safe fallback)
         if (!originId) return true;
-        return insideOriginIds.has(originId);
+        return incorporadorOriginIds.has(originId);
       });
 
       // Step 2: Collect booked_by UUIDs and resolve SDR names
