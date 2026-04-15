@@ -63,13 +63,13 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
         supabase.from('r2_status_options').select('id, name').eq('is_active', true),
         supabase
           .from('meeting_slot_attendees')
-          .select(`id, status, r2_status_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type)`)
+          .select(`id, status, r2_status_id, deal_id, carrinho_week_start, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type)`)
           .eq('meeting_slot.meeting_type', 'r2')
           .gte('meeting_slot.scheduled_at', boundaries.r2Meetings.start.toISOString())
           .lte('meeting_slot.scheduled_at', boundaries.r2Meetings.end.toISOString()),
         supabase
           .from('meeting_slot_attendees')
-          .select('id, r2_status_id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)')
+          .select('id, r2_status_id, deal_id, carrinho_week_start, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)')
           .eq('meeting_slot.meeting_type', 'r2')
           .gte('meeting_slot.scheduled_at', boundaries.aprovados.start.toISOString())
           .lte('meeting_slot.scheduled_at', boundaries.aprovados.end.toISOString()),
@@ -103,6 +103,9 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       }
       for (const att of r2AttendeesResult.data || []) {
         const key = (att as any).deal_id || att.id;
+        const attWeekStart = (att as any).carrinho_week_start;
+        // Skip if assigned to a different week (align with useR2CarrinhoData)
+        if (attWeekStart && attWeekStart !== weekStartStr) continue;
         if (!r2LeadKeys.has(key) && !r2AttendeeIds.has(att.id)) {
           r2LeadKeys.set(key, att);
           r2AttendeeIds.add(att.id);
@@ -120,6 +123,8 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       }
       for (const att of opAprovadosResult.data || []) {
         const key = (att as any).deal_id || att.id;
+        const attWeekStart = (att as any).carrinho_week_start;
+        if (attWeekStart && attWeekStart !== weekStartStr) continue;
         if (!apLeadKeys.has(key) && !opAprovadosIds.has(att.id)) {
           apLeadKeys.set(key, att);
           opAprovadosIds.add(att.id);
