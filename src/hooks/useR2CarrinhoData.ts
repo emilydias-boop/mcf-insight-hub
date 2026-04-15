@@ -37,6 +37,7 @@ async function fetchAttendeesFromQuery(
   statusMap: Record<string, string>,
   filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados',
   aprovadoStatusId?: string,
+  weekStartStr?: string,
 ): Promise<R2CarrinhoAttendee[]> {
   const { data } = await supabase
     .from('meeting_slot_attendees')
