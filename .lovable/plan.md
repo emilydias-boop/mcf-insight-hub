@@ -1,39 +1,53 @@
 
 
-## Plano: Corrigir coluna "Dia Compra" no Carrinho R2
+## Plano: Preencher "Dia Compra" faltante via hubla_transactions
 
 ### Problema
-O campo `contract_paid_at` nos attendees de R2 está NULL porque ele é preenchido apenas no attendee de **R1** (pelo webhook de contrato). Os registros de R2 são entradas separadas na tabela `meeting_slot_attendees` e não herdam esse valor.
+Alguns leads mostram "-" na coluna "Dia Compra" porque o campo `contract_paid_at` no attendee de R1 está NULL. Isso acontece quando o webhook de contrato não conseguiu vincular a transação ao attendee (ex: lead "outside", matching falhou, ou contrato antigo anterior ao sistema de linking).
 
 ### Solução
-No hook `useR2CarrinhoData.ts`, na mesma etapa onde já buscamos os dados de R1 (linhas 257-287), também buscar o `contract_paid_at` do attendee de R1 vinculado ao mesmo `deal_id`, e popular o campo nos attendees de R2.
+Após o merge com R1, fazer um fallback para leads que ainda não têm `contract_paid_at`: buscar na tabela `hubla_transactions` pelo `customer_email` do contato, filtrando por `product_name = 'A000 - Contrato'` e `sale_status in ('completed', 'refunded')`, e usar o `sale_date` como data de compra.
 
 ### Alterações
 
-**`src/hooks/useR2CarrinhoData.ts`**
-- Na query de R1 (linha 260-268), adicionar `contract_paid_at` ao select dos `meeting_slot_attendees`
-- No mapeamento do `r1Map`, incluir `contract_paid_at` junto com `date` e `closer_name`
-- No loop de merge (linhas 281-286), popular `att.contract_paid_at` a partir do R1 quando o valor local for null
+**`src/hooks/useR2CarrinhoData.ts`** (após o bloco de merge R1, ~linha 289)
 
-### Detalhes técnicos
+1. Coletar os emails dos attendees que ainda têm `contract_paid_at` nulo
+2. Buscar em `hubla_transactions` a transação mais recente para cada email
+3. Popular `contract_paid_at` com `sale_date` da transação encontrada
 
 ```ts
-// Linha 265: adicionar contract_paid_at ao select
-meeting_slot_attendees!inner(deal_id, contract_paid_at)
+// Após merge R1 (linha 289), antes do sort:
+const missingContractEmails = merged
+  .filter(a => !a.contract_paid_at && a.contact_email)
+  .map(a => a.contact_email!.toLowerCase().trim());
 
-// Linha 270: incluir contract_paid_at no map
-const r1Map = new Map<string, { date: string; closer_name: string | null; contract_paid_at: string | null }>();
+if (missingContractEmails.length > 0) {
+  const uniqueEmails = [...new Set(missingContractEmails)];
+  const { data: txs } = await supabase
+    .from('hubla_transactions')
+    .select('customer_email, sale_date')
+    .eq('product_name', 'A000 - Contrato')
+    .in('sale_status', ['completed', 'refunded'])
+    .in('customer_email', uniqueEmails)
+    .order('sale_date', { ascending: false });
 
-// Linha 276: salvar no map
-r1Map.set(rAtt.deal_id, { 
-  date: r1.scheduled_at, 
-  closer_name: r1Closer?.name || null,
-  contract_paid_at: rAtt.contract_paid_at || null 
-});
+  const emailToSaleDate = new Map<string, string>();
+  for (const tx of txs || []) {
+    const email = (tx.customer_email || '').toLowerCase().trim();
+    if (email && !emailToSaleDate.has(email)) {
+      emailToSaleDate.set(email, tx.sale_date);
+    }
+  }
 
-// Linha 283: popular no attendee R2
-att.contract_paid_at = att.contract_paid_at || r1Map.get(att.deal_id)!.contract_paid_at;
+  for (const att of merged) {
+    if (!att.contract_paid_at && att.contact_email) {
+      const saleDate = emailToSaleDate.get(att.contact_email.toLowerCase().trim());
+      if (saleDate) att.contract_paid_at = saleDate;
+    }
+  }
+}
 ```
 
-Nenhum arquivo adicional precisa ser alterado — a coluna na tabela já está implementada corretamente.
+Nenhum outro arquivo precisa ser alterado.
 
