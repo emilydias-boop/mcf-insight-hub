@@ -1,18 +1,16 @@
 import { useState, useMemo } from "react";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, addWeeks, subWeeks, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { DateRange } from "react-day-picker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { CalendarIcon, Download, Search, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useContractLifecycleReport, ContractLifecycleRow, ContractSituacao } from "@/hooks/useContractLifecycleReport";
 import { DealDetailsDrawer } from "./DealDetailsDrawer";
+import { getCartWeekStart, getCartWeekEnd } from "@/lib/carrinhoWeekBoundaries";
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return '—';
@@ -67,18 +65,22 @@ function formatPhone(phone: string | null) {
 }
 
 export function R2ContractLifecyclePanel() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: startOfMonth(new Date()),
-    to: endOfMonth(new Date()),
-  });
+  const [weekDate, setWeekDate] = useState<Date>(new Date());
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // Derive safra (Thu-Wed) from current weekDate
+  const safraStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
+  const safraEnd = useMemo(() => getCartWeekEnd(weekDate), [weekDate]);
+  // Carrinho Friday = safra Thursday + 8 days
+  const carrinhoFriday = useMemo(() => addDays(safraStart, 8), [safraStart]);
+
   const filters = useMemo(() => ({
-    startDate: dateRange?.from || startOfMonth(new Date()),
-    endDate: dateRange?.to || endOfMonth(new Date()),
-  }), [dateRange]);
+    startDate: safraStart,
+    endDate: safraEnd,
+    weekStart: safraStart,
+  }), [safraStart, safraEnd]);
 
   const { data: rows, isLoading } = useContractLifecycleReport(filters);
 
@@ -123,7 +125,7 @@ export function R2ContractLifecyclePanel() {
       r.r1CloserName || '',
       formatDate(r.r1Date),
       r.r1Status || '',
-      r.situacaoLabel.replace(/^[^\w]*\s*/, ''), // remove emoji
+      r.situacaoLabel.replace(/^[^\w]*\s*/, ''),
       formatDate(r.r2Date),
       r.r2CloserName || '',
       r.r2StatusName || '',
@@ -138,38 +140,37 @@ export function R2ContractLifecyclePanel() {
     URL.revokeObjectURL(url);
   };
 
+  const navigateWeek = (dir: number) => {
+    setWeekDate(prev => dir > 0 ? addWeeks(prev, 1) : subWeeks(prev, 1));
+  };
+
   return (
     <div className="space-y-4">
-      {/* Filters */}
+      {/* Week Navigation */}
       <Card className="bg-card border-border">
         <CardContent className="pt-4">
           <div className="flex flex-wrap items-center gap-3">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-[260px] justify-start text-left font-normal">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "dd/MM/yy", { locale: ptBR })} - {format(dateRange.to, "dd/MM/yy", { locale: ptBR })}
-                      </>
-                    ) : format(dateRange.from, "dd/MM/yy", { locale: ptBR })
-                  ) : "Período"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
-                  locale={ptBR}
-                  className="pointer-events-auto"
-                />
-              </PopoverContent>
-            </Popover>
+            {/* Carrinho week nav */}
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateWeek(-1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="px-3 py-1.5 text-sm font-medium whitespace-nowrap">
+                <span className="text-muted-foreground">Carrinho </span>
+                <span className="text-foreground">Sex {format(carrinhoFriday, "dd/MM", { locale: ptBR })}</span>
+                <span className="text-muted-foreground mx-1.5">—</span>
+                <span className="text-muted-foreground">Safra: </span>
+                <span className="text-foreground">
+                  Qui {format(safraStart, "dd/MM", { locale: ptBR })} → Qua {format(safraEnd, "dd/MM", { locale: ptBR })}
+                </span>
+              </div>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateWeek(1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" className="text-xs ml-1" onClick={() => setWeekDate(new Date())}>
+                Hoje
+              </Button>
+            </div>
 
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
