@@ -89,18 +89,8 @@ export function getCarrinhoMetricBoundaries(
 
   // Sexta do carrinho atual = Qui + 1 dia (sexta da mesma semana)
   const currentFriday = addDays(new Date(weekStart), 1);
-  // Sexta anterior = uma semana antes
-  const previousFriday = subDays(currentFriday, 7);
-
-  // Horário de corte da sexta anterior (usa previousConfig, fallback config, fallback 12:00)
-  const prevHorarioCorte = previousConfig?.carrinhos?.[0]?.horario_corte
-    || config?.carrinhos?.[0]?.horario_corte
-    || '12:00';
-  const [prevCutHour, prevCutMinute] = prevHorarioCorte.split(':').map(Number);
-  const previousFridayCutoff = new Date(
-    previousFriday.getFullYear(), previousFriday.getMonth(), previousFriday.getDate(),
-    prevCutHour, prevCutMinute || 0, 0, 0
-  );
+  // Próxima sexta = uma semana depois
+  const nextFriday = addDays(currentFriday, 7);
 
   // Horário de corte da sexta atual (default 12:00)
   const horarioCorte = config?.carrinhos?.[0]?.horario_corte || '12:00';
@@ -110,14 +100,20 @@ export function getCarrinhoMetricBoundaries(
     cutHour, cutMinute || 0, 0, 0
   );
 
+  // Horário de corte da próxima sexta
+  const nextFridayCutoff = new Date(
+    nextFriday.getFullYear(), nextFriday.getMonth(), nextFriday.getDate(),
+    cutHour, cutMinute || 0, 0, 0
+  );
+
   // Vendas parceria: Sex do carrinho atual 00:00 → Seg 23:59:59
   const friCartStart = localStartOfDay(currentFriday);
   const monAfterCart = localEndOfDay(addDays(currentFriday, 3));
 
   return {
     contratos: { start: thuStart, end: wedEnd },
-    r2Meetings: { start: previousFridayCutoff, end: currentFridayCutoff },
-    aprovados: { start: previousFridayCutoff, end: currentFridayCutoff },
+    r2Meetings: { start: currentFridayCutoff, end: nextFridayCutoff },
+    aprovados: { start: currentFridayCutoff, end: nextFridayCutoff },
     vendasParceria: { start: friCartStart, end: monAfterCart },
     r1Meetings: { start: thuStart, end: wedEnd },
   };
