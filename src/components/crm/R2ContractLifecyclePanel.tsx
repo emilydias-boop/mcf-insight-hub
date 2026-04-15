@@ -427,7 +427,7 @@ export function R2ContractLifecyclePanel() {
               onClick={() => handleSubClick('antigos')}
             >
               <CardContent className="py-2 px-3 text-center">
-                <p className="text-[10px] text-muted-foreground">Antigos (>3d)</p>
+                <p className="text-[10px] text-muted-foreground">{"Antigos (>3d)"}</p>
                 <p className="text-lg font-bold text-amber-600">{pendentesChildren.antigos}</p>
               </CardContent>
             </Card>
