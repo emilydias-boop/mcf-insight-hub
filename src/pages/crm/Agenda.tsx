@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { format, addDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns';
+import { format, addDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getWeekStartsOn } from '@/lib/businessDays';
-import { CalendarDays, ChevronLeft, ChevronRight, Settings, Users, RefreshCw, Plus, Columns3, BarChart3, Search } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Settings, Users, RefreshCw, Plus, Columns3, BarChart3, Search, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -240,6 +241,34 @@ export default function Agenda() {
     return `${format(rangeStart, "dd MMM", { locale: ptBR })} - ${format(rangeEnd, "dd MMM yyyy", { locale: ptBR })}`;
   }, [selectedDate, viewMode, rangeStart, rangeEnd]);
 
+  const STATUS_LABELS: Record<string, string> = {
+    invited: 'Agendada', scheduled: 'Agendada', rescheduled: 'Reagendada',
+    completed: 'Realizada', no_show: 'No-show', canceled: 'Cancelada',
+    cancelled: 'Cancelada', contract_paid: 'Contrato Pago',
+    approved: 'Aprovado', rejected: 'Rejeitado', refunded: 'Reembolsado',
+  };
+
+  const handleExportExcel = useCallback(() => {
+    const rows: Record<string, string>[] = [];
+    for (const meeting of filteredMeetings) {
+      for (const att of (meeting.attendees || [])) {
+        if (att.is_partner) continue;
+        rows.push({
+          'Data/Hora': format(parseISO(meeting.scheduled_at), 'dd/MM/yyyy HH:mm'),
+          'Lead': att.attendee_name || att.contact?.name || '',
+          'Telefone': att.attendee_phone || att.contact?.phone || '',
+          'Closer': meeting.closer?.name || '',
+          'Status': STATUS_LABELS[att.status] || att.status || '',
+        });
+      }
+    }
+    if (rows.length === 0) return;
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Agenda R1');
+    XLSX.writeFile(wb, `agenda-r1-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+  }, [filteredMeetings]);
+
   return (
     <div className="space-y-3 sm:space-y-4">
       {/* Header */}
@@ -256,8 +285,11 @@ export default function Agenda() {
           </div>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button variant="outline" size="icon" onClick={() => refetch()} className="h-8 w-8 sm:h-9 sm:w-9">
+          <Button variant="outline" size="icon" onClick={() => refetch()} className="h-8 w-8 sm:h-9 sm:w-9" title="Atualizar">
             <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" onClick={handleExportExcel} className="h-8 w-8 sm:h-9 sm:w-9" title="Exportar Excel">
+            <Download className="h-4 w-4" />
           </Button>
           {!isCloser && (
             <>
