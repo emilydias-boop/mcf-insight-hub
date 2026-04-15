@@ -444,6 +444,7 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
                         <TableHead className="w-auto">Nome Lead</TableHead>
                         <TableHead className="w-[160px] min-w-[160px]">Closer R2</TableHead>
                         <TableHead className="w-[90px]">Dia R1</TableHead>
+                        <TableHead className="w-[90px]">Dia Compra</TableHead>
                         <TableHead className="w-[180px] min-w-[180px] text-right">Status</TableHead>
                       </TableRow>
                     </TableHeader>
