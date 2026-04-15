@@ -3,6 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { startOfDay, endOfDay, differenceInDays, addDays, nextFriday, isFriday, startOfWeek } from 'date-fns';
 import { getCustomWeekEnd } from '@/lib/dateHelpers';
 
+function normalizePhoneSuffix(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return digits.slice(-9);
+}
+
 export interface ContractLifecycleFilters {
   startDate: Date;
   endDate: Date;
