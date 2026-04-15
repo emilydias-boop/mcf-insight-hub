@@ -107,7 +107,7 @@ function classifySituacao(
 
 export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
   return useQuery({
-    queryKey: ['contract-lifecycle-report', filters.startDate.toISOString(), filters.endDate.toISOString(), filters.closerR1Id, filters.situacao],
+    queryKey: ['contract-lifecycle-report', filters.startDate.toISOString(), filters.endDate.toISOString(), filters.closerR1Id, filters.situacao, filters.weekStart?.toISOString()],
     staleTime: 30000,
     queryFn: async () => {
       // Step 1: Get R1 attendees with contract_paid_at in the period
