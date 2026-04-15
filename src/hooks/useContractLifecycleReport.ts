@@ -40,6 +40,7 @@ export interface ContractLifecycleRow {
   diasParado: number | null;
   situacao: ContractSituacao;
   situacaoLabel: string;
+  isPaidContract: boolean;
 }
 
 /** Get the Friday cutoff for a given week start (Thursday).
@@ -295,6 +296,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
             r1Att._hublaRefunded = true;
           }
           r1Att._hublaSaleDate = txInfo.saleDate;
+          r1Att._isPaidFromHubla = true;
           filteredR1Attendees.push(r1Att);
         } else {
           // Create synthetic row — no R1 found for this email
@@ -321,6 +323,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
             deal: bestDeal ? { ...bestDeal, contact: contact || null } : null,
             _hublaRefunded: txInfo.isRefunded,
             _hublaSaleDate: txInfo.saleDate,
+            _isPaidFromHubla: true,
           });
         }
       }
@@ -687,6 +690,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           diasParado,
           situacao,
           situacaoLabel,
+          isPaidContract: !!att._isPaidFromHubla,
         };
       });
 
