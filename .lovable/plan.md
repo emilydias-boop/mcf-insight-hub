@@ -1,41 +1,64 @@
 
 
-## Correção: Reembolso não detectado para contatos sem email
+## Plano: KPIs clicáveis com filtro na tabela
 
-### Causa raiz
-O cruzamento com `hubla_transactions` para detectar reembolsos usa apenas email. Porém, Marco Aurélio Cunta e Monique Andrade têm `email = null` no `crm_contacts`. Seus reembolsos existem na Hubla (`sale_status = 'refunded'`, `product_name LIKE '%Contrato%'`), mas o match nunca acontece.
+### Comportamento
+- Clicar em um KPI filtra a tabela para mostrar apenas os registros daquela categoria
+- Clicar novamente no mesmo KPI remove o filtro (toggle)
+- O KPI ativo fica visualmente destacado (borda/fundo mais forte)
+- Cada KPI mostra sub-contadores inline para dar contexto rápido
 
-### Solução
-Adicionar cross-reference por **telefone** como fallback quando email não está disponível.
+### Mapeamento de filtros
 
-### Alterações em `src/hooks/useContractLifecycleReport.ts`
+| KPI clicado | Situações filtradas | Sub-info exibida no card |
+|---|---|---|
+| **Total Pagos** | Todas (sem filtro) | — |
+| **Agendados** | `agendado`, `proxima_semana`, `pre_agendado`, `realizada` | Aprovados / Pré-agend / Próx. Semana / Realizadas |
+| **Pendentes** | `pendente` | Recentes (≤3d) / Antigos (>3d) |
+| **No-show** | `no_show` | — |
+| **Reembolso** | `reembolso` | — |
 
-1. **Coletar telefones refundidos**: Além de `refundedEmailsSet`, criar `refundedPhonesSet` com os `customer_phone` das transações refundidas (normalizados para sufixo de 9 dígitos)
+### Alterações em `src/components/crm/R2ContractLifecyclePanel.tsx`
 
-2. **Mapear attendee → phone**: Além de `attendeeEmailMap`, criar `attendeePhoneMap` usando `att.attendee_phone || att.deal?.contact?.phone`
-
-3. **Atualizar check de refund**: 
-```ts
-const contactEmail = attendeeEmailMap.get(att.id);
-const contactPhone = attendeePhoneMap.get(att.id);
-const isHublaRefunded = 
-  (contactEmail ? refundedEmailsSet.has(contactEmail) : false) ||
-  (contactPhone ? refundedPhonesSet.has(normalizePhone(contactPhone)) : false);
-```
-
-4. **Normalização de telefone**: Usar sufixo de 9 dígitos (mesma lógica já usada no projeto para deduplicação) para evitar falsos negativos por formatação diferente (+55, com espaço, etc.)
+1. **Novo estado**: `activeKpiFilter: string | null` (toggle)
+2. **Expandir KPIs computed**: adicionar sub-contadores (aprovados, pré-agendados, próxima semana, realizadas dentro de agendados; recentes/antigos dentro de pendentes)
+3. **Filtrar `filteredRows`**: aplicar `activeKpiFilter` antes do search
+4. **Estilizar cards**: `cursor-pointer`, borda highlight quando ativo, sub-texto com breakdown
+5. **Extrair KPI cards para componente inline** com `onClick` e `isActive` prop
 
 ### Seção técnica
 
-A normalização será uma função simples:
 ```ts
-function normalizePhoneSuffix(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  return digits.slice(-9);
+// Estado
+const [activeKpiFilter, setActiveKpiFilter] = useState<string | null>(null);
+
+// Sub-KPIs
+const agendadosSub = {
+  aprovados: rows.filter(r => r.situacao === 'agendado').length,
+  preAgendados: rows.filter(r => r.situacao === 'pre_agendado').length,
+  proximaSemana: rows.filter(r => r.situacao === 'proxima_semana').length,
+  realizadas: rows.filter(r => r.situacao === 'realizada').length,
+};
+const pendentesSub = {
+  recentes: rows.filter(r => r.situacao === 'pendente' && (r.diasParado ?? 0) <= 3).length,
+  antigos: rows.filter(r => r.situacao === 'pendente' && (r.diasParado ?? 0) > 3).length,
+};
+
+// Filtro aplicado
+const FILTER_MAP: Record<string, ContractSituacao[]> = {
+  agendados: ['agendado', 'proxima_semana', 'pre_agendado', 'realizada'],
+  pendentes: ['pendente'],
+  noShow: ['no_show'],
+  reembolso: ['reembolso'],
+};
+
+// Na filtragem
+let displayed = rows;
+if (activeKpiFilter && FILTER_MAP[activeKpiFilter]) {
+  displayed = displayed.filter(r => FILTER_MAP[activeKpiFilter].includes(r.situacao));
 }
+// depois aplica searchTerm
 ```
 
-Isso garante que `+5521985134202`, `21985134202` e `985134202` todos resolvam para o mesmo sufixo `985134202`.
-
-Nenhuma alteração no painel — apenas no hook de dados.
+Cada card KPI terá `onClick={() => setActiveKpiFilter(k === activeKpiFilter ? null : k)}` e uma classe `ring-2` quando ativo. Sub-contadores aparecem como texto `text-[10px]` abaixo do número principal.
 
