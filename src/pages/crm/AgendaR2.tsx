@@ -54,7 +54,7 @@ import { R2PendingLeadsPanel } from "@/components/crm/R2PendingLeadsPanel";
 import { R2NoShowsPanel } from "@/components/crm/R2NoShowsPanel";
 import { R2ListViewTable } from "@/components/crm/R2ListViewTable";
 import { R2StatusConfigModal } from "@/components/crm/R2StatusConfigModal";
-import { R2QualificationReportPanel } from "@/components/crm/R2QualificationReportPanel";
+import { R2ContractLifecyclePanel } from "@/components/crm/R2ContractLifecyclePanel";
 import { useR2PendingLeadsCount } from "@/hooks/useR2PendingLeads";
 import { useR2NoShowsCount } from "@/hooks/useR2NoShowLeads";
 import { useR2PreScheduledCount } from "@/hooks/useR2PreScheduledLeads";
