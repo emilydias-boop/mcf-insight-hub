@@ -64,11 +64,19 @@ function formatPhone(phone: string | null) {
   return phone;
 }
 
+const KPI_FILTER_MAP: Record<string, ContractSituacao[]> = {
+  agendados: ['agendado', 'proxima_semana', 'pre_agendado', 'realizada'],
+  pendentes: ['pendente'],
+  noShow: ['no_show'],
+  reembolso: ['reembolso'],
+};
+
 export function R2ContractLifecyclePanel() {
   const [weekDate, setWeekDate] = useState<Date>(new Date());
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeKpiFilter, setActiveKpiFilter] = useState<string | null>(null);
 
   // Derive safra (Thu-Wed) from current weekDate
   const safraStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
@@ -86,15 +94,23 @@ export function R2ContractLifecyclePanel() {
 
   const filteredRows = useMemo(() => {
     if (!rows) return [];
-    if (!searchTerm.trim()) return rows;
-    const term = searchTerm.toLowerCase();
-    return rows.filter(r =>
-      (r.leadName || '').toLowerCase().includes(term) ||
-      (r.phone || '').includes(term) ||
-      (r.r1CloserName || '').toLowerCase().includes(term) ||
-      (r.r2CloserName || '').toLowerCase().includes(term)
-    );
-  }, [rows, searchTerm]);
+    let result = rows;
+    // Apply KPI filter
+    if (activeKpiFilter && KPI_FILTER_MAP[activeKpiFilter]) {
+      result = result.filter(r => KPI_FILTER_MAP[activeKpiFilter]!.includes(r.situacao));
+    }
+    // Apply search
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(r =>
+        (r.leadName || '').toLowerCase().includes(term) ||
+        (r.phone || '').includes(term) ||
+        (r.r1CloserName || '').toLowerCase().includes(term) ||
+        (r.r2CloserName || '').toLowerCase().includes(term)
+      );
+    }
+    return result;
+  }, [rows, searchTerm, activeKpiFilter]);
 
   // KPIs
   const kpis = useMemo(() => {
