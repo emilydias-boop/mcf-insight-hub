@@ -1,36 +1,18 @@
 
 
-## Plano: Enriquecer Relatório de Contratos com SDR, Telefone, Dias Parado e Drawer
+## Diagnóstico
 
-### Resumo
-Adicionar 4 funcionalidades ao relatório de lifecycle de contratos:
-1. **Telefone do lead** — coluna visível na tabela
-2. **SDR que agendou** — resolver `booked_by` do meeting_slot R1 via `profiles`
-3. **Dias parado** — calcular dias desde `contract_paid_at` sem terminal status
-4. **Drawer do lead** — clicar na linha abre o `DealDetailsDrawer` existente
+A query R2 no hook exclui attendees com `status = 'pre_scheduled'` (linha 129). Isso oculta 5 leads que **já têm R2 marcada** mas ainda estão em status pré-agendado — como o caso do "Riolando de Faria Gião Jr" que tem R2 com Jessica Martins em 16/04.
 
-### Alterações
+A exclusão de `pre_scheduled` faz sentido nas grids de agenda (para não poluir), mas no relatório de lifecycle o objetivo é justamente ver se o lead **tem ou não R2**, independente do status de confirmação.
 
-**`src/hooks/useContractLifecycleReport.ts`**
-- Na query R1, adicionar `booked_by` do `meeting_slots` no select
-- Coletar `booked_by` UUIDs e buscar nomes via `profiles(id, full_name)`
-- Adicionar campos ao `ContractLifecycleRow`:
-  - `sdrName: string | null`
-  - `diasParado: number | null` (dias desde `contract_paid_at` para não-terminais)
-- No R2, adicionar `status` do attendee R2 para presença (compareceu/no-show/agendado)
-  - `r2AttendeeStatus: string | null`
+## Correção
 
-**`src/components/crm/R2ContractLifecyclePanel.tsx`**
-- Importar `DealDetailsDrawer` e adicionar state `selectedDealId`
-- Ao clicar na linha da tabela, abrir drawer com `dealId`
-- Adicionar colunas: Telefone, SDR, Presença R2, Dias
-- KPI adicional: "Parados >5d" (contratos sem status terminal há mais de 5 dias)
-- Cursor pointer nas linhas clicáveis
-- Atualizar export CSV com novas colunas
+**`src/hooks/useContractLifecycleReport.ts`** — uma única alteração:
 
-### Dados já disponíveis
-- `booked_by` está no `meeting_slots` (UUID do profile que agendou)
-- `attendee_phone` já vem na query R1
-- `DealDetailsDrawer` já existe em `src/components/crm/DealDetailsDrawer.tsx`
-- `profiles` table tem `full_name` para resolver SDR
+- **Remover** `.neq('status', 'pre_scheduled')` da query R2 (linha 129)
+- Isso vai incluir os 5 leads que hoje aparecem como "Sem R2" mas na verdade já têm R2 pré-agendada
+- O campo `r2AttendeeStatus` já captura o status do attendee, então a coluna "Presença R2" vai mostrar corretamente "Pré-agendado" para esses casos
+
+Nenhuma outra alteração necessária — o painel já renderiza `r2AttendeeStatus` na coluna de presença.
 
