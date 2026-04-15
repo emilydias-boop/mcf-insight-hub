@@ -179,7 +179,7 @@ export function R2ContractLifecyclePanel() {
 
       // Apply sub-filter
       if (activeSubFilter) {
-        if (expandedKpi === 'realizadas') {
+        if (expandedKpi === 'realizadas' || expandedKpi === 'agendados') {
           result = result.filter(r => (r.r2StatusName || 'Sem status') === activeSubFilter);
         } else if (expandedKpi === 'pendentes') {
           if (activeSubFilter === 'recentes') {
