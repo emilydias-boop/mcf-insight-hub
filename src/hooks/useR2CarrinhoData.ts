@@ -18,6 +18,8 @@ export interface R2CarrinhoAttendee {
   meeting_id: string;
   meeting_status: string;
   scheduled_at: string;
+  /** Data usada para agrupamento/exibição no carrinho. Para encaixes, projeta para dentro da safra. */
+  display_scheduled_at: string;
   closer_id: string | null;
   closer_name: string | null;
   closer_color: string | null;
@@ -29,6 +31,30 @@ export interface R2CarrinhoAttendee {
   r1_closer_name: string | null;
   contract_paid_at: string | null;
   is_encaixado?: boolean;
+}
+
+/**
+ * Para leads encaixados, projeta o scheduled_at para dentro da semana do encaixe,
+ * preservando dia-da-semana e horário quando possível.
+ * Se o dia-da-semana original cair fora da safra, usa o primeiro dia da safra.
+ */
+function computeDisplayDate(scheduledAt: string, carrinhoWeekStart: string | null, isEncaixado: boolean): string {
+  if (!isEncaixado || !carrinhoWeekStart) return scheduledAt;
+  
+  const original = new Date(scheduledAt);
+  const weekStart = new Date(carrinhoWeekStart + 'T00:00:00');
+  
+  // Calcula o offset em dias do original dentro da sua própria semana (sáb=0..sex=6)
+  const originalDow = original.getDay(); // 0=dom..6=sab
+  // Converte para offset relativo a sábado: sab=0, dom=1, seg=2..sex=6
+  const offsetFromSat = originalDow === 6 ? 0 : originalDow + 1;
+  
+  // weekStart já é sábado, soma o offset
+  const projected = new Date(weekStart);
+  projected.setDate(projected.getDate() + offsetFromSat);
+  projected.setHours(original.getHours(), original.getMinutes(), original.getSeconds(), original.getMilliseconds());
+  
+  return projected.toISOString();
 }
 
 async function fetchAttendeesFromQuery(
