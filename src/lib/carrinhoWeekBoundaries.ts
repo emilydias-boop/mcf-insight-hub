@@ -112,8 +112,8 @@ export function getCarrinhoMetricBoundaries(
 
   return {
     contratos: { start: thuStart, end: wedEnd },
-    r2Meetings: { start: previousFridayCutoff, end: currentFridayCutoff },
-    aprovados: { start: previousFridayCutoff, end: currentFridayCutoff },
+    r2Meetings: { start: currentFridayCutoff, end: nextFridayCutoff },
+    aprovados: { start: currentFridayCutoff, end: nextFridayCutoff },
     vendasParceria: { start: friCartStart, end: monAfterCart },
     r1Meetings: { start: thuStart, end: wedEnd },
   };
