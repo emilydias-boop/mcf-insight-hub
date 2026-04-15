@@ -1,53 +1,34 @@
 
 
-## Plano: Preencher "Dia Compra" faltante via hubla_transactions
+## Diagnóstico: Janela de R2 desalinhada com a Safra
 
-### Problema
-Alguns leads mostram "-" na coluna "Dia Compra" porque o campo `contract_paid_at` no attendee de R1 está NULL. Isso acontece quando o webhook de contrato não conseguiu vincular a transação ao attendee (ex: lead "outside", matching falhou, ou contrato antigo anterior ao sistema de linking).
+### Problema atual
+Para a safra **09/04-15/04** (Qui→Qua), a janela de R2 está calculada como **Sex 03/04 12:00 → Sex 10/04 12:00** (semana ANTERIOR). Isso significa que a lista mostra R2s da semana passada, não da semana atual.
 
-### Solução
-Após o merge com R1, fazer um fallback para leads que ainda não têm `contract_paid_at`: buscar na tabela `hubla_transactions` pelo `customer_email` do contato, filtrando por `product_name = 'A000 - Contrato'` e `sale_status in ('completed', 'refunded')`, e usar o `sale_date` como data de compra.
+O cálculo atual em `getCarrinhoMetricBoundaries`:
+```
+currentFriday = weekStart + 1 dia = Sex 10/04
+previousFriday = currentFriday - 7 = Sex 03/04
+r2Meetings = previousFriday cutoff → currentFriday cutoff  ← ERRADO
+```
+
+### Correção
+Mover a janela de R2 para frente, alinhando com a safra:
+```
+currentFriday = weekStart + 1 dia = Sex 10/04
+nextFriday = currentFriday + 7 = Sex 17/04
+r2Meetings = currentFriday cutoff → nextFriday cutoff  ← CORRETO (10/04 → 17/04)
+```
+
+Para safra 09-15, isso captura R2s de **10/04 12:00 a 17/04 12:00** — ou seja, as R2s que acontecem durante a semana da safra.
 
 ### Alterações
 
-**`src/hooks/useR2CarrinhoData.ts`** (após o bloco de merge R1, ~linha 289)
+**`src/lib/carrinhoWeekBoundaries.ts`**
+- Adicionar `nextFriday = addDays(currentFriday, 7)`
+- Calcular `nextFridayCutoff` usando o `horario_corte` do config atual
+- Alterar `r2Meetings` e `aprovados` de `{ previousFridayCutoff → currentFridayCutoff }` para `{ currentFridayCutoff → nextFridayCutoff }`
+- Atualizar os comentários JSDoc para refletir a nova janela
 
-1. Coletar os emails dos attendees que ainda têm `contract_paid_at` nulo
-2. Buscar em `hubla_transactions` a transação mais recente para cada email
-3. Popular `contract_paid_at` com `sale_date` da transação encontrada
-
-```ts
-// Após merge R1 (linha 289), antes do sort:
-const missingContractEmails = merged
-  .filter(a => !a.contract_paid_at && a.contact_email)
-  .map(a => a.contact_email!.toLowerCase().trim());
-
-if (missingContractEmails.length > 0) {
-  const uniqueEmails = [...new Set(missingContractEmails)];
-  const { data: txs } = await supabase
-    .from('hubla_transactions')
-    .select('customer_email, sale_date')
-    .eq('product_name', 'A000 - Contrato')
-    .in('sale_status', ['completed', 'refunded'])
-    .in('customer_email', uniqueEmails)
-    .order('sale_date', { ascending: false });
-
-  const emailToSaleDate = new Map<string, string>();
-  for (const tx of txs || []) {
-    const email = (tx.customer_email || '').toLowerCase().trim();
-    if (email && !emailToSaleDate.has(email)) {
-      emailToSaleDate.set(email, tx.sale_date);
-    }
-  }
-
-  for (const att of merged) {
-    if (!att.contract_paid_at && att.contact_email) {
-      const saleDate = emailToSaleDate.get(att.contact_email.toLowerCase().trim());
-      if (saleDate) att.contract_paid_at = saleDate;
-    }
-  }
-}
-```
-
-Nenhum outro arquivo precisa ser alterado.
+Essa mudança afeta automaticamente tanto os **KPIs** quanto as **listas**, pois ambos usam `getCarrinhoMetricBoundaries`.
 
