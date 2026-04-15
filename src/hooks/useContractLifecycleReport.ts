@@ -409,6 +409,10 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       }
 
       // Step 4: Fetch R2 attendees for expanded deal list
+      // Calculate carrinho window for R2 prioritization
+      const r2PrioBoundaries = filters.weekStart
+        ? getCarrinhoMetricBoundaries(filters.weekStart, addDays(filters.weekStart, 6))
+        : null;
       let r2Map: Record<string, {
         r2Date: string | null;
         r2CloserName: string | null;
@@ -444,13 +448,29 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
             .neq('status', 'cancelled');
 
           if (r2Data) {
+            // Use carrinho window to prioritize R2 within the correct period
+            const r2Window = r2PrioBoundaries?.r2Meetings;
+            const isInWindow = (dateStr: string) => {
+              if (!r2Window) return false;
+              const d = new Date(dateStr);
+              return d >= r2Window.start && d <= r2Window.end;
+            };
+
             for (const r2 of r2Data as any[]) {
               const ms = r2.meeting_slot;
               if (r2.deal_id && ms) {
                 const mappedDealId = siblingToOriginal.get(r2.deal_id) || r2.deal_id;
                 const existing = r2Map[mappedDealId];
                 const newDate = ms.scheduled_at;
-                if (!existing || (newDate && (!existing.r2Date || newDate > existing.r2Date))) {
+                const newInWindow = newDate ? isInWindow(newDate) : false;
+                const existingInWindow = existing?.r2Date ? isInWindow(existing.r2Date) : false;
+
+                // Priority: in-window > out-of-window; within same category, most recent wins
+                const shouldReplace = !existing
+                  || (newInWindow && !existingInWindow)
+                  || (newInWindow === existingInWindow && newDate && (!existing.r2Date || newDate > existing.r2Date));
+
+                if (shouldReplace) {
                   r2Map[mappedDealId] = {
                     r2Date: ms.scheduled_at,
                     r2CloserName: ms.closer?.name || null,
