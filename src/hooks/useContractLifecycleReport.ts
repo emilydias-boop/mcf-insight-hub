@@ -609,6 +609,9 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
               return d >= r2Window.start && d <= r2Window.end;
             };
 
+            // Compute cartWeekStartStr for carrinho_week_start filtering
+            const cartWkStr = filters.weekStart ? format(getCartWeekStart(filters.weekStart), 'yyyy-MM-dd') : null;
+
             for (const r2 of r2Data as any[]) {
               const ms = r2.meeting_slot;
               if (r2.deal_id && ms) {
@@ -618,10 +621,16 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
                 const newInWindow = newDate ? isInWindow(newDate) : false;
                 const existingInWindow = existing?.r2Date ? isInWindow(existing.r2Date) : false;
 
-                // Priority: in-window > out-of-window; within same category, most recent wins
+                // Check carrinho_week_start alignment (same week vs different week)
+                const r2CWS = r2.carrinho_week_start;
+                const newSameWeek = !r2CWS || !cartWkStr || r2CWS === cartWkStr;
+                const existingSameWeek = !existing?.carrinhoWeekStart || !cartWkStr || existing.carrinhoWeekStart === cartWkStr;
+
+                // Priority: same-week > different-week; then in-window > out-of-window; then most recent
                 const shouldReplace = !existing
-                  || (newInWindow && !existingInWindow)
-                  || (newInWindow === existingInWindow && newDate && (!existing.r2Date || newDate > existing.r2Date));
+                  || (newSameWeek && !existingSameWeek)
+                  || (newSameWeek === existingSameWeek && newInWindow && !existingInWindow)
+                  || (newSameWeek === existingSameWeek && newInWindow === existingInWindow && newDate && (!existing.r2Date || newDate > existing.r2Date));
 
                 if (shouldReplace) {
                   r2Map[mappedDealId] = {

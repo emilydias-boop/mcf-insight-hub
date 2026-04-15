@@ -326,6 +326,7 @@ export default function R2Carrinho() {
         <TabsContent value="agendadas">
           <R2AgendadasList 
             attendees={agendadasData} 
+            aprovadosAttendees={aprovadosData}
             isLoading={agendadasLoading}
             onSelectAttendee={handleSelectAttendee}
           />

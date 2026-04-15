@@ -28,6 +28,7 @@ import { toast } from 'sonner';
 
 interface R2AgendadasListProps {
   attendees: R2CarrinhoAttendee[];
+  aprovadosAttendees?: R2CarrinhoAttendee[];
   isLoading?: boolean;
   onSelectAttendee?: (attendee: R2CarrinhoAttendee) => void;
 }
@@ -94,7 +95,7 @@ function renderStatusCell(att: R2CarrinhoAttendee) {
   );
 }
 
-export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2AgendadasListProps) {
+export function R2AgendadasList({ attendees, aprovadosAttendees, isLoading, onSelectAttendee }: R2AgendadasListProps) {
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [closerFilter, setCloserFilter] = useState<string>('all');
@@ -151,9 +152,22 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
     return statuses;
   }, [attendees]);
 
+  // Determine the aprovado status ID from the r2Statuses list
+  const aprovadoStatusId = useMemo(() => {
+    return r2Statuses.find(s => s.name.toLowerCase().includes('aprovado'))?.id;
+  }, [r2Statuses]);
+
+  // When statusFilter = aprovado, use aprovadosAttendees as the canonical source
+  const effectiveAttendees = useMemo(() => {
+    if (statusFilter !== 'all' && aprovadoStatusId && statusFilter === aprovadoStatusId && aprovadosAttendees) {
+      return aprovadosAttendees;
+    }
+    return attendees;
+  }, [statusFilter, aprovadoStatusId, aprovadosAttendees, attendees]);
+
   // Filter attendees based on all criteria
   const filteredAttendees = useMemo(() => {
-    return attendees.filter(att => {
+    return effectiveAttendees.filter(att => {
       // Search filter (name, phone, email)
       if (searchTerm) {
         const search = searchTerm.toLowerCase();
@@ -202,7 +216,7 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
       
       return true;
     });
-  }, [attendees, searchTerm, closerFilter, dateFilter, statusFilter, positionFilter]);
+  }, [effectiveAttendees, searchTerm, closerFilter, dateFilter, statusFilter, positionFilter]);
 
   // Check if any filter is active
   const hasActiveFilters = searchTerm || closerFilter !== 'all' || dateFilter !== 'all' || statusFilter !== 'all' || positionFilter !== 'all';

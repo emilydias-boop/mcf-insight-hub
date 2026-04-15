@@ -30,7 +30,7 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
   
   const updateStatus = useUpdateCarrinhoStatus();
   
-  // Fetch real sales data (same source as Vendas tab)
+  // Fetch real sales data (same source as Vendas tab) — pass config for boundary alignment
   const { data: vendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd);
 
   // Batch fetch agreement status for all attendees
