@@ -632,47 +632,6 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         }
       }
 
-      // Step 4b: Fetch refunded Hubla transactions in the period to cross-reference
-      const refundedEmailsSet = new Set<string>();
-      const refundedPhonesSet = new Set<string>();
-      {
-        const { data: refundedTx } = await supabase
-          .from('hubla_transactions')
-          .select('customer_email, customer_phone, linked_attendee_id')
-          .eq('sale_status', 'refunded')
-          .ilike('product_name', '%Contrato%')
-          .gte('sale_date', startOfDay(filters.startDate).toISOString())
-          .lte('sale_date', endOfDay(filters.endDate).toISOString());
-
-        if (refundedTx) {
-          for (const tx of refundedTx) {
-            if (tx.customer_email) {
-              refundedEmailsSet.add(tx.customer_email.toLowerCase().trim());
-            }
-            if (tx.customer_phone) {
-              const suffix = normalizePhoneSuffix(tx.customer_phone);
-              if (suffix.length >= 8) {
-                refundedPhonesSet.add(suffix);
-              }
-            }
-          }
-        }
-      }
-
-      // Build maps: attendee id -> contact email/phone for cross-referencing
-      const attendeeEmailMap = new Map<string, string>();
-      const attendeePhoneMap = new Map<string, string>();
-      for (const att of filteredR1Attendees as any[]) {
-        const email = att.deal?.contact?.email;
-        if (email && att.id) {
-          attendeeEmailMap.set(att.id, email.toLowerCase().trim());
-        }
-        const phone = att.attendee_phone || att.deal?.contact?.phone;
-        if (phone && att.id) {
-          attendeePhoneMap.set(att.id, phone);
-        }
-      }
-
       const now = new Date();
       const fridayCutoff = getFridayCutoff(filters.weekStart);
 
@@ -684,12 +643,8 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
         const hasR2 = !!r2Info;
 
-        // Check if Hubla marks this as refunded (by email or phone)
-        const contactEmail = attendeeEmailMap.get(att.id);
-        const contactPhone = attendeePhoneMap.get(att.id);
-        const isHublaRefunded = 
-          (contactEmail ? refundedEmailsSet.has(contactEmail) : false) ||
-          (contactPhone ? refundedPhonesSet.has(normalizePhoneSuffix(contactPhone)) : false);
+        // Refund status comes directly from Hubla transaction (set in Step 1a)
+        const isHublaRefunded = !!att._hublaRefunded;
 
         // Classify situacao
         const { situacao, label: situacaoLabel } = classifySituacao(
