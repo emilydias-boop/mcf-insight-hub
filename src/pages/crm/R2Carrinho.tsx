@@ -161,7 +161,7 @@ export default function R2Carrinho() {
 
   const kpiCards = [
     { label: 'Contratos (R1)', value: displayKpis?.contratosPagos ?? 0, color: 'bg-blue-500' },
-    { label: 'R2 Pendentes', value: displayKpis?.r2Agendadas ?? 0, color: 'bg-indigo-500' },
+    { label: 'R2 Agendadas', value: displayKpis?.r2Agendadas ?? 0, color: 'bg-indigo-500' },
     { label: 'R2 Realizadas', value: displayKpis?.r2Realizadas ?? 0, color: 'bg-green-500' },
     { label: 'Fora do Carrinho', value: displayKpis?.foraDoCarrinho ?? 0, color: 'bg-red-500' },
     { label: 'Aprovados', value: displayKpis?.aprovados ?? 0, color: 'bg-emerald-500' },
