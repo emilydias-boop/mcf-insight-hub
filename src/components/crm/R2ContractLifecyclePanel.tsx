@@ -66,7 +66,8 @@ function formatPhone(phone: string | null) {
 
 // Parent KPI filter map
 const PARENT_SITUACOES: Record<string, ContractSituacao[]> = {
-  realizadas: ['realizada', 'agendado', 'proxima_semana'],
+  realizadas: ['realizada'],
+  agendados: ['agendado', 'proxima_semana'],
   pre_agendado: ['pre_agendado'],
   pendentes: ['pendente'],
   noShow: ['no_show'],
@@ -74,7 +75,7 @@ const PARENT_SITUACOES: Record<string, ContractSituacao[]> = {
 };
 
 // Parents that have children
-const EXPANDABLE_PARENTS = ['realizadas', 'pendentes'];
+const EXPANDABLE_PARENTS = ['realizadas', 'agendados', 'pendentes'];
 
 export function R2ContractLifecyclePanel() {
   const [weekDate, setWeekDate] = useState<Date>(new Date());
@@ -98,10 +99,11 @@ export function R2ContractLifecyclePanel() {
 
   // KPI counts
   const kpis = useMemo(() => {
-    if (!rows) return { total: 0, realizadas: 0, preAgendado: 0, pendentes: 0, noShow: 0, reembolso: 0 };
+    if (!rows) return { total: 0, realizadas: 0, agendados: 0, preAgendado: 0, pendentes: 0, noShow: 0, reembolso: 0 };
     return {
       total: rows.length,
-      realizadas: rows.filter(r => ['realizada', 'agendado', 'proxima_semana'].includes(r.situacao)).length,
+      realizadas: rows.filter(r => r.situacao === 'realizada').length,
+      agendados: rows.filter(r => ['agendado', 'proxima_semana'].includes(r.situacao)).length,
       preAgendado: rows.filter(r => r.situacao === 'pre_agendado').length,
       pendentes: rows.filter(r => r.situacao === 'pendente').length,
       noShow: rows.filter(r => r.situacao === 'no_show').length,
@@ -109,11 +111,24 @@ export function R2ContractLifecyclePanel() {
     };
   }, [rows]);
 
-  // Realizadas children: dynamic by r2StatusName
+  // Realizadas children: dynamic by r2StatusName (only completed/contract_paid)
   const realizadasChildren = useMemo(() => {
     if (!rows) return [];
     const map = new Map<string, { count: number; color: string | null }>();
-    rows.filter(r => ['realizada', 'agendado', 'proxima_semana'].includes(r.situacao))
+    rows.filter(r => r.situacao === 'realizada')
+      .forEach(r => {
+        const key = r.r2StatusName || 'Sem status';
+        const existing = map.get(key) || { count: 0, color: r.r2StatusColor || null };
+        map.set(key, { count: existing.count + 1, color: existing.color });
+      });
+    return Array.from(map.entries()).sort((a, b) => b[1].count - a[1].count);
+  }, [rows]);
+
+  // Agendados children: dynamic by r2StatusName (invited/scheduled)
+  const agendadosChildren = useMemo(() => {
+    if (!rows) return [];
+    const map = new Map<string, { count: number; color: string | null }>();
+    rows.filter(r => ['agendado', 'proxima_semana'].includes(r.situacao))
       .forEach(r => {
         const key = r.r2StatusName || 'Sem status';
         const existing = map.get(key) || { count: 0, color: r.r2StatusColor || null };
