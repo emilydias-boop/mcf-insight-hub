@@ -246,7 +246,7 @@ export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agen
 
       // Fetch both: regular boundary attendees + encaixados for this week
       const [regularAttendees, encaixados] = await Promise.all([
-        fetchAttendeesFromQuery('r2', useBoundary.start.toISOString(), useBoundary.end.toISOString(), statusMap, filter, aprovadoStatusId),
+        fetchAttendeesFromQuery('r2', useBoundary.start.toISOString(), useBoundary.end.toISOString(), statusMap, filter, aprovadoStatusId, weekStartStr),
         fetchEncaixadosForWeek(weekStartStr, statusMap, filter, aprovadoStatusId),
       ]);
 
