@@ -63,7 +63,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
         supabase.from('r2_status_options').select('id, name').eq('is_active', true),
         supabase
           .from('meeting_slot_attendees')
-          .select(`id, status, r2_status_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type)`)
+          .select(`id, status, r2_status_id, deal_id, carrinho_week_start, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type)`)
           .eq('meeting_slot.meeting_type', 'r2')
           .gte('meeting_slot.scheduled_at', boundaries.r2Meetings.start.toISOString())
           .lte('meeting_slot.scheduled_at', boundaries.r2Meetings.end.toISOString()),
