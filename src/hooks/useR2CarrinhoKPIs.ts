@@ -92,25 +92,40 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
         .filter(s => foraDoCarrinhoNames.some(name => s.name.toLowerCase().includes(name)))
         .map(s => s.id);
 
-      // Merge encaixados into r2Attendees (dedupe by id)
-      const r2AttendeeIds = new Set((r2AttendeesResult.data || []).map((a: any) => a.id));
-      const mergedR2 = [...(r2AttendeesResult.data || [])];
+      // Merge encaixados into r2Attendees, dedup by deal_id (lead-level) then id
+      const r2LeadKeys = new Map<string, any>();
+      const r2AttendeeIds = new Set<string>();
+      // Encaixados take priority
       for (const enc of encaixadosResult.data || []) {
-        if (!r2AttendeeIds.has(enc.id)) {
-          mergedR2.push(enc);
-          r2AttendeeIds.add(enc.id);
+        const key = (enc as any).deal_id || enc.id;
+        r2LeadKeys.set(key, enc);
+        r2AttendeeIds.add(enc.id);
+      }
+      for (const att of r2AttendeesResult.data || []) {
+        const key = (att as any).deal_id || att.id;
+        if (!r2LeadKeys.has(key) && !r2AttendeeIds.has(att.id)) {
+          r2LeadKeys.set(key, att);
+          r2AttendeeIds.add(att.id);
         }
       }
+      const mergedR2 = Array.from(r2LeadKeys.values());
 
-      // Merge encaixados into aprovados (dedupe by id)
-      const opAprovadosIds = new Set((opAprovadosResult.data || []).map((a: any) => a.id));
-      const mergedAprovados = [...(opAprovadosResult.data || [])];
+      // Merge encaixados into aprovados, same logic
+      const apLeadKeys = new Map<string, any>();
+      const opAprovadosIds = new Set<string>();
       for (const enc of encaixadosAprovadosResult.data || []) {
-        if (!opAprovadosIds.has(enc.id)) {
-          mergedAprovados.push(enc);
-          opAprovadosIds.add(enc.id);
+        const key = (enc as any).deal_id || enc.id;
+        apLeadKeys.set(key, enc);
+        opAprovadosIds.add(enc.id);
+      }
+      for (const att of opAprovadosResult.data || []) {
+        const key = (att as any).deal_id || att.id;
+        if (!apLeadKeys.has(key) && !opAprovadosIds.has(att.id)) {
+          apLeadKeys.set(key, att);
+          opAprovadosIds.add(att.id);
         }
       }
+      const mergedAprovados = Array.from(apLeadKeys.values());
 
       // Count aprovados
       const aprovados = aprovadoStatusId
