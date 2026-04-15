@@ -112,17 +112,22 @@ export function R2ContractLifecyclePanel() {
   }, [rows]);
 
   // Realizadas children: dynamic by r2StatusName (only completed/contract_paid)
+  // Leads whose R2 belongs to a different week are bucketed as "Outra semana"
+  const currentWeekStartStr = useMemo(() => format(safraStart, 'yyyy-MM-dd'), [safraStart]);
+
   const realizadasChildren = useMemo(() => {
     if (!rows) return [];
     const map = new Map<string, { count: number; color: string | null }>();
     rows.filter(r => r.situacao === 'realizada')
       .forEach(r => {
-        const key = r.r2StatusName || 'Sem status';
-        const existing = map.get(key) || { count: 0, color: r.r2StatusColor || null };
+        const cws = r.carrinhoWeekStart;
+        const isOtherWeek = cws && cws !== currentWeekStartStr;
+        const key = isOtherWeek ? 'Outra semana' : (r.r2StatusName || 'Sem status');
+        const existing = map.get(key) || { count: 0, color: isOtherWeek ? null : (r.r2StatusColor || null) };
         map.set(key, { count: existing.count + 1, color: existing.color });
       });
     return Array.from(map.entries()).sort((a, b) => b[1].count - a[1].count);
-  }, [rows]);
+  }, [rows, currentWeekStartStr]);
 
   // Agendados children: dynamic by r2StatusName (invited/scheduled)
   const agendadosChildren = useMemo(() => {
