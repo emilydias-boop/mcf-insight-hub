@@ -137,6 +137,8 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           deal:crm_deals(
             id,
             name,
+            contact_id,
+            origin_id,
             contact:crm_contacts(name, phone, email)
           )
         `)
@@ -149,9 +151,23 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
       if (r1Error) throw r1Error;
 
+      // Step 1b: Filter R1 attendees to Inside Sales pipeline only
+      const { data: insideOrigins } = await supabase
+        .from('crm_origins')
+        .select('id')
+        .ilike('name', '%inside%');
+      const insideOriginIds = new Set((insideOrigins || []).map((o: any) => o.id));
+
+      const filteredR1Attendees = (r1Attendees || []).filter((a: any) => {
+        const originId = a.deal?.origin_id;
+        // If no deal or no origin_id, keep (safe fallback)
+        if (!originId) return true;
+        return insideOriginIds.has(originId);
+      });
+
       // Step 2: Collect booked_by UUIDs and resolve SDR names
       const bookedByIds = [...new Set(
-        (r1Attendees || [])
+        filteredR1Attendees
           .map((a: any) => a.meeting_slot?.booked_by)
           .filter(Boolean) as string[]
       )];
@@ -169,12 +185,49 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         }
       }
 
-      // Step 3: Collect deal_ids to fetch R2 info
-      const dealIds = (r1Attendees || [])
+      // Step 3: Collect deal_ids and expand via contact_id for cross-pipeline R2 lookup
+      const originalDealIds = filteredR1Attendees
         .map((a: any) => a.deal_id)
         .filter(Boolean) as string[];
 
-      // Step 4: Fetch R2 attendees for those deals
+      // Build contact → original deal mapping
+      const contactToDealMap = new Map<string, string[]>();
+      for (const att of filteredR1Attendees as any[]) {
+        const cid = att.deal?.contact_id;
+        const did = att.deal_id;
+        if (cid && did) {
+          if (!contactToDealMap.has(cid)) contactToDealMap.set(cid, []);
+          const arr = contactToDealMap.get(cid)!;
+          if (!arr.includes(did)) arr.push(did);
+        }
+      }
+
+      // Fetch sibling deals for the same contacts (cross-pipeline)
+      const contactIds = [...contactToDealMap.keys()];
+      const siblingToOriginal = new Map<string, string>();
+      const allDealIdsForR2 = new Set(originalDealIds);
+
+      if (contactIds.length > 0) {
+        for (let i = 0; i < contactIds.length; i += 200) {
+          const chunk = contactIds.slice(i, i + 200);
+          const { data: siblingDeals } = await supabase
+            .from('crm_deals')
+            .select('id, contact_id')
+            .in('contact_id', chunk);
+
+          for (const sd of siblingDeals || []) {
+            allDealIdsForR2.add(sd.id);
+            if (!originalDealIds.includes(sd.id) && sd.contact_id) {
+              const originals = contactToDealMap.get(sd.contact_id) || [];
+              if (originals.length > 0) {
+                siblingToOriginal.set(sd.id, originals[0]);
+              }
+            }
+          }
+        }
+      }
+
+      // Step 4: Fetch R2 attendees for expanded deal list
       let r2Map: Record<string, {
         r2Date: string | null;
         r2CloserName: string | null;
@@ -186,43 +239,48 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         carrinhoWeekStart: string | null;
       }> = {};
 
-      if (dealIds.length > 0) {
-        const { data: r2Data } = await supabase
-          .from('meeting_slot_attendees')
-          .select(`
-            deal_id,
-            status,
-            r2_status_id,
-            carrinho_status,
-            carrinho_week_start,
-            r2_status:r2_status_options(id, name, color),
-            meeting_slot:meeting_slots!inner(
-              scheduled_at,
-              meeting_type,
-              closer:closers!meeting_slots_closer_id_fkey(id, name)
-            )
-          `)
-          .eq('meeting_slot.meeting_type', 'r2')
-          .in('deal_id', dealIds)
-          .neq('status', 'cancelled');
+      const allDealIdsArray = [...allDealIdsForR2];
+      if (allDealIdsArray.length > 0) {
+        for (let i = 0; i < allDealIdsArray.length; i += 200) {
+          const chunk = allDealIdsArray.slice(i, i + 200);
+          const { data: r2Data } = await supabase
+            .from('meeting_slot_attendees')
+            .select(`
+              deal_id,
+              status,
+              r2_status_id,
+              carrinho_status,
+              carrinho_week_start,
+              r2_status:r2_status_options(id, name, color),
+              meeting_slot:meeting_slots!inner(
+                scheduled_at,
+                meeting_type,
+                closer:closers!meeting_slots_closer_id_fkey(id, name)
+              )
+            `)
+            .eq('meeting_slot.meeting_type', 'r2')
+            .in('deal_id', chunk)
+            .neq('status', 'cancelled');
 
-        if (r2Data) {
-          for (const r2 of r2Data as any[]) {
-            const ms = r2.meeting_slot;
-            if (r2.deal_id && ms) {
-              const existing = r2Map[r2.deal_id];
-              const newDate = ms.scheduled_at;
-              if (!existing || (newDate && (!existing.r2Date || newDate > existing.r2Date))) {
-                r2Map[r2.deal_id] = {
-                  r2Date: ms.scheduled_at,
-                  r2CloserName: ms.closer?.name || null,
-                  r2StatusName: r2.r2_status?.name || null,
-                  r2StatusColor: r2.r2_status?.color || null,
-                  r2StatusId: r2.r2_status_id,
-                  r2AttendeeStatus: r2.status,
-                  carrinhoStatus: r2.carrinho_status,
-                  carrinhoWeekStart: r2.carrinho_week_start,
-                };
+          if (r2Data) {
+            for (const r2 of r2Data as any[]) {
+              const ms = r2.meeting_slot;
+              if (r2.deal_id && ms) {
+                const mappedDealId = siblingToOriginal.get(r2.deal_id) || r2.deal_id;
+                const existing = r2Map[mappedDealId];
+                const newDate = ms.scheduled_at;
+                if (!existing || (newDate && (!existing.r2Date || newDate > existing.r2Date))) {
+                  r2Map[mappedDealId] = {
+                    r2Date: ms.scheduled_at,
+                    r2CloserName: ms.closer?.name || null,
+                    r2StatusName: r2.r2_status?.name || null,
+                    r2StatusColor: r2.r2_status?.color || null,
+                    r2StatusId: r2.r2_status_id,
+                    r2AttendeeStatus: r2.status,
+                    carrinhoStatus: r2.carrinho_status,
+                    carrinhoWeekStart: r2.carrinho_week_start,
+                  };
+                }
               }
             }
           }
@@ -259,7 +317,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       // Build maps: attendee id -> contact email/phone for cross-referencing
       const attendeeEmailMap = new Map<string, string>();
       const attendeePhoneMap = new Map<string, string>();
-      for (const att of (r1Attendees || []) as any[]) {
+      for (const att of filteredR1Attendees as any[]) {
         const email = att.deal?.contact?.email;
         if (email && att.id) {
           attendeeEmailMap.set(att.id, email.toLowerCase().trim());
@@ -274,7 +332,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const fridayCutoff = getFridayCutoff(filters.weekStart);
 
       // Step 5: Transform into rows
-      const rows: ContractLifecycleRow[] = (r1Attendees || []).map((att: any) => {
+      const rows: ContractLifecycleRow[] = filteredR1Attendees.map((att: any) => {
         const ms = att.meeting_slot;
         const deal = att.deal;
         const r2Info = att.deal_id ? r2Map[att.deal_id] : null;
