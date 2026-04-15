@@ -343,7 +343,14 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
                   <TableCell className="font-medium">{idx + 1}</TableCell>
                   <TableCell>
                     <div className="flex flex-col">
-                      <span className="font-medium">{att.attendee_name || att.deal_name || 'Sem nome'}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium">{att.attendee_name || att.deal_name || 'Sem nome'}</span>
+                        {att.is_encaixado && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-amber-100 text-amber-800 border-amber-300">
+                            Encaixado
+                          </Badge>
+                        )}
+                      </div>
                       {att.partner_name && (
                         <span className="text-xs text-muted-foreground">+ {att.partner_name}</span>
                       )}

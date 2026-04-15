@@ -28,6 +28,7 @@ export interface R2CarrinhoAttendee {
   r1_date: string | null;
   r1_closer_name: string | null;
   contract_paid_at: string | null;
+  is_encaixado?: boolean;
 }
 
 async function fetchAttendeesFromQuery(
@@ -100,6 +101,8 @@ async function fetchAttendeesFromQuery(
       if (slot.status !== 'completed') continue;
     }
 
+    const isEncaixado = !!(attWeekStart && weekStartStr && attWeekStart === weekStartStr);
+
     attendees.push({
       id: att.id,
       attendee_name: att.attendee_name,
@@ -123,6 +126,7 @@ async function fetchAttendeesFromQuery(
       r1_date: null,
       r1_closer_name: null,
       contract_paid_at: (att as any).contract_paid_at,
+      is_encaixado: isEncaixado,
     });
   }
   return attendees;
@@ -217,6 +221,7 @@ async function fetchEncaixadosForWeek(
       r1_date: null,
       r1_closer_name: null,
       contract_paid_at: (att as any).contract_paid_at,
+      is_encaixado: true,
     });
   }
   return attendees;
