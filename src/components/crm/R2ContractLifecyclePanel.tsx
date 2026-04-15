@@ -42,7 +42,8 @@ const SITUACAO_STYLES: Record<ContractSituacao, { bg: string; text: string; bord
   reembolso:      { bg: 'bg-red-500/15',    text: 'text-red-400',    border: 'border-red-500/30' },
   no_show:        { bg: 'bg-red-900/20',     text: 'text-red-300',    border: 'border-red-800/30' },
   desistente:     { bg: 'bg-zinc-500/15',    text: 'text-zinc-400',   border: 'border-zinc-500/30' },
-  proxima_semana: { bg: 'bg-emerald-500/15', text: 'text-emerald-400',border: 'border-emerald-500/30' },
+  realizada:      { bg: 'bg-emerald-500/15', text: 'text-emerald-400',border: 'border-emerald-500/30' },
+  proxima_semana: { bg: 'bg-green-500/15',   text: 'text-green-400',  border: 'border-green-500/30' },
   agendado:       { bg: 'bg-blue-500/15',    text: 'text-blue-400',   border: 'border-blue-500/30' },
   pre_agendado:   { bg: 'bg-purple-500/15',  text: 'text-purple-400', border: 'border-purple-500/30' },
   pendente:       { bg: 'bg-amber-500/15',   text: 'text-amber-400',  border: 'border-amber-500/30' },
@@ -98,7 +99,7 @@ export function R2ContractLifecyclePanel() {
     if (!rows) return { total: 0, agendados: 0, pendentes: 0, noShow: 0, reembolso: 0 };
     return {
       total: rows.length,
-      agendados: rows.filter(r => ['agendado', 'proxima_semana', 'pre_agendado'].includes(r.situacao)).length,
+      agendados: rows.filter(r => ['agendado', 'proxima_semana', 'pre_agendado', 'realizada'].includes(r.situacao)).length,
       pendentes: rows.filter(r => r.situacao === 'pendente').length,
       noShow: rows.filter(r => r.situacao === 'no_show').length,
       reembolso: rows.filter(r => r.situacao === 'reembolso').length,
