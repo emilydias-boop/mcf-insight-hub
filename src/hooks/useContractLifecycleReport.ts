@@ -360,10 +360,11 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         // --- Step 1c: R2 Aprovado in window ---
         let extraDealIdsFromR2: string[] = [];
         if (aprovadoId) {
-          const { data: r2AprovadoData } = await supabase
+          const r2AprovadoQuery = supabase
             .from('meeting_slot_attendees')
             .select(`
               deal_id,
+              carrinho_week_start,
               meeting_slot:meeting_slots!inner(
                 scheduled_at,
                 meeting_type
@@ -375,8 +376,13 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
             .gte('meeting_slot.scheduled_at', r2WindowStart.toISOString())
             .lte('meeting_slot.scheduled_at', r2WindowEnd.toISOString());
 
+          const { data: r2AprovadoData } = await r2AprovadoQuery;
+
           if (r2AprovadoData) {
             for (const r2 of r2AprovadoData as any[]) {
+              // Skip leads assigned to a different carrinho week
+              const r2WeekStart = (r2 as any).carrinho_week_start;
+              if (r2WeekStart && r2WeekStart !== cartWeekStartStr) continue;
               if (r2.deal_id && !existingDealIds.has(r2.deal_id)) {
                 extraDealIdsFromR2.push(r2.deal_id);
                 existingDealIds.add(r2.deal_id);
