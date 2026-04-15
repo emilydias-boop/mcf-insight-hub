@@ -288,6 +288,37 @@ export function useR2CarrinhoData(weekStart: Date, weekEnd: Date, filter?: 'agen
         }
       }
 
+      // Fallback: buscar contract_paid_at via hubla_transactions para leads sem data
+      const missingContractEmails = merged
+        .filter(a => !a.contract_paid_at && a.contact_email)
+        .map(a => a.contact_email!.toLowerCase().trim());
+
+      if (missingContractEmails.length > 0) {
+        const uniqueEmails = [...new Set(missingContractEmails)];
+        const { data: txs } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email, sale_date')
+          .eq('product_name', 'A000 - Contrato')
+          .in('sale_status', ['completed', 'refunded'])
+          .in('customer_email', uniqueEmails)
+          .order('sale_date', { ascending: false });
+
+        const emailToSaleDate = new Map<string, string>();
+        for (const tx of txs || []) {
+          const email = (tx.customer_email || '').toLowerCase().trim();
+          if (email && !emailToSaleDate.has(email)) {
+            emailToSaleDate.set(email, tx.sale_date!);
+          }
+        }
+
+        for (const att of merged) {
+          if (!att.contract_paid_at && att.contact_email) {
+            const saleDate = emailToSaleDate.get(att.contact_email.toLowerCase().trim());
+            if (saleDate) att.contract_paid_at = saleDate;
+          }
+        }
+      }
+
       merged.sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
       return merged;
     },
