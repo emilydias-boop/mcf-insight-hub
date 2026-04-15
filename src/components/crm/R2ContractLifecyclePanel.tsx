@@ -101,7 +101,7 @@ export function R2ContractLifecyclePanel() {
   const kpis = useMemo(() => {
     if (!rows) return { total: 0, realizadas: 0, agendados: 0, preAgendado: 0, pendentes: 0, noShow: 0, reembolso: 0 };
     return {
-      total: rows.length,
+      total: rows.filter(r => r.isPaidContract).length,
       realizadas: rows.filter(r => r.situacao === 'realizada').length,
       agendados: rows.filter(r => ['agendado', 'proxima_semana'].includes(r.situacao)).length,
       preAgendado: rows.filter(r => r.situacao === 'pre_agendado').length,
