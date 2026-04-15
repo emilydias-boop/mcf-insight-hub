@@ -281,9 +281,12 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
         const hasR2 = !!r2Info;
 
-        // Check if Hubla marks this as refunded
+        // Check if Hubla marks this as refunded (by email or phone)
         const contactEmail = attendeeEmailMap.get(att.id);
-        const isHublaRefunded = contactEmail ? refundedEmailsSet.has(contactEmail) : false;
+        const contactPhone = attendeePhoneMap.get(att.id);
+        const isHublaRefunded = 
+          (contactEmail ? refundedEmailsSet.has(contactEmail) : false) ||
+          (contactPhone ? refundedPhonesSet.has(normalizePhoneSuffix(contactPhone)) : false);
 
         // Classify situacao
         const { situacao, label: situacaoLabel } = classifySituacao(
