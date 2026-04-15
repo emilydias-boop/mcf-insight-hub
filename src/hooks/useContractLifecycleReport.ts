@@ -117,42 +117,48 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
     queryKey: ['contract-lifecycle-report', filters.startDate.toISOString(), filters.endDate.toISOString(), filters.closerR1Id, filters.situacao, filters.weekStart?.toISOString()],
     staleTime: 30000,
     queryFn: async () => {
-      // Step 1: Get R1 attendees with contract_paid_at in the period
-      const { data: r1Attendees, error: r1Error } = await supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          id,
-          attendee_name,
-          attendee_phone,
-          contract_paid_at,
-          deal_id,
-          status,
-          is_partner,
-          meeting_slot:meeting_slots!inner(
-            id,
-            scheduled_at,
-            meeting_type,
-            booked_by,
-            closer:closers!meeting_slots_closer_id_fkey(id, name)
-          ),
-          deal:crm_deals(
-            id,
-            name,
-            contact_id,
-            origin_id,
-            contact:crm_contacts(name, phone, email)
-          )
-        `)
-        .eq('meeting_slot.meeting_type', 'r1')
-        .not('contract_paid_at', 'is', null)
-        .gte('contract_paid_at', startOfDay(filters.startDate).toISOString())
-        .lte('contract_paid_at', endOfDay(filters.endDate).toISOString())
-        .neq('status', 'cancelled')
-        .eq('is_partner', false);
+      // Step 1a: Fetch paid contracts from hubla_transactions (aligned with Carrinho)
+      const contractBoundaryStart = startOfDay(filters.startDate).toISOString();
+      const contractBoundaryEnd = endOfDay(filters.endDate).toISOString();
 
-      if (r1Error) throw r1Error;
+      const { data: hublaTx, error: hublaError } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, sale_date, hubla_id, source, product_name, installment_number, sale_status')
+        .eq('product_name', 'A000 - Contrato')
+        .in('sale_status', ['completed', 'refunded'])
+        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
+        .gte('sale_date', contractBoundaryStart)
+        .lte('sale_date', contractBoundaryEnd);
 
-      // Step 1b: Filter R1 attendees to BU Incorporador origins only
+      if (hublaError) throw hublaError;
+
+      // Apply Carrinho exclusion filters & deduplicate by email
+      const emailTxMap = new Map<string, { email: string; saleDate: string; isRefunded: boolean }>();
+      for (const tx of (hublaTx || []) as any[]) {
+        // Exclude newsale- duplicates
+        if (tx.hubla_id && String(tx.hubla_id).startsWith('newsale-')) continue;
+        // Exclude make+contrato lowercase
+        if (tx.source === 'make' && tx.product_name?.toLowerCase() === 'contrato') continue;
+        // Exclude installment > 1
+        if (tx.installment_number && tx.installment_number > 1) continue;
+
+        const email = (tx.customer_email || '').toLowerCase().trim();
+        if (!email) continue;
+
+        const existing = emailTxMap.get(email);
+        const isRefunded = tx.sale_status === 'refunded';
+        if (!existing) {
+          emailTxMap.set(email, { email, saleDate: tx.sale_date, isRefunded });
+        } else {
+          // If we already have a completed and this is refunded, mark as refunded
+          if (isRefunded) existing.isRefunded = true;
+        }
+      }
+
+      const uniqueEmails = [...emailTxMap.keys()];
+
+      // Step 1b: Resolve emails → contacts → deals → R1 attendees
+      // First fetch BU origin mapping
       const { data: buMappings } = await supabase
         .from('bu_origin_mapping')
         .select('entity_type, entity_id')
@@ -175,11 +181,149 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       }
       const incorporadorOriginIds = new Set(allBUOriginIds);
 
-      let filteredR1Attendees = (r1Attendees || []).filter((a: any) => {
-        const originId = a.deal?.origin_id;
-        if (!originId) return true;
-        return incorporadorOriginIds.has(originId);
+      // Fetch contacts by email
+      let allContacts: any[] = [];
+      for (let i = 0; i < uniqueEmails.length; i += 200) {
+        const chunk = uniqueEmails.slice(i, i + 200);
+        const { data: contacts } = await supabase
+          .from('crm_contacts')
+          .select('id, name, email, phone')
+          .in('email', chunk);
+        if (contacts) allContacts.push(...contacts);
+      }
+
+      // Build email → contact_ids map
+      const emailToContactIds = new Map<string, string[]>();
+      for (const c of allContacts) {
+        const em = (c.email || '').toLowerCase().trim();
+        if (!emailToContactIds.has(em)) emailToContactIds.set(em, []);
+        emailToContactIds.get(em)!.push(c.id);
+      }
+
+      // Fetch deals by contact_ids
+      const allContactIds = allContacts.map((c: any) => c.id);
+      let allDeals: any[] = [];
+      for (let i = 0; i < allContactIds.length; i += 200) {
+        const chunk = allContactIds.slice(i, i + 200);
+        const { data: deals } = await supabase
+          .from('crm_deals')
+          .select('id, name, contact_id, origin_id')
+          .in('contact_id', chunk);
+        if (deals) allDeals.push(...deals);
+      }
+
+      // Filter deals by BU incorporador
+      const buDeals = allDeals.filter((d: any) => {
+        if (!d.origin_id) return true;
+        return incorporadorOriginIds.has(d.origin_id);
       });
+
+      // Build contact_id → deal mapping
+      const contactToDealIds = new Map<string, string[]>();
+      for (const d of buDeals) {
+        if (!contactToDealIds.has(d.contact_id)) contactToDealIds.set(d.contact_id, []);
+        contactToDealIds.get(d.contact_id)!.push(d.id);
+      }
+
+      // Fetch R1 attendees for these deals
+      const buDealIds = buDeals.map((d: any) => d.id);
+      let allR1Attendees: any[] = [];
+      for (let i = 0; i < buDealIds.length; i += 200) {
+        const chunk = buDealIds.slice(i, i + 200);
+        const { data: r1Data } = await supabase
+          .from('meeting_slot_attendees')
+          .select(`
+            id,
+            attendee_name,
+            attendee_phone,
+            contract_paid_at,
+            deal_id,
+            status,
+            is_partner,
+            meeting_slot:meeting_slots!inner(
+              id,
+              scheduled_at,
+              meeting_type,
+              booked_by,
+              closer:closers!meeting_slots_closer_id_fkey(id, name)
+            ),
+            deal:crm_deals(
+              id,
+              name,
+              contact_id,
+              origin_id,
+              contact:crm_contacts(name, phone, email)
+            )
+          `)
+          .eq('meeting_slot.meeting_type', 'r1')
+          .in('deal_id', chunk)
+          .neq('status', 'cancelled')
+          .eq('is_partner', false);
+        if (r1Data) allR1Attendees.push(...r1Data);
+      }
+
+      // Build email → R1 attendee (best one per email)
+      const emailToR1 = new Map<string, any>();
+      for (const att of allR1Attendees as any[]) {
+        const email = (att.deal?.contact?.email || '').toLowerCase().trim();
+        if (!email) continue;
+        const existing = emailToR1.get(email);
+        if (!existing) {
+          emailToR1.set(email, att);
+        } else {
+          // Prefer the one with contract_paid_at, then most recent
+          const existingPaid = !!existing.contract_paid_at;
+          const newPaid = !!att.contract_paid_at;
+          if ((!existingPaid && newPaid) || (existingPaid === newPaid && (att.meeting_slot?.scheduled_at || '') > (existing.meeting_slot?.scheduled_at || ''))) {
+            emailToR1.set(email, att);
+          }
+        }
+      }
+
+      // Build final filteredR1Attendees: one row per unique email from Hubla
+      let filteredR1Attendees: any[] = [];
+      const processedEmails = new Set<string>();
+
+      for (const [email, txInfo] of emailTxMap) {
+        if (processedEmails.has(email)) continue;
+        processedEmails.add(email);
+
+        const r1Att = emailToR1.get(email);
+        if (r1Att) {
+          // Override refund status from Hubla transaction
+          if (txInfo.isRefunded && r1Att.status !== 'refunded') {
+            r1Att._hublaRefunded = true;
+          }
+          r1Att._hublaSaleDate = txInfo.saleDate;
+          filteredR1Attendees.push(r1Att);
+        } else {
+          // Create synthetic row — no R1 found for this email
+          const contactIds = emailToContactIds.get(email) || [];
+          let bestDeal: any = null;
+          for (const cid of contactIds) {
+            const dids = contactToDealIds.get(cid) || [];
+            for (const did of dids) {
+              const deal = buDeals.find((d: any) => d.id === did);
+              if (deal) { bestDeal = deal; break; }
+            }
+            if (bestDeal) break;
+          }
+          const contact = allContacts.find((c: any) => (c.email || '').toLowerCase().trim() === email);
+          filteredR1Attendees.push({
+            id: `synthetic-hubla-${email}`,
+            attendee_name: contact?.name || email,
+            attendee_phone: contact?.phone || null,
+            contract_paid_at: txInfo.saleDate,
+            deal_id: bestDeal?.id || null,
+            status: txInfo.isRefunded ? 'refunded' : 'outside',
+            is_partner: false,
+            meeting_slot: null,
+            deal: bestDeal ? { ...bestDeal, contact: contact || null } : null,
+            _hublaRefunded: txInfo.isRefunded,
+            _hublaSaleDate: txInfo.saleDate,
+          });
+        }
+      }
 
       // Step 1c — Leads com R2 Aprovado na janela do carrinho (fora da safra)
       // Step 1d — Leads encaixados via carrinho_week_start
@@ -488,47 +632,6 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         }
       }
 
-      // Step 4b: Fetch refunded Hubla transactions in the period to cross-reference
-      const refundedEmailsSet = new Set<string>();
-      const refundedPhonesSet = new Set<string>();
-      {
-        const { data: refundedTx } = await supabase
-          .from('hubla_transactions')
-          .select('customer_email, customer_phone, linked_attendee_id')
-          .eq('sale_status', 'refunded')
-          .ilike('product_name', '%Contrato%')
-          .gte('sale_date', startOfDay(filters.startDate).toISOString())
-          .lte('sale_date', endOfDay(filters.endDate).toISOString());
-
-        if (refundedTx) {
-          for (const tx of refundedTx) {
-            if (tx.customer_email) {
-              refundedEmailsSet.add(tx.customer_email.toLowerCase().trim());
-            }
-            if (tx.customer_phone) {
-              const suffix = normalizePhoneSuffix(tx.customer_phone);
-              if (suffix.length >= 8) {
-                refundedPhonesSet.add(suffix);
-              }
-            }
-          }
-        }
-      }
-
-      // Build maps: attendee id -> contact email/phone for cross-referencing
-      const attendeeEmailMap = new Map<string, string>();
-      const attendeePhoneMap = new Map<string, string>();
-      for (const att of filteredR1Attendees as any[]) {
-        const email = att.deal?.contact?.email;
-        if (email && att.id) {
-          attendeeEmailMap.set(att.id, email.toLowerCase().trim());
-        }
-        const phone = att.attendee_phone || att.deal?.contact?.phone;
-        if (phone && att.id) {
-          attendeePhoneMap.set(att.id, phone);
-        }
-      }
-
       const now = new Date();
       const fridayCutoff = getFridayCutoff(filters.weekStart);
 
@@ -540,12 +643,8 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
         const hasR2 = !!r2Info;
 
-        // Check if Hubla marks this as refunded (by email or phone)
-        const contactEmail = attendeeEmailMap.get(att.id);
-        const contactPhone = attendeePhoneMap.get(att.id);
-        const isHublaRefunded = 
-          (contactEmail ? refundedEmailsSet.has(contactEmail) : false) ||
-          (contactPhone ? refundedPhonesSet.has(normalizePhoneSuffix(contactPhone)) : false);
+        // Refund status comes directly from Hubla transaction (set in Step 1a)
+        const isHublaRefunded = !!att._hublaRefunded;
 
         // Classify situacao
         const { situacao, label: situacaoLabel } = classifySituacao(
