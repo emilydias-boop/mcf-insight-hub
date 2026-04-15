@@ -257,8 +257,11 @@ export default function Agenda() {
           </div>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button variant="outline" size="icon" onClick={() => refetch()} className="h-8 w-8 sm:h-9 sm:w-9">
+          <Button variant="outline" size="icon" onClick={() => refetch()} className="h-8 w-8 sm:h-9 sm:w-9" title="Atualizar">
             <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" onClick={handleExportExcel} className="h-8 w-8 sm:h-9 sm:w-9" title="Exportar Excel">
+            <Download className="h-4 w-4" />
           </Button>
           {!isCloser && (
             <>
