@@ -324,6 +324,26 @@ export function R2ContractLifecyclePanel() {
             </CardContent>
           </Card>
 
+          {/* Agendados (expandable) */}
+          <Card
+            className={cn(
+              "bg-card border-border cursor-pointer transition-all hover:shadow-md",
+              isParentActive('agendados') && "ring-2 ring-blue-500/50"
+            )}
+            onClick={() => handleParentClick('agendados')}
+          >
+            <CardContent className="pt-4 pb-3 text-center">
+              <div className="flex items-center justify-center gap-1">
+                <p className="text-xs text-muted-foreground">Agendados</p>
+                <ChevronDown className={cn(
+                  "h-3 w-3 text-muted-foreground transition-transform",
+                  isParentActive('agendados') && "rotate-180"
+                )} />
+              </div>
+              <p className="text-2xl font-bold text-blue-400">{kpis.agendados}</p>
+            </CardContent>
+          </Card>
+
           {/* Pré-agendado (no children) */}
           <Card
             className={cn(
