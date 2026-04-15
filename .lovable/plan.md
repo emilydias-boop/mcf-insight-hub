@@ -1,46 +1,39 @@
 
 
-## Plano: Navegar pelo Carrinho (Sexta) e mostrar a Safra correspondente
+## Diagnóstico: Reembolsos não aparecem
 
-### Contexto
-O relatório precisa ser organizado a partir do **carrinho** (sexta-feira), mostrando a safra (Qui-Qua) que alimenta aquele carrinho. O usuário seleciona o carrinho e vê os contratos da safra correspondente.
+O problema é que a classificação de "Reembolso" verifica apenas `r1Status === 'refunded'`, mas na prática o status do R1 attendee **nem sempre é atualizado** quando o reembolso ocorre na Hubla.
 
-### Lógica
-- O carrinho é na **sexta-feira** (dia do corte)
-- A safra que alimenta esse carrinho = **Qui anterior → Qua anterior** (a semana que termina na quarta antes da sexta do carrinho)
-- Exemplo: Carrinho sexta 11/04 → Safra Qui 03/04 a Qua 09/04
-- Usa `getCartWeekStart(fridayDate - 1 dia)` para encontrar a quinta, e `getCartWeekEnd(...)` para a quarta
+Dados encontrados:
+- **Andre Ricci**: R1 status = `refunded` ✅ → aparece como Reembolso
+- **Marco Aurélio Cunta**: R1 status = `contract_paid`, R2 status = `completed` → classificado como "Realizada" em vez de "Reembolso"
+- **Monique Andrade**: R1 status = `contract_paid`, R2 status = `completed` → idem
 
-### Alterações
+O reembolso está registrado em `hubla_transactions.sale_status = 'refunded'`, mas o hook não consulta essa tabela.
 
-**`src/components/crm/R2ContractLifecyclePanel.tsx`**
+## Solução
 
-1. **Remover** `DateRange`, `Calendar`, `Popover`, `startOfMonth`, `endOfMonth`
-2. **Adicionar** estado `weekDate` (Date) para navegação por semana
-3. **Importar** `getCartWeekStart`, `getCartWeekEnd` de `carrinhoWeekBoundaries` e `addDays`, `subDays`, `addWeeks`, `subWeeks`
-4. **Calcular**:
-   - `carrinhoFriday` = sexta do carrinho da semana selecionada
-   - `safraStart` = quinta (weekStart da semana anterior à sexta) via `getCartWeekStart`
-   - `safraEnd` = quarta (weekEnd) via `getCartWeekEnd`
-5. **Exibir** header: `"Carrinho Sex 11/04 — Safra: Qui 03/04 → Qua 09/04"` com botões `<` `>` `Hoje`
-6. **Passar** `safraStart`/`safraEnd` como `startDate`/`endDate` ao hook
+Adicionar uma consulta a `hubla_transactions` para detectar reembolsos pela data de `contract_paid_at` e email/deal, e usar essa informação na classificação.
 
-**`src/hooks/useContractLifecycleReport.ts`**
+### Alterações em `src/hooks/useContractLifecycleReport.ts`
 
-1. Atualizar `getFridayCutoff` para aceitar `weekStart` como parâmetro:
-   - `fridayCutoff = weekStart + 1 dia (sexta) às 12:00`
-   - Isso garante que "Próxima Semana" funcione corretamente para semanas passadas
-2. Adicionar `weekStart?: Date` opcional em `ContractLifecycleFilters`
+1. **Novo Step**: Após buscar R1 attendees, coletar os `contract_paid_at` timestamps e buscar em `hubla_transactions` registros com `sale_status = 'refunded'` e `product_name LIKE '%Contrato%'` no período da safra
+2. **Criar mapa de reembolsos**: por `deal_id` (via email matching com `crm_contacts`) ou diretamente por `linked_attendee_id`
+3. **Atualizar `classifySituacao`**: aceitar um parâmetro `isRefunded: boolean` e verificar **antes** dos outros checks — se `isRefunded` ou `r1Status === 'refunded'`, classificar como Reembolso
 
-### Seção técnica
+Abordagem mais simples: buscar transações refunded no período, cruzar pelo `customer_email` com os contatos dos deals dos R1 attendees.
 
-A derivação das datas:
+### Fluxo
+
 ```text
-weekDate (qualquer dia) → getCartWeekStart(weekDate) = Quinta
-                        → getCartWeekEnd(weekDate) = Quarta
-carrinhoFriday = Quinta + 8 dias = Sexta seguinte (dia do carrinho)
-
-Filtro do hook: contract_paid_at entre Quinta 00:00 e Quarta 23:59
-Corte "Próxima Semana": carrinhoFriday às 12:00
+1. Buscar R1 attendees (já existe)
+2. Buscar hubla_transactions refunded no período da safra
+3. Cruzar por email: deal → crm_contacts.email vs hubla_transactions.customer_email
+4. Marcar isRefunded = true para matches
+5. classifySituacao prioriza isRefunded sobre qualquer outro status
 ```
+
+### Alterações no Panel (nenhuma)
+
+O badge e KPIs já tratam `situacao === 'reembolso'` corretamente. A correção é apenas no hook de dados.
 
