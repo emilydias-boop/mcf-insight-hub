@@ -35,6 +35,8 @@ export function useInsideSalesDeals() {
             )
           `)
           .eq('origin_id', INSIDE_SALES_ORIGIN_ID)
+          .eq('is_duplicate', false)
+          .is('archived_at', null)
           .range(from, from + batchSize - 1);
 
         if (error) throw error;
