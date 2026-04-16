@@ -126,22 +126,26 @@ serve(async (req) => {
       console.log('[LIVE-LEAD] Novo contato criado:', contactId);
     }
 
-    // 2. Verificar se já existe deal para este contato nesta origem
-    const { data: existingDeal } = await supabase
-      .from('crm_deals')
-      .select('id')
-      .eq('contact_id', contactId)
-      .eq('origin_id', LIVE_ORIGIN_ID)
-      .maybeSingle();
+    // 2. Verificar se já existe deal por identidade (email/phone) nesta origem
+    const emailNorm = payload.email?.trim().toLowerCase() || '';
+    const phoneCleanForCheck = normalizedPhone ? normalizedPhone.replace(/\D/g, '') : '';
+    const phoneSuffixForCheck = phoneCleanForCheck.length >= 9 ? phoneCleanForCheck.slice(-9) : phoneCleanForCheck;
 
-    if (existingDeal) {
-      console.log('[LIVE-LEAD] Deal já existe, ignorando duplicata:', existingDeal.id);
+    const { data: existingDealId } = await supabase
+      .rpc('check_duplicate_deal_by_identity', {
+        p_email: emailNorm,
+        p_phone_suffix: phoneSuffixForCheck,
+        p_origin_id: LIVE_ORIGIN_ID,
+      });
+
+    if (existingDealId) {
+      console.log('[LIVE-LEAD] Deal já existe por identidade, ignorando duplicata:', existingDealId);
       return new Response(
         JSON.stringify({ 
           success: true, 
           action: 'skipped', 
           reason: 'deal_already_exists',
-          deal_id: existingDeal.id,
+          deal_id: existingDealId,
           contact_id: contactId
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

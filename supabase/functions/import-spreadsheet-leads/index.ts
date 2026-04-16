@@ -135,20 +135,20 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Check if deal already exists for this contact in this origin
-        const { data: existingDeal } = await supabase
-          .from('crm_deals')
-          .select('id, stage_id, owner_id, tags')
-          .eq('contact_id', contactId)
-          .eq('origin_id', origin_id)
-          .limit(1);
+        // Check if deal already exists by identity (email/phone) in this origin
+        const { data: existingDealId } = await supabase
+          .rpc('check_duplicate_deal_by_identity', {
+            p_email: emailNorm || '',
+            p_phone_suffix: phoneSuffix || '',
+            p_origin_id: origin_id,
+          });
 
-        if (existingDeal?.length) {
+        if (existingDealId) {
           // Deal já existe: só atualizar tags, preservar owner e stage
           const { error: updateError } = await supabase
             .from('crm_deals')
             .update({ tags: finalTags })
-            .eq('id', existingDeal[0].id);
+            .eq('id', existingDealId);
 
           if (updateError) {
             console.error(`Error updating deal for ${lead.name}:`, updateError);

@@ -10738,6 +10738,10 @@ export type Database = {
         }
         Returns: string
       }
+      check_duplicate_deal_by_identity: {
+        Args: { p_email: string; p_origin_id: string; p_phone_suffix: string }
+        Returns: string
+      }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
       generate_patrimonio_number: {
