@@ -655,10 +655,25 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         };
       });
 
+      // Phone-based deduplication: keep only one row per phone (last 9 digits)
+      const phoneDedup = new Map<string, ContractLifecycleRow>();
+      const dedupedRows: ContractLifecycleRow[] = [];
+      for (const row of rows) {
+        const phone = row.phone;
+        if (phone) {
+          const key = normalizePhoneSuffix9(phone);
+          if (key.length >= 8) {
+            if (phoneDedup.has(key)) continue; // skip duplicate
+            phoneDedup.set(key, row);
+          }
+        }
+        dedupedRows.push(row);
+      }
+
       // Apply filters
-      let filtered = rows;
+      let filtered = dedupedRows;
       if (filters.situacao && filters.situacao !== 'all') {
-        filtered = rows.filter(r => r.situacao === filters.situacao);
+        filtered = dedupedRows.filter(r => r.situacao === filters.situacao);
       }
 
       // Sort by contract_paid_at desc
