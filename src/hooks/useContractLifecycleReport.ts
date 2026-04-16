@@ -333,100 +333,41 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         }
       }
 
-      // Step 1c — Leads com R2 Aprovado na janela do carrinho (fora da safra)
-      // Step 1d — Leads encaixados via carrinho_week_start
+      // Step 1c — Use unified RPC to get correct R2 attendees for this week
+      // This handles: week scoping, phone dedup, encaixados
       if (filters.weekStart) {
         const weekStart = filters.weekStart;
-        const weekEnd = addDays(weekStart, 6); // Qui + 6 = Qua
-
-        // Fetch aprovado status ID
-        const { data: statusOptions } = await supabase
-          .from('r2_status_options')
-          .select('id, name')
-          .eq('is_active', true);
-        const aprovadoId = statusOptions?.find((s: any) =>
-          s.name.toLowerCase().includes('aprovado')
-        )?.id;
-
-        // Carrinho metric boundaries (Friday-to-Friday window)
+        const weekEnd = addDays(weekStart, 6);
         const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd);
-        const r2WindowStart = boundaries.aprovados.start;
-        const r2WindowEnd = boundaries.aprovados.end;
+        const weekStartStr = format(weekStart, 'yyyy-MM-dd');
 
-        // Carrinho week start string for encaixados
-        const cartWeekStart = getCartWeekStart(weekStart);
-        const cartWeekStartStr = format(cartWeekStart, 'yyyy-MM-dd');
+        // Call the unified RPC
+        const { data: rpcData } = await supabase.rpc('get_carrinho_r2_attendees', {
+          p_week_start: weekStartStr,
+          p_window_start: boundaries.r2Meetings.start.toISOString(),
+          p_window_end: boundaries.r2Meetings.end.toISOString(),
+        });
 
-        // Collect deal_ids already captured
+        // Collect deal_ids already captured from contracts
         const existingDealIds = new Set(
           filteredR1Attendees.map((a: any) => a.deal_id).filter(Boolean)
         );
 
-        // --- Step 1c: R2 Aprovado in window ---
-        let extraDealIdsFromR2: string[] = [];
-        if (aprovadoId) {
-          const r2AprovadoQuery = supabase
-            .from('meeting_slot_attendees')
-            .select(`
-              deal_id,
-              carrinho_week_start,
-              meeting_slot:meeting_slots!inner(
-                scheduled_at,
-                meeting_type
-              )
-            `)
-            .eq('meeting_slot.meeting_type', 'r2')
-            .eq('r2_status_id', aprovadoId)
-            .neq('status', 'cancelled')
-            .gte('meeting_slot.scheduled_at', r2WindowStart.toISOString())
-            .lte('meeting_slot.scheduled_at', r2WindowEnd.toISOString());
-
-          const { data: r2AprovadoData } = await r2AprovadoQuery;
-
-          if (r2AprovadoData) {
-            for (const r2 of r2AprovadoData as any[]) {
-              // Skip leads assigned to a different carrinho week
-              const r2WeekStart = (r2 as any).carrinho_week_start;
-              if (r2WeekStart && r2WeekStart !== cartWeekStartStr) continue;
-              if (r2.deal_id && !existingDealIds.has(r2.deal_id)) {
-                extraDealIdsFromR2.push(r2.deal_id);
-                existingDealIds.add(r2.deal_id);
-              }
+        // Add extra deal_ids from RPC that aren't in the contract set
+        const allExtraDealIds: string[] = [];
+        if (rpcData) {
+          for (const r2 of rpcData as any[]) {
+            if (r2.deal_id && !existingDealIds.has(r2.deal_id)) {
+              allExtraDealIds.push(r2.deal_id);
+              existingDealIds.add(r2.deal_id);
             }
           }
         }
 
-        // --- Step 1d: Encaixados (carrinho_week_start) ---
-        let extraDealIdsFromEncaixados: string[] = [];
-        {
-          const { data: encaixadosData } = await supabase
-            .from('meeting_slot_attendees')
-            .select(`
-              deal_id,
-              meeting_slot:meeting_slots!inner(
-                meeting_type
-              )
-            `)
-            .eq('meeting_slot.meeting_type', 'r2')
-            .eq('carrinho_week_start', cartWeekStartStr)
-            .neq('status', 'cancelled');
-
-          if (encaixadosData) {
-            for (const enc of encaixadosData as any[]) {
-              if (enc.deal_id && !existingDealIds.has(enc.deal_id)) {
-                extraDealIdsFromEncaixados.push(enc.deal_id);
-                existingDealIds.add(enc.deal_id);
-              }
-            }
-          }
-        }
-
-        // --- Fetch R1 attendees for the extra deal_ids ---
-        const allExtraDealIds = [...extraDealIdsFromR2, ...extraDealIdsFromEncaixados];
+        // Fetch R1 attendees for extra deals
         if (allExtraDealIds.length > 0) {
           const foundR1DealIds = new Set<string>();
 
-          // First try to find R1 attendees by deal_id
           for (let i = 0; i < allExtraDealIds.length; i += 200) {
             const chunk = allExtraDealIds.slice(i, i + 200);
             const { data: extraR1 } = await supabase
@@ -472,7 +413,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
             }
           }
 
-          // For remaining extra deal_ids (no R1 found), create synthetic rows
+          // Synthetic rows for extra deals without R1
           const remainingDealIds = allExtraDealIds.filter(d => !foundR1DealIds.has(d));
           if (remainingDealIds.length > 0) {
             for (let i = 0; i < remainingDealIds.length; i += 200) {
