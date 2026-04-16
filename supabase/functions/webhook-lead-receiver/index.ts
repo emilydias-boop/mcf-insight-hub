@@ -604,15 +604,28 @@ serve(async (req) => {
       }
     }
 
-    // 8. Check for existing deal (any deal for same contact+origin, respecting UNIQUE constraint)
-    const { data: existingDeal } = await supabase
-      .from('crm_deals')
-      .select('id, tags, stage_id, custom_fields, owner_id, owner_profile_id')
-      .eq('contact_id', contactId)
-      .eq('origin_id', endpoint.origin_id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // 8. Check for existing deal by identity (email/phone suffix), not just contact_id
+    const emailForDupCheck = normalizedEmail || '';
+    const phoneForDupCheck = normalizedPhone ? normalizedPhone.replace(/\D/g, '') : '';
+    const phoneSuffixForDupCheck = phoneForDupCheck.length >= 9 ? phoneForDupCheck.slice(-9) : phoneForDupCheck;
+
+    const { data: existingDealId } = await supabase
+      .rpc('check_duplicate_deal_by_identity', {
+        p_email: emailForDupCheck,
+        p_phone_suffix: phoneSuffixForDupCheck,
+        p_origin_id: endpoint.origin_id,
+      });
+
+    // If found, fetch full deal data for the update logic below
+    let existingDeal = null;
+    if (existingDealId) {
+      const { data } = await supabase
+        .from('crm_deals')
+        .select('id, tags, stage_id, custom_fields, owner_id, owner_profile_id')
+        .eq('id', existingDealId)
+        .maybeSingle();
+      existingDeal = data;
+    }
 
     if (existingDeal) {
       console.log('[WEBHOOK-RECEIVER] Deal já existe:', existingDeal.id);
