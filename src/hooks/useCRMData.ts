@@ -425,8 +425,10 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
           crm_origins(name),
           crm_stages(stage_name, color)
         `)
-        .order('stage_moved_at', { ascending: false, nullsFirst: false })
-        .limit(limit);
+      .eq('is_duplicate', false)
+      .is('archived_at', null)
+      .order('stage_moved_at', { ascending: false, nullsFirst: false })
+      .limit(limit);
       
       // Aplicar filtro de origens (apenas se não estiver em busca cross-pipeline)
       if (originIds.length > 0) {

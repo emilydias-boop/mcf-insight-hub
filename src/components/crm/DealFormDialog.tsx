@@ -145,40 +145,83 @@ export function DealFormDialog({
 
   const onSubmit = async (data: DealFormValues) => {
     try {
-      // 1. Create contact first
-      const { data: newContact, error: contactError } = await supabase
-        .from('crm_contacts')
-        .insert({
-          clint_id: `local-${Date.now()}`,
-          name: data.contact_name,
-          email: data.contact_email || null,
-          phone: data.contact_phone || null,
-          origin_id: defaultOriginId,
-        })
-        .select()
-        .single();
-      
-      if (contactError) throw contactError;
+      // 1. Try to find existing contact by email or phone
+      let contactId: string | null = null;
+      const emailNorm = (data.contact_email || '').toLowerCase().trim();
+      const phoneClean = (data.contact_phone || '').replace(/\D/g, '');
+      const phoneSuffix = phoneClean.length >= 9 ? phoneClean.slice(-9) : phoneClean;
 
-      // 2. Create deal linked to contact
-      // Buscar email do profile selecionado para manter owner_id (legacy)
+      if (emailNorm) {
+        const { data: existing } = await supabase
+          .from('crm_contacts')
+          .select('id')
+          .ilike('email', emailNorm)
+          .limit(1);
+        if (existing?.length) contactId = existing[0].id;
+      }
+
+      if (!contactId && phoneSuffix && phoneSuffix.length >= 8) {
+        const { data: existing } = await supabase
+          .from('crm_contacts')
+          .select('id')
+          .ilike('phone', `%${phoneSuffix}`)
+          .limit(1);
+        if (existing?.length) contactId = existing[0].id;
+      }
+
+      // 2. Check if active deal already exists for this contact in this pipeline
+      if (contactId && defaultOriginId) {
+        const { data: existingDeal } = await supabase
+          .from('crm_deals')
+          .select('id, name')
+          .eq('contact_id', contactId)
+          .eq('origin_id', defaultOriginId)
+          .eq('is_duplicate', false)
+          .is('archived_at', null)
+          .limit(1);
+
+        if (existingDeal?.length) {
+          toast.error(`Este lead já existe nesta pipeline: "${existingDeal[0].name}". Abra o deal existente.`);
+          return;
+        }
+      }
+
+      // 3. Create contact if not found
+      if (!contactId) {
+        const { data: newContact, error: contactError } = await supabase
+          .from('crm_contacts')
+          .insert({
+            clint_id: `local-${Date.now()}`,
+            name: data.contact_name,
+            email: data.contact_email || null,
+            phone: data.contact_phone || null,
+            origin_id: defaultOriginId,
+          })
+          .select()
+          .single();
+        
+        if (contactError) throw contactError;
+        contactId = newContact.id;
+      }
+
+      // 4. Create deal linked to contact
       const selectedProfile = dealOwners.find((p: any) => p.id === data.owner_id);
       
       const payload = {
         name: data.name,
         value: data.value,
         stage_id: data.stage,
-        contact_id: newContact.id,
+        contact_id: contactId,
         origin_id: defaultOriginId,
-        owner_id: selectedProfile?.email || undefined, // legacy (email)
-        owner_profile_id: data.owner_id || undefined,  // novo (UUID)
-        clint_id: `local-${Date.now()}`,  // ID local para deals criados manualmente
-        data_source: 'manual',             // Indica criação manual (não webhook/CSV)
+        owner_id: selectedProfile?.email || undefined,
+        owner_profile_id: data.owner_id || undefined,
+        clint_id: `local-${Date.now()}`,
+        data_source: 'manual',
       };
 
       const newDeal = await createDealMutation.mutateAsync(payload);
 
-      // 3. Log activity
+      // 5. Log activity
       if (newDeal) {
         await createActivityMutation.mutateAsync({
           deal_id: newDeal.id,
