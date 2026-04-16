@@ -117,13 +117,16 @@ export default function R2Carrinho() {
   const handleToday = () => setWeekDate(new Date());
 
   const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['carrinho-unified-data'] });
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
+    queryClient.invalidateQueries({ queryKey: ['r2-carrinho-contratos'] });
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
     queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-vendas'] });
     queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
     queryClient.invalidateQueries({ queryKey: ['carrinho-config'] });
     queryClient.invalidateQueries({ queryKey: ['r2-accumulated-leads'] });
+    queryClient.invalidateQueries({ queryKey: ['r2-metrics-data'] });
   };
 
   const handleReschedule = (meetingId: string) => {
