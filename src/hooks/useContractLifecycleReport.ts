@@ -1,17 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { startOfDay, endOfDay, differenceInDays, addDays, nextFriday, isFriday, startOfWeek, format } from 'date-fns';
+import { startOfDay, endOfDay, differenceInDays, addDays, format } from 'date-fns';
 import { getCustomWeekEnd } from '@/lib/dateHelpers';
-import { getCarrinhoMetricBoundaries, getCartWeekStart } from '@/lib/carrinhoWeekBoundaries';
+import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
 
-function normalizePhoneSuffix9(phone: string): string {
+function normalizePhoneSuffix9(phone: string | null | undefined): string {
+  if (!phone) return '';
   const digits = phone.replace(/\D/g, '');
   return digits.slice(-9);
 }
 
-function normalizePhoneSuffix(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  return digits.slice(-9);
+function normalizeEmail(email: string | null | undefined): string {
+  return (email || '').toLowerCase().trim();
 }
 
 export interface ContractLifecycleFilters {
@@ -48,24 +48,15 @@ export interface ContractLifecycleRow {
   isPaidContract: boolean;
 }
 
-/** Get the Friday cutoff for a given week start (Thursday).
- *  If weekStart is provided, friday = weekStart + 8 days (the carrinho Friday after the safra).
- *  Otherwise falls back to the current week's Friday.
- */
 function getFridayCutoff(weekStart?: Date, horarioCorte?: string): Date {
   const [cutH, cutM] = (horarioCorte || '12:00').split(':').map(Number);
-
   if (weekStart) {
-    // Carrinho Friday = safra Thursday + 8 days
     const friday = addDays(new Date(weekStart), 8);
     friday.setHours(cutH, cutM || 0, 0, 0);
     return friday;
   }
-
-  // Fallback: current week
   const now = new Date();
-  const weekEnd = getCustomWeekEnd(now);
-  const friday = weekEnd;
+  const friday = getCustomWeekEnd(now);
   friday.setHours(cutH, cutM || 0, 0, 0);
   return friday;
 }
@@ -78,27 +69,18 @@ function classifySituacao(
   fridayCutoff: Date,
   isHublaRefunded: boolean = false,
 ): { situacao: ContractSituacao; label: string } {
-  // 1. Reembolso (R1 status OR Hubla transaction refunded)
   if (r1Status === 'refunded' || isHublaRefunded) {
     return { situacao: 'reembolso', label: '💰 Reembolso' };
   }
-
-  // 2. No-show on R2
   if (r2AttendeeStatus === 'no_show') {
     return { situacao: 'no_show', label: '❌ No-show' };
   }
-
-  // 3. Desistente (via r2_status_options name)
   if (r2StatusName && r2StatusName.toLowerCase().includes('desistente')) {
     return { situacao: 'desistente', label: '🚫 Desistente' };
   }
-
-  // 4. Realizada
   if (r2AttendeeStatus === 'completed' || r2AttendeeStatus === 'contract_paid') {
     return { situacao: 'realizada', label: '✅ Realizada' };
   }
-
-  // 5 & 6. Agendado / Próxima Semana
   if (r2AttendeeStatus === 'invited' || r2AttendeeStatus === 'scheduled') {
     if (r2Date) {
       const r2DateTime = new Date(r2Date);
@@ -108,13 +90,9 @@ function classifySituacao(
     }
     return { situacao: 'agendado', label: '✅ Agendado' };
   }
-
-  // 6. Pré-agendado
   if (r2AttendeeStatus === 'pre_scheduled') {
     return { situacao: 'pre_agendado', label: '🔜 Pré-agendado' };
   }
-
-  // 7. Pendente (everything else)
   return { situacao: 'pendente', label: '⏳ Pendente' };
 }
 
@@ -123,560 +101,226 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
     queryKey: ['contract-lifecycle-report', filters.startDate.toISOString(), filters.endDate.toISOString(), filters.closerR1Id, filters.situacao, filters.weekStart?.toISOString()],
     staleTime: 30000,
     queryFn: async () => {
-      // Step 1a: Fetch paid contracts from hubla_transactions (aligned with Carrinho)
+      // ============================================================
+      // STEP A: Fetch unified R2 data via RPC (canonical source)
+      // ============================================================
+      const weekStart = filters.weekStart || filters.startDate;
+      const weekEnd = addDays(weekStart, 6);
+      const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd);
+      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+
+      const rpcPromise = supabase.rpc('get_carrinho_r2_attendees', {
+        p_week_start: weekStartStr,
+        p_window_start: boundaries.r2Meetings.start.toISOString(),
+        p_window_end: boundaries.r2Meetings.end.toISOString(),
+      });
+
+      // ============================================================
+      // STEP B: Fetch Hubla A000 contracts in parallel
+      // ============================================================
       const contractBoundaryStart = startOfDay(filters.startDate).toISOString();
       const contractBoundaryEnd = endOfDay(filters.endDate).toISOString();
 
-      const { data: hublaTx, error: hublaError } = await supabase
+      const hublaPromise = supabase
         .from('hubla_transactions')
-        .select('customer_email, sale_date, hubla_id, source, product_name, installment_number, sale_status')
+        .select('customer_email, customer_phone, customer_name, sale_date, hubla_id, source, product_name, installment_number, sale_status')
         .eq('product_name', 'A000 - Contrato')
         .in('sale_status', ['completed', 'refunded'])
         .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
         .gte('sale_date', contractBoundaryStart)
         .lte('sale_date', contractBoundaryEnd);
 
+      const [{ data: rpcData, error: rpcError }, { data: hublaTx, error: hublaError }] = await Promise.all([
+        rpcPromise,
+        hublaPromise,
+      ]);
+
+      if (rpcError) throw rpcError;
       if (hublaError) throw hublaError;
 
-      // Apply Carrinho exclusion filters & deduplicate by email
-      const emailTxMap = new Map<string, { email: string; saleDate: string; isRefunded: boolean }>();
+      // ============================================================
+      // STEP C: Build Hubla lookup maps (by phone & email)
+      // ============================================================
+      type HublaInfo = { saleDate: string; isRefunded: boolean; email: string; phone: string | null; name: string | null };
+      const hublaByPhone = new Map<string, HublaInfo>();
+      const hublaByEmail = new Map<string, HublaInfo>();
+      const allHublaInfos: HublaInfo[] = [];
+
       for (const tx of (hublaTx || []) as any[]) {
-        // Exclude newsale- duplicates
         if (tx.hubla_id && String(tx.hubla_id).startsWith('newsale-')) continue;
-        // Exclude make+contrato lowercase
         if (tx.source === 'make' && tx.product_name?.toLowerCase() === 'contrato') continue;
-        // Exclude installment > 1
         if (tx.installment_number && tx.installment_number > 1) continue;
 
-        const email = (tx.customer_email || '').toLowerCase().trim();
-        if (!email) continue;
-
-        const existing = emailTxMap.get(email);
+        const email = normalizeEmail(tx.customer_email);
+        const phoneKey = normalizePhoneSuffix9(tx.customer_phone);
         const isRefunded = tx.sale_status === 'refunded';
-        if (!existing) {
-          emailTxMap.set(email, { email, saleDate: tx.sale_date, isRefunded });
-        } else {
-          // If we already have a completed and this is refunded, mark as refunded
-          if (isRefunded) existing.isRefunded = true;
+        const info: HublaInfo = {
+          saleDate: tx.sale_date,
+          isRefunded,
+          email,
+          phone: tx.customer_phone || null,
+          name: tx.customer_name || null,
+        };
+        allHublaInfos.push(info);
+
+        if (email) {
+          const existing = hublaByEmail.get(email);
+          if (!existing) hublaByEmail.set(email, info);
+          else if (isRefunded) existing.isRefunded = true;
+        }
+        if (phoneKey.length >= 8) {
+          const existing = hublaByPhone.get(phoneKey);
+          if (!existing) hublaByPhone.set(phoneKey, info);
+          else if (isRefunded) existing.isRefunded = true;
         }
       }
 
-      const uniqueEmails = [...emailTxMap.keys()];
-
-      // Step 1b: Resolve emails → contacts → deals → R1 attendees
-      // First fetch BU origin mapping
-      const { data: buMappings } = await supabase
-        .from('bu_origin_mapping')
-        .select('entity_type, entity_id')
-        .eq('bu', 'incorporador');
-
-      const directOriginIds = (buMappings || [])
-        .filter((m: any) => m.entity_type === 'origin')
-        .map((m: any) => m.entity_id);
-      const groupIds = (buMappings || [])
-        .filter((m: any) => m.entity_type === 'group')
-        .map((m: any) => m.entity_id);
-
-      let allBUOriginIds = [...directOriginIds];
-      if (groupIds.length > 0) {
-        const { data: childOrigins } = await supabase
-          .from('crm_origins')
-          .select('id')
-          .in('group_id', groupIds);
-        allBUOriginIds.push(...(childOrigins || []).map((o: any) => o.id));
-      }
-      const incorporadorOriginIds = new Set(allBUOriginIds);
-
-      // Fetch contacts by email
-      let allContacts: any[] = [];
-      for (let i = 0; i < uniqueEmails.length; i += 200) {
-        const chunk = uniqueEmails.slice(i, i + 200);
-        const { data: contacts } = await supabase
-          .from('crm_contacts')
-          .select('id, name, email, phone')
-          .in('email', chunk);
-        if (contacts) allContacts.push(...contacts);
-      }
-
-      // Build email → contact_ids map
-      const emailToContactIds = new Map<string, string[]>();
-      for (const c of allContacts) {
-        const em = (c.email || '').toLowerCase().trim();
-        if (!emailToContactIds.has(em)) emailToContactIds.set(em, []);
-        emailToContactIds.get(em)!.push(c.id);
-      }
-
-      // Fetch deals by contact_ids
-      const allContactIds = allContacts.map((c: any) => c.id);
-      let allDeals: any[] = [];
-      for (let i = 0; i < allContactIds.length; i += 200) {
-        const chunk = allContactIds.slice(i, i + 200);
-        const { data: deals } = await supabase
-          .from('crm_deals')
-          .select('id, name, contact_id, origin_id')
-          .in('contact_id', chunk);
-        if (deals) allDeals.push(...deals);
-      }
-
-      // Filter deals by BU incorporador
-      const buDeals = allDeals.filter((d: any) => {
-        if (!d.origin_id) return true;
-        return incorporadorOriginIds.has(d.origin_id);
-      });
-
-      // Build contact_id → deal mapping
-      const contactToDealIds = new Map<string, string[]>();
-      for (const d of buDeals) {
-        if (!contactToDealIds.has(d.contact_id)) contactToDealIds.set(d.contact_id, []);
-        contactToDealIds.get(d.contact_id)!.push(d.id);
-      }
-
-      // Fetch R1 attendees for these deals
-      const buDealIds = buDeals.map((d: any) => d.id);
-      let allR1Attendees: any[] = [];
-      for (let i = 0; i < buDealIds.length; i += 200) {
-        const chunk = buDealIds.slice(i, i + 200);
-        const { data: r1Data } = await supabase
-          .from('meeting_slot_attendees')
-          .select(`
-            id,
-            attendee_name,
-            attendee_phone,
-            contract_paid_at,
-            deal_id,
-            status,
-            is_partner,
-            meeting_slot:meeting_slots!inner(
-              id,
-              scheduled_at,
-              meeting_type,
-              booked_by,
-              closer:closers!meeting_slots_closer_id_fkey(id, name)
-            ),
-            deal:crm_deals(
-              id,
-              name,
-              contact_id,
-              origin_id,
-              contact:crm_contacts(name, phone, email)
-            )
-          `)
-          .eq('meeting_slot.meeting_type', 'r1')
-          .in('deal_id', chunk)
-          .neq('status', 'cancelled')
-          .eq('is_partner', false);
-        if (r1Data) allR1Attendees.push(...r1Data);
-      }
-
-      // Build email → R1 attendee (best one per email)
-      const emailToR1 = new Map<string, any>();
-      for (const att of allR1Attendees as any[]) {
-        const email = (att.deal?.contact?.email || '').toLowerCase().trim();
-        if (!email) continue;
-        const existing = emailToR1.get(email);
-        if (!existing) {
-          emailToR1.set(email, att);
-        } else {
-          // Prefer the one with contract_paid_at, then most recent
-          const existingPaid = !!existing.contract_paid_at;
-          const newPaid = !!att.contract_paid_at;
-          if ((!existingPaid && newPaid) || (existingPaid === newPaid && (att.meeting_slot?.scheduled_at || '') > (existing.meeting_slot?.scheduled_at || ''))) {
-            emailToR1.set(email, att);
-          }
-        }
-      }
-
-      // Build final filteredR1Attendees: one row per unique email from Hubla
-      let filteredR1Attendees: any[] = [];
-      const processedEmails = new Set<string>();
-
-      for (const [email, txInfo] of emailTxMap) {
-        if (processedEmails.has(email)) continue;
-        processedEmails.add(email);
-
-        const r1Att = emailToR1.get(email);
-        if (r1Att) {
-          // Override refund status from Hubla transaction
-          if (txInfo.isRefunded && r1Att.status !== 'refunded') {
-            r1Att._hublaRefunded = true;
-          }
-          r1Att._hublaSaleDate = txInfo.saleDate;
-          r1Att._isPaidFromHubla = true;
-          filteredR1Attendees.push(r1Att);
-        } else {
-          // Create synthetic row — no R1 found for this email
-          const contactIds = emailToContactIds.get(email) || [];
-          let bestDeal: any = null;
-          for (const cid of contactIds) {
-            const dids = contactToDealIds.get(cid) || [];
-            for (const did of dids) {
-              const deal = buDeals.find((d: any) => d.id === did);
-              if (deal) { bestDeal = deal; break; }
-            }
-            if (bestDeal) break;
-          }
-          const contact = allContacts.find((c: any) => (c.email || '').toLowerCase().trim() === email);
-          filteredR1Attendees.push({
-            id: `synthetic-hubla-${email}`,
-            attendee_name: contact?.name || email,
-            attendee_phone: contact?.phone || null,
-            contract_paid_at: txInfo.saleDate,
-            deal_id: bestDeal?.id || null,
-            status: txInfo.isRefunded ? 'refunded' : 'outside',
-            is_partner: false,
-            meeting_slot: null,
-            deal: bestDeal ? { ...bestDeal, contact: contact || null } : null,
-            _hublaRefunded: txInfo.isRefunded,
-            _hublaSaleDate: txInfo.saleDate,
-            _isPaidFromHubla: true,
-          });
-        }
-      }
-
-      // Step 1c — Use unified RPC to get correct R2 attendees for this week
-      // This handles: week scoping, phone dedup, encaixados
-      if (filters.weekStart) {
-        const weekStart = filters.weekStart;
-        const weekEnd = addDays(weekStart, 6);
-        const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd);
-        const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-
-        // Call the unified RPC
-        const { data: rpcData } = await supabase.rpc('get_carrinho_r2_attendees', {
-          p_week_start: weekStartStr,
-          p_window_start: boundaries.r2Meetings.start.toISOString(),
-          p_window_end: boundaries.r2Meetings.end.toISOString(),
-        });
-
-        // Collect deal_ids already captured from contracts
-        const existingDealIds = new Set(
-          filteredR1Attendees.map((a: any) => a.deal_id).filter(Boolean)
-        );
-
-        // Add extra deal_ids from RPC that aren't in the contract set
-        const allExtraDealIds: string[] = [];
-        if (rpcData) {
-          for (const r2 of rpcData as any[]) {
-            if (r2.deal_id && !existingDealIds.has(r2.deal_id)) {
-              allExtraDealIds.push(r2.deal_id);
-              existingDealIds.add(r2.deal_id);
-            }
-          }
-        }
-
-        // Fetch R1 attendees for extra deals
-        if (allExtraDealIds.length > 0) {
-          const foundR1DealIds = new Set<string>();
-
-          for (let i = 0; i < allExtraDealIds.length; i += 200) {
-            const chunk = allExtraDealIds.slice(i, i + 200);
-            const { data: extraR1 } = await supabase
-              .from('meeting_slot_attendees')
-              .select(`
-                id,
-                attendee_name,
-                attendee_phone,
-                contract_paid_at,
-                deal_id,
-                status,
-                is_partner,
-                meeting_slot:meeting_slots!inner(
-                  id,
-                  scheduled_at,
-                  meeting_type,
-                  booked_by,
-                  closer:closers!meeting_slots_closer_id_fkey(id, name)
-                ),
-                deal:crm_deals(
-                  id,
-                  name,
-                  contact_id,
-                  origin_id,
-                  contact:crm_contacts(name, phone, email)
-                )
-              `)
-              .eq('meeting_slot.meeting_type', 'r1')
-              .in('deal_id', chunk)
-              .neq('status', 'cancelled')
-              .eq('is_partner', false);
-
-            if (extraR1 && extraR1.length > 0) {
-              const validExtra = (extraR1 as any[]).filter((a: any) => {
-                const originId = a.deal?.origin_id;
-                if (!originId) return true;
-                return incorporadorOriginIds.has(originId);
-              });
-              filteredR1Attendees = [...filteredR1Attendees, ...validExtra];
-              for (const a of validExtra) {
-                if (a.deal_id) foundR1DealIds.add(a.deal_id);
-              }
-            }
-          }
-
-          // Synthetic rows for extra deals without R1
-          const remainingDealIds = allExtraDealIds.filter(d => !foundR1DealIds.has(d));
-          if (remainingDealIds.length > 0) {
-            for (let i = 0; i < remainingDealIds.length; i += 200) {
-              const chunk = remainingDealIds.slice(i, i + 200);
-              const { data: dealInfo } = await supabase
-                .from('crm_deals')
-                .select('id, name, contact_id, origin_id, contact:crm_contacts(name, phone, email)')
-                .in('id', chunk);
-
-              if (dealInfo) {
-                for (const deal of dealInfo as any[]) {
-                  const originId = deal.origin_id;
-                  if (originId && !incorporadorOriginIds.has(originId)) continue;
-                  filteredR1Attendees.push({
-                    id: `synthetic-${deal.id}`,
-                    attendee_name: deal.contact?.name || deal.name || null,
-                    attendee_phone: deal.contact?.phone || null,
-                    contract_paid_at: null,
-                    deal_id: deal.id,
-                    status: 'outside',
-                    is_partner: false,
-                    meeting_slot: null,
-                    deal: deal,
-                  });
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // Step 2: Collect booked_by UUIDs and resolve SDR names
-      const bookedByIds = [...new Set(
-        filteredR1Attendees
-          .map((a: any) => a.meeting_slot?.booked_by)
-          .filter(Boolean) as string[]
-      )];
-
-      let profilesMap: Record<string, string> = {};
-      if (bookedByIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', bookedByIds);
-        if (profiles) {
-          for (const p of profiles) {
-            if (p.id && p.full_name) profilesMap[p.id] = p.full_name;
-          }
-        }
-      }
-
-      // Step 3: Collect deal_ids and expand via contact_id for cross-pipeline R2 lookup
-      const originalDealIds = filteredR1Attendees
-        .map((a: any) => a.deal_id)
-        .filter(Boolean) as string[];
-
-      // Build contact → original deal mapping
-      const contactToDealMap = new Map<string, string[]>();
-      for (const att of filteredR1Attendees as any[]) {
-        const cid = att.deal?.contact_id;
-        const did = att.deal_id;
-        if (cid && did) {
-          if (!contactToDealMap.has(cid)) contactToDealMap.set(cid, []);
-          const arr = contactToDealMap.get(cid)!;
-          if (!arr.includes(did)) arr.push(did);
-        }
-      }
-
-      // Fetch sibling deals for the same contacts (cross-pipeline)
-      const contactIds = [...contactToDealMap.keys()];
-      const siblingToOriginal = new Map<string, string>();
-      const allDealIdsForR2 = new Set(originalDealIds);
-
-      if (contactIds.length > 0) {
-        for (let i = 0; i < contactIds.length; i += 200) {
-          const chunk = contactIds.slice(i, i + 200);
-          const { data: siblingDeals } = await supabase
-            .from('crm_deals')
-            .select('id, contact_id')
-            .in('contact_id', chunk);
-
-          for (const sd of siblingDeals || []) {
-            allDealIdsForR2.add(sd.id);
-            if (!originalDealIds.includes(sd.id) && sd.contact_id) {
-              const originals = contactToDealMap.get(sd.contact_id) || [];
-              if (originals.length > 0) {
-                siblingToOriginal.set(sd.id, originals[0]);
-              }
-            }
-          }
-        }
-      }
-
-      // Step 4: Fetch R2 attendees for expanded deal list
-      // Calculate carrinho window for R2 prioritization
-      const r2PrioBoundaries = filters.weekStart
-        ? getCarrinhoMetricBoundaries(filters.weekStart, addDays(filters.weekStart, 6))
-        : null;
-      let r2Map: Record<string, {
-        r2Date: string | null;
-        r2CloserName: string | null;
-        r2StatusName: string | null;
-        r2StatusColor: string | null;
-        r2StatusId: string | null;
-        r2AttendeeStatus: string | null;
-        carrinhoStatus: string | null;
-        carrinhoWeekStart: string | null;
-      }> = {};
-
-      const allDealIdsArray = [...allDealIdsForR2];
-      if (allDealIdsArray.length > 0) {
-        for (let i = 0; i < allDealIdsArray.length; i += 200) {
-          const chunk = allDealIdsArray.slice(i, i + 200);
-          const { data: r2Data } = await supabase
-            .from('meeting_slot_attendees')
-            .select(`
-              deal_id,
-              status,
-              r2_status_id,
-              carrinho_status,
-              carrinho_week_start,
-              r2_status:r2_status_options(id, name, color),
-              meeting_slot:meeting_slots!inner(
-                scheduled_at,
-                meeting_type,
-                closer:closers!meeting_slots_closer_id_fkey(id, name)
-              )
-            `)
-            .eq('meeting_slot.meeting_type', 'r2')
-            .in('deal_id', chunk)
-            .neq('status', 'cancelled');
-
-          if (r2Data) {
-            // Use carrinho window to prioritize R2 within the correct period
-            const r2Window = r2PrioBoundaries?.r2Meetings;
-            const isInWindow = (dateStr: string) => {
-              if (!r2Window) return false;
-              const d = new Date(dateStr);
-              return d >= r2Window.start && d <= r2Window.end;
-            };
-
-            // Compute cartWeekStartStr for carrinho_week_start filtering
-            const cartWkStr = filters.weekStart ? format(getCartWeekStart(filters.weekStart), 'yyyy-MM-dd') : null;
-
-            for (const r2 of r2Data as any[]) {
-              const ms = r2.meeting_slot;
-              if (r2.deal_id && ms) {
-                const mappedDealId = siblingToOriginal.get(r2.deal_id) || r2.deal_id;
-                const existing = r2Map[mappedDealId];
-                const newDate = ms.scheduled_at;
-                const newInWindow = newDate ? isInWindow(newDate) : false;
-                const existingInWindow = existing?.r2Date ? isInWindow(existing.r2Date) : false;
-
-                // Check carrinho_week_start alignment (same week vs different week)
-                const r2CWS = r2.carrinho_week_start;
-                const newSameWeek = !r2CWS || !cartWkStr || r2CWS === cartWkStr;
-                const existingSameWeek = !existing?.carrinhoWeekStart || !cartWkStr || existing.carrinhoWeekStart === cartWkStr;
-
-                // Priority: same-week > different-week; then in-window > out-of-window; then most recent
-                const shouldReplace = !existing
-                  || (newSameWeek && !existingSameWeek)
-                  || (newSameWeek === existingSameWeek && newInWindow && !existingInWindow)
-                  || (newSameWeek === existingSameWeek && newInWindow === existingInWindow && newDate && (!existing.r2Date || newDate > existing.r2Date));
-
-                if (shouldReplace) {
-                  r2Map[mappedDealId] = {
-                    r2Date: ms.scheduled_at,
-                    r2CloserName: ms.closer?.name || null,
-                    r2StatusName: r2.r2_status?.name || null,
-                    r2StatusColor: r2.r2_status?.color || null,
-                    r2StatusId: r2.r2_status_id,
-                    r2AttendeeStatus: r2.status,
-                    carrinhoStatus: r2.carrinho_status,
-                    carrinhoWeekStart: r2.carrinho_week_start,
-                  };
-                }
-              }
-            }
-          }
-        }
-      }
+      // Track which Hubla records were matched to RPC rows
+      const matchedHublaEmails = new Set<string>();
+      const matchedHublaPhones = new Set<string>();
 
       const now = new Date();
       const fridayCutoff = getFridayCutoff(filters.weekStart);
 
-      // Step 5: Transform into rows
-      const rows: ContractLifecycleRow[] = filteredR1Attendees.map((att: any) => {
-        const ms = att.meeting_slot;
-        const deal = att.deal;
-        const r2Info = att.deal_id ? r2Map[att.deal_id] : null;
+      // ============================================================
+      // STEP D: Build rows from RPC (primary source) + merge Hubla by phone/email
+      // ============================================================
+      const rpcRows: ContractLifecycleRow[] = [];
+      const phoneSeen = new Map<string, ContractLifecycleRow>();
 
-        const hasR2 = !!r2Info;
+      for (const r2 of (rpcData || []) as any[]) {
+        const phoneKey = normalizePhoneSuffix9(r2.attendee_phone || r2.contact_phone);
+        const emailKey = normalizeEmail(r2.contact_email);
 
-        // Refund status comes directly from Hubla transaction (set in Step 1a)
-        const isHublaRefunded = !!att._hublaRefunded;
+        // Match Hubla contract by phone first, then email
+        let hublaInfo: HublaInfo | undefined;
+        if (phoneKey.length >= 8 && hublaByPhone.has(phoneKey)) {
+          hublaInfo = hublaByPhone.get(phoneKey);
+          matchedHublaPhones.add(phoneKey);
+          if (hublaInfo?.email) matchedHublaEmails.add(hublaInfo.email);
+        } else if (emailKey && hublaByEmail.has(emailKey)) {
+          hublaInfo = hublaByEmail.get(emailKey);
+          matchedHublaEmails.add(emailKey);
+          const hp = normalizePhoneSuffix9(hublaInfo?.phone);
+          if (hp.length >= 8) matchedHublaPhones.add(hp);
+        }
 
-        // Classify situacao
+        const isHublaRefunded = !!hublaInfo?.isRefunded;
+        const contractPaidAt = r2.r1_contract_paid_at || hublaInfo?.saleDate || r2.contract_paid_at || null;
+
+        const r1Status: string | null = isHublaRefunded ? 'refunded' : null;
+        const r2AttendeeStatus = r2.attendee_status as string | null;
+
         const { situacao, label: situacaoLabel } = classifySituacao(
-          att.status,
-          r2Info?.r2AttendeeStatus || null,
-          r2Info?.r2StatusName || null,
-          r2Info?.r2Date || null,
+          r1Status,
+          r2AttendeeStatus,
+          r2.r2_status_name || null,
+          r2.scheduled_at || null,
           fridayCutoff,
           isHublaRefunded,
         );
 
-        // Calculate dias parado for non-terminal
         let diasParado: number | null = null;
-        if (situacao === 'pendente' && att.contract_paid_at) {
-          diasParado = differenceInDays(now, new Date(att.contract_paid_at));
+        if (situacao === 'pendente' && contractPaidAt) {
+          diasParado = differenceInDays(now, new Date(contractPaidAt));
         }
 
-        // Resolve SDR name
-        const bookedBy = ms?.booked_by;
-        const sdrName = bookedBy ? (profilesMap[bookedBy] || null) : null;
-
-        return {
-          id: att.id,
-          leadName: att.attendee_name || deal?.contact?.name || deal?.name || null,
-          phone: att.attendee_phone || deal?.contact?.phone || null,
-          contractPaidAt: att.contract_paid_at,
-          dealId: att.deal_id,
-          r1Date: ms?.scheduled_at || null,
-          r1CloserName: ms?.closer?.name || null,
-          r1Status: att.status,
-          sdrName,
-          hasR2,
-          r2Date: r2Info?.r2Date || null,
-          r2CloserName: r2Info?.r2CloserName || null,
-          r2StatusName: r2Info?.r2StatusName || null,
-          r2StatusColor: r2Info?.r2StatusColor || null,
-          r2AttendeeStatus: r2Info?.r2AttendeeStatus || null,
-          carrinhoStatus: r2Info?.carrinhoStatus || null,
-          carrinhoWeekStart: r2Info?.carrinhoWeekStart || null,
+        const row: ContractLifecycleRow = {
+          id: r2.attendee_id,
+          leadName: r2.attendee_name || r2.contact_name || hublaInfo?.name || null,
+          phone: r2.attendee_phone || r2.contact_phone || hublaInfo?.phone || null,
+          contractPaidAt,
+          dealId: r2.deal_id || null,
+          r1Date: r2.r1_scheduled_at || null,
+          r1CloserName: r2.r1_closer_name || null,
+          r1Status,
+          sdrName: null, // Not provided by RPC; could be added later
+          hasR2: !!r2.scheduled_at,
+          r2Date: r2.scheduled_at || null,
+          r2CloserName: r2.r2_closer_name || null,
+          r2StatusName: r2.r2_status_name || null,
+          r2StatusColor: r2.r2_status_color || null,
+          r2AttendeeStatus,
+          carrinhoStatus: r2.carrinho_status || null,
+          carrinhoWeekStart: r2.carrinho_week_start || null,
           diasParado,
           situacao,
           situacaoLabel,
-          isPaidContract: !!att._isPaidFromHubla,
+          isPaidContract: !!hublaInfo,
         };
-      });
 
-      // Phone-based deduplication: keep only one row per phone (last 9 digits)
-      const phoneDedup = new Map<string, ContractLifecycleRow>();
-      const dedupedRows: ContractLifecycleRow[] = [];
-      for (const row of rows) {
-        const phone = row.phone;
-        if (phone) {
-          const key = normalizePhoneSuffix9(phone);
-          if (key.length >= 8) {
-            if (phoneDedup.has(key)) continue; // skip duplicate
-            phoneDedup.set(key, row);
-          }
+        // Safety net dedup by phone (should be no-op since RPC dedupes)
+        if (phoneKey.length >= 8) {
+          if (phoneSeen.has(phoneKey)) continue;
+          phoneSeen.set(phoneKey, row);
         }
-        dedupedRows.push(row);
+        rpcRows.push(row);
       }
 
-      // Apply filters
-      let filtered = dedupedRows;
+      // ============================================================
+      // STEP E: Add orphan Hubla contracts (paid but no R2 in this week)
+      // Preserves "Total Pagos" KPI
+      // ============================================================
+      const orphanRows: ContractLifecycleRow[] = [];
+      const seenOrphanKeys = new Set<string>();
+
+      for (const info of allHublaInfos) {
+        const phoneKey = normalizePhoneSuffix9(info.phone);
+        const emailKey = info.email;
+
+        const matchedByPhone = phoneKey.length >= 8 && matchedHublaPhones.has(phoneKey);
+        const matchedByEmail = emailKey && matchedHublaEmails.has(emailKey);
+        if (matchedByPhone || matchedByEmail) continue;
+
+        // Dedup orphans among themselves
+        const dedupKey = phoneKey.length >= 8 ? `p:${phoneKey}` : `e:${emailKey}`;
+        if (!dedupKey || seenOrphanKeys.has(dedupKey)) continue;
+        seenOrphanKeys.add(dedupKey);
+
+        const { situacao, label: situacaoLabel } = classifySituacao(
+          info.isRefunded ? 'refunded' : null,
+          null,
+          null,
+          null,
+          fridayCutoff,
+          info.isRefunded,
+        );
+
+        orphanRows.push({
+          id: `hubla-orphan-${emailKey || phoneKey}`,
+          leadName: info.name,
+          phone: info.phone,
+          contractPaidAt: info.saleDate,
+          dealId: null,
+          r1Date: null,
+          r1CloserName: null,
+          r1Status: info.isRefunded ? 'refunded' : 'outside',
+          sdrName: null,
+          hasR2: false,
+          r2Date: null,
+          r2CloserName: null,
+          r2StatusName: null,
+          r2StatusColor: null,
+          r2AttendeeStatus: null,
+          carrinhoStatus: null,
+          carrinhoWeekStart: null,
+          diasParado: situacao === 'pendente' ? differenceInDays(now, new Date(info.saleDate)) : null,
+          situacao,
+          situacaoLabel,
+          isPaidContract: true,
+        });
+      }
+
+      const allRows = [...rpcRows, ...orphanRows];
+
+      // ============================================================
+      // STEP F: Apply filters & sort
+      // ============================================================
+      let filtered = allRows;
       if (filters.situacao && filters.situacao !== 'all') {
-        filtered = dedupedRows.filter(r => r.situacao === filters.situacao);
+        filtered = allRows.filter(r => r.situacao === filters.situacao);
       }
 
-      // Sort by contract_paid_at desc
       filtered.sort((a, b) => {
         const da = a.contractPaidAt ? new Date(a.contractPaidAt).getTime() : 0;
         const db = b.contractPaidAt ? new Date(b.contractPaidAt).getTime() : 0;
