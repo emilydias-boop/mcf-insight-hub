@@ -1,61 +1,65 @@
 
 
-## Plano: Alinhar "Aprovado" do Relatório com o Carrinho (25 → 28)
+## Diagnóstico: Pendentes pegando deal_id da pipeline errada
 
-### Diagnóstico exato
+### Causa raiz confirmada
 
-Confirmei via SQL que as duas telas calculam "Aprovado" de formas diferentes:
+Os 2 casos do print mostram o mesmo padrão:
+- **Eduardo da Silva Queiroz**: tem deal correto na `PIPELINE INSIDE SALES` (com R2 Jessica Martins 10/02 às 11:00 = Realizada), mas o relatório está pegando o deal da `PIPELINE - INSIDE SALES - VIVER DE ALUGUEL` (que só tem um R2 refunded de 13/04).
+- **Jackson Willians Mariano**: tem R2 realizada com Jessica Martins 10/04 às 10:00 na `PIPELINE INSIDE SALES` (R1 Cristiane Gomes 08/04, contract_paid), mas o relatório está pegando outro deal de outra BU.
 
-| Tela | Universo | Regra "Aprovado" | Resultado |
-|------|----------|------------------|-----------|
-| **Carrinho R2** | `get_carrinho_r2_attendees` (RPC, deduped por telefone) | `r2_status_name LIKE '%aprov%'` | **28** |
-| **Relatório (Realizadas → Aprovado)** | Contratos Hubla + extras da RPC | `situacao = 'realizada'` AND `r2StatusName = 'Aprovado'` | **25** |
+A regra de negócio (memória `lead-segregation-by-product-v2` e `hubla-routing-collision-logic-v5`): **qualquer lead com compra A010 deve ser tratado como Inside Sales, independente de outros produtos**.
 
-**Por que a Relatório perde 3:** No `useContractLifecycleReport.ts`, o universo começa pelos contratos Hubla (Step 1). Para cada email Hubla, busca o R1 e cria uma "linha primária". Depois enriquece com R2 via `r2Map[deal_id]` (Step 4). 
+### Por que está falhando hoje
 
-O problema: o **deal_id da linha primária (vindo do contato Hubla)** muitas vezes é diferente do **deal_id onde o R2 foi agendado** (cross-pipeline). Exemplos confirmados no banco:
-- `Rowerson` tem 2 deals (`775c95...` e `ea647...`) — Hubla pode pegar um, R2 está no outro
-- `Joyce` tem 2 deals — mesma fragmentação
-- `Wilde` tem 3 deals
-- `Felipe Vaz` tem 2 deals
+No `useContractLifecycleReport.ts`, o merge entre contrato Hubla e R2 da RPC é feito por telefone (9 dígitos) ou email. Mas a RPC `get_carrinho_r2_attendees` retorna **um R2 por telefone deduplicado** — escolhendo qualquer R2 da semana. Quando o lead tem múltiplos deals em pipelines diferentes (uma da BU correta com R2 realizada, outra de BU errada com R2 refunded), a RPC pode estar retornando o R2 errado, ou o telefone do contrato Hubla está casando com o lead errado.
 
-Quando o `r2Map[dealHubla]` fica vazio, a linha vira `pendente`, não `realizada`. A linha R2 correta É adicionada como "extra" (Step 1c), mas depois é eliminada pelo dedup por telefone (Step 5b, linha 666: o primeiro encontrado vence — e o Hubla veio primeiro).
+Além disso, esses contratos A010+A000 estão entrando no relatório como órfãos porque:
+1. O contrato Hubla tem email/telefone do lead
+2. A RPC traz o R2 da semana, mas se o R2 correto está na pipeline correta E a deduplicação por telefone na RPC priorizou o R2 errado, a linha primária aponta para o deal errado
+3. Resultado: aparece como "pendente sem R2" mesmo tendo R2 realizada
 
-Tudo isso também explica por que aparecem leads "fora da semana" no histórico anterior — eram efeitos colaterais do mesmo desalinhamento.
+### Solução proposta
 
-### Solução
+Mudar a lógica de matching para priorizar **deals da BU correta para A010**:
 
-Mudar o `useContractLifecycleReport.ts` para usar a **RPC unificada como fonte primária dos R2** (igual ao Carrinho), em vez de derivar R2 por `deal_id` do contrato Hubla.
+1. **Na RPC `get_carrinho_r2_attendees`**: Quando há múltiplos R2 para o mesmo telefone na semana, priorizar:
+   - R2 com `attendee_status` = `contract_paid`/`presente`/`completed` sobre `refunded`/`cancelled`
+   - R2 cujo `deal.origin_id` aponta para uma origem da BU Inside Sales (se o lead tem compra A010)
+   - Mais recente como tiebreaker
 
-#### Mudanças em `src/hooks/useContractLifecycleReport.ts`
+2. **No `useContractLifecycleReport.ts`**: Após o merge inicial, para órfãos com email/telefone:
+   - Buscar **todos** os R2 do telefone na semana (não só o deduplicado)
+   - Se houver R2 válido (não refunded/cancelled) em **qualquer** deal do mesmo telefone, usar esse R2
+   - Isso resolve os casos onde o lead tem deal duplicado entre BUs
 
-1. **Inverter a ordem da montagem**:
-   - Step A: Chamar `get_carrinho_r2_attendees` PRIMEIRO → conjunto canônico de R2s da semana (já deduped por telefone, já scoped corretamente).
-   - Step B: Chamar contratos Hubla A000 paralelamente.
-   - Step C: Fazer **merge por chave de telefone (9 dígitos)** — não por `deal_id`. Cada lead da semana = 1 linha, com:
-     - dados de R2 vindos da RPC (status, closer, data, attendee_status)
-     - dados de R1/contrato vindos da RPC (`r1_scheduled_at`, `r1_closer_name`, `r1_contract_paid_at`) — a RPC já entrega isso via JOIN
-     - sale_date e refunded vindos do Hubla, casados por telefone OU email
+### Plano de implementação
 
-2. **Incluir contratos Hubla "órfãos"** (com contrato mas sem R2 na semana) como linhas sintéticas, para preservar o KPI "Total Pagos" (64 no print).
+**Etapa 1 — Investigar via SQL** (sem alterar código):
+- Confirmar para Eduardo (`+5522981379394`) e Jackson (`11972143532`) quais R2s existem na semana, em quais deals/origens, e qual a RPC está retornando.
+- Validar a hipótese antes de mexer em RPC ou hook.
 
-3. **Remover o passo de "extras"** (Step 1c, ~linhas 336-446) — não precisa mais, pois a RPC já é a base.
+**Etapa 2 — Atualizar a RPC `get_carrinho_r2_attendees`** (migração SQL):
+- Adicionar critério de priorização na deduplicação por telefone:
+  - 1º: `attendee_status` válido (`contract_paid` > `presente` > `completed` > `invited` > `scheduled` > `refunded` > `cancelled`)
+  - 2º: deal com `origin_id` em Inside Sales se o lead tem A010
+  - 3º: `scheduled_at` mais recente
 
-4. **Remover a re-busca de R2 por `deal_id` + sibling deals** (Step 3-4, ~linhas 468-597) — a RPC já entrega o R2 correto.
-
-5. **Manter classificação `situacao`** (`classifySituacao`) usando os dados que vêm da RPC (`attendee_status`, `r2_status_name`, `scheduled_at`).
-
-6. **Manter dedup por telefone** como rede de segurança, mas agora será no-op porque a RPC já dedupa.
-
-#### Resultado esperado
-
-- "Realizadas → Aprovado" no Relatório passa a refletir os mesmos 28 leads do Carrinho
-- "Total Pagos" continua mostrando contratos Hubla (sem mudança)
-- Performance melhora: ~5 queries a menos
-- Os contadores Realizadas/Pendentes/No-show/Reembolso ficam consistentes com o Carrinho
+**Etapa 3 — Adicionar coluna "Motivo" no Pendentes**:
+- Após corrigir a RPC, classificar cada órfão restante com motivo claro:
+  - `outside_legitimo` (compra direta sem R2)
+  - `recompra_outra_semana` (R2 em outra safra)
+  - `bu_errada` (R2 existe mas em pipeline incorreta — para os que ainda escaparem)
+  - `sem_r2` (genuinamente sem R2)
+- Exibir como badge na coluna nova em `R2ContractLifecyclePanel.tsx`.
 
 ### Arquivos alterados
 
-- `src/hooks/useContractLifecycleReport.ts` — refactor (mantém a interface pública / `ContractLifecycleRow`)
-- Nenhuma mudança de schema, nenhuma migração SQL nova (a RPC `get_carrinho_r2_attendees` já existe e já entrega tudo o necessário)
+- `supabase/migrations/<nova>.sql` — atualizar RPC `get_carrinho_r2_attendees` com priorização
+- `src/hooks/useContractLifecycleReport.ts` — adicionar enriquecimento de motivo nos órfãos
+- `src/components/crm/R2ContractLifecyclePanel.tsx` — coluna "Motivo" + badges
+
+### Próximo passo
+
+Preciso rodar SQL exploratório nos 22 nomes Pendentes para validar a hipótese caso a caso antes de tocar na RPC. Após sua aprovação, executo a investigação completa e ajusto a RPC com os critérios de priorização certos.
 
