@@ -1,39 +1,31 @@
 
 
-## Plano: Alinhar "Aprovado" do Relatório (30 → 27)
+## Plano: Corrigir filtro de capacidade do pré-agendamento
 
 ### Problema
-No Relatório (Agenda R2 → aba Relatório), ao expandir "Realizadas", o sub-KPI "Aprovado" mostra **30**. Os outros painéis (KPI Carrinho, aba Aprovados, Todas R2s filtrado) já mostram **27**.
+O `preScheduledCounts` conta attendees com status `pre_scheduled`, `invited`, `scheduled` e `confirmed`. Isso inclui reuniões regulares já agendadas, inflando a contagem e bloqueando novos pré-agendamentos em slots que já têm reuniões normais.
 
-### Causa raiz
-O Step 4 do `useContractLifecycleReport.ts` resolve o "melhor R2" para cada deal. Quando não existe R2 na mesma semana (`carrinho_week_start`), ele aceita R2 de **outra semana**. Esses 3 leads extras têm R2 Aprovado + Realizada em outra semana, mas como o contrato foi pago nesta safra, eles entram no relatório com `r2StatusName = 'Aprovado'`.
+### Por que a correção é segura para todos
 
-O sub-KPI `realizadasChildren` no `R2ContractLifecyclePanel.tsx` simplesmente conta por `r2StatusName`, sem verificar se o R2 pertence à semana correta.
+1. **O `preScheduledCounts` só é usado no modo pré-agendamento** — ele aparece apenas no `R2QuickScheduleModal` quando `isPreSchedule = true`, para mostrar "(lotado)" ou "(1/2)". Não afeta agendamentos regulares.
+
+2. **A capacidade de reuniões regulares é controlada separadamente** — o campo `isAvailable` (linha 118) já usa `currentCount < maxLeadsPerSlot` baseado em `meeting_slots`, que é independente do `preScheduledCounts`.
+
+3. **A regra de negócio diz: limite de 2 pré-agendamentos por slot** — isso deve contar apenas pré-agendamentos pendentes (`pre_scheduled`), não reuniões já confirmadas/realizadas. Attendees que passaram para `invited`/`scheduled`/`confirmed` já viraram reuniões regulares e já são contados no `currentCount`.
+
+4. **O closer Jessica funciona porque provavelmente tem menos reuniões regulares** — Julio tem mais horários ocupados com reuniões normais, que estavam sendo contadas como pré-agendamentos.
 
 ### Correção
 
-**Arquivo: `src/components/crm/R2ContractLifecyclePanel.tsx`**
+**Arquivo:** `src/hooks/useR2CloserAvailableSlots.ts` — linha 128
 
-No cálculo de `realizadasChildren` (linhas ~114-125), ao contar por `r2StatusName`, verificar também `carrinhoWeekStart`. Se o row tem `carrinhoWeekStart` apontando para outra semana (diferente da semana atual selecionada), usar "Sem status" em vez do `r2StatusName` real — ou seja, não contar como "Aprovado".
+```
+// DE:
+.in('status', ['pre_scheduled', 'invited', 'scheduled', 'confirmed'])
 
-Alternativa mais limpa: adicionar o campo `carrinhoWeekStart` à comparação. Rows cujo R2 não pertence à semana atual não devem ser contados como "Aprovado" no sub-KPI. O `carrinhoWeekStart` já está disponível no `ContractLifecycleRow`.
-
-Lógica:
-```text
-const currentWeekStart = format(getCartWeekStart(weekStartDate), 'yyyy-MM-dd');
-
-realizadasChildren: para cada row com situacao === 'realizada':
-  - se row.carrinhoWeekStart existe E é diferente de currentWeekStart → key = 'Outra semana'
-  - senão → key = row.r2StatusName || 'Sem status'
+// PARA:
+.eq('status', 'pre_scheduled')
 ```
 
-Isso remove os 3 leads de outra semana do bucket "Aprovado" e os move para "Outra semana", alinhando o "Aprovado" com 27.
-
-### Resultado esperado
-- Relatório Realizadas → Aprovado = **27**
-- Alinhado com KPI, aba Aprovados e Todas R2s
-
-### Seção técnica
-- 1 arquivo: `src/components/crm/R2ContractLifecyclePanel.tsx`
-- ~5 linhas alteradas no `realizadasChildren` useMemo
+Uma única linha. Sem efeitos colaterais — a contagem passa a refletir apenas pré-agendamentos pendentes reais.
 
