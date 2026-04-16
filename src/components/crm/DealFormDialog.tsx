@@ -169,20 +169,48 @@ export function DealFormDialog({
         if (existing?.length) contactId = existing[0].id;
       }
 
-      // 2. Check if active deal already exists for this contact in this pipeline
-      if (contactId && defaultOriginId) {
-        const { data: existingDeal } = await supabase
-          .from('crm_deals')
-          .select('id, name')
-          .eq('contact_id', contactId)
-          .eq('origin_id', defaultOriginId)
-          .eq('is_duplicate', false)
-          .is('archived_at', null)
-          .limit(1);
+      // 2. Check if active deal already exists by email OR phone suffix in this pipeline
+      if (defaultOriginId && (emailNorm || (phoneSuffix && phoneSuffix.length >= 8))) {
+        // Find ALL contact_ids that share the same email or phone suffix
+        let matchingContactIds: string[] = [];
 
-        if (existingDeal?.length) {
-          toast.error(`Este lead já existe nesta pipeline: "${existingDeal[0].name}". Abra o deal existente.`);
-          return;
+        if (emailNorm) {
+          const { data: emailContacts } = await supabase
+            .from('crm_contacts')
+            .select('id')
+            .ilike('email', emailNorm);
+          if (emailContacts?.length) {
+            matchingContactIds.push(...emailContacts.map(c => c.id));
+          }
+        }
+
+        if (phoneSuffix && phoneSuffix.length >= 8) {
+          const { data: phoneContacts } = await supabase
+            .from('crm_contacts')
+            .select('id')
+            .ilike('phone', `%${phoneSuffix}`);
+          if (phoneContacts?.length) {
+            matchingContactIds.push(...phoneContacts.map(c => c.id));
+          }
+        }
+
+        // Deduplicate contact IDs
+        matchingContactIds = [...new Set(matchingContactIds)];
+
+        if (matchingContactIds.length > 0) {
+          const { data: existingDeal } = await supabase
+            .from('crm_deals')
+            .select('id, name')
+            .in('contact_id', matchingContactIds)
+            .eq('origin_id', defaultOriginId)
+            .eq('is_duplicate', false)
+            .is('archived_at', null)
+            .limit(1);
+
+          if (existingDeal?.length) {
+            toast.error(`Este lead já existe nesta pipeline: "${existingDeal[0].name}". Abra o deal existente.`);
+            return;
+          }
         }
       }
 
