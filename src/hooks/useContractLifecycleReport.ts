@@ -4,6 +4,11 @@ import { startOfDay, endOfDay, differenceInDays, addDays, nextFriday, isFriday, 
 import { getCustomWeekEnd } from '@/lib/dateHelpers';
 import { getCarrinhoMetricBoundaries, getCartWeekStart } from '@/lib/carrinhoWeekBoundaries';
 
+function normalizePhoneSuffix9(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return digits.slice(-9);
+}
+
 function normalizePhoneSuffix(phone: string): string {
   const digits = phone.replace(/\D/g, '');
   return digits.slice(-9);
