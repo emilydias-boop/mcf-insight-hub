@@ -421,7 +421,24 @@ export function useDuplicateToInsideSales() {
           contactId = newContact.id;
         }
 
-        // Step 2: Create deal in Inside Sales
+        // Step 2: Check if active deal already exists in Inside Sales for this contact
+        if (contactId) {
+          const { data: existingDeal } = await supabase
+            .from('crm_deals')
+            .select('id')
+            .eq('contact_id', contactId)
+            .eq('origin_id', INSIDE_SALES_ORIGIN_ID)
+            .eq('is_duplicate', false)
+            .is('archived_at', null)
+            .limit(1);
+
+          if (existingDeal?.length) {
+            // Skip — deal already exists for this person
+            continue;
+          }
+        }
+
+        // Step 3: Create deal in Inside Sales
         const { data: newDeal, error: dErr } = await supabase
           .from('crm_deals')
           .insert({
