@@ -1,82 +1,61 @@
 
 
-## Unificação da lógica de Aprovados R2 — Fonte única via RPC
+## Plano: Alinhar "Aprovado" do Relatório com o Carrinho (25 → 28)
 
-### Diagnóstico
+### Diagnóstico exato
 
-Atualmente existem **5 hooks diferentes** calculando "aprovados" com lógicas divergentes:
-- `useR2CarrinhoKPIs` (Carrinho KPI cards) → 29
-- `useR2CarrinhoData` (Carrinho aba Aprovados) → 29
-- `useR2MetricsData` (Carrinho Métricas) → usa contratos como base
-- `useContractLifecycleReport` (Agenda R2 Relatório) → 32
-- `useCloserCarrinhoMetrics` (breakdown por closer) → lógica própria
+Confirmei via SQL que as duas telas calculam "Aprovado" de formas diferentes:
 
-Os 3 extras vêm de:
-1. **Leads da semana anterior** (Gustavo Lourenço R2 10/04, Jaziel Alencar R2 09/04, Uislaine Fuzzo R2 10/04, Wilde Oliveira R2 14/04) — seus R2 caem dentro da janela operacional Fri-Fri mas pertencem ao carrinho anterior. O campo `carrinho_week_start` está NULL neles, então o filtro `if (r2WeekStart && r2WeekStart !== cartWeekStartStr) continue` não os exclui (só filtra quando o campo está preenchido E é diferente).
-2. **Duplicatas** (Joyce Maria, Luiz Carlos) — mesma pessoa com 2 registros R1 diferentes (`deal_id` distintos), e a deduplicação por `deal_id` não detecta.
-3. **Faltando** (Daniel Marotti, Fabio Carneiro, Márcio Barros) — provavelmente sem contrato A000 na safra (são "outside" ou sem R1 match).
+| Tela | Universo | Regra "Aprovado" | Resultado |
+|------|----------|------------------|-----------|
+| **Carrinho R2** | `get_carrinho_r2_attendees` (RPC, deduped por telefone) | `r2_status_name LIKE '%aprov%'` | **28** |
+| **Relatório (Realizadas → Aprovado)** | Contratos Hubla + extras da RPC | `situacao = 'realizada'` AND `r2StatusName = 'Aprovado'` | **25** |
 
-### Solução: RPC SQL centralizada
+**Por que a Relatório perde 3:** No `useContractLifecycleReport.ts`, o universo começa pelos contratos Hubla (Step 1). Para cada email Hubla, busca o R1 e cria uma "linha primária". Depois enriquece com R2 via `r2Map[deal_id]` (Step 4). 
 
-Criar uma função SQL `get_carrinho_week_leads` que retorna TODOS os dados de um carrinho em uma única query, com deduplicação por telefone (9 dígitos) e filtragem correta de semana.
+O problema: o **deal_id da linha primária (vindo do contato Hubla)** muitas vezes é diferente do **deal_id onde o R2 foi agendado** (cross-pipeline). Exemplos confirmados no banco:
+- `Rowerson` tem 2 deals (`775c95...` e `ea647...`) — Hubla pode pegar um, R2 está no outro
+- `Joyce` tem 2 deals — mesma fragmentação
+- `Wilde` tem 3 deals
+- `Felipe Vaz` tem 2 deals
 
-#### 1. Migration SQL — `get_carrinho_week_leads(p_week_start DATE)`
+Quando o `r2Map[dealHubla]` fica vazio, a linha vira `pendente`, não `realizada`. A linha R2 correta É adicionada como "extra" (Step 1c), mas depois é eliminada pelo dedup por telefone (Step 5b, linha 666: o primeiro encontrado vence — e o Hubla veio primeiro).
 
-```text
-Parâmetros: p_week_start (Quinta), p_friday_cutoff TIMESTAMPTZ, p_prev_friday_cutoff TIMESTAMPTZ
+Tudo isso também explica por que aparecem leads "fora da semana" no histórico anterior — eram efeitos colaterais do mesmo desalinhamento.
 
-Lógica:
-1. Buscar TODOS os meeting_slot_attendees R2 onde:
-   - scheduled_at BETWEEN p_prev_friday_cutoff AND p_friday_cutoff
-   - OU carrinho_week_start = p_week_start
-   - status != 'cancelled'
-2. Deduplicar por RIGHT(digits_only(phone), 9) — manter o mais recente
-3. Retornar: attendee_id, name, phone, email, r2_status, 
-   r2_closer, r2_date, r1_closer, r1_date, contract_paid_at, 
-   carrinho_status, deal_id, is_encaixado
-```
+### Solução
 
-A função faz JOINs internos para R1 e contratos (hubla_transactions), eliminando as ~10 queries sequenciais do frontend.
+Mudar o `useContractLifecycleReport.ts` para usar a **RPC unificada como fonte primária dos R2** (igual ao Carrinho), em vez de derivar R2 por `deal_id` do contrato Hubla.
 
-#### 2. Novo hook centralizado — `useCarrinhoUnifiedData`
+#### Mudanças em `src/hooks/useContractLifecycleReport.ts`
 
-- Chama `supabase.rpc('get_carrinho_week_leads', { p_week_start, p_friday_cutoff, p_prev_friday_cutoff })`
-- Retorna `CarrinhoLeadRow[]` com todos os campos necessários
-- Filtragem por r2_status (aprovado, pendente, fora, etc.) é feita no cliente sobre os dados retornados
-- Um único `queryKey` invalidado em todos os lugares
+1. **Inverter a ordem da montagem**:
+   - Step A: Chamar `get_carrinho_r2_attendees` PRIMEIRO → conjunto canônico de R2s da semana (já deduped por telefone, já scoped corretamente).
+   - Step B: Chamar contratos Hubla A000 paralelamente.
+   - Step C: Fazer **merge por chave de telefone (9 dígitos)** — não por `deal_id`. Cada lead da semana = 1 linha, com:
+     - dados de R2 vindos da RPC (status, closer, data, attendee_status)
+     - dados de R1/contrato vindos da RPC (`r1_scheduled_at`, `r1_closer_name`, `r1_contract_paid_at`) — a RPC já entrega isso via JOIN
+     - sale_date e refunded vindos do Hubla, casados por telefone OU email
 
-#### 3. Refatorar consumidores
+2. **Incluir contratos Hubla "órfãos"** (com contrato mas sem R2 na semana) como linhas sintéticas, para preservar o KPI "Total Pagos" (64 no print).
 
-| Arquivo | Mudança |
-|---------|---------|
-| `useR2CarrinhoKPIs.ts` | Substituir lógica por contagem sobre `useCarrinhoUnifiedData` |
-| `useR2CarrinhoData.ts` | Substituir queries por filtro sobre dados unificados |
-| `useR2MetricsData.ts` | Usar mesma base de leads para contadores |
-| `useContractLifecycleReport.ts` | Usar mesma base de leads (maior refactor) |
-| `useCloserCarrinhoMetrics.ts` | Derivar de dados unificados |
-| `useR2ForaDoCarrinhoData.ts` | Filtrar do mesmo dataset |
-| `R2Carrinho.tsx` | Ajustar para usar novo hook |
-| `R2ContractLifecyclePanel.tsx` | Ajustar para usar novo hook |
-| `R2MetricsPanel.tsx` | Ajustar prop de aprovados |
-| `R2AprovadosList.tsx` | Sem mudança (já recebe dados prontos) |
+3. **Remover o passo de "extras"** (Step 1c, ~linhas 336-446) — não precisa mais, pois a RPC já é a base.
 
-#### 4. Correções específicas
+4. **Remover a re-busca de R2 por `deal_id` + sibling deals** (Step 3-4, ~linhas 468-597) — a RPC já entrega o R2 correto.
 
-- **Deduplicação por telefone**: A RPC agrupa por `RIGHT(regexp_replace(phone, '\D', '', 'g'), 9)` e mantém apenas o registro com o R2 `scheduled_at` mais recente, eliminando duplicatas como Joyce Maria e Luiz Carlos.
-- **Filtro de semana estrito**: Se `carrinho_week_start IS NOT NULL` e diferente da semana atual → EXCLUIR. Se `carrinho_week_start IS NULL` e `scheduled_at` cai na janela → INCLUIR (pertence a esta semana por padrão). Isso corrige leads da semana anterior que não tinham o campo preenchido.
-- **Leads outside/sem R1**: A RPC inclui leads cujo R2 está na janela mesmo sem contrato A000, resolvendo Daniel Marotti, Fabio Carneiro e Márcio Barros.
+5. **Manter classificação `situacao`** (`classifySituacao`) usando os dados que vêm da RPC (`attendee_status`, `r2_status_name`, `scheduled_at`).
 
-### Benefícios
+6. **Manter dedup por telefone** como rede de segurança, mas agora será no-op porque a RPC já dedupa.
 
-- **Uma fonte de verdade**: Todos os contadores batem entre si
-- **Performance**: 1 query RPC vs 10-15 queries sequenciais
-- **Deduplicação robusta**: Por telefone, não por `deal_id`
-- **Manutenibilidade**: Mudança de regra em um lugar só
+#### Resultado esperado
+
+- "Realizadas → Aprovado" no Relatório passa a refletir os mesmos 28 leads do Carrinho
+- "Total Pagos" continua mostrando contratos Hubla (sem mudança)
+- Performance melhora: ~5 queries a menos
+- Os contadores Realizadas/Pendentes/No-show/Reembolso ficam consistentes com o Carrinho
 
 ### Arquivos alterados
 
-- 1 migration SQL (RPC function)
-- 1 novo hook (`useCarrinhoUnifiedData.ts`)
-- 6-8 hooks refatorados para consumir dados unificados
-- 2-3 componentes ajustados
+- `src/hooks/useContractLifecycleReport.ts` — refactor (mantém a interface pública / `ContractLifecycleRow`)
+- Nenhuma mudança de schema, nenhuma migração SQL nova (a RPC `get_carrinho_r2_attendees` já existe e já entrega tudo o necessário)
 
