@@ -125,7 +125,7 @@ export function useR2CloserAvailableSlots(
       const { data: attendeeData, error: attendeeError } = await supabase
         .from('meeting_slot_attendees')
         .select('meeting_slots!inner(scheduled_at, closer_id)')
-        .in('status', ['pre_scheduled', 'invited', 'scheduled', 'confirmed'])
+        .eq('status', 'pre_scheduled')
         .eq('meeting_slots.closer_id', closerId)
         .gte('meeting_slots.scheduled_at', startOfDayStr)
         .lte('meeting_slots.scheduled_at', endOfDayStr);
