@@ -221,7 +221,7 @@ export function DealFormDialog({
 
       const newDeal = await createDealMutation.mutateAsync(payload);
 
-      // 3. Log activity
+      // 5. Log activity
       if (newDeal) {
         await createActivityMutation.mutateAsync({
           deal_id: newDeal.id,
