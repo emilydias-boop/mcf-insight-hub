@@ -239,7 +239,7 @@ export function R2ContractLifecyclePanel() {
 
   const handleExportCSV = () => {
     if (!filteredRows.length) return;
-    const headers = ['Lead', 'Telefone', 'Contrato Pago', 'Closer R1', 'R1 Data', 'R1 Status', 'Status', 'R2 Data', 'Closer R2', 'R2 Status'];
+    const headers = ['Lead', 'Telefone', 'Contrato Pago', 'Closer R1', 'R1 Data', 'R1 Status', 'Status', 'Motivo', 'R2 Data', 'Closer R2', 'R2 Status'];
     const csvRows = filteredRows.map(r => [
       r.leadName || '',
       r.phone || '',
@@ -248,8 +248,9 @@ export function R2ContractLifecyclePanel() {
       formatDate(r.r1Date),
       r.r1Status || '',
       r.situacaoLabel.replace(/^[^\w]*\s*/, ''),
-      formatDate(r.r2Date),
-      r.r2CloserName || '',
+      r.pendingReason ? PENDING_REASON_LABELS[r.pendingReason].label.replace(/^[^\w]*\s*/, '') : '',
+      formatDate(r.r2Date || r.futureR2Date),
+      r.r2CloserName || r.futureR2CloserName || '',
       r.r2StatusName || '',
     ]);
     const csv = [headers, ...csvRows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
