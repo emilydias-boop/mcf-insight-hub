@@ -572,10 +572,16 @@ export function R2ContractLifecyclePanel() {
                       <TableCell>
                         <SituacaoBadge situacao={row.situacao} label={row.situacaoLabel} />
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs">
-                        {row.hasR2 ? formatDate(row.r2Date) : <span className="text-muted-foreground">—</span>}
+                      <TableCell>
+                        {row.situacao === 'pendente'
+                          ? <PendingReasonBadge reason={row.pendingReason} futureDate={row.futureR2Date} />
+                          : <span className="text-muted-foreground text-xs">—</span>
+                        }
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs">{row.r2CloserName || '—'}</TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {row.hasR2 ? formatDate(row.r2Date) : (row.futureR2Date ? formatDate(row.futureR2Date) : <span className="text-muted-foreground">—</span>)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">{row.r2CloserName || row.futureR2CloserName || '—'}</TableCell>
                       <TableCell><R2StatusBadge name={row.r2StatusName} color={row.r2StatusColor} /></TableCell>
                     </TableRow>
                   ))}
