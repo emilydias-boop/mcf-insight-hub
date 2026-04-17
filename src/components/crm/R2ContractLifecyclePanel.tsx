@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, ChevronDown, Download, Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useContractLifecycleReport, ContractLifecycleRow, ContractSituacao } from "@/hooks/useContractLifecycleReport";
+import { useContractLifecycleReport, ContractLifecycleRow, ContractSituacao, PendingReason } from "@/hooks/useContractLifecycleReport";
 import { DealDetailsDrawer } from "./DealDetailsDrawer";
 import { getCartWeekStart, getCartWeekEnd } from "@/lib/carrinhoWeekBoundaries";
 
@@ -52,6 +52,27 @@ function SituacaoBadge({ situacao, label }: { situacao: ContractSituacao; label:
   return (
     <Badge variant="outline" className={cn("text-xs whitespace-nowrap", style.bg, style.text, style.border)}>
       {label}
+    </Badge>
+  );
+}
+
+const PENDING_REASON_LABELS: Record<Exclude<PendingReason, null>, { label: string; bg: string; text: string; border: string }> = {
+  r2_proxima_semana:  { label: '📅 R2 próx. semana', bg: 'bg-blue-500/15',    text: 'text-blue-300',    border: 'border-blue-500/30' },
+  aguardando_r2:      { label: '⏳ Aguardando R2',   bg: 'bg-amber-500/15',   text: 'text-amber-300',   border: 'border-amber-500/30' },
+  r2_outro_deal:      { label: '🔀 R2 em outro deal', bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/30' },
+  reembolso_recente:  { label: '💸 Reembolso recente', bg: 'bg-red-500/15',   text: 'text-red-300',     border: 'border-red-500/30' },
+  outside_legitimo:   { label: '🚪 Outside (s/ R1)', bg: 'bg-zinc-500/15',    text: 'text-zinc-300',    border: 'border-zinc-500/30' },
+};
+
+function PendingReasonBadge({ reason, futureDate }: { reason: PendingReason; futureDate?: string | null }) {
+  if (!reason) return <span className="text-muted-foreground text-xs">—</span>;
+  const style = PENDING_REASON_LABELS[reason];
+  const dateSuffix = reason === 'r2_proxima_semana' && futureDate
+    ? ` ${format(new Date(futureDate), 'dd/MM', { locale: ptBR })}`
+    : '';
+  return (
+    <Badge variant="outline" className={cn("text-xs whitespace-nowrap", style.bg, style.text, style.border)}>
+      {style.label}{dateSuffix}
     </Badge>
   );
 }
@@ -218,7 +239,7 @@ export function R2ContractLifecyclePanel() {
 
   const handleExportCSV = () => {
     if (!filteredRows.length) return;
-    const headers = ['Lead', 'Telefone', 'Contrato Pago', 'Closer R1', 'R1 Data', 'R1 Status', 'Status', 'R2 Data', 'Closer R2', 'R2 Status'];
+    const headers = ['Lead', 'Telefone', 'Contrato Pago', 'Closer R1', 'R1 Data', 'R1 Status', 'Status', 'Motivo', 'R2 Data', 'Closer R2', 'R2 Status'];
     const csvRows = filteredRows.map(r => [
       r.leadName || '',
       r.phone || '',
@@ -227,8 +248,9 @@ export function R2ContractLifecyclePanel() {
       formatDate(r.r1Date),
       r.r1Status || '',
       r.situacaoLabel.replace(/^[^\w]*\s*/, ''),
-      formatDate(r.r2Date),
-      r.r2CloserName || '',
+      r.pendingReason ? PENDING_REASON_LABELS[r.pendingReason].label.replace(/^[^\w]*\s*/, '') : '',
+      formatDate(r.r2Date || r.futureR2Date),
+      r.r2CloserName || r.futureR2CloserName || '',
       r.r2StatusName || '',
     ]);
     const csv = [headers, ...csvRows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
@@ -526,6 +548,7 @@ export function R2ContractLifecyclePanel() {
                     <TableHead className="whitespace-nowrap">Closer R1</TableHead>
                     <TableHead className="whitespace-nowrap">R1 Data</TableHead>
                     <TableHead className="whitespace-nowrap">Status</TableHead>
+                    <TableHead className="whitespace-nowrap">Motivo</TableHead>
                     <TableHead className="whitespace-nowrap">R2 Data</TableHead>
                     <TableHead className="whitespace-nowrap">Closer R2</TableHead>
                     <TableHead className="whitespace-nowrap">R2 Status</TableHead>
@@ -550,10 +573,16 @@ export function R2ContractLifecyclePanel() {
                       <TableCell>
                         <SituacaoBadge situacao={row.situacao} label={row.situacaoLabel} />
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs">
-                        {row.hasR2 ? formatDate(row.r2Date) : <span className="text-muted-foreground">—</span>}
+                      <TableCell>
+                        {row.situacao === 'pendente'
+                          ? <PendingReasonBadge reason={row.pendingReason} futureDate={row.futureR2Date} />
+                          : <span className="text-muted-foreground text-xs">—</span>
+                        }
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs">{row.r2CloserName || '—'}</TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {row.hasR2 ? formatDate(row.r2Date) : (row.futureR2Date ? formatDate(row.futureR2Date) : <span className="text-muted-foreground">—</span>)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">{row.r2CloserName || row.futureR2CloserName || '—'}</TableCell>
                       <TableCell><R2StatusBadge name={row.r2StatusName} color={row.r2StatusColor} /></TableCell>
                     </TableRow>
                   ))}
