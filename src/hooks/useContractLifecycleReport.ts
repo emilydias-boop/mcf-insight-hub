@@ -24,6 +24,15 @@ export interface ContractLifecycleFilters {
 
 export type ContractSituacao = 'reembolso' | 'no_show' | 'desistente' | 'realizada' | 'proxima_semana' | 'agendado' | 'pre_agendado' | 'pendente';
 
+// Motivo detalhado para órfãos pendentes
+export type PendingReason =
+  | 'r2_proxima_semana'      // R2 está marcado para semana futura
+  | 'aguardando_r2'          // R1 ok + contrato pago, sem R2 ainda
+  | 'r2_outro_deal'          // R2 existe mas em deal diferente do contrato
+  | 'reembolso_recente'      // contrato antigo, reembolso na semana
+  | 'outside_legitimo'       // sem R1 nem R2, compra direta
+  | null;
+
 export interface ContractLifecycleRow {
   id: string;
   leadName: string | null;
@@ -46,6 +55,11 @@ export interface ContractLifecycleRow {
   situacao: ContractSituacao;
   situacaoLabel: string;
   isPaidContract: boolean;
+  // Motivo detalhado (para Pendentes)
+  pendingReason: PendingReason;
+  // Data do R2 futuro (quando pendingReason = 'r2_proxima_semana')
+  futureR2Date: string | null;
+  futureR2CloserName: string | null;
 }
 
 function getFridayCutoff(weekStart?: Date, horarioCorte?: string): Date {
@@ -234,7 +248,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           r1Date: r2.r1_scheduled_at || null,
           r1CloserName: r2.r1_closer_name || null,
           r1Status,
-          sdrName: null, // Not provided by RPC; could be added later
+          sdrName: null,
           hasR2: !!r2.scheduled_at,
           r2Date: r2.scheduled_at || null,
           r2CloserName: r2.r2_closer_name || null,
@@ -247,6 +261,9 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           situacao,
           situacaoLabel,
           isPaidContract: !!hublaInfo,
+          pendingReason: null,
+          futureR2Date: null,
+          futureR2CloserName: null,
         };
 
         // Safety net dedup by phone (should be no-op since RPC dedupes)
@@ -263,6 +280,8 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       // ============================================================
       const orphanRows: ContractLifecycleRow[] = [];
       const seenOrphanKeys = new Set<string>();
+      const orphansByPhone = new Map<string, ContractLifecycleRow>();
+      const orphansByEmail = new Map<string, ContractLifecycleRow>();
 
       for (const info of allHublaInfos) {
         const phoneKey = normalizePhoneSuffix9(info.phone);
@@ -286,7 +305,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           info.isRefunded,
         );
 
-        orphanRows.push({
+        const orphan: ContractLifecycleRow = {
           id: `hubla-orphan-${emailKey || phoneKey}`,
           leadName: info.name,
           phone: info.phone,
@@ -308,13 +327,219 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           situacao,
           situacaoLabel,
           isPaidContract: true,
+          pendingReason: null,
+          futureR2Date: null,
+          futureR2CloserName: null,
+        };
+        orphanRows.push(orphan);
+        if (phoneKey.length >= 8) orphansByPhone.set(phoneKey, orphan);
+        if (emailKey) orphansByEmail.set(emailKey, orphan);
+      }
+
+      // ============================================================
+      // STEP F: Enrich orphans with future R2s and R1 fallback
+      // (Resolve Grupos A e B do diagnóstico)
+      // ============================================================
+      const orphansToEnrich = orphanRows.filter(o => o.situacao === 'pendente');
+
+      if (orphansToEnrich.length > 0) {
+        const orphanPhones = Array.from(new Set(
+          orphansToEnrich
+            .map(o => normalizePhoneSuffix9(o.phone))
+            .filter(p => p.length >= 8)
+        ));
+        const orphanEmails = Array.from(new Set(
+          orphansToEnrich
+            .map(o => normalizeEmail(o.phone ? '' : '') || normalizeEmail((o as any).email))
+            .filter(Boolean)
+        ));
+
+        // Step F.1: Buscar contatos pelos telefones para descobrir deal_ids
+        let contactDealIds: string[] = [];
+        const phoneToContactId = new Map<string, string>();
+        if (orphanPhones.length > 0) {
+          // Buscar contatos: phone pode ter formatos variados, então buscamos os com sufixo de 9 dígitos
+          const phonePatterns = orphanPhones.map(p => `%${p}`);
+          const { data: contacts } = await supabase
+            .from('crm_contacts')
+            .select('id, phone')
+            .or(phonePatterns.map(p => `phone.ilike.${p}`).join(','));
+          
+          (contacts || []).forEach(c => {
+            const ckey = normalizePhoneSuffix9(c.phone);
+            if (ckey.length >= 8) phoneToContactId.set(ckey, c.id);
+          });
+
+          if (phoneToContactId.size > 0) {
+            const { data: deals } = await supabase
+              .from('crm_deals')
+              .select('id, contact_id')
+              .in('contact_id', Array.from(phoneToContactId.values()));
+            contactDealIds = (deals || []).map(d => d.id);
+          }
+        }
+
+        // Step F.2: Buscar TODOS os R2 (qualquer semana, futuro ou passado) desses deals
+        // para identificar leads com R2 marcado para próxima semana
+        if (contactDealIds.length > 0) {
+          const { data: allR2s } = await supabase
+            .from('meeting_slot_attendees')
+            .select(`
+              id,
+              deal_id,
+              status,
+              attendee_phone,
+              meeting_slot:meeting_slots!inner(
+                id,
+                scheduled_at,
+                meeting_type,
+                status,
+                closer:closers!meeting_slots_closer_id_fkey(name)
+              )
+            `)
+            .in('deal_id', contactDealIds)
+            .eq('meeting_slot.meeting_type', 'r2')
+            .neq('status', 'cancelled');
+
+          // Map deal_id -> melhor R2 (futuro mais próximo, status válido)
+          const dealToR2 = new Map<string, { date: string; closerName: string | null; isFuture: boolean }>();
+          (allR2s || []).forEach((att: any) => {
+            const slot = att.meeting_slot;
+            if (!slot || slot.status === 'cancelled' || slot.status === 'rescheduled') return;
+            if (att.status === 'cancelled' || att.status === 'refunded') return;
+            const r2Date = slot.scheduled_at;
+            if (!r2Date) return;
+            const isFuture = new Date(r2Date) >= fridayCutoff;
+            const existing = dealToR2.get(att.deal_id);
+            // Priorizar R2 futuro mais próximo
+            if (!existing || (isFuture && !existing.isFuture) ||
+                (isFuture === existing.isFuture && new Date(r2Date) < new Date(existing.date))) {
+              dealToR2.set(att.deal_id, {
+                date: r2Date,
+                closerName: slot.closer?.name || null,
+                isFuture,
+              });
+            }
+          });
+
+          // Map contact_id -> deals
+          const { data: dealsWithContacts } = await supabase
+            .from('crm_deals')
+            .select('id, contact_id')
+            .in('id', contactDealIds);
+
+          const contactToBestR2 = new Map<string, { date: string; closerName: string | null; isFuture: boolean }>();
+          (dealsWithContacts || []).forEach(d => {
+            if (!d.contact_id) return;
+            const r2 = dealToR2.get(d.id);
+            if (!r2) return;
+            const existing = contactToBestR2.get(d.contact_id);
+            if (!existing || (r2.isFuture && !existing.isFuture) ||
+                (r2.isFuture === existing.isFuture && new Date(r2.date) < new Date(existing.date))) {
+              contactToBestR2.set(d.contact_id, r2);
+            }
+          });
+
+          // Aplicar R2 futuro nos órfãos
+          orphansToEnrich.forEach(orphan => {
+            const phoneKey = normalizePhoneSuffix9(orphan.phone);
+            if (phoneKey.length < 8) return;
+            const contactId = phoneToContactId.get(phoneKey);
+            if (!contactId) return;
+            const bestR2 = contactToBestR2.get(contactId);
+            if (!bestR2) return;
+            if (bestR2.isFuture) {
+              orphan.pendingReason = 'r2_proxima_semana';
+              orphan.futureR2Date = bestR2.date;
+              orphan.futureR2CloserName = bestR2.closerName;
+            }
+          });
+        }
+
+        // Step F.3: Buscar R1 para órfãos sem R2 futuro encontrado
+        if (contactDealIds.length > 0) {
+          const { data: r1Attendees } = await supabase
+            .from('meeting_slot_attendees')
+            .select(`
+              deal_id,
+              status,
+              meeting_slot:meeting_slots!inner(
+                scheduled_at,
+                meeting_type,
+                closer:closers!meeting_slots_closer_id_fkey(name)
+              )
+            `)
+            .in('deal_id', contactDealIds)
+            .eq('meeting_slot.meeting_type', 'r1')
+            .neq('status', 'cancelled')
+            .order('created_at', { ascending: false });
+
+          // Map deal_id -> R1 mais recente
+          const dealToR1 = new Map<string, { date: string; closerName: string | null }>();
+          (r1Attendees || []).forEach((att: any) => {
+            if (dealToR1.has(att.deal_id)) return;
+            const slot = att.meeting_slot;
+            if (!slot?.scheduled_at) return;
+            dealToR1.set(att.deal_id, {
+              date: slot.scheduled_at,
+              closerName: slot.closer?.name || null,
+            });
+          });
+
+          // Map contact_id -> R1 (via deals)
+          const { data: dealsForR1 } = await supabase
+            .from('crm_deals')
+            .select('id, contact_id')
+            .in('id', contactDealIds);
+
+          const contactToR1 = new Map<string, { date: string; closerName: string | null }>();
+          (dealsForR1 || []).forEach(d => {
+            if (!d.contact_id) return;
+            const r1 = dealToR1.get(d.id);
+            if (!r1) return;
+            const existing = contactToR1.get(d.contact_id);
+            if (!existing || new Date(r1.date) > new Date(existing.date)) {
+              contactToR1.set(d.contact_id, r1);
+            }
+          });
+
+          // Aplicar R1 nos órfãos
+          orphansToEnrich.forEach(orphan => {
+            const phoneKey = normalizePhoneSuffix9(orphan.phone);
+            if (phoneKey.length < 8) return;
+            const contactId = phoneToContactId.get(phoneKey);
+            if (!contactId) return;
+            const r1 = contactToR1.get(contactId);
+            if (r1) {
+              orphan.r1Date = r1.date;
+              orphan.r1CloserName = r1.closerName;
+              if (orphan.r1Status === 'outside') orphan.r1Status = 'realizada';
+              // Se ainda não tem reason e tem R1 mas sem R2 futuro, é "aguardando R2"
+              if (!orphan.pendingReason) {
+                orphan.pendingReason = 'aguardando_r2';
+              }
+            } else if (!orphan.pendingReason) {
+              orphan.pendingReason = 'outside_legitimo';
+            }
+          });
+        }
+
+        // Step F.4: Marcar reembolso recente para órfãos que estão como reembolso
+        orphanRows.forEach(orphan => {
+          if (orphan.situacao === 'reembolso' && orphan.contractPaidAt) {
+            const paidDate = new Date(orphan.contractPaidAt);
+            // Se o pagamento foi há mais de 14 dias mas o reembolso é desta semana
+            if (differenceInDays(now, paidDate) > 14) {
+              orphan.pendingReason = 'reembolso_recente';
+            }
+          }
         });
       }
 
       const allRows = [...rpcRows, ...orphanRows];
 
       // ============================================================
-      // STEP F: Apply filters & sort
+      // STEP G: Apply filters & sort
       // ============================================================
       let filtered = allRows;
       if (filters.situacao && filters.situacao !== 'all') {
