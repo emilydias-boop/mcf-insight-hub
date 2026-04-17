@@ -547,6 +547,7 @@ export function R2ContractLifecyclePanel() {
                     <TableHead className="whitespace-nowrap">Closer R1</TableHead>
                     <TableHead className="whitespace-nowrap">R1 Data</TableHead>
                     <TableHead className="whitespace-nowrap">Status</TableHead>
+                    <TableHead className="whitespace-nowrap">Motivo</TableHead>
                     <TableHead className="whitespace-nowrap">R2 Data</TableHead>
                     <TableHead className="whitespace-nowrap">Closer R2</TableHead>
                     <TableHead className="whitespace-nowrap">R2 Status</TableHead>
