@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, ChevronDown, Download, Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useContractLifecycleReport, ContractLifecycleRow, ContractSituacao } from "@/hooks/useContractLifecycleReport";
+import { useContractLifecycleReport, ContractLifecycleRow, ContractSituacao, PendingReason } from "@/hooks/useContractLifecycleReport";
 import { DealDetailsDrawer } from "./DealDetailsDrawer";
 import { getCartWeekStart, getCartWeekEnd } from "@/lib/carrinhoWeekBoundaries";
 
