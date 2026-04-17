@@ -1,65 +1,89 @@
 
 
-## Diagnóstico: Pendentes pegando deal_id da pipeline errada
+## Diagnóstico real dos 22 Pendentes
 
-### Causa raiz confirmada
+Recebi sua planilha com a verdade-terreno. Os 22 casos se dividem em **4 padrões distintos**, e nenhum deles é "outside legítimo". Todos têm R1 realizada com SDR conhecido e contrato pago — só estão classificados errado.
 
-Os 2 casos do print mostram o mesmo padrão:
-- **Eduardo da Silva Queiroz**: tem deal correto na `PIPELINE INSIDE SALES` (com R2 Jessica Martins 10/02 às 11:00 = Realizada), mas o relatório está pegando o deal da `PIPELINE - INSIDE SALES - VIVER DE ALUGUEL` (que só tem um R2 refunded de 13/04).
-- **Jackson Willians Mariano**: tem R2 realizada com Jessica Martins 10/04 às 10:00 na `PIPELINE INSIDE SALES` (R1 Cristiane Gomes 08/04, contract_paid), mas o relatório está pegando outro deal de outra BU.
+### Categorização dos 22 casos
 
-A regra de negócio (memória `lead-segregation-by-product-v2` e `hubla-routing-collision-logic-v5`): **qualquer lead com compra A010 deve ser tratado como Inside Sales, independente de outros produtos**.
+**Grupo A — R2 agendado para PRÓXIMA semana (6 casos)**  
+Jackson O. Silva, Annie Veggi, Riolando, Carlos Simão, Vinicius Ornelas (pré-agendado), e parcialmente Rafael Albaneze.  
+→ Pagaram contrato nesta semana, mas o R2 está marcado para 20/04 (semana seguinte). A RPC só traz R2 da semana atual, então caem como órfãos. **Hoje a RPC não os encontra porque o R2 está fora da janela.**
 
-### Por que está falhando hoje
+**Grupo B — Sem R2 agendado ainda, só R1+contrato (7 casos)**  
+Willams Luiz, Erick Alves, Luis Fernando Exner, Moisés Elias, Ulisses Lamas, Edinei Pinto, Ailton Lins, Filipe Amaral.  
+→ R1 realizada + contrato pago, mas ninguém marcou R2. **São genuinamente "pago sem R2 nesta semana"**, porém **R1 existe** — então não deveriam estar em "Pendente" sem mostrar R1+SDR. Hoje aparecem como linha vazia porque o merge é só com R2.
 
-No `useContractLifecycleReport.ts`, o merge entre contrato Hubla e R2 da RPC é feito por telefone (9 dígitos) ou email. Mas a RPC `get_carrinho_r2_attendees` retorna **um R2 por telefone deduplicado** — escolhendo qualquer R2 da semana. Quando o lead tem múltiplos deals em pipelines diferentes (uma da BU correta com R2 realizada, outra de BU errada com R2 refunded), a RPC pode estar retornando o R2 errado, ou o telefone do contrato Hubla está casando com o lead errado.
+**Grupo C — R2 desta semana mas RPC pegou o errado (5 casos)**  
+Wilde, Uislaine, Gustavo Almeida, Jaziel Alencar, Jackson Willians.  
+→ Têm R2 Aprovado nesta semana mas a RPC retornou outro registro (refunded de outra pipeline, ou Próxima Semana). **Mesmo problema que corrigimos na última migração** — o `status_score` deve resolver, mas para os que têm `r2_status_name` = "Próxima Semana" precisamos verificar se o score está priorizando "Aprovado".
 
-Além disso, esses contratos A010+A000 estão entrando no relatório como órfãos porque:
-1. O contrato Hubla tem email/telefone do lead
-2. A RPC traz o R2 da semana, mas se o R2 correto está na pipeline correta E a deduplicação por telefone na RPC priorizou o R2 errado, a linha primária aponta para o deal errado
-3. Resultado: aparece como "pendente sem R2" mesmo tendo R2 realizada
+**Grupo D — Caso especial: 2 R2 na semana (1 caso)**  
+Rafael Albaneze (R2 09/04 + R2 10/04, mesmo lead).  
+→ Lead foi agendado 2x. RPC dedupa por telefone e mostra um só, mas o "outro" sumiu. Precisa decidir qual mostrar (provavelmente o mais recente Aprovado).
+
+**Grupo E — Refund legítimo (1 caso)**  
+Eduardo Queiroz (10/02 contrato pago, 13/04 R2 reembolso).  
+→ Comprou em fevereiro mas o reembolso de 13/04 é desta semana. **A questão aqui:** o contrato pago é antigo (fora da semana), só o reembolso é desta semana. Precisa decidir se entra ou não no relatório desta safra.
+
+**Grupo F — Pré-agendado oculto (1 caso)**  
+Vinicius Ornelas — `status = pre_scheduled`, deliberadamente escondido das grades (memória `r2-pre-scheduled-confirmation-flow-v2`). **Isso é correto pelo design atual.**
+
+### Causa-raiz real
+
+O hook `useContractLifecycleReport` hoje:
+1. Busca contratos Hubla da semana
+2. Busca R2s da RPC `get_carrinho_r2_attendees` (só da semana)
+3. Faz merge por telefone/email
+4. Quando não encontra R2 → vira órfão "Pendente" com R1 vazio
+
+**O que está faltando:**
+- **(A)** Não busca R2s de **semanas futuras** vinculados ao mesmo telefone/email
+- **(B)** Não busca **R1s** independentes (só pega R1 quando há R2 na semana, via JOIN dentro da RPC)
+- **(C)** Pré-agendados são ocultados corretamente, mas isso causa "fantasmas" em Pendente
 
 ### Solução proposta
 
-Mudar a lógica de matching para priorizar **deals da BU correta para A010**:
+#### Mudança 1 — Buscar R2 futuros para órfãos
+Após gerar `orphanRows`, fazer query adicional em `meeting_slot_attendees` (R2) para cada telefone órfão, **sem limite de semana**, pegando R2 mais próximo no futuro.
+→ Resolve **Grupo A** (6 casos).
 
-1. **Na RPC `get_carrinho_r2_attendees`**: Quando há múltiplos R2 para o mesmo telefone na semana, priorizar:
-   - R2 com `attendee_status` = `contract_paid`/`presente`/`completed` sobre `refunded`/`cancelled`
-   - R2 cujo `deal.origin_id` aponta para uma origem da BU Inside Sales (se o lead tem compra A010)
-   - Mais recente como tiebreaker
+#### Mudança 2 — Buscar R1 + SDR para órfãos sem R2
+Para órfãos que continuam sem R2 mesmo após Mudança 1, buscar a R1 mais recente do `deal_id` (ou por telefone se deal não bate). Mostrar R1, closer R1, SDR mesmo sem R2.
+→ Resolve **Grupo B** (7 casos): coluna R1 deixa de ficar vazia, deixa claro que o lead está aguardando agendamento R2.
 
-2. **No `useContractLifecycleReport.ts`**: Após o merge inicial, para órfãos com email/telefone:
-   - Buscar **todos** os R2 do telefone na semana (não só o deduplicado)
-   - Se houver R2 válido (não refunded/cancelled) em **qualquer** deal do mesmo telefone, usar esse R2
-   - Isso resolve os casos onde o lead tem deal duplicado entre BUs
+#### Mudança 3 — Garantir que "Aprovado" vence "Próxima Semana" no status_score
+Ajustar o `status_score` na RPC para considerar também o `r2_status_id` (não só `attendee_status`). Hoje "Próxima Semana" e "Aprovado" têm o mesmo `attendee_status` (geralmente `scheduled`/`completed`), então o tiebreaker é `scheduled_at DESC` — pode pegar o errado.
+→ Resolve **Grupo C** (5 casos).
 
-### Plano de implementação
+#### Mudança 4 — Adicionar coluna "Status Real" / "Motivo"
+Mostrar no relatório uma coluna que classifica cada Pendente em: 
+- `R2 agendado próx. semana` (badge azul, mostra data)
+- `Aguardando R2` (R1 ok, sem R2 ainda)
+- `R2 Aprovado em outro deal` (badge verde — caso C antes da fix)
+- `Reembolso recente` (caso E)
 
-**Etapa 1 — Investigar via SQL** (sem alterar código):
-- Confirmar para Eduardo (`+5522981379394`) e Jackson (`11972143532`) quais R2s existem na semana, em quais deals/origens, e qual a RPC está retornando.
-- Validar a hipótese antes de mexer em RPC ou hook.
+→ Cada um dos 22 fica com motivo claro, você decide o que filtrar.
 
-**Etapa 2 — Atualizar a RPC `get_carrinho_r2_attendees`** (migração SQL):
-- Adicionar critério de priorização na deduplicação por telefone:
-  - 1º: `attendee_status` válido (`contract_paid` > `presente` > `completed` > `invited` > `scheduled` > `refunded` > `cancelled`)
-  - 2º: deal com `origin_id` em Inside Sales se o lead tem A010
-  - 3º: `scheduled_at` mais recente
-
-**Etapa 3 — Adicionar coluna "Motivo" no Pendentes**:
-- Após corrigir a RPC, classificar cada órfão restante com motivo claro:
-  - `outside_legitimo` (compra direta sem R2)
-  - `recompra_outra_semana` (R2 em outra safra)
-  - `bu_errada` (R2 existe mas em pipeline incorreta — para os que ainda escaparem)
-  - `sem_r2` (genuinamente sem R2)
-- Exibir como badge na coluna nova em `R2ContractLifecyclePanel.tsx`.
+#### Mudança 5 — Para Rafael Albaneze (Grupo D)
+A RPC já dedupa por telefone. Após Mudança 3, o "Aprovado" mais recente vence. Resolvido naturalmente.
 
 ### Arquivos alterados
 
-- `supabase/migrations/<nova>.sql` — atualizar RPC `get_carrinho_r2_attendees` com priorização
-- `src/hooks/useContractLifecycleReport.ts` — adicionar enriquecimento de motivo nos órfãos
-- `src/components/crm/R2ContractLifecyclePanel.tsx` — coluna "Motivo" + badges
+- `supabase/migrations/<nova>.sql` — ajustar `status_score` da RPC `get_carrinho_r2_attendees` para considerar `r2_status_id` (Aprovado > demais).
+- `src/hooks/useContractLifecycleReport.ts` — adicionar buscas de R2 futuro e R1 fallback para órfãos; classificar `motivo_pendente`.
+- `src/types/contractLifecycle.ts` (ou onde está `ContractLifecycleRow`) — adicionar `motivo_pendente`, `r2_proxima_semana_data`.
+- `src/components/crm/R2ContractLifecyclePanel.tsx` — coluna "Motivo" com badges + preencher R1/R2 dos órfãos enriquecidos.
 
-### Próximo passo
+### Resultado esperado
 
-Preciso rodar SQL exploratório nos 22 nomes Pendentes para validar a hipótese caso a caso antes de tocar na RPC. Após sua aprovação, executo a investigação completa e ajusto a RPC com os critérios de priorização certos.
+Dos 22 Pendentes atuais:
+- **6** vão deixar de ser pendentes ou ganhar badge "R2 próx. semana"
+- **7** continuam pendentes mas mostram R1+SDR e badge "Aguardando R2"
+- **5** vão para Realizadas/Aprovado (correção da RPC)
+- **1** (Rafael) ganha 1 linha só com Aprovado correto
+- **1** (Eduardo) ganha badge "Reembolso recente"
+- **1** (Vinicius pré-agendado) continua oculto por design
+
+Lista final de Pendentes "verdadeiros" deve cair para ~7-8 com motivo claro em cada linha.
 
