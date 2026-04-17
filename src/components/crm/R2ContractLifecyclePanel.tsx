@@ -56,6 +56,27 @@ function SituacaoBadge({ situacao, label }: { situacao: ContractSituacao; label:
   );
 }
 
+const PENDING_REASON_LABELS: Record<Exclude<PendingReason, null>, { label: string; bg: string; text: string; border: string }> = {
+  r2_proxima_semana:  { label: '📅 R2 próx. semana', bg: 'bg-blue-500/15',    text: 'text-blue-300',    border: 'border-blue-500/30' },
+  aguardando_r2:      { label: '⏳ Aguardando R2',   bg: 'bg-amber-500/15',   text: 'text-amber-300',   border: 'border-amber-500/30' },
+  r2_outro_deal:      { label: '🔀 R2 em outro deal', bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/30' },
+  reembolso_recente:  { label: '💸 Reembolso recente', bg: 'bg-red-500/15',   text: 'text-red-300',     border: 'border-red-500/30' },
+  outside_legitimo:   { label: '🚪 Outside (s/ R1)', bg: 'bg-zinc-500/15',    text: 'text-zinc-300',    border: 'border-zinc-500/30' },
+};
+
+function PendingReasonBadge({ reason, futureDate }: { reason: PendingReason; futureDate?: string | null }) {
+  if (!reason) return <span className="text-muted-foreground text-xs">—</span>;
+  const style = PENDING_REASON_LABELS[reason];
+  const dateSuffix = reason === 'r2_proxima_semana' && futureDate
+    ? ` ${format(new Date(futureDate), 'dd/MM', { locale: ptBR })}`
+    : '';
+  return (
+    <Badge variant="outline" className={cn("text-xs whitespace-nowrap", style.bg, style.text, style.border)}>
+      {style.label}{dateSuffix}
+    </Badge>
+  );
+}
+
 function formatPhone(phone: string | null) {
   if (!phone) return '—';
   const clean = phone.replace(/\D/g, '');
