@@ -31,7 +31,7 @@ import { R2AccumulatedLead } from '@/hooks/useR2AccumulatedLeads';
 import { useEncaixarNoCarrinho } from '@/hooks/useEncaixarNoCarrinho';
 
 export default function R2Carrinho() {
-  const [weekDate, setWeekDate] = useState(new Date());
+  const [weekDate, setWeekDate] = useState(() => getActiveCartReferenceDate(new Date()));
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
