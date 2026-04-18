@@ -150,19 +150,19 @@ export function getActiveCartReferenceDate(
   // Qui (4) | Sex pré-corte → mostrar safra em construção (a quinta atual ou recém-passada)
 
   if (day === 5 && !isPastCutoff) {
-    // Sex pré-corte: ainda finalizando a safra que fecha hoje (Qua = -2)
-    return subDays(now, 2);
-  }
-  if (day === 5 && isPastCutoff) {
-    // Sex pós-corte: novo ciclo iniciado, safra atual em construção (Qui = -1)
+    // Sex pré-corte: safra em construção (começa Qui ontem) — usar hoje
     return now;
   }
+  if (day === 5 && isPastCutoff) {
+    // Sex pós-corte: já passou o corte, mostrar safra que acabou de fechar (Qua = -2)
+    return subDays(now, 2);
+  }
   if (day === 6 || day === 0 || day === 1 || day === 2 || day === 3) {
-    // Sáb/Dom/Seg/Ter/Qua: continua finalizando a safra anterior (Qua passada)
+    // Sáb/Dom/Seg/Ter/Qua: continua na safra que acabou de fechar (Qua passada)
     // day=6→-3, day=0→-4, day=1→-5, day=2→-6, day=3→-7
     const daysBack = day === 6 ? 3 : day === 0 ? 4 : day + 4;
     return subDays(now, daysBack);
   }
-  // Qui (4): safra atual começa hoje
+  // Qui (4): nova safra começa hoje — usar hoje
   return now;
 }
