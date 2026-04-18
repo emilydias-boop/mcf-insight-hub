@@ -1,89 +1,80 @@
 
 
-## Diagnóstico real dos 22 Pendentes
+## Diagnóstico: Por que as vendas do dia 17/04 não aparecem e a semana padrão está errada
 
-Recebi sua planilha com a verdade-terreno. Os 22 casos se dividem em **4 padrões distintos**, e nenhum deles é "outside legítimo". Todos têm R1 realizada com SDR conhecido e contrato pago — só estão classificados errado.
+### Os dois problemas são da mesma raiz: **a definição de "semana atual"**
 
-### Categorização dos 22 casos
+#### Problema 1 — Vendas do 17/04 não sobem na safra 09/04-15/04
 
-**Grupo A — R2 agendado para PRÓXIMA semana (6 casos)**  
-Jackson O. Silva, Annie Veggi, Riolando, Carlos Simão, Vinicius Ornelas (pré-agendado), e parcialmente Rafael Albaneze.  
-→ Pagaram contrato nesta semana, mas o R2 está marcado para 20/04 (semana seguinte). A RPC só traz R2 da semana atual, então caem como órfãos. **Hoje a RPC não os encontra porque o R2 está fora da janela.**
+A janela de "Vendas Parceria" (em `getCarrinhoMetricBoundaries`, linhas 109-111 de `carrinhoWeekBoundaries.ts`) é fixa e curta:
 
-**Grupo B — Sem R2 agendado ainda, só R1+contrato (7 casos)**  
-Willams Luiz, Erick Alves, Luis Fernando Exner, Moisés Elias, Ulisses Lamas, Edinei Pinto, Ailton Lins, Filipe Amaral.  
-→ R1 realizada + contrato pago, mas ninguém marcou R2. **São genuinamente "pago sem R2 nesta semana"**, porém **R1 existe** — então não deveriam estar em "Pendente" sem mostrar R1+SDR. Hoje aparecem como linha vazia porque o merge é só com R2.
+```
+Vendas Parceria = Sex do carrinho 00:00 → Seg 23:59:59 (4 dias)
+```
 
-**Grupo C — R2 desta semana mas RPC pegou o errado (5 casos)**  
-Wilde, Uislaine, Gustavo Almeida, Jaziel Alencar, Jackson Willians.  
-→ Têm R2 Aprovado nesta semana mas a RPC retornou outro registro (refunded de outra pipeline, ou Próxima Semana). **Mesmo problema que corrigimos na última migração** — o `status_score` deve resolver, mas para os que têm `r2_status_name` = "Próxima Semana" precisamos verificar se o score está priorizando "Aprovado".
+Para a safra **09/04-15/04** (Qui-Qua), a sexta do carrinho é **10/04**. Então a janela de vendas é:
+- **Sex 10/04 00:00 → Seg 13/04 23:59**
 
-**Grupo D — Caso especial: 2 R2 na semana (1 caso)**  
-Rafael Albaneze (R2 09/04 + R2 10/04, mesmo lead).  
-→ Lead foi agendado 2x. RPC dedupa por telefone e mostra um só, mas o "outro" sumiu. Precisa decidir qual mostrar (provavelmente o mais recente Aprovado).
+**As vendas do 17/04 (sexta) caem FORA dessa janela** — elas pertencem ao próximo ciclo de carrinho. Por isso não aparecem.
 
-**Grupo E — Refund legítimo (1 caso)**  
-Eduardo Queiroz (10/02 contrato pago, 13/04 R2 reembolso).  
-→ Comprou em fevereiro mas o reembolso de 13/04 é desta semana. **A questão aqui:** o contrato pago é antigo (fora da semana), só o reembolso é desta semana. Precisa decidir se entra ou não no relatório desta safra.
+Confirmei via SQL: existem **dezenas de vendas de parceria em 17/04/2026** (Claudio, Evano, Dyego, Saulo, João Pedro, etc.) que estão "esperando" mas o carrinho 09-15 não enxerga porque já fechou a janela em 13/04.
 
-**Grupo F — Pré-agendado oculto (1 caso)**  
-Vinicius Ornelas — `status = pre_scheduled`, deliberadamente escondido das grades (memória `r2-pre-scheduled-confirmation-flow-v2`). **Isso é correto pelo design atual.**
+#### Problema 2 — Sempre precisa voltar para ver "a semana atual"
 
-### Causa-raiz real
+A página inicia com `weekDate = new Date()` (= hoje, sexta 17/04). O `getCartWeekStart(17/04)` retorna **Qui 16/04** (a quinta mais recente), mostrando a safra **16/04-22/04** — que é a safra "em construção".
 
-O hook `useContractLifecycleReport` hoje:
-1. Busca contratos Hubla da semana
-2. Busca R2s da RPC `get_carrinho_r2_attendees` (só da semana)
-3. Faz merge por telefone/email
-4. Quando não encontra R2 → vira órfão "Pendente" com R1 vazio
+Mas operacionalmente, na sexta-feira **antes do corte (12:00)** e **até segunda à noite**, o usuário ainda está finalizando o carrinho da semana **anterior** (vendas pós-aprovação rolam até segunda). Por isso ele sempre clica "voltar" para ver 09-15.
 
-**O que está faltando:**
-- **(A)** Não busca R2s de **semanas futuras** vinculados ao mesmo telefone/email
-- **(B)** Não busca **R1s** independentes (só pega R1 quando há R2 na semana, via JOIN dentro da RPC)
-- **(C)** Pré-agendados são ocultados corretamente, mas isso causa "fantasmas" em Pendente
+### Por que isso quebra: a "semana operacional" ≠ "semana de safra"
+
+A memória `carrinho-safra-operational-logic-v6` define que o ciclo do carrinho é uma janela **contínua entre cortes** (Sex 12:00 → Sex 12:00). A página, porém, navega por **safras Qui-Qua** (`getCartWeekStart` ancora em quinta), o que não bate com o momento em que o usuário está operando.
 
 ### Solução proposta
 
-#### Mudança 1 — Buscar R2 futuros para órfãos
-Após gerar `orphanRows`, fazer query adicional em `meeting_slot_attendees` (R2) para cada telefone órfão, **sem limite de semana**, pegando R2 mais próximo no futuro.
-→ Resolve **Grupo A** (6 casos).
+#### Mudança 1 — Inicializar `weekDate` na "safra ativa" (não na safra futura)
+Em `R2Carrinho.tsx`, linha 34:
+```ts
+const [weekDate, setWeekDate] = useState(getActiveCartReferenceDate(new Date()));
+```
 
-#### Mudança 2 — Buscar R1 + SDR para órfãos sem R2
-Para órfãos que continuam sem R2 mesmo após Mudança 1, buscar a R1 mais recente do `deal_id` (ou por telefone se deal não bate). Mostrar R1, closer R1, SDR mesmo sem R2.
-→ Resolve **Grupo B** (7 casos): coluna R1 deixa de ficar vazia, deixa claro que o lead está aguardando agendamento R2.
+Nova função `getActiveCartReferenceDate(now)` em `carrinhoWeekBoundaries.ts`:
+- Se `now` está entre **Qui 00:00** e **Sex antes do corte (12:00)** → safra atual = a que **termina** nessa quarta (a "em construção"). Mostrar como hoje.
+- Se `now` está entre **Sex pós-corte** e **próxima Qua 23:59** → operação ativa é a safra que **acabou de fechar** (Qui anterior - Qua dessa semana). Usar uma data dentro dela como referência para `getCartWeekStart`.
 
-#### Mudança 3 — Garantir que "Aprovado" vence "Próxima Semana" no status_score
-Ajustar o `status_score` na RPC para considerar também o `r2_status_id` (não só `attendee_status`). Hoje "Próxima Semana" e "Aprovado" têm o mesmo `attendee_status` (geralmente `scheduled`/`completed`), então o tiebreaker é `scheduled_at DESC` — pode pegar o errado.
-→ Resolve **Grupo C** (5 casos).
+Resultado: na sexta 17/04 às 21h, a página abre direto em **09/04-15/04** sem precisar clicar "voltar".
 
-#### Mudança 4 — Adicionar coluna "Status Real" / "Motivo"
-Mostrar no relatório uma coluna que classifica cada Pendente em: 
-- `R2 agendado próx. semana` (badge azul, mostra data)
-- `Aguardando R2` (R1 ok, sem R2 ainda)
-- `R2 Aprovado em outro deal` (badge verde — caso C antes da fix)
-- `Reembolso recente` (caso E)
+#### Mudança 2 — Estender a janela de "Vendas Parceria"
+Em `getCarrinhoMetricBoundaries`, mudar `vendasParceria` de "Sex→Seg" para **"Sex do carrinho 00:00 → próxima Sex no corte (12:00)"** (Sex→Sex, 7 dias).
 
-→ Cada um dos 22 fica com motivo claro, você decide o que filtrar.
+Antes: `Sex 10/04 00:00 → Seg 13/04 23:59`  
+Depois: `Sex 10/04 00:00 → Sex 17/04 11:59:59`
 
-#### Mudança 5 — Para Rafael Albaneze (Grupo D)
-A RPC já dedupa por telefone. Após Mudança 3, o "Aprovado" mais recente vence. Resolvido naturalmente.
+Isso captura **todas as vendas geradas pelo trabalho de aprovação dessa safra**, incluindo as de quinta e sexta de manhã da semana seguinte. Vendas do 17/04 após o corte continuam pertencendo ao próximo ciclo (correto).
 
-### Arquivos alterados
+#### Mudança 3 — Atualizar o label informativo
+O texto "Safra: Contratos de DD/MM a DD/MM" continua. Adicionar abaixo um sub-label indicando a janela de vendas:
+```
+Vendas: 10/04 00:00 → 17/04 12:00
+```
+Para o usuário entender o que está dentro/fora da contagem.
 
-- `supabase/migrations/<nova>.sql` — ajustar `status_score` da RPC `get_carrinho_r2_attendees` para considerar `r2_status_id` (Aprovado > demais).
-- `src/hooks/useContractLifecycleReport.ts` — adicionar buscas de R2 futuro e R1 fallback para órfãos; classificar `motivo_pendente`.
-- `src/types/contractLifecycle.ts` (ou onde está `ContractLifecycleRow`) — adicionar `motivo_pendente`, `r2_proxima_semana_data`.
-- `src/components/crm/R2ContractLifecyclePanel.tsx` — coluna "Motivo" com badges + preencher R1/R2 dos órfãos enriquecidos.
+#### Mudança 4 — (Opcional) Botão "Carrinho ativo agora"
+Diferente do "Hoje" (que pula para a safra futura), um botão que sempre traz para a safra operacionalmente ativa. Pode substituir o "Hoje" para evitar confusão.
+
+### Arquivos a alterar
+
+- `src/lib/carrinhoWeekBoundaries.ts` — adicionar `getActiveCartReferenceDate()`; estender `vendasParceria` para Sex→Sex(corte).
+- `src/pages/crm/R2Carrinho.tsx` — usar a nova função no `useState` inicial; ajustar label do "Hoje".
+- (Opcional) `src/components/crm/R2VendasList.tsx` — exibir o sub-label da janela de vendas no header.
 
 ### Resultado esperado
 
-Dos 22 Pendentes atuais:
-- **6** vão deixar de ser pendentes ou ganhar badge "R2 próx. semana"
-- **7** continuam pendentes mas mostram R1+SDR e badge "Aguardando R2"
-- **5** vão para Realizadas/Aprovado (correção da RPC)
-- **1** (Rafael) ganha 1 linha só com Aprovado correto
-- **1** (Eduardo) ganha badge "Reembolso recente"
-- **1** (Vinicius pré-agendado) continua oculto por design
+- **Vendas do 17/04** passam a aparecer no carrinho 09-15 (até as 12:00 do 17/04).
+- **Vendas do 17/04 pós-corte (12:01+)** ficam no próximo carrinho (16-22), como deve ser.
+- **Página abre direto** na safra ativa correta sem precisar clicar "voltar".
+- O número "3 vendas" do print deve subir significativamente (vimos ~25+ vendas no 17/04 só na consulta SQL).
 
-Lista final de Pendentes "verdadeiros" deve cair para ~7-8 com motivo claro em cada linha.
+### Nota sobre regras de negócio
+
+A memória `carrinho-safra-operational-logic-v6` já documenta esse comportamento operacional. A janela atual de Sex→Seg parece ter sido um valor inicial conservador; estendê-la para o ciclo completo Sex→Sex(corte) está alinhado com a regra escrita.
 
