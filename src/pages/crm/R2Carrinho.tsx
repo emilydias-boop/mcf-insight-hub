@@ -114,7 +114,7 @@ export default function R2Carrinho() {
 
   const handlePrevWeek = () => setWeekDate(subWeeks(weekDate, 1));
   const handleNextWeek = () => setWeekDate(addWeeks(weekDate, 1));
-  const handleToday = () => setWeekDate(new Date());
+  const handleToday = () => setWeekDate(getActiveCartReferenceDate(new Date()));
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['carrinho-unified-data'] });
