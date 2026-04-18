@@ -200,6 +200,14 @@ export default function R2Carrinho() {
           <p className="text-muted-foreground">
             Safra: Contratos de {format(weekStart, 'dd/MM', { locale: ptBR })} a {format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}
           </p>
+          {(() => {
+            const b = getCarrinhoMetricBoundaries(weekStart, weekEnd, config, prevConfig);
+            return (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Janela de Vendas: {format(b.vendasParceria.start, "dd/MM HH:mm", { locale: ptBR })} → {format(b.vendasParceria.end, "dd/MM HH:mm", { locale: ptBR })}
+              </p>
+            );
+          })()}
         </div>
 
         <div className="flex items-center gap-2">
