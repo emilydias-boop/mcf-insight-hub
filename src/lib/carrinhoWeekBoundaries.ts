@@ -106,15 +106,64 @@ export function getCarrinhoMetricBoundaries(
     cutHour, cutMinute || 0, 0, 0
   );
 
-  // Vendas parceria: Sex do carrinho atual 00:00 → Seg 23:59:59
+  // Vendas parceria: Sex do carrinho atual 00:00 → próxima Sex no horário de corte
+  // Captura todas as vendas geradas pelo trabalho de aprovação dessa safra,
+  // incluindo as de quinta e sexta de manhã da semana seguinte (até o próximo corte).
   const friCartStart = localStartOfDay(currentFriday);
-  const monAfterCart = localEndOfDay(addDays(currentFriday, 3));
+  const vendasEnd = new Date(nextFridayCutoff.getTime() - 1); // Sex 11:59:59.999
 
   return {
     contratos: { start: thuStart, end: wedEnd },
     r2Meetings: { start: currentFridayCutoff, end: nextFridayCutoff },
     aprovados: { start: currentFridayCutoff, end: nextFridayCutoff },
-    vendasParceria: { start: friCartStart, end: monAfterCart },
+    vendasParceria: { start: friCartStart, end: vendasEnd },
     r1Meetings: { start: thuStart, end: wedEnd },
   };
+}
+
+/**
+ * Retorna a data de referência da safra "operacionalmente ativa" para o carrinho.
+ *
+ * Lógica:
+ * - Qui 00:00 → Sex antes do corte (12:00): safra atual = a que termina nessa quarta (em construção)
+ * - Sex pós-corte → próxima Qua 23:59: safra ativa = a que acabou de fechar (Qui anterior - Qua dessa semana)
+ *
+ * Isso evita que o usuário precise clicar "voltar" na sexta após o corte para ver a safra
+ * que ainda está sendo finalizada operacionalmente (vendas pós-aprovação rolam até a próxima sexta).
+ *
+ * @param now Data/hora atual (default: new Date())
+ * @param cutoffHour Hora do corte (default: 12)
+ * @param cutoffMinute Minuto do corte (default: 0)
+ */
+export function getActiveCartReferenceDate(
+  now: Date = new Date(),
+  cutoffHour: number = 12,
+  cutoffMinute: number = 0
+): Date {
+  const day = now.getDay(); // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+  const isPastCutoff = hour > cutoffHour || (hour === cutoffHour && minute >= cutoffMinute);
+
+  // Sex pós-corte (5) | Sáb (6) | Dom (0) | Seg (1) | Ter (2) | Qua (3)
+  // → mostrar safra que acabou de fechar (a quinta anterior)
+  // Qui (4) | Sex pré-corte → mostrar safra em construção (a quinta atual ou recém-passada)
+
+  if (day === 5 && !isPastCutoff) {
+    // Sex antes do corte: safra atual (em construção, começa quinta passada)
+    return now;
+  }
+  if (day === 5 && isPastCutoff) {
+    // Sex pós-corte: ir para a quarta anterior (parte da safra que acabou)
+    return subDays(now, 2);
+  }
+  if (day === 6 || day === 0 || day === 1 || day === 2 || day === 3) {
+    // Sáb/Dom/Seg/Ter/Qua: ainda na semana operacional da quinta anterior
+    // Voltar para a quarta da mesma semana operacional
+    // day=6→-3, day=0→-4, day=1→-5, day=2→-6, day=3→-7
+    const daysBack = day === 6 ? 3 : day === 0 ? 4 : day + 4;
+    return subDays(now, daysBack);
+  }
+  // Qui (4): safra atual começa hoje
+  return now;
 }
