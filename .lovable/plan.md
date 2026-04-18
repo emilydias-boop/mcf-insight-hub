@@ -1,80 +1,68 @@
 
 
-## Diagnóstico: Por que as vendas do dia 17/04 não aparecem e a semana padrão está errada
+## Diagnóstico final: vendas de parceria não casam com aprovados
 
-### Os dois problemas são da mesma raiz: **a definição de "semana atual"**
+### A causa raiz
 
-#### Problema 1 — Vendas do 17/04 não sobem na safra 09/04-15/04
+A janela `aprovados` (em `getCarrinhoMetricBoundaries`) é **Sex 12:00 → Sex 12:00**. Mas a safra é **Qui 00:00 → Qua 23:59**. Isso joga muitos R2s aprovados para a semana errada:
 
-A janela de "Vendas Parceria" (em `getCarrinhoMetricBoundaries`, linhas 109-111 de `carrinhoWeekBoundaries.ts`) é fixa e curta:
+Na safra **09/04-15/04** (carrinho da Sex 10/04), os R2s aprovados que deveriam pertencer:
+- Sarah Coelho — R2 Qui **09/04 17:00 BRT** → fora (antes de Sex 12:00)
+- Heloiza Helena — R2 Sex **10/04 10:00 BRT** → fora (antes do corte 12:00)
+- Uislaine Fuzzo — R2 Sex **10/04 07:00 BRT** → fora
+- Maria Tatiana — R2 antigo (**10/03**) → fora (correto)
+- Lucas Fonseca — R2 **jan/26** → fora (correto)
 
+Vendas dessas pessoas em 10-16/04 caem como **órfãs** porque o "Aprovado" está em outra janela. Por isso só aparecem **3-4 vendas no print** ao invés de 25+.
+
+E ainda: vendas pós-corte (Wellington, Marcia, Valdinei vendendo 17/04 13-14h BRT) ficam fora da janela `vendasParceria` (que vai até Sex 11:59).
+
+### As 2 mudanças necessárias
+
+#### Mudança 1 — Janela `aprovados` = janela completa da safra
+Hoje: `Sex 10/04 12:00 → Sex 17/04 12:00` (7 dias deslocados).  
+**Proposta**: `Qui 09/04 00:00 → Sex 17/04 12:00` (safra inteira + carry over até o corte da semana seguinte).
+
+Isso captura:
+- R2s de Qui/Sex de manhã (Sarah, Heloiza, Uislaine) → entram corretamente
+- R2s de Qua à noite (Wellington, Marcia, Valdinei feitos na sex 17 manhã) → continuam entrando
+- R2s da próxima sex pós-corte → ficam para a próxima safra (correto)
+
+#### Mudança 2 — Janela `vendasParceria` = casar com `aprovados`
+Hoje: `Sex 10/04 00:00 → Sex 17/04 11:59`.  
+**Proposta**: `Qui 09/04 00:00 → Sex 17/04 11:59` (alinhar início com a safra, manter fim no corte).
+
+Vendas que acontecem **dentro da safra** (Qui-Qua) também são contabilizadas, não só as Sex+. Isso é importante porque vendas de incorporador (que não dependem só de R2 da semana) podem rolar Qui-Sex.
+
+### Por que faz sentido operacionalmente
+
+A memória `carrinho-safra-operational-logic-v6` define a safra como **Qui→Qua**. O corte de Sex 12:00 só serve para **fechar** a safra (cortar o que entra na próxima). Não faz sentido **excluir** o que aconteceu DENTRO da safra (Qui inteiro, Sex de manhã).
+
+A janela Sex→Sex foi um erro de modelagem: confundiu "corte que fecha" com "corte que abre". O ciclo correto é:
 ```
-Vendas Parceria = Sex do carrinho 00:00 → Seg 23:59:59 (4 dias)
+Safra ativa: [Qui 00:00 ──────────────── Qua 23:59] + [Qui-Sex_corte da próxima semana para terminar processamento]
+                                                      ↑
+                                         carry-over para Aprovados/Vendas
 ```
-
-Para a safra **09/04-15/04** (Qui-Qua), a sexta do carrinho é **10/04**. Então a janela de vendas é:
-- **Sex 10/04 00:00 → Seg 13/04 23:59**
-
-**As vendas do 17/04 (sexta) caem FORA dessa janela** — elas pertencem ao próximo ciclo de carrinho. Por isso não aparecem.
-
-Confirmei via SQL: existem **dezenas de vendas de parceria em 17/04/2026** (Claudio, Evano, Dyego, Saulo, João Pedro, etc.) que estão "esperando" mas o carrinho 09-15 não enxerga porque já fechou a janela em 13/04.
-
-#### Problema 2 — Sempre precisa voltar para ver "a semana atual"
-
-A página inicia com `weekDate = new Date()` (= hoje, sexta 17/04). O `getCartWeekStart(17/04)` retorna **Qui 16/04** (a quinta mais recente), mostrando a safra **16/04-22/04** — que é a safra "em construção".
-
-Mas operacionalmente, na sexta-feira **antes do corte (12:00)** e **até segunda à noite**, o usuário ainda está finalizando o carrinho da semana **anterior** (vendas pós-aprovação rolam até segunda). Por isso ele sempre clica "voltar" para ver 09-15.
-
-### Por que isso quebra: a "semana operacional" ≠ "semana de safra"
-
-A memória `carrinho-safra-operational-logic-v6` define que o ciclo do carrinho é uma janela **contínua entre cortes** (Sex 12:00 → Sex 12:00). A página, porém, navega por **safras Qui-Qua** (`getCartWeekStart` ancora em quinta), o que não bate com o momento em que o usuário está operando.
-
-### Solução proposta
-
-#### Mudança 1 — Inicializar `weekDate` na "safra ativa" (não na safra futura)
-Em `R2Carrinho.tsx`, linha 34:
-```ts
-const [weekDate, setWeekDate] = useState(getActiveCartReferenceDate(new Date()));
-```
-
-Nova função `getActiveCartReferenceDate(now)` em `carrinhoWeekBoundaries.ts`:
-- Se `now` está entre **Qui 00:00** e **Sex antes do corte (12:00)** → safra atual = a que **termina** nessa quarta (a "em construção"). Mostrar como hoje.
-- Se `now` está entre **Sex pós-corte** e **próxima Qua 23:59** → operação ativa é a safra que **acabou de fechar** (Qui anterior - Qua dessa semana). Usar uma data dentro dela como referência para `getCartWeekStart`.
-
-Resultado: na sexta 17/04 às 21h, a página abre direto em **09/04-15/04** sem precisar clicar "voltar".
-
-#### Mudança 2 — Estender a janela de "Vendas Parceria"
-Em `getCarrinhoMetricBoundaries`, mudar `vendasParceria` de "Sex→Seg" para **"Sex do carrinho 00:00 → próxima Sex no corte (12:00)"** (Sex→Sex, 7 dias).
-
-Antes: `Sex 10/04 00:00 → Seg 13/04 23:59`  
-Depois: `Sex 10/04 00:00 → Sex 17/04 11:59:59`
-
-Isso captura **todas as vendas geradas pelo trabalho de aprovação dessa safra**, incluindo as de quinta e sexta de manhã da semana seguinte. Vendas do 17/04 após o corte continuam pertencendo ao próximo ciclo (correto).
-
-#### Mudança 3 — Atualizar o label informativo
-O texto "Safra: Contratos de DD/MM a DD/MM" continua. Adicionar abaixo um sub-label indicando a janela de vendas:
-```
-Vendas: 10/04 00:00 → 17/04 12:00
-```
-Para o usuário entender o que está dentro/fora da contagem.
-
-#### Mudança 4 — (Opcional) Botão "Carrinho ativo agora"
-Diferente do "Hoje" (que pula para a safra futura), um botão que sempre traz para a safra operacionalmente ativa. Pode substituir o "Hoje" para evitar confusão.
-
-### Arquivos a alterar
-
-- `src/lib/carrinhoWeekBoundaries.ts` — adicionar `getActiveCartReferenceDate()`; estender `vendasParceria` para Sex→Sex(corte).
-- `src/pages/crm/R2Carrinho.tsx` — usar a nova função no `useState` inicial; ajustar label do "Hoje".
-- (Opcional) `src/components/crm/R2VendasList.tsx` — exibir o sub-label da janela de vendas no header.
 
 ### Resultado esperado
 
-- **Vendas do 17/04** passam a aparecer no carrinho 09-15 (até as 12:00 do 17/04).
-- **Vendas do 17/04 pós-corte (12:01+)** ficam no próximo carrinho (16-22), como deve ser.
-- **Página abre direto** na safra ativa correta sem precisar clicar "voltar".
-- O número "3 vendas" do print deve subir significativamente (vimos ~25+ vendas no 17/04 só na consulta SQL).
+- **Aprovados** sobe de ~45 para ~55-65 (incluindo Heloiza, Uislaine, Sarah, etc.)
+- **Vendas de Parceria** sobe de **4** para **20-25+** (todos os matches do dia 10-17 antes do corte)
+- Conversão `vendas/aprovados` fica realista
+- "Vendas Sem Vínculo" cai porque a maioria vai casar
 
-### Nota sobre regras de negócio
+### Arquivo a alterar
 
-A memória `carrinho-safra-operational-logic-v6` já documenta esse comportamento operacional. A janela atual de Sex→Seg parece ter sido um valor inicial conservador; estendê-la para o ciclo completo Sex→Sex(corte) está alinhado com a regra escrita.
+- `src/lib/carrinhoWeekBoundaries.ts` — em `getCarrinhoMetricBoundaries`:
+  - `aprovados.start = thuStart` (Qui 00:00 da safra)
+  - `aprovados.end = nextFridayCutoff` (Sex 12:00 da semana seguinte) — mantém
+  - `r2Meetings.start = thuStart` (mesma coisa)
+  - `vendasParceria.start = thuStart` (Qui 00:00, não Sex)
+  - `vendasParceria.end` mantém
+
+### Risco / efeito colateral
+
+- A aba "R2 Agendadas" e "R2 Realizadas" (que usam `r2Meetings`) também vão incluir Qui/Sex-manhã. Isso é o comportamento correto — esses são leads dessa safra.
+- O número de "R2 Agendadas" (65 no print) vai subir um pouco. Se isso estiver ok, vamos em frente. Se quiser que `r2Meetings` continue Sex→Sex e só `aprovados`+`vendasParceria` mudem, é trivial.
 
