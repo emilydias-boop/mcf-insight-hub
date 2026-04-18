@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useR2CarrinhoKPIs } from '@/hooks/useR2CarrinhoKPIs';
 import { useR2CarrinhoData, R2CarrinhoAttendee } from '@/hooks/useR2CarrinhoData';
 import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
-import { getCartWeekStart, getCartWeekEnd } from '@/lib/carrinhoWeekBoundaries';
+import { getCartWeekStart, getCartWeekEnd, getActiveCartReferenceDate, getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
 import { R2AprovadosList } from '@/components/crm/R2AprovadosList';
 import { R2ForaDoCarrinhoList } from '@/components/crm/R2ForaDoCarrinhoList';
 import { useR2ForaDoCarrinhoData } from '@/hooks/useR2ForaDoCarrinhoData';
@@ -31,7 +31,7 @@ import { R2AccumulatedLead } from '@/hooks/useR2AccumulatedLeads';
 import { useEncaixarNoCarrinho } from '@/hooks/useEncaixarNoCarrinho';
 
 export default function R2Carrinho() {
-  const [weekDate, setWeekDate] = useState(new Date());
+  const [weekDate, setWeekDate] = useState(() => getActiveCartReferenceDate(new Date()));
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
@@ -114,7 +114,7 @@ export default function R2Carrinho() {
 
   const handlePrevWeek = () => setWeekDate(subWeeks(weekDate, 1));
   const handleNextWeek = () => setWeekDate(addWeeks(weekDate, 1));
-  const handleToday = () => setWeekDate(new Date());
+  const handleToday = () => setWeekDate(getActiveCartReferenceDate(new Date()));
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['carrinho-unified-data'] });
@@ -200,6 +200,14 @@ export default function R2Carrinho() {
           <p className="text-muted-foreground">
             Safra: Contratos de {format(weekStart, 'dd/MM', { locale: ptBR })} a {format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}
           </p>
+          {(() => {
+            const b = getCarrinhoMetricBoundaries(weekStart, weekEnd, config, prevConfig);
+            return (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Janela de Vendas: {format(b.vendasParceria.start, "dd/MM HH:mm", { locale: ptBR })} → {format(b.vendasParceria.end, "dd/MM HH:mm", { locale: ptBR })}
+              </p>
+            );
+          })()}
         </div>
 
         <div className="flex items-center gap-2">
