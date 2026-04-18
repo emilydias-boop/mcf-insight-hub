@@ -106,17 +106,16 @@ export function getCarrinhoMetricBoundaries(
     cutHour, cutMinute || 0, 0, 0
   );
 
-  // Vendas parceria: Sex do carrinho atual 00:00 → próxima Sex no horário de corte
-  // Captura todas as vendas geradas pelo trabalho de aprovação dessa safra,
-  // incluindo as de quinta e sexta de manhã da semana seguinte (até o próximo corte).
-  const friCartStart = localStartOfDay(currentFriday);
+  // Vendas parceria, Aprovados e R2 Meetings: Qui 00:00 da safra → próxima Sex no corte (12:00).
+  // Janela alinhada à safra operacional (Qui→Qua) com carry-over até o próximo corte,
+  // para capturar R2s de Qui/Sex-manhã e vendas pós-aprovação até o fechamento.
   const vendasEnd = new Date(nextFridayCutoff.getTime() - 1); // Sex 11:59:59.999
 
   return {
     contratos: { start: thuStart, end: wedEnd },
-    r2Meetings: { start: currentFridayCutoff, end: nextFridayCutoff },
-    aprovados: { start: currentFridayCutoff, end: nextFridayCutoff },
-    vendasParceria: { start: friCartStart, end: vendasEnd },
+    r2Meetings: { start: thuStart, end: nextFridayCutoff },
+    aprovados: { start: thuStart, end: nextFridayCutoff },
+    vendasParceria: { start: thuStart, end: vendasEnd },
     r1Meetings: { start: thuStart, end: wedEnd },
   };
 }
