@@ -338,6 +338,9 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           pendingReason: null,
           futureR2Date: null,
           futureR2CloserName: null,
+          dentroCorte: false,
+          effectiveContractDate: info.saleDate,
+          contractSource: 'hubla',
         };
         orphanRows.push(orphan);
         if (phoneKey.length >= 8) orphansByPhone.set(phoneKey, orphan);
