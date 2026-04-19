@@ -470,6 +470,45 @@ export function useVincularCarta() {
   });
 }
 
+// Mutation: Aguardar retorno do cliente (estado intermediário 48h)
+export function useMarcarAguardarRetorno() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (params: {
+      deal_id: string;
+      origin_id: string;
+      observacao?: string;
+      horas?: number; // default 48
+    }) => {
+      const horas = params.horas ?? 48;
+      const until = new Date(Date.now() + horas * 60 * 60 * 1000).toISOString();
+
+      // Insere proposta marcada como "aguardando_retorno" sem valores definidos
+      const { error } = await supabase
+        .from('consorcio_proposals')
+        .insert({
+          deal_id: params.deal_id,
+          status: 'pendente',
+          aguardando_retorno: true,
+          aguardando_retorno_until: until,
+          proposal_details: params.observacao || 'Aguardando retorno do cliente',
+          proposal_date: new Date().toISOString().split('T')[0],
+          created_by: user?.id || null,
+        } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Marcado como "Aguardando retorno do cliente" (48h)');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-realizadas'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-outcomes'] });
+    },
+    onError: (e: any) => toast.error('Erro: ' + e.message),
+  });
+}
+
 export { CONSORCIO_STAGE_IDS, CONSORCIO_ORIGIN_IDS };
 
 // Fetch ALL consorcio deals (todas reuniões, qualquer stage)

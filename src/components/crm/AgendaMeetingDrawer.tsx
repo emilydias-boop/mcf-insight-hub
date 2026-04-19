@@ -63,6 +63,7 @@ import { AttendeeNotesSection } from './AttendeeNotesSection';
 import { MovementHistorySection } from '@/components/sdr/MovementHistorySection';
 import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
 import { LinkContractDialog } from './LinkContractDialog';
+import { OutcomeRequiredModal } from '@/components/consorcio/OutcomeRequiredModal';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -122,6 +123,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { role, user } = useAuth();
+  const { activeBU } = useBUContext();
   const isSdr = role === 'sdr';
   const [closerNotes, setCloserNotes] = useState(meeting?.closer_notes || '');
   const [sdrNote, setSdrNote] = useState(meeting?.notes || '');
@@ -138,6 +140,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const [showR2PromptDialog, setShowR2PromptDialog] = useState(false);
   const [showLinkContractDialog, setShowLinkContractDialog] = useState(false);
   const [contractPaidParticipant, setContractPaidParticipant] = useState<{ id: string; name: string; dealId: string | null } | null>(null);
+  const [outcomeModalDeal, setOutcomeModalDeal] = useState<{ dealId: string; dealName: string; contactName: string; originId: string } | null>(null);
   
   const updateStatus = useUpdateMeetingStatus();
   const cancelMeeting = useCancelMeeting();
@@ -218,8 +221,24 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   };
 
   const handleCompleted = () => {
-    if (selectedParticipant) {
-      handleParticipantStatusChange(selectedParticipant.id, 'completed');
+    if (!selectedParticipant) return;
+    const participantName = selectedParticipant.name;
+    const dealId = (selectedParticipant as any).dealId || activeMeeting?.deal_id || null;
+    const dealName = activeMeeting?.deal?.name || participantName;
+    const originId = (activeMeeting?.deal as any)?.origin_id || '';
+
+    handleParticipantStatusChange(selectedParticipant.id, 'completed');
+
+    // Para BU Consórcio, abrir modal de desfecho obrigatório após marcar Realizada
+    if (activeBU === 'consorcio' && dealId) {
+      setTimeout(() => {
+        setOutcomeModalDeal({
+          dealId,
+          dealName,
+          contactName: participantName,
+          originId,
+        });
+      }, 400);
     }
   };
 
@@ -308,7 +327,6 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const { data: outsideData = {} } = useOutsideDetectionBatch(attendeesForOutsideCheck);
 
   // Hook to detect partner products (Consórcio BU) - MUST be before any conditional return
-  const { activeBU } = useBUContext();
   const attendeesForPartnerCheck = useMemo(() => {
     if (activeBU !== 'consorcio') return [];
     return (activeMeeting?.attendees || []).map(att => ({
@@ -1251,6 +1269,17 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
           attendeeId={selectedParticipant.id}
           attendeeName={selectedParticipant.name}
           dealId={selectedParticipant.dealId}
+        />
+      )}
+
+      {outcomeModalDeal && (
+        <OutcomeRequiredModal
+          open={!!outcomeModalDeal}
+          onOpenChange={(v) => !v && setOutcomeModalDeal(null)}
+          dealId={outcomeModalDeal.dealId}
+          dealName={outcomeModalDeal.dealName}
+          contactName={outcomeModalDeal.contactName}
+          originId={outcomeModalDeal.originId}
         />
       )}
     </Sheet>

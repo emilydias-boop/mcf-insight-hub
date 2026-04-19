@@ -26,6 +26,7 @@ import {
   CloserConsorcioRankingBlock,
   ConsorcioRanking,
 } from "@/components/closer/CloserConsorcioRankingBlock";
+import { PendingOutcomesBanner } from "@/components/closer/PendingOutcomesBanner";
 
 type DatePreset = "today" | "week" | "month";
 
@@ -300,6 +301,7 @@ export default function MeuDesempenhoCloser() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
+          {isConsorcio && <PendingOutcomesBanner />}
           {isConsorcio ? (
             <CloserConsorcioDetailKPICards
               metrics={consorcioData?.myMetrics || null}
