@@ -51,6 +51,7 @@ const FILTER_OPTIONS: { type: TimelineEventType | 'all'; label: string }[] = [
   { type: 'task', label: 'Tarefas' },
   { type: 'qualification', label: 'Qualif.' },
   { type: 'entry', label: 'Entrada' },
+  { type: 'tag_change', label: 'Tags' },
 ];
 
 function TimelineEventItem({ event }: { event: TimelineEvent }) {
