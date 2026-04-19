@@ -50,6 +50,9 @@ serve(async (req) => {
     } catch (_) { /* nunca quebra fluxo */ }
   };
 
+  let wlFinalStatus: 'success' | 'error' = 'success';
+  let wlFinalError: string | undefined;
+  try {
   try {
     // Extract slug from URL path
     const url = new URL(req.url);
