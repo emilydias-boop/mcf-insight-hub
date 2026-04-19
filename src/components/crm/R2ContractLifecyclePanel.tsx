@@ -227,7 +227,29 @@ export function R2ContractLifecyclePanel() {
 
       // Apply sub-filter
       if (activeSubFilter) {
-        if (expandedKpi === 'realizadas' || expandedKpi === 'agendados') {
+        if (expandedKpi === 'realizadas') {
+          if (activeSubFilter === '__other_week__') {
+            result = result.filter(r => r.carrinhoWeekStart && r.carrinhoWeekStart !== currentWeekStartStr);
+          } else if (activeSubFilter === '__aprovado_fora__') {
+            result = result.filter(r => {
+              const sn = (r.r2StatusName || '').toLowerCase();
+              const isAprovado = sn.includes('aprovado') || sn.includes('approved');
+              const sameWeek = !r.carrinhoWeekStart || r.carrinhoWeekStart === currentWeekStartStr;
+              return isAprovado && sameWeek && !r.dentroCorte;
+            });
+          } else if (activeSubFilter.startsWith('status:')) {
+            const statusName = activeSubFilter.slice('status:'.length);
+            const isAprovadoFilter = statusName.toLowerCase().includes('aprovado') || statusName.toLowerCase().includes('approved');
+            result = result.filter(r => {
+              const sameWeek = !r.carrinhoWeekStart || r.carrinhoWeekStart === currentWeekStartStr;
+              if (!sameWeek) return false;
+              if ((r.r2StatusName || 'Sem status') !== statusName) return false;
+              // For "Aprovado" status card, only include leads dentro_corte
+              if (isAprovadoFilter && !r.dentroCorte) return false;
+              return true;
+            });
+          }
+        } else if (expandedKpi === 'agendados') {
           result = result.filter(r => (r.r2StatusName || 'Sem status') === activeSubFilter);
         } else if (expandedKpi === 'pendentes') {
           if (activeSubFilter === 'recentes') {
