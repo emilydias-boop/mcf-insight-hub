@@ -14,7 +14,7 @@ export function useMyCloser() {
       const { data: closerViaEmployee } = await supabase
         .from('closers')
         .select(`
-          id, name, email, is_active,
+          id, name, email, is_active, bu,
           employees!closers_employee_id_fkey (
             user_id
           )
@@ -33,6 +33,7 @@ export function useMyCloser() {
           name: matchedCloser.name,
           email: matchedCloser.email,
           is_active: matchedCloser.is_active,
+          bu: matchedCloser.bu,
         };
       }
 
@@ -47,7 +48,7 @@ export function useMyCloser() {
 
       const { data: closerByEmail, error } = await supabase
         .from('closers')
-        .select('id, name, email, is_active')
+        .select('id, name, email, is_active, bu')
         .ilike('email', profile.email)
         .eq('is_active', true)
         .maybeSingle();
