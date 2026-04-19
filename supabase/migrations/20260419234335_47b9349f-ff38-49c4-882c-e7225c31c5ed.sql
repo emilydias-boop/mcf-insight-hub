@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.get_carrinho_r2_attendees(date, timestamptz, timestamptz, boolean);
