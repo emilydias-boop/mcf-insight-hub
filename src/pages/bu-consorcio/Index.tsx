@@ -172,9 +172,22 @@ export default function ConsorcioPage() {
   const startDate = selectedMonth.start;
   const endDate = selectedMonth.end;
 
+  // Resolve date range based on filter selection:
+  // - "Todo Período" → no date filter (undefined)
+  // - Custom/preset range → use filter range
+  // - No selection (initial state) → fallback to selected month
+  const isTodoPeriodo = dateRangeFilter.label === 'Todo Período';
+  const isPeriodoCustom = !!(dateRangeFilter.startDate || dateRangeFilter.endDate);
+
+  const resolvedDateRange = isTodoPeriodo
+    ? { startDate: undefined as Date | undefined, endDate: undefined as Date | undefined }
+    : isPeriodoCustom
+      ? { startDate: dateRangeFilter.startDate, endDate: dateRangeFilter.endDate }
+      : { startDate, endDate };
+
   const filters = {
-    startDate: dateRangeFilter.startDate || startDate,
-    endDate: dateRangeFilter.endDate || endDate,
+    startDate: resolvedDateRange.startDate,
+    endDate: resolvedDateRange.endDate,
     status: statusFilter !== 'todos' ? statusFilter : undefined,
     tipoProduto: tipoFilter !== 'todos' ? tipoFilter : undefined,
     vendedorId: vendedorFilter !== 'todos' ? vendedorFilter : undefined,
@@ -186,8 +199,8 @@ export default function ConsorcioPage() {
 
   const { data: cards, isLoading: cardsLoading } = useConsorcioCards(filters);
   const { data: summary, isLoading: summaryLoading } = useConsorcioSummary({
-    startDate: dateRangeFilter.startDate || startDate,
-    endDate: dateRangeFilter.endDate || endDate,
+    startDate: resolvedDateRange.startDate,
+    endDate: resolvedDateRange.endDate,
   });
   const deleteCard = useDeleteConsorcioCard();
   const recalculateAll = useRecalculateAllCommissions();
