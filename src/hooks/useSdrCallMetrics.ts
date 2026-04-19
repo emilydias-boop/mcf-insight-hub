@@ -67,6 +67,7 @@ export const useSdrCallMetrics = (
           .select('id, status, outcome, duration_seconds, started_at, ended_at, created_at')
           .eq('user_id', profile.id)
           .eq('direction', 'outbound')
+          .order('created_at', { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
         if (startDate) {
