@@ -325,6 +325,27 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const produtoCodigo = form.watch('produto_codigo');
   const condicaoPagamento = (form.watch('condicao_pagamento') || 'convencional') as CondicaoPagamento;
   const incluiSeguro = form.watch('inclui_seguro') || false;
+  const dataContratacaoWatch = form.watch('data_contratacao');
+  const parcelasPagasClienteWatch = form.watch('parcelas_pagas_cliente') || 0;
+
+  // Detectar cadastro retroativo (data de contratação anterior ao mês atual)
+  const isCadastroRetroativo = useMemo(() => {
+    if (!dataContratacaoWatch) return false;
+    const hoje = new Date();
+    const inicioMesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    return dataContratacaoWatch < inicioMesAtual;
+  }, [dataContratacaoWatch]);
+
+  // Sugerir nº de parcelas pagas pelo cliente: meses entre contratação e hoje menos parcelas da empresa
+  const sugestaoParcelasCliente = useMemo(() => {
+    if (!isCadastroRetroativo || !dataContratacaoWatch) return 0;
+    const hoje = new Date();
+    const meses =
+      (hoje.getFullYear() - dataContratacaoWatch.getFullYear()) * 12 +
+      (hoje.getMonth() - dataContratacaoWatch.getMonth());
+    const restante = Math.max(0, meses - (parcelasPagasEmpresa || 0));
+    return Math.min(restante, (prazoMeses || 240) - (parcelasPagasEmpresa || 0));
+  }, [isCadastroRetroativo, dataContratacaoWatch, parcelasPagasEmpresa, prazoMeses]);
 
   // Fetch vendedor options from configurable table
   const { data: vendedorOptions = [] } = useConsorcioVendedorOptions();
