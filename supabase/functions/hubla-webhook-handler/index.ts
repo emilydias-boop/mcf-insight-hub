@@ -1777,11 +1777,64 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
+  // Painel "Movimentações de Leads" (webhook_events)
+  let wlLogId: string | null = null;
+  let wlMappedType = 'purchase.unknown';
+  let wlPayloadSnapshot: any = null;
+  let wlFinalStatus: 'success' | 'error' = 'success';
+  let wlFinalError: string | undefined;
+  const finalizeWebhookLog = async () => {
+    try {
+      if (!wlLogId) {
+        await supabase.from('webhook_events').insert({
+          event_type: wlMappedType,
+          event_data: wlPayloadSnapshot ?? {},
+          status: wlFinalStatus,
+          processed_at: new Date().toISOString(),
+          processing_time_ms: Date.now() - startTime,
+          error_message: wlFinalError ?? null,
+        });
+      } else {
+        await supabase.from('webhook_events').update({
+          status: wlFinalStatus,
+          processed_at: new Date().toISOString(),
+          processing_time_ms: Date.now() - startTime,
+          error_message: wlFinalError ?? null,
+        }).eq('id', wlLogId);
+      }
+    } catch (_) { /* nunca quebra fluxo */ }
+  };
+
+  try {
   try {
     const body = await req.json();
     const eventType = body.event_type || body.type;
 
     console.log('📥 Webhook recebido:', eventType);
+
+    // Mapear evento Hubla → event_type do painel de movimentações
+    wlPayloadSnapshot = body;
+    if (eventType === 'invoice.refunded') {
+      wlMappedType = 'purchase.refunded';
+    } else if (eventType === 'invoice.payment_succeeded' || eventType === 'NewSale' || eventType === 'invoice.created') {
+      wlMappedType = 'purchase.completed';
+    } else if (eventType === 'lead.abandoned_checkout') {
+      wlMappedType = 'lead.abandoned_checkout';
+    } else {
+      wlMappedType = `hubla.${eventType ?? 'unknown'}`;
+    }
+    try {
+      const { data: wlLog } = await supabase
+        .from('webhook_events')
+        .insert({
+          event_type: wlMappedType,
+          event_data: body,
+          status: 'processing',
+        })
+        .select('id')
+        .single();
+      wlLogId = wlLog?.id ?? null;
+    } catch (_) { /* nunca quebra fluxo */ }
 
     // Log do webhook
     const { data: logEntry } = await supabase
