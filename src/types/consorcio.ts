@@ -223,6 +223,10 @@ export interface CreateConsorcioCardInput {
   parcela_1a_12a?: number;
   parcela_demais?: number;
   
+  // Cadastro retroativo - parcelas já pagas pelo cliente antes do cadastro
+  parcelas_pagas_cliente?: number;
+  data_ultimo_pagamento_cliente?: string;
+  
   // Partners (PJ only)
   partners?: Array<{ nome: string; cpf: string; renda?: number }>;
 }
