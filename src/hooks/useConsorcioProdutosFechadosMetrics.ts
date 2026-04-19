@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from 'date-fns';
 import { CONSORCIO_WEEK_STARTS_ON } from '@/lib/businessDays';
+import { CONSORCIO_FECHAMENTO_STAGE_IDS } from '@/lib/consorcioStages';
 
 export interface ProdutoFechadoMetric {
   id: string;
@@ -13,6 +14,9 @@ export interface ProdutoFechadoMetric {
 
 export interface ConsorcioProdutosFechadosMetrics {
   products: ProdutoFechadoMetric[];
+  totalDay: number;
+  totalWeek: number;
+  totalMonth: number;
   isLoading: boolean;
 }
 
@@ -27,7 +31,6 @@ export function useConsorcioProdutosFechadosMetrics(): ConsorcioProdutosFechados
   const monthStart = format(startOfMonth(today), "yyyy-MM-dd'T'HH:mm:ss");
   const monthEnd = format(endOfMonth(today), "yyyy-MM-dd'T'HH:mm:ss");
 
-  // Fetch active product options
   const { data: options = [], isLoading: optionsLoading } = useQuery({
     queryKey: ['produto-fechado-options-active'],
     queryFn: async () => {
@@ -41,19 +44,33 @@ export function useConsorcioProdutosFechadosMetrics(): ConsorcioProdutosFechados
     },
   });
 
-  // Fetch all deal_produtos_adquiridos for the month
-  const { data: records = [], isLoading: recordsLoading } = useQuery({
-    queryKey: ['produtos-fechados-metrics', monthStart],
+  const { data, isLoading: recordsLoading } = useQuery({
+    queryKey: ['produtos-fechados-metrics-v2', monthStart],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: prods, error } = await supabase
         .from('deal_produtos_adquiridos' as any)
-        .select('id, produto_option_id, created_at')
+        .select('id, produto_option_id, deal_id, created_at')
         .gte('created_at', monthStart)
         .lte('created_at', monthEnd);
       if (error) throw error;
-      return (data || []) as unknown as { id: string; produto_option_id: string; created_at: string }[];
+
+      const { data: stageDeals, error: dError } = await supabase
+        .from('crm_deals')
+        .select('id, stage_moved_at')
+        .in('stage_id', CONSORCIO_FECHAMENTO_STAGE_IDS)
+        .gte('stage_moved_at', monthStart)
+        .lte('stage_moved_at', monthEnd);
+      if (dError) throw dError;
+
+      return {
+        records: (prods || []) as unknown as { id: string; produto_option_id: string; deal_id: string; created_at: string }[],
+        stageDeals: (stageDeals || []) as { id: string; stage_moved_at: string }[],
+      };
     },
   });
+
+  const records = data?.records || [];
+  const stageDeals = data?.stageDeals || [];
 
   const products: ProdutoFechadoMetric[] = options.map((opt) => {
     const optRecords = records.filter((r) => r.produto_option_id === opt.id);
@@ -66,8 +83,23 @@ export function useConsorcioProdutosFechadosMetrics(): ConsorcioProdutosFechados
     };
   });
 
+  // Totals = DISTINCT deal_id from records ∪ stageDeals per period
+  const distinctInPeriod = (start: string, end: string): number => {
+    const set = new Set<string>();
+    records
+      .filter((r) => r.created_at >= start && r.created_at <= end && r.deal_id)
+      .forEach((r) => set.add(r.deal_id));
+    stageDeals
+      .filter((d) => d.stage_moved_at >= start && d.stage_moved_at <= end)
+      .forEach((d) => set.add(d.id));
+    return set.size;
+  };
+
   return {
     products,
+    totalDay: distinctInPeriod(dayStart, dayEnd),
+    totalWeek: distinctInPeriod(weekStart, weekEnd),
+    totalMonth: distinctInPeriod(monthStart, monthEnd),
     isLoading: optionsLoading || recordsLoading,
   };
 }
