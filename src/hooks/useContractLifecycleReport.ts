@@ -131,7 +131,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         p_week_start: weekStartStr,
         p_window_start: boundaries.r2Meetings.start.toISOString(),
         p_window_end: boundaries.r2Meetings.end.toISOString(),
-        p_apply_contract_cutoff: false,
+        p_apply_contract_cutoff: true,
       });
 
       // ============================================================
