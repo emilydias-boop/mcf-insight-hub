@@ -835,6 +835,12 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       parcela_1a_12a: calculoParcela?.parcela1a12 || undefined,
       parcela_demais: calculoParcela?.parcelaDemais || undefined,
       
+      // Cadastro retroativo
+      parcelas_pagas_cliente: data.parcelas_pagas_cliente || undefined,
+      data_ultimo_pagamento_cliente: data.data_ultimo_pagamento_cliente
+        ? formatDateForDB(data.data_ultimo_pagamento_cliente)
+        : undefined,
+      
       partners: (data.partners || []).filter(p => p.nome && p.cpf) as Array<{ nome: string; cpf: string; renda?: number }>,
     };
 
