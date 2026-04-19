@@ -1,51 +1,82 @@
 
-## Diferenciar "Meu Desempenho" para Closer Consórcio
 
-### Diagnóstico
+## Diagnóstico revisado: "Proposta Enviada" ≠ "Produto Fechado"
 
-A página `/closer/meu-desempenho` (`src/pages/closer/MeuDesempenhoCloser.tsx`) hoje renderiza KPIs e resumos voltados para Incorporador (R1 Agendada, R1 Realizada, No-Show, Contrato Pago, **Outside**, Taxa Conversão, **R2 Agendada**, R2 Carrinho). Para o João Pedro (`bu=consorcio`), os campos **Outside, Contrato Pago, R2 Agendada e R2 Carrinho** não fazem sentido — Consórcio mede **Realizadas, Propostas Enviadas e Produtos Fechados**.
+Você está certo — não posso espelhar `PRODUTOS FECHADOS` como Proposta. São eventos distintos: o closer envia várias propostas e só algumas viram fechamento. Contar igual quebra a Taxa de Conversão.
 
-`useMyCloser` hoje retorna só `{ id, name, email, is_active }`. Precisa expor também `bu` para o componente decidir qual versão renderizar.
+### O sinal real de "Proposta Enviada" hoje
 
-Já existem hooks prontos para Consórcio:
-- `useConsorcioPipelineMetricsByCloser(start, end)` → propostas enviadas por closer
-- `useConsorcioProdutosFechadosByCloser(start, end)` → produtos fechados por closer
-- `useR1CloserMetrics(start, end, 'consorcio')` → R1 Agendada/Realizada/No-Show da BU
+Investigando o banco:
 
-### Mudanças
+| Fonte | O que é | Status |
+|---|---|---|
+| `consorcio_proposals` | Criada via aba Pós-Reunião → botão "Proposta" | Parou em 12/mar (time abandonou) |
+| Stage `PROPOSTA ENVIADA` (VdA) | Move manual no Kanban | 0 em abril |
+| Stage `PRODUTOS FECHADOS` (EA) | Fechamento, não proposta | 49 em abril ❌ não serve |
 
-**1. `src/hooks/useMyCloser.ts`**
-- Adicionar `bu` ao SELECT em ambos os caminhos (employee e fallback por email) e ao retorno tipado.
+**Não existe hoje, no fluxo Efeito Alavanca, NENHUM sinal de "proposta enviada" sendo registrado.** O closer fecha direto, sem trilha.
 
-**2. Criar `src/components/closer/CloserConsorcioDetailKPICards.tsx`**
-- Mostra apenas: **R1 Agendada, R1 Realizada, No-Show, Taxa No-Show, Propostas Enviadas, Produtos Fechados, Taxa Conversão (produtos/realizadas)**.
-- Mesmo visual de comparação com média do time (reaproveita o `KPICard`).
+### Caminho correto
 
-**3. Criar `src/components/closer/CloserConsorcioRankingBlock.tsx`**
-- Ranking dentro do time Consórcio em: **R1 Realizada, Produtos Fechados, Propostas Enviadas, Taxa No-Show**.
-- Calcula posições a partir das mesmas listas usadas nos hooks Consórcio + `useR1CloserMetrics(..., 'consorcio')`.
+**1. Propostas Enviadas = somente sinais reais de proposta**
 
-**4. `src/pages/closer/MeuDesempenhoCloser.tsx`**
-- Detectar `isConsorcio = myCloser.bu === 'consorcio'`.
-- Se Consórcio:
-  - Buscar dados via `useR1CloserMetrics(start, end, 'consorcio')` + `useConsorcioPipelineMetricsByCloser(start, end)` + `useConsorcioProdutosFechadosByCloser(start, end)`.
-  - Renderizar `CloserConsorcioDetailKPICards` e `CloserConsorcioRankingBlock`.
-  - Substituir o card "Resumo do Período" por versão Consórcio:
-    - Total Realizadas, Propostas Enviadas, Produtos Fechados, Taxa de Fechamento (produtos/realizadas).
-  - Não renderizar bloco "R2 Carrinho" (não se aplica).
-- Se Incorporador (default): manter exatamente o que existe hoje.
+Hook `useConsorcioPipelineMetricsByCloser.ts` passa a contar (DISTINCT por `deal_id`):
+- (a) Registros em `consorcio_proposals` criados no período (qualquer status)
+- (b) Deals movidos para stage `PROPOSTA ENVIADA` (VdA) no período
 
-**5. Aba "Meus Leads"**
-- Manter o `CloserLeadsTable` para ambos (vem de `useCloserDetailData.allLeads`, que já usa `meeting_slot_attendees` filtrados pelo closer — agnóstico de BU). Apenas renomear contagem/cabeçalho se necessário (sem mudança de dados).
+**Não conta** `PRODUTOS FECHADOS` como proposta. Para fluxo EA, Propostas pode ficar 0 — é a realidade: não há registro.
 
-### Resultado esperado para João Pedro
-- KPIs: R1 Agendada / R1 Realizada / No-Show / Taxa No-Show / **Propostas Enviadas** / **Produtos Fechados** / Taxa Conversão.
-- Ranking Consórcio: posição entre os 5 closers ativos da BU.
-- Resumo: realizadas, propostas, produtos, taxa de fechamento.
-- Sem "Outside", sem "R2 Agendada", sem "R2 Carrinho".
+Mapeamento closer:
+- (a) via `consorcio_proposals.created_by` → user → `closers`
+- (b) via `crm_deals.owner_id` (email) → `closers.email`, com fallback para `meeting_slot_attendees`
+
+**2. Produtos Fechados = sinais de fechamento real**
+
+Hook `useConsorcioProdutosFechadosByCloser.ts` passa a contar (DISTINCT por `deal_id`):
+- (a) Registros em `deal_produtos_adquiridos` no período (cota cadastrada via fluxo)
+- (b) Deals em stages de fechamento Consórcio movidos no período:
+  - VdA: `VENDA REALIZADA`, `CONTRATO PAGO`
+  - EA: `PRODUTOS FECHADOS`, `VENDA REALIZADA 50K`
+
+Mapeamento closer: igual acima.
+
+**3. Taxa de Conversão fica honesta**
+- Produtos Fechados / R1 Realizada (não usa Propostas no denominador, evita distorção EA)
+- Para João Pedro abril: 49/79 ≈ 62% ✅
+
+**4. Aplicar mesma lógica nos hooks de equipe** para consistência:
+- `useConsorcioProdutosFechadosBySdr.ts` → adicionar fonte CRM stages
+- `useConsorcioProdutosFechadosMetrics.ts` → idem
+- `useConsorcioPipelineMetricsBySdr.ts` → manter só Propostas reais
+- `useConsorcioPipelineMetrics.ts` → idem
+
+**5. Tooltip nos cards** (`CloserConsorcioDetailKPICards.tsx`):
+- Propostas Enviadas: "Conta proposta criada na aba Pós-Reunião + stage PROPOSTA ENVIADA (Viver de Aluguel). Fluxo Efeito Alavanca não possui etapa de proposta."
+- Produtos Fechados: "Conta cota cadastrada + stages PRODUTOS FECHADOS / VENDA REALIZADA / CONTRATO PAGO."
+
+### Resultado esperado para João Pedro (abril/2026)
+
+| Métrica | Antes | Depois | Honesto? |
+|---|---|---|---|
+| R1 Realizada | 79 | 79 | ✅ |
+| **Propostas Enviadas** | 0 | **0** (EA não registra) | ✅ reflete realidade |
+| **Produtos Fechados** | 0 | **49** | ✅ |
+| **Taxa Conversão** | 0% | **62%** (49/79) | ✅ |
+
+### Observação para a equipe (fora do escopo deste fix)
+
+Se quiserem rastrear Propostas Enviadas no fluxo EA, há duas saídas (decisão futura):
+- Criar stage "PROPOSTA ENVIADA" também na pipeline EA + treinar time a mover
+- Voltar a usar a aba Pós-Reunião como obrigatória (que já alimenta `consorcio_proposals`)
+
+Sem uma dessas, EA continuará com Propostas = 0 — e isso é o dado real, não bug.
 
 ### Garantias
-- Zero alteração de banco.
-- Zero impacto no fluxo de Closers Incorporador (mesma página, branch separado).
-- Hooks Consórcio reaproveitados — sem duplicação de regra de negócio.
-- Tabela "Meus Leads" continua igual.
+
+- Sem alteração de banco
+- Aba Pós-Reunião continua funcionando
+- Fluxo Kanban-direto agora aparece em Produtos Fechados
+- Sem duplicação (DISTINCT por `deal_id`)
+- Taxa de Conversão usa Produtos/R1 Realizada (não depende de Propostas)
+- Sem impacto em Incorporador
+
