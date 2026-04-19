@@ -21,13 +21,43 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
+  // Painel "Movimentações de Leads" (webhook_events)
+  const startTime = Date.now();
+  let webhookLogId: string | null = null;
+  const finalizeWebhookLog = async (status: 'success' | 'error', errorMsg?: string) => {
+    if (!webhookLogId) return;
+    try {
+      await supabase.from('webhook_events').update({
+        status,
+        processed_at: new Date().toISOString(),
+        processing_time_ms: Date.now() - startTime,
+        error_message: errorMsg ?? null,
+      }).eq('id', webhookLogId);
+    } catch (_) { /* nunca quebra fluxo */ }
+  };
+
   try {
     const payload = await req.json();
     console.log('[LIVE-LEAD] Recebendo lead:', JSON.stringify(payload, null, 2));
 
+    // Registrar evento no painel de movimentações
+    try {
+      const { data: log } = await supabase
+        .from('webhook_events')
+        .insert({
+          event_type: 'lead.received.live',
+          event_data: payload,
+          status: 'processing',
+        })
+        .select('id')
+        .single();
+      webhookLogId = log?.id ?? null;
+    } catch (_) { /* nunca quebra fluxo */ }
+
     // Validar campos obrigatórios
     if (!payload.name || !payload.email) {
       console.error('[LIVE-LEAD] Campos obrigatórios faltando');
+      await finalizeWebhookLog('error', 'name e email são obrigatórios');
       return new Response(
         JSON.stringify({ error: 'name e email são obrigatórios' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -140,6 +170,7 @@ serve(async (req) => {
 
     if (existingDealId) {
       console.log('[LIVE-LEAD] Deal já existe por identidade, ignorando duplicata:', existingDealId);
+      await finalizeWebhookLog('success');
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -226,6 +257,7 @@ serve(async (req) => {
       console.log('[LIVE-LEAD] 👤 Atribuído para:', assignedOwner);
     }
 
+    await finalizeWebhookLog('success');
     return new Response(
       JSON.stringify({ 
         success: true, 
@@ -242,6 +274,7 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[LIVE-LEAD] ❌ Erro:', error);
+    await finalizeWebhookLog('error', errorMessage);
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -17,6 +17,42 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
+  // Painel "Movimentações de Leads" (webhook_events)
+  const wlStartTime = Date.now();
+  let wlLogId: string | null = null;
+  let wlEventType = 'lead.received.unknown';
+  let wlPayloadSnapshot: any = null;
+  const finalizeWebhookLog = async (status: 'success' | 'error', errorMsg?: string) => {
+    try {
+      if (!wlLogId) {
+        // Inserção tardia caso não tenha conseguido criar antes
+        const { data } = await supabase
+          .from('webhook_events')
+          .insert({
+            event_type: wlEventType,
+            event_data: wlPayloadSnapshot ?? {},
+            status,
+            processed_at: new Date().toISOString(),
+            processing_time_ms: Date.now() - wlStartTime,
+            error_message: errorMsg ?? null,
+          })
+          .select('id')
+          .single();
+        wlLogId = data?.id ?? null;
+      } else {
+        await supabase.from('webhook_events').update({
+          status,
+          processed_at: new Date().toISOString(),
+          processing_time_ms: Date.now() - wlStartTime,
+          error_message: errorMsg ?? null,
+        }).eq('id', wlLogId);
+      }
+    } catch (_) { /* nunca quebra fluxo */ }
+  };
+
+  let wlFinalStatus: 'success' | 'error' = 'success';
+  let wlFinalError: string | undefined;
+  try {
   try {
     // Extract slug from URL path
     const url = new URL(req.url);
@@ -71,6 +107,33 @@ serve(async (req) => {
     // 3. Parse payload
     const payload = await req.json();
     console.log('[WEBHOOK-RECEIVER] Payload recebido:', JSON.stringify(payload, null, 2));
+
+    // Painel de movimentações: derivar event_type pelo slug e logar
+    wlPayloadSnapshot = payload;
+    const slugLower = slug.toLowerCase();
+    if (slugLower.includes('anamnese') && slugLower.includes('incompleta')) {
+      wlEventType = 'lead.received.anamnese_incompleta';
+    } else if (slugLower.includes('anamnese')) {
+      wlEventType = 'lead.received.anamnese_completa';
+    } else if (slugLower.includes('parceria')) {
+      wlEventType = 'lead.received.parceria';
+    } else if (slugLower.includes('instagram')) {
+      wlEventType = 'lead.received.instagram';
+    } else {
+      wlEventType = `lead.received.${slugLower}`;
+    }
+    try {
+      const { data: log } = await supabase
+        .from('webhook_events')
+        .insert({
+          event_type: wlEventType,
+          event_data: payload,
+          status: 'processing',
+        })
+        .select('id')
+        .single();
+      wlLogId = log?.id ?? null;
+    } catch (_) { /* nunca quebra fluxo */ }
 
     // 4. Apply reverse field mapping before validation
     if (endpoint.field_mapping) {
@@ -997,10 +1060,15 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[WEBHOOK-RECEIVER] ❌ Erro:', error);
+    wlFinalStatus = 'error';
+    wlFinalError = errorMessage;
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+  }
+  } finally {
+    await finalizeWebhookLog(wlFinalStatus, wlFinalError);
   }
 });
 
