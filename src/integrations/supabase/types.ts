@@ -3103,6 +3103,8 @@ export type Database = {
       consorcio_proposals: {
         Row: {
           aceite_date: string | null
+          aguardando_retorno: boolean
+          aguardando_retorno_until: string | null
           consortium_card_id: string | null
           created_at: string | null
           created_by: string | null
@@ -3119,6 +3121,8 @@ export type Database = {
         }
         Insert: {
           aceite_date?: string | null
+          aguardando_retorno?: boolean
+          aguardando_retorno_until?: string | null
           consortium_card_id?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -3135,6 +3139,8 @@ export type Database = {
         }
         Update: {
           aceite_date?: string | null
+          aguardando_retorno?: boolean
+          aguardando_retorno_until?: string | null
           consortium_card_id?: string | null
           created_at?: string | null
           created_by?: string | null
