@@ -484,14 +484,14 @@ export function R2ContractLifecyclePanel() {
           expandedKpi === 'realizadas' ? "max-h-[200px] opacity-100" : "max-h-0 opacity-0"
         )}>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 pt-1">
-            {realizadasChildren.map(([statusName, { count, color }]) => (
+            {realizadasChildren.map(([statusName, { count, color, filterKey }]) => (
               <Card
-                key={statusName}
+                key={filterKey}
                 className={cn(
                   "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
-                  activeSubFilter === statusName && "ring-2 ring-emerald-500/50 bg-emerald-500/5"
+                  activeSubFilter === filterKey && "ring-2 ring-emerald-500/50 bg-emerald-500/5"
                 )}
-                onClick={() => handleSubClick(statusName)}
+                onClick={() => handleSubClick(filterKey)}
               >
                 <CardContent className="py-2 px-3 text-center">
                   <p className="text-[10px] text-muted-foreground truncate">{statusName}</p>
