@@ -1,40 +1,55 @@
 
-Objetivo: corrigir o número “Aprovado 56” que você ainda vê na aba Agenda R2 > Relatório. Pela leitura do código, isso está vindo do front dessa tela, não do painel principal de métricas.
+Objetivo: corrigir o “Aprovado 56” que ainda aparece na aba Agenda R2 > Relatório.
 
-Diagnóstico
-- A tela do print não usa `R2MetricsPanel`.
-- Ela usa `R2ContractLifecyclePanel` + `useContractLifecycleReport`.
-- Nesse fluxo, o hook chama a RPC com `p_apply_contract_cutoff: false` e depois o front monta os cards filhos de “Realizadas” agrupando só por `r2StatusName`.
-- Resultado: todo lead com R2 realizada + status “Aprovado” entra no card “Aprovado”, mesmo quando `dentro_corte = false`.
-- Por isso o banco já pode estar melhor, mas essa aba continua mostrando 56.
+Diagnóstico real
+- O problema agora não é “só o front” nem “só o banco” isoladamente.
+- O componente `R2ContractLifecyclePanel` já tem a separação visual entre:
+  - `Aprovado`
+  - `Aprovado (fora do corte)`
+- Porém o hook `useContractLifecycleReport` ainda chama a RPC com:
+  - `p_apply_contract_cutoff: false`
+- Na própria função SQL, isso força:
+  - `dentro_corte = true`
+- Resultado: para essa tela, todo aprovado chega como “dentro do corte”, então o split do front nunca entra em ação e o card continua em 56.
 
-O que vou ajustar
+Arquivos envolvidos
+- `src/hooks/useContractLifecycleReport.ts`
+- `src/components/crm/R2ContractLifecyclePanel.tsx`
+- `supabase/migrations/20260419222847_b3308e11-9499-4372-9d54-450c857cf23f.sql` (já confirma a regra: com `p_apply_contract_cutoff = false`, `dentro_corte` vira `true`)
+
+O que ajustar
 1. `src/hooks/useContractLifecycleReport.ts`
-- Passar a carregar e preservar no row:
-  - `dentro_corte`
-  - `effective_contract_date`
-  - `contract_source`
-- Parar de reconstruir a data de contrato de forma paralela quando a RPC já trouxe a data efetiva correta.
-- Manter a lógica do relatório completa, mas com metadata suficiente para separar aprovado da safra vs aprovado tardio.
+- Trocar a chamada da RPC para:
+  - `p_apply_contract_cutoff: true`
+- Manter no row os campos já adicionados:
+  - `dentroCorte`
+  - `effectiveContractDate`
+  - `contractSource`
+- Ajustar `contractPaidAt` para usar preferencialmente `r2.effective_contract_date` quando existir, evitando inconsistência visual entre data exibida e regra de corte.
 
 2. `src/components/crm/R2ContractLifecyclePanel.tsx`
-- Corrigir os cards filhos de “Realizadas”.
-- Em vez de agrupar apenas por `r2StatusName`, separar:
-  - `Aprovado` = realizado + status aprovado + `dentro_corte = true`
-  - `Aprovado tardio` (ou “Fora do corte”) = realizado + status aprovado + `dentro_corte = false`
-  - `Próxima Semana`, `Reprovado`, `Sem status` seguem como hoje
-- Assim o card “Aprovado” dessa aba passa a refletir a safra correta.
+- Revisar a lógica atual só para garantir consistência após o hook passar o valor correto:
+  - `Aprovado` = status aprovado + `dentroCorte = true`
+  - `Aprovado (fora do corte)` = status aprovado + `dentroCorte = false`
+- Manter o filtro da tabela coerente com isso.
 
-3. Filtro da tabela
-- Quando clicar no card “Aprovado”, a tabela deve mostrar só os 45 da safra.
-- Quando clicar em “Aprovado tardio/Fora do corte”, a tabela mostra os excedentes que hoje estão inflando o 56.
+3. Validação esperada
+- Na aba Relatório:
+  - o card `Aprovado` deixa de mostrar 56
+  - parte desses leads migra para `Aprovado (fora do corte)`
+- `Total Pagos`, `Pendentes`, `No-show`, `Reembolso` continuam iguais.
+- A tabela filtrada por `Aprovado` passa a refletir a safra correta.
 
-Validação esperada
-- Na aba Relatório, o card filho “Aprovado” cai de 56 para 45.
-- A diferença aparece em um bucket separado de tardios/fora do corte, em vez de sumir.
-- O nome e a lista filtrada ficam consistentes com a regra que você já definiu.
-- O restante do relatório continua funcionando sem mexer na lógica de “Total Pagos”, “Pendentes”, “No-show” etc.
+Por que isso explica exatamente o que você está vendo
+- Se o front estivesse errado “sozinho”, a separação nem existiria no componente.
+- Mas ela existe.
+- O dado que alimenta essa separação está vindo inválido para essa tela, porque o hook explicitamente desliga o cutoff.
+- Então o problema principal, neste ponto, é: o hook do relatório está pedindo a RPC no modo errado para essa aba.
 
-Detalhe técnico
-- O problema central não parece ser mais a RPC em si nessa tela, e sim que o front do relatório ainda trata “Aprovado” como “qualquer R2 aprovada realizada”, ignorando `dentro_corte`.
-- Então o ajuste principal agora é frontend nessa aba específica.
+Implementação proposta
+- Fazer um ajuste pontual no hook.
+- Validar se os contadores do painel mudam imediatamente sem nova migração.
+- Se ainda sobrar divergência após isso, aí a próxima investigação fica restrita à montagem de `contractPaidAt`/deduplicação dessa própria tela, não mais à regra de cutoff.
+
+Resultado esperado
+- Esse é o ajuste mais provável para finalmente fazer o 56 cair na aba Relatório, porque hoje essa tela está literalmente ignorando o cutoff na chamada da RPC.
