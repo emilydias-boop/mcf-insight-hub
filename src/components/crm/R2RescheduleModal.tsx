@@ -472,7 +472,8 @@ export function R2RescheduleModal({
           <Button 
             className="w-full bg-purple-600 hover:bg-purple-700" 
             onClick={handleSubmit}
-            disabled={!selectedDate || rescheduleMeeting.isPending || updateAttendee.isPending}
+            disabled={!selectedDate || !isNoteValid || rescheduleMeeting.isPending || updateAttendee.isPending}
+            title={!isNoteValid ? 'Informe uma justificativa de pelo menos 10 caracteres' : undefined}
           >
             {rescheduleMeeting.isPending || updateAttendee.isPending ? 'Reagendando...' : 'Reagendar R2'}
           </Button>
