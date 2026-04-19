@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Filter,
   LogIn,
+  Tag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +38,7 @@ const EVENT_CONFIG: Record<TimelineEventType, { icon: React.ElementType; color: 
   qualification: { icon: Star, color: 'text-orange-600 dark:text-orange-400', bgColor: 'bg-orange-100 dark:bg-orange-900/40', label: 'Qualificação' },
   closer_note: { icon: MessageSquare, color: 'text-indigo-600 dark:text-indigo-400', bgColor: 'bg-indigo-100 dark:bg-indigo-900/40', label: 'Nota Closer' },
   entry: { icon: LogIn, color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-100 dark:bg-emerald-900/40', label: 'Entrada' },
+  tag_change: { icon: Tag, color: 'text-sky-600 dark:text-sky-400', bgColor: 'bg-sky-100 dark:bg-sky-900/40', label: 'Tag' },
 };
 
 const FILTER_OPTIONS: { type: TimelineEventType | 'all'; label: string }[] = [
@@ -49,6 +51,7 @@ const FILTER_OPTIONS: { type: TimelineEventType | 'all'; label: string }[] = [
   { type: 'task', label: 'Tarefas' },
   { type: 'qualification', label: 'Qualif.' },
   { type: 'entry', label: 'Entrada' },
+  { type: 'tag_change', label: 'Tags' },
 ];
 
 function TimelineEventItem({ event }: { event: TimelineEvent }) {
@@ -165,6 +168,22 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
         {meta.pipeline_name && <Badge variant="secondary" className="text-[10px] font-semibold">{meta.pipeline_name}</Badge>}
         {meta.from_stage && <Badge variant="outline" className="text-[10px]">De: {meta.from_stage}</Badge>}
         {meta.to_stage && <Badge variant="outline" className="text-[10px]">Para: {meta.to_stage}</Badge>}
+      </div>
+    );
+  }
+
+  if (event.type === 'tag_change') {
+    const added = (meta.added as string[]) || [];
+    const removed = (meta.removed as string[]) || [];
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        {meta.source && <Badge variant="secondary" className="text-[10px] font-semibold">Fonte: {meta.source}</Badge>}
+        {added.map(t => (
+          <Badge key={`a-${t}`} variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-700 dark:text-emerald-400">+ {t}</Badge>
+        ))}
+        {removed.map(t => (
+          <Badge key={`r-${t}`} variant="outline" className="text-[10px] border-rose-500/40 text-rose-700 dark:text-rose-400">− {t}</Badge>
+        ))}
       </div>
     );
   }
