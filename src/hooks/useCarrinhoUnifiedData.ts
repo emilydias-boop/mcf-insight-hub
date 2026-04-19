@@ -37,6 +37,10 @@ export interface CarrinhoLeadRow {
   phone_dedup_key: string | null;
   /** True quando o contrato foi pago dentro da janela do corte da safra. */
   dentro_corte: boolean;
+  /** Data efetiva do contrato: COALESCE(r1_contract_paid_at, contract_paid_at, hubla_A000) */
+  effective_contract_date: string | null;
+  /** Origem da data: 'r1' | 'r2' | 'hubla' | 'none' */
+  contract_source: 'r1' | 'r2' | 'hubla' | 'none' | null;
 }
 
 /**
