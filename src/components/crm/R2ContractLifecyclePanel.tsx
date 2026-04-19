@@ -138,16 +138,38 @@ export function R2ContractLifecyclePanel() {
 
   const realizadasChildren = useMemo(() => {
     if (!rows) return [];
-    const map = new Map<string, { count: number; color: string | null }>();
+    const map = new Map<string, { count: number; color: string | null; key: string }>();
     rows.filter(r => r.situacao === 'realizada')
       .forEach(r => {
         const cws = r.carrinhoWeekStart;
         const isOtherWeek = cws && cws !== currentWeekStartStr;
-        const key = isOtherWeek ? 'Outra semana' : (r.r2StatusName || 'Sem status');
-        const existing = map.get(key) || { count: 0, color: isOtherWeek ? null : (r.r2StatusColor || null) };
-        map.set(key, { count: existing.count + 1, color: existing.color });
+        const statusName = r.r2StatusName || 'Sem status';
+        const isAprovado = statusName.toLowerCase().includes('aprovado') || statusName.toLowerCase().includes('approved');
+
+        let displayName: string;
+        let key: string;
+        let color: string | null;
+
+        if (isOtherWeek) {
+          displayName = 'Outra semana';
+          key = '__other_week__';
+          color = null;
+        } else if (isAprovado && !r.dentroCorte) {
+          displayName = 'Aprovado (fora do corte)';
+          key = '__aprovado_fora__';
+          color = r.r2StatusColor || null;
+        } else {
+          displayName = statusName;
+          key = `status:${statusName}`;
+          color = r.r2StatusColor || null;
+        }
+
+        const existing = map.get(key) || { count: 0, color, key: displayName };
+        map.set(key, { count: existing.count + 1, color: existing.color, key: displayName });
       });
-    return Array.from(map.entries()).sort((a, b) => b[1].count - a[1].count);
+    return Array.from(map.entries())
+      .map(([k, v]) => [v.key, { count: v.count, color: v.color, filterKey: k }] as const)
+      .sort((a, b) => b[1].count - a[1].count);
   }, [rows, currentWeekStartStr]);
 
   // Agendados children: dynamic by r2StatusName (invited/scheduled)
@@ -205,7 +227,29 @@ export function R2ContractLifecyclePanel() {
 
       // Apply sub-filter
       if (activeSubFilter) {
-        if (expandedKpi === 'realizadas' || expandedKpi === 'agendados') {
+        if (expandedKpi === 'realizadas') {
+          if (activeSubFilter === '__other_week__') {
+            result = result.filter(r => r.carrinhoWeekStart && r.carrinhoWeekStart !== currentWeekStartStr);
+          } else if (activeSubFilter === '__aprovado_fora__') {
+            result = result.filter(r => {
+              const sn = (r.r2StatusName || '').toLowerCase();
+              const isAprovado = sn.includes('aprovado') || sn.includes('approved');
+              const sameWeek = !r.carrinhoWeekStart || r.carrinhoWeekStart === currentWeekStartStr;
+              return isAprovado && sameWeek && !r.dentroCorte;
+            });
+          } else if (activeSubFilter.startsWith('status:')) {
+            const statusName = activeSubFilter.slice('status:'.length);
+            const isAprovadoFilter = statusName.toLowerCase().includes('aprovado') || statusName.toLowerCase().includes('approved');
+            result = result.filter(r => {
+              const sameWeek = !r.carrinhoWeekStart || r.carrinhoWeekStart === currentWeekStartStr;
+              if (!sameWeek) return false;
+              if ((r.r2StatusName || 'Sem status') !== statusName) return false;
+              // For "Aprovado" status card, only include leads dentro_corte
+              if (isAprovadoFilter && !r.dentroCorte) return false;
+              return true;
+            });
+          }
+        } else if (expandedKpi === 'agendados') {
           result = result.filter(r => (r.r2StatusName || 'Sem status') === activeSubFilter);
         } else if (expandedKpi === 'pendentes') {
           if (activeSubFilter === 'recentes') {
@@ -440,14 +484,14 @@ export function R2ContractLifecyclePanel() {
           expandedKpi === 'realizadas' ? "max-h-[200px] opacity-100" : "max-h-0 opacity-0"
         )}>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 pt-1">
-            {realizadasChildren.map(([statusName, { count, color }]) => (
+            {realizadasChildren.map(([statusName, { count, color, filterKey }]) => (
               <Card
-                key={statusName}
+                key={filterKey}
                 className={cn(
                   "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
-                  activeSubFilter === statusName && "ring-2 ring-emerald-500/50 bg-emerald-500/5"
+                  activeSubFilter === filterKey && "ring-2 ring-emerald-500/50 bg-emerald-500/5"
                 )}
-                onClick={() => handleSubClick(statusName)}
+                onClick={() => handleSubClick(filterKey)}
               >
                 <CardContent className="py-2 px-3 text-center">
                   <p className="text-[10px] text-muted-foreground truncate">{statusName}</p>

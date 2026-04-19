@@ -60,6 +60,10 @@ export interface ContractLifecycleRow {
   // Data do R2 futuro (quando pendingReason = 'r2_proxima_semana')
   futureR2Date: string | null;
   futureR2CloserName: string | null;
+  // Cohort cutoff metadata (from RPC)
+  dentroCorte: boolean;
+  effectiveContractDate: string | null;
+  contractSource: 'r1' | 'r2' | 'hubla' | 'none' | null;
 }
 
 function getFridayCutoff(weekStart?: Date, horarioCorte?: string): Date {
@@ -265,6 +269,9 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           pendingReason: null,
           futureR2Date: null,
           futureR2CloserName: null,
+          dentroCorte: !!r2.dentro_corte,
+          effectiveContractDate: r2.effective_contract_date || null,
+          contractSource: (r2.contract_source as any) || null,
         };
 
         // Safety net dedup by phone (should be no-op since RPC dedupes)
@@ -331,6 +338,9 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           pendingReason: null,
           futureR2Date: null,
           futureR2CloserName: null,
+          dentroCorte: false,
+          effectiveContractDate: info.saleDate,
+          contractSource: 'hubla',
         };
         orphanRows.push(orphan);
         if (phoneKey.length >= 8) orphansByPhone.set(phoneKey, orphan);
