@@ -155,6 +155,11 @@ const STYLES = `
   .pie-chart { width: 140px; height: 140px; border-radius: 50%; flex-shrink: 0; }
   .pie-legend { font-size: 12px; line-height: 2; }
   .pie-legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .kpi-hint { font-size: 9px; color: #888; margin-top: 4px; line-height: 1.2; padding: 0 4px; }
+  .legend-note { font-size: 11px; color: #555; font-style: italic; margin: 4px 0 12px; padding: 8px 12px; background: #f8f9fc; border-left: 3px solid #cbd5e1; border-radius: 4px; }
+  .pie-row { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0 24px; }
+  .pie-block { flex: 1; min-width: 280px; }
+  .pie-block-title { font-size: 12px; font-weight: 600; color: #444; margin-bottom: 8px; text-align: center; }
 `;
 
 // ══════════════════════════════════════════════════
@@ -504,23 +509,91 @@ async function buildIncorporadorReport(supabase: any) {
   ].filter(d => d.value > 0);
   const pieTotal = pieData.reduce((s, d) => s + d.value, 0);
 
-  let pieGradient = '';
-  if (pieTotal > 0) {
+  function buildPie(data: { label: string; value: number; color: string }[], total: number) {
+    if (total === 0) return { gradient: 'conic-gradient(#e5e7eb 0% 100%)', legend: '<div style="color:#999;font-size:11px">Sem dados</div>' };
     let cumPct = 0;
     const stops: string[] = [];
-    for (const d of pieData) {
-      const segPct = (d.value / pieTotal) * 100;
+    for (const d of data) {
+      const segPct = (d.value / total) * 100;
       stops.push(`${d.color} ${cumPct}% ${cumPct + segPct}%`);
       cumPct += segPct;
     }
-    pieGradient = `conic-gradient(${stops.join(', ')})`;
-  } else {
-    pieGradient = 'conic-gradient(#e5e7eb 0% 100%)';
+    const legend = data.map(d =>
+      `<div><span class="pie-legend-dot" style="background:${d.color}"></span>${d.label}: <strong>${d.value}</strong> (${pct(d.value, total)})</div>`
+    ).join('');
+    return { gradient: `conic-gradient(${stops.join(', ')})`, legend };
   }
 
-  const pieLegendHtml = pieData.map(d =>
-    `<div><span class="pie-legend-dot" style="background:${d.color}"></span>${d.label}: <strong>${d.value}</strong> (${pct(d.value, pieTotal)})</div>`
-  ).join('');
+  const r2Pie = buildPie(pieData, pieTotal);
+  const pieGradient = r2Pie.gradient;
+  const pieLegendHtml = r2Pie.legend;
+
+  // ── 2ª Pizza: Contratos Fechados (líquido) por Origem ──
+  const contratosLiquidosTx = allContratos.filter((t: any) =>
+    t.sale_status !== 'refunded' && (t.installment_number || 1) <= 1
+  );
+  const contratosEmails = contratosLiquidosTx
+    .map((t: any) => t.customer_email?.toLowerCase())
+    .filter(Boolean) as string[];
+  const uniqueContratosEmails = [...new Set(contratosEmails)];
+
+  // Quais desses emails passaram por estágio Anamnese?
+  let contratosAnamneseEmails = new Set<string>();
+  if (uniqueContratosEmails.length > 0) {
+    const { data: contratosDeals } = await supabase
+      .from('crm_deals')
+      .select('id, crm_contacts!inner(email)')
+      .in('crm_contacts.email', uniqueContratosEmails);
+    const dealIdsByEmail = new Map<string, string[]>();
+    for (const d of contratosDeals || []) {
+      const email = (d as any).crm_contacts?.email?.toLowerCase();
+      if (!email) continue;
+      if (!dealIdsByEmail.has(email)) dealIdsByEmail.set(email, []);
+      dealIdsByEmail.get(email)!.push(d.id);
+    }
+    // Cross-check com anamneseDealIds populados na seção R2
+    // Para contratos fora dos R2 dessa semana, fazemos fetch adicional
+    const allDealIds = [...dealIdsByEmail.values()].flat();
+    const newDealIds = allDealIds.filter(id => !anamneseDealIds.has(id) && !r2DealIds.includes(id));
+    if (newDealIds.length > 0) {
+      const { data: anamnaseStages2 } = await supabase
+        .from('crm_stages')
+        .select('id')
+        .ilike('stage_name', '%anamnes%');
+      const stageIds2 = new Set((anamnaseStages2 || []).map((s: any) => s.id));
+      const { data: extraActs } = await supabase
+        .from('deal_activities')
+        .select('deal_id, to_stage, from_stage')
+        .in('deal_id', newDealIds);
+      for (const da of extraActs || []) {
+        const ts = (da as any).to_stage || '';
+        const fs = (da as any).from_stage || '';
+        if (stageIds2.has(ts) || stageIds2.has(fs) || ts.toUpperCase().includes('ANAMNES') || fs.toUpperCase().includes('ANAMNES')) {
+          anamneseDealIds.add((da as any).deal_id);
+        }
+      }
+    }
+    for (const [email, dealIds] of dealIdsByEmail) {
+      if (dealIds.some(id => anamneseDealIds.has(id))) {
+        contratosAnamneseEmails.add(email);
+      }
+    }
+  }
+
+  let contratosA010 = 0, contratosAnamnese = 0, contratosLive = 0;
+  for (const email of contratosEmails) {
+    if (a010EmailSet.has(email)) contratosA010++;
+    else if (contratosAnamneseEmails.has(email)) contratosAnamnese++;
+    else contratosLive++;
+  }
+
+  const contratosPieData = [
+    { label: 'A010', value: contratosA010, color: '#f59e0b' },
+    { label: 'ANAMNESE', value: contratosAnamnese, color: '#3b82f6' },
+    { label: 'LIVE', value: contratosLive, color: '#10b981' },
+  ].filter(d => d.value > 0);
+  const contratosPieTotal = contratosPieData.reduce((s, d) => s + d.value, 0);
+  const contratosPie = buildPie(contratosPieData, contratosPieTotal);
 
   // ══ 4. SDR RANKING (from RPC data — same source as dashboard) ══
   // Build a map of SDR profile id → email for calls lookup
@@ -592,29 +665,36 @@ async function buildIncorporadorReport(supabase: any) {
 
   const sdrRows = sdrList.map((s, idx) => {
     const rankClass = idx === 0 ? 'rank-1' : idx === 1 ? 'rank-2' : idx === 2 ? 'rank-3' : '';
-    const noShowRate = s.agendados > 0 ? pct(s.noShow, s.agendados) : '-';
+    const noShowBase = s.r1Realizadas + s.noShow;
+    const compRate = noShowBase > 0 ? pct(s.r1Realizadas, noShowBase) : '-';
+    const noShowRate = noShowBase > 0 ? pct(s.noShow, noShowBase) : '-';
     const convRate = s.r1Realizadas > 0 ? pct(s.contratos, s.r1Realizadas) : '-';
-    const metaStr = s.meta > 0 ? `${s.agendados}/${s.meta}` : `${s.agendados}`;
+    const metaPct = s.meta > 0 ? pct(s.agendados, s.meta) : '-';
     return `<tr class="${rankClass}">
       <td>${idx + 1}º</td>
       <td>${s.name}</td>
-      <td style="text-align:center">${metaStr}</td>
+      <td style="text-align:center">${s.meta || '-'}</td>
+      <td style="text-align:center">${s.agendados}</td>
+      <td style="text-align:center">${metaPct}</td>
       <td style="text-align:center">${s.r1Realizadas}</td>
       <td style="text-align:center">${s.noShow}</td>
-      <td style="text-align:center">${s.contratos}</td>
+      <td style="text-align:center">${compRate}</td>
       <td style="text-align:center">${noShowRate}</td>
+      <td style="text-align:center">${s.contratos}</td>
       <td style="text-align:center">${convRate}</td>
       <td style="text-align:center">${s.calls}</td>
     </tr>`;
   }).join('');
 
   const sdrTotals = sdrList.reduce((acc, s) => ({
+    meta: acc.meta + s.meta,
     agendados: acc.agendados + s.agendados,
     r1Realizadas: acc.r1Realizadas + s.r1Realizadas,
     noShow: acc.noShow + s.noShow,
     contratos: acc.contratos + s.contratos,
     calls: acc.calls + s.calls,
-  }), { agendados: 0, r1Realizadas: 0, noShow: 0, contratos: 0, calls: 0 });
+  }), { meta: 0, agendados: 0, r1Realizadas: 0, noShow: 0, contratos: 0, calls: 0 });
+  const sdrTotalsBase = sdrTotals.r1Realizadas + sdrTotals.noShow;
 
   // ══ 5. CLOSER R1 PERFORMANCE ══
   interface CloserR1Stats { name: string; r1Agendadas: number; r1Realizadas: number; contratos: number; r2Marcadas: number; aprovados: number; }
@@ -644,11 +724,15 @@ async function buildIncorporadorReport(supabase: any) {
   // For aprovados per R1 closer: same issue. We'll just show R1 metrics.
   const closerR1Rows = R1_CLOSER_IDS.map(c => {
     const st = closerR1Map.get(c.id)!;
+    const compRate = st.r1Agendadas > 0 ? pct(st.r1Realizadas, st.r1Agendadas) : '-';
+    const convRate = st.r1Realizadas > 0 ? pct(st.contratos, st.r1Realizadas) : '-';
     return `<tr>
       <td>${st.name}</td>
       <td style="text-align:center">${st.r1Agendadas}</td>
       <td style="text-align:center">${st.r1Realizadas}</td>
+      <td style="text-align:center">${compRate}</td>
       <td style="text-align:center">${st.contratos}</td>
+      <td style="text-align:center">${convRate}</td>
     </tr>`;
   }).join('');
 
@@ -658,9 +742,9 @@ async function buildIncorporadorReport(supabase: any) {
   }, { r1Ag: 0, r1Re: 0, cont: 0 });
 
   // ══ 6. CLOSER R2 PERFORMANCE ══
-  interface CloserR2Stats { name: string; r2Agendadas: number; r2Realizadas: number; aprovados: number; reprovados: number; vendasParceria: number; produtos: Map<string, number>; }
+  interface CloserR2Stats { name: string; r2Agendadas: number; r2Realizadas: number; aprovados: number; reprovados: number; vendasParceria: number; receitaParceria: number; produtos: Map<string, number>; }
   const closerR2Map = new Map<string, CloserR2Stats>();
-  for (const c of R2_CLOSER_IDS) closerR2Map.set(c.id, { name: c.name, r2Agendadas: 0, r2Realizadas: 0, aprovados: 0, reprovados: 0, vendasParceria: 0, produtos: new Map() });
+  for (const c of R2_CLOSER_IDS) closerR2Map.set(c.id, { name: c.name, r2Agendadas: 0, r2Realizadas: 0, aprovados: 0, reprovados: 0, vendasParceria: 0, receitaParceria: 0, produtos: new Map() });
 
   for (const att of r2NonPartner) {
     const slot = (att as any).meeting_slot;
@@ -697,6 +781,7 @@ async function buildIncorporadorReport(supabase: any) {
       if (closerR2Map.has(closerId)) {
         const st = closerR2Map.get(closerId)!;
         st.vendasParceria++;
+        st.receitaParceria += tx.net_value || 0;
         const prodKey = (tx.product_name || 'Outro').trim();
         st.produtos.set(prodKey, (st.produtos.get(prodKey) || 0) + 1);
       }
@@ -705,57 +790,108 @@ async function buildIncorporadorReport(supabase: any) {
 
   const closerR2Rows = R2_CLOSER_IDS.map(c => {
     const st = closerR2Map.get(c.id)!;
-    const prodList = [...st.produtos.entries()].map(([p, n]) => `${p}: ${n}`).join(', ') || '-';
+    const convR2 = st.r2Realizadas > 0 ? pct(st.aprovados, st.r2Realizadas) : '-';
+    const ticketMedio = st.vendasParceria > 0 ? fmtBRL(st.receitaParceria / st.vendasParceria) : '-';
     return `<tr>
       <td>${st.name}</td>
       <td style="text-align:center">${st.r2Agendadas}</td>
       <td style="text-align:center">${st.r2Realizadas}</td>
       <td style="text-align:center"><span class="badge badge-green">${st.aprovados}</span></td>
       <td style="text-align:center"><span class="badge badge-red">${st.reprovados}</span></td>
+      <td style="text-align:center">${convR2}</td>
       <td style="text-align:center">${st.vendasParceria}</td>
-      <td style="font-size:10px">${prodList}</td>
+      <td style="text-align:right">${fmtBRL(st.receitaParceria)}</td>
+      <td style="text-align:right">${ticketMedio}</td>
     </tr>`;
   }).join('');
 
   const r2CloserTotals = R2_CLOSER_IDS.reduce((acc, c) => {
     const st = closerR2Map.get(c.id)!;
-    return { r2Ag: acc.r2Ag + st.r2Agendadas, r2Re: acc.r2Re + st.r2Realizadas, aprov: acc.aprov + st.aprovados, reprov: acc.reprov + st.reprovados, vendas: acc.vendas + st.vendasParceria };
-  }, { r2Ag: 0, r2Re: 0, aprov: 0, reprov: 0, vendas: 0 });
+    return { r2Ag: acc.r2Ag + st.r2Agendadas, r2Re: acc.r2Re + st.r2Realizadas, aprov: acc.aprov + st.aprovados, reprov: acc.reprov + st.reprovados, vendas: acc.vendas + st.vendasParceria, receita: acc.receita + st.receitaParceria };
+  }, { r2Ag: 0, r2Re: 0, aprov: 0, reprov: 0, vendas: 0, receita: 0 });
 
-  // ══ 7. RESUMO FINANCEIRO ══
-  // A010 sales
+
+  // ══ 7. RESUMO FINANCEIRO (Bruto vs Líquido) ══
+  // Buscar reference_price de product_configurations
+  const { data: prodConfigs } = await supabase
+    .from('product_configurations')
+    .select('product_name, reference_price');
+  const refPriceMap = new Map<string, number>();
+  for (const pc of prodConfigs || []) {
+    refPriceMap.set((pc.product_name || '').toLowerCase().trim(), Number(pc.reference_price) || 0);
+  }
+  const getRefPrice = (productName: string | null): number => {
+    if (!productName) return 0;
+    return refPriceMap.get(productName.toLowerCase().trim()) || 0;
+  };
+
+  // A010 sales — incluir product_name pra lookup de bruto
   const { data: a010Sales } = await supabase
     .from('hubla_transactions')
-    .select('id, net_value')
+    .select('id, net_value, product_name')
     .eq('product_category', 'a010')
     .in('sale_status', ['completed', 'refunded'])
     .gte('sale_date', carrinhoStartISO)
     .lte('sale_date', carrinhoEndISO);
   const a010Count = (a010Sales || []).length;
-  const a010Revenue = (a010Sales || []).reduce((s: number, t: any) => s + (t.net_value || 0), 0);
+  const a010Liquido = (a010Sales || []).reduce((s: number, t: any) => s + (t.net_value || 0), 0);
+  const a010Bruto = (a010Sales || []).reduce((s: number, t: any) => s + getRefPrice(t.product_name), 0);
 
-  // Partnership by product (A001, A009 etc)
-  const parceriaByProduct = new Map<string, { count: number; revenue: number }>();
+  // A000 Contratos: bruto via reference_price, líquido via net_value
+  const { data: a000Tx } = await supabase
+    .from('hubla_transactions')
+    .select('net_value, product_name, sale_status, installment_number')
+    .eq('product_name', 'A000 - Contrato')
+    .in('sale_status', ['completed', 'refunded'])
+    .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
+    .gte('sale_date', safraStartISO)
+    .lte('sale_date', safraEndISO);
+  const a000LiquidoTx = (a000Tx || []).filter((t: any) => t.sale_status !== 'refunded' && (t.installment_number || 1) <= 1);
+  const a000Bruto = a000LiquidoTx.reduce((s: number, t: any) => s + getRefPrice(t.product_name), 0);
+  const a000Liquido = a000LiquidoTx.reduce((s: number, t: any) => s + (t.net_value || 0), 0);
+
+  // Partnership by product (A001, A009 etc) — bruto e líquido
+  const parceriaByProduct = new Map<string, { count: number; bruto: number; liquido: number }>();
   for (const tx of parceriaTx || []) {
+    if (tx.sale_status === 'refunded') continue;
     const pname = (tx.product_name || 'Outro').trim();
-    if (!parceriaByProduct.has(pname)) parceriaByProduct.set(pname, { count: 0, revenue: 0 });
+    if (!parceriaByProduct.has(pname)) parceriaByProduct.set(pname, { count: 0, bruto: 0, liquido: 0 });
     const p = parceriaByProduct.get(pname)!;
     p.count++;
-    p.revenue += tx.net_value || 0;
+    p.liquido += tx.net_value || 0;
+    p.bruto += getRefPrice(tx.product_name);
   }
+
+  const diffPct = (b: number, l: number) => {
+    if (b === 0) return '-';
+    const d = ((b - l) / b) * 100;
+    return `${d.toFixed(0)}%`;
+  };
 
   const finRows = [
-    `<tr><td>Vendas A010</td><td style="text-align:center">${a010Count}</td><td style="text-align:right">${fmtBRL(a010Revenue)}</td></tr>`,
-    `<tr><td>Contratos (A000)</td><td style="text-align:center">${contratosLiquidos}</td><td style="text-align:right">-</td></tr>`,
+    `<tr><td>Vendas A010</td><td style="text-align:center">${a010Count}</td><td style="text-align:right">${fmtBRL(a010Bruto)}</td><td style="text-align:right">${fmtBRL(a010Liquido)}</td><td style="text-align:center;color:#888">${diffPct(a010Bruto, a010Liquido)}</td></tr>`,
+    `<tr><td>Contratos (A000)</td><td style="text-align:center">${contratosLiquidos}</td><td style="text-align:right">${fmtBRL(a000Bruto)}</td><td style="text-align:right">${fmtBRL(a000Liquido)}</td><td style="text-align:center;color:#888">${diffPct(a000Bruto, a000Liquido)}</td></tr>`,
   ];
   for (const [prod, stats] of [...parceriaByProduct.entries()].sort((a, b) => b[1].count - a[1].count)) {
-    finRows.push(`<tr><td>Parceria — ${prod}</td><td style="text-align:center">${stats.count}</td><td style="text-align:right">${fmtBRL(stats.revenue)}</td></tr>`);
+    finRows.push(`<tr><td>Parceria — ${prod}</td><td style="text-align:center">${stats.count}</td><td style="text-align:right">${fmtBRL(stats.bruto)}</td><td style="text-align:right">${fmtBRL(stats.liquido)}</td><td style="text-align:center;color:#888">${diffPct(stats.bruto, stats.liquido)}</td></tr>`);
   }
-  const totalParceria = [...parceriaByProduct.values()].reduce((s, p) => s + p.revenue, 0);
+  const totalParceriaBruto = [...parceriaByProduct.values()].reduce((s, p) => s + p.bruto, 0);
+  const totalParceriaLiquido = [...parceriaByProduct.values()].reduce((s, p) => s + p.liquido, 0);
   const totalParceriaCount = [...parceriaByProduct.values()].reduce((s, p) => s + p.count, 0);
-  finRows.push(`<tr class="totals"><td>TOTAL PARCERIA</td><td style="text-align:center">${totalParceriaCount}</td><td style="text-align:right">${fmtBRL(totalParceria)}</td></tr>`);
+  finRows.push(`<tr class="totals"><td>TOTAL PARCERIA</td><td style="text-align:center">${totalParceriaCount}</td><td style="text-align:right">${fmtBRL(totalParceriaBruto)}</td><td style="text-align:right">${fmtBRL(totalParceriaLiquido)}</td><td style="text-align:center">${diffPct(totalParceriaBruto, totalParceriaLiquido)}</td></tr>`);
+
+  const totalGeralBruto = a010Bruto + a000Bruto + totalParceriaBruto;
+  const totalGeralLiquido = a010Liquido + a000Liquido + totalParceriaLiquido;
+  finRows.push(`<tr class="totals" style="background:#1a1a2e;color:#fff"><td>TOTAL GERAL</td><td style="text-align:center;color:#fff">-</td><td style="text-align:right;color:#fff">${fmtBRL(totalGeralBruto)}</td><td style="text-align:right;color:#fff">${fmtBRL(totalGeralLiquido)}</td><td style="text-align:center;color:#fff">${diffPct(totalGeralBruto, totalGeralLiquido)}</td></tr>`);
+
 
   // ══ BUILD HTML ══
+  // Helpers para R1 com %
+  const r1Outros = Math.max(0, rpcTotals.agendamentos - rpcTotals.r1_realizada - rpcTotals.no_shows);
+  const r1Base = rpcTotals.r1_realizada + rpcTotals.no_shows;
+  const r1ComparPct = r1Base > 0 ? pct(rpcTotals.r1_realizada, r1Base) : '-';
+  const r1NoShowPct = r1Base > 0 ? pct(rpcTotals.no_shows, r1Base) : '-';
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${STYLES}</style></head><body>
 <div class="container">
   <div class="header">
@@ -768,61 +904,91 @@ async function buildIncorporadorReport(supabase: any) {
     <!-- SEÇÃO 1: KPIs DO CARRINHO -->
     <div class="section-title">1. KPIs do Carrinho</div>
 
-    <div class="sub-title">Contratos (Safra ${safraLabel})</div>
+    <div class="sub-title">Contratos novos (Safra ${safraLabel})</div>
     <div class="kpi-row">
-      <div class="kpi"><div class="value">${totalComRecorrencia}</div><div class="label">Total Transações</div></div>
-      <div class="kpi"><div class="value">${recorrencias}</div><div class="label">Recorrências</div></div>
-      <div class="kpi blue"><div class="value">${contratosComReembolso}</div><div class="label">Com Reembolso</div></div>
-      <div class="kpi red"><div class="value">${contratosReembolsados}</div><div class="label">Reembolsos</div></div>
-      <div class="kpi green"><div class="value">${contratosLiquidos}</div><div class="label">Contratos Líq.</div></div>
+      <div class="kpi"><div class="value">${totalComRecorrencia}</div><div class="label">Transações no período</div><div class="kpi-hint">Todas A000</div></div>
+      <div class="kpi"><div class="value">${recorrencias}</div><div class="label">Recorrências (parcelas)</div><div class="kpi-hint">Não são novos</div></div>
+      <div class="kpi blue"><div class="value">${contratosComReembolso}</div><div class="label">Contratos novos (bruto)</div><div class="kpi-hint">= Transações − Recorrências</div></div>
+      <div class="kpi red"><div class="value">${contratosReembolsados}</div><div class="label">Reembolsos no período</div><div class="kpi-hint">Sobre os novos</div></div>
+      <div class="kpi green"><div class="value">${contratosLiquidos}</div><div class="label">Contratos novos (líquido)</div><div class="kpi-hint">= Bruto − Reembolsos</div></div>
     </div>
+    <div class="legend-note">Contratos novos = transações novas A000 menos parcelas recorrentes. Líquido = bruto menos reembolsos do período.</div>
 
-    <div class="sub-title">Reuniões R1</div>
+    <div class="sub-title">Reuniões R1 (Sáb→Sex)</div>
     <div class="kpi-row">
-      <div class="kpi"><div class="value">${rpcTotals.agendamentos}</div><div class="label">Agendamentos</div></div>
-      <div class="kpi"><div class="value">${rpcTotals.r1_realizada}</div><div class="label">R1 Realizada</div></div>
-      <div class="kpi red"><div class="value">${rpcTotals.no_shows}</div><div class="label">No-Show R1</div></div>
+      <div class="kpi"><div class="value">${rpcTotals.agendamentos}</div><div class="label">Agendamentos</div><div class="kpi-hint">Inclui reagendadas</div></div>
+      <div class="kpi"><div class="value">${rpcTotals.r1_realizada}</div><div class="label">R1 Realizada</div><div class="kpi-hint">Aconteceram</div></div>
+      <div class="kpi red"><div class="value">${rpcTotals.no_shows}</div><div class="label">No-Show</div><div class="kpi-hint">Não compareceu</div></div>
+      <div class="kpi"><div class="value" style="color:#6b7280">${r1Outros}</div><div class="label">Outros</div><div class="kpi-hint">Reagendadas/canceladas/pendentes</div></div>
+      <div class="kpi green"><div class="value">${r1ComparPct}</div><div class="label">% Comparecimento</div><div class="kpi-hint">Realizada / (Realizada+NS)</div></div>
+      <div class="kpi red"><div class="value">${r1NoShowPct}</div><div class="label">% No-Show</div><div class="kpi-hint">NS / (Realizada+NS)</div></div>
     </div>
+    <div class="legend-note">Agendamentos inclui reagendamentos (reuniões marcadas, mesmo que depois remarcadas). % Comparecimento e % No-Show são calculados apenas sobre as que efetivamente aconteceram (Realizada + No-Show), não sobre o total de agendamentos.</div>
 
-    <div class="sub-title">Reuniões R2</div>
+    <div class="sub-title">Reuniões R2 — Carrinho da semana</div>
     <div class="kpi-row">
-      <div class="kpi"><div class="value">${r2Agendadas}</div><div class="label">R2 Agendada</div></div>
-      <div class="kpi"><div class="value">${r2Realizadas}</div><div class="label">R2 Realizada</div></div>
-      <div class="kpi green"><div class="value">${aprovados}</div><div class="label">Aprovados</div></div>
-      <div class="kpi purple"><div class="value">${proximaSemana}</div><div class="label">Próx. Semana</div></div>
-      <div class="kpi red"><div class="value">${foraDoCarrinho}</div><div class="label">Fora Carrinho</div></div>
+      <div class="kpi"><div class="value">${r2Agendadas}</div><div class="label">R2 Agendada</div><div class="kpi-hint">Não-parceiros + encaixados</div></div>
+      <div class="kpi"><div class="value">${r2Realizadas}</div><div class="label">R2 Realizada</div><div class="kpi-hint">Agend. − no-shows reais</div></div>
+      <div class="kpi green"><div class="value">${aprovados}</div><div class="label">Aprovados</div><div class="kpi-hint">Status = Aprovado</div></div>
+      <div class="kpi purple"><div class="value">${proximaSemana}</div><div class="label">Próx. Semana</div><div class="kpi-hint">Adiados</div></div>
+      <div class="kpi red"><div class="value">${foraDoCarrinho}</div><div class="label">Fora Carrinho</div><div class="kpi-hint">Reprov./Reembolso/Desist./Cancel.</div></div>
     </div>
+    <div class="legend-note">Reuniões R2 da semana operacional (Sáb a Sex), incluindo leads encaixados manualmente no carrinho.</div>
 
-    <div class="sub-title">Origem dos Leads (R2)</div>
+    <div class="sub-title">Origem das Entradas no Carrinho R2 (${r2Agendadas})</div>
     <div class="kpi-row">
-      <div class="kpi" style="border-top:3px solid #f59e0b"><div class="value">${originA010}</div><div class="label">A010</div></div>
-      <div class="kpi blue"><div class="value">${originAnamnese}</div><div class="label">ANAMNESE</div></div>
-      <div class="kpi green"><div class="value">${originLive}</div><div class="label">LIVE</div></div>
+      <div class="kpi" style="border-top:3px solid #f59e0b"><div class="value">${originA010}</div><div class="label">A010</div><div class="kpi-hint">Já tinha comprado A010</div></div>
+      <div class="kpi blue"><div class="value">${originAnamnese}</div><div class="label">ANAMNESE</div><div class="kpi-hint">Funil de qualificação</div></div>
+      <div class="kpi green"><div class="value">${originLive}</div><div class="label">LIVE</div><div class="kpi-hint">Entrou direto via evento</div></div>
     </div>
+    <div class="legend-note">Como cada lead que entrou no carrinho desta semana foi originado.</div>
 
-    <div class="sub-title">Distribuição R2 — Status</div>
-    <div class="pie-container">
-      <div class="pie-chart" style="background: ${pieGradient};"></div>
-      <div class="pie-legend">${pieLegendHtml}</div>
+    <div class="sub-title">Distribuição da Semana</div>
+    <div class="pie-row">
+      <div class="pie-block">
+        <div class="pie-block-title">Entradas no R2 — Status (${pieTotal})</div>
+        <div class="pie-container">
+          <div class="pie-chart" style="background: ${pieGradient};"></div>
+          <div class="pie-legend">${pieLegendHtml}</div>
+        </div>
+      </div>
+      <div class="pie-block">
+        <div class="pie-block-title">Contratos Fechados — Origem (${contratosPieTotal})</div>
+        <div class="pie-container">
+          <div class="pie-chart" style="background: ${contratosPie.gradient};"></div>
+          <div class="pie-legend">${contratosPie.legend}</div>
+        </div>
+      </div>
     </div>
 
     <!-- SEÇÃO 2: RANKING SDRs -->
     <div class="section-title">2. Ranking SDRs</div>
+    <div class="legend-note">Ranking ordenado por nº de Contratos fechados. Em caso de empate, desempata por R1 Realizadas. Meta semanal = meta mensal ÷ dias úteis × 5.</div>
     <table>
       <tr>
-        <th>#</th><th>SDR</th><th style="text-align:center">Meta/Agend.</th>
-        <th style="text-align:center">R1 Real.</th><th style="text-align:center">No-Show</th>
-        <th style="text-align:center">Contratos</th><th style="text-align:center">% No-Show</th>
-        <th style="text-align:center">% Conv.</th><th style="text-align:center">Ligações</th>
+        <th>#</th><th>SDR</th>
+        <th style="text-align:center">Meta Sem.</th>
+        <th style="text-align:center">Agendados</th>
+        <th style="text-align:center">% Meta</th>
+        <th style="text-align:center">R1 Real.</th>
+        <th style="text-align:center">No-Show</th>
+        <th style="text-align:center">% Comp.</th>
+        <th style="text-align:center">% NS</th>
+        <th style="text-align:center">Contratos</th>
+        <th style="text-align:center">% Conv.</th>
+        <th style="text-align:center">Ligações</th>
       </tr>
-      ${sdrRows || '<tr><td colspan="9" style="text-align:center;color:#999">Sem SDRs</td></tr>'}
+      ${sdrRows || '<tr><td colspan="12" style="text-align:center;color:#999">Sem SDRs</td></tr>'}
       <tr class="totals">
         <td></td><td>TOTAL</td>
+        <td style="text-align:center">${sdrTotals.meta || '-'}</td>
         <td style="text-align:center">${sdrTotals.agendados}</td>
+        <td style="text-align:center">${sdrTotals.meta > 0 ? pct(sdrTotals.agendados, sdrTotals.meta) : '-'}</td>
         <td style="text-align:center">${sdrTotals.r1Realizadas}</td>
         <td style="text-align:center">${sdrTotals.noShow}</td>
+        <td style="text-align:center">${sdrTotalsBase > 0 ? pct(sdrTotals.r1Realizadas, sdrTotalsBase) : '-'}</td>
+        <td style="text-align:center">${sdrTotalsBase > 0 ? pct(sdrTotals.noShow, sdrTotalsBase) : '-'}</td>
         <td style="text-align:center">${sdrTotals.contratos}</td>
-        <td style="text-align:center">${pct(sdrTotals.noShow, sdrTotals.agendados)}</td>
         <td style="text-align:center">${pct(sdrTotals.contratos, sdrTotals.r1Realizadas)}</td>
         <td style="text-align:center">${sdrTotals.calls}</td>
       </tr>
@@ -833,14 +999,39 @@ async function buildIncorporadorReport(supabase: any) {
     
     <div class="sub-title">Closers R1</div>
     <table>
-      <tr><th>Closer R1</th><th style="text-align:center">R1 Agendada</th><th style="text-align:center">R1 Realizada</th><th style="text-align:center">Contratos</th></tr>
+      <tr>
+        <th>Closer R1</th>
+        <th style="text-align:center">R1 Agend.</th>
+        <th style="text-align:center">R1 Real.</th>
+        <th style="text-align:center">% Comp.</th>
+        <th style="text-align:center">Contratos</th>
+        <th style="text-align:center">% Conv.</th>
+      </tr>
       ${closerR1Rows}
-      <tr class="totals"><td>TOTAL</td><td style="text-align:center">${r1CloserTotals.r1Ag}</td><td style="text-align:center">${r1CloserTotals.r1Re}</td><td style="text-align:center">${r1CloserTotals.cont}</td></tr>
+      <tr class="totals">
+        <td>TOTAL</td>
+        <td style="text-align:center">${r1CloserTotals.r1Ag}</td>
+        <td style="text-align:center">${r1CloserTotals.r1Re}</td>
+        <td style="text-align:center">${r1CloserTotals.r1Ag > 0 ? pct(r1CloserTotals.r1Re, r1CloserTotals.r1Ag) : '-'}</td>
+        <td style="text-align:center">${r1CloserTotals.cont}</td>
+        <td style="text-align:center">${r1CloserTotals.r1Re > 0 ? pct(r1CloserTotals.cont, r1CloserTotals.r1Re) : '-'}</td>
+      </tr>
     </table>
+    <div class="legend-note">% Comp. = R1 Realizada / R1 Agendada. % Conv. = Contratos / R1 Realizada.</div>
 
     <div class="sub-title">Closers R2</div>
     <table>
-      <tr><th>Closer R2</th><th style="text-align:center">R2 Agend.</th><th style="text-align:center">R2 Real.</th><th style="text-align:center">Aprovados</th><th style="text-align:center">Reprov.</th><th style="text-align:center">Vendas Parc.</th><th>Produtos</th></tr>
+      <tr>
+        <th>Closer R2</th>
+        <th style="text-align:center">R2 Agend.</th>
+        <th style="text-align:center">R2 Real.</th>
+        <th style="text-align:center">Aprovados</th>
+        <th style="text-align:center">Reprov.</th>
+        <th style="text-align:center">% Conv. R2</th>
+        <th style="text-align:center">Vendas Parc.</th>
+        <th style="text-align:right">Receita Parc.</th>
+        <th style="text-align:right">Ticket Médio</th>
+      </tr>
       ${closerR2Rows}
       <tr class="totals">
         <td>TOTAL</td>
@@ -848,17 +1039,27 @@ async function buildIncorporadorReport(supabase: any) {
         <td style="text-align:center">${r2CloserTotals.r2Re}</td>
         <td style="text-align:center">${r2CloserTotals.aprov}</td>
         <td style="text-align:center">${r2CloserTotals.reprov}</td>
+        <td style="text-align:center">${r2CloserTotals.r2Re > 0 ? pct(r2CloserTotals.aprov, r2CloserTotals.r2Re) : '-'}</td>
         <td style="text-align:center">${r2CloserTotals.vendas}</td>
-        <td></td>
+        <td style="text-align:right">${fmtBRL(r2CloserTotals.receita)}</td>
+        <td style="text-align:right">${r2CloserTotals.vendas > 0 ? fmtBRL(r2CloserTotals.receita / r2CloserTotals.vendas) : '-'}</td>
       </tr>
     </table>
+    <div class="legend-note">% Conv. R2 = Aprovados / R2 Realizada. Detalhamento por produto na seção 4.</div>
 
     <!-- SEÇÃO 4: RESUMO FINANCEIRO -->
-    <div class="section-title">4. Resumo Financeiro</div>
+    <div class="section-title">4. Resumo Financeiro — Bruto vs Líquido</div>
     <table>
-      <tr><th>Tipo</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor</th></tr>
+      <tr>
+        <th>Tipo</th>
+        <th style="text-align:center">Qtd</th>
+        <th style="text-align:right">Bruto</th>
+        <th style="text-align:right">Líquido</th>
+        <th style="text-align:center">Δ %</th>
+      </tr>
       ${finRows.join('')}
     </table>
+    <div class="legend-note">Bruto = preço de referência cadastrado no produto (product_configurations). Líquido = valor efetivamente recebido (após descontos, taxas, comissões). Δ% = quanto foi descontado do bruto.</div>
 
   </div>
   <div class="footer">MCF Gestão — Relatório gerado automaticamente em ${new Date().toLocaleDateString('pt-BR')}</div>
