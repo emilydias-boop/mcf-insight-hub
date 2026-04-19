@@ -916,14 +916,14 @@ async function buildIncorporadorReport(supabase: any) {
 
     <div class="sub-title">Reuniões R1 (Sáb→Sex)</div>
     <div class="kpi-row">
-      <div class="kpi"><div class="value">${rpcTotals.agendamentos}</div><div class="label">Agendamentos</div><div class="kpi-hint">Inclui reagendadas</div></div>
+      <div class="kpi"><div class="value">${r1AgendadaTotal}</div><div class="label">R1 Agendada</div><div class="kpi-hint">Marcadas PARA a semana</div></div>
       <div class="kpi"><div class="value">${rpcTotals.r1_realizada}</div><div class="label">R1 Realizada</div><div class="kpi-hint">Aconteceram</div></div>
       <div class="kpi red"><div class="value">${rpcTotals.no_shows}</div><div class="label">No-Show</div><div class="kpi-hint">Não compareceu</div></div>
       <div class="kpi"><div class="value" style="color:#6b7280">${r1Outros}</div><div class="label">Outros</div><div class="kpi-hint">Reagendadas/canceladas/pendentes</div></div>
-      <div class="kpi green"><div class="value">${r1ComparPct}</div><div class="label">% Comparecimento</div><div class="kpi-hint">Realizada / (Realizada+NS)</div></div>
-      <div class="kpi red"><div class="value">${r1NoShowPct}</div><div class="label">% No-Show</div><div class="kpi-hint">NS / (Realizada+NS)</div></div>
+      <div class="kpi green"><div class="value">${r1ComparPct}</div><div class="label">% Comparecimento</div><div class="kpi-hint">Realizada / R1 Agendada</div></div>
+      <div class="kpi red"><div class="value">${r1NoShowPct}</div><div class="label">% No-Show</div><div class="kpi-hint">No-Show / R1 Agendada</div></div>
     </div>
-    <div class="legend-note">Agendamentos inclui reagendamentos (reuniões marcadas, mesmo que depois remarcadas). % Comparecimento e % No-Show são calculados apenas sobre as que efetivamente aconteceram (Realizada + No-Show), não sobre o total de agendamentos.</div>
+    <div class="legend-note">R1 Agendada = reuniões marcadas PARA esta semana (Sáb–Sex), independente de quando foram criadas. Mesma métrica usada no painel <b>/crm/reunioes-equipe</b>. % Comparecimento e % No-Show são calculados sobre o total de R1 Agendada (mesma base do painel).</div>
 
     <div class="sub-title">Reuniões R2 — Carrinho da semana</div>
     <div class="kpi-row">
