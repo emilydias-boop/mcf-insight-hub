@@ -1,68 +1,68 @@
 
 
-## Diagnóstico final: vendas de parceria não casam com aprovados
+## Diagnóstico do lead Atailson e proposta para histórico de tags
 
-### A causa raiz
+### Sobre o Atailson Filho da Costa Oliveira
 
-A janela `aprovados` (em `getCarrinhoMetricBoundaries`) é **Sex 12:00 → Sex 12:00**. Mas a safra é **Qui 00:00 → Qua 23:59**. Isso joga muitos R2s aprovados para a semana errada:
+Levantamento direto no banco:
 
-Na safra **09/04-15/04** (carrinho da Sex 10/04), os R2s aprovados que deveriam pertencer:
-- Sarah Coelho — R2 Qui **09/04 17:00 BRT** → fora (antes de Sex 12:00)
-- Heloiza Helena — R2 Sex **10/04 10:00 BRT** → fora (antes do corte 12:00)
-- Uislaine Fuzzo — R2 Sex **10/04 07:00 BRT** → fora
-- Maria Tatiana — R2 antigo (**10/03**) → fora (correto)
-- Lucas Fonseca — R2 **jan/26** → fora (correto)
+- **Contato**: 1 único (`ea59a2e9...`), criado **17/04/2026 07:39**, telefone +55 17 99616-2691.
+- **Deals**: 1 único na pipeline `PILOTO ANAMNESE / INDICAÇÃO`, sem outros deals em outras pipelines.
+- **Compras Hubla/Kiwify**: **nenhuma** (zero registros em `hubla_transactions` por nome ou telefone).
+- **Tags atuais**: `['ANAMNESE-INCOMPLETA']` — só essa.
+- **Atividades do deal** (4 eventos):
+  1. 17/04 07:39 — `lead_entered` via endpoint **"Anamnese Incompleta"** (webhook). É aqui que a tag foi adicionada.
+  2. 17/04 17:21 — Movido `INCOMPLETA → Lead Qualificado` (Antony Elias).
+  3. 17/04 17:27 — Movido auto ao agendar R1 (William Ferreira).
+  4. 18/04 14:49 — Status `no_show` via Agenda Sync.
 
-Vendas dessas pessoas em 10-16/04 caem como **órfãs** porque o "Aprovado" está em outra janela. Por isso só aparecem **3-4 vendas no print** ao invés de 25+.
+**Resposta direta**: o lead **não teve outra aquisição** nem retorno com tag de Anamnese (completa). A tag `ANAMNESE-INCOMPLETA` foi adicionada na entrada do webhook em 17/04 07:39 — antes de qualquer interação humana. Se ele tivesse preenchido a anamnese completa depois, o webhook adicionaria a tag `ANAMNESE` e moveria de estágio (lógica já existe no `webhook-lead-receiver` linhas 634-705). Como isso não ocorreu, ele continua só com a `INCOMPLETA`.
 
-E ainda: vendas pós-corte (Wellington, Marcia, Valdinei vendendo 17/04 13-14h BRT) ficam fora da janela `vendasParceria` (que vai até Sex 11:59).
+### O problema estrutural: não há histórico de tags
 
-### As 2 mudanças necessárias
+Verifiquei `audit_logs`: **0 registros** para `crm_contacts` e `crm_deals`. As tags são gravadas/sobrescritas in-place em vários pontos (webhook receiver, hubla handler, edição manual) sem nenhum registro de quem adicionou ou quando. Hoje você só vê o estado **atual** do array.
 
-#### Mudança 1 — Janela `aprovados` = janela completa da safra
-Hoje: `Sex 10/04 12:00 → Sex 17/04 12:00` (7 dias deslocados).  
-**Proposta**: `Qui 09/04 00:00 → Sex 17/04 12:00` (safra inteira + carry over até o corte da semana seguinte).
+### Proposta: registrar adições/remoções de tags
 
-Isso captura:
-- R2s de Qui/Sex de manhã (Sarah, Heloiza, Uislaine) → entram corretamente
-- R2s de Qua à noite (Wellington, Marcia, Valdinei feitos na sex 17 manhã) → continuam entrando
-- R2s da próxima sex pós-corte → ficam para a próxima safra (correto)
+#### Mudança 1 — Trigger no banco para auditar mudanças em `tags`
+Criar trigger `AFTER UPDATE` em `crm_contacts` e `crm_deals` que, quando `OLD.tags IS DISTINCT FROM NEW.tags`, insere uma atividade em `deal_activities` (para deals) e em `audit_logs` (para contatos) com:
+- `activity_type: 'tags_changed'`
+- `description: 'Tags adicionadas: X, Y | Removidas: Z'` (calculado por diff)
+- `metadata: { added: [...], removed: [...], previous: [...], new: [...], source: 'webhook|manual|hubla' }`
+- `user_id: auth.uid()` (ou null para origem webhook)
 
-#### Mudança 2 — Janela `vendasParceria` = casar com `aprovados`
-Hoje: `Sex 10/04 00:00 → Sex 17/04 11:59`.  
-**Proposta**: `Qui 09/04 00:00 → Sex 17/04 11:59` (alinhar início com a safra, manter fim no corte).
+Para inserções (deal/contato novo já com tags), também registrar uma entrada inicial `tags_added`.
 
-Vendas que acontecem **dentro da safra** (Qui-Qua) também são contabilizadas, não só as Sex+. Isso é importante porque vendas de incorporador (que não dependem só de R2 da semana) podem rolar Qui-Sex.
+#### Mudança 2 — Backfill da entrada atual
+Para deals existentes com tags, criar uma entrada retroativa em `deal_activities` com `created_at = deal.created_at` e a fonte derivada da `data_source` do deal (`webhook`, `manual`, `hubla`). Assim o histórico volta ao Atailson com `ANAMNESE-INCOMPLETA — adicionada em 17/04 07:39 via webhook (Anamnese Incompleta)`.
 
-### Por que faz sentido operacionalmente
+#### Mudança 3 — Exibir no Timeline do drawer
+No `LeadFullTimeline.tsx`, adicionar novo `TimelineEventType: 'tag_change'` com:
+- Ícone Tag, cor azul.
+- Título: "Tag adicionada: ANAMNESE-INCOMPLETA" / "Tag removida: X".
+- Sub-info: autor (ou "Webhook: anamnese-incompleta"), timestamp.
+- Filtro próprio na barra de filtros do timeline.
 
-A memória `carrinho-safra-operational-logic-v6` define a safra como **Qui→Qua**. O corte de Sex 12:00 só serve para **fechar** a safra (cortar o que entra na próxima). Não faz sentido **excluir** o que aconteceu DENTRO da safra (Qui inteiro, Sex de manhã).
+E no `useLeadFullTimeline` (hook), adicionar query para `deal_activities` com `activity_type IN ('tags_changed', 'tags_added')` para renderizar.
 
-A janela Sex→Sex foi um erro de modelagem: confundiu "corte que fecha" com "corte que abre". O ciclo correto é:
-```
-Safra ativa: [Qui 00:00 ──────────────── Qua 23:59] + [Qui-Sex_corte da próxima semana para terminar processamento]
-                                                      ↑
-                                         carry-over para Aprovados/Vendas
-```
+#### Mudança 4 — Mostrar fonte da tag no badge (opcional)
+No `ContactInfoCard`/local onde as tags são exibidas, ao passar mouse mostrar tooltip: "Adicionada em DD/MM/YYYY HH:mm via [fonte]".
+
+### Arquivos afetados
+
+- `supabase/migrations/<nova>.sql` — função `log_tags_change()` + triggers em `crm_contacts` e `crm_deals` + backfill.
+- `src/hooks/useLeadFullTimeline.ts` — incluir eventos `tags_changed`/`tags_added`.
+- `src/components/crm/LeadFullTimeline.tsx` — novo tipo `tag_change` + filtro + renderização.
+- (Opcional) `src/components/crm/drawers/sections/ContactInfoCard.tsx` (ou similar) — tooltip nas tags.
 
 ### Resultado esperado
 
-- **Aprovados** sobe de ~45 para ~55-65 (incluindo Heloiza, Uislaine, Sarah, etc.)
-- **Vendas de Parceria** sobe de **4** para **20-25+** (todos os matches do dia 10-17 antes do corte)
-- Conversão `vendas/aprovados` fica realista
-- "Vendas Sem Vínculo" cai porque a maioria vai casar
+No drawer do Atailson, na aba **Timeline**, você verá:
+- 17/04 07:39 — **Tag adicionada: ANAMNESE-INCOMPLETA** (via Webhook Anamnese Incompleta)
+- 17/04 14:21 — Estágio: INCOMPLETA → Lead Qualificado
+- 17/04 14:27 — Reunião R1 agendada
+- 17/04 14:46 — Nota geral
+- 18/04 11:49 — R1 Agendada → No-Show
 
-### Arquivo a alterar
-
-- `src/lib/carrinhoWeekBoundaries.ts` — em `getCarrinhoMetricBoundaries`:
-  - `aprovados.start = thuStart` (Qui 00:00 da safra)
-  - `aprovados.end = nextFridayCutoff` (Sex 12:00 da semana seguinte) — mantém
-  - `r2Meetings.start = thuStart` (mesma coisa)
-  - `vendasParceria.start = thuStart` (Qui 00:00, não Sex)
-  - `vendasParceria.end` mantém
-
-### Risco / efeito colateral
-
-- A aba "R2 Agendadas" e "R2 Realizadas" (que usam `r2Meetings`) também vão incluir Qui/Sex-manhã. Isso é o comportamento correto — esses são leads dessa safra.
-- O número de "R2 Agendadas" (65 no print) vai subir um pouco. Se isso estiver ok, vamos em frente. Se quiser que `r2Meetings` continue Sex→Sex e só `aprovados`+`vendasParceria` mudem, é trivial.
+E para qualquer lead futuro: cada inclusão/remoção de tag fica visível com autor, data e origem. Resolve a dúvida "foi antes ou depois de receber tal tag?" definitivamente.
 
