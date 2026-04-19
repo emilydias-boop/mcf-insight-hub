@@ -13,6 +13,16 @@ import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 
 const eventTypeLabels: Record<string, string> = {
+  // Webhooks ativos (pós-Clint)
+  'lead.received.anamnese_completa': 'Anamnese Completa',
+  'lead.received.anamnese_incompleta': 'Anamnese Incompleta',
+  'lead.received.parceria': 'Parceria',
+  'lead.received.instagram': 'Instagram',
+  'lead.received.live': 'Lead LIVE',
+  'lead.abandoned_checkout': 'Carrinho Abandonado',
+  'purchase.completed': 'Compra Realizada',
+  'purchase.refunded': 'Reembolso',
+  // Legados (Clint - histórico)
   'contact.created': 'Contato Criado',
   'contact.updated': 'Contato Atualizado',
   'deal.created': 'Deal Criado',
