@@ -781,6 +781,7 @@ async function buildIncorporadorReport(supabase: any) {
       if (closerR2Map.has(closerId)) {
         const st = closerR2Map.get(closerId)!;
         st.vendasParceria++;
+        st.receitaParceria += tx.net_value || 0;
         const prodKey = (tx.product_name || 'Outro').trim();
         st.produtos.set(prodKey, (st.produtos.get(prodKey) || 0) + 1);
       }
@@ -789,22 +790,26 @@ async function buildIncorporadorReport(supabase: any) {
 
   const closerR2Rows = R2_CLOSER_IDS.map(c => {
     const st = closerR2Map.get(c.id)!;
-    const prodList = [...st.produtos.entries()].map(([p, n]) => `${p}: ${n}`).join(', ') || '-';
+    const convR2 = st.r2Realizadas > 0 ? pct(st.aprovados, st.r2Realizadas) : '-';
+    const ticketMedio = st.vendasParceria > 0 ? fmtBRL(st.receitaParceria / st.vendasParceria) : '-';
     return `<tr>
       <td>${st.name}</td>
       <td style="text-align:center">${st.r2Agendadas}</td>
       <td style="text-align:center">${st.r2Realizadas}</td>
       <td style="text-align:center"><span class="badge badge-green">${st.aprovados}</span></td>
       <td style="text-align:center"><span class="badge badge-red">${st.reprovados}</span></td>
+      <td style="text-align:center">${convR2}</td>
       <td style="text-align:center">${st.vendasParceria}</td>
-      <td style="font-size:10px">${prodList}</td>
+      <td style="text-align:right">${fmtBRL(st.receitaParceria)}</td>
+      <td style="text-align:right">${ticketMedio}</td>
     </tr>`;
   }).join('');
 
   const r2CloserTotals = R2_CLOSER_IDS.reduce((acc, c) => {
     const st = closerR2Map.get(c.id)!;
-    return { r2Ag: acc.r2Ag + st.r2Agendadas, r2Re: acc.r2Re + st.r2Realizadas, aprov: acc.aprov + st.aprovados, reprov: acc.reprov + st.reprovados, vendas: acc.vendas + st.vendasParceria };
-  }, { r2Ag: 0, r2Re: 0, aprov: 0, reprov: 0, vendas: 0 });
+    return { r2Ag: acc.r2Ag + st.r2Agendadas, r2Re: acc.r2Re + st.r2Realizadas, aprov: acc.aprov + st.aprovados, reprov: acc.reprov + st.reprovados, vendas: acc.vendas + st.vendasParceria, receita: acc.receita + st.receitaParceria };
+  }, { r2Ag: 0, r2Re: 0, aprov: 0, reprov: 0, vendas: 0, receita: 0 });
+
 
   // ══ 7. RESUMO FINANCEIRO ══
   // A010 sales
