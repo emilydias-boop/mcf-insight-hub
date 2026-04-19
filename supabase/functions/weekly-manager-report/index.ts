@@ -886,11 +886,11 @@ async function buildIncorporadorReport(supabase: any) {
 
 
   // ══ BUILD HTML ══
-  // Helpers para R1 com %
-  const r1Outros = Math.max(0, rpcTotals.agendamentos - rpcTotals.r1_realizada - rpcTotals.no_shows);
-  const r1Base = rpcTotals.r1_realizada + rpcTotals.no_shows;
-  const r1ComparPct = r1Base > 0 ? pct(rpcTotals.r1_realizada, r1Base) : '-';
-  const r1NoShowPct = r1Base > 0 ? pct(rpcTotals.no_shows, r1Base) : '-';
+  // Helpers para R1 com % — base = R1 Agendada (scheduled_at, mesma do painel /crm/reunioes-equipe)
+  const r1AgendadaTotal = rpcTotals.r1_agendada;
+  const r1Outros = Math.max(0, r1AgendadaTotal - rpcTotals.r1_realizada - rpcTotals.no_shows);
+  const r1ComparPct = r1AgendadaTotal > 0 ? pct(rpcTotals.r1_realizada, r1AgendadaTotal) : '-';
+  const r1NoShowPct = r1AgendadaTotal > 0 ? pct(rpcTotals.no_shows, r1AgendadaTotal) : '-';
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${STYLES}</style></head><body>
 <div class="container">
