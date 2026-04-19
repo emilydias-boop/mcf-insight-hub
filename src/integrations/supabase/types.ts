@@ -10812,9 +10812,11 @@ export type Database = {
           contact_name: string
           contact_phone: string
           contract_paid_at: string
+          contract_source: string
           deal_id: string
           deal_name: string
           dentro_corte: boolean
+          effective_contract_date: string
           is_encaixado: boolean
           meeting_slot_id: string
           meeting_status: string
