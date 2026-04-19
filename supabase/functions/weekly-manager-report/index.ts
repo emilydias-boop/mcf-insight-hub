@@ -886,6 +886,12 @@ async function buildIncorporadorReport(supabase: any) {
 
 
   // ══ BUILD HTML ══
+  // Helpers para R1 com %
+  const r1Outros = Math.max(0, rpcTotals.agendamentos - rpcTotals.r1_realizada - rpcTotals.no_shows);
+  const r1Base = rpcTotals.r1_realizada + rpcTotals.no_shows;
+  const r1ComparPct = r1Base > 0 ? pct(rpcTotals.r1_realizada, r1Base) : '-';
+  const r1NoShowPct = r1Base > 0 ? pct(rpcTotals.no_shows, r1Base) : '-';
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${STYLES}</style></head><body>
 <div class="container">
   <div class="header">
@@ -898,61 +904,91 @@ async function buildIncorporadorReport(supabase: any) {
     <!-- SEÇÃO 1: KPIs DO CARRINHO -->
     <div class="section-title">1. KPIs do Carrinho</div>
 
-    <div class="sub-title">Contratos (Safra ${safraLabel})</div>
+    <div class="sub-title">Contratos novos (Safra ${safraLabel})</div>
     <div class="kpi-row">
-      <div class="kpi"><div class="value">${totalComRecorrencia}</div><div class="label">Total Transações</div></div>
-      <div class="kpi"><div class="value">${recorrencias}</div><div class="label">Recorrências</div></div>
-      <div class="kpi blue"><div class="value">${contratosComReembolso}</div><div class="label">Com Reembolso</div></div>
-      <div class="kpi red"><div class="value">${contratosReembolsados}</div><div class="label">Reembolsos</div></div>
-      <div class="kpi green"><div class="value">${contratosLiquidos}</div><div class="label">Contratos Líq.</div></div>
+      <div class="kpi"><div class="value">${totalComRecorrencia}</div><div class="label">Transações no período</div><div class="kpi-hint">Todas A000</div></div>
+      <div class="kpi"><div class="value">${recorrencias}</div><div class="label">Recorrências (parcelas)</div><div class="kpi-hint">Não são novos</div></div>
+      <div class="kpi blue"><div class="value">${contratosComReembolso}</div><div class="label">Contratos novos (bruto)</div><div class="kpi-hint">= Transações − Recorrências</div></div>
+      <div class="kpi red"><div class="value">${contratosReembolsados}</div><div class="label">Reembolsos no período</div><div class="kpi-hint">Sobre os novos</div></div>
+      <div class="kpi green"><div class="value">${contratosLiquidos}</div><div class="label">Contratos novos (líquido)</div><div class="kpi-hint">= Bruto − Reembolsos</div></div>
     </div>
+    <div class="legend-note">Contratos novos = transações novas A000 menos parcelas recorrentes. Líquido = bruto menos reembolsos do período.</div>
 
-    <div class="sub-title">Reuniões R1</div>
+    <div class="sub-title">Reuniões R1 (Sáb→Sex)</div>
     <div class="kpi-row">
-      <div class="kpi"><div class="value">${rpcTotals.agendamentos}</div><div class="label">Agendamentos</div></div>
-      <div class="kpi"><div class="value">${rpcTotals.r1_realizada}</div><div class="label">R1 Realizada</div></div>
-      <div class="kpi red"><div class="value">${rpcTotals.no_shows}</div><div class="label">No-Show R1</div></div>
+      <div class="kpi"><div class="value">${rpcTotals.agendamentos}</div><div class="label">Agendamentos</div><div class="kpi-hint">Inclui reagendadas</div></div>
+      <div class="kpi"><div class="value">${rpcTotals.r1_realizada}</div><div class="label">R1 Realizada</div><div class="kpi-hint">Aconteceram</div></div>
+      <div class="kpi red"><div class="value">${rpcTotals.no_shows}</div><div class="label">No-Show</div><div class="kpi-hint">Não compareceu</div></div>
+      <div class="kpi"><div class="value" style="color:#6b7280">${r1Outros}</div><div class="label">Outros</div><div class="kpi-hint">Reagendadas/canceladas/pendentes</div></div>
+      <div class="kpi green"><div class="value">${r1ComparPct}</div><div class="label">% Comparecimento</div><div class="kpi-hint">Realizada / (Realizada+NS)</div></div>
+      <div class="kpi red"><div class="value">${r1NoShowPct}</div><div class="label">% No-Show</div><div class="kpi-hint">NS / (Realizada+NS)</div></div>
     </div>
+    <div class="legend-note">Agendamentos inclui reagendamentos (reuniões marcadas, mesmo que depois remarcadas). % Comparecimento e % No-Show são calculados apenas sobre as que efetivamente aconteceram (Realizada + No-Show), não sobre o total de agendamentos.</div>
 
-    <div class="sub-title">Reuniões R2</div>
+    <div class="sub-title">Reuniões R2 — Carrinho da semana</div>
     <div class="kpi-row">
-      <div class="kpi"><div class="value">${r2Agendadas}</div><div class="label">R2 Agendada</div></div>
-      <div class="kpi"><div class="value">${r2Realizadas}</div><div class="label">R2 Realizada</div></div>
-      <div class="kpi green"><div class="value">${aprovados}</div><div class="label">Aprovados</div></div>
-      <div class="kpi purple"><div class="value">${proximaSemana}</div><div class="label">Próx. Semana</div></div>
-      <div class="kpi red"><div class="value">${foraDoCarrinho}</div><div class="label">Fora Carrinho</div></div>
+      <div class="kpi"><div class="value">${r2Agendadas}</div><div class="label">R2 Agendada</div><div class="kpi-hint">Não-parceiros + encaixados</div></div>
+      <div class="kpi"><div class="value">${r2Realizadas}</div><div class="label">R2 Realizada</div><div class="kpi-hint">Agend. − no-shows reais</div></div>
+      <div class="kpi green"><div class="value">${aprovados}</div><div class="label">Aprovados</div><div class="kpi-hint">Status = Aprovado</div></div>
+      <div class="kpi purple"><div class="value">${proximaSemana}</div><div class="label">Próx. Semana</div><div class="kpi-hint">Adiados</div></div>
+      <div class="kpi red"><div class="value">${foraDoCarrinho}</div><div class="label">Fora Carrinho</div><div class="kpi-hint">Reprov./Reembolso/Desist./Cancel.</div></div>
     </div>
+    <div class="legend-note">Reuniões R2 da semana operacional (Sáb a Sex), incluindo leads encaixados manualmente no carrinho.</div>
 
-    <div class="sub-title">Origem dos Leads (R2)</div>
+    <div class="sub-title">Origem das Entradas no Carrinho R2 (${r2Agendadas})</div>
     <div class="kpi-row">
-      <div class="kpi" style="border-top:3px solid #f59e0b"><div class="value">${originA010}</div><div class="label">A010</div></div>
-      <div class="kpi blue"><div class="value">${originAnamnese}</div><div class="label">ANAMNESE</div></div>
-      <div class="kpi green"><div class="value">${originLive}</div><div class="label">LIVE</div></div>
+      <div class="kpi" style="border-top:3px solid #f59e0b"><div class="value">${originA010}</div><div class="label">A010</div><div class="kpi-hint">Já tinha comprado A010</div></div>
+      <div class="kpi blue"><div class="value">${originAnamnese}</div><div class="label">ANAMNESE</div><div class="kpi-hint">Funil de qualificação</div></div>
+      <div class="kpi green"><div class="value">${originLive}</div><div class="label">LIVE</div><div class="kpi-hint">Entrou direto via evento</div></div>
     </div>
+    <div class="legend-note">Como cada lead que entrou no carrinho desta semana foi originado.</div>
 
-    <div class="sub-title">Distribuição R2 — Status</div>
-    <div class="pie-container">
-      <div class="pie-chart" style="background: ${pieGradient};"></div>
-      <div class="pie-legend">${pieLegendHtml}</div>
+    <div class="sub-title">Distribuição da Semana</div>
+    <div class="pie-row">
+      <div class="pie-block">
+        <div class="pie-block-title">Entradas no R2 — Status (${pieTotal})</div>
+        <div class="pie-container">
+          <div class="pie-chart" style="background: ${pieGradient};"></div>
+          <div class="pie-legend">${pieLegendHtml}</div>
+        </div>
+      </div>
+      <div class="pie-block">
+        <div class="pie-block-title">Contratos Fechados — Origem (${contratosPieTotal})</div>
+        <div class="pie-container">
+          <div class="pie-chart" style="background: ${contratosPie.gradient};"></div>
+          <div class="pie-legend">${contratosPie.legend}</div>
+        </div>
+      </div>
     </div>
 
     <!-- SEÇÃO 2: RANKING SDRs -->
     <div class="section-title">2. Ranking SDRs</div>
+    <div class="legend-note">Ranking ordenado por nº de Contratos fechados. Em caso de empate, desempata por R1 Realizadas. Meta semanal = meta mensal ÷ dias úteis × 5.</div>
     <table>
       <tr>
-        <th>#</th><th>SDR</th><th style="text-align:center">Meta/Agend.</th>
-        <th style="text-align:center">R1 Real.</th><th style="text-align:center">No-Show</th>
-        <th style="text-align:center">Contratos</th><th style="text-align:center">% No-Show</th>
-        <th style="text-align:center">% Conv.</th><th style="text-align:center">Ligações</th>
+        <th>#</th><th>SDR</th>
+        <th style="text-align:center">Meta Sem.</th>
+        <th style="text-align:center">Agendados</th>
+        <th style="text-align:center">% Meta</th>
+        <th style="text-align:center">R1 Real.</th>
+        <th style="text-align:center">No-Show</th>
+        <th style="text-align:center">% Comp.</th>
+        <th style="text-align:center">% NS</th>
+        <th style="text-align:center">Contratos</th>
+        <th style="text-align:center">% Conv.</th>
+        <th style="text-align:center">Ligações</th>
       </tr>
-      ${sdrRows || '<tr><td colspan="9" style="text-align:center;color:#999">Sem SDRs</td></tr>'}
+      ${sdrRows || '<tr><td colspan="12" style="text-align:center;color:#999">Sem SDRs</td></tr>'}
       <tr class="totals">
         <td></td><td>TOTAL</td>
+        <td style="text-align:center">${sdrTotals.meta || '-'}</td>
         <td style="text-align:center">${sdrTotals.agendados}</td>
+        <td style="text-align:center">${sdrTotals.meta > 0 ? pct(sdrTotals.agendados, sdrTotals.meta) : '-'}</td>
         <td style="text-align:center">${sdrTotals.r1Realizadas}</td>
         <td style="text-align:center">${sdrTotals.noShow}</td>
+        <td style="text-align:center">${sdrTotalsBase > 0 ? pct(sdrTotals.r1Realizadas, sdrTotalsBase) : '-'}</td>
+        <td style="text-align:center">${sdrTotalsBase > 0 ? pct(sdrTotals.noShow, sdrTotalsBase) : '-'}</td>
         <td style="text-align:center">${sdrTotals.contratos}</td>
-        <td style="text-align:center">${pct(sdrTotals.noShow, sdrTotals.agendados)}</td>
         <td style="text-align:center">${pct(sdrTotals.contratos, sdrTotals.r1Realizadas)}</td>
         <td style="text-align:center">${sdrTotals.calls}</td>
       </tr>
@@ -963,14 +999,39 @@ async function buildIncorporadorReport(supabase: any) {
     
     <div class="sub-title">Closers R1</div>
     <table>
-      <tr><th>Closer R1</th><th style="text-align:center">R1 Agendada</th><th style="text-align:center">R1 Realizada</th><th style="text-align:center">Contratos</th></tr>
+      <tr>
+        <th>Closer R1</th>
+        <th style="text-align:center">R1 Agend.</th>
+        <th style="text-align:center">R1 Real.</th>
+        <th style="text-align:center">% Comp.</th>
+        <th style="text-align:center">Contratos</th>
+        <th style="text-align:center">% Conv.</th>
+      </tr>
       ${closerR1Rows}
-      <tr class="totals"><td>TOTAL</td><td style="text-align:center">${r1CloserTotals.r1Ag}</td><td style="text-align:center">${r1CloserTotals.r1Re}</td><td style="text-align:center">${r1CloserTotals.cont}</td></tr>
+      <tr class="totals">
+        <td>TOTAL</td>
+        <td style="text-align:center">${r1CloserTotals.r1Ag}</td>
+        <td style="text-align:center">${r1CloserTotals.r1Re}</td>
+        <td style="text-align:center">${r1CloserTotals.r1Ag > 0 ? pct(r1CloserTotals.r1Re, r1CloserTotals.r1Ag) : '-'}</td>
+        <td style="text-align:center">${r1CloserTotals.cont}</td>
+        <td style="text-align:center">${r1CloserTotals.r1Re > 0 ? pct(r1CloserTotals.cont, r1CloserTotals.r1Re) : '-'}</td>
+      </tr>
     </table>
+    <div class="legend-note">% Comp. = R1 Realizada / R1 Agendada. % Conv. = Contratos / R1 Realizada.</div>
 
     <div class="sub-title">Closers R2</div>
     <table>
-      <tr><th>Closer R2</th><th style="text-align:center">R2 Agend.</th><th style="text-align:center">R2 Real.</th><th style="text-align:center">Aprovados</th><th style="text-align:center">Reprov.</th><th style="text-align:center">Vendas Parc.</th><th>Produtos</th></tr>
+      <tr>
+        <th>Closer R2</th>
+        <th style="text-align:center">R2 Agend.</th>
+        <th style="text-align:center">R2 Real.</th>
+        <th style="text-align:center">Aprovados</th>
+        <th style="text-align:center">Reprov.</th>
+        <th style="text-align:center">% Conv. R2</th>
+        <th style="text-align:center">Vendas Parc.</th>
+        <th style="text-align:right">Receita Parc.</th>
+        <th style="text-align:right">Ticket Médio</th>
+      </tr>
       ${closerR2Rows}
       <tr class="totals">
         <td>TOTAL</td>
@@ -978,17 +1039,27 @@ async function buildIncorporadorReport(supabase: any) {
         <td style="text-align:center">${r2CloserTotals.r2Re}</td>
         <td style="text-align:center">${r2CloserTotals.aprov}</td>
         <td style="text-align:center">${r2CloserTotals.reprov}</td>
+        <td style="text-align:center">${r2CloserTotals.r2Re > 0 ? pct(r2CloserTotals.aprov, r2CloserTotals.r2Re) : '-'}</td>
         <td style="text-align:center">${r2CloserTotals.vendas}</td>
-        <td></td>
+        <td style="text-align:right">${fmtBRL(r2CloserTotals.receita)}</td>
+        <td style="text-align:right">${r2CloserTotals.vendas > 0 ? fmtBRL(r2CloserTotals.receita / r2CloserTotals.vendas) : '-'}</td>
       </tr>
     </table>
+    <div class="legend-note">% Conv. R2 = Aprovados / R2 Realizada. Detalhamento por produto na seção 4.</div>
 
     <!-- SEÇÃO 4: RESUMO FINANCEIRO -->
-    <div class="section-title">4. Resumo Financeiro</div>
+    <div class="section-title">4. Resumo Financeiro — Bruto vs Líquido</div>
     <table>
-      <tr><th>Tipo</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor</th></tr>
+      <tr>
+        <th>Tipo</th>
+        <th style="text-align:center">Qtd</th>
+        <th style="text-align:right">Bruto</th>
+        <th style="text-align:right">Líquido</th>
+        <th style="text-align:center">Δ %</th>
+      </tr>
       ${finRows.join('')}
     </table>
+    <div class="legend-note">Bruto = preço de referência cadastrado no produto (product_configurations). Líquido = valor efetivamente recebido (após descontos, taxas, comissões). Δ% = quanto foi descontado do bruto.</div>
 
   </div>
   <div class="footer">MCF Gestão — Relatório gerado automaticamente em ${new Date().toLocaleDateString('pt-BR')}</div>
