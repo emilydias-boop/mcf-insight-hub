@@ -1033,10 +1033,15 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[WEBHOOK-RECEIVER] ❌ Erro:', error);
+    wlFinalStatus = 'error';
+    wlFinalError = errorMessage;
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+  }
+  } finally {
+    await finalizeWebhookLog(wlFinalStatus, wlFinalError);
   }
 });
 
