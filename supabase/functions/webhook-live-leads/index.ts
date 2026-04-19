@@ -256,6 +256,7 @@ serve(async (req) => {
       console.log('[LIVE-LEAD] 👤 Atribuído para:', assignedOwner);
     }
 
+    await finalizeWebhookLog('success');
     return new Response(
       JSON.stringify({ 
         success: true, 
@@ -272,6 +273,7 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[LIVE-LEAD] ❌ Erro:', error);
+    await finalizeWebhookLog('error', errorMessage);
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
