@@ -867,7 +867,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       <div className="flex items-center gap-2 mb-2">
                         <StickyNote className="h-4 w-4 text-blue-600" />
                         <span className="text-xs font-medium text-blue-700 dark:text-blue-400">
-                          Notas do SDR sobre o Lead ({sdrNotes.length})
+                          Notas do SDR sobre {selectedParticipant?.name?.split(' ')[0] || 'o Lead'} ({sdrNotes.length})
                         </span>
                       </div>
                       <ScrollArea className="max-h-[120px]">
