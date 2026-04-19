@@ -239,13 +239,14 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const getParticipantsListEarly = () => {
     if (!activeMeeting) return [];
     
-    const allAttendees: { id: string; notes: string | null; closerNotes: string | null }[] = [];
+    const allAttendees: { id: string; notes: string | null; closerNotes: string | null; dealId: string | null }[] = [];
     for (const m of allMeetings) {
       if (m.attendees) {
         allAttendees.push(...m.attendees.map(att => ({
           id: att.id,
           notes: att.notes,
           closerNotes: att.closer_notes,
+          dealId: (att as any).deal_id || m.deal_id || null,
         })));
       }
     }
