@@ -139,6 +139,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const [showR2PromptDialog, setShowR2PromptDialog] = useState(false);
   const [showLinkContractDialog, setShowLinkContractDialog] = useState(false);
   const [contractPaidParticipant, setContractPaidParticipant] = useState<{ id: string; name: string; dealId: string | null } | null>(null);
+  const [outcomeModalDeal, setOutcomeModalDeal] = useState<{ dealId: string; dealName: string; contactName: string; originId: string } | null>(null);
   
   const updateStatus = useUpdateMeetingStatus();
   const cancelMeeting = useCancelMeeting();
@@ -219,8 +220,24 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   };
 
   const handleCompleted = () => {
-    if (selectedParticipant) {
-      handleParticipantStatusChange(selectedParticipant.id, 'completed');
+    if (!selectedParticipant) return;
+    const participantName = selectedParticipant.name;
+    const dealId = (selectedParticipant as any).dealId || activeMeeting?.deal_id || null;
+    const dealName = activeMeeting?.deal?.name || participantName;
+    const originId = (activeMeeting?.deal as any)?.origin_id || '';
+
+    handleParticipantStatusChange(selectedParticipant.id, 'completed');
+
+    // Para BU Consórcio, abrir modal de desfecho obrigatório após marcar Realizada
+    if (activeBU === 'consorcio' && dealId) {
+      setTimeout(() => {
+        setOutcomeModalDeal({
+          dealId,
+          dealName,
+          contactName: participantName,
+          originId,
+        });
+      }, 400);
     }
   };
 
