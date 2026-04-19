@@ -665,9 +665,9 @@ async function buildIncorporadorReport(supabase: any) {
 
   const sdrRows = sdrList.map((s, idx) => {
     const rankClass = idx === 0 ? 'rank-1' : idx === 1 ? 'rank-2' : idx === 2 ? 'rank-3' : '';
-    const noShowBase = s.r1Realizadas + s.noShow;
-    const compRate = noShowBase > 0 ? pct(s.r1Realizadas, noShowBase) : '-';
-    const noShowRate = noShowBase > 0 ? pct(s.noShow, noShowBase) : '-';
+    // Base = agendados (mesma do painel SDR: % sobre o total de reuniões marcadas pelo SDR)
+    const compRate = s.agendados > 0 ? pct(s.r1Realizadas, s.agendados) : '-';
+    const noShowRate = s.agendados > 0 ? pct(s.noShow, s.agendados) : '-';
     const convRate = s.r1Realizadas > 0 ? pct(s.contratos, s.r1Realizadas) : '-';
     const metaPct = s.meta > 0 ? pct(s.agendados, s.meta) : '-';
     return `<tr class="${rankClass}">
@@ -694,7 +694,7 @@ async function buildIncorporadorReport(supabase: any) {
     contratos: acc.contratos + s.contratos,
     calls: acc.calls + s.calls,
   }), { meta: 0, agendados: 0, r1Realizadas: 0, noShow: 0, contratos: 0, calls: 0 });
-  const sdrTotalsBase = sdrTotals.r1Realizadas + sdrTotals.noShow;
+  const sdrTotalsBase = sdrTotals.agendados;
 
   // ══ 5. CLOSER R1 PERFORMANCE ══
   interface CloserR1Stats { name: string; r1Agendadas: number; r1Realizadas: number; contratos: number; r2Marcadas: number; aprovados: number; }
