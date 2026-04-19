@@ -665,9 +665,9 @@ async function buildIncorporadorReport(supabase: any) {
 
   const sdrRows = sdrList.map((s, idx) => {
     const rankClass = idx === 0 ? 'rank-1' : idx === 1 ? 'rank-2' : idx === 2 ? 'rank-3' : '';
-    const noShowBase = s.r1Realizadas + s.noShow;
-    const compRate = noShowBase > 0 ? pct(s.r1Realizadas, noShowBase) : '-';
-    const noShowRate = noShowBase > 0 ? pct(s.noShow, noShowBase) : '-';
+    // Base = agendados (mesma do painel SDR: % sobre o total de reuniões marcadas pelo SDR)
+    const compRate = s.agendados > 0 ? pct(s.r1Realizadas, s.agendados) : '-';
+    const noShowRate = s.agendados > 0 ? pct(s.noShow, s.agendados) : '-';
     const convRate = s.r1Realizadas > 0 ? pct(s.contratos, s.r1Realizadas) : '-';
     const metaPct = s.meta > 0 ? pct(s.agendados, s.meta) : '-';
     return `<tr class="${rankClass}">
@@ -694,7 +694,7 @@ async function buildIncorporadorReport(supabase: any) {
     contratos: acc.contratos + s.contratos,
     calls: acc.calls + s.calls,
   }), { meta: 0, agendados: 0, r1Realizadas: 0, noShow: 0, contratos: 0, calls: 0 });
-  const sdrTotalsBase = sdrTotals.r1Realizadas + sdrTotals.noShow;
+  const sdrTotalsBase = sdrTotals.agendados;
 
   // ══ 5. CLOSER R1 PERFORMANCE ══
   interface CloserR1Stats { name: string; r1Agendadas: number; r1Realizadas: number; contratos: number; r2Marcadas: number; aprovados: number; }
@@ -886,11 +886,11 @@ async function buildIncorporadorReport(supabase: any) {
 
 
   // ══ BUILD HTML ══
-  // Helpers para R1 com %
-  const r1Outros = Math.max(0, rpcTotals.agendamentos - rpcTotals.r1_realizada - rpcTotals.no_shows);
-  const r1Base = rpcTotals.r1_realizada + rpcTotals.no_shows;
-  const r1ComparPct = r1Base > 0 ? pct(rpcTotals.r1_realizada, r1Base) : '-';
-  const r1NoShowPct = r1Base > 0 ? pct(rpcTotals.no_shows, r1Base) : '-';
+  // Helpers para R1 com % — base = R1 Agendada (scheduled_at, mesma do painel /crm/reunioes-equipe)
+  const r1AgendadaTotal = rpcTotals.r1_agendada;
+  const r1Outros = Math.max(0, r1AgendadaTotal - rpcTotals.r1_realizada - rpcTotals.no_shows);
+  const r1ComparPct = r1AgendadaTotal > 0 ? pct(rpcTotals.r1_realizada, r1AgendadaTotal) : '-';
+  const r1NoShowPct = r1AgendadaTotal > 0 ? pct(rpcTotals.no_shows, r1AgendadaTotal) : '-';
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${STYLES}</style></head><body>
 <div class="container">
@@ -916,14 +916,14 @@ async function buildIncorporadorReport(supabase: any) {
 
     <div class="sub-title">Reuniões R1 (Sáb→Sex)</div>
     <div class="kpi-row">
-      <div class="kpi"><div class="value">${rpcTotals.agendamentos}</div><div class="label">Agendamentos</div><div class="kpi-hint">Inclui reagendadas</div></div>
+      <div class="kpi"><div class="value">${r1AgendadaTotal}</div><div class="label">R1 Agendada</div><div class="kpi-hint">Marcadas PARA a semana</div></div>
       <div class="kpi"><div class="value">${rpcTotals.r1_realizada}</div><div class="label">R1 Realizada</div><div class="kpi-hint">Aconteceram</div></div>
       <div class="kpi red"><div class="value">${rpcTotals.no_shows}</div><div class="label">No-Show</div><div class="kpi-hint">Não compareceu</div></div>
       <div class="kpi"><div class="value" style="color:#6b7280">${r1Outros}</div><div class="label">Outros</div><div class="kpi-hint">Reagendadas/canceladas/pendentes</div></div>
-      <div class="kpi green"><div class="value">${r1ComparPct}</div><div class="label">% Comparecimento</div><div class="kpi-hint">Realizada / (Realizada+NS)</div></div>
-      <div class="kpi red"><div class="value">${r1NoShowPct}</div><div class="label">% No-Show</div><div class="kpi-hint">NS / (Realizada+NS)</div></div>
+      <div class="kpi green"><div class="value">${r1ComparPct}</div><div class="label">% Comparecimento</div><div class="kpi-hint">Realizada / R1 Agendada</div></div>
+      <div class="kpi red"><div class="value">${r1NoShowPct}</div><div class="label">% No-Show</div><div class="kpi-hint">No-Show / R1 Agendada</div></div>
     </div>
-    <div class="legend-note">Agendamentos inclui reagendamentos (reuniões marcadas, mesmo que depois remarcadas). % Comparecimento e % No-Show são calculados apenas sobre as que efetivamente aconteceram (Realizada + No-Show), não sobre o total de agendamentos.</div>
+    <div class="legend-note">R1 Agendada = reuniões marcadas PARA esta semana (Sáb–Sex), independente de quando foram criadas. Mesma métrica usada no painel <b>/crm/reunioes-equipe</b>. % Comparecimento e % No-Show são calculados sobre o total de R1 Agendada (mesma base do painel).</div>
 
     <div class="sub-title">Reuniões R2 — Carrinho da semana</div>
     <div class="kpi-row">
