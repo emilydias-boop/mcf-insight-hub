@@ -35,6 +35,12 @@ export interface R2MetricsData {
   vendasExtras: number;
   conversaoGeral: number;
   closerConversions: CloserConversion[];
+  /** Aprovados cujo contrato foi pago APÓS o corte de Sex 12:00 (vão p/ próxima safra) */
+  tardios: number;
+  tardiosList: Array<{ id: string; name: string; phone: string | null; contractPaidAt: string | null; closerName: string | null }>;
+  /** R2s realizadas (completed) sem r2_status_id definido — closer esqueceu de carimbar */
+  pendentesStatus: number;
+  pendentesStatusList: Array<{ id: string; name: string; closerName: string | null }>;
 }
 
 const normalizePhone = (phone: string | null): string | null => {
@@ -61,6 +67,9 @@ export function useR2MetricsData(weekStart: Date, weekEnd: Date, carrinhoConfig?
       let noShow = 0;
       let aprovados = 0;
       let reembolsosCount = 0;
+      let tardiosCount = 0;
+      const tardiosList: R2MetricsData['tardiosList'] = [];
+      const pendentesStatusList: R2MetricsData['pendentesStatusList'] = [];
 
       const approvedEmails: string[] = [];
       const approvedPhones: string[] = [];
@@ -77,6 +86,19 @@ export function useR2MetricsData(weekStart: Date, weekEnd: Date, carrinhoConfig?
 
         if (!closerStats.has(closerId)) {
           closerStats.set(closerId, { name: closerName, color: closerColor, aprovados: 0, vendas: 0 });
+        }
+
+        // Detectar R2 realizada SEM status (closer esqueceu de carimbar)
+        const realizadaSemStatus =
+          (row.attendee_status === 'completed' || row.attendee_status === 'presente' || row.meeting_status === 'completed')
+          && row.attendee_status !== 'no_show'
+          && !row.r2_status_id;
+        if (realizadaSemStatus) {
+          pendentesStatusList.push({
+            id: row.attendee_id,
+            name: row.attendee_name || 'Sem nome',
+            closerName: row.r2_closer_name,
+          });
         }
 
         if (statusName.includes('desistente')) {
@@ -96,6 +118,20 @@ export function useR2MetricsData(weekStart: Date, weekEnd: Date, carrinhoConfig?
             meetingId: row.attendee_id,
           });
         } else if (statusName.includes('aprovado') || statusName.includes('approved')) {
+          // Filtro de corte por DATA DO CONTRATO PAGO:
+          // - dentro_corte = true → conta como aprovado da safra
+          // - dentro_corte = false → "tardio" (vai pra próxima safra), aparece em badge
+          if (row.dentro_corte === false) {
+            tardiosCount++;
+            tardiosList.push({
+              id: row.attendee_id,
+              name: row.attendee_name || 'Sem nome',
+              phone: row.attendee_phone,
+              contractPaidAt: row.contract_paid_at,
+              closerName: row.r2_closer_name,
+            });
+            continue;
+          }
           aprovados++;
           closerStats.get(closerId)!.aprovados++;
           approvedAttendeeIds.add(row.attendee_id);
@@ -109,7 +145,7 @@ export function useR2MetricsData(weekStart: Date, weekEnd: Date, carrinhoConfig?
         }
       }
 
-      const agendadosPendentes = unifiedData.length - desistentes - reprovados - reembolsosCount - proximaSemana - noShow - aprovados;
+      const agendadosPendentes = unifiedData.length - desistentes - reprovados - reembolsosCount - proximaSemana - noShow - aprovados - tardiosCount;
       const totalLeads = agendadosPendentes + aprovados;
 
       // Vendas (partnership sales)
@@ -204,6 +240,10 @@ export function useR2MetricsData(weekStart: Date, weekEnd: Date, carrinhoConfig?
         vendasExtras: totalVendasExtras,
         conversaoGeral,
         closerConversions,
+        tardios: tardiosCount,
+        tardiosList,
+        pendentesStatus: pendentesStatusList.length,
+        pendentesStatusList,
       };
     },
     enabled: !!unifiedData,
@@ -228,6 +268,10 @@ function emptyMetrics(): R2MetricsData {
     vendasExtras: 0,
     conversaoGeral: 0,
     closerConversions: [],
+    tardios: 0,
+    tardiosList: [],
+    pendentesStatus: 0,
+    pendentesStatusList: [],
   };
 }
 

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -15,7 +16,11 @@ import {
   RefreshCcw,
   User,
   Phone,
-  Briefcase
+  Briefcase,
+  AlertTriangle,
+  Clock,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -78,6 +83,8 @@ export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig, previousCon
   const { data: metrics, isLoading } = useR2MetricsData(weekStart, weekEnd, carrinhoConfig, previousConfig);
   const { data: sdrCarrinhoMetrics, isLoading: sdrLoading } = useSDRCarrinhoMetrics(weekStart, weekEnd, 'incorporador', carrinhoConfig, previousConfig);
   const { data: closerCarrinhoMetrics, isLoading: closerLoading } = useCloserCarrinhoMetrics(weekStart, weekEnd, carrinhoConfig, previousConfig);
+  const [showTardios, setShowTardios] = useState(false);
+  const [showPendentes, setShowPendentes] = useState(false);
 
   const handleRescheduleNoShows = () => {
     window.location.href = '/crm/agenda-r2?tab=noshows';
@@ -98,6 +105,10 @@ export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig, previousCon
       </div>
     );
   }
+
+  // Sex 12:00 da próxima sexta = fim da janela r2Meetings (= corte da safra)
+  const horarioCorte = carrinhoConfig?.carrinhos?.[0]?.horario_corte || '12:00';
+  const corteLabel = `Sex ${format(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 8), "dd/MM", { locale: ptBR })} ${horarioCorte}`;
 
   return (
     <div className="space-y-6">
@@ -192,6 +203,93 @@ export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig, previousCon
         </div>
       </div>
 
+      {/* Alertas de corte: tardios + R2 sem status */}
+      {(metrics.tardios > 0 || metrics.pendentesStatus > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {metrics.tardios > 0 && (
+            <Card className="border-orange-300 dark:border-orange-700 bg-orange-50/50 dark:bg-orange-950/20">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-sm text-orange-900 dark:text-orange-100">
+                        +{metrics.tardios} aprovados tardios
+                      </p>
+                      <p className="text-xs text-orange-700 dark:text-orange-300 mt-0.5">
+                        Contrato pago após o corte ({corteLabel}). Contam na próxima safra.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs gap-1 text-orange-700 dark:text-orange-300"
+                    onClick={() => setShowTardios(v => !v)}
+                  >
+                    {showTardios ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    {showTardios ? 'Ocultar' : 'Mostrar'}
+                  </Button>
+                </div>
+                {showTardios && (
+                  <ul className="mt-3 space-y-1 text-xs text-orange-900 dark:text-orange-100 max-h-48 overflow-y-auto">
+                    {metrics.tardiosList.map(t => (
+                      <li key={t.id} className="flex items-center justify-between gap-2 py-1 border-t border-orange-200 dark:border-orange-800">
+                        <span className="truncate">{t.name}</span>
+                        <span className="text-orange-600 dark:text-orange-400 shrink-0">
+                          {t.contractPaidAt ? format(new Date(t.contractPaidAt), 'dd/MM HH:mm', { locale: ptBR }) : '—'}
+                          {t.closerName ? ` · ${t.closerName.split(' ')[0]}` : ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          {metrics.pendentesStatus > 0 && (
+            <Card className="border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-sm text-amber-900 dark:text-amber-100">
+                        ⚠️ {metrics.pendentesStatus} R2 sem status
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                        Reuniões realizadas que ainda não tiveram o status carimbado pelo closer.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs gap-1 text-amber-700 dark:text-amber-300"
+                    onClick={() => setShowPendentes(v => !v)}
+                  >
+                    {showPendentes ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    {showPendentes ? 'Ocultar' : 'Mostrar'}
+                  </Button>
+                </div>
+                {showPendentes && (
+                  <ul className="mt-3 space-y-1 text-xs text-amber-900 dark:text-amber-100 max-h-48 overflow-y-auto">
+                    {metrics.pendentesStatusList.map(p => (
+                      <li key={p.id} className="flex items-center justify-between gap-2 py-1 border-t border-amber-200 dark:border-amber-800">
+                        <span className="truncate">{p.name}</span>
+                        <span className="text-amber-600 dark:text-amber-400 shrink-0">
+                          {p.closerName ? p.closerName.split(' ')[0] : '—'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
       {/* Seção 2: Conversão do Carrinho */}
       <div>
         <h3 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wide">
@@ -203,6 +301,15 @@ export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig, previousCon
             label="Selecionados"
             value={aprovadosOverride ?? metrics.selecionados}
             color="#10B981"
+            badge={
+              metrics.tardios > 0 ? (
+                <Badge variant="outline" className="text-[10px] bg-orange-100/80 text-orange-700 dark:bg-orange-900/50 dark:text-orange-200 border-orange-300 dark:border-orange-700">
+                  +{metrics.tardios} tardios
+                </Badge>
+              ) : (
+                <span className="text-[10px] text-muted-foreground">até {corteLabel}</span>
+              )
+            }
           />
           <MetricCard
             icon={<ShoppingBag className="h-5 w-5" />}
