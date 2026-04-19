@@ -203,20 +203,34 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
 
           {/* Reschedule Note */}
           <div className="space-y-2">
-            <Label>Motivo do Reagendamento</Label>
+            <Label>
+              Motivo do Reagendamento <span className="text-destructive">*</span>
+            </Label>
             <Textarea
               value={rescheduleNote}
               onChange={(e) => setRescheduleNote(e.target.value)}
-              placeholder="Ex: Cliente pediu para remarcar, não atendeu, etc..."
+              placeholder="Obrigatório: descreva o que ocorreu (ex: Cliente pediu para remarcar para semana que vem)"
               rows={2}
             />
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">
+                Mínimo 10 caracteres — descreva o motivo real do reagendamento
+              </span>
+              <span className={cn(
+                "font-medium tabular-nums",
+                isNoteValid ? "text-green-600 dark:text-green-500" : "text-muted-foreground"
+              )}>
+                {rescheduleNote.trim().length}/10
+              </span>
+            </div>
           </div>
 
           {/* Submit */}
           <Button 
             className="w-full" 
             onClick={handleSubmit}
-            disabled={!selectedDate || !selectedTime || rescheduleMeeting.isPending}
+            disabled={!selectedDate || !selectedTime || !isNoteValid || rescheduleMeeting.isPending}
+            title={!isNoteValid ? 'Informe uma justificativa de pelo menos 10 caracteres' : undefined}
           >
             {rescheduleMeeting.isPending ? 'Reagendando...' : 'Reagendar'}
           </Button>
