@@ -108,6 +108,33 @@ serve(async (req) => {
     const payload = await req.json();
     console.log('[WEBHOOK-RECEIVER] Payload recebido:', JSON.stringify(payload, null, 2));
 
+    // Painel de movimentações: derivar event_type pelo slug e logar
+    wlPayloadSnapshot = payload;
+    const slugLower = slug.toLowerCase();
+    if (slugLower.includes('anamnese') && slugLower.includes('incompleta')) {
+      wlEventType = 'lead.received.anamnese_incompleta';
+    } else if (slugLower.includes('anamnese')) {
+      wlEventType = 'lead.received.anamnese_completa';
+    } else if (slugLower.includes('parceria')) {
+      wlEventType = 'lead.received.parceria';
+    } else if (slugLower.includes('instagram')) {
+      wlEventType = 'lead.received.instagram';
+    } else {
+      wlEventType = `lead.received.${slugLower}`;
+    }
+    try {
+      const { data: log } = await supabase
+        .from('webhook_events')
+        .insert({
+          event_type: wlEventType,
+          event_data: payload,
+          status: 'processing',
+        })
+        .select('id')
+        .single();
+      wlLogId = log?.id ?? null;
+    } catch (_) { /* nunca quebra fluxo */ }
+
     // 4. Apply reverse field mapping before validation
     if (endpoint.field_mapping) {
       for (const [sourceField, targetField] of Object.entries(endpoint.field_mapping)) {
