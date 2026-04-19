@@ -49,6 +49,8 @@ export interface CarrinhoMetricBoundaries {
   vendasParceria: { start: Date; end: Date };
   /** R1 realizadas: mesma janela dos contratos */
   r1Meetings: { start: Date; end: Date };
+  /** Sexta-feira da semana ANTERIOR no horário de corte (início real da janela operacional desta safra) */
+  previousCutoff: Date;
 }
 
 /**
@@ -91,6 +93,8 @@ export function getCarrinhoMetricBoundaries(
   const currentFriday = addDays(new Date(weekStart), 1);
   // Próxima sexta = uma semana depois
   const nextFriday = addDays(currentFriday, 7);
+  // Sexta da semana ANTERIOR = -6 dias da quinta = Qui - 6
+  const previousFriday = subDays(new Date(weekStart), 6);
 
   // Horário de corte da sexta atual (default 12:00)
   const horarioCorte = config?.carrinhos?.[0]?.horario_corte || '12:00';
@@ -106,6 +110,14 @@ export function getCarrinhoMetricBoundaries(
     cutHour, cutMinute || 0, 0, 0
   );
 
+  // Horário de corte da sexta ANTERIOR (usa previousConfig se disponível)
+  const prevHorarioCorte = previousConfig?.carrinhos?.[0]?.horario_corte || horarioCorte;
+  const [prevCutHour, prevCutMinute] = prevHorarioCorte.split(':').map(Number);
+  const previousFridayCutoff = new Date(
+    previousFriday.getFullYear(), previousFriday.getMonth(), previousFriday.getDate(),
+    prevCutHour, prevCutMinute || 0, 0, 0
+  );
+
   // Vendas parceria, Aprovados e R2 Meetings: Qui 00:00 da safra → próxima Sex no corte (12:00).
   // Janela alinhada à safra operacional (Qui→Qua) com carry-over até o próximo corte,
   // para capturar R2s de Qui/Sex-manhã e vendas pós-aprovação até o fechamento.
@@ -117,6 +129,7 @@ export function getCarrinhoMetricBoundaries(
     aprovados: { start: thuStart, end: nextFridayCutoff },
     vendasParceria: { start: thuStart, end: vendasEnd },
     r1Meetings: { start: thuStart, end: wedEnd },
+    previousCutoff: previousFridayCutoff,
   };
 }
 
