@@ -138,16 +138,38 @@ export function R2ContractLifecyclePanel() {
 
   const realizadasChildren = useMemo(() => {
     if (!rows) return [];
-    const map = new Map<string, { count: number; color: string | null }>();
+    const map = new Map<string, { count: number; color: string | null; key: string }>();
     rows.filter(r => r.situacao === 'realizada')
       .forEach(r => {
         const cws = r.carrinhoWeekStart;
         const isOtherWeek = cws && cws !== currentWeekStartStr;
-        const key = isOtherWeek ? 'Outra semana' : (r.r2StatusName || 'Sem status');
-        const existing = map.get(key) || { count: 0, color: isOtherWeek ? null : (r.r2StatusColor || null) };
-        map.set(key, { count: existing.count + 1, color: existing.color });
+        const statusName = r.r2StatusName || 'Sem status';
+        const isAprovado = statusName.toLowerCase().includes('aprovado') || statusName.toLowerCase().includes('approved');
+
+        let displayName: string;
+        let key: string;
+        let color: string | null;
+
+        if (isOtherWeek) {
+          displayName = 'Outra semana';
+          key = '__other_week__';
+          color = null;
+        } else if (isAprovado && !r.dentroCorte) {
+          displayName = 'Aprovado (fora do corte)';
+          key = '__aprovado_fora__';
+          color = r.r2StatusColor || null;
+        } else {
+          displayName = statusName;
+          key = `status:${statusName}`;
+          color = r.r2StatusColor || null;
+        }
+
+        const existing = map.get(key) || { count: 0, color, key: displayName };
+        map.set(key, { count: existing.count + 1, color: existing.color, key: displayName });
       });
-    return Array.from(map.entries()).sort((a, b) => b[1].count - a[1].count);
+    return Array.from(map.entries())
+      .map(([k, v]) => [v.key, { count: v.count, color: v.color, filterKey: k }] as const)
+      .sort((a, b) => b[1].count - a[1].count);
   }, [rows, currentWeekStartStr]);
 
   // Agendados children: dynamic by r2StatusName (invited/scheduled)
