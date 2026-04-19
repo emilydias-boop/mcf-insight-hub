@@ -61,11 +61,15 @@ export default function MinhasReunioes() {
         const [year, month] = selectedMonth.split('-').map(Number);
         const monthDate = new Date(year, month - 1);
         return { startDate: startOfMonth(monthDate), endDate: endOfMonth(monthDate) };
-      case 'custom':
-        return { 
-          startDate: customStartDate ? startOfDay(customStartDate) : null, 
-          endDate: customEndDate ? endOfDay(customEndDate) : null 
+      case 'custom': {
+        // Se só preencheu uma data, usar como filtro de dia único
+        const start = customStartDate || customEndDate;
+        const end = customEndDate || customStartDate;
+        return {
+          startDate: start ? startOfDay(start) : null,
+          endDate: end ? endOfDay(end) : null,
         };
+      }
       default:
         return { startDate: null, endDate: null };
     }

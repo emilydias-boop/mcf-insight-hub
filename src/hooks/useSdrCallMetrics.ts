@@ -67,6 +67,7 @@ export const useSdrCallMetrics = (
           .select('id, status, outcome, duration_seconds, started_at, ended_at, created_at')
           .eq('user_id', profile.id)
           .eq('direction', 'outbound')
+          .order('created_at', { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
         if (startDate) {
@@ -201,6 +202,7 @@ export const useSdrCallMetricsBySdrId = (
           .eq('direction', 'outbound')
           .gte('created_at', format(startDate, "yyyy-MM-dd'T'00:00:00"))
           .lte('created_at', format(endDate, "yyyy-MM-dd'T'23:59:59"))
+          .order('created_at', { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
         if (error) {
