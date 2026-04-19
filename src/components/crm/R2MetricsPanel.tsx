@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -15,7 +16,11 @@ import {
   RefreshCcw,
   User,
   Phone,
-  Briefcase
+  Briefcase,
+  AlertTriangle,
+  Clock,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -78,6 +83,8 @@ export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig, previousCon
   const { data: metrics, isLoading } = useR2MetricsData(weekStart, weekEnd, carrinhoConfig, previousConfig);
   const { data: sdrCarrinhoMetrics, isLoading: sdrLoading } = useSDRCarrinhoMetrics(weekStart, weekEnd, 'incorporador', carrinhoConfig, previousConfig);
   const { data: closerCarrinhoMetrics, isLoading: closerLoading } = useCloserCarrinhoMetrics(weekStart, weekEnd, carrinhoConfig, previousConfig);
+  const [showTardios, setShowTardios] = useState(false);
+  const [showPendentes, setShowPendentes] = useState(false);
 
   const handleRescheduleNoShows = () => {
     window.location.href = '/crm/agenda-r2?tab=noshows';
@@ -98,6 +105,10 @@ export function R2MetricsPanel({ weekStart, weekEnd, carrinhoConfig, previousCon
       </div>
     );
   }
+
+  // Sex 12:00 da próxima sexta = fim da janela r2Meetings (= corte da safra)
+  const horarioCorte = carrinhoConfig?.carrinhos?.[0]?.horario_corte || '12:00';
+  const corteLabel = `Sex ${format(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 8), "dd/MM", { locale: ptBR })} ${horarioCorte}`;
 
   return (
     <div className="space-y-6">
