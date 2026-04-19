@@ -155,6 +155,11 @@ const STYLES = `
   .pie-chart { width: 140px; height: 140px; border-radius: 50%; flex-shrink: 0; }
   .pie-legend { font-size: 12px; line-height: 2; }
   .pie-legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .kpi-hint { font-size: 9px; color: #888; margin-top: 4px; line-height: 1.2; padding: 0 4px; }
+  .legend-note { font-size: 11px; color: #555; font-style: italic; margin: 4px 0 12px; padding: 8px 12px; background: #f8f9fc; border-left: 3px solid #cbd5e1; border-radius: 4px; }
+  .pie-row { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0 24px; }
+  .pie-block { flex: 1; min-width: 280px; }
+  .pie-block-title { font-size: 12px; font-weight: 600; color: #444; margin-bottom: 8px; text-align: center; }
 `;
 
 // ══════════════════════════════════════════════════
