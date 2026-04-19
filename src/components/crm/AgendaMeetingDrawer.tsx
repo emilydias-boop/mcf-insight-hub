@@ -268,24 +268,24 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const isBookedBySdr = user?.id === activeMeeting?.booked_by;
   const canEditSdrNote = isBookedBySdr && (activeMeeting?.status === 'scheduled' || activeMeeting?.status === 'rescheduled');
 
-  // Fetch SDR notes for this deal - MUST be before any conditional return
-  const dealId = activeMeeting?.deal_id;
+  // Fetch SDR notes for the SELECTED participant's deal - MUST be before any conditional return
+  const selectedDealId = selectedParticipantEarly?.dealId;
   const { data: sdrNotes } = useQuery({
-    queryKey: ['deal-sdr-notes', dealId],
+    queryKey: ['deal-sdr-notes', selectedDealId],
     queryFn: async () => {
-      if (!dealId) return [];
+      if (!selectedDealId) return [];
       
       const { data, error } = await supabase
         .from('deal_activities')
         .select('id, description, created_at')
-        .eq('deal_id', dealId)
+        .eq('deal_id', selectedDealId)
         .eq('activity_type', 'note')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       return data;
     },
-    enabled: !!dealId,
+    enabled: !!selectedDealId,
   });
 
   // Fetch dynamic meeting link based on closer, day and time - MUST be before any conditional return
