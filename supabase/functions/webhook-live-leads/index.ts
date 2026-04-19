@@ -21,9 +21,38 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
+  // Painel "Movimentações de Leads" (webhook_events)
+  const startTime = Date.now();
+  let webhookLogId: string | null = null;
+  const finalizeWebhookLog = async (status: 'success' | 'error', errorMsg?: string) => {
+    if (!webhookLogId) return;
+    try {
+      await supabase.from('webhook_events').update({
+        status,
+        processed_at: new Date().toISOString(),
+        processing_time_ms: Date.now() - startTime,
+        error_message: errorMsg ?? null,
+      }).eq('id', webhookLogId);
+    } catch (_) { /* nunca quebra fluxo */ }
+  };
+
   try {
     const payload = await req.json();
     console.log('[LIVE-LEAD] Recebendo lead:', JSON.stringify(payload, null, 2));
+
+    // Registrar evento no painel de movimentações
+    try {
+      const { data: log } = await supabase
+        .from('webhook_events')
+        .insert({
+          event_type: 'lead.received.live',
+          event_data: payload,
+          status: 'processing',
+        })
+        .select('id')
+        .single();
+      webhookLogId = log?.id ?? null;
+    } catch (_) { /* nunca quebra fluxo */ }
 
     // Validar campos obrigatórios
     if (!payload.name || !payload.email) {
