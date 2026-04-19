@@ -10792,87 +10792,47 @@ export type Database = {
           total_installments: number
         }[]
       }
-      get_carrinho_r2_attendees:
-        | {
-            Args: {
-              p_week_start: string
-              p_window_end: string
-              p_window_start: string
-            }
-            Returns: {
-              attendee_id: string
-              attendee_name: string
-              attendee_phone: string
-              attendee_status: string
-              carrinho_status: string
-              carrinho_updated_at: string
-              carrinho_week_start: string
-              contact_email: string
-              contact_id: string
-              contact_name: string
-              contact_phone: string
-              contract_paid_at: string
-              deal_id: string
-              deal_name: string
-              is_encaixado: boolean
-              meeting_slot_id: string
-              meeting_status: string
-              partner_name: string
-              phone_dedup_key: string
-              r1_closer_id: string
-              r1_closer_name: string
-              r1_contract_paid_at: string
-              r1_scheduled_at: string
-              r2_closer_color: string
-              r2_closer_id: string
-              r2_closer_name: string
-              r2_status_color: string
-              r2_status_id: string
-              r2_status_name: string
-              scheduled_at: string
-            }[]
-          }
-        | {
-            Args: {
-              p_apply_contract_cutoff?: boolean
-              p_week_start: string
-              p_window_end: string
-              p_window_start: string
-            }
-            Returns: {
-              attendee_id: string
-              attendee_name: string
-              attendee_phone: string
-              attendee_status: string
-              carrinho_status: string
-              carrinho_updated_at: string
-              carrinho_week_start: string
-              contact_email: string
-              contact_id: string
-              contact_name: string
-              contact_phone: string
-              contract_paid_at: string
-              deal_id: string
-              deal_name: string
-              dentro_corte: boolean
-              is_encaixado: boolean
-              meeting_slot_id: string
-              meeting_status: string
-              partner_name: string
-              phone_dedup_key: string
-              r1_closer_id: string
-              r1_closer_name: string
-              r1_contract_paid_at: string
-              r1_scheduled_at: string
-              r2_closer_color: string
-              r2_closer_id: string
-              r2_closer_name: string
-              r2_status_color: string
-              r2_status_id: string
-              r2_status_name: string
-              scheduled_at: string
-            }[]
-          }
+      get_carrinho_r2_attendees: {
+        Args: {
+          p_apply_contract_cutoff?: boolean
+          p_week_start: string
+          p_window_end: string
+          p_window_start: string
+        }
+        Returns: {
+          attendee_id: string
+          attendee_name: string
+          attendee_phone: string
+          attendee_status: string
+          carrinho_status: string
+          carrinho_updated_at: string
+          carrinho_week_start: string
+          contact_email: string
+          contact_id: string
+          contact_name: string
+          contact_phone: string
+          contract_paid_at: string
+          deal_id: string
+          deal_name: string
+          dentro_corte: boolean
+          is_encaixado: boolean
+          meeting_slot_id: string
+          meeting_status: string
+          partner_name: string
+          phone_dedup_key: string
+          r1_closer_id: string
+          r1_closer_name: string
+          r1_contract_paid_at: string
+          r1_scheduled_at: string
+          r2_closer_color: string
+          r2_closer_id: string
+          r2_closer_name: string
+          r2_status_color: string
+          r2_status_id: string
+          r2_status_name: string
+          scheduled_at: string
+        }[]
+      }
       get_contact_with_meetings: {
         Args: { p_email?: string; p_phone_suffix?: string }
         Returns: {
