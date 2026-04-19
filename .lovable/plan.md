@@ -1,90 +1,55 @@
 
-## Bug confirmado: filtro custom sem "Fim" busca tudo a partir do "Início"
+## Proposta: marcar parcelas já pagas no momento do cadastro retroativo
 
-### O que está acontecendo
+Excelente ideia — é a solução **certa pela raiz**. Em vez de só "não cancelar", o sistema vai refletir a realidade: cota antiga já entra com as parcelas passadas marcadas como `pago`.
 
-Validei direto no banco para o usuário **cleiton.lima** (que está logado):
+### Como funciona hoje
+No cadastro, o formulário pede `parcelas_pagas_empresa` (quantas a empresa já pagou pelo cliente). Quando salva, gera 240 parcelas todas `pendente` — só as da empresa ficam marcadas certo. Resultado: 13 meses de parcelas vencidas e "não pagas" → cota cancela sozinha.
 
-| Cenário UI | Mostra na UI | Banco real | Por quê |
-|---|---|---|---|
-| Filtro custom Início=14/04, Fim=vazio | **345** | 345 ligações de 14/04 em diante (sem limite) | Bug: sem `endDate`, hook busca TUDO a partir do início |
-| Filtro custom Início=08/04, Fim=vazio | **564** | 564 ligações de 08/04 em diante (sem limite) | Mesmo bug |
-| Filtro "Mês" abril | **631** | 631 ligações 01/04→30/04 | Correto ✅ |
+### Como vai funcionar
+No `CreateConsorcioCardModal`, quando a `data_contratacao` for anterior ao mês atual, exibir um **novo passo / seção** para o usuário informar o histórico de pagamentos retroativos:
 
-Os 564 (a partir de 08/04) **não são menores que 631 (mês inteiro)** — são uma subset coerente. O problema é que o usuário esperava que "Início=08/04" significasse "**no dia 08/04**" (deveria dar 107), mas o sistema interpreta como "**a partir de 08/04 sem limite final**" (dá 564).
+**Campo principal:** "Parcelas já pagas pelo cliente até hoje" (número)
+- Default sugerido = nº de meses entre `data_contratacao` e hoje menos `parcelas_pagas_empresa`
+- Usuário pode ajustar (cliente atrasou alguns meses, etc.)
 
-### Causa raiz
+**Campo opcional:** "Data do último pagamento" (date)
+- Permite o sistema saber até onde marcar como pago
 
-**Arquivo:** `src/pages/sdr/MinhasReunioes.tsx` linhas 64-68:
+### Lógica de geração das parcelas (na criação)
 
+Ao criar a cota com data retroativa:
+
+1. Gera 240 parcelas normalmente (com datas, valores, comissões — toda lógica atual preservada)
+2. Marca as **N primeiras parcelas do tipo `cliente`** como `status='pago'` com `data_pagamento` = data de vencimento (ou `ultimo_pagamento` se informado)
+3. Marca as **M primeiras parcelas do tipo `empresa`** como `status='pago'` (já existe — `parcelas_pagas_empresa`)
+4. Parcelas restantes ficam `pendente` normalmente
+
+### Onde mexer
+
+**1. `src/types/consorcio.ts`** — adicionar em `CreateConsorcioCardInput`:
 ```ts
-case 'custom':
-  return { 
-    startDate: customStartDate ? startOfDay(customStartDate) : null, 
-    endDate: customEndDate ? endOfDay(customEndDate) : null   // ← null se não preencher Fim
-  };
+parcelas_pagas_cliente?: number;
+data_ultimo_pagamento_cliente?: string;
 ```
 
-Combinado com `useSdrCallMetrics` (linhas 72-77) que aplica os filtros condicionalmente:
-```ts
-if (startDate) query = query.gte('created_at', ...);
-if (endDate)   query = query.lte('created_at', ...);  // ← se endDate for null, NÃO limita
-```
+**2. `CreateConsorcioCardModal` (ou wizard equivalente)** — novo bloco condicional:
+- Aparece apenas se `data_contratacao < startOfMonth(hoje)`
+- Mostra: "Cadastro retroativo detectado — informe o histórico"
+- Campo numérico com sugestão automática
+- Campo data opcional
 
-→ Resultado: filtra só por data de início, sem teto.
+**3. Hook de criação (`useCreateConsorcioCard` ou edge function de geração de parcelas)** — após gerar parcelas, executar update marcando as N primeiras parcelas do cliente como pagas, espelhando lógica já existente para empresa.
 
-### Bug secundário (também precisa corrigir)
+**4. Remover o auto-cancelamento** em `ConsorcioCardDrawer.tsx` (linhas 110-115) — vira ação manual via dropdown. Mesmo com retroativo correto, evita cancelar acidentalmente cotas legítimas.
 
-No mesmo `useSdrCallMetrics`, a paginação na linha 64-93 **não tem `.order()` explícito**. Sem ordem estável, o Postgres pode retornar linhas em ordem inconsistente entre páginas (`OFFSET 0-999`, `OFFSET 1000-1999`...), causando linhas duplicadas ou perdidas em SDRs com mais de 1000 ligações no período. Hoje só afeta uns poucos SDRs no mês inteiro, mas é um bug latente.
+**5. `deveSerCancelado` / `verificarRiscoCancelamento`** — mantêm lógica atual (sem necessidade de filtrar por `created_at`), porque agora as parcelas pagas estarão refletidas corretamente.
 
-### Plano de correção
+### Cotas já canceladas indevidamente
+Posso, em paralelo, listar as cotas canceladas pelo bug anterior (status=`cancelado`, criação recente, contratação antiga, 0 parcelas pagas) para o usuário revisar e reativar manualmente — sem alterações em massa sem aprovação.
 
-**1. Arquivo:** `src/pages/sdr/MinhasReunioes.tsx` (linhas 64-68)
-
-Quando custom estiver ativo e o usuário preencheu só "Início" (ou só "Fim"), tratar como **filtro de um único dia** (mesmo dia para início e fim):
-
-```ts
-case 'custom': {
-  // Se só preencheu uma data, usar ela como range único (dia específico)
-  const start = customStartDate || customEndDate;
-  const end = customEndDate || customStartDate;
-  return {
-    startDate: start ? startOfDay(start) : null,
-    endDate: end ? endOfDay(end) : null,
-  };
-}
-```
-
-→ Início=14/04, Fim=vazio passa a significar "dia 14/04 inteiro" (resultado esperado: ~30-50 ligações daquele dia, não 345).
-
-**2. Arquivo:** `src/hooks/useSdrCallMetrics.ts` (linha 67-70 e 199-204)
-
-Adicionar `.order('created_at', { ascending: true })` antes do `.range()` em ambas as queries paginadas, garantindo ordem estável entre páginas:
-
-```ts
-let query = supabase
-  .from('calls')
-  .select('id, status, outcome, duration_seconds, started_at, ended_at, created_at')
-  .eq('user_id', profile.id)
-  .eq('direction', 'outbound')
-  .order('created_at', { ascending: true })  // ← novo
-  .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-```
-
-**3. UI feedback (opcional — recomendo incluir):**
-
-No filtro custom, quando o usuário seleciona só "Início", mostrar uma dica visual indicando "filtrando apenas o dia DD/MM/YYYY" para deixar claro o comportamento.
-
-### Resultado esperado após correção
-
-| Cenário UI | Vai mostrar | Cálculo |
-|---|---|---|
-| Início=14/04, Fim=vazio | ligações **só do dia 14/04** | startOfDay(14/04) → endOfDay(14/04) |
-| Início=08/04, Fim=14/04 | ligações de **08 a 14/04** | range correto |
-| Mês abril | 631 | continua igual |
-
-### Não muda
-- Sem alteração de banco
-- Sem impacto em outros componentes que usam `useSdrCallMetrics` (hook continua com mesma assinatura)
-- Cards de Reuniões/R2 continuam funcionando — eles vêm de outros hooks
-- "Hoje", "Semana", "Mês" continuam idênticos
+### Garantias
+- Toda a lógica de cálculo de parcelas, comissões e valores **permanece intacta**
+- Cadastros novos (sem retroativo) funcionam exatamente como hoje
+- Cobrança e KPIs passam a refletir realidade
+- Auto-cancelamento removido → nunca mais cancela sozinho ao abrir drawer
