@@ -188,7 +188,7 @@ export function useCreateConsorcioCard() {
   return useMutation({
     mutationFn: async (input: CreateConsorcioCardInput) => {
       // 1. Create the card
-      const { partners, inicio_segunda_parcela, ...cardData } = input;
+      const { partners, inicio_segunda_parcela, parcelas_pagas_cliente, data_ultimo_pagamento_cliente, ...cardData } = input;
       
       // Sanitizar campos vazios antes de enviar ao banco
       const cleanedData = Object.fromEntries(
@@ -235,7 +235,22 @@ export function useCreateConsorcioCard() {
         offsetSegundaParcela = dataContratacao.getDate() > 16 ? 2 : 1;
       }
       
+      // Cadastro retroativo: limite de até onde marcar parcelas do cliente como pagas
+      const hojeData = new Date();
+      hojeData.setHours(0, 0, 0, 0);
+      let limitePagamentoCliente: Date | null = null;
+      if (parcelas_pagas_cliente && parcelas_pagas_cliente > 0) {
+        if (data_ultimo_pagamento_cliente) {
+          const [uy, um, ud] = data_ultimo_pagamento_cliente.split('-').map(Number);
+          limitePagamentoCliente = new Date(uy, um - 1, ud);
+        } else {
+          limitePagamentoCliente = hojeData;
+        }
+      }
+      
       const installments: Omit<ConsorcioInstallment, 'id' | 'created_at' | 'updated_at'>[] = [];
+      let parcelasClientePagasMarcadas = 0;
+      const parcelasClienteAlvo = parcelas_pagas_cliente || 0;
 
       for (let i = 1; i <= input.prazo_meses; i++) {
         let dataVencimento: Date;
@@ -271,6 +286,21 @@ export function useCreateConsorcioCard() {
           tipo = i <= input.parcelas_pagas_empresa ? 'empresa' : 'cliente';
         }
 
+        // Cadastro retroativo: marcar primeiras N parcelas do cliente como pagas
+        // (apenas as cujo vencimento já passou e respeitando data do último pagamento)
+        let status: 'pago' | 'pendente' = 'pendente';
+        let dataPagamento: string | undefined;
+        if (
+          tipo === 'cliente' &&
+          parcelasClientePagasMarcadas < parcelasClienteAlvo &&
+          limitePagamentoCliente &&
+          dataVencimento <= limitePagamentoCliente
+        ) {
+          status = 'pago';
+          dataPagamento = dataVencimento.toISOString().split('T')[0];
+          parcelasClientePagasMarcadas++;
+        }
+
         installments.push({
           card_id: card.id,
           numero_parcela: i,
@@ -278,8 +308,9 @@ export function useCreateConsorcioCard() {
           valor_parcela: input.valor_credito / input.prazo_meses, // Simplified calculation
           valor_comissao: valorComissao,
           data_vencimento: dataVencimento.toISOString().split('T')[0],
-          status: 'pendente',
-        });
+          status,
+          ...(dataPagamento ? { data_pagamento: dataPagamento } : {}),
+        } as any);
       }
 
       const { error: installmentsError } = await supabase

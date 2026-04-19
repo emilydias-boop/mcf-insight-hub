@@ -104,15 +104,9 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   const recalculateCommissions = useRecalculateCommissions();
   const updateCardStatus = useUpdateCardStatus();
 
-  // Check inadimplência - must be before useEffect
+  // Check inadimplência (apenas alerta visual — auto-cancelamento removido para evitar
+  // cancelamentos indevidos de cotas cadastradas retroativamente).
   const deveCancelar = card?.installments ? deveSerCancelado(card.installments) : false;
-
-  // Auto-cancel if 4+ overdue and still active - useEffect must be before early return
-  useEffect(() => {
-    if (card && deveCancelar && card.status === 'ativo') {
-      updateCardStatus.mutate({ cardId: card.id, status: 'cancelado' });
-    }
-  }, [card, deveCancelar, updateCardStatus]);
 
   if (!cardId) return null;
 

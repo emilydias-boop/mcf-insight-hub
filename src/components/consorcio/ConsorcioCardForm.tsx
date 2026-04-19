@@ -119,6 +119,9 @@ const formSchema = z.object({
   data_contratacao: z.date(),
   dia_vencimento: z.number().min(1).max(31),
   inicio_segunda_parcela: z.enum(['proximo_mes', 'pular_mes', 'automatico']).default('automatico'),
+  // Cadastro retroativo
+  parcelas_pagas_cliente: z.number().min(0).optional(),
+  data_ultimo_pagamento_cliente: z.date().optional().nullable(),
   origem: z.string().min(1, 'Origem é obrigatória'),
   origem_detalhe: z.string().optional(),
   vendedor_id: z.string().optional(),
@@ -322,6 +325,27 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const produtoCodigo = form.watch('produto_codigo');
   const condicaoPagamento = (form.watch('condicao_pagamento') || 'convencional') as CondicaoPagamento;
   const incluiSeguro = form.watch('inclui_seguro') || false;
+  const dataContratacaoWatch = form.watch('data_contratacao');
+  const parcelasPagasClienteWatch = form.watch('parcelas_pagas_cliente') || 0;
+
+  // Detectar cadastro retroativo (data de contratação anterior ao mês atual)
+  const isCadastroRetroativo = useMemo(() => {
+    if (!dataContratacaoWatch) return false;
+    const hoje = new Date();
+    const inicioMesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    return dataContratacaoWatch < inicioMesAtual;
+  }, [dataContratacaoWatch]);
+
+  // Sugerir nº de parcelas pagas pelo cliente: meses entre contratação e hoje menos parcelas da empresa
+  const sugestaoParcelasCliente = useMemo(() => {
+    if (!isCadastroRetroativo || !dataContratacaoWatch) return 0;
+    const hoje = new Date();
+    const meses =
+      (hoje.getFullYear() - dataContratacaoWatch.getFullYear()) * 12 +
+      (hoje.getMonth() - dataContratacaoWatch.getMonth());
+    const restante = Math.max(0, meses - (parcelasPagasEmpresa || 0));
+    return Math.min(restante, (prazoMeses || 240) - (parcelasPagasEmpresa || 0));
+  }, [isCadastroRetroativo, dataContratacaoWatch, parcelasPagasEmpresa, prazoMeses]);
 
   // Fetch vendedor options from configurable table
   const { data: vendedorOptions = [] } = useConsorcioVendedorOptions();
@@ -832,6 +856,12 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       parcela_1a_12a: calculoParcela?.parcela1a12 || undefined,
       parcela_demais: calculoParcela?.parcelaDemais || undefined,
       
+      // Cadastro retroativo
+      parcelas_pagas_cliente: data.parcelas_pagas_cliente || undefined,
+      data_ultimo_pagamento_cliente: data.data_ultimo_pagamento_cliente
+        ? formatDateForDB(data.data_ultimo_pagamento_cliente)
+        : undefined,
+      
       partners: (data.partners || []).filter(p => p.nome && p.cpf) as Array<{ nome: string; cpf: string; renda?: number }>,
     };
 
@@ -1314,6 +1344,95 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                     )}
                   />
                 </div>
+
+                {/* Cadastro retroativo: histórico de pagamentos do cliente */}
+                {isCadastroRetroativo && !isEditing && (
+                  <div className="space-y-4 p-4 border border-amber-300 rounded-lg bg-amber-50 dark:bg-amber-950/20">
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                        ⚠️ Cadastro retroativo detectado
+                      </p>
+                      <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
+                        A data de contratação é anterior ao mês atual. Informe quantas parcelas o cliente já pagou
+                        para que o sistema marque corretamente o histórico e evite cancelamento automático por inadimplência.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="parcelas_pagas_cliente"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Parcelas já pagas pelo cliente</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={(prazoMeses || 240) - (parcelasPagasEmpresa || 0)}
+                                placeholder={`Sugestão: ${sugestaoParcelasCliente}`}
+                                {...field}
+                                onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+                                value={field.value ?? ''}
+                              />
+                            </FormControl>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Sugestão automática: <strong>{sugestaoParcelasCliente}</strong> parcela(s)
+                            </p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="data_ultimo_pagamento_cliente"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>Data do último pagamento (opcional)</FormLabel>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button
+                                    variant="outline"
+                                    className={cn(
+                                      'w-full pl-3 text-left font-normal',
+                                      !field.value && 'text-muted-foreground'
+                                    )}
+                                  >
+                                    {field.value ? (
+                                      format(field.value, 'dd/MM/yyyy', { locale: ptBR })
+                                    ) : (
+                                      <span>Hoje (padrão)</span>
+                                    )}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                  </Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={field.value || undefined}
+                                  onSelect={field.onChange}
+                                  locale={ptBR}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Marca como pagas até esta data
+                            </p>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    {parcelasPagasClienteWatch > 0 && (
+                      <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-md">
+                        <p className="text-sm text-amber-900 dark:text-amber-200">
+                          ✅ Serão marcadas como <strong>pagas</strong> as primeiras{' '}
+                          <strong>{parcelasPagasClienteWatch}</strong> parcela(s) do cliente cujo vencimento já tenha ocorrido.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <FormField
                   control={form.control}
