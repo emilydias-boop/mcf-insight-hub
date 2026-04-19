@@ -239,13 +239,14 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const getParticipantsListEarly = () => {
     if (!activeMeeting) return [];
     
-    const allAttendees: { id: string; notes: string | null; closerNotes: string | null }[] = [];
+    const allAttendees: { id: string; notes: string | null; closerNotes: string | null; dealId: string | null }[] = [];
     for (const m of allMeetings) {
       if (m.attendees) {
         allAttendees.push(...m.attendees.map(att => ({
           id: att.id,
           notes: att.notes,
           closerNotes: att.closer_notes,
+          dealId: (att as any).deal_id || m.deal_id || null,
         })));
       }
     }
@@ -268,24 +269,24 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const isBookedBySdr = user?.id === activeMeeting?.booked_by;
   const canEditSdrNote = isBookedBySdr && (activeMeeting?.status === 'scheduled' || activeMeeting?.status === 'rescheduled');
 
-  // Fetch SDR notes for this deal - MUST be before any conditional return
-  const dealId = activeMeeting?.deal_id;
+  // Fetch SDR notes for the SELECTED participant's deal - MUST be before any conditional return
+  const selectedDealId = selectedParticipantEarly?.dealId;
   const { data: sdrNotes } = useQuery({
-    queryKey: ['deal-sdr-notes', dealId],
+    queryKey: ['deal-sdr-notes', selectedDealId],
     queryFn: async () => {
-      if (!dealId) return [];
+      if (!selectedDealId) return [];
       
       const { data, error } = await supabase
         .from('deal_activities')
         .select('id, description, created_at')
-        .eq('deal_id', dealId)
+        .eq('deal_id', selectedDealId)
         .eq('activity_type', 'note')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       return data;
     },
-    enabled: !!dealId,
+    enabled: !!selectedDealId,
   });
 
   // Fetch dynamic meeting link based on closer, day and time - MUST be before any conditional return
@@ -866,7 +867,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       <div className="flex items-center gap-2 mb-2">
                         <StickyNote className="h-4 w-4 text-blue-600" />
                         <span className="text-xs font-medium text-blue-700 dark:text-blue-400">
-                          Notas do SDR sobre o Lead ({sdrNotes.length})
+                          Notas do SDR sobre {selectedParticipant?.name?.split(' ')[0] || 'o Lead'} ({sdrNotes.length})
                         </span>
                       </div>
                       <ScrollArea className="max-h-[120px]">
