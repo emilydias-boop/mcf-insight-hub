@@ -60,6 +60,10 @@ export interface ContractLifecycleRow {
   // Data do R2 futuro (quando pendingReason = 'r2_proxima_semana')
   futureR2Date: string | null;
   futureR2CloserName: string | null;
+  // Cohort cutoff metadata (from RPC)
+  dentroCorte: boolean;
+  effectiveContractDate: string | null;
+  contractSource: 'r1' | 'r2' | 'hubla' | 'none' | null;
 }
 
 function getFridayCutoff(weekStart?: Date, horarioCorte?: string): Date {
