@@ -2,9 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from 'date-fns';
 import { CONSORCIO_WEEK_STARTS_ON } from '@/lib/businessDays';
-
-// Stage ID for Viver de Aluguel pipeline (origin 4e2b810a)
-const PROPOSTA_ENVIADA_STAGE_ID = '09a0a99e-feee-46df-a817-bc4d0e1ac3d9';
+import { CONSORCIO_PROPOSTA_STAGE_IDS } from '@/lib/consorcioStages';
 
 interface PeriodCounts {
   propostaEnviada: number;
@@ -15,12 +13,6 @@ export interface ConsorcioPipelineMetrics {
   week: PeriodCounts;
   month: PeriodCounts;
   isLoading: boolean;
-}
-
-function countByStage(deals: any[]): PeriodCounts {
-  return {
-    propostaEnviada: deals.filter(d => d.stage_id === PROPOSTA_ENVIADA_STAGE_ID).length,
-  };
 }
 
 export function useConsorcioPipelineMetrics(): ConsorcioPipelineMetrics {
@@ -35,26 +27,48 @@ export function useConsorcioPipelineMetrics(): ConsorcioPipelineMetrics {
   const monthEnd = format(endOfMonth(today), "yyyy-MM-dd'T'HH:mm:ss");
 
   const { data, isLoading } = useQuery({
-    queryKey: ['consorcio-pipeline-metrics', monthStart],
+    queryKey: ['consorcio-pipeline-metrics-v2', monthStart],
     queryFn: async () => {
+      // Stage moves (Proposta Enviada VdA)
       const { data: deals, error } = await supabase
         .from('crm_deals')
-        .select('id, stage_id, stage_moved_at')
-        .eq('stage_id', PROPOSTA_ENVIADA_STAGE_ID)
+        .select('id, stage_moved_at')
+        .in('stage_id', CONSORCIO_PROPOSTA_STAGE_IDS)
         .gte('stage_moved_at', monthStart)
         .lte('stage_moved_at', monthEnd);
-
       if (error) throw error;
-      return deals || [];
+
+      // consorcio_proposals
+      const { data: proposals, error: pError } = await supabase
+        .from('consorcio_proposals')
+        .select('deal_id, created_at')
+        .gte('created_at', monthStart)
+        .lte('created_at', monthEnd);
+      if (pError) throw pError;
+
+      return {
+        deals: deals || [],
+        proposals: (proposals || []).filter((p) => p.deal_id),
+      };
     },
   });
 
-  const metrics: ConsorcioPipelineMetrics = {
-    day: countByStage((data || []).filter(d => d.stage_moved_at >= dayStart && d.stage_moved_at <= dayEnd)),
-    week: countByStage((data || []).filter(d => d.stage_moved_at >= weekStart && d.stage_moved_at <= weekEnd)),
-    month: countByStage(data || []),
-    isLoading,
+  const countDistinct = (start: string, end: string): number => {
+    if (!data) return 0;
+    const set = new Set<string>();
+    data.deals
+      .filter((d) => d.stage_moved_at >= start && d.stage_moved_at <= end)
+      .forEach((d) => set.add(d.id));
+    data.proposals
+      .filter((p) => p.created_at >= start && p.created_at <= end)
+      .forEach((p) => p.deal_id && set.add(p.deal_id));
+    return set.size;
   };
 
-  return metrics;
+  return {
+    day: { propostaEnviada: countDistinct(dayStart, dayEnd) },
+    week: { propostaEnviada: countDistinct(weekStart, weekEnd) },
+    month: { propostaEnviada: countDistinct(monthStart, monthEnd) },
+    isLoading,
+  };
 }

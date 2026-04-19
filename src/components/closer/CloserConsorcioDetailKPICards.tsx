@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, Minus, Users, CheckCircle, XCircle, FileText, Package } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Users, CheckCircle, XCircle, FileText, Package, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface ConsorcioCloserMetrics {
   r1_agendada: number;
