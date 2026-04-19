@@ -269,6 +269,9 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           pendingReason: null,
           futureR2Date: null,
           futureR2CloserName: null,
+          dentroCorte: !!r2.dentro_corte,
+          effectiveContractDate: r2.effective_contract_date || null,
+          contractSource: (r2.contract_source as any) || null,
         };
 
         // Safety net dedup by phone (should be no-op since RPC dedupes)
