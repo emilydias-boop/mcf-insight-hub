@@ -665,29 +665,36 @@ async function buildIncorporadorReport(supabase: any) {
 
   const sdrRows = sdrList.map((s, idx) => {
     const rankClass = idx === 0 ? 'rank-1' : idx === 1 ? 'rank-2' : idx === 2 ? 'rank-3' : '';
-    const noShowRate = s.agendados > 0 ? pct(s.noShow, s.agendados) : '-';
+    const noShowBase = s.r1Realizadas + s.noShow;
+    const compRate = noShowBase > 0 ? pct(s.r1Realizadas, noShowBase) : '-';
+    const noShowRate = noShowBase > 0 ? pct(s.noShow, noShowBase) : '-';
     const convRate = s.r1Realizadas > 0 ? pct(s.contratos, s.r1Realizadas) : '-';
-    const metaStr = s.meta > 0 ? `${s.agendados}/${s.meta}` : `${s.agendados}`;
+    const metaPct = s.meta > 0 ? pct(s.agendados, s.meta) : '-';
     return `<tr class="${rankClass}">
       <td>${idx + 1}º</td>
       <td>${s.name}</td>
-      <td style="text-align:center">${metaStr}</td>
+      <td style="text-align:center">${s.meta || '-'}</td>
+      <td style="text-align:center">${s.agendados}</td>
+      <td style="text-align:center">${metaPct}</td>
       <td style="text-align:center">${s.r1Realizadas}</td>
       <td style="text-align:center">${s.noShow}</td>
-      <td style="text-align:center">${s.contratos}</td>
+      <td style="text-align:center">${compRate}</td>
       <td style="text-align:center">${noShowRate}</td>
+      <td style="text-align:center">${s.contratos}</td>
       <td style="text-align:center">${convRate}</td>
       <td style="text-align:center">${s.calls}</td>
     </tr>`;
   }).join('');
 
   const sdrTotals = sdrList.reduce((acc, s) => ({
+    meta: acc.meta + s.meta,
     agendados: acc.agendados + s.agendados,
     r1Realizadas: acc.r1Realizadas + s.r1Realizadas,
     noShow: acc.noShow + s.noShow,
     contratos: acc.contratos + s.contratos,
     calls: acc.calls + s.calls,
-  }), { agendados: 0, r1Realizadas: 0, noShow: 0, contratos: 0, calls: 0 });
+  }), { meta: 0, agendados: 0, r1Realizadas: 0, noShow: 0, contratos: 0, calls: 0 });
+  const sdrTotalsBase = sdrTotals.r1Realizadas + sdrTotals.noShow;
 
   // ══ 5. CLOSER R1 PERFORMANCE ══
   interface CloserR1Stats { name: string; r1Agendadas: number; r1Realizadas: number; contratos: number; r2Marcadas: number; aprovados: number; }
@@ -717,11 +724,15 @@ async function buildIncorporadorReport(supabase: any) {
   // For aprovados per R1 closer: same issue. We'll just show R1 metrics.
   const closerR1Rows = R1_CLOSER_IDS.map(c => {
     const st = closerR1Map.get(c.id)!;
+    const compRate = st.r1Agendadas > 0 ? pct(st.r1Realizadas, st.r1Agendadas) : '-';
+    const convRate = st.r1Realizadas > 0 ? pct(st.contratos, st.r1Realizadas) : '-';
     return `<tr>
       <td>${st.name}</td>
       <td style="text-align:center">${st.r1Agendadas}</td>
       <td style="text-align:center">${st.r1Realizadas}</td>
+      <td style="text-align:center">${compRate}</td>
       <td style="text-align:center">${st.contratos}</td>
+      <td style="text-align:center">${convRate}</td>
     </tr>`;
   }).join('');
 
@@ -731,9 +742,9 @@ async function buildIncorporadorReport(supabase: any) {
   }, { r1Ag: 0, r1Re: 0, cont: 0 });
 
   // ══ 6. CLOSER R2 PERFORMANCE ══
-  interface CloserR2Stats { name: string; r2Agendadas: number; r2Realizadas: number; aprovados: number; reprovados: number; vendasParceria: number; produtos: Map<string, number>; }
+  interface CloserR2Stats { name: string; r2Agendadas: number; r2Realizadas: number; aprovados: number; reprovados: number; vendasParceria: number; receitaParceria: number; produtos: Map<string, number>; }
   const closerR2Map = new Map<string, CloserR2Stats>();
-  for (const c of R2_CLOSER_IDS) closerR2Map.set(c.id, { name: c.name, r2Agendadas: 0, r2Realizadas: 0, aprovados: 0, reprovados: 0, vendasParceria: 0, produtos: new Map() });
+  for (const c of R2_CLOSER_IDS) closerR2Map.set(c.id, { name: c.name, r2Agendadas: 0, r2Realizadas: 0, aprovados: 0, reprovados: 0, vendasParceria: 0, receitaParceria: 0, produtos: new Map() });
 
   for (const att of r2NonPartner) {
     const slot = (att as any).meeting_slot;
