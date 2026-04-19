@@ -11,9 +11,21 @@ import { Separator } from "@/components/ui/separator";
 import { useMyCloser } from "@/hooks/useMyCloser";
 import { useCloserDetailData } from "@/hooks/useCloserDetailData";
 import { useCloserR2Metrics } from "@/hooks/useCloserR2Metrics";
+import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
+import { useConsorcioPipelineMetricsByCloser } from "@/hooks/useConsorcioPipelineMetricsByCloser";
+import { useConsorcioProdutosFechadosByCloser } from "@/hooks/useConsorcioProdutosFechadosByCloser";
 import { CloserDetailKPICards } from "@/components/closer/CloserDetailKPICards";
 import { CloserRankingBlock } from "@/components/closer/CloserRankingBlock";
 import { CloserLeadsTable } from "@/components/closer/CloserLeadsTable";
+import {
+  CloserConsorcioDetailKPICards,
+  ConsorcioCloserMetrics,
+  ConsorcioTeamAverages,
+} from "@/components/closer/CloserConsorcioDetailKPICards";
+import {
+  CloserConsorcioRankingBlock,
+  ConsorcioRanking,
+} from "@/components/closer/CloserConsorcioRankingBlock";
 
 type DatePreset = "today" | "week" | "month";
 
@@ -22,6 +34,7 @@ export default function MeuDesempenhoCloser() {
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   const { data: myCloser, isLoading: isLoadingCloser } = useMyCloser();
+  const isConsorcio = (myCloser as any)?.bu === "consorcio";
 
   const { startDate, endDate } = useMemo(() => {
     const now = new Date();
@@ -29,7 +42,6 @@ export default function MeuDesempenhoCloser() {
       case "today":
         return { startDate: startOfDay(now), endDate: endOfDay(now) };
       case "week":
-        // Semana começa no sábado
         return {
           startDate: startOfWeek(now, { weekStartsOn: 6 }),
           endDate: endOfWeek(now, { weekStartsOn: 6 }),
@@ -44,6 +56,7 @@ export default function MeuDesempenhoCloser() {
     }
   }, [datePreset, selectedMonth]);
 
+  // ========== Incorporador (default) ==========
   const {
     closerInfo,
     closerMetrics,
@@ -56,16 +69,99 @@ export default function MeuDesempenhoCloser() {
     closerId: myCloser?.id || "",
     startDate,
     endDate,
-});
+  });
 
-  // Métricas R2 Carrinho do Closer
+  // R2 Carrinho — só Incorporador
   const { data: r2Metrics, isLoading: isLoadingR2 } = useCloserR2Metrics(
-    myCloser?.id || null,
+    !isConsorcio ? myCloser?.id || null : null,
     startDate,
     endDate
   );
 
-  const isLoading = isLoadingCloser || isLoadingData;
+  // ========== Consórcio ==========
+  const { data: r1ConsorcioMetrics, isLoading: isLoadingR1Cons } = useR1CloserMetrics(
+    startDate,
+    endDate,
+    "consorcio"
+  );
+  const { data: propostasMap, isLoading: isLoadingProp } =
+    useConsorcioPipelineMetricsByCloser(startDate, endDate);
+  const { data: produtosMap, isLoading: isLoadingProd } =
+    useConsorcioProdutosFechadosByCloser(startDate, endDate);
+
+  const consorcioData = useMemo(() => {
+    if (!isConsorcio || !myCloser?.id || !r1ConsorcioMetrics) {
+      return null;
+    }
+
+    const myR1 = r1ConsorcioMetrics.find((m) => m.closer_id === myCloser.id);
+    const myMetrics: ConsorcioCloserMetrics = {
+      r1_agendada: myR1?.r1_agendada || 0,
+      r1_realizada: myR1?.r1_realizada || 0,
+      noshow: myR1?.noshow || 0,
+      propostas_enviadas: propostasMap?.get(myCloser.id) || 0,
+      produtos_fechados: produtosMap?.get(myCloser.id) || 0,
+    };
+
+    // Team aggregates
+    const team = r1ConsorcioMetrics.map((m) => ({
+      closer_id: m.closer_id,
+      r1_agendada: m.r1_agendada,
+      r1_realizada: m.r1_realizada,
+      noshow: m.noshow,
+      taxa_noshow: m.r1_agendada > 0 ? (m.noshow / m.r1_agendada) * 100 : 0,
+      propostas: propostasMap?.get(m.closer_id) || 0,
+      produtos: produtosMap?.get(m.closer_id) || 0,
+      taxa_conversao: m.r1_realizada > 0 ? ((produtosMap?.get(m.closer_id) || 0) / m.r1_realizada) * 100 : 0,
+    }));
+
+    const total = team.length || 1;
+    const sum = (key: keyof (typeof team)[number]) =>
+      team.reduce((acc, t) => acc + (t[key] as number), 0);
+
+    const teamAvg: ConsorcioTeamAverages = {
+      avgR1Agendada: sum("r1_agendada") / total,
+      avgR1Realizada: sum("r1_realizada") / total,
+      avgNoShow: sum("noshow") / total,
+      avgTaxaNoShow: sum("taxa_noshow") / total,
+      avgPropostas: sum("propostas") / total,
+      avgProdutos: sum("produtos") / total,
+      avgTaxaConversao: sum("taxa_conversao") / total,
+    };
+
+    // Rankings
+    const rankBy = (key: keyof (typeof team)[number], asc = false) => {
+      const sorted = [...team].sort((a, b) =>
+        asc ? (a[key] as number) - (b[key] as number) : (b[key] as number) - (a[key] as number)
+      );
+      const idx = sorted.findIndex((t) => t.closer_id === myCloser.id);
+      return idx === -1 ? 0 : idx + 1;
+    };
+
+    const myTaxaNoShow = myMetrics.r1_agendada > 0 ? (myMetrics.noshow / myMetrics.r1_agendada) * 100 : 0;
+
+    const rank: ConsorcioRanking = {
+      r1Realizada: rankBy("r1_realizada"),
+      produtosFechados: rankBy("produtos"),
+      propostasEnviadas: rankBy("propostas"),
+      // Taxa No-Show: menor é melhor, mas quem tem 0 agendadas fica fora
+      taxaNoShow:
+        myMetrics.r1_agendada === 0
+          ? 0
+          : (() => {
+              const eligible = team.filter((t) => t.r1_agendada > 0);
+              const sorted = [...eligible].sort((a, b) => a.taxa_noshow - b.taxa_noshow);
+              const idx = sorted.findIndex((t) => t.closer_id === myCloser.id);
+              return idx === -1 ? 0 : idx + 1;
+            })(),
+      total,
+    };
+
+    return { myMetrics, teamAvg, rank };
+  }, [isConsorcio, myCloser?.id, r1ConsorcioMetrics, propostasMap, produtosMap]);
+
+  const isLoadingConsorcio = isLoadingR1Cons || isLoadingProp || isLoadingProd;
+  const isLoading = isLoadingCloser || (isConsorcio ? isLoadingConsorcio : isLoadingData);
 
   const handlePrevMonth = () => {
     setSelectedMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -134,7 +230,7 @@ export default function MeuDesempenhoCloser() {
               Meu Desempenho
               <Badge variant="outline" className="text-xs">
                 <TrendingUp className="h-3 w-3 mr-1" />
-                Closer
+                Closer{isConsorcio ? " Consórcio" : ""}
               </Badge>
             </h1>
             <p className="text-sm text-muted-foreground">{myCloser.email}</p>
@@ -204,19 +300,52 @@ export default function MeuDesempenhoCloser() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <CloserDetailKPICards
-            metrics={closerMetrics}
-            teamAverages={teamAverages}
-            isLoading={isLoading}
-          />
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <CloserRankingBlock
-              closerMetrics={closerMetrics}
-              ranking={ranking}
+          {isConsorcio ? (
+            <CloserConsorcioDetailKPICards
+              metrics={consorcioData?.myMetrics || null}
+              teamAverages={
+                consorcioData?.teamAvg || {
+                  avgR1Agendada: 0,
+                  avgR1Realizada: 0,
+                  avgNoShow: 0,
+                  avgTaxaNoShow: 0,
+                  avgPropostas: 0,
+                  avgProdutos: 0,
+                  avgTaxaConversao: 0,
+                }
+              }
+              isLoading={isLoading}
+            />
+          ) : (
+            <CloserDetailKPICards
+              metrics={closerMetrics}
               teamAverages={teamAverages}
               isLoading={isLoading}
             />
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {isConsorcio ? (
+              <CloserConsorcioRankingBlock
+                ranking={
+                  consorcioData?.rank || {
+                    r1Realizada: 0,
+                    produtosFechados: 0,
+                    propostasEnviadas: 0,
+                    taxaNoShow: 0,
+                    total: 0,
+                  }
+                }
+                isLoading={isLoading}
+              />
+            ) : (
+              <CloserRankingBlock
+                closerMetrics={closerMetrics}
+                ranking={ranking}
+                teamAverages={teamAverages}
+                isLoading={isLoading}
+              />
+            )}
 
             <Card>
               <CardHeader>
@@ -229,6 +358,36 @@ export default function MeuDesempenhoCloser() {
                       <Skeleton key={i} className="h-6 w-full" />
                     ))}
                   </div>
+                ) : isConsorcio ? (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Total Realizadas</span>
+                      <span className="font-semibold">{consorcioData?.myMetrics.r1_realizada || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Propostas Enviadas</span>
+                      <span className="font-semibold">{consorcioData?.myMetrics.propostas_enviadas || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Produtos Fechados</span>
+                      <span className="font-semibold text-primary">
+                        {consorcioData?.myMetrics.produtos_fechados || 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Taxa de Fechamento</span>
+                      <span className="font-semibold">
+                        {consorcioData?.myMetrics.r1_realizada
+                          ? (
+                              ((consorcioData.myMetrics.produtos_fechados) /
+                                consorcioData.myMetrics.r1_realizada) *
+                              100
+                            ).toFixed(1)
+                          : 0}
+                        %
+                      </span>
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div className="flex justify-between items-center">
@@ -258,7 +417,7 @@ export default function MeuDesempenhoCloser() {
                       <span className="text-sm text-muted-foreground">R2 Agendadas</span>
                       <span className="font-semibold">{closerMetrics?.r2_agendada || 0}</span>
                     </div>
-                    
+
                     {/* R2 Carrinho Section */}
                     <Separator className="my-3" />
                     <div className="flex items-center gap-2 mb-2">
@@ -283,8 +442,8 @@ export default function MeuDesempenhoCloser() {
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Taxa Carrinho → Venda</span>
-                          <Badge 
-                            variant="secondary" 
+                          <Badge
+                            variant="secondary"
                             className={(r2Metrics?.taxaConversao || 0) >= 50 ? 'bg-green-500/20 text-green-500' : ''}
                           >
                             {(r2Metrics?.taxaConversao || 0).toFixed(1)}%
