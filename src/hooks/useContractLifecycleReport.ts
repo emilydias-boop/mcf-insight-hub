@@ -225,7 +225,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         }
 
         const isHublaRefunded = !!hublaInfo?.isRefunded;
-        const contractPaidAt = r2.r1_contract_paid_at || hublaInfo?.saleDate || r2.contract_paid_at || null;
+        const contractPaidAt = r2.effective_contract_date || r2.r1_contract_paid_at || hublaInfo?.saleDate || r2.contract_paid_at || null;
 
         const r1Status: string | null = isHublaRefunded ? 'refunded' : null;
         const r2AttendeeStatus = r2.attendee_status as string | null;
