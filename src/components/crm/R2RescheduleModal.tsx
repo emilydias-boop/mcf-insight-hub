@@ -126,6 +126,7 @@ export function R2RescheduleModal({
 
   const attendee = meeting.attendees?.[0];
   const originalNote = meeting.notes;
+  const isNoteValid = rescheduleNote.trim().length >= 10;
 
   const toggleThermometer = (id: string) => {
     setThermometerIds(prev => 
@@ -149,7 +150,7 @@ export function R2RescheduleModal({
       originalDate: meeting.scheduled_at,
       originalCloserId: meeting.closer?.id,
       originalAttendeeStatus: attendee?.status,
-      rescheduleNote: rescheduleNote.trim() || undefined,
+      rescheduleNote: rescheduleNote.trim(),
     }, {
       onSuccess: async () => {
         // Then update attendee fields if we have an attendee
@@ -308,13 +309,26 @@ export function R2RescheduleModal({
 
             {/* Reschedule Note */}
             <div className="space-y-2">
-              <Label>Motivo do Reagendamento</Label>
+              <Label>
+                Motivo do Reagendamento <span className="text-destructive">*</span>
+              </Label>
               <Textarea
                 value={rescheduleNote}
                 onChange={(e) => setRescheduleNote(e.target.value)}
-                placeholder="Ex: Cliente pediu para remarcar..."
+                placeholder="Obrigatório: descreva o que ocorreu (ex: Cliente pediu para remarcar para semana que vem)"
                 rows={2}
               />
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">
+                  Mínimo 10 caracteres — descreva o motivo real
+                </span>
+                <span className={cn(
+                  "font-medium tabular-nums",
+                  isNoteValid ? "text-green-600 dark:text-green-500" : "text-muted-foreground"
+                )}>
+                  {rescheduleNote.trim().length}/10
+                </span>
+              </div>
             </div>
 
             {/* Separator */}

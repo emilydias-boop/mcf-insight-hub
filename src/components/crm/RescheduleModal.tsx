@@ -60,6 +60,8 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
   // Get the original note from the first attendee
   const originalNote = meeting.attendees?.[0]?.notes;
 
+  const isNoteValid = rescheduleNote.trim().length >= 10;
+
   const handleSubmit = () => {
     if (!selectedDate) return;
 
@@ -71,7 +73,7 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
       meetingId: meeting.id,
       newDate,
       closerId: selectedCloser !== meeting.closer_id ? selectedCloser : undefined,
-      rescheduleNote: rescheduleNote.trim() || undefined,
+      rescheduleNote: rescheduleNote.trim(),
     }, {
       onSuccess: () => {
         setRescheduleNote('');
