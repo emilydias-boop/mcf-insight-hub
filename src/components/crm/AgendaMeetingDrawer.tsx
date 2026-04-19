@@ -327,7 +327,6 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const { data: outsideData = {} } = useOutsideDetectionBatch(attendeesForOutsideCheck);
 
   // Hook to detect partner products (Consórcio BU) - MUST be before any conditional return
-  const { activeBU } = useBUContext();
   const attendeesForPartnerCheck = useMemo(() => {
     if (activeBU !== 'consorcio') return [];
     return (activeMeeting?.attendees || []).map(att => ({
