@@ -34,6 +34,7 @@ function KPICard({
   icon: Icon,
   format: formatFn = (v: number) => v.toString(),
   lowerIsBetter = false,
+  tooltip,
 }: {
   title: string;
   value: number;
@@ -41,6 +42,7 @@ function KPICard({
   icon: React.ElementType;
   format?: (v: number) => string;
   lowerIsBetter?: boolean;
+  tooltip?: string;
 }) {
   const diff = value - average;
   const isAboveAverage = lowerIsBetter ? diff < 0 : diff > 0;
@@ -50,7 +52,21 @@ function KPICard({
     <Card className="bg-card border-border">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-muted-foreground">{title}</span>
+          <div className="flex items-center gap-1">
+            <span className="text-sm text-muted-foreground">{title}</span>
+            {tooltip && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p className="text-xs">{tooltip}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           <Icon className="h-4 w-4 text-muted-foreground" />
         </div>
         <div className="text-2xl font-bold text-foreground">{formatFn(value)}</div>
@@ -125,8 +141,20 @@ export function CloserConsorcioDetailKPICards({ metrics, teamAverages, isLoading
         format={(v) => `${v.toFixed(1)}%`}
         lowerIsBetter
       />
-      <KPICard title="Propostas Enviadas" value={m.propostas_enviadas} average={teamAverages.avgPropostas} icon={FileText} />
-      <KPICard title="Produtos Fechados" value={m.produtos_fechados} average={teamAverages.avgProdutos} icon={Package} />
+      <KPICard
+        title="Propostas Enviadas"
+        value={m.propostas_enviadas}
+        average={teamAverages.avgPropostas}
+        icon={FileText}
+        tooltip="Conta proposta criada na aba Pós-Reunião + stage PROPOSTA ENVIADA (Viver de Aluguel). Fluxo Efeito Alavanca não possui etapa de proposta."
+      />
+      <KPICard
+        title="Produtos Fechados"
+        value={m.produtos_fechados}
+        average={teamAverages.avgProdutos}
+        icon={Package}
+        tooltip="Conta cota cadastrada (deal_produtos_adquiridos) + stages PRODUTOS FECHADOS / VENDA REALIZADA / CONTRATO PAGO / VENDA REALIZADA 50K."
+      />
       <KPICard
         title="Taxa Conversão"
         value={taxaConversao}
