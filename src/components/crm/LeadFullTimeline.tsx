@@ -172,6 +172,22 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
     );
   }
 
+  if (event.type === 'tag_change') {
+    const added = (meta.added as string[]) || [];
+    const removed = (meta.removed as string[]) || [];
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        {meta.source && <Badge variant="secondary" className="text-[10px] font-semibold">Fonte: {meta.source}</Badge>}
+        {added.map(t => (
+          <Badge key={`a-${t}`} variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-700 dark:text-emerald-400">+ {t}</Badge>
+        ))}
+        {removed.map(t => (
+          <Badge key={`r-${t}`} variant="outline" className="text-[10px] border-rose-500/40 text-rose-700 dark:text-rose-400">− {t}</Badge>
+        ))}
+      </div>
+    );
+  }
+
   return null;
 }
 
