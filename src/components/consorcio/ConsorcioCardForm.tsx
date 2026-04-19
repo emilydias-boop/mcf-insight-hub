@@ -119,6 +119,9 @@ const formSchema = z.object({
   data_contratacao: z.date(),
   dia_vencimento: z.number().min(1).max(31),
   inicio_segunda_parcela: z.enum(['proximo_mes', 'pular_mes', 'automatico']).default('automatico'),
+  // Cadastro retroativo
+  parcelas_pagas_cliente: z.number().min(0).optional(),
+  data_ultimo_pagamento_cliente: z.date().optional().nullable(),
   origem: z.string().min(1, 'Origem é obrigatória'),
   origem_detalhe: z.string().optional(),
   vendedor_id: z.string().optional(),
