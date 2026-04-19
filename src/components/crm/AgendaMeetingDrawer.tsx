@@ -1271,6 +1271,17 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
           dealId={selectedParticipant.dealId}
         />
       )}
+
+      {outcomeModalDeal && (
+        <OutcomeRequiredModal
+          open={!!outcomeModalDeal}
+          onOpenChange={(v) => !v && setOutcomeModalDeal(null)}
+          dealId={outcomeModalDeal.dealId}
+          dealName={outcomeModalDeal.dealName}
+          contactName={outcomeModalDeal.contactName}
+          originId={outcomeModalDeal.originId}
+        />
+      )}
     </Sheet>
   );
 }
