@@ -49,6 +49,8 @@ export interface CarrinhoMetricBoundaries {
   vendasParceria: { start: Date; end: Date };
   /** R1 realizadas: mesma janela dos contratos */
   r1Meetings: { start: Date; end: Date };
+  /** Sexta-feira da semana ANTERIOR no horário de corte (início real da janela operacional desta safra) */
+  previousCutoff: Date;
 }
 
 /**
