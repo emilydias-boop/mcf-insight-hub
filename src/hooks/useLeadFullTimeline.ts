@@ -240,6 +240,26 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               author: resolveAuthor(act.user_id, meta.sdr_name, meta.author),
               metadata: meta,
             });
+          } else if (actType === 'tags_changed' || actType === 'tags_added') {
+            const added = (meta.added as string[]) || [];
+            const removed = (meta.removed as string[]) || [];
+            const source = meta.source || 'sistema';
+            const isInitial = !!meta.initial;
+            const titleParts: string[] = [];
+            if (added.length > 0) titleParts.push(`+ ${added.join(', ')}`);
+            if (removed.length > 0) titleParts.push(`− ${removed.join(', ')}`);
+            const title = isInitial
+              ? `Tags iniciais: ${added.join(', ')}`
+              : `Tags ${titleParts.join(' / ') || 'alteradas'}`;
+            events.push({
+              id: act.id,
+              type: 'tag_change',
+              title,
+              description: act.description,
+              date: act.created_at,
+              author: resolveAuthor(act.user_id),
+              metadata: { added, removed, source, initial: isInitial, ...meta },
+            });
           } else if (actType) {
             // Other activity types
             events.push({
