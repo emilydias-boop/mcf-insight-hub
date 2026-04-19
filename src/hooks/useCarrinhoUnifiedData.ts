@@ -35,6 +35,8 @@ export interface CarrinhoLeadRow {
   r1_contract_paid_at: string | null;
   is_encaixado: boolean;
   phone_dedup_key: string | null;
+  /** True quando o contrato foi pago dentro da janela do corte da safra. */
+  dentro_corte: boolean;
 }
 
 /**
@@ -65,6 +67,7 @@ export function useCarrinhoUnifiedData(
         p_week_start: weekStartStr,
         p_window_start: boundaries.r2Meetings.start.toISOString(),
         p_window_end: boundaries.r2Meetings.end.toISOString(),
+        p_apply_contract_cutoff: true,
       });
 
       if (error) {
