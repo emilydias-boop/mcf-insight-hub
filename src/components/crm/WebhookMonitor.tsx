@@ -96,16 +96,19 @@ export function WebhookMonitor() {
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Movimentações Hoje</h3>
           <div className="grid grid-cols-3 gap-3">
             <div className="p-3 border rounded-lg bg-card text-center">
-              <p className="text-xs text-muted-foreground mb-1">Estágio Alterado</p>
-              <p className="text-2xl font-bold">{stats?.eventTypeCounts?.['deal.stage_changed'] || 0}</p>
+              <p className="text-xs text-muted-foreground mb-1">Anamnese</p>
+              <p className="text-2xl font-bold">
+                {(stats?.eventTypeCounts?.['lead.received.anamnese_completa'] || 0) +
+                  (stats?.eventTypeCounts?.['lead.received.anamnese_incompleta'] || 0)}
+              </p>
             </div>
             <div className="p-3 border rounded-lg bg-card text-center">
-              <p className="text-xs text-muted-foreground mb-1">Deal Criado</p>
-              <p className="text-2xl font-bold">{stats?.eventTypeCounts?.['deal.created'] || 0}</p>
+              <p className="text-xs text-muted-foreground mb-1">Lead LIVE</p>
+              <p className="text-2xl font-bold">{stats?.eventTypeCounts?.['lead.received.live'] || 0}</p>
             </div>
             <div className="p-3 border rounded-lg bg-card text-center">
-              <p className="text-xs text-muted-foreground mb-1">Contato Criado</p>
-              <p className="text-2xl font-bold">{stats?.eventTypeCounts?.['contact.created'] || 0}</p>
+              <p className="text-xs text-muted-foreground mb-1">Compras</p>
+              <p className="text-2xl font-bold">{stats?.eventTypeCounts?.['purchase.completed'] || 0}</p>
             </div>
           </div>
         </div>
