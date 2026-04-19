@@ -509,23 +509,91 @@ async function buildIncorporadorReport(supabase: any) {
   ].filter(d => d.value > 0);
   const pieTotal = pieData.reduce((s, d) => s + d.value, 0);
 
-  let pieGradient = '';
-  if (pieTotal > 0) {
+  function buildPie(data: { label: string; value: number; color: string }[], total: number) {
+    if (total === 0) return { gradient: 'conic-gradient(#e5e7eb 0% 100%)', legend: '<div style="color:#999;font-size:11px">Sem dados</div>' };
     let cumPct = 0;
     const stops: string[] = [];
-    for (const d of pieData) {
-      const segPct = (d.value / pieTotal) * 100;
+    for (const d of data) {
+      const segPct = (d.value / total) * 100;
       stops.push(`${d.color} ${cumPct}% ${cumPct + segPct}%`);
       cumPct += segPct;
     }
-    pieGradient = `conic-gradient(${stops.join(', ')})`;
-  } else {
-    pieGradient = 'conic-gradient(#e5e7eb 0% 100%)';
+    const legend = data.map(d =>
+      `<div><span class="pie-legend-dot" style="background:${d.color}"></span>${d.label}: <strong>${d.value}</strong> (${pct(d.value, total)})</div>`
+    ).join('');
+    return { gradient: `conic-gradient(${stops.join(', ')})`, legend };
   }
 
-  const pieLegendHtml = pieData.map(d =>
-    `<div><span class="pie-legend-dot" style="background:${d.color}"></span>${d.label}: <strong>${d.value}</strong> (${pct(d.value, pieTotal)})</div>`
-  ).join('');
+  const r2Pie = buildPie(pieData, pieTotal);
+  const pieGradient = r2Pie.gradient;
+  const pieLegendHtml = r2Pie.legend;
+
+  // ── 2ª Pizza: Contratos Fechados (líquido) por Origem ──
+  const contratosLiquidosTx = allContratos.filter((t: any) =>
+    t.sale_status !== 'refunded' && (t.installment_number || 1) <= 1
+  );
+  const contratosEmails = contratosLiquidosTx
+    .map((t: any) => t.customer_email?.toLowerCase())
+    .filter(Boolean) as string[];
+  const uniqueContratosEmails = [...new Set(contratosEmails)];
+
+  // Quais desses emails passaram por estágio Anamnese?
+  let contratosAnamneseEmails = new Set<string>();
+  if (uniqueContratosEmails.length > 0) {
+    const { data: contratosDeals } = await supabase
+      .from('crm_deals')
+      .select('id, crm_contacts!inner(email)')
+      .in('crm_contacts.email', uniqueContratosEmails);
+    const dealIdsByEmail = new Map<string, string[]>();
+    for (const d of contratosDeals || []) {
+      const email = (d as any).crm_contacts?.email?.toLowerCase();
+      if (!email) continue;
+      if (!dealIdsByEmail.has(email)) dealIdsByEmail.set(email, []);
+      dealIdsByEmail.get(email)!.push(d.id);
+    }
+    // Cross-check com anamneseDealIds populados na seção R2
+    // Para contratos fora dos R2 dessa semana, fazemos fetch adicional
+    const allDealIds = [...dealIdsByEmail.values()].flat();
+    const newDealIds = allDealIds.filter(id => !anamneseDealIds.has(id) && !r2DealIds.includes(id));
+    if (newDealIds.length > 0) {
+      const { data: anamnaseStages2 } = await supabase
+        .from('crm_stages')
+        .select('id')
+        .ilike('stage_name', '%anamnes%');
+      const stageIds2 = new Set((anamnaseStages2 || []).map((s: any) => s.id));
+      const { data: extraActs } = await supabase
+        .from('deal_activities')
+        .select('deal_id, to_stage, from_stage')
+        .in('deal_id', newDealIds);
+      for (const da of extraActs || []) {
+        const ts = (da as any).to_stage || '';
+        const fs = (da as any).from_stage || '';
+        if (stageIds2.has(ts) || stageIds2.has(fs) || ts.toUpperCase().includes('ANAMNES') || fs.toUpperCase().includes('ANAMNES')) {
+          anamneseDealIds.add((da as any).deal_id);
+        }
+      }
+    }
+    for (const [email, dealIds] of dealIdsByEmail) {
+      if (dealIds.some(id => anamneseDealIds.has(id))) {
+        contratosAnamneseEmails.add(email);
+      }
+    }
+  }
+
+  let contratosA010 = 0, contratosAnamnese = 0, contratosLive = 0;
+  for (const email of contratosEmails) {
+    if (a010EmailSet.has(email)) contratosA010++;
+    else if (contratosAnamneseEmails.has(email)) contratosAnamnese++;
+    else contratosLive++;
+  }
+
+  const contratosPieData = [
+    { label: 'A010', value: contratosA010, color: '#f59e0b' },
+    { label: 'ANAMNESE', value: contratosAnamnese, color: '#3b82f6' },
+    { label: 'LIVE', value: contratosLive, color: '#10b981' },
+  ].filter(d => d.value > 0);
+  const contratosPieTotal = contratosPieData.reduce((s, d) => s + d.value, 0);
+  const contratosPie = buildPie(contratosPieData, contratosPieTotal);
 
   // ══ 4. SDR RANKING (from RPC data — same source as dashboard) ══
   // Build a map of SDR profile id → email for calls lookup
