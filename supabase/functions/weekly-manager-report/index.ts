@@ -811,38 +811,79 @@ async function buildIncorporadorReport(supabase: any) {
   }, { r2Ag: 0, r2Re: 0, aprov: 0, reprov: 0, vendas: 0, receita: 0 });
 
 
-  // ══ 7. RESUMO FINANCEIRO ══
-  // A010 sales
+  // ══ 7. RESUMO FINANCEIRO (Bruto vs Líquido) ══
+  // Buscar reference_price de product_configurations
+  const { data: prodConfigs } = await supabase
+    .from('product_configurations')
+    .select('product_name, reference_price');
+  const refPriceMap = new Map<string, number>();
+  for (const pc of prodConfigs || []) {
+    refPriceMap.set((pc.product_name || '').toLowerCase().trim(), Number(pc.reference_price) || 0);
+  }
+  const getRefPrice = (productName: string | null): number => {
+    if (!productName) return 0;
+    return refPriceMap.get(productName.toLowerCase().trim()) || 0;
+  };
+
+  // A010 sales — incluir product_name pra lookup de bruto
   const { data: a010Sales } = await supabase
     .from('hubla_transactions')
-    .select('id, net_value')
+    .select('id, net_value, product_name')
     .eq('product_category', 'a010')
     .in('sale_status', ['completed', 'refunded'])
     .gte('sale_date', carrinhoStartISO)
     .lte('sale_date', carrinhoEndISO);
   const a010Count = (a010Sales || []).length;
-  const a010Revenue = (a010Sales || []).reduce((s: number, t: any) => s + (t.net_value || 0), 0);
+  const a010Liquido = (a010Sales || []).reduce((s: number, t: any) => s + (t.net_value || 0), 0);
+  const a010Bruto = (a010Sales || []).reduce((s: number, t: any) => s + getRefPrice(t.product_name), 0);
 
-  // Partnership by product (A001, A009 etc)
-  const parceriaByProduct = new Map<string, { count: number; revenue: number }>();
+  // A000 Contratos: bruto via reference_price, líquido via net_value
+  const { data: a000Tx } = await supabase
+    .from('hubla_transactions')
+    .select('net_value, product_name, sale_status, installment_number')
+    .eq('product_name', 'A000 - Contrato')
+    .in('sale_status', ['completed', 'refunded'])
+    .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
+    .gte('sale_date', safraStartISO)
+    .lte('sale_date', safraEndISO);
+  const a000LiquidoTx = (a000Tx || []).filter((t: any) => t.sale_status !== 'refunded' && (t.installment_number || 1) <= 1);
+  const a000Bruto = a000LiquidoTx.reduce((s: number, t: any) => s + getRefPrice(t.product_name), 0);
+  const a000Liquido = a000LiquidoTx.reduce((s: number, t: any) => s + (t.net_value || 0), 0);
+
+  // Partnership by product (A001, A009 etc) — bruto e líquido
+  const parceriaByProduct = new Map<string, { count: number; bruto: number; liquido: number }>();
   for (const tx of parceriaTx || []) {
+    if (tx.sale_status === 'refunded') continue;
     const pname = (tx.product_name || 'Outro').trim();
-    if (!parceriaByProduct.has(pname)) parceriaByProduct.set(pname, { count: 0, revenue: 0 });
+    if (!parceriaByProduct.has(pname)) parceriaByProduct.set(pname, { count: 0, bruto: 0, liquido: 0 });
     const p = parceriaByProduct.get(pname)!;
     p.count++;
-    p.revenue += tx.net_value || 0;
+    p.liquido += tx.net_value || 0;
+    p.bruto += getRefPrice(tx.product_name);
   }
 
+  const diffPct = (b: number, l: number) => {
+    if (b === 0) return '-';
+    const d = ((b - l) / b) * 100;
+    return `${d.toFixed(0)}%`;
+  };
+
   const finRows = [
-    `<tr><td>Vendas A010</td><td style="text-align:center">${a010Count}</td><td style="text-align:right">${fmtBRL(a010Revenue)}</td></tr>`,
-    `<tr><td>Contratos (A000)</td><td style="text-align:center">${contratosLiquidos}</td><td style="text-align:right">-</td></tr>`,
+    `<tr><td>Vendas A010</td><td style="text-align:center">${a010Count}</td><td style="text-align:right">${fmtBRL(a010Bruto)}</td><td style="text-align:right">${fmtBRL(a010Liquido)}</td><td style="text-align:center;color:#888">${diffPct(a010Bruto, a010Liquido)}</td></tr>`,
+    `<tr><td>Contratos (A000)</td><td style="text-align:center">${contratosLiquidos}</td><td style="text-align:right">${fmtBRL(a000Bruto)}</td><td style="text-align:right">${fmtBRL(a000Liquido)}</td><td style="text-align:center;color:#888">${diffPct(a000Bruto, a000Liquido)}</td></tr>`,
   ];
   for (const [prod, stats] of [...parceriaByProduct.entries()].sort((a, b) => b[1].count - a[1].count)) {
-    finRows.push(`<tr><td>Parceria — ${prod}</td><td style="text-align:center">${stats.count}</td><td style="text-align:right">${fmtBRL(stats.revenue)}</td></tr>`);
+    finRows.push(`<tr><td>Parceria — ${prod}</td><td style="text-align:center">${stats.count}</td><td style="text-align:right">${fmtBRL(stats.bruto)}</td><td style="text-align:right">${fmtBRL(stats.liquido)}</td><td style="text-align:center;color:#888">${diffPct(stats.bruto, stats.liquido)}</td></tr>`);
   }
-  const totalParceria = [...parceriaByProduct.values()].reduce((s, p) => s + p.revenue, 0);
+  const totalParceriaBruto = [...parceriaByProduct.values()].reduce((s, p) => s + p.bruto, 0);
+  const totalParceriaLiquido = [...parceriaByProduct.values()].reduce((s, p) => s + p.liquido, 0);
   const totalParceriaCount = [...parceriaByProduct.values()].reduce((s, p) => s + p.count, 0);
-  finRows.push(`<tr class="totals"><td>TOTAL PARCERIA</td><td style="text-align:center">${totalParceriaCount}</td><td style="text-align:right">${fmtBRL(totalParceria)}</td></tr>`);
+  finRows.push(`<tr class="totals"><td>TOTAL PARCERIA</td><td style="text-align:center">${totalParceriaCount}</td><td style="text-align:right">${fmtBRL(totalParceriaBruto)}</td><td style="text-align:right">${fmtBRL(totalParceriaLiquido)}</td><td style="text-align:center">${diffPct(totalParceriaBruto, totalParceriaLiquido)}</td></tr>`);
+
+  const totalGeralBruto = a010Bruto + a000Bruto + totalParceriaBruto;
+  const totalGeralLiquido = a010Liquido + a000Liquido + totalParceriaLiquido;
+  finRows.push(`<tr class="totals" style="background:#1a1a2e;color:#fff"><td>TOTAL GERAL</td><td style="text-align:center;color:#fff">-</td><td style="text-align:right;color:#fff">${fmtBRL(totalGeralBruto)}</td><td style="text-align:right;color:#fff">${fmtBRL(totalGeralLiquido)}</td><td style="text-align:center;color:#fff">${diffPct(totalGeralBruto, totalGeralLiquido)}</td></tr>`);
+
 
   // ══ BUILD HTML ══
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${STYLES}</style></head><body>
