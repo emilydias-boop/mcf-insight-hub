@@ -131,7 +131,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         p_week_start: weekStartStr,
         p_window_start: boundaries.r2Meetings.start.toISOString(),
         p_window_end: boundaries.r2Meetings.end.toISOString(),
-        p_apply_contract_cutoff: false,
+        p_apply_contract_cutoff: true,
       });
 
       // ============================================================
@@ -225,7 +225,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         }
 
         const isHublaRefunded = !!hublaInfo?.isRefunded;
-        const contractPaidAt = r2.r1_contract_paid_at || hublaInfo?.saleDate || r2.contract_paid_at || null;
+        const contractPaidAt = r2.effective_contract_date || r2.r1_contract_paid_at || hublaInfo?.saleDate || r2.contract_paid_at || null;
 
         const r1Status: string | null = isHublaRefunded ? 'refunded' : null;
         const r2AttendeeStatus = r2.attendee_status as string | null;
