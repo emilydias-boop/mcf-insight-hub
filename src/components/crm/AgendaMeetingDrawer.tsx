@@ -123,6 +123,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { role, user } = useAuth();
+  const { activeBU } = useBUContext();
   const isSdr = role === 'sdr';
   const [closerNotes, setCloserNotes] = useState(meeting?.closer_notes || '');
   const [sdrNote, setSdrNote] = useState(meeting?.notes || '');
