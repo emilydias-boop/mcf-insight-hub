@@ -57,6 +57,7 @@ serve(async (req) => {
     // Validar campos obrigatórios
     if (!payload.name || !payload.email) {
       console.error('[LIVE-LEAD] Campos obrigatórios faltando');
+      await finalizeWebhookLog('error', 'name e email são obrigatórios');
       return new Response(
         JSON.stringify({ error: 'name e email são obrigatórios' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
