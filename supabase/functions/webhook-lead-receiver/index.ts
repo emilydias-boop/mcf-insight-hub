@@ -17,6 +17,39 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
+  // Painel "Movimentações de Leads" (webhook_events)
+  const wlStartTime = Date.now();
+  let wlLogId: string | null = null;
+  let wlEventType = 'lead.received.unknown';
+  let wlPayloadSnapshot: any = null;
+  const finalizeWebhookLog = async (status: 'success' | 'error', errorMsg?: string) => {
+    try {
+      if (!wlLogId) {
+        // Inserção tardia caso não tenha conseguido criar antes
+        const { data } = await supabase
+          .from('webhook_events')
+          .insert({
+            event_type: wlEventType,
+            event_data: wlPayloadSnapshot ?? {},
+            status,
+            processed_at: new Date().toISOString(),
+            processing_time_ms: Date.now() - wlStartTime,
+            error_message: errorMsg ?? null,
+          })
+          .select('id')
+          .single();
+        wlLogId = data?.id ?? null;
+      } else {
+        await supabase.from('webhook_events').update({
+          status,
+          processed_at: new Date().toISOString(),
+          processing_time_ms: Date.now() - wlStartTime,
+          error_message: errorMsg ?? null,
+        }).eq('id', wlLogId);
+      }
+    } catch (_) { /* nunca quebra fluxo */ }
+  };
+
   try {
     // Extract slug from URL path
     const url = new URL(req.url);
