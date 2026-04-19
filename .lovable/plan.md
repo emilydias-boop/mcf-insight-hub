@@ -1,81 +1,43 @@
 
 
-## Reformular Relatório R2 — corte temporal por DATA DO CONTRATO
+## Fix: drop overload duplicada da RPC `get_carrinho_r2_attendees`
 
-### Diagnóstico final (corrigido)
+### Diagnóstico (causa raiz confirmada via network logs)
 
-Eu estava errado nas duas tentativas anteriores. A regra real é mais simples e mais física:
+A migration anterior tentou estender a RPC com novo parâmetro `p_apply_contract_cutoff`, mas o Postgres criou uma **função NOVA em vez de substituir** — porque adicionar um parâmetro muda a assinatura. Resultado: **2 versões coexistem** no banco:
 
-**O que define se um Aprovado entra na safra é a DATA DO CONTRATO PAGO, não a data da R2 nem a data em que o status R2 virou "Aprovado".**
-
-### Análise da lista do usuário (44 aprovados — safra Qui 09/04 → Qua 15/04, corte Sex 17/04 12:00)
-
-Olhando os 44 nomes, vejo o padrão exato:
-
-| Bucket | Qtd | Datas de contrato | Regra |
-|---|---|---|---|
-| **Contratos DENTRO da safra Qui 09 → Qua 15** | 31 | 09/04 a 15/04 | ✅ Entram na safra |
-| **Contratos pré-safra (até Qua 08/04)** com R2 que finalmente aprovou aqui | 6 | 06/02, 16/03, 24/03, 31/03, 07/04, 08/04 | ✅ Entram (carry-over para trás de leads que rolaram) |
-| **Contratos pós-Quarta (16/04) MAS antes do corte de Sex 17/04 12:00** | 7 | 16/04 (manhã) | ✅ Entram (corte ainda permite) |
-
-**Total: 44.**
-
-O painel mostra **56** porque hoje conta também:
-- ~12 leads cujo contrato foi pago **depois** do corte de Sex 17/04 12:00 (já são da próxima safra)
-- A regra de filtro é por `r2 scheduled_at` ou `audit_logs do status`, ambas erradas
-
-### Regra correta (definitiva)
-
-Um lead conta como "Aprovado da safra X" se:
-
-```text
-contract_paid_at >= safra_X_inicio (Qui 00:00)
-  AND
-contract_paid_at < safra_X_corte_proxima_sexta (Sex+1 12:00)
-  AND
-attendee.r2_status = 'Aprovado'
+```
+get_carrinho_r2_attendees(p_week_start, p_window_start, p_window_end)               -- ANTIGA
+get_carrinho_r2_attendees(p_week_start, p_window_start, p_window_end, p_apply_…)    -- NOVA
 ```
 
-Ou seja: a janela é **Qui 00:00 da safra → próxima Sex no horário de corte**, mas aplicada sobre `meeting_slot_attendees.contract_paid_at` (não sobre `scheduled_at` da R2 nem sobre `audit_logs`).
+PostgREST recebe a chamada do `useContractLifecycleReport` (3 args) e responde:
+```
+PGRST203 — Could not choose the best candidate function
+```
+Status HTTP **300** = ambíguo. Todos os hooks que ainda chamam com 3 args quebram → painel zera.
 
-Casos edge cobertos:
-- Contrato pago Qui 09/04 + R2 Sex 10/04 11:00 (aprovado): ✅ entra (contract dentro da safra)
-- Contrato pago Sex 17/04 11:00 + R2 mesma manhã: ✅ entra (antes do corte 12:00)
-- Contrato pago Sex 17/04 13:00: ❌ próxima safra (depois do corte)
-- Contrato pago 06/02 + R2 só agora aprovou: ✅ entra (closer recuperou um lead antigo nesta safra — confirmado pela lista)
-- R2 realizada sem `r2_status`: card amarelo de alerta (não infla nem deflaciona)
+Por isso **só o painel "Relatório" zerou**: o `R2MetricsPanel` (Carrinho R2) já passa o 4º argumento, então funciona. O `useContractLifecycleReport` (esta tela) ainda chama com 3 args.
 
-### Implementação
+### Fix em 2 linhas
 
-**1. RPC `get_carrinho_r2_attendees`** (Postgres)
-- Adicionar parâmetro `p_apply_contract_cutoff boolean` (default false)
-- Quando true: filtrar por `meeting_slot_attendees.contract_paid_at` em vez de `scheduled_at`
-- Janela: `[p_window_start, p_window_end)` aplicada sobre `contract_paid_at`
-- Retornar campo extra `dentro_corte boolean` baseado nessa janela
+**1. Migração SQL — DROP da função antiga**
+```sql
+DROP FUNCTION IF EXISTS public.get_carrinho_r2_attendees(date, timestamptz, timestamptz);
+```
+Mantém apenas a versão de 4 args (que tem default `false` no `p_apply_contract_cutoff`, retro-compatível).
 
-**2. `src/lib/carrinhoWeekBoundaries.ts`**
-- Renomear conceito: `r2Meetings` agora representa a janela do **contrato pago**
-- Manter `start = Qui 00:00` e `end = próxima Sex no horário de corte`
-
-**3. `src/hooks/useCarrinhoUnifiedData.ts`**
-- Passar `p_apply_contract_cutoff = true` para a RPC
-- Tipo `CarrinhoLeadRow` ganha `dentro_corte` e `pendente_status`
-
-**4. `src/hooks/useR2MetricsData.ts`**
-- Contar como aprovado apenas rows com `r2_status = Aprovado AND dentro_corte = true`
-- Expor `tardios: number` (aprovados com contrato pago após o corte)
-- Expor `pendentesStatus: number` (R2 realizada sem status R2)
-
-**5. `src/components/crm/R2MetricsPanel.tsx`**
-- Card "Selecionados" com legenda: *"Contratos pagos de Qui DD/MM 00:00 até Sex DD/MM 12:00"*
-- Badge `+N tardios` ao lado (toggle "Mostrar tardios" expande lista)
-- Card amarelo `⚠️ N R2 sem status` quando `pendentesStatus > 0`
+**2. `src/hooks/useContractLifecycleReport.ts` (linha 126)**
+- Passar explicitamente `p_apply_contract_cutoff: false` para evitar futura ambiguidade caso alguém recrie overload.
 
 ### Validação esperada
 
-Safra **09/04**: painel passa de **56 → 44 Aprovados** — exatamente a lista que o usuário enviou. Os ~12 tardios aparecem em badge, contam na safra **16/04**.
+- Painel "Relatório" volta a popular: 129 contratos Hubla + 85 R2s = ~120 leads únicos esperados.
+- `R2MetricsPanel` (Carrinho R2) continua funcionando como está.
+- Nenhuma quebra: a versão de 4 args já existe e tem `DEFAULT false`.
 
-### Escopo
+### Arquivos
 
-Apenas painel `/crm/agenda-r2 → Relatório`. Email continua intocado (alinhamos depois que validarmos o painel com a próxima safra).
+- Nova migração SQL (DROP da função antiga de 3 args)
+- `src/hooks/useContractLifecycleReport.ts` (passar 4º arg explícito)
 
