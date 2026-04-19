@@ -169,6 +169,7 @@ serve(async (req) => {
 
     if (existingDealId) {
       console.log('[LIVE-LEAD] Deal já existe por identidade, ignorando duplicata:', existingDealId);
+      await finalizeWebhookLog('success');
       return new Response(
         JSON.stringify({ 
           success: true, 
