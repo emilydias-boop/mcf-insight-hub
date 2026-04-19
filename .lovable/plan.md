@@ -1,82 +1,81 @@
 
 
-## Diagnóstico revisado: "Proposta Enviada" ≠ "Produto Fechado"
+## Plano: Forçar registro de desfecho da reunião pelo Closer Consórcio
 
-Você está certo — não posso espelhar `PRODUTOS FECHADOS` como Proposta. São eventos distintos: o closer envia várias propostas e só algumas viram fechamento. Contar igual quebra a Taxa de Conversão.
+### Problema central
+A aba Pós-Reunião já tem botões "Proposta" e "Sem Sucesso", mas é **opcional** — o closer só aparece lá depois da R1 Realizada e pode simplesmente ignorar (em abril, 270 reuniões realizadas estão "Aguardando Ação", todas pendentes). Resultado: dashboards zerados.
 
-### O sinal real de "Proposta Enviada" hoje
+### O que precisamos construir
 
-Investigando o banco:
+Tornar o registro de desfecho **obrigatório e visível** para o closer logo após a reunião, em vez de uma aba que ele esquece de abrir.
 
-| Fonte | O que é | Status |
-|---|---|---|
-| `consorcio_proposals` | Criada via aba Pós-Reunião → botão "Proposta" | Parou em 12/mar (time abandonou) |
-| Stage `PROPOSTA ENVIADA` (VdA) | Move manual no Kanban | 0 em abril |
-| Stage `PRODUTOS FECHADOS` (EA) | Fechamento, não proposta | 49 em abril ❌ não serve |
+### Solução em 3 camadas
 
-**Não existe hoje, no fluxo Efeito Alavanca, NENHUM sinal de "proposta enviada" sendo registrado.** O closer fecha direto, sem trilha.
+**1. Notificação ativa no momento da reunião (push-based, não pull-based)**
 
-### Caminho correto
+Hoje o closer precisa LEMBRAR de abrir a aba Pós-Reunião. Inverter:
+- Após uma R1 ser marcada como "Realizada" (na Agenda R1), abrir automaticamente um **modal de desfecho obrigatório** com 3 opções:
+  - **Proposta Enviada** (abre `ProposalModal` existente)
+  - **Sem Sucesso** (abre `SemSucessoModal` existente)
+  - **Aguardar retorno do cliente** (registra "pendente" com prazo de 48h, conta como "em follow-up")
+- Modal pode ser fechado, mas o card do deal fica destacado em vermelho na agenda até desfecho registrado
 
-**1. Propostas Enviadas = somente sinais reais de proposta**
+**2. Banner persistente "Reuniões sem desfecho" no dashboard do Closer**
 
-Hook `useConsorcioPipelineMetricsByCloser.ts` passa a contar (DISTINCT por `deal_id`):
-- (a) Registros em `consorcio_proposals` criados no período (qualquer status)
-- (b) Deals movidos para stage `PROPOSTA ENVIADA` (VdA) no período
+Em `/closer/meu-desempenho` (Consórcio), adicionar banner no topo:
+- Conta R1 Realizadas dele sem desfecho (sem `consorcio_proposals` nem `consorcio_sem_sucesso`)
+- Mostra em vermelho com CTA "Registrar agora" → abre lista
+- Bloqueia visualmente até reduzir para 0
 
-**Não conta** `PRODUTOS FECHADOS` como proposta. Para fluxo EA, Propostas pode ficar 0 — é a realidade: não há registro.
+**3. Lembrete automático após 24h sem desfecho**
 
-Mapeamento closer:
-- (a) via `consorcio_proposals.created_by` → user → `closers`
-- (b) via `crm_deals.owner_id` (email) → `closers.email`, com fallback para `meeting_slot_attendees`
+Edge Function (cron diário) que:
+- Busca R1 Realizadas com mais de 24h sem desfecho
+- Cria notificação in-app (sino) para o closer
+- Após 72h: notifica também o gestor (visibilidade cruzada)
 
-**2. Produtos Fechados = sinais de fechamento real**
+### Mudanças técnicas
 
-Hook `useConsorcioProdutosFechadosByCloser.ts` passa a contar (DISTINCT por `deal_id`):
-- (a) Registros em `deal_produtos_adquiridos` no período (cota cadastrada via fluxo)
-- (b) Deals em stages de fechamento Consórcio movidos no período:
-  - VdA: `VENDA REALIZADA`, `CONTRATO PAGO`
-  - EA: `PRODUTOS FECHADOS`, `VENDA REALIZADA 50K`
+**Arquivos a modificar:**
 
-Mapeamento closer: igual acima.
+| Arquivo | Mudança |
+|---|---|
+| `src/components/crm/R1MeetingDrawer.tsx` (ou onde marca "Realizada") | Após mutation success de status `completed`, se BU = consórcio, disparar `OutcomeRequiredModal` |
+| `src/components/consorcio/OutcomeRequiredModal.tsx` (NOVO) | Modal com 3 cards: Proposta / Sem Sucesso / Aguardar. Reusa `ProposalModal` e `SemSucessoModal` existentes |
+| `src/pages/closer/MeuDesempenhoCloser.tsx` (branch consórcio) | Adicionar `<PendingOutcomesBanner />` no topo |
+| `src/components/closer/PendingOutcomesBanner.tsx` (NOVO) | Banner que conta reuniões sem desfecho do closer logado, com lista expansível e CTAs rápidos |
+| `src/hooks/usePendingOutcomes.ts` (NOVO) | Query: R1 Realizadas do closer no período sem registro em `consorcio_proposals` nem em `consorcio_sem_sucesso` |
+| `src/hooks/useConsorcioPostMeeting.ts` | Adicionar mutation `useMarcarAguardarRetorno` (insere registro com flag `aguardando_retorno = true`) |
+| `supabase/functions/notify-pending-outcomes/index.ts` (NOVO Edge Function) | Cron diário 09h: verifica pendências >24h, cria notificações |
 
-**3. Taxa de Conversão fica honesta**
-- Produtos Fechados / R1 Realizada (não usa Propostas no denominador, evita distorção EA)
-- Para João Pedro abril: 49/79 ≈ 62% ✅
+**Schema (1 alteração mínima):**
 
-**4. Aplicar mesma lógica nos hooks de equipe** para consistência:
-- `useConsorcioProdutosFechadosBySdr.ts` → adicionar fonte CRM stages
-- `useConsorcioProdutosFechadosMetrics.ts` → idem
-- `useConsorcioPipelineMetricsBySdr.ts` → manter só Propostas reais
-- `useConsorcioPipelineMetrics.ts` → idem
+Adicionar coluna `aguardando_retorno boolean DEFAULT false` em `consorcio_proposals` (já que "aguardar" é um estado intermediário válido — proposta verbal feita, aguarda confirmação do cliente). Sem nova tabela.
 
-**5. Tooltip nos cards** (`CloserConsorcioDetailKPICards.tsx`):
-- Propostas Enviadas: "Conta proposta criada na aba Pós-Reunião + stage PROPOSTA ENVIADA (Viver de Aluguel). Fluxo Efeito Alavanca não possui etapa de proposta."
-- Produtos Fechados: "Conta cota cadastrada + stages PRODUTOS FECHADOS / VENDA REALIZADA / CONTRATO PAGO."
+### Como fica a UX do João Pedro
 
-### Resultado esperado para João Pedro (abril/2026)
+| Momento | O que acontece |
+|---|---|
+| Marca R1 como "Realizada" | Modal obrigatório aparece imediatamente: "Qual o desfecho?" |
+| Clica "Proposta" | Abre `ProposalModal`, registra → vai pra dashboard |
+| Clica "Sem Sucesso" | Abre `SemSucessoModal`, registra motivo → vai pra dashboard |
+| Clica "Aguardar retorno" | Registra pendente, modal fecha, deal volta pra agenda com flag |
+| Fecha modal sem ação | Banner vermelho aparece no `/meu-desempenho`: "Você tem 1 reunião sem desfecho" |
+| 24h depois | Notificação no sino: "Registre o desfecho de [Cliente]" |
+| 72h depois | Gestor vê na sua dashboard que João tem desfechos pendentes |
 
-| Métrica | Antes | Depois | Honesto? |
-|---|---|---|---|
-| R1 Realizada | 79 | 79 | ✅ |
-| **Propostas Enviadas** | 0 | **0** (EA não registra) | ✅ reflete realidade |
-| **Produtos Fechados** | 0 | **49** | ✅ |
-| **Taxa Conversão** | 0% | **62%** (49/79) | ✅ |
+### Resultado esperado em 2 semanas
 
-### Observação para a equipe (fora do escopo deste fix)
+Hoje: 270 reuniões realizadas / 0 propostas registradas (0%)  
+Meta: >90% das reuniões com desfecho registrado em até 24h
 
-Se quiserem rastrear Propostas Enviadas no fluxo EA, há duas saídas (decisão futura):
-- Criar stage "PROPOSTA ENVIADA" também na pipeline EA + treinar time a mover
-- Voltar a usar a aba Pós-Reunião como obrigatória (que já alimenta `consorcio_proposals`)
-
-Sem uma dessas, EA continuará com Propostas = 0 — e isso é o dado real, não bug.
+Aí sim os dashboards "Propostas Enviadas" passam a refletir a realidade — sem hack de contar `PRODUTOS FECHADOS` como proposta.
 
 ### Garantias
 
-- Sem alteração de banco
-- Aba Pós-Reunião continua funcionando
-- Fluxo Kanban-direto agora aparece em Produtos Fechados
-- Sem duplicação (DISTINCT por `deal_id`)
-- Taxa de Conversão usa Produtos/R1 Realizada (não depende de Propostas)
-- Sem impacto em Incorporador
+- Sem quebra do fluxo atual (aba Pós-Reunião continua funcionando)
+- Modal obrigatório só aparece para BU Consórcio (não afeta Incorporador)
+- Closer pode escolher "Aguardar retorno" — não força decisão prematura
+- Banner é visual, não bloqueia operação
+- Notificações usam sistema in-app existente (sino)
 
