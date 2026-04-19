@@ -1,42 +1,61 @@
 
+## Confirmação: bug confirmado, nada de nota se perde
 
-## Tornar justificativa obrigatória no reagendamento
+### O que verifiquei no banco
 
-### Problema
-Hoje o campo "Motivo do Reagendamento" existe nos dois modais (R1 e R2) mas é **opcional**. Permite reagendar sem explicar o que aconteceu — perdemos o histórico do "porquê" do no-show ou remarcação.
+Rodei query em `deal_activities` para os 3 deals. Resultado:
 
-### Solução
-Tornar o campo obrigatório em ambos os modais, exigindo uma frase mínima (não pode ser vazio, espaços em branco ou um simples `-`/`.`).
+| Lead | Deal ID | Notas tipo `note` no banco |
+|---|---|---|
+| **Franklin Silveira** | `b817d815...` | **1 nota**: "lead participou da reunião com o João Pedro, mas quer financiamento, aguardando definiri horário" (16/04 14:05) |
+| **José Henrique** | `fec3d199...` | **1 nota**: "LEAD QUER AGENDAR PARA QUARTA ÀS 18H COM O SÓCIO" (17/04 19:52) |
+| **Ricardo Souza** | `6658165e...` | **0 notas** tipo `note` (só `stage_change`) |
 
-### Arquivos a alterar
+### Bug confirmado em `AgendaMeetingDrawer.tsx` linha 272
 
-**1. `src/components/crm/RescheduleModal.tsx` (R1)**
-- Marcar label como obrigatória: `Motivo do Reagendamento *`
-- Validar `rescheduleNote.trim().length >= 10` (mínimo 10 caracteres = força frase real, evita `-`, `.`, `ok`)
-- Mostrar contador de caracteres + mensagem de ajuda quando inválido
-- Desabilitar botão "Reagendar" enquanto justificativa inválida
-- Atualizar `placeholder` para indicar que é obrigatório explicar o motivo
-- Trocar `rescheduleNote.trim() || undefined` por sempre enviar `rescheduleNote.trim()`
-
-**2. `src/components/crm/R2RescheduleModal.tsx` (R2)**
-- Mesmas mudanças do R1: label obrigatória, validação ≥10 chars trimmed, contador, botão desabilitado, sempre enviar a nota.
-
-### Regra de validação aplicada
 ```ts
-const isNoteValid = rescheduleNote.trim().length >= 10;
+const dealId = activeMeeting?.deal_id;  // ← deal do PRIMEIRO que reservou (Franklin)
 ```
-- Bloqueia: vazio, só espaços, `-`, `ok`, `.`, `xx`
-- Permite frases curtas reais como "Cliente não atendeu" (20 chars), "Reagendou via WhatsApp" (22 chars)
 
-### Feedback visual
-- Label com asterisco vermelho `*`
-- Texto auxiliar abaixo do textarea: "Mínimo 10 caracteres — descreva o que ocorreu (ex: 'Cliente pediu para remarcar para semana que vem')"
-- Contador `{rescheduleNote.trim().length}/10` que fica verde quando válido
-- Botão "Reagendar" fica desabilitado com tooltip explicando o motivo
+Como o `meeting_slots.deal_id` é fixo no Franklin (1º a reservar), todos os 3 drawers buscam as notas do Franklin → você vê a mesma frase em todos.
 
-### Não muda
-- Nenhuma alteração de banco de dados (campo `notes` já existe)
-- Hooks de mutation (`useRescheduleMeeting`, `useRescheduleR2Meeting`) permanecem iguais — passam a sempre receber a nota
-- Histórico/log de movimentações continua funcionando idêntico
-- Contador de "número de reagendamentos" não muda
+### Após a correção, cada drawer mostrará:
 
+- **Franklin** → "lead participou da reunião com o João Pedro..." ✅
+- **José Henrique** → "LEAD QUER AGENDAR PARA QUARTA ÀS 18H COM O SÓCIO" ✅ (nota própria que estava escondida pelo bug!)
+- **Ricardo** → vazio (correto — ele realmente não tem nota)
+
+**Importante:** o José Henrique TEM nota própria que hoje você nem está vendo, porque o bug sobrescreve com a do Franklin. A correção **revela** essa nota que estava escondida.
+
+### Plano de implementação
+
+**Arquivo:** `src/components/crm/AgendaMeetingDrawer.tsx`
+
+**Linha 272-289** — trocar `activeMeeting?.deal_id` por `selectedParticipant?.dealId`:
+
+```ts
+const selectedDealId = selectedParticipant?.dealId;
+const { data: sdrNotes } = useQuery({
+  queryKey: ['deal-sdr-notes', selectedDealId],
+  queryFn: async () => {
+    if (!selectedDealId) return [];
+    const { data, error } = await supabase
+      .from('deal_activities')
+      .select('id, description, created_at')
+      .eq('deal_id', selectedDealId)
+      .eq('activity_type', 'note')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+  enabled: !!selectedDealId,
+});
+```
+
+**Atualizar título** para deixar claro de quem é a nota: `Notas do SDR sobre {primeiro nome do participante selecionado}`.
+
+### Garantias
+- Zero alterações de banco — nenhuma nota é deletada
+- Zero impacto em outros componentes (`useLeadNotes`, `AttendeeNotesSection` etc.)
+- Cada nota volta a aparecer no drawer correto
+- Histórico, contadores e demais painéis intactos
