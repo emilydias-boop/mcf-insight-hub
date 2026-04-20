@@ -1,62 +1,74 @@
 
 
-## Remover trigger quebrado de webhook de saída em `hubla_transactions`
+## Reprocessar webhook da Hubla do lead João Vitor (e qualquer outro derrubado pelo trigger)
 
-### Resposta direta à sua pergunta
+### Contexto
 
-**Não, o trigger não é necessário.** Ele só serve para enfileirar eventos no `outbound_webhook_queue` (a fila que o `outbound-webhook-dispatcher` lê para reenviar vendas para o webhook.site / sistemas externos). A entrada de vendas pela fonte primária (Hubla / Make A010 / Kiwify / MCFPay / Asaas / Manual) **não depende dele**.
+A Hubla **enviou** o webhook do João Vitor normalmente. O log está salvo em `hubla_webhook_logs` (id `8dace3dc-f7d3-4dda-8f2b-9aabb509078c`) com `status = error` e o payload completo em `event_data`. A correção do trigger já foi aplicada, então agora basta **reexecutar** o payload original — sem precisar do Make.
 
-Hoje ele está **causando o problema oposto do que deveria**: como está quebrado (`function enqueue_outbound_sale_webhook(uuid, unknown) does not exist`), ele aborta o `INSERT` em `hubla_transactions` inteiro. Foi exatamente isso que derrubou o lead `JOAO VITOR FELISBINO MARTINIANO` — o Make tentou inserir, o trigger explodiu, o insert foi revertido, lead nunca entrou.
+### O que será feito
 
-### Confirmação técnica
+#### 1. Identificar todos os webhooks que falharam pelo bug do trigger
+Query em `hubla_webhook_logs`:
+- `status = 'error'`
+- `error_message ILIKE '%enqueue_outbound_sale_webhook%does not exist%'`
+- janela: últimos 7 dias (cobre desde a migration quebrada `20260420133826`)
 
-- Trigger ativo: `trg_outbound_sale_webhook AFTER INSERT OR UPDATE` em `hubla_transactions`
-- Função usada pelo trigger: `outbound_sale_webhook_trigger()` (migration `20260420133826`)
-- Essa função chama `enqueue_outbound_sale_webhook(NEW.id, 'sale.created')` — versão com 2 parâmetros que **não existe** no banco
-- A versão que existe é `enqueue_outbound_sale_webhook()` sem parâmetros (migration `20260420131948`), que era a trigger function original
-- Resultado: qualquer insert em `hubla_transactions` chama o trigger novo, que tenta usar a função inexistente, e o Postgres aborta tudo
-- Lead `JOAO VITOR FELISBINO MARTINIANO` / `anisk1216@gmail.com` confirmado **ausente** de `hubla_transactions`
+Esperado: pelo menos o registro do João Vitor; possivelmente outros leads A010 / Hubla que caíram no mesmo erro.
 
-### Correção (mínima e segura)
+#### 2. Reprocessar via edge function `hubla-webhook-handler`
+Para cada log com erro:
+- Pegar `event_data` (payload original íntegro da Hubla)
+- POSTar de volta para a edge function `hubla-webhook-handler` com o mesmo payload
+- A função fará todo o fluxo normal:
+  - inserir em `hubla_transactions` (agora passa, trigger corrigido)
+  - acionar lógica de roteamento A010 → `PIPELINE INSIDE SALES`
+  - criar contato + deal no CRM
+  - atualizar `hubla_webhook_logs` para `status = success`
+- enfileirar evento em `outbound_webhook_queue` → webhook.site
 
-Migration única que:
+#### 3. Validar no CRM
+- Buscar `anisk1216@gmail.com` em `hubla_transactions` → deve existir
+- Buscar contato no `PIPELINE INSIDE SALES` → deve estar criado
+- Confirmar evento em `outbound_webhook_queue` (event = `sale.created`)
+- Confirmar POST chegando em `webhook.site` em até 30s
 
-1. **Remove** o trigger quebrado:
-   ```sql
-   DROP TRIGGER IF EXISTS trg_outbound_sale_webhook ON public.hubla_transactions;
-   DROP FUNCTION IF EXISTS public.outbound_sale_webhook_trigger();
-   ```
-2. **Recria** o trigger usando a função correta original (sem parâmetros), que já contém toda a lógica de filtragem por `events`, `sources` e `product_categories` e enfileira em `outbound_webhook_queue`:
-   ```sql
-   CREATE TRIGGER trg_outbound_sale_webhook
-   AFTER INSERT OR UPDATE ON public.hubla_transactions
-   FOR EACH ROW
-   EXECUTE FUNCTION public.enqueue_outbound_sale_webhook();
-   ```
+### Implementação técnica
 
-Isso restaura o comportamento que existia antes da migration `20260420133826` ter quebrado a chamada — o trigger volta a funcionar **sem abortar inserts** e os webhooks de saída voltam a ser enfileirados corretamente para o webhook.site.
+Será criada uma edge function utilitária temporária `reprocess-failed-hubla-webhooks` (ou um script one-shot) que:
 
-### Por que não simplesmente apagar o trigger?
+```ts
+// Pseudo
+const { data: failed } = await supabase
+  .from('hubla_webhook_logs')
+  .select('id, event_data, event_type')
+  .eq('status', 'error')
+  .ilike('error_message', '%enqueue_outbound_sale_webhook%does not exist%')
+  .gte('created_at', '2026-04-15');
 
-Você poderia. Mas se apagar:
-- ❌ O webhook.site para de receber as vendas em tempo real (perde o objetivo do debug que você acabou de configurar)
-- ❌ Qualquer integração externa futura via "Webhooks Saída" deixa de funcionar
-- ✅ Por outro lado, os inserts voltam a passar (que é o que importa agora)
+for (const log of failed) {
+  await fetch(`${SUPABASE_URL}/functions/v1/hubla-webhook-handler`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(log.event_data),
+  });
+}
+```
 
-Recriar o trigger com a função certa resolve **as duas coisas** ao mesmo tempo, com o mesmo trabalho.
+A função `hubla-webhook-handler` já é idempotente (usa `hubla_id` único), então não há risco de duplicação para vendas que eventualmente já tenham entrado por outro caminho.
 
-### Validação após a correção
+### Resultado esperado
 
-1. Reenviar pelo Make o payload do `JOAO VITOR FELISBINO MARTINIANO` (ou esperar próximo lead A010)
-2. Confirmar linha em `hubla_transactions` com `customer_email = anisk1216@gmail.com`
-3. Confirmar contato/deal criado no `PIPELINE INSIDE SALES`
-4. Confirmar item em `outbound_webhook_queue` com `event = sale.created`
-5. Confirmar POST chegando no webhook.site em até 30s (próxima execução do dispatcher)
+- João Vitor (`anisk1216@gmail.com`) entra em `hubla_transactions` com `source = hubla` e `event_type = invoice.payment_succeeded`
+- Lead aparece no `PIPELINE INSIDE SALES` com classificação A010
+- Qualquer outro lead derrubado pelo bug do trigger (entre 20/04 13:38 e 20/04 14:14 UTC) também é recuperado
+- Evento aparece em `outbound_webhook_queue` e é entregue ao webhook.site
+- A Hubla volta a ser **única fonte primária** — Make permanece apenas como redundância opcional
 
 ### Escopo
 
-- 1 migration nova (drop + create trigger)
-- Zero alteração de código (frontend ou edge function)
+- 1 edge function utilitária nova (`reprocess-failed-hubla-webhooks`) **OU** execução direta via tool de SQL/curl pelo backend
 - Zero alteração de schema
-- Zero impacto em outras tabelas
+- Zero alteração de UI
+- Zero alteração no fluxo de ingestão normal (já corrigido pela migration anterior)
 
