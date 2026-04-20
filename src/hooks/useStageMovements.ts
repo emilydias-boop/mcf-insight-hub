@@ -94,17 +94,23 @@ export function useStageMovements({
       const dealIds = [...new Set(activities.map((a) => a.deal_id).filter((id) => id && isValidUUID(id)))];
       if (dealIds.length === 0) return { summary: [], rows: [] };
 
-      let dealsQuery = supabase
-        .from('crm_deals')
-        .select('id, name, tags, origin_id')
-        .in('id', dealIds);
-
-      if (originIds && originIds.length > 0) {
-        dealsQuery = dealsQuery.in('origin_id', originIds);
-      }
-
-      const { data: deals, error: dealsErr } = await dealsQuery;
-      if (dealsErr) throw dealsErr;
+      // Paginar IN(...) em chunks de 200 para evitar HTTP 400 por URL longa
+      const dealChunks = chunk(dealIds, 200);
+      const dealsResults = await Promise.all(
+        dealChunks.map(async (ids) => {
+          let q = supabase
+            .from('crm_deals')
+            .select('id, name, tags, origin_id')
+            .in('id', ids);
+          if (originIds && originIds.length > 0) {
+            q = q.in('origin_id', originIds);
+          }
+          const { data, error } = await q;
+          if (error) throw error;
+          return data || [];
+        })
+      );
+      const deals = dealsResults.flat();
 
       // Filtrar tags
       const filteredDeals = (deals || []).filter((deal) => {
