@@ -1,101 +1,105 @@
 
 
-## Liberar permissões avançadas individuais para SDRs (caso Caroline Corrêa)
+## Dois ajustes: ver todos os Closers + permitir SDR+Closer simultâneo
 
-### Resumo
+### Problema 1: "Nenhum closer cadastrado para outro"
 
-Hoje, no drawer da agenda (`AgendaMeetingDrawer.tsx` e `R2MeetingDetailDrawer.tsx`), todas as ações "de gestor" estão escondidas via `isSdr = role === 'sdr'`. Isso bloqueia o SDR de:
-- Marcar reunião como **Realizada** ou **Voltar para Agendada** (remanejar sem precisar aplicar No-Show)
-- **Vincular Contrato Pago** (R1)
-- **Reagendar** participante (R2)
-- **Cancelar / Restaurar reunião** (R2)
+A tela `/crm/configurar-closers` filtra closers pela BU ativa (`activeBU`). Como a Emily (admin) não está dentro de uma rota BU-específica, o `useActiveBU()` cai no fallback `userBUs[0]` — que é `'outro'` (squad pessoal dela), e nenhum closer tem `bu='outro'`. Resultado: lista vazia.
 
-Vamos seguir o mesmo padrão já usado no `can_book_r2`: criar **flags individuais por usuário** na tabela `profiles`, configuráveis na aba "Geral" do drawer de Gerenciamento de Usuários (`/usuarios`). Quando ligadas, o SDR ganha as ações específicas, mesmo mantendo o `role = sdr`.
+**Correção em `src/pages/crm/ConfigurarClosers.tsx`:**
 
-### Novas flags (em `profiles`)
+Para admin/manager, ignorar o filtro de BU quando a rota não for BU-específica. Usar `useIsGlobalCRM()` + `useAuth().role`:
 
-| Coluna | Default | O que libera quando `true` |
-|---|---|---|
-| `can_manage_agenda` | `false` | Voltar para Agendada / Realizada / Reagendar (R1+R2), Mover lead sem No-Show |
-| `can_handle_no_show` | `false` | Já é livre hoje — vira flag explícita por consistência (futuro: bloquear caso `false`) |
-| `can_link_contract` | `false` | Botão "Vincular Contrato" (R1), marcar Contrato Pago manualmente |
-| `can_cancel_meeting` | `false` | Cancelar reunião / Desfazer cancelamento (R2), Excluir reunião |
-
-> Nada disso muda o `role`. A Caroline continua `sdr`. O sistema apenas concede capacidades extras pontuais a ela.
-
-### Mudanças no banco
-
-Migration única:
-```sql
-ALTER TABLE public.profiles
-  ADD COLUMN IF NOT EXISTS can_manage_agenda boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS can_handle_no_show boolean NOT NULL DEFAULT true,
-  ADD COLUMN IF NOT EXISTS can_link_contract boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS can_cancel_meeting boolean NOT NULL DEFAULT false;
-```
-
-### Mudanças no frontend
-
-**1. Hook novo `src/hooks/useMyAgendaCapabilities.ts`**
-Lê o profile do usuário logado e retorna:
 ```ts
-{ canManageAgenda, canHandleNoShow, canLinkContract, canCancelMeeting, isAdmin }
-```
-Admin/manager/coordenador → todas `true` automaticamente.
+const isGlobalCRM = useIsGlobalCRM();
+const { role } = useAuth();
+const isAdminLike = role === 'admin' || role === 'manager';
 
-**2. `src/components/crm/AgendaMeetingDrawer.tsx`**
-Substituir as condições `!isSdr` pelas capabilities específicas:
-- "Voltar para Agendada" / "Realizada" / "Mover" → `canManageAgenda || !isSdr`
-- "Vincular Contrato" → `canLinkContract || !isSdr`
-- Botão de excluir reunião → adicionar `can_cancel_meeting` ao `DELETE_ALLOWED_ROLES` check
-
-**3. `src/components/crm/R2MeetingDetailDrawer.tsx`**
-- Botão "Reagendar" → `canManageAgenda || !isSdr`
-- "Cancelar Reunião" / "Desfazer Cancelamento" → `canCancelMeeting || !isSdr`
-- Botão de remover participante (`handleRemoveAttendee`) → `canManageAgenda || !isSdr`
-
-**4. `src/components/user-management/UserDetailsDrawer.tsx` — aba "Geral"**
-Adicionar uma nova seção **"Permissões avançadas da Agenda"** (apenas para usuários com role `sdr`, escondida para admins/managers/coordenadores que já têm tudo):
-
-```
-┌─ Permissões avançadas da Agenda ──────────────┐
-│  Gerenciar agenda (remanejar/realizada)  [⚪] │
-│  Tratar No-Show                          [⚫] │
-│  Vincular contratos pagos                [⚪] │
-│  Cancelar / excluir reuniões             [⚪] │
-└────────────────────────────────────────────────┘
+// Mostrar todos quando admin em rota global, senão filtrar por BU
+const filteredClosers = closers?.filter(c => 
+  (isGlobalCRM && isAdminLike) ? true : (!activeBU || c.bu === activeBU)
+) || [];
 ```
 
-Cada switch faz o mesmo pattern do `handleToggleCanBookR2` existente — `UPDATE profiles SET can_xxx = checked WHERE id = userId`, com toast e invalidate.
+E ajustar o título do card e o empty state para refletir "Todos" quando não há filtro real. A coluna BU já aparece quando não há `activeBU` aplicado — perfeito para a Emily ver todos e identificar a BU de cada um.
 
-**5. `src/hooks/useUsers.ts`** — incluir as 4 novas colunas no `useUserDetails`.
+### Problema 2: Migrar usuário de SDR → Closer com período "ambos"
 
-**6. `src/types/user-management.ts`** — adicionar os 4 campos opcionais em `UserDetails`.
+Hoje `useUpdateUserRole` em `src/hooks/useUserMutations.ts` faz `DELETE FROM user_roles WHERE user_id=?` seguido de `INSERT` de **um único** role. O `<Select>` no drawer de usuário também só permite escolher um.
 
-### Para a Caroline especificamente
+Mas o resto do sistema **já suporta múltiplos roles**:
+- `AuthContext` extrai `allRoles[]` do JWT e expõe `hasAnyRole(...)`.
+- `RoleGuard`, `useGestorClosers`, `useMyCloser`, `useMyAgendaCapabilities` etc. checam roles individualmente.
+- A tabela `user_roles` tem `unique(user_id, role)`, ou seja, suporta N linhas por usuário.
 
-Após o deploy, basta abrir `/usuarios` → clicar em **Gerenciar** na Caroline → na aba **Geral**, ligar:
-- ✅ Gerenciar agenda
-- ✅ Vincular contratos pagos
-- ✅ Cancelar / excluir reuniões
+**Mudanças propostas:**
 
-Imediatamente ela terá os mesmos botões que coordenadora/manager têm, sem mudar o role dela (continua aparecendo como SDR nas métricas, dashboards, distribuição de leads, etc.).
+**1. `src/hooks/useUserMutations.ts`** — adicionar mutations granulares (sem quebrar a existente):
+
+```ts
+export const useAddUserRole = () => { /* INSERT ... ON CONFLICT DO NOTHING */ };
+export const useRemoveUserRole = () => { /* DELETE ... WHERE user_id AND role */ };
+```
+
+Manter `useUpdateUserRole` como está (single-role) para fluxos que ainda usam.
+
+**2. `src/hooks/useUsers.ts`** — `useUserDetails` já busca `user_roles`; expor `roles: AppRole[]` (todos os roles do usuário) além do `role` (primário).
+
+**3. `src/components/user-management/UserDetailsDrawer.tsx` — aba Geral**
+
+Substituir o `<Select>` "Role de sistema" (single) por uma nova seção **"Cargos no sistema"**:
+
+```
+┌─ Cargos no sistema ──────────────────────────────┐
+│ Selecione um ou mais cargos. O cargo de maior   │
+│ prioridade vira o "primário" (define dashboards │
+│ padrão). Útil em períodos de migração (ex: SDR  │
+│ que está virando Closer).                        │
+│                                                  │
+│  ☑ SDR              [primário]                  │
+│  ☑ Closer                                        │
+│  ☐ Coordenador                                   │
+│  ☐ Manager                                       │
+│  ...                                             │
+└──────────────────────────────────────────────────┘
+```
+
+- Cada checkbox chama `useAddUserRole` ou `useRemoveUserRole` individualmente, com toast.
+- Badge "primário" no role com menor `ROLE_PRIORITY` (lógica que o AuthContext já faz).
+- Validação: não permitir remover o último role (sempre deve ter pelo menos 1).
+- Após qualquer mudança: `invalidateQueries(['user-details', userId])` + `['users']`.
+
+**4. Nota explicativa no header da seção:** "O usuário precisará fazer logout/login para o novo cargo passar a valer (refresh do JWT)." — porque `extractRolesFromSession` lê do token.
+
+### O que NÃO muda
+
+- Schema de `user_roles` (já permite múltiplos).
+- RLS, edge functions, JWT injection.
+- Nenhuma lógica de métricas/distribuição — quem é SDR continua aparecendo nos KPIs de SDR; quem é Closer aparece nos de Closer; quem é os dois aparece em ambos.
+- Vínculo `closers.employee_id` → `employees.user_id` (já é o mecanismo que `useMyCloser` usa para detectar que o usuário é um closer ativo).
+
+### Para a migração concreta (ex: Geison vai virar Closer)
+
+Após o deploy:
+1. Criar o registro dele em **Closers** (`/crm/configurar-closers` → Adicionar → vincular `employee_id`).
+2. Em `/usuarios` → drawer dele → marcar **☑ Closer** mantendo **☑ SDR**.
+3. Ele faz logout/login → passa a ver tanto a Agenda R1 (como SDR) quanto seus dashboards de Closer.
+4. Quando a transição terminar, desmarcar **☐ SDR** e desativar o registro de SDR no RH.
 
 ### Validação
 
-1. Logar como Caroline antes do toggle → drawer da agenda mostra apenas No-Show e Mover (estado atual)
-2. Admin liga as 3 flags em `/usuarios` → Caroline
-3. Caroline recarrega → vê "Voltar para Agendada", "Realizada", "Vincular Contrato", "Cancelar Reunião"
-4. Verificar que outros SDRs (Geison, Felipe etc.) **NÃO** veem esses botões
-5. Verificar que admin/manager continuam vendo tudo normalmente
-6. Verificar que `useR2Bookers` (que filtra `can_book_r2 = true`) não é afetado
+1. Emily entra em `/crm/configurar-closers` → vê **todos** os closers (com coluna BU visível), não mais "Nenhum closer cadastrado para outro".
+2. Outro admin em rota BU-específica (ex: dentro do CRM Consórcio) continua vendo apenas closers daquela BU.
+3. Em `/usuarios` → abrir um SDR → marcar Closer → salvar → ver 2 badges no header (SDR + Closer), o de menor prioridade marcado como "primário".
+4. Desmarcar o último role → erro "usuário precisa ter ao menos um cargo".
+5. Login do usuário migrado → `allRoles` no JWT contém ambos → vê telas de SDR e Closer.
 
 ### Escopo
 
-- 1 migration (ADD COLUMN x4 em `profiles`)
-- 1 hook novo (`useMyAgendaCapabilities`)
-- 3 arquivos editados (`AgendaMeetingDrawer`, `R2MeetingDetailDrawer`, `UserDetailsDrawer`)
-- 2 arquivos de tipos atualizados (`useUsers.ts`, `user-management.ts`)
-- Zero alteração em RLS, edge functions, métricas ou role priority
-- Reversível (basta desligar o switch)
+- 1 arquivo editado: `src/pages/crm/ConfigurarClosers.tsx`
+- 1 arquivo editado: `src/hooks/useUserMutations.ts` (2 mutations novas)
+- 1 arquivo editado: `src/hooks/useUsers.ts` (expor `roles[]`)
+- 1 arquivo editado: `src/components/user-management/UserDetailsDrawer.tsx` (substituir select por checkboxes)
+- Zero migration de banco
+- Zero alteração em RLS, edge functions, JWT, métricas
 
