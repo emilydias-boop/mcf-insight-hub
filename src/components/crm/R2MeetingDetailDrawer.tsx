@@ -26,6 +26,7 @@ import { R2EvaluationTab } from './r2-drawer/R2EvaluationTab';
 import { R2NotesTab } from './r2-drawer/R2NotesTab';
 import { R2AttendeeTransferModal } from './R2AttendeeTransferModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMyAgendaCapabilities } from '@/hooks/useMyAgendaCapabilities';
 import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
 
 interface R2MeetingDetailDrawerProps {
@@ -68,6 +69,9 @@ export function R2MeetingDetailDrawer({
   const { role } = useAuth();
   const isSdr = role === 'sdr';
   const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
+  const { canManageAgenda, canCancelMeeting } = useMyAgendaCapabilities();
+  const canManage = canManageAgenda || !isSdr;
+  const canCancel = canCancelMeeting || !isSdr;
   
   // Debug log - remove after testing
   console.log('[R2Drawer] role:', role, '| canTransfer:', canTransfer);
