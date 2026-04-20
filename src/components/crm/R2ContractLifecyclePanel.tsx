@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, ChevronDown, Download, Search, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Download, Search, Loader2, PackagePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useContractLifecycleReport, ContractLifecycleRow, ContractSituacao, PendingReason } from "@/hooks/useContractLifecycleReport";
 import { DealDetailsDrawer } from "./DealDetailsDrawer";
 import { getCartWeekStart, getCartWeekEnd } from "@/lib/carrinhoWeekBoundaries";
+import { useEncaixarNoCarrinho } from "@/hooks/useEncaixarNoCarrinho";
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return '—';
@@ -187,11 +188,12 @@ export function R2ContractLifecyclePanel() {
 
   // Pendentes children: recentes vs antigos
   const pendentesChildren = useMemo(() => {
-    if (!rows) return { recentes: 0, antigos: 0 };
+    if (!rows) return { recentes: 0, antigos: 0, proximaSafra: 0 };
     const pendentes = rows.filter(r => r.situacao === 'pendente');
     return {
       recentes: pendentes.filter(r => (r.diasParado ?? 0) <= 3).length,
       antigos: pendentes.filter(r => (r.diasParado ?? 0) > 3).length,
+      proximaSafra: pendentes.filter(r => r.pendingReason === 'r2_proxima_semana').length,
     };
   }, [rows]);
 
@@ -256,6 +258,8 @@ export function R2ContractLifecyclePanel() {
             result = result.filter(r => (r.diasParado ?? 0) <= 3);
           } else if (activeSubFilter === 'antigos') {
             result = result.filter(r => (r.diasParado ?? 0) > 3);
+          } else if (activeSubFilter === 'proxima_safra') {
+            result = result.filter(r => r.pendingReason === 'r2_proxima_semana');
           }
         }
       }
