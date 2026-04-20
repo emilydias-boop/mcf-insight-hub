@@ -21,6 +21,7 @@ interface Props {
   selectedStageNameKey: string | null;
   onSelectStage: (stageNameKey: string | null) => void;
   isLoading?: boolean;
+  totalUniqueLeads?: number;
 }
 
 export function StageMovementsSummaryTable({
@@ -28,6 +29,7 @@ export function StageMovementsSummaryTable({
   selectedStageNameKey,
   onSelectStage,
   isLoading,
+  totalUniqueLeads = 0,
 }: Props) {
   if (isLoading) {
     return (
