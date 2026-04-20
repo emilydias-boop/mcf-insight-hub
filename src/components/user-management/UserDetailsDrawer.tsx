@@ -523,6 +523,54 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                 </Button>
               </CardContent>
             </Card>
+
+            {/* ===== Permissões avançadas da Agenda ===== */}
+            {userDetails.role && !['admin', 'manager', 'coordenador'].includes(userDetails.role) && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Permissões avançadas da Agenda</CardTitle>
+                  <CardDescription>
+                    Libere ações de gestor para este usuário (mantém o cargo atual). Admins, managers e coordenadores já têm tudo liberado por padrão.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {[
+                    {
+                      key: 'can_manage_agenda' as const,
+                      label: 'Gerenciar agenda',
+                      hint: 'Voltar p/ agendada, marcar como Realizada, remanejar/mover leads sem aplicar No-Show',
+                    },
+                    {
+                      key: 'can_handle_no_show' as const,
+                      label: 'Tratar No-Show',
+                      hint: 'Aplicar status de No-Show em reuniões',
+                    },
+                    {
+                      key: 'can_link_contract' as const,
+                      label: 'Vincular contratos pagos',
+                      hint: 'Botão "Vincular Contrato" e marcar Contrato Pago manualmente',
+                    },
+                    {
+                      key: 'can_cancel_meeting' as const,
+                      label: 'Cancelar / excluir reuniões',
+                      hint: 'Cancelar, restaurar e excluir reuniões da agenda',
+                    },
+                  ].map((cap) => (
+                    <div key={cap.key} className="flex items-center justify-between gap-4">
+                      <div className="space-y-0.5 min-w-0">
+                        <Label>{cap.label}</Label>
+                        <p className="text-xs text-muted-foreground">{cap.hint}</p>
+                      </div>
+                      <Switch
+                        checked={agendaCaps[cap.key]}
+                        onCheckedChange={(v) => handleToggleAgendaCap(cap.key, v)}
+                        disabled={savingCapKey === cap.key}
+                      />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* ===== ABA SEGURANÇA ===== */}
