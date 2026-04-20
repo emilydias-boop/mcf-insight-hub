@@ -279,6 +279,7 @@ export default function MovimentacoesEstagio() {
               selectedStageNameKey={selectedStageNameKey}
               onSelectStage={setSelectedStageNameKey}
               isLoading={isLoading}
+              totalUniqueLeads={data?.totalUniqueLeads ?? 0}
             />
           </CardContent>
         </Card>
