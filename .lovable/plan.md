@@ -1,80 +1,101 @@
 
 
-## Adicionar `sale.created` ao webhook "Vendas Gestão - Dash Grima"
+## Liberar permissões avançadas individuais para SDRs (caso Caroline Corrêa)
 
-### Diagnóstico confirmado
+### Resumo
 
-A venda do João Vitor foi inserida em `hubla_transactions` corretamente (id `5aa224dc...`, `sale_status = completed`, `source = hubla`, `product_category = a010`). O trigger `enqueue_outbound_sale_webhook` rodou e gerou o evento `sale.created`.
+Hoje, no drawer da agenda (`AgendaMeetingDrawer.tsx` e `R2MeetingDetailDrawer.tsx`), todas as ações "de gestor" estão escondidas via `isSdr = role === 'sdr'`. Isso bloqueia o SDR de:
+- Marcar reunião como **Realizada** ou **Voltar para Agendada** (remanejar sem precisar aplicar No-Show)
+- **Vincular Contrato Pago** (R1)
+- **Reagendar** participante (R2)
+- **Cancelar / Restaurar reunião** (R2)
 
-Mas a **única config de webhook de saída ativa** ("Vendas Gestão - Dash Grima") tem:
+Vamos seguir o mesmo padrão já usado no `can_book_r2`: criar **flags individuais por usuário** na tabela `profiles`, configuráveis na aba "Geral" do drawer de Gerenciamento de Usuários (`/usuarios`). Quando ligadas, o SDR ganha as ações específicas, mesmo mantendo o `role = sdr`.
 
-```
-events = ['sale.updated', 'sale.refunded']
-```
+### Novas flags (em `profiles`)
 
-`sale.created` **não está na lista**, então o trigger filtra e nada vai para o `outbound_webhook_queue` → nada chega ao webhook.site.
+| Coluna | Default | O que libera quando `true` |
+|---|---|---|
+| `can_manage_agenda` | `false` | Voltar para Agendada / Realizada / Reagendar (R1+R2), Mover lead sem No-Show |
+| `can_handle_no_show` | `false` | Já é livre hoje — vira flag explícita por consistência (futuro: bloquear caso `false`) |
+| `can_link_contract` | `false` | Botão "Vincular Contrato" (R1), marcar Contrato Pago manualmente |
+| `can_cancel_meeting` | `false` | Cancelar reunião / Desfazer cancelamento (R2), Excluir reunião |
 
-Isso explica também por que `success_count` e `error_count` estão zerados: nenhuma venda real chegou a ser despachada — só os 3 testes manuais que aparecem no print de Logs (eventos `test.ping` enviados pela função `outbound-webhook-test`, que ignora o filtro de events).
+> Nada disso muda o `role`. A Caroline continua `sdr`. O sistema apenas concede capacidades extras pontuais a ela.
 
-### Correção
+### Mudanças no banco
 
-Adicionar `sale.created` ao array `events` da config existente. UPDATE de uma linha:
-
+Migration única:
 ```sql
-UPDATE public.outbound_webhook_configs
-SET events = ARRAY['sale.created', 'sale.updated', 'sale.refunded']
-WHERE id = '05222b24-ff4f-484b-b2e1-720afe8a52ae';
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS can_manage_agenda boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS can_handle_no_show boolean NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS can_link_contract boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS can_cancel_meeting boolean NOT NULL DEFAULT false;
 ```
 
-### Reprocessar a venda do João Vitor
+### Mudanças no frontend
 
-Como o trigger só dispara em INSERT/UPDATE, e a venda já está inserida, será necessário forçar uma reentrada na fila. Duas opções:
-
-**Opção A (recomendada)** — `UPDATE` no-op que dispara o trigger e gera `sale.updated`:
-```sql
-UPDATE public.hubla_transactions
-SET sale_status = sale_status
-WHERE id IN ('5aa224dc-07cd-498c-9309-f6a2c8a96044','65419d04-5e1e-47cb-a92c-787d7461ce91');
+**1. Hook novo `src/hooks/useMyAgendaCapabilities.ts`**
+Lê o profile do usuário logado e retorna:
+```ts
+{ canManageAgenda, canHandleNoShow, canLinkContract, canCancelMeeting, isAdmin }
 ```
-Isso não funciona porque o trigger exige uma diferença real (`IS DISTINCT FROM`). Será feito um update neutro mais explícito (ex: tocar `gross_override` para o mesmo valor não funciona; alternativa: rebote `sale_status` paid→completed→completed). 
+Admin/manager/coordenador → todas `true` automaticamente.
 
-**Opção B (mais simples e segura)** — INSERT direto na fila com o payload já gerado pela função `build_sale_webhook_payload`:
-```sql
-INSERT INTO public.outbound_webhook_queue (config_id, event, transaction_id, payload)
-SELECT 
-  '05222b24-ff4f-484b-b2e1-720afe8a52ae',
-  'sale.created',
-  t.id,
-  public.build_sale_webhook_payload(t, 'sale.created')
-FROM public.hubla_transactions t
-WHERE t.id IN (
-  '5aa224dc-07cd-498c-9309-f6a2c8a96044',
-  '65419d04-5e1e-47cb-a92c-787d7461ce91'
-);
+**2. `src/components/crm/AgendaMeetingDrawer.tsx`**
+Substituir as condições `!isSdr` pelas capabilities específicas:
+- "Voltar para Agendada" / "Realizada" / "Mover" → `canManageAgenda || !isSdr`
+- "Vincular Contrato" → `canLinkContract || !isSdr`
+- Botão de excluir reunião → adicionar `can_cancel_meeting` ao `DELETE_ALLOWED_ROLES` check
+
+**3. `src/components/crm/R2MeetingDetailDrawer.tsx`**
+- Botão "Reagendar" → `canManageAgenda || !isSdr`
+- "Cancelar Reunião" / "Desfazer Cancelamento" → `canCancelMeeting || !isSdr`
+- Botão de remover participante (`handleRemoveAttendee`) → `canManageAgenda || !isSdr`
+
+**4. `src/components/user-management/UserDetailsDrawer.tsx` — aba "Geral"**
+Adicionar uma nova seção **"Permissões avançadas da Agenda"** (apenas para usuários com role `sdr`, escondida para admins/managers/coordenadores que já têm tudo):
+
+```
+┌─ Permissões avançadas da Agenda ──────────────┐
+│  Gerenciar agenda (remanejar/realizada)  [⚪] │
+│  Tratar No-Show                          [⚫] │
+│  Vincular contratos pagos                [⚪] │
+│  Cancelar / excluir reuniões             [⚪] │
+└────────────────────────────────────────────────┘
 ```
 
-A opção B será usada — é determinística e não depende de quirks de `IS DISTINCT FROM`.
+Cada switch faz o mesmo pattern do `handleToggleCanBookR2` existente — `UPDATE profiles SET can_xxx = checked WHERE id = userId`, com toast e invalidate.
 
-### O que será executado
+**5. `src/hooks/useUsers.ts`** — incluir as 4 novas colunas no `useUserDetails`.
 
-Uma migration única com:
+**6. `src/types/user-management.ts`** — adicionar os 4 campos opcionais em `UserDetails`.
 
-1. `UPDATE outbound_webhook_configs` — adicionar `sale.created` ao array `events`
-2. `INSERT INTO outbound_webhook_queue` — enfileirar manualmente as 2 linhas do João Vitor para envio imediato
+### Para a Caroline especificamente
 
-### Validação após execução
+Após o deploy, basta abrir `/usuarios` → clicar em **Gerenciar** na Caroline → na aba **Geral**, ligar:
+- ✅ Gerenciar agenda
+- ✅ Vincular contratos pagos
+- ✅ Cancelar / excluir reuniões
 
-1. Verificar `outbound_webhook_queue` → 2 novas linhas com `status = pending`, `event = sale.created`
-2. Aguardar até 30s (próxima execução do `outbound-webhook-dispatcher`)
-3. Verificar `webhook.site` → deve receber 2 POSTs com payload completo da venda do João Vitor
-4. Verificar `outbound_webhook_logs` → 2 novas linhas com `success = true`, `response_status = 200`
-5. Verificar card "Vendas Gestão - Dash Grima" → contador "Sucessos" passa de 0 para 2
-6. Para a próxima venda real (qualquer A010/Hubla nova), o webhook deve disparar automaticamente sem nenhuma intervenção
+Imediatamente ela terá os mesmos botões que coordenadora/manager têm, sem mudar o role dela (continua aparecendo como SDR nas métricas, dashboards, distribuição de leads, etc.).
+
+### Validação
+
+1. Logar como Caroline antes do toggle → drawer da agenda mostra apenas No-Show e Mover (estado atual)
+2. Admin liga as 3 flags em `/usuarios` → Caroline
+3. Caroline recarrega → vê "Voltar para Agendada", "Realizada", "Vincular Contrato", "Cancelar Reunião"
+4. Verificar que outros SDRs (Geison, Felipe etc.) **NÃO** veem esses botões
+5. Verificar que admin/manager continuam vendo tudo normalmente
+6. Verificar que `useR2Bookers` (que filtra `can_book_r2 = true`) não é afetado
 
 ### Escopo
 
-- 1 migration (UPDATE config + INSERT 2 itens na fila)
-- Zero alteração de código (frontend, edge function ou trigger)
-- Zero alteração de schema
-- Efeito imediato — primeira execução do dispatcher cron despacha em até 30s
+- 1 migration (ADD COLUMN x4 em `profiles`)
+- 1 hook novo (`useMyAgendaCapabilities`)
+- 3 arquivos editados (`AgendaMeetingDrawer`, `R2MeetingDetailDrawer`, `UserDetailsDrawer`)
+- 2 arquivos de tipos atualizados (`useUsers.ts`, `user-management.ts`)
+- Zero alteração em RLS, edge functions, métricas ou role priority
+- Reversível (basta desligar o switch)
 
