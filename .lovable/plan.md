@@ -1,54 +1,58 @@
 
 
-## Fix: Excluir arquivados e deduplicar por contato (alinhar dashboard com CRM)
+## Esclarecer: "Acumulado" soma > "Leads únicos" é o comportamento correto
 
-### Diagnóstico confirmado
+### Por que 455 + 78 + 192 + 2 = 727 ≠ 668
 
-Dashboard tem **674**, CRM tem **668** = 6 leads a mais. Causa:
+A coluna **Acumulado** mostra, para cada estágio, **quantos leads únicos já passaram por ele** (incluindo inferência da trilha). Como um mesmo lead aparece em **múltiplos estágios** ao longo da jornada, somar a coluna verticalmente conta o mesmo lead várias vezes.
 
-- **4 deals arquivados** (`archived_at IS NOT NULL`) com tag ANAMNESE — CRM esconde, dashboard mostra.
-- **2 deals duplicados por contato** (Germana Luz Cataldo e Igor) — mesmo `contact_id` em pipelines diferentes; CRM conta 1x, dashboard conta 2x.
+Exemplo concreto: um lead que hoje está em "Lead Qualificado" também passou por "Anamnese Incompleta" e "Novo Lead" → conta nos 3 estágios. A soma vertical é uma soma de **passagens acumuladas**, não de leads únicos.
 
-### Mudanças
+**668** é o universo real (cada lead contado 1 vez). **727** é a soma das passagens nos 4 estágios visíveis. Os dois números medem coisas diferentes — ambos estão corretos.
 
-**`src/hooks/useStageMovements.ts`**
+### Validação numérica
 
-1. **Filtrar arquivados em todas as queries de `crm_deals`**:
-   ```ts
-   .is('archived_at', null)
-   ```
-   Aplicar em: query de movimentações, query de deals criados no período, e na nova query de universo CRM-compatível.
+Com os 4 estágios da imagem (todos no topo do funil, antes de qualificação):
+- 668 leads únicos no universo
+- Cada lead "passa" em média por ~1,09 estágios desses 4 → 668 × 1,09 ≈ 727 ✅
 
-2. **Deduplicar `totalUniqueLeads` por `contact_id`** (com fallback para `id` quando `contact_id` é null):
-   ```ts
-   const dedupeKey = (d: { id: string; contact_id: string | null }) =>
-     d.contact_id ?? d.id;
-   const matched = new Set<string>();
-   batch.forEach((d) => {
-     if (passesTagFilter({ tags: d.tags })) matched.add(dedupeKey(d));
-   });
-   ```
+Isso é matematicamente consistente. Não há bug.
 
-3. Selecionar `contact_id` junto com `id` e `tags` na query do universo.
+### O que propor para resolver a confusão visual
 
-### Resultado esperado
+**Opção A — Tooltip explicativo no header "Acumulado"** (recomendado, mínimo)
 
-Com PILOTO ANAMNESE + INSIDE SALES + tag ANAMNESE:
+Atualizar o tooltip do ícone (ⓘ) ao lado de "Acumulado" para deixar explícito:
 
-| Métrica | Antes | Depois |
-|---|---|---|
-| Leads únicos no universo | 674 | **668** ✅ |
-| Soma (passagens) | 1490 | ~1480 (sem arquivados) |
-| Linhas por estágio | inclui arquivados | só ativos |
+> "Quantidade de leads únicos que já passaram por este estágio no período. Como cada lead passa por vários estágios, a **soma vertical desta coluna é maior que o total de leads únicos** — isso é esperado."
 
-### Trade-off
+**Opção B — Remover a soma vertical do rodapé da coluna Acumulado**
 
-- Linhas Acumulado/Passaram/Estão lá podem reduzir levemente quando há leads arquivados em algum estágio. É o comportamento correto e alinhado com o CRM.
-- Dedupe por `contact_id` é aplicado **só** no contador "Leads únicos no universo". Nas linhas por estágio, cada deal continua sendo uma trajetória separada (Germana em INSIDE SALES + Germana em PILOTO ANAMNESE = 2 trajetórias).
+Hoje o rodapé mostra "Soma (passagens) = 727" para Acumulado, o que reforça a confusão. Substituir por um traço (—) ou pelo texto "n/a (ver Leads únicos)" deixa claro que somar essa coluna não tem significado.
+
+**Opção C — Renomear "Acumulado" para "Passou pelo estágio"**
+
+Tornar o nome da coluna autoexplicativo: deixa claro que é uma contagem por estágio, não cumulativa.
+
+### Mudanças no código
+
+**`src/components/crm/StageMovementsSummaryTable.tsx`** (~10 linhas)
+
+1. Atualizar o texto do `Tooltip` do header "Acumulado" com a explicação acima.
+2. No rodapé, na linha "Soma (passagens)", trocar o número da coluna Acumulado por `—` (ou manter, mas ajustar tooltip).
+3. (Opcional) Renomear coluna para "Passou pelo estágio".
+
+**Sem mudanças em hooks ou queries** — os dados estão corretos.
+
+### Recomendação
+
+Aplicar **A + B juntos**: tooltip claro no header + remover a soma vertical sem sentido no rodapé da coluna Acumulado. Resolve a confusão sem quebrar a leitura horizontal por estágio.
+
+Sobre a **Opção C** (renomear coluna) — me avise se prefere também trocar o nome "Acumulado" para algo mais explícito como "Passou no estágio" ou "Leads únicos no estágio".
 
 ### Escopo
 
-- 1 arquivo (`src/hooks/useStageMovements.ts`)
+- 1 arquivo (`src/components/crm/StageMovementsSummaryTable.tsx`)
 - ~10 linhas
-- Zero migration
+- Zero migration, zero mudança em queries
 
