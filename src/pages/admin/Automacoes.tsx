@@ -6,7 +6,9 @@ import { AutomationLogs } from "@/components/automations/AutomationLogs";
 import { AutomationSettings } from "@/components/automations/AutomationSettings";
 import { AutomationMetrics } from "@/components/automations/AutomationMetrics";
 import { ReplicationRulesEditor } from "@/components/crm/automations/ReplicationRulesEditor";
-import { Bot, FileText, History, Settings, BarChart3, Copy } from "lucide-react";
+import { OutboundWebhookList } from "@/components/automations/OutboundWebhookList";
+import { IncomingWebhooksGlobalList } from "@/components/automations/IncomingWebhooksGlobalList";
+import { Bot, FileText, History, Settings, BarChart3, Copy, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 
 export default function Automacoes() {
   return (
@@ -21,7 +23,7 @@ export default function Automacoes() {
       <AutomationMetrics />
 
       <Tabs defaultValue="flows" className="space-y-4">
-        <TabsList className="bg-muted">
+        <TabsList className="bg-muted flex-wrap h-auto">
           <TabsTrigger value="flows" className="flex items-center gap-2">
             <Bot className="h-4 w-4" />
             Fluxos
@@ -33,6 +35,14 @@ export default function Automacoes() {
           <TabsTrigger value="templates" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             Templates
+          </TabsTrigger>
+          <TabsTrigger value="webhooks-in" className="flex items-center gap-2">
+            <ArrowDownToLine className="h-4 w-4" />
+            Webhooks Entrada
+          </TabsTrigger>
+          <TabsTrigger value="webhooks-out" className="flex items-center gap-2">
+            <ArrowUpFromLine className="h-4 w-4" />
+            Webhooks Saída
           </TabsTrigger>
           <TabsTrigger value="logs" className="flex items-center gap-2">
             <History className="h-4 w-4" />
@@ -54,6 +64,14 @@ export default function Automacoes() {
 
         <TabsContent value="templates" className="space-y-4">
           <TemplateList />
+        </TabsContent>
+
+        <TabsContent value="webhooks-in" className="space-y-4">
+          <IncomingWebhooksGlobalList />
+        </TabsContent>
+
+        <TabsContent value="webhooks-out" className="space-y-4">
+          <OutboundWebhookList />
         </TabsContent>
 
         <TabsContent value="logs" className="space-y-4">
