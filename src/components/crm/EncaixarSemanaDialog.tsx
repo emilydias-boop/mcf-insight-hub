@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { format, addWeeks, subWeeks, parseISO } from 'date-fns';
+import { format, addWeeks, subWeeks, addDays, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, PackagePlus, PackageX, Sparkles, CheckCircle2 } from 'lucide-react';
 import {
@@ -43,16 +43,17 @@ interface WeekOption {
 function buildWeekOptions(anchor: Date, suggested?: Date): WeekOption[] {
   const base = getCartWeekStart(anchor);
   const weeks = [
-    { key: 'prev', label: 'Semana anterior', start: subWeeks(base, 1) },
-    { key: 'current', label: 'Semana atual', start: base },
-    { key: 'next', label: 'Próxima semana', start: addWeeks(base, 1) },
-    { key: 'next2', label: 'Semana seguinte', start: addWeeks(base, 2) },
+    { key: 'prev', start: subWeeks(base, 1) },
+    { key: 'current', start: base },
+    { key: 'next', start: addWeeks(base, 1) },
+    { key: 'next2', start: addWeeks(base, 2) },
   ];
   const suggestedKey = suggested
     ? format(getCartWeekStart(suggested), 'yyyy-MM-dd')
     : format(base, 'yyyy-MM-dd');
   return weeks.map(w => ({
     ...w,
+    label: `Carrinho ${format(addDays(w.start, 1), 'dd/MM', { locale: ptBR })}`,
     end: getCartWeekEnd(w.start),
     isSuggested: format(w.start, 'yyyy-MM-dd') === suggestedKey,
   }));
@@ -60,6 +61,10 @@ function buildWeekOptions(anchor: Date, suggested?: Date): WeekOption[] {
 
 function formatRange(start: Date, end: Date) {
   return `Qui ${format(start, 'dd/MM', { locale: ptBR })} → Qua ${format(end, 'dd/MM', { locale: ptBR })}`;
+}
+
+function formatCarrinhoLabel(start: Date) {
+  return `Carrinho ${format(addDays(start, 1), 'dd/MM', { locale: ptBR })}`;
 }
 
 export function EncaixarSemanaDialog({
