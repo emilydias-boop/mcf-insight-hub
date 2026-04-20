@@ -1,43 +1,131 @@
 
 
-## Aumentar limite de movimentações para 10.000 (sem impacto colateral)
+## Fix: Funil acumulado real por estágio (passagens + snapshot atual)
 
-### Mudança
+### Definição final do número exibido por estágio
+
+Para cada estágio no período selecionado, exibir o **acumulado único** de leads que:
+- **(A) Passaram pelo estágio** dentro do período (registrado em `deal_activities` como `stage_change` com `to_stage = X`), OU
+- **(B) Estão atualmente no estágio** (snapshot: `crm_deals.stage_id = X` hoje), independente de quando entraram
+
+**Sem dupla contagem**: se o mesmo lead aparece em (A) e (B), conta uma vez só (Set por `deal_id`).
+
+**Sem inferência de pulos**: respeita 100% o que está registrado. Se um lead pulou de Novo direto pra Contrato Pago, os intermediários não recebem +1.
+
+**Resultado**: cada estágio mostra o "tamanho real" do volume que tocou aquele estágio na janela de tempo, somado ao que está parado lá hoje.
+
+### Mudanças no código
 
 **Arquivo único:** `src/hooks/useStageMovements.ts`
 
-1. Trocar `.limit(5000)` por `.limit(10000)` na query de `deal_activities`.
-2. Adicionar warning no console quando o retorno bater no teto, sinalizando dados potencialmente cortados:
-   ```ts
-   if (activities.length === 10000) {
-     console.warn('[useStageMovements] Limite de 10.000 atingido — encurte o período ou filtre por pipeline para ver tudo.');
-   }
-   ```
-3. Manter o `console.info` de diagnóstico já existente.
+**1. Adicionar busca de snapshot atual**
 
-### Garantias de isolamento
+Após a query de `deal_activities`, fazer uma segunda query em `crm_deals` filtrando pelas mesmas origens (e pelas mesmas tags), trazendo `id, stage_id, origin_id, tags, name`:
+```ts
+const { data: currentDeals } = await supabase
+  .from('crm_deals')
+  .select('id, name, stage_id, origin_id, tags')
+  .in('origin_id', queryOriginIds ?? [...])
+  .not('stage_id', 'is', null);
+```
+Aplicar o mesmo filtro de tags em memória.
 
-- **Hook usado em 1 lugar só**: página `/crm/movimentacoes`. Verificado por busca no codebase.
-- **Zero migration**, zero RLS, zero schema change.
-- **Zero impacto** em KPIs, Fechamento, Carrinho R2, Agenda, atribuição de SDR, payouts ou qualquer outro cálculo — esses sistemas usam tabelas e queries totalmente separadas.
-- **Zero efeito em performance de outras telas** — a query só roda quando o usuário abre `/crm/movimentacoes`.
-- **Mesma agregação, mesmos filtros, mesma UI** — só sobe o teto de leitura.
+**2. Construir o agregado unificado**
 
-### Limites conhecidos (aceitos)
+Substituir o `summaryMap` atual (que só conta passagens) por uma estrutura que combine ambas as fontes:
+```ts
+// Map<stageNameKey, { stageName, stageOrder, uniqueLeads: Set<dealId>, passagens: number, parados: number }>
+```
+- Para cada activity de `stage_change` no período → `uniqueLeads.add(deal_id)` + `passagens++`
+- Para cada deal do snapshot → `uniqueLeads.add(deal_id)` + `parados++`
+- Total exibido = `uniqueLeads.size` (sem dupla contagem)
 
-- Pipelines de altíssimo volume (Consórcio) ainda podem cortar dados acima de ~60 dias.
-- Visão "todas as pipelines" pode cortar acima de ~30 dias.
-- Quando isso ocorrer, console exibe warning explícito.
+**3. Agregar por nome normalizado** (resolve fragmentação entre pipelines)
+
+Continuar consolidando "Lead Qualificado" das 17 instâncias diferentes no mesmo bucket via `normalizeStageName(stage.name)`.
+
+**4. Atualizar `StageMovementsSummaryRow`**
+
+Novo formato:
+```ts
+interface StageMovementsSummaryRow {
+  stageId: string;          // representativo (primeiro encontrado)
+  stageNameKey: string;     // chave normalizada para seleção
+  stageName: string;
+  stageOrder: number;
+  uniqueLeads: number;      // total acumulado (passou + está lá)
+  passagens: number;        // só movimentações no período
+  parados: number;          // só snapshot atual
+}
+```
+
+**5. Atualizar tabela de resumo (`StageMovementsSummaryTable.tsx`)**
+
+Trocar as colunas atuais por:
+- **Estágio**
+- **Acumulado** (badge primário — número principal)
+- **Passaram no período** (badge secundário, menor)
+- **Estão no estágio** (badge secundário, menor)
+
+Tooltip explicando: "Acumulado = leads únicos que passaram pelo estágio no período + leads que estão no estágio hoje".
+
+**6. Ajustar filtro de detalhe (`MovimentacoesEstagio.tsx`)**
+
+A tabela de detalhe hoje só lista linhas de `deal_activities`. Vou ampliar o `rows` retornado pelo hook para incluir também os deals do snapshot que NÃO tiveram movimentação no período, marcados com:
+- `when = null` (não tem data de movimentação)
+- `fromStageName = null`
+- Tag visual "Sem movimentação no período (parado)"
+
+Ao clicar num estágio do resumo, o detalhe mostra todos os leads (movimentados + parados) que compõem o número acumulado daquele estágio.
+
+**7. Filtro de seleção por nome**
+
+`selectedStageId` vira `selectedStageNameKey`. O filtro de `detailRows` passa a comparar pela chave normalizada do estágio (do snapshot ou da movimentação).
+
+### Garantias
+
+- **Funil fica coerente**: estágios anteriores tendem a ter acumulado >= estágios posteriores (não é garantido por inferência, mas reflete a realidade quando o time não pula etapas)
+- **Lead Qualificado deixa de subcontar** porque agora soma quem passou + quem está parado lá
+- **Sem dupla contagem**: Set por `deal_id` garante que lead que passou e voltou não infla o número
+- **Zero migration, zero RLS**: tudo cliente
+- **Hook usado em 1 lugar só** (`/crm/movimentacoes`)
+- **Outras telas inalteradas**
+
+### Limites conhecidos
+
+- Continua dependente do limite de 10.000 atividades. Para períodos muito longos sem filtro de pipeline, pode cortar (warning no console já existe).
+- Snapshot de `crm_deals` também segue o limite default do Supabase (1000) — vou paginar com chunks se necessário (padrão já usado no hook).
+- Não infere pulos: se a operação pula etapas frequentemente, alguns estágios intermediários ainda parecem subcontados (decisão consciente sua para manter fidelidade).
 
 ### Validação
 
-1. `/crm/movimentacoes`, Inside Sales, últimos 90 dias → todas as stages aparecem
-2. Console mostra `[useStageMovements] { activities: ~7000, dealsAfterFilter: ..., rows: ... }` sem warning
-3. Outras telas (KPIs, Fechamento, Carrinho) continuam funcionando idênticas
-4. Performance percebida: ~1.5-2s no carregamento da página de Movimentações
+1. `/crm/movimentacoes`, Inside Sales, últimos 30 dias:
+   - "Lead Qualificado" mostra acumulado coerente com volume operacional (centenas/milhar, não 35)
+   - Estágios seguintes mostram números menores ou iguais (funil)
+2. Tabela de resumo mostra 3 colunas: Acumulado / Passaram / Estão no estágio
+3. Clicar em "Lead Qualificado" → detalhe lista leads movimentados E leads parados nesse estágio
+4. Soma de "Passaram + Estão" pode ser > "Acumulado" (correto: lead que passou e ficou conta uma vez no acumulado)
+5. Validar contra SQL:
+   ```sql
+   SELECT COUNT(DISTINCT deal_id) FROM (
+     SELECT deal_id FROM deal_activities da
+       JOIN crm_stages s ON (s.id::text=da.to_stage OR s.clint_id=da.to_stage)
+       WHERE da.activity_type='stage_change'
+         AND da.created_at >= now() - interval '30 days'
+         AND lower(s.stage_name) LIKE '%qualific%'
+     UNION
+     SELECT id FROM crm_deals d
+       JOIN crm_stages s ON s.id=d.stage_id
+       WHERE lower(s.stage_name) LIKE '%qualific%'
+   ) t;
+   ```
+   Número da tela bate com esse query.
 
 ### Escopo
 
-- 1 arquivo editado, ~3 linhas alteradas
-- Zero dependências, zero migrations, zero mudanças de UI
+- 1 hook refatorado: `src/hooks/useStageMovements.ts` (+ snapshot query, agregação unificada por nome)
+- 1 tabela ajustada: `src/components/crm/StageMovementsSummaryTable.tsx` (3 colunas)
+- 1 tabela ajustada: `src/components/crm/StageMovementsDetailTable.tsx` (linha "parado", sem data)
+- 1 página ajustada: `src/pages/crm/MovimentacoesEstagio.tsx` (filtro por nameKey)
+- Zero migration, zero RLS, zero edge function
 
