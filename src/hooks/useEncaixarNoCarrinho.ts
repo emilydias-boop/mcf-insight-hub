@@ -59,6 +59,8 @@ export function useEncaixarNoCarrinho() {
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
       queryClient.invalidateQueries({ queryKey: ['r2-accumulated-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['carrinho-unified-data'] });
+      queryClient.invalidateQueries({ queryKey: ['contract-lifecycle-report'] });
       toast.success('Lead encaixado no carrinho da semana!');
     },
     onError: () => {

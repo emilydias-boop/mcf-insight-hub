@@ -60,6 +60,8 @@ export interface ContractLifecycleRow {
   // Data do R2 futuro (quando pendingReason = 'r2_proxima_semana')
   futureR2Date: string | null;
   futureR2CloserName: string | null;
+  // attendee_id do R2 futuro (necessário para "Encaixar nesta semana")
+  futureR2AttendeeId: string | null;
   // Cohort cutoff metadata (from RPC)
   dentroCorte: boolean;
   effectiveContractDate: string | null;
