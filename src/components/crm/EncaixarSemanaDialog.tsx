@@ -213,7 +213,8 @@ export function EncaixarSemanaDialog({
           {currentOption && (
             <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
               <p className="text-xs text-amber-700 dark:text-amber-300">
-                ⚠️ Encaixado atualmente em <strong>{formatRange(currentOption.start, currentOption.end)}</strong>
+                ⚠️ Encaixado atualmente em <strong>{formatCarrinhoLabel(currentOption.start)}</strong>{' '}
+                <span className="opacity-80">({formatRange(currentOption.start, currentOption.end)})</span>
               </p>
               <Button
                 variant="outline"
@@ -234,8 +235,9 @@ export function EncaixarSemanaDialog({
 
           {selectedOption && !isSameAsCurrent && (
             <p className="text-xs text-muted-foreground mt-2">
-              O lead aparecerá em <strong>Aprovados</strong> da semana{' '}
-              <strong>{formatRange(selectedOption.start, selectedOption.end)}</strong>.
+              O lead aparecerá em <strong>Aprovados</strong> do{' '}
+              <strong>{formatCarrinhoLabel(selectedOption.start)}</strong>{' '}
+              <span className="opacity-80">({formatRange(selectedOption.start, selectedOption.end)})</span>.
             </p>
           )}
         </div>
