@@ -1,80 +1,105 @@
 
 
-## Diagnóstico definitivo (validado contra os 44 nomes)
+## Ajuste no plano: janela de Vendas Parceria
 
-Rodei a RPC e o banco com a sua lista oficial. Resultado por janela de R2:
+Confirmado o restante do plano. Único ajuste é na janela de **Vendas Parceria**.
 
-| Janela testada | Aprovados encontrados |
-|---|---|
-| **Front HOJE** (Qui 16 00:00 → Sex 17 12:00 BRT) | 20 ❌ |
-| Sáb 11/04 → Sex 17/04 12:00 | 42 |
-| Sex 10/04 12:00 → Sex 17/04 12:00 (corte a corte) | 43 |
-| **Qui 09/04 00:00 → Sex 17/04 12:00** | **44 ✅** |
+### Regra correta de Vendas Parceria
 
-**A regra correta**, conforme você descreveu:
+- **Início**: Sex no corte (12:00) — logo após o fechamento do carrinho
+- **Fim**: Segunda 23:59 — para captar boletos que caem com atraso
 
-- **Safra (contratos)**: Qui 09/04 00:00 → Qua 15/04 23:59 (data do contrato R1)
-- **Janela do R2 do Carrinho**: Qui 09/04 00:00 → **Sex 17/04 12:00** (sexta DA SEMANA SEGUINTE no corte) — porque o R2 pode acontecer na semana inteira e fechar na sexta às 12h
-- **Encaixados**: leads com `carrinho_week_start = 09/04` entram independentemente da janela
-- **Próxima safra**: aprovados com R2 nessa janela MAS contrato fora do corte
+Para a safra Qui 09/04 → Qua 15/04 (carrinho Sex 17/04 12:00):
+- Vendas Parceria: **Sex 17/04 12:00 → Seg 20/04 23:59**
 
-**Onde codei errado**: na minha última correção mudei `r2Meetings.end` para a sexta DA safra (Sex 10/04 12:00) achando que era o corte da safra. Errado. O corte da semana do carrinho é a **sexta seguinte** (Sex 17/04 12:00) — e foi por isso que caímos de 38 → 13. Preciso reverter essa parte.
-
-## Mapeamento dos 4 cálculos (carrinho R2 ↔ Relatório)
-
-| Métrica | Origem | Janela usada | Status final |
-|---|---|---|---|
-| Aprovados (Carrinho R2) | RPC `get_carrinho_r2_attendees` | Qui da safra → Sex+1 12:00 | **deve dar 44** |
-| Aprovado R2 Carrinho (Relatório) | mesma RPC | mesma janela | **deve dar 44** (idêntico) |
-| Próxima Safra (ambas) | mesma RPC + `dentro_corte=false` | mesma janela | mesmo número nas duas |
-| R2 Agendadas / Realizadas / Fora | mesma RPC | mesma janela | derivadas do mesmo conjunto |
-
-Hoje as duas telas estão conectadas na mesma RPC (Fase 2 que fiz já unificou via `isCarrinhoEligible`). O problema restante é APENAS a janela passada pra RPC.
-
-## Plano de correção (3 arquivos, mudança cirúrgica)
-
-### 1. `src/lib/carrinhoWeekBoundaries.ts` — corrigir a janela de R2
-
-Reverter `r2Meetings.end` e `aprovados.end` de `currentFridayCutoff` (Sex DA safra) para `nextFridayCutoff` (Sex+1 da semana do carrinho no corte):
+### Mudança em `src/lib/carrinhoWeekBoundaries.ts`
 
 ```text
-// ANTES (errado, da minha última mudança):
-r2Meetings.end = currentFridayCutoff   // Sex 10/04 12:00 ❌
+// ANTES (errado):
+vendasParceria: { start: thuStart, end: currentFridayCutoff - 1ms }
+// = Qui 09/04 00:00 → Sex 10/04 11:59 ❌
 
 // DEPOIS (correto):
-const nextFriday = addDays(weekStart, 8)  // Qui+8 = Sex da semana seguinte
-r2Meetings.end = nextFridayCutoff      // Sex 17/04 12:00 ✅
-aprovados.end = nextFridayCutoff       // idem
+const monday = addDays(currentFriday, 3)  // Sex+3 = Segunda
+const mondayEnd = endOfDay(monday)         // Seg 23:59:59.999
+vendasParceria: { start: currentFridayCutoff, end: mondayEnd }
+// = Sex 17/04 12:00 → Seg 20/04 23:59 ✅
 ```
 
-Manter:
-- `r2Meetings.start = thuStart` (Qui 09/04 00:00)
-- `previousCutoff = currentFridayCutoff` (Sex 10/04 12:00 = corte para `dentro_corte` na RPC)
-- `vendasParceria.end = currentFridayCutoff - 1ms` (vendas até a sexta DA safra, não da seguinte)
-- `contratos: Qui 00:00 → Qua 23:59` (safra de contratos)
+⚠️ Nota: como `currentFridayCutoff` agora aponta pra Sex DA safra (10/04) e o corte real do carrinho desta safra é na sexta seguinte (17/04 = `nextFridayCutoff`), a janela de Vendas Parceria precisa usar `nextFridayCutoff` como início, não `currentFridayCutoff`.
 
-### 2. Validação (sem código novo)
+Versão final:
+```text
+const nextMonday = addDays(nextFriday, 3)  // Sex+1 + 3 = Seg da semana seguinte
+vendasParceria: { 
+  start: nextFridayCutoff,                  // Sex 17/04 12:00 (corte deste carrinho)
+  end: localEndOfDay(nextMonday)            // Seg 20/04 23:59
+}
+```
 
-Após o ajuste:
-- Carrinho R2 → "Aprovados" deve marcar **44** (ou bem próximo, dependendo de status atual de cada lead)
-- Carrinho R2 → "Próxima Safra" deve refletir aprovados com R2 nessa janela mas contrato fora do corte (não vai sumir essa coluna)
-- Relatório → "Aprovado (R2 Carrinho)" deve marcar o mesmo **44**
-- Relatório → "Aprovado — Próxima Safra" deve bater com Carrinho R2
+## Plano consolidado (4 mudanças cirúrgicas)
 
-### 3. Não mexer (já está certo)
+### 1. `src/lib/carrinhoWeekBoundaries.ts` — duas correções
 
-- A RPC `get_carrinho_r2_attendees` não precisa mudar — ela só recebe parâmetros
-- `isCarrinhoEligible` e `isProximaSafra` em `useCarrinhoUnifiedData.ts` já estão corretos (Fase 2 ok)
-- Os contadores de KPI e abas em `useR2CarrinhoKPIs.ts` e `useR2CarrinhoData.ts` já consomem a regra unificada
-- `useR2CarrinhoVendas` continua hardcoded mas isso é problema de outra fase — **não bloqueia o número 44**
+**A) Vendas Parceria** (esta nova):
+```text
+vendasParceria: { 
+  start: nextFridayCutoff,           // Sex 17/04 12:00
+  end: localEndOfDay(nextMonday)     // Seg 20/04 23:59
+}
+```
 
-### Risco controlado
+**B) Adicionar nova janela `carrinhoOperacional`** (do plano anterior):
+```text
+carrinhoOperacional: { 
+  start: previousFridayCutoff,   // Sex 10/04 12:00 (corte do carrinho anterior)
+  end: nextFridayCutoff          // Sex 17/04 12:00 (corte deste carrinho)
+}
+```
 
-A única mudança é em **1 arquivo, 4 linhas** (`carrinhoWeekBoundaries.ts`). É exatamente reverter o erro que introduzi no último commit nessa parte específica. Não toca em RPC, não toca em hooks, não toca em UI.
+Manter intactos: `r2Meetings`, `aprovados`, `contratos`, `r1Meetings`, `previousCutoff`.
 
-### Esperado depois
+### 2. `src/hooks/useR2CarrinhoData.ts` — filtro operacional para R2s
 
-- Carrinho R2 mostra **~44 aprovados** (idêntico à sua lista)
-- Relatório mostra **~44 aprovados** no card "Aprovado (R2 Carrinho)"
-- Próxima Safra fica como aba/card auxiliar para os que ficaram fora do corte de contrato
+Aplicar `carrinhoOperacional` (com bypass para encaixados) apenas em `agendadas`, `realizadas`, `no_show`. Não tocar em `aprovados`/`aprovados_proxima_safra`.
+
+### 3. `src/hooks/useR2CarrinhoKPIs.ts` — mesma filtragem
+
+Aplicar `carrinhoOperacional` em `r2Agendadas`, `r2Realizadas`, `foraDoCarrinho`. Manter intactos: `aprovados`, `aprovadosForaCorte`, `contratosPagos`, `pendentes`, `emAnalise`.
+
+### 4. `src/hooks/useR2ForaDoCarrinhoData.ts` — mesma filtragem
+
+Aplicar `carrinhoOperacional` para evitar mostrar leads "fora" da semana passada.
+
+### 5. `src/hooks/useR2CarrinhoVendas.ts` (se existir consumo da janela vendas) — receber nova janela
+
+Confirmar que a aba de Vendas usa `vendasParceria` da nova janela (Sex corte → Seg 23:59).
+
+### 6. UI — atualizar header em `R2Carrinho.tsx`
+
+Mostrar três janelas para clareza:
+```
+Janela do Carrinho (R2s):  10/04 12:00 → 17/04 12:00
+Janela de Vendas Parceria: 17/04 12:00 → 20/04 23:59
+Safra (contratos):         09/04 00:00 → 15/04 23:59
+```
+
+## Resultado esperado
+
+| Métrica | Janela | Antes | Depois |
+|---|---|---|---|
+| Contratos (R1) | Qui→Qua | 64 | 64 |
+| R2 Agendadas | Sex→Sex 12h | 85 | ~65 |
+| R2 Realizadas | Sex→Sex 12h | 73 | ~57 |
+| Fora do Carrinho | Sex→Sex 12h | 14 | recalculado |
+| **Aprovados** | Qui→Sex+1 12h | 49 | 49 ✅ |
+| Próxima Safra | Qui→Sex+1 12h | 10 | 10 |
+| **Vendas Parceria** | **Sex+1 12h→Seg 23:59** | (errado) | janela correta de boletos atrasados |
+
+## Escopo
+
+- 5 arquivos editados, ~40 linhas
+- Zero mudança na RPC
+- Zero impacto no Relatório
+- Aprovados/Próxima Safra ficam intocados (continua batendo com sua lista)
 
