@@ -68,6 +68,7 @@ import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMyAgendaCapabilities } from '@/hooks/useMyAgendaCapabilities';
 
 interface AgendaMeetingDrawerProps {
   meeting: MeetingSlot | null;
@@ -116,8 +117,8 @@ const parseRescheduleHistory = (notes: string | null | undefined) => {
   return { originalNote, reschedules };
 };
 
-// Roles that can delete meetings
-const DELETE_ALLOWED_ROLES = ['admin', 'manager', 'coordenador', 'sdr'];
+// Roles that can delete meetings (sdr só se tiver can_cancel_meeting=true)
+const DELETE_ALLOWED_ROLES = ['admin', 'manager', 'coordenador'];
 
 export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpenChange, onReschedule }: AgendaMeetingDrawerProps) {
   const navigate = useNavigate();
@@ -125,6 +126,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const { role, user } = useAuth();
   const { activeBU } = useBUContext();
   const isSdr = role === 'sdr';
+  const { canManageAgenda, canLinkContract, canCancelMeeting } = useMyAgendaCapabilities();
   const [closerNotes, setCloserNotes] = useState(meeting?.closer_notes || '');
   const [sdrNote, setSdrNote] = useState(meeting?.notes || '');
   
