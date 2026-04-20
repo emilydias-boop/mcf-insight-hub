@@ -1,73 +1,97 @@
 
 
-## Ajustar ordem de exibição dos estágios na tabela
+## Fix: Período passa a controlar TODAS as colunas (sem misturar fixo + dinâmico)
 
-Reordenar as linhas da tabela de "Movimentações de Estágio" para seguir exatamente a sequência operacional do funil, intercalando estágios principais e laterais na ordem que faz sentido para o time.
+### Entendimento
 
-### Ordem desejada
+Você não quer um híbrido (universo fixo + colunas dinâmicas). Quer que **o período escolhido seja a única fonte de verdade**: tudo (Acumulado, Passaram, Estão lá, Detalhe) reflete o intervalo selecionado.
 
-1. ANAMNESE INCOMPLETA
-2. LEAD GRATUITO
-3. NOVO LEAD
-4. LEAD INSTAGRAM
-5. LEAD QUALIFICADO
-6. SEM INTERESSE
-7. R1 AGENDADA
-8. NO-SHOW
-9. R1 REALIZADA
-10. CONTRATO PAGO
-11. R2 AGENDADA
-12. NO-SHOW R2
-13. R2 REALIZADA
-14. VENDAS FINAIS
+### Comportamento atual (errado)
 
-### Mudança no código
+- **Acumulado**: universo fixo = todos os deals da origem + tag, ignora o período
+- **Passaram**: dinâmico, filtra por `deal_activities.created_at` no período
+- **Estão lá**: snapshot atual, ignora o período
+- **Detalhe**: dinâmico, filtra por período
+
+Resultado: trocar o período só muda 1 das 3 colunas visíveis e parece que "nada muda".
+
+### Comportamento desejado (tudo dinâmico pelo período)
+
+Um lead conta no estágio X **se e somente se** ele passou por X durante o período selecionado. Definição uniforme:
+
+| Coluna | Definição |
+|---|---|
+| **Acumulado** | Leads únicos que passaram por X em algum momento **dentro do período** (via `deal_activities` + inferência de trilha) |
+| **Passaram** | = Acumulado (mesma definição). Manter as duas colunas só faz sentido se forem definições diferentes — vamos consolidar |
+| **Estão lá** | Leads que estão no estágio X **no fim do período** (snapshot na `endDate`, não "agora") |
+| **Detalhe** | Movimentações com `created_at` no período |
+
+### Mudanças no código
 
 **Arquivo único:** `src/hooks/useStageMovements.ts`
 
-Adicionar uma constante `STAGE_DISPLAY_ORDER` com a ordem fixa por `stageNameKey` (chave canônica já normalizada via `STAGE_ALIASES`):
+**1. Remover a query paginada de "universo total"**
+
+Apagar o bloco que busca todos os deals das origens (paginado, ignorando data). O universo passa a ser construído **somente** a partir de `deal_activities` filtrada por `created_at` no período + inferência.
+
+**2. Reconstruir `stagesPassedByDeal` apenas com movimentações no período**
 
 ```ts
-const STAGE_DISPLAY_ORDER: string[] = [
-  'anamnese incompleta',
-  'lead gratuito',
-  'novo lead',
-  'lead instagram',
-  'lead qualificado',
-  'sem interesse',
-  'r1 agendada',
-  'no-show',
-  'r1 realizada',
-  'contrato pago',
-  'r2 agendada',
-  'no-show r2',
-  'r2 realizada',
-  'venda realizada',
-];
+// Para cada activity de stage_change no período:
+//   stagesPassedByDeal.get(dealId).add(toStageKey)
+//   stagesPassedByDeal.get(dealId).add(fromStageKey)  // origem da movimentação também conta como "passou"
 ```
 
-No final da agregação do `summaryRows`, substituir o sort atual (que usa `stage_order` da pipeline) por:
+Aplicar inferência de MAIN_TRAIL e LATERAL_PREREQ por cima desse Set (igual hoje).
+
+**3. "Estão lá" = snapshot no fim do período, não "agora"**
+
+Para cada deal envolvido, descobrir o estágio que ele estava em `endDate`:
+- Pegar a última `stage_change` do deal com `created_at <= endDate`
+- Se não houver nenhuma, usar o `stage_id` atual de `crm_deals` apenas se o deal foi criado antes de `endDate`
 
 ```ts
-summaryRows.sort((a, b) => {
-  const ia = STAGE_DISPLAY_ORDER.indexOf(a.stageNameKey);
-  const ib = STAGE_DISPLAY_ORDER.indexOf(b.stageNameKey);
-  // Estágios não mapeados vão para o final, mantendo ordem alfabética entre si
-  if (ia === -1 && ib === -1) return a.stageName.localeCompare(b.stageName);
-  if (ia === -1) return 1;
-  if (ib === -1) return -1;
-  return ia - ib;
-});
+// Pseudo:
+const stageAtEndOfPeriod = lastStageChangeBefore(dealId, endDate)?.toStage
+  ?? (deal.created_at <= endDate ? deal.stage_id : null);
 ```
+
+Contar `stageAtEndOfPeriod` por estágio para a coluna "Estão lá".
+
+**4. Consolidar Acumulado e Passaram OU diferenciar claramente**
+
+Opções:
+- **A)** Manter ambas com a mesma definição e renomear "Passaram" para algo como "Movimentações" (count de eventos, não de leads únicos). Hoje "Passaram" já é count de eventos, então só precisa garantir o tooltip.
+- **B)** Remover a coluna duplicada.
+
+Recomendação: **opção A** — Acumulado = leads únicos no período, Passaram = nº de movimentações (eventos) no período. Já é assim hoje, só precisa atualizar o tooltip do Acumulado.
+
+**5. Atualizar tooltips em `StageMovementsSummaryTable.tsx`**
+
+- **Acumulado**: "Leads únicos que passaram por este estágio dentro do período selecionado (inclui inferência da trilha do funil)."
+- **Passaram**: "Número de movimentações (eventos) que entraram neste estágio no período."
+- **Estão lá**: "Leads que estavam neste estágio no fim do período selecionado."
+
+### Resultado esperado
+
+- Trocar 30d → 7d: **todos** os números diminuem proporcionalmente
+- Trocar 30d → 90d: **todos** os números aumentam
+- Não há mais "universo fixo" — período é a única dimensão temporal
 
 ### Garantias
 
-- Estágios fora da lista (qualquer custom de outra pipeline) caem no final, ordenados alfabeticamente — sem quebrar
-- Aliases já normalizam variações ("REUNIÃO 1 AGENDADA" → "r1 agendada"), então a ordem se aplica cross-pipeline
-- Zero mudança em UI, totais, inferência ou queries
+- Funil continua monotônico decrescente nos estágios principais (inferência de trilha preservada)
+- Estágios laterais (No-Show, Sem Interesse) continuam sem inflar
+- Multi-pipeline continua funcionando
+- Filtro de tags continua aplicando sobre o universo derivado de `deal_activities`
+
+### Trade-off
+
+Leads que entraram numa origem dentro do período mas **nunca tiveram movimentação registrada** (caso raro: criados direto sem nenhum stage_change) não vão aparecer. Para cobrir esse caso, podemos **opcionalmente** adicionar deals criados no período via `crm_deals.created_at BETWEEN start AND end` ao universo, mapeando o estágio atual deles como "passagem" no período. Isso mantém tudo dinâmico pelo período e cobre leads novos sem histórico.
 
 ### Escopo
 
-- 1 arquivo: `src/hooks/useStageMovements.ts` (~20 linhas)
-- Zero migration, zero mudança em componentes
+- `src/hooks/useStageMovements.ts` (~40 linhas: remove query paginada, ajusta lógica de snapshot)
+- `src/components/crm/StageMovementsSummaryTable.tsx` (~3 tooltips)
+- Zero migration, zero mudança em UI principal
 
