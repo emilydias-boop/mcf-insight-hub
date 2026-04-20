@@ -437,14 +437,31 @@ export function useStageMovements({
         movedSetByStage.get(r.toStageNameKey)!.add(r.dealId);
       });
 
+      // Snapshot no FIM do período: para cada deal, descobrir o estágio que ele estava em endDate.
+      //    Estratégia: pegar a última stage_change com created_at <= endDate (acts já está ordenado desc).
+      //    Fallback: stage_id atual SE o deal foi criado <= endDate.
+      const lastStageAtEnd = new Map<string, string>(); // dealId -> stageId/clintId
+      // acts está ordenado desc por created_at e já é <= endDate (filtro da query)
+      acts.forEach((act) => {
+        if (!act.deal_id || !filteredDealsMap.has(act.deal_id)) return;
+        if (lastStageAtEnd.has(act.deal_id)) return; // já temos a mais recente
+        if (act.to_stage) lastStageAtEnd.set(act.deal_id, act.to_stage);
+      });
+
       filteredDealsMap.forEach((deal) => {
-        if (!deal.stage_id) return;
-        const stage = resolveStage(deal.stage_id);
+        let stageRef: string | null = lastStageAtEnd.get(deal.id) ?? null;
+        if (!stageRef) {
+          const createdMs = deal.created_at ? new Date(deal.created_at).getTime() : NaN;
+          if (Number.isFinite(createdMs) && createdMs <= endMs && deal.stage_id) {
+            stageRef = deal.stage_id;
+          }
+        }
+        if (!stageRef) return;
+        const stage = resolveStage(stageRef);
         if (!stage) return;
         const key = normalizeStageName(stage.name) || stage.id;
         const e = ensureEntry(key, stage);
         e.parados += 1;
-        const wasAlreadyCounted = e.uniqueLeads.has(deal.id);
         e.uniqueLeads.add(deal.id);
 
         // Se este deal não teve movimentação para este estágio no período, adicionar linha "snapshot only"
@@ -466,7 +483,6 @@ export function useStageMovements({
             isSnapshotOnly: true,
           });
         }
-        void wasAlreadyCounted;
       });
 
       // 10) Acumulado via histórico completo: uniqueLeads = todos os deals que JÁ passaram por cada estágio
@@ -506,7 +522,8 @@ export function useStageMovements({
 
       console.info('[useStageMovements]', {
         activities: acts.length,
-        snapshotDeals: snapshotDeals.length,
+        createdInPeriod: createdInPeriod.length,
+        movementDeals: movementDeals.length,
         dealsAfterFilter: filteredDealsMap.size,
         rows: rows.length,
         stages: summary.length,
