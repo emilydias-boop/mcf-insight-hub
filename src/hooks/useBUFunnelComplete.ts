@@ -118,7 +118,6 @@ export function useBUFunnelComplete({
         stage_id: string | null;
         created_at: string | null;
         contact_id: string | null;
-        lead_channel: string | null;
         data_source: string | null;
       };
 
