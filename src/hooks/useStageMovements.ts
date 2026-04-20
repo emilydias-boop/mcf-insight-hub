@@ -192,6 +192,7 @@ export function useStageMovements({
         origin_id: string | null;
         stage_id: string | null;
         created_at: string | null;
+        contact_id: string | null;
       };
 
       const movementDealIds = [
@@ -203,8 +204,9 @@ export function useStageMovements({
         dealChunks.map(async (ids) => {
           let q = supabase
             .from('crm_deals')
-            .select('id, name, tags, origin_id, stage_id, created_at')
-            .in('id', ids);
+            .select('id, name, tags, origin_id, stage_id, created_at, contact_id')
+            .in('id', ids)
+            .is('archived_at', null);
           if (originIds && originIds.length > 0) {
             q = q.in('origin_id', originIds);
           }
@@ -221,7 +223,8 @@ export function useStageMovements({
       for (let from = 0; ; from += PAGE) {
         let q = supabase
           .from('crm_deals')
-          .select('id, name, tags, origin_id, stage_id, created_at')
+          .select('id, name, tags, origin_id, stage_id, created_at, contact_id')
+          .is('archived_at', null)
           .gte('created_at', startDate.toISOString())
           .lte('created_at', endDate.toISOString())
           .order('created_at', { ascending: false })
