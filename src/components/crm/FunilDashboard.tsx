@@ -4,9 +4,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
 import { useCRMOverviewData } from '@/hooks/useCRMOverviewData';
+import { useBUFunnelComplete } from '@/hooks/useBUFunnelComplete';
 
 import { PipelineHealthBlock } from './overview/PipelineHealthBlock';
-import { FlowFunnelBlock } from './overview/FlowFunnelBlock';
+import { BUFunnelComplete } from './BUFunnelComplete';
 import { SdrRankingTable } from './overview/SdrRankingTable';
 import { CloserRankingTable } from './overview/CloserRankingTable';
 import { OperationalAlertsBlock } from './overview/OperationalAlertsBlock';
@@ -62,6 +63,14 @@ export function FunilDashboard() {
 
   const { data, isLoading } = useCRMOverviewData(periodStart, periodEnd, originIds, activeBU);
 
+  const funnelQuery = useBUFunnelComplete({
+    originIds: originIds ?? null,
+    startDate: periodStart,
+    endDate: periodEnd,
+    tagFilters: [],
+    tagOperator: 'AND',
+  });
+
   return (
     <div className="space-y-6">
       {/* Period Selector */}
@@ -93,7 +102,7 @@ export function FunilDashboard() {
       <PipelineHealthBlock data={data?.health} isLoading={isLoading} />
 
       {/* 3. Flow Funnel */}
-      <FlowFunnelBlock data={data?.funnel} isLoading={isLoading} />
+      <BUFunnelComplete data={funnelQuery.data} isLoading={funnelQuery.isLoading} />
 
       {/* 4 & 5. Rankings side by side on large screens */}
       <div className="grid gap-6 lg:grid-cols-2">
