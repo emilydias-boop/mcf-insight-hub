@@ -36,7 +36,9 @@ import {
   useUpdateUserPermissions, 
   useUpdateUserIntegrations,
   useSendPasswordReset,
-  useDeleteUser 
+  useDeleteUser,
+  useAddUserRole,
+  useRemoveUserRole,
 } from "@/hooks/useUserMutations";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
@@ -67,6 +69,8 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const queryClient = useQueryClient();
 
   const updateRole = useUpdateUserRole();
+  const addUserRole = useAddUserRole();
+  const removeUserRole = useRemoveUserRole();
   const updateAccess = useUpdateUserAccess();
   const updatePermissions = useUpdateUserPermissions();
   const updateIntegrations = useUpdateUserIntegrations();
@@ -175,6 +179,21 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const handleRoleChange = (role: AppRole) => {
     if (!userId) return;
     updateRole.mutate({ userId, role });
+  };
+
+  const userRoles: AppRole[] = ((userDetails as any)?.roles as AppRole[]) || (userDetails?.role ? [userDetails.role] : []);
+
+  const handleToggleRole = (role: AppRole, checked: boolean) => {
+    if (!userId) return;
+    if (checked) {
+      addUserRole.mutate({ userId, role });
+    } else {
+      if (userRoles.length <= 1) {
+        toast.error("O usuário precisa ter ao menos um cargo.");
+        return;
+      }
+      removeUserRole.mutate({ userId, role });
+    }
   };
 
   const handleSaveGeneral = () => {
