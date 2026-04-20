@@ -516,6 +516,57 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
 
                 <Separator />
 
+                {/* ===== Cargos no sistema (multi-role) ===== */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Cargos no sistema</Label>
+                    <span className="text-xs text-muted-foreground">
+                      {userRoles.length} {userRoles.length === 1 ? 'cargo' : 'cargos'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Selecione um ou mais cargos. O cargo de maior prioridade vira o primário (define dashboards padrão).
+                    Útil em períodos de migração (ex: SDR que está virando Closer).
+                  </p>
+                  <div className="space-y-2 p-3 border rounded-md max-h-64 overflow-y-auto">
+                    {activeRoles.map((r) => {
+                      const roleKey = r.role_key as AppRole;
+                      const isChecked = userRoles.includes(roleKey);
+                      const isPrimary = userDetails.role === roleKey;
+                      const isLastRole = isChecked && userRoles.length === 1;
+                      const isSaving = (addUserRole.isPending || removeUserRole.isPending);
+                      return (
+                        <label
+                          key={r.role_key}
+                          className={cn(
+                            "flex items-center gap-2 cursor-pointer py-1",
+                            isLastRole && "cursor-not-allowed opacity-80"
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={isSaving || isLastRole}
+                            onChange={(e) => handleToggleRole(roleKey, e.target.checked)}
+                            className="rounded border-gray-300"
+                          />
+                          <span className="text-sm">{r.label}</span>
+                          {isPrimary && (
+                            <Badge variant="outline" className="text-[10px] h-5 ml-auto">
+                              primário
+                            </Badge>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    ⚠️ O usuário precisa fazer logout/login para o novo cargo passar a valer (refresh do JWT).
+                  </p>
+                </div>
+
+                <Separator />
+
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Pode agendar R2</Label>
