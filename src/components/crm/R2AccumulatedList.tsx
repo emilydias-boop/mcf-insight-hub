@@ -6,14 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { R2AccumulatedLead } from '@/hooks/useR2AccumulatedLeads';
+import { EncaixarSemanaDialog } from './EncaixarSemanaDialog';
 
 interface R2AccumulatedListProps {
   leads: R2AccumulatedLead[];
   isLoading?: boolean;
   onSchedule?: (lead: R2AccumulatedLead) => void;
-  onEncaixar?: (lead: R2AccumulatedLead) => void;
-  isEncaixando?: boolean;
-  encaixandoId?: string | null;
+  /** Semana atualmente exibida — usada como âncora do diálogo de encaixe. */
+  anchorWeekStart: Date;
 }
 
 const TYPE_FILTERS = [
@@ -24,11 +24,12 @@ const TYPE_FILTERS = [
 
 const PAGE_SIZE_OPTIONS = ['20', '50', '100'];
 
-export function R2AccumulatedList({ leads, isLoading, onSchedule, onEncaixar, isEncaixando, encaixandoId }: R2AccumulatedListProps) {
+export function R2AccumulatedList({ leads, isLoading, onSchedule, anchorWeekStart }: R2AccumulatedListProps) {
   const [typeFilter, setTypeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [encaixarTarget, setEncaixarTarget] = useState<R2AccumulatedLead | null>(null);
 
   const searchFiltered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -215,15 +216,10 @@ export function R2AccumulatedList({ leads, isLoading, onSchedule, onEncaixar, is
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => onEncaixar?.(lead)}
-                      disabled={isEncaixando && encaixandoId === lead.id}
+                      onClick={() => setEncaixarTarget(lead)}
                       className="flex items-center gap-1"
                     >
-                      {isEncaixando && encaixandoId === lead.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <ShoppingCart className="h-3.5 w-3.5" />
-                      )}
+                      <ShoppingCart className="h-3.5 w-3.5" />
                       Encaixar
                     </Button>
                   ) : (
@@ -296,6 +292,14 @@ export function R2AccumulatedList({ leads, isLoading, onSchedule, onEncaixar, is
           </div>
         </div>
       )}
+
+      <EncaixarSemanaDialog
+        open={!!encaixarTarget}
+        onOpenChange={(o) => { if (!o) setEncaixarTarget(null); }}
+        attendeeId={encaixarTarget?.id || null}
+        attendeeName={encaixarTarget?.attendee_name || encaixarTarget?.deal_name || null}
+        anchorWeekStart={anchorWeekStart}
+      />
     </div>
   );
 }

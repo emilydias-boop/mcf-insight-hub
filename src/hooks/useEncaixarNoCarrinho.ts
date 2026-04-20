@@ -68,3 +68,34 @@ export function useEncaixarNoCarrinho() {
     },
   });
 }
+
+/**
+ * Remove o encaixe manual de um lead no carrinho, devolvendo-o
+ * ao bucket natural (acumulados / próxima safra) ao zerar
+ * `carrinho_week_start`.
+ */
+export function useDesencaixarDoCarrinho() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ attendeeId }: { attendeeId: string }) => {
+      const { error } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ carrinho_week_start: null } as any)
+        .eq('id', attendeeId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-accumulated-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['carrinho-unified-data'] });
+      queryClient.invalidateQueries({ queryKey: ['contract-lifecycle-report'] });
+      toast.success('Encaixe removido. Lead voltou para o bucket natural.');
+    },
+    onError: () => {
+      toast.error('Erro ao remover encaixe');
+    },
+  });
+}
