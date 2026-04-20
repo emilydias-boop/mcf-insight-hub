@@ -241,6 +241,52 @@ export function useBUFunnelComplete({
         if (s.clint_id) stageNameById.set(s.clint_id, s.stage_name);
       });
 
+      // 5b) Compradores A010 da Hubla no período (fonte de verdade do canal A010)
+      const { data: a010Buyers } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, customer_phone')
+        .eq('product_category', 'a010')
+        .eq('sale_status', 'completed')
+        .gte('sale_date', startIso)
+        .lte('sale_date', endIso);
+      const a010EmailSet = new Set<string>();
+      const a010PhoneSet = new Set<string>();
+      (a010Buyers || []).forEach((b: any) => {
+        if (b.customer_email) a010EmailSet.add(b.customer_email.toLowerCase());
+        const ph = normPhone(b.customer_phone);
+        if (ph) a010PhoneSet.add(ph);
+      });
+
+      // Buscar email/phone dos contatos dos deals filtrados (necessário antes da classificação)
+      const allContactIds = [
+        ...new Set(filteredDeals.map((d) => d.contact_id).filter((x): x is string => !!x)),
+      ];
+      const contactEmailById = new Map<string, string>();
+      const contactPhoneById = new Map<string, string>();
+      if (allContactIds.length > 0) {
+        const ccChunks = chunk(allContactIds, 200);
+        const ccRes = await Promise.all(
+          ccChunks.map(async (ids) => {
+            const { data } = await supabase
+              .from('crm_contacts')
+              .select('id, email, phone')
+              .in('id', ids);
+            return data || [];
+          }),
+        );
+        ccRes.flat().forEach((c: any) => {
+          if (c.email) contactEmailById.set(c.id, c.email.toLowerCase());
+          if (c.phone) contactPhoneById.set(c.id, normPhone(c.phone));
+        });
+      }
+
+      const dealIsA010Buyer = (d: DealRow): boolean => {
+        if (!d.contact_id) return false;
+        const email = contactEmailById.get(d.contact_id);
+        const phone = contactPhoneById.get(d.contact_id);
+        return (!!email && a010EmailSet.has(email)) || (!!phone && a010PhoneSet.has(phone));
+      };
+
       // 6) Classificar cada deal por canal
       const dealChannel = new Map<string, string>();
       filteredDeals.forEach((d) => {
@@ -249,7 +295,7 @@ export function useBUFunnelComplete({
           tags: tagsArr,
           originName: d.origin_id ? (originMap.get(d.origin_id) || null) : null,
           dataSource: d.data_source,
-          hasA010: tagsArr.some((t) => typeof t === 'string' && t.toUpperCase().includes('A010')),
+          hasA010: dealIsA010Buyer(d),
         });
         dealChannel.set(d.id, ch || 'OUTRO');
       });
