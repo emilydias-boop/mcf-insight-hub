@@ -265,23 +265,8 @@ export function useStageMovements({
 
       if (filteredDealsMap.size === 0) return { summary: [], rows: [] };
 
-      // 5) Buscar histórico COMPLETO de stage_change para todos os deals filtrados (sem filtro de data)
-      const allDealIds = Array.from(filteredDealsMap.keys()).filter(isValidUUID);
-      const historyChunks = chunk(allDealIds, 200);
-      const historyResults = await Promise.all(
-        historyChunks.map(async (ids) => {
-          const { data, error } = await supabase
-            .from('deal_activities')
-            .select('deal_id, to_stage')
-            .eq('activity_type', 'stage_change')
-            .in('deal_id', ids);
-          if (error) throw error;
-          return data || [];
-        }),
-      );
-      const fullHistory = historyResults.flat();
-
-      // Construir stagesPassedByDeal: Map<dealId, Set<stageNameKey>>
+      // 5) Construir stagesPassedByDeal APENAS com movimentações no período + estágio inicial
+      //    de deals criados no período.
       const stagesPassedByDeal = new Map<string, Set<string>>();
       const ensurePassedSet = (dealId: string) => {
         let s = stagesPassedByDeal.get(dealId);
@@ -289,15 +274,28 @@ export function useStageMovements({
         return s;
       };
 
-      fullHistory.forEach((act) => {
-        const stage = resolveStage(act.to_stage);
-        if (!stage) return;
-        const key = normalizeStageName(stage.name) || stage.id;
-        ensurePassedSet(act.deal_id).add(key);
+      // Atividades no período: tanto from_stage quanto to_stage contam como "passou"
+      acts.forEach((act) => {
+        if (!act.deal_id || !filteredDealsMap.has(act.deal_id)) return;
+        const toStage = resolveStage(act.to_stage);
+        if (toStage) {
+          const key = normalizeStageName(toStage.name) || toStage.id;
+          ensurePassedSet(act.deal_id).add(key);
+        }
+        const fromStage = resolveStage(act.from_stage);
+        if (fromStage) {
+          const key = normalizeStageName(fromStage.name) || fromStage.id;
+          ensurePassedSet(act.deal_id).add(key);
+        }
       });
 
-      // Adicionar estágio atual de cada deal ao histórico (cobre deals criados direto num estágio)
+      // Deals criados no período: estágio atual conta como "passou" no período
+      const startMs = startDate.getTime();
+      const endMs = endDate.getTime();
       filteredDealsMap.forEach((deal) => {
+        const createdMs = deal.created_at ? new Date(deal.created_at).getTime() : NaN;
+        if (!Number.isFinite(createdMs)) return;
+        if (createdMs < startMs || createdMs > endMs) return;
         if (!deal.stage_id) return;
         const stage = resolveStage(deal.stage_id);
         if (!stage) return;
