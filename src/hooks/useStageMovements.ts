@@ -234,6 +234,33 @@ export function useStageMovements({
         ensurePassedSet(deal.id).add(key);
       });
 
+      // Inferência de trilha principal: se um deal atingiu um estágio da trilha,
+      // ele automaticamente "passou" por todos os anteriores
+      const MAIN_TRAIL: string[] = [
+        'anamnese incompleta',
+        'novo lead',
+        'lead qualificado',
+        'reuniao 01 agendada',
+        'reuniao 01 realizada',
+        'reuniao 02 agendada',
+        'reuniao 02 realizada',
+        'contrato pago',
+        'venda realizada',
+      ];
+
+      stagesPassedByDeal.forEach((stagesSet) => {
+        let maxTrailIndex = -1;
+        stagesSet.forEach((stageKey) => {
+          const idx = MAIN_TRAIL.indexOf(stageKey);
+          if (idx > maxTrailIndex) maxTrailIndex = idx;
+        });
+        if (maxTrailIndex >= 0) {
+          for (let i = 0; i <= maxTrailIndex; i++) {
+            stagesSet.add(MAIN_TRAIL[i]);
+          }
+        }
+      });
+
       // 6) Origens
       const originIdsFromDeals = [
         ...new Set(
