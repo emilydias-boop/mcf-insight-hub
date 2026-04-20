@@ -18,9 +18,11 @@ interface R2AprovadosListProps {
   isLoading?: boolean;
   weekStart: Date;
   weekEnd: Date;
+  emptyMessage?: string;
+  countLabel?: string;
 }
 
-export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2AprovadosListProps) {
+export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, emptyMessage, countLabel }: R2AprovadosListProps) {
   const [copied, setCopied] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [closerFilter, setCloserFilter] = useState<string>('all');
@@ -223,7 +225,7 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
     return (
       <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
         <ShoppingCart className="h-12 w-12 mb-4 opacity-50" />
-        <p>Nenhum aprovado na semana</p>
+        <p>{emptyMessage || 'Nenhum aprovado na semana'}</p>
       </div>
     );
   }
@@ -237,7 +239,7 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd }: R2
             {displayedAttendees.length} em acompanhamento
           </Badge>
           <span className="text-sm text-muted-foreground">
-            (de {attendees.length} aprovados • {soldCount} vendidos)
+            (de {attendees.length} {countLabel || 'aprovados'} • {soldCount} vendidos)
           </span>
         </div>
         <div className="flex gap-2">

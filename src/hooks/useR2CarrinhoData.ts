@@ -65,7 +65,7 @@ function toAttendee(row: CarrinhoLeadRow): R2CarrinhoAttendee {
 export function useR2CarrinhoData(
   weekStart: Date,
   weekEnd: Date,
-  filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados',
+  filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados' | 'aprovados_proxima_safra',
   carrinhoConfig?: CarrinhoConfig,
   previousConfig?: CarrinhoConfig
 ) {
@@ -77,7 +77,9 @@ export function useR2CarrinhoData(
     let filtered = unifiedData;
 
     if (filter === 'aprovados') {
-      filtered = filtered.filter(r => isAprovado(r));
+      filtered = filtered.filter(r => isAprovado(r) && r.dentro_corte === true);
+    } else if (filter === 'aprovados_proxima_safra') {
+      filtered = filtered.filter(r => isAprovado(r) && r.dentro_corte === false);
     } else if (filter === 'agendadas') {
       filtered = filtered.filter(r => r.meeting_status !== 'cancelled' && r.meeting_status !== 'rescheduled');
     } else if (filter === 'no_show') {
