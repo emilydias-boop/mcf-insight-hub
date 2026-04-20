@@ -163,18 +163,35 @@ export function useStageMovements({
         );
       };
 
-      // 3) Snapshot atual: deals filtrados por origem
-      let snapshotQ = supabase
-        .from('crm_deals')
-        .select('id, name, tags, origin_id, stage_id')
-        .not('stage_id', 'is', null)
-        .limit(10000);
-      if (originIds && originIds.length > 0) {
-        snapshotQ = snapshotQ.in('origin_id', originIds);
+      // 3) UNIVERSO COMPLETO: todos os deals das origens selecionadas (paginado, sem limite de 10k).
+      //    Esse é o universo definitivo — a janela de data afeta apenas "Passaram".
+      const snapshotDeals: Array<{
+        id: string;
+        name: string | null;
+        tags: unknown;
+        origin_id: string | null;
+        stage_id: string | null;
+      }> = [];
+      const PAGE = 1000;
+      for (let from = 0; ; from += PAGE) {
+        let q = supabase
+          .from('crm_deals')
+          .select('id, name, tags, origin_id, stage_id')
+          .order('created_at', { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (originIds && originIds.length > 0) {
+          q = q.in('origin_id', originIds);
+        }
+        const { data, error } = await q;
+        if (error) throw error;
+        const batch = data || [];
+        snapshotDeals.push(...(batch as typeof snapshotDeals));
+        if (batch.length < PAGE) break;
+        if (from > 50_000) {
+          console.warn('[useStageMovements] Universo > 50k deals, interrompendo paginação.');
+          break;
+        }
       }
-      const { data: snapshotDealsRaw, error: snapErr } = await snapshotQ;
-      if (snapErr) throw snapErr;
-      const snapshotDeals = snapshotDealsRaw || [];
 
       // 4) Deals envolvidos em movimentações (para nome/tags/origin)
       const movementDealIds = [
