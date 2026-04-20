@@ -8,13 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
   TooltipContent,
@@ -47,7 +42,7 @@ export default function MovimentacoesEstagio() {
     from: startOfDay(subDays(new Date(), 30)),
     to: endOfDay(new Date()),
   });
-  const [originId, setOriginId] = useState<string>('all');
+  const [selectedOriginIds, setSelectedOriginIds] = useState<string[]>([]);
   const [tagFilters, setTagFilters] = useState<TagFilterRule[]>([]);
   const [tagOperator, setTagOperator] = useState<TagOperator>('and');
   const [selectedStageNameKey, setSelectedStageNameKey] = useState<string | null>(null);
@@ -72,17 +67,17 @@ export default function MovimentacoesEstagio() {
 
   // Tags disponíveis (escopo: origem selecionada ou BU)
   const tagsScopeOriginId =
-    originId !== 'all' ? originId : undefined;
+    selectedOriginIds.length === 1 ? selectedOriginIds[0] : undefined;
   const { data: availableTags = [], isLoading: tagsLoading } = useUniqueDealTags({
     originId: tagsScopeOriginId,
   });
 
   // originIds para a query
   const queryOriginIds = useMemo(() => {
-    if (originId !== 'all') return [originId];
+    if (selectedOriginIds.length > 0) return selectedOriginIds;
     if (buOriginIds && buOriginIds.length > 0) return buOriginIds;
     return null;
-  }, [originId, buOriginIds]);
+  }, [selectedOriginIds, buOriginIds]);
 
   const { data, isLoading, isFetching, refetch } = useStageMovements({
     originIds: queryOriginIds,
@@ -108,7 +103,7 @@ export default function MovimentacoesEstagio() {
       from: startOfDay(subDays(new Date(), 30)),
       to: endOfDay(new Date()),
     });
-    setOriginId('all');
+    setSelectedOriginIds([]);
     setTagFilters([]);
     setTagOperator('and');
     setSelectedStageNameKey(null);
@@ -172,20 +167,60 @@ export default function MovimentacoesEstagio() {
                 </PopoverContent>
               </Popover>
 
-              {/* Pipeline */}
-              <Select value={originId} onValueChange={setOriginId}>
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue placeholder="Pipeline" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as pipelines</SelectItem>
-                  {origins.map((o) => (
-                    <SelectItem key={o.id} value={o.id}>
-                      {o.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Pipelines (multi-select) */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="justify-start font-normal">
+                    <Filter className="mr-2 h-4 w-4" />
+                    {selectedOriginIds.length === 0
+                      ? 'Todas as pipelines'
+                      : `${selectedOriginIds.length} pipeline${selectedOriginIds.length > 1 ? 's' : ''}`}
+                    {selectedOriginIds.length > 0 && (
+                      <Badge variant="secondary" className="ml-2">
+                        {selectedOriginIds.length}
+                      </Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0" align="start">
+                  <div className="p-2 border-b flex items-center justify-between">
+                    <span className="text-xs font-medium">Selecione as pipelines</span>
+                    {selectedOriginIds.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs"
+                        onClick={() => setSelectedOriginIds([])}
+                      >
+                        Limpar
+                      </Button>
+                    )}
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto p-2 space-y-1">
+                    {origins.map((o) => {
+                      const checked = selectedOriginIds.includes(o.id);
+                      return (
+                        <label
+                          key={o.id}
+                          className="flex items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer text-sm"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(v) => {
+                              setSelectedOriginIds((prev) =>
+                                v
+                                  ? [...prev, o.id]
+                                  : prev.filter((x) => x !== o.id),
+                              );
+                            }}
+                          />
+                          <span className="flex-1">{o.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
 
               {/* Tags */}
               <TagFilterPopover
@@ -214,7 +249,7 @@ export default function MovimentacoesEstagio() {
               <div className="ml-auto flex items-center gap-2">
                 {(selectedStageNameKey ||
                   tagFilters.length > 0 ||
-                  originId !== 'all') && (
+                  selectedOriginIds.length > 0) && (
                   <Button variant="ghost" size="sm" onClick={handleClear}>
                     <X className="h-4 w-4 mr-1" />
                     Limpar
