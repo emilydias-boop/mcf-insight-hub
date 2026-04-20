@@ -523,14 +523,9 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
                               variant="outline"
                               size="sm"
                               className="h-8 px-2 ml-1 border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
-                              disabled={encaixandoId === att.id}
-                              onClick={() => handleEncaixar(att.id)}
+                              onClick={() => openEncaixarDialog(att)}
                             >
-                              {encaixandoId === att.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <PackagePlus className="h-4 w-4" />
-                              )}
+                              <PackagePlus className="h-4 w-4" />
                               <span className="hidden lg:inline ml-1 text-xs">Encaixar</span>
                             </Button>
                           </TooltipTrigger>
@@ -551,6 +546,17 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
         attendee={selectedAttendee}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+      />
+
+      <EncaixarSemanaDialog
+        open={!!encaixarTarget}
+        onOpenChange={(o) => { if (!o) setEncaixarTarget(null); }}
+        attendeeId={encaixarTarget?.id || null}
+        attendeeName={encaixarTarget?.attendee_name || encaixarTarget?.deal_name || null}
+        anchorWeekStart={weekStart}
+        currentCarrinhoWeekStart={encaixarTarget?.carrinho_week_start || null}
+        contractPaidAt={encaixarTarget?.contract_paid_at || null}
+        r2Date={encaixarTarget?.scheduled_at || null}
       />
     </div>
   );
