@@ -8,13 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
   TooltipContent,
@@ -47,7 +42,7 @@ export default function MovimentacoesEstagio() {
     from: startOfDay(subDays(new Date(), 30)),
     to: endOfDay(new Date()),
   });
-  const [originId, setOriginId] = useState<string>('all');
+  const [selectedOriginIds, setSelectedOriginIds] = useState<string[]>([]);
   const [tagFilters, setTagFilters] = useState<TagFilterRule[]>([]);
   const [tagOperator, setTagOperator] = useState<TagOperator>('and');
   const [selectedStageNameKey, setSelectedStageNameKey] = useState<string | null>(null);
@@ -72,17 +67,17 @@ export default function MovimentacoesEstagio() {
 
   // Tags disponíveis (escopo: origem selecionada ou BU)
   const tagsScopeOriginId =
-    originId !== 'all' ? originId : undefined;
+    selectedOriginIds.length === 1 ? selectedOriginIds[0] : undefined;
   const { data: availableTags = [], isLoading: tagsLoading } = useUniqueDealTags({
     originId: tagsScopeOriginId,
   });
 
   // originIds para a query
   const queryOriginIds = useMemo(() => {
-    if (originId !== 'all') return [originId];
+    if (selectedOriginIds.length > 0) return selectedOriginIds;
     if (buOriginIds && buOriginIds.length > 0) return buOriginIds;
     return null;
-  }, [originId, buOriginIds]);
+  }, [selectedOriginIds, buOriginIds]);
 
   const { data, isLoading, isFetching, refetch } = useStageMovements({
     originIds: queryOriginIds,
@@ -108,7 +103,7 @@ export default function MovimentacoesEstagio() {
       from: startOfDay(subDays(new Date(), 30)),
       to: endOfDay(new Date()),
     });
-    setOriginId('all');
+    setSelectedOriginIds([]);
     setTagFilters([]);
     setTagOperator('and');
     setSelectedStageNameKey(null);
