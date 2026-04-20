@@ -68,7 +68,7 @@ export function FunilDashboard() {
     startDate: periodStart,
     endDate: periodEnd,
     tagFilters: [],
-    tagOperator: 'AND',
+    tagOperator: 'and',
   });
 
   return (
