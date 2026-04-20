@@ -1,66 +1,111 @@
 
 
-## Fix: Coluna "Acumulado" deve deduplicar por contato (igual ao CRM)
+## Funil completo da BU Incorporador (669 → 8)
 
-### Diagnóstico
+### O que você quer ver
 
-A coluna **Acumulado** soma 684 (442+60+180+2) enquanto o CRM mostra 669. A diferença vem de:
+Um funil end-to-end onde o topo = **669 oportunidades únicas** (universo da BU) e cada etapa subsequente mostra quantos avançaram, com a soma vertical fazendo sentido em cada nível:
 
-- O **Acumulado** é montado em `Set<dealId>` (`uniqueLeads.add(dealId)`) — conta cada deal separadamente.
-- Quando o mesmo **contato** existe em 2 pipelines (Germana Luz Cataldo, Igor + outros casos), os 2 deals contam nos 2 estágios em que aparecem, inflando cada linha.
-- "Leads únicos no universo" já foi corrigido para deduplicar por `contact_id` (= 669). A coluna Acumulado ficou para trás.
+```
+Universo BU Incorporador          669
+├─ Qualificados                   168
+├─ Sem Interesse                  192
+├─ Agendados (R1)                 163
+│  ├─ R1 Realizada                112
+│  ├─ No-Show R1                   51
+├─ Contrato Pago                   29
+├─ R2 Realizada                    21
+└─ Vendas Finais                    8
+```
 
-### Mudança
+### Diagnóstico do que existe hoje
 
-**`src/hooks/useStageMovements.ts`** (~5 linhas)
+A página `/crm/movimentacoes` mostra apenas estágios da pipeline atual (Novo Lead, Anamnese Incompleta, etc.) — não combina dados de **agenda R1/R2** + **transações Hubla** + **estágios CRM** num funil único.
 
-Trocar a chave do `Set<string>` em `uniqueLeads` de `dealId` para `contactKey = contact_id ?? dealId`. Locais a ajustar:
+Os dados existem, mas em hooks separados:
+- **669 / Qualificados / Sem Interesse / Anamnese**: `useStageMovements` (CRM stages)
+- **Agendados / R1 Realizada / No-Show R1**: `useTeamMeetingsData` + `useInvestigationByPeriod` (meeting_slot_attendees, type=r1)
+- **R2 Realizada / Contrato Pago**: `useR2MetricsData` + `useCloserR2Metrics` (meeting_slot_attendees type=r2 + r2_status_options)
+- **Vendas Finais**: `hubla_transactions` (sale_status=completed, product_category=parceria)
 
-1. **Linha ~432** (movimentações):
-   ```ts
-   const contactKey = deal.contact_id ?? deal.id;
-   if (!e.uniqueLeads.has(contactKey)) e.uniqueLeads.add(contactKey);
-   ```
+Falta uma camada que **una tudo** num único funil deduplicado por contato (`contact_id`).
 
-2. **Linha ~469** (snapshot):
-   ```ts
-   const contactKey = deal.contact_id ?? deal.id;
-   e.uniqueLeads.add(contactKey);
-   ```
+### Proposta: novo componente `BUFunnelComplete`
 
-3. **Linhas ~493-505** (acumulado via histórico) — usar `contact_id` do deal (lookup em `filteredDealsMap`):
-   ```ts
-   stagesPassedByDeal.forEach((stagesSet, dealId) => {
-     const deal = filteredDealsMap.get(dealId);
-     const contactKey = deal?.contact_id ?? dealId;
-     stagesSet.forEach((stageKey) => {
-       // ... ensureEntry(...)
-       e.uniqueLeads.add(contactKey);
-     });
-   });
-   ```
+**1. Novo hook `src/hooks/useBUFunnelComplete.ts`** (~150 linhas)
 
-### Resultado esperado
+Recebe: `{ bu: 'incorporador' | 'consorcio', startDate, endDate, originIds, tagFilters }`
 
-Com PILOTO ANAMNESE + INSIDE SALES + tag ANAMNESE:
+Retorna:
+```ts
+interface BUFunnelData {
+  universo: number;              // 669 — leads únicos por contact_id
+  qualificados: number;          // 168 — leads em estágios "qualificado*"
+  semInteresse: number;          // 192 — leads em estágios "sem interesse*" / "perdido*"
+  agendadosR1: number;           // 163 — meeting_slot_attendees type=r1 com slot no período
+  r1Realizada: number;           // 112 — status=realizada/completed
+  noShowR1: number;              // 51 — status=no_show
+  contratoPago: number;          // 29 — status=contract_paid OU stage "contrato pago"
+  r2Realizada: number;           // 21 — meeting_slot_attendees type=r2 status=realizada
+  vendasFinais: number;          // 8 — hubla_transactions completed product_category=parceria
+  // listas de leads em cada etapa para drill-down
+  leadsPorEtapa: Record<EtapaKey, Array<{ dealId: string; contactId: string; name: string }>>;
+}
+```
 
-| Estágio | Antes | Depois |
+Dedupe sempre por `contact_id ?? deal.id` (mesma regra já corrigida em `useStageMovements`).
+
+Reusa hooks existentes (não duplica queries):
+- `useStageMovements` para universo + estágios CRM
+- `useTeamMeetingsData` para R1
+- `useR2MetricsData` para R2
+- Query nova só para `hubla_transactions` (vendas finais)
+
+**2. Novo componente `src/components/crm/BUFunnelComplete.tsx`** (~120 linhas)
+
+Funil visual horizontal/vertical com:
+- Cada etapa = card com (label, valor absoluto, % do topo, % da etapa anterior)
+- Cores semânticas: positivo (verde) para avanço, destrutivo (vermelho) para perdas (no-show, sem interesse)
+- Click numa etapa abre drawer/tabela com a lista de leads daquela etapa
+- Tooltips explicando a regra de cada métrica (de onde sai o número)
+
+**3. Nova página/aba `src/pages/crm/FunilCompleto.tsx`** (~80 linhas)
+
+Ou adicionar como **nova seção** no topo de `/crm/movimentacoes` (acima do "Resumo por estágio"), reaproveitando os filtros de período/pipeline/tags já existentes.
+
+Recomendação: nova seção colapsável no topo da página atual — evita duplicar filtros e dá contexto único.
+
+### Mapeamento de cada métrica para a fonte
+
+| Etapa | Fonte | Regra |
 |---|---|---|
-| ANAMNESE INCOMPLETA | 442 | ~440 |
-| Lead Gratuito | 60 | 60 |
-| Novo Lead | 180 | ~179 |
-| Lead Instagram | 2 | 2 |
-| **Soma das linhas** | **684** | **≤ 669** ✅ |
-| Leads únicos no universo | 669 | 669 |
+| Universo (669) | `crm_deals` filtrados | `count(distinct contact_id)` no escopo BU + filtros |
+| Qualificados (168) | `crm_deals.stage_id` | stage name match `qualificado` |
+| Sem Interesse (192) | `crm_deals.stage_id` | stage name match `sem interesse\|perdido\|desqualificado` |
+| Agendados R1 (163) | `meeting_slot_attendees` | type=r1, slot no período, deduplicado por contact |
+| R1 Realizada (112) | `meeting_slot_attendees` | type=r1, status `realizada\|completed` |
+| No-Show R1 (51) | `meeting_slot_attendees` | type=r1, status `no_show` |
+| Contrato Pago (29) | `meeting_slot_attendees` | status=`contract_paid` (já tem `contract_paid_at`) |
+| R2 Realizada (21) | `meeting_slot_attendees` | type=r2, status `realizada` |
+| Vendas Finais (8) | `hubla_transactions` | `sale_status=completed`, `product_category=parceria`, no período |
 
-A soma vertical pode continuar > 669 se um mesmo contato aparece em estágios diferentes (ex.: Germana passou por "Novo Lead" e "Anamnese Incompleta") — isso é correto, pois é o conceito da coluna. Mas nenhuma linha individual passará do total do CRM.
+### Validação numérica
 
-### Trade-off
+Os números que você passou (168+192+163 = 523 ≠ 669) indicam que **estados são mutuamente exclusivos por momento mas o lead pode passar por vários** ao longo do tempo. O funil mostra "quantos chegaram em cada etapa", não uma partição do universo. Universo (669) > soma dos ramos, e isso é correto — alguns leads ainda estão em "Anamnese Incompleta" sem ter avançado nem para Qualificado nem para Sem Interesse.
 
-Mantém o comportamento de "mesmo contato em 2 pipelines = 1 entrada por estágio", alinhando com a forma do CRM contar oportunidades únicas por contato.
+### Antes de implementar — confirmação
+
+Preciso confirmar 3 pontos:
+
+1. **Localização**: nova seção no topo de `/crm/movimentacoes` (recomendado, mantém filtros únicos) **ou** rota nova `/crm/funil-completo`?
+2. **Escopo do filtro**: o funil deve respeitar os filtros atuais (período + pipeline + tags) ou ser sempre BU inteira (Incorporador) sem filtro de tag/pipeline?
+3. **"Qualificados" e "Sem Interesse"**: quais nomes exatos de estágio devo considerar? Vejo que existem múltiplos estágios na pipeline — preciso da lista (ex.: "Lead Qualificado", "Qualificado A010", "Sem Interesse", "Não Tem Interesse", "Perdido")?
 
 ### Escopo
 
-- 1 arquivo, ~5 linhas
-- Zero migration, zero mudança em queries
+- 1 hook novo (`useBUFunnelComplete.ts`)
+- 1 componente novo (`BUFunnelComplete.tsx`)
+- 1 ajuste em `MovimentacoesEstagio.tsx` para incluir o card
+- ~350 linhas no total
+- Zero migration, reusa queries existentes
 
