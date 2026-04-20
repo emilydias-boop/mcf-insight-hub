@@ -67,8 +67,10 @@ export function StageMovementsSummaryTable({
                     Leads únicos que passaram por este estágio <strong>dentro
                     do período selecionado</strong> (inclui inferência da
                     trilha do funil — leads em estágios avançados são
-                    contados nos anteriores). Trocar o período altera este
-                    número.
+                    contados nos anteriores). Como cada lead passa por
+                    vários estágios, a <strong>soma vertical desta coluna é
+                    maior que o total de leads únicos</strong> — isso é
+                    esperado.
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -179,15 +181,17 @@ export function StageMovementsSummaryTable({
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   <p className="text-xs">
-                    Soma vertical da coluna Acumulado. Como um lead que avança
-                    aparece em vários estágios (inferência da trilha), esse
-                    número é maior que o de leads únicos — é esperado.
+                    Somar a coluna Acumulado verticalmente não tem
+                    significado: o mesmo lead aparece em vários estágios.
+                    Use <strong>Leads únicos no universo</strong> acima
+                    para o total real. As colunas Passaram e Estão lá podem
+                    ser somadas normalmente.
                   </p>
                 </TooltipContent>
               </Tooltip>
             </span>
           </TableCell>
-          <TableCell className="text-right">{totalAcumulado}</TableCell>
+          <TableCell className="text-right">—</TableCell>
           <TableCell className="text-right">{totalPassagens}</TableCell>
           <TableCell className="text-right">{totalParados}</TableCell>
           <TableCell />
