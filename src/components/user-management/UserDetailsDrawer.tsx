@@ -455,19 +455,15 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Role de sistema</Label>
-                    <Select value={userDetails.role || 'viewer'} onValueChange={handleRoleChange}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {activeRoles.map((r) => (
-                          <SelectItem key={r.role_key} value={r.role_key}>
-                            {r.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label>Cargo primário</Label>
+                    <div className="h-10 px-3 py-2 rounded-md border border-input bg-muted/30 text-sm flex items-center">
+                      <Badge variant="outline" className={cn("text-xs", roleInfo.color)}>
+                        {roleInfo.label}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground ml-2">
+                        (definido pela prioridade dos cargos selecionados abaixo)
+                      </span>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Status de acesso</Label>
