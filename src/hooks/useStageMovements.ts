@@ -88,6 +88,24 @@ const STAGE_ALIASES: Record<string, string> = {
   'no show r2': 'no-show r2',
 };
 
+// Ordem fixa de exibição na tabela (por chave canônica)
+const STAGE_DISPLAY_ORDER: string[] = [
+  'anamnese incompleta',
+  'lead gratuito',
+  'novo lead',
+  'lead instagram',
+  'lead qualificado',
+  'sem interesse',
+  'r1 agendada',
+  'no-show',
+  'r1 realizada',
+  'contrato pago',
+  'r2 agendada',
+  'no-show r2',
+  'r2 realizada',
+  'venda realizada',
+];
+
 const isValidUUID = (s: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
@@ -474,7 +492,14 @@ export function useStageMovements({
           passagens: v.passagens,
           parados: v.parados,
         }))
-        .sort((a, b) => a.stageOrder - b.stageOrder || a.stageName.localeCompare(b.stageName));
+        .sort((a, b) => {
+          const ia = STAGE_DISPLAY_ORDER.indexOf(a.stageNameKey);
+          const ib = STAGE_DISPLAY_ORDER.indexOf(b.stageNameKey);
+          if (ia === -1 && ib === -1) return a.stageName.localeCompare(b.stageName);
+          if (ia === -1) return 1;
+          if (ib === -1) return -1;
+          return ia - ib;
+        });
 
       console.info('[useStageMovements]', {
         activities: acts.length,
