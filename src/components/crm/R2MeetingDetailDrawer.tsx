@@ -310,6 +310,7 @@ export function R2MeetingDetailDrawer({
                               <Pencil className="h-4 w-4" />
                             </Button>
                           )}
+                          {canManage && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -321,6 +322,7 @@ export function R2MeetingDetailDrawer({
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
+                          )}
                         </div>
                       </div>
                     );
@@ -505,8 +507,8 @@ export function R2MeetingDetailDrawer({
             <Save className="h-4 w-4 mr-2" />
             Salvar Informações
           </Button>
-          <div className={cn("grid gap-2", isSdr ? "grid-cols-1" : "grid-cols-2")}>
-            {!isSdr && (
+          <div className={cn("grid gap-2", canManage ? "grid-cols-2" : "grid-cols-1")}>
+            {canManage && (
               <Button 
                 variant="outline" 
                 className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950"
@@ -526,7 +528,7 @@ export function R2MeetingDetailDrawer({
             </Button>
           </div>
           
-          {!isSdr && (
+          {canManage && (
             <Button 
               variant="outline"
               className="w-full text-orange-600 border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950"
@@ -537,7 +539,7 @@ export function R2MeetingDetailDrawer({
             </Button>
           )}
 
-          {!isSdr && (
+          {canCancel && (
             meeting.status === 'canceled' ? (
               <Button 
                 variant="outline"
