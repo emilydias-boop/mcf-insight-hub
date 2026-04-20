@@ -1,43 +1,62 @@
 
 
-## Forçar redeploy da `outbound-webhook-test` e diagnosticar
+## Remover trigger quebrado de webhook de saída em `hubla_transactions`
 
-### Diagnóstico atual
+### Resposta direta à sua pergunta
 
-- `supabase/config.toml` já tem `verify_jwt = false` para `outbound-webhook-test` ✅
-- Curl direto da função pelo backend retorna `404 "config not found"` (= função executa, JWT desativado funciona) ✅
-- **Mas `supabase--edge_function_logs outbound-webhook-test` retorna "No logs found"** — significa que a função existe deployada mas o tráfego do navegador não chega até ela
-- Frontend mostra "Failed to send a request to the Edge Function" — erro do `supabase.functions.invoke()` no client
+**Não, o trigger não é necessário.** Ele só serve para enfileirar eventos no `outbound_webhook_queue` (a fila que o `outbound-webhook-dispatcher` lê para reenviar vendas para o webhook.site / sistemas externos). A entrada de vendas pela fonte primária (Hubla / Make A010 / Kiwify / MCFPay / Asaas / Manual) **não depende dele**.
 
-### Hipóteses prováveis
+Hoje ele está **causando o problema oposto do que deveria**: como está quebrado (`function enqueue_outbound_sale_webhook(uuid, unknown) does not exist`), ele aborta o `INSERT` em `hubla_transactions` inteiro. Foi exatamente isso que derrubou o lead `JOAO VITOR FELISBINO MARTINIANO` — o Make tentou inserir, o trigger explodiu, o insert foi revertido, lead nunca entrou.
 
-1. **Deploy da função não absorveu a mudança do config.toml** — alteração de `verify_jwt` exige redeploy explícito da função
-2. **Lockfile/esm.sh drift** — a função importa `https://esm.sh/@supabase/supabase-js@2.45.0`; se o boot falhar, o gateway responde com erro de rede para o client (sem gerar logs da função)
-3. **Cache do navegador do usuário** — possível mas menos provável
+### Confirmação técnica
 
-### Ações (em ordem)
+- Trigger ativo: `trg_outbound_sale_webhook AFTER INSERT OR UPDATE` em `hubla_transactions`
+- Função usada pelo trigger: `outbound_sale_webhook_trigger()` (migration `20260420133826`)
+- Essa função chama `enqueue_outbound_sale_webhook(NEW.id, 'sale.created')` — versão com 2 parâmetros que **não existe** no banco
+- A versão que existe é `enqueue_outbound_sale_webhook()` sem parâmetros (migration `20260420131948`), que era a trigger function original
+- Resultado: qualquer insert em `hubla_transactions` chama o trigger novo, que tenta usar a função inexistente, e o Postgres aborta tudo
+- Lead `JOAO VITOR FELISBINO MARTINIANO` / `anisk1216@gmail.com` confirmado **ausente** de `hubla_transactions`
 
-1. **Forçar redeploy** das 2 funções: `outbound-webhook-test` e `outbound-webhook-dispatcher`
-   - Usar `supabase--deploy_edge_functions(["outbound-webhook-test", "outbound-webhook-dispatcher"])`
-2. **Trocar import do esm.sh para npm:** na `outbound-webhook-test/index.ts` (mais estável em edge-runtime, recomendado pelos docs Lovable):
-   - De: `import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";`
-   - Para: `import { createClient } from "npm:@supabase/supabase-js@2.45.0";`
-   - Aplicar a mesma troca em `outbound-webhook-dispatcher/index.ts` para consistência
-3. **Redeployar novamente** após a mudança
-4. **Validar** chamando a função diretamente via `supabase--curl_edge_functions` com o `config_id` real do webhook `Vendas Reais — Debug webhook.site` — confirmar HTTP 200 + logs aparecendo
-5. **Pedir ao usuário** para fazer hard-refresh (Ctrl+Shift+R) na aba `/admin/automacoes` e clicar **Testar**
+### Correção (mínima e segura)
 
-### Resultado esperado
+Migration única que:
 
-- Após redeploy: `supabase--edge_function_logs outbound-webhook-test` passa a mostrar logs
-- Botão **Testar** retorna toast verde com `HTTP 200 em XXXms`
-- Payload de exemplo aparece ao vivo no webhook.site
-- Linha em **Logs** com `event: test.ping`, status 200
+1. **Remove** o trigger quebrado:
+   ```sql
+   DROP TRIGGER IF EXISTS trg_outbound_sale_webhook ON public.hubla_transactions;
+   DROP FUNCTION IF EXISTS public.outbound_sale_webhook_trigger();
+   ```
+2. **Recria** o trigger usando a função correta original (sem parâmetros), que já contém toda a lógica de filtragem por `events`, `sources` e `product_categories` e enfileira em `outbound_webhook_queue`:
+   ```sql
+   CREATE TRIGGER trg_outbound_sale_webhook
+   AFTER INSERT OR UPDATE ON public.hubla_transactions
+   FOR EACH ROW
+   EXECUTE FUNCTION public.enqueue_outbound_sale_webhook();
+   ```
+
+Isso restaura o comportamento que existia antes da migration `20260420133826` ter quebrado a chamada — o trigger volta a funcionar **sem abortar inserts** e os webhooks de saída voltam a ser enfileirados corretamente para o webhook.site.
+
+### Por que não simplesmente apagar o trigger?
+
+Você poderia. Mas se apagar:
+- ❌ O webhook.site para de receber as vendas em tempo real (perde o objetivo do debug que você acabou de configurar)
+- ❌ Qualquer integração externa futura via "Webhooks Saída" deixa de funcionar
+- ✅ Por outro lado, os inserts voltam a passar (que é o que importa agora)
+
+Recriar o trigger com a função certa resolve **as duas coisas** ao mesmo tempo, com o mesmo trabalho.
+
+### Validação após a correção
+
+1. Reenviar pelo Make o payload do `JOAO VITOR FELISBINO MARTINIANO` (ou esperar próximo lead A010)
+2. Confirmar linha em `hubla_transactions` com `customer_email = anisk1216@gmail.com`
+3. Confirmar contato/deal criado no `PIPELINE INSIDE SALES`
+4. Confirmar item em `outbound_webhook_queue` com `event = sale.created`
+5. Confirmar POST chegando no webhook.site em até 30s (próxima execução do dispatcher)
 
 ### Escopo
 
-- 2 arquivos alterados: `supabase/functions/outbound-webhook-test/index.ts` e `supabase/functions/outbound-webhook-dispatcher/index.ts` (1 linha de import cada)
-- 2 deploys de edge function
-- Zero alteração de schema/dados
-- Zero alteração de UI/frontend
+- 1 migration nova (drop + create trigger)
+- Zero alteração de código (frontend ou edge function)
+- Zero alteração de schema
+- Zero impacto em outras tabelas
 
