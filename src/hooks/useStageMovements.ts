@@ -137,6 +137,7 @@ export function useStageMovements({
     queryFn: async (): Promise<{
       summary: StageMovementsSummaryRow[];
       rows: StageMovementRow[];
+      totalUniqueLeads: number;
     }> => {
       // 1) Atividades stage_change no período
       const { data: activities, error: actErr } = await supabase
