@@ -122,7 +122,7 @@ export function useBUFunnelComplete({
         data_source: string | null;
       };
 
-      const dealCols = 'id, name, tags, origin_id, stage_id, created_at, contact_id, lead_channel, data_source';
+      const dealCols = 'id, name, tags, origin_id, stage_id, created_at, contact_id, data_source';
 
       const movChunks = chunk(movementDealIds, 200);
       const movResults = await Promise.all(
