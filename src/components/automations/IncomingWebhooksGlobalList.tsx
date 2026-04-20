@@ -15,7 +15,7 @@ import { ptBR } from 'date-fns/locale';
 interface OriginRow {
   id: string;
   name: string;
-  bu_type: string | null;
+  pipeline_type: string | null;
 }
 
 export function IncomingWebhooksGlobalList() {
@@ -25,7 +25,7 @@ export function IncomingWebhooksGlobalList() {
   const { data: origins } = useQuery({
     queryKey: ['crm-origins-all'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('crm_origins').select('id, name, bu_type');
+      const { data, error } = await supabase.from('crm_origins').select('id, name, pipeline_type');
       if (error) throw error;
       return (data || []) as OriginRow[];
     },
@@ -63,7 +63,7 @@ export function IncomingWebhooksGlobalList() {
     const buckets = new Map<string, any[]>();
     filtered.forEach((ep: any) => {
       const o = originMap.get(ep.origin_id);
-      const key = o ? `${o.name}__${o.bu_type ?? '-'}` : 'Sem origem';
+      const key = o ? `${o.name}__${o.pipeline_type ?? '-'}` : 'Sem origem';
       const arr = buckets.get(key) ?? [];
       arr.push(ep);
       buckets.set(key, arr);
