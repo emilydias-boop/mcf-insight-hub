@@ -133,11 +133,19 @@ export function useStageMovements({
       const originIdsFromDeals = [
         ...new Set(filteredDeals.map((d) => d.origin_id).filter((id): id is string => !!id)),
       ];
-      const { data: origins } = await supabase
-        .from('crm_origins')
-        .select('id, name')
-        .in('id', originIdsFromDeals.length > 0 ? originIdsFromDeals : ['00000000-0000-0000-0000-000000000000']);
-      const originMap = new Map((origins || []).map((o) => [o.id, o.name]));
+      const originChunks = originIdsFromDeals.length > 0 ? chunk(originIdsFromDeals, 200) : [];
+      const originsResults = await Promise.all(
+        originChunks.map(async (ids) => {
+          const { data, error } = await supabase
+            .from('crm_origins')
+            .select('id, name')
+            .in('id', ids);
+          if (error) throw error;
+          return data || [];
+        })
+      );
+      const origins = originsResults.flat();
+      const originMap = new Map(origins.map((o) => [o.id, o.name]));
 
       // 4) Buscar todas as stages para resolver nomes/ordem
       const { data: stages } = await supabase
