@@ -7423,6 +7423,175 @@ export type Database = {
           },
         ]
       }
+      outbound_webhook_configs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          error_count: number
+          events: string[]
+          headers: Json
+          id: string
+          is_active: boolean
+          last_error: string | null
+          last_triggered_at: string | null
+          method: string
+          name: string
+          product_categories: string[] | null
+          secret_token: string | null
+          sources: string[]
+          success_count: number
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          error_count?: number
+          events?: string[]
+          headers?: Json
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_triggered_at?: string | null
+          method?: string
+          name: string
+          product_categories?: string[] | null
+          secret_token?: string | null
+          sources?: string[]
+          success_count?: number
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          error_count?: number
+          events?: string[]
+          headers?: Json
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_triggered_at?: string | null
+          method?: string
+          name?: string
+          product_categories?: string[] | null
+          secret_token?: string | null
+          sources?: string[]
+          success_count?: number
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      outbound_webhook_logs: {
+        Row: {
+          config_id: string
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          event: string
+          id: string
+          payload: Json
+          response_body: string | null
+          response_status: number | null
+          success: boolean
+          transaction_id: string | null
+        }
+        Insert: {
+          config_id: string
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          event: string
+          id?: string
+          payload: Json
+          response_body?: string | null
+          response_status?: number | null
+          success?: boolean
+          transaction_id?: string | null
+        }
+        Update: {
+          config_id?: string
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          event?: string
+          id?: string
+          payload?: Json
+          response_body?: string | null
+          response_status?: number | null
+          success?: boolean
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outbound_webhook_logs_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "outbound_webhook_configs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outbound_webhook_queue: {
+        Row: {
+          attempts: number
+          config_id: string
+          created_at: string
+          event: string
+          id: string
+          last_error: string | null
+          next_retry_at: string
+          payload: Json
+          response_body: string | null
+          response_status: number | null
+          sent_at: string | null
+          status: string
+          transaction_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          config_id: string
+          created_at?: string
+          event: string
+          id?: string
+          last_error?: string | null
+          next_retry_at?: string
+          payload: Json
+          response_body?: string | null
+          response_status?: number | null
+          sent_at?: string | null
+          status?: string
+          transaction_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          config_id?: string
+          created_at?: string
+          event?: string
+          id?: string
+          last_error?: string | null
+          next_retry_at?: string
+          payload?: Json
+          response_body?: string | null
+          response_status?: number | null
+          sent_at?: string | null
+          status?: string
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outbound_webhook_queue_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "outbound_webhook_configs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partner_returns: {
         Row: {
           blocked: boolean
@@ -10743,6 +10912,13 @@ export type Database = {
           p_value: number
         }
         Returns: string
+      }
+      build_sale_webhook_payload: {
+        Args: {
+          _event: string
+          _tx: Database["public"]["Tables"]["hubla_transactions"]["Row"]
+        }
+        Returns: Json
       }
       check_duplicate_deal_by_identity: {
         Args: { p_email: string; p_origin_id: string; p_phone_suffix: string }
