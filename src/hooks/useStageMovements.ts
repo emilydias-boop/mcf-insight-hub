@@ -428,8 +428,9 @@ export function useStageMovements({
         });
 
         const e = ensureEntry(key, stage);
-        if (!e.uniqueLeads.has(deal.id)) {
-          e.uniqueLeads.add(deal.id);
+        const contactKey = (deal as any).contact_id ?? deal.id;
+        if (!e.uniqueLeads.has(contactKey)) {
+          e.uniqueLeads.add(contactKey);
         }
         e.passagens += 1;
       });
@@ -466,7 +467,8 @@ export function useStageMovements({
         const key = normalizeStageName(stage.name) || stage.id;
         const e = ensureEntry(key, stage);
         e.parados += 1;
-        e.uniqueLeads.add(deal.id);
+        const contactKey = (deal as any).contact_id ?? deal.id;
+        e.uniqueLeads.add(contactKey);
 
         // Se este deal não teve movimentação para este estágio no período, adicionar linha "snapshot only"
         const movedHere = movedSetByStage.get(key)?.has(deal.id);
@@ -491,6 +493,8 @@ export function useStageMovements({
 
       // 10) Acumulado via histórico completo: uniqueLeads = todos os deals que JÁ passaram por cada estágio
       stagesPassedByDeal.forEach((stagesSet, dealId) => {
+        const deal = filteredDealsMap.get(dealId);
+        const contactKey = (deal as any)?.contact_id ?? dealId;
         stagesSet.forEach((stageKey) => {
           const stageInfo = stageByKey.get(stageKey) ||
             (() => {
@@ -501,7 +505,7 @@ export function useStageMovements({
               return { id: stageKey, name: stageKey, order: 999 };
             })();
           const e = ensureEntry(stageKey, stageInfo);
-          e.uniqueLeads.add(dealId);
+          e.uniqueLeads.add(contactKey);
         });
       });
 
