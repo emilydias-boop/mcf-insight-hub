@@ -474,7 +474,14 @@ export function useStageMovements({
           passagens: v.passagens,
           parados: v.parados,
         }))
-        .sort((a, b) => a.stageOrder - b.stageOrder || a.stageName.localeCompare(b.stageName));
+        .sort((a, b) => {
+          const ia = STAGE_DISPLAY_ORDER.indexOf(a.stageNameKey);
+          const ib = STAGE_DISPLAY_ORDER.indexOf(b.stageNameKey);
+          if (ia === -1 && ib === -1) return a.stageName.localeCompare(b.stageName);
+          if (ia === -1) return 1;
+          if (ib === -1) return -1;
+          return ia - ib;
+        });
 
       console.info('[useStageMovements]', {
         activities: acts.length,
