@@ -1,105 +1,62 @@
 
 
-## Ajuste no plano: janela de Vendas Parceria
+## Diagnóstico do bug
 
-Confirmado o restante do plano. Único ajuste é na janela de **Vendas Parceria**.
+Confirmei na tela "Janela do Carrinho (R2s): **03/04** 12:00 → 17/04 12:00" (14 dias!). Era pra ser **10/04** 12:00 → 17/04 12:00 (7 dias).
 
-### Regra correta de Vendas Parceria
+Causa: em `carrinhoWeekBoundaries.ts` linha 99, `previousFriday = subDays(weekStart, 6)`. Para a safra Qui 09/04, isso dá Sex 03/04 (sexta da semana retrasada), não Sex 10/04 (sexta DA safra = corte do carrinho anterior real).
 
-- **Início**: Sex no corte (12:00) — logo após o fechamento do carrinho
-- **Fim**: Segunda 23:59 — para captar boletos que caem com atraso
+A regra que você descreveu:
+- Safra Qui 09/04 → Qua 15/04
+- Carrinho **abre** Sex **10/04** 12:00 (corte da safra anterior, que era Qui 02 → Qua 08)
+- Carrinho **fecha** Sex **17/04** 12:00 (corte desta safra)
 
-Para a safra Qui 09/04 → Qua 15/04 (carrinho Sex 17/04 12:00):
-- Vendas Parceria: **Sex 17/04 12:00 → Seg 20/04 23:59**
+Hoje o código está pegando a sexta da safra retrasada (03/04) como abertura → janela de 14 dias → todas as 85 R2s passam → KPIs e lista não são filtrados.
 
-### Mudança em `src/lib/carrinhoWeekBoundaries.ts`
+## Correção (1 arquivo, 1 linha)
+
+### `src/lib/carrinhoWeekBoundaries.ts`
+
+Trocar a janela `carrinhoOperacional` para usar **a sexta DA safra atual** como início (não a sexta da semana anterior):
 
 ```text
-// ANTES (errado):
-vendasParceria: { start: thuStart, end: currentFridayCutoff - 1ms }
-// = Qui 09/04 00:00 → Sex 10/04 11:59 ❌
-
-// DEPOIS (correto):
-const monday = addDays(currentFriday, 3)  // Sex+3 = Segunda
-const mondayEnd = endOfDay(monday)         // Seg 23:59:59.999
-vendasParceria: { start: currentFridayCutoff, end: mondayEnd }
-// = Sex 17/04 12:00 → Seg 20/04 23:59 ✅
-```
-
-⚠️ Nota: como `currentFridayCutoff` agora aponta pra Sex DA safra (10/04) e o corte real do carrinho desta safra é na sexta seguinte (17/04 = `nextFridayCutoff`), a janela de Vendas Parceria precisa usar `nextFridayCutoff` como início, não `currentFridayCutoff`.
-
-Versão final:
-```text
-const nextMonday = addDays(nextFriday, 3)  // Sex+1 + 3 = Seg da semana seguinte
-vendasParceria: { 
-  start: nextFridayCutoff,                  // Sex 17/04 12:00 (corte deste carrinho)
-  end: localEndOfDay(nextMonday)            // Seg 20/04 23:59
-}
-```
-
-## Plano consolidado (4 mudanças cirúrgicas)
-
-### 1. `src/lib/carrinhoWeekBoundaries.ts` — duas correções
-
-**A) Vendas Parceria** (esta nova):
-```text
-vendasParceria: { 
-  start: nextFridayCutoff,           // Sex 17/04 12:00
-  end: localEndOfDay(nextMonday)     // Seg 20/04 23:59
-}
-```
-
-**B) Adicionar nova janela `carrinhoOperacional`** (do plano anterior):
-```text
+// ANTES (errado — janela de 14 dias):
 carrinhoOperacional: { 
-  start: previousFridayCutoff,   // Sex 10/04 12:00 (corte do carrinho anterior)
-  end: nextFridayCutoff          // Sex 17/04 12:00 (corte deste carrinho)
+  start: previousFridayCutoff,   // Sex 03/04 12:00 ❌
+  end: nextFridayCutoff          // Sex 17/04 12:00
+}
+
+// DEPOIS (correto — janela de 7 dias):
+carrinhoOperacional: { 
+  start: currentFridayCutoff,    // Sex 10/04 12:00 ✅
+  end: nextFridayCutoff          // Sex 17/04 12:00 ✅
 }
 ```
 
-Manter intactos: `r2Meetings`, `aprovados`, `contratos`, `r1Meetings`, `previousCutoff`.
+`currentFridayCutoff` já existe no arquivo (linha 106) — é a Sexta da MESMA semana da safra (Qui+1).
 
-### 2. `src/hooks/useR2CarrinhoData.ts` — filtro operacional para R2s
+Não mexer em mais nada. Os hooks (`useR2CarrinhoData`, `useR2CarrinhoKPIs`, `useR2ForaDoCarrinhoData`) já consomem `carrinhoOperacional` corretamente — só estão recebendo a janela errada.
 
-Aplicar `carrinhoOperacional` (com bypass para encaixados) apenas em `agendadas`, `realizadas`, `no_show`. Não tocar em `aprovados`/`aprovados_proxima_safra`.
+## Resultado esperado após o ajuste
 
-### 3. `src/hooks/useR2CarrinhoKPIs.ts` — mesma filtragem
+| Item | Antes | Depois |
+|---|---|---|
+| Header "Janela do Carrinho (R2s)" | 03/04 12:00 → 17/04 12:00 ❌ | **10/04 12:00 → 17/04 12:00** ✅ |
+| KPI "R2 Agendadas" | 85 | ~65 |
+| KPI "R2 Realizadas" | 73 | ~57 |
+| KPI "Fora do Carrinho" | 14 | recalculado na janela certa |
+| Aba "Todas R2s" (contagem) | 85 | ~65 (some os leads do dia 09/04 que pertenciam ao carrinho anterior) |
+| KPI "Aprovados" | 49 | 49 (intacto — usa janela ampla) |
+| KPI "Próxima Safra" | 10 | 10 (intacto) |
+| KPI "Contratos (R1)" | 64 | 64 (intacto) |
+| Aba Vendas Parceria | OK | OK (já usa `nextFridayCutoff → nextMonday`) |
 
-Aplicar `carrinhoOperacional` em `r2Agendadas`, `r2Realizadas`, `foraDoCarrinho`. Manter intactos: `aprovados`, `aprovadosForaCorte`, `contratosPagos`, `pendentes`, `emAnalise`.
+## Por que o problema não era de front (cache)
 
-### 4. `src/hooks/useR2ForaDoCarrinhoData.ts` — mesma filtragem
-
-Aplicar `carrinhoOperacional` para evitar mostrar leads "fora" da semana passada.
-
-### 5. `src/hooks/useR2CarrinhoVendas.ts` (se existir consumo da janela vendas) — receber nova janela
-
-Confirmar que a aba de Vendas usa `vendasParceria` da nova janela (Sex corte → Seg 23:59).
-
-### 6. UI — atualizar header em `R2Carrinho.tsx`
-
-Mostrar três janelas para clareza:
-```
-Janela do Carrinho (R2s):  10/04 12:00 → 17/04 12:00
-Janela de Vendas Parceria: 17/04 12:00 → 20/04 23:59
-Safra (contratos):         09/04 00:00 → 15/04 23:59
-```
-
-## Resultado esperado
-
-| Métrica | Janela | Antes | Depois |
-|---|---|---|---|
-| Contratos (R1) | Qui→Qua | 64 | 64 |
-| R2 Agendadas | Sex→Sex 12h | 85 | ~65 |
-| R2 Realizadas | Sex→Sex 12h | 73 | ~57 |
-| Fora do Carrinho | Sex→Sex 12h | 14 | recalculado |
-| **Aprovados** | Qui→Sex+1 12h | 49 | 49 ✅ |
-| Próxima Safra | Qui→Sex+1 12h | 10 | 10 |
-| **Vendas Parceria** | **Sex+1 12h→Seg 23:59** | (errado) | janela correta de boletos atrasados |
+O front estava chamando o hook certo, mas o hook estava recebendo uma janela operacional de 14 dias em vez de 7. Como a RPC já retorna 85 R2s da janela ampla (Qui→Sex+1), o filtro extra `inOperationalWindow` não conseguia descartar nada porque sua janela cobria os mesmos 14 dias. Não é cache — é cálculo de boundary.
 
 ## Escopo
 
-- 5 arquivos editados, ~40 linhas
-- Zero mudança na RPC
-- Zero impacto no Relatório
-- Aprovados/Próxima Safra ficam intocados (continua batendo com sua lista)
+- 1 arquivo, 1 linha trocada (`previousFridayCutoff` → `currentFridayCutoff` na propriedade `carrinhoOperacional.start`)
+- Zero impacto em RPC, Aprovados, Próxima Safra, Vendas Parceria ou Relatório
 
