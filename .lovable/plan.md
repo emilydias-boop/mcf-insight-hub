@@ -1,60 +1,43 @@
 
 
-## Fix: "Nenhuma movimentação encontrada" no dashboard de Movimentações
+## Aumentar limite de movimentações para 10.000 (sem impacto colateral)
 
-### Causa raiz
-
-O hook `useStageMovements` busca até 5000 atividades de `stage_change` no período e depois faz **uma única** chamada `crm_deals.select().in('id', [...5000 ids])`. A URL resultante passa de 4000 caracteres e o PostgREST devolve **HTTP 400 Bad Request**. Resultado: `deals = []`, `dealMap` vazio, tela vazia.
-
-Mesmo problema atinge `crm_origins.in('id', ...)` quando há muitas origens distintas.
-
-### Correção
-
-Paginar as queries `IN(...)` em lotes de 200 IDs (padrão já usado em `useDealActivitySummary.ts`), juntar os resultados em memória. Mantém o teto de 5000 atividades + adiciona log de diagnóstico no console pra você validar os números.
-
-### Mudanças
+### Mudança
 
 **Arquivo único:** `src/hooks/useStageMovements.ts`
 
-1. Helper interno `chunk<T>(arr: T[], size = 200): T[][]`
-2. Substituir a query única de `crm_deals` por `Promise.all` sobre chunks:
+1. Trocar `.limit(5000)` por `.limit(10000)` na query de `deal_activities`.
+2. Adicionar warning no console quando o retorno bater no teto, sinalizando dados potencialmente cortados:
    ```ts
-   const dealChunks = chunk(dealIds, 200);
-   const dealsResults = await Promise.all(
-     dealChunks.map(async (ids) => {
-       let q = supabase.from('crm_deals')
-         .select('id, name, tags, origin_id')
-         .in('id', ids);
-       if (originIds && originIds.length > 0) q = q.in('origin_id', originIds);
-       const { data, error } = await q;
-       if (error) throw error;
-       return data || [];
-     })
-   );
-   const deals = dealsResults.flat();
+   if (activities.length === 10000) {
+     console.warn('[useStageMovements] Limite de 10.000 atingido — encurte o período ou filtre por pipeline para ver tudo.');
+   }
    ```
-3. Mesmo tratamento em `crm_origins.in('id', originIdsFromDeals)` (chunks de 200).
-4. Manter `.limit(5000)` em `deal_activities`. Adicionar `console.info('[useStageMovements]', { activities, dealsAfterFilter, rows })` para validação.
+3. Manter o `console.info` de diagnóstico já existente.
 
-### Garantias sobre o resultado
+### Garantias de isolamento
 
-- **Não muda contagens**: mesma lógica de agregação, mesmos filtros (período, pipeline, tag atual).
-- **Não duplica linhas**: cada chunk traz IDs disjuntos; `flat()` apenas concatena.
-- **Não inflaciona "leads únicos"**: `Set<deal.id>` deduplica por natureza.
-- **Limitação de tag** documentada no plano original permanece (tag atual, não histórica).
+- **Hook usado em 1 lugar só**: página `/crm/movimentacoes`. Verificado por busca no codebase.
+- **Zero migration**, zero RLS, zero schema change.
+- **Zero impacto** em KPIs, Fechamento, Carrinho R2, Agenda, atribuição de SDR, payouts ou qualquer outro cálculo — esses sistemas usam tabelas e queries totalmente separadas.
+- **Zero efeito em performance de outras telas** — a query só roda quando o usuário abre `/crm/movimentacoes`.
+- **Mesma agregação, mesmos filtros, mesma UI** — só sobe o teto de leitura.
+
+### Limites conhecidos (aceitos)
+
+- Pipelines de altíssimo volume (Consórcio) ainda podem cortar dados acima de ~60 dias.
+- Visão "todas as pipelines" pode cortar acima de ~30 dias.
+- Quando isso ocorrer, console exibe warning explícito.
 
 ### Validação
 
-1. Abrir `/crm/movimentacoes` com range padrão (últimos 30 dias)
-2. Network: várias chamadas `crm_deals?id=in.(...)` retornando **200** em vez de uma única **400**
-3. Console mostra `[useStageMovements] { activities: N, dealsAfterFilter: M, rows: K }`
-4. Tabela "Resumo por estágio" populada; detalhe lista os leads
-5. Filtrar por pipeline e por tag → contagens reagem
-6. Clicar num estágio do resumo → detalhe filtra
-7. Range curto (1 dia) e range longo (30 dias) ambos funcionam
+1. `/crm/movimentacoes`, Inside Sales, últimos 90 dias → todas as stages aparecem
+2. Console mostra `[useStageMovements] { activities: ~7000, dealsAfterFilter: ..., rows: ... }` sem warning
+3. Outras telas (KPIs, Fechamento, Carrinho) continuam funcionando idênticas
+4. Performance percebida: ~1.5-2s no carregamento da página de Movimentações
 
 ### Escopo
 
-- 1 arquivo editado, zero migrations, zero RLS, zero mudança de UI
-- Reaproveita o padrão já existente em `useDealActivitySummary.ts`
+- 1 arquivo editado, ~3 linhas alteradas
+- Zero dependências, zero migrations, zero mudanças de UI
 
