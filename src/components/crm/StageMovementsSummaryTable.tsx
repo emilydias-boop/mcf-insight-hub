@@ -67,8 +67,10 @@ export function StageMovementsSummaryTable({
                     Leads únicos que passaram por este estágio <strong>dentro
                     do período selecionado</strong> (inclui inferência da
                     trilha do funil — leads em estágios avançados são
-                    contados nos anteriores). Trocar o período altera este
-                    número.
+                    contados nos anteriores). Como cada lead passa por
+                    vários estágios, a <strong>soma vertical desta coluna é
+                    maior que o total de leads únicos</strong> — isso é
+                    esperado.
                   </p>
                 </TooltipContent>
               </Tooltip>
