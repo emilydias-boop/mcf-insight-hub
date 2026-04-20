@@ -288,13 +288,19 @@ export function useStageMovements({
         'anamnese incompleta',
         'novo lead',
         'lead qualificado',
-        'reuniao 01 agendada',
-        'reuniao 01 realizada',
-        'reuniao 02 agendada',
-        'reuniao 02 realizada',
+        'r1 agendada',
+        'r1 realizada',
+        'r2 agendada',
+        'r2 realizada',
         'contrato pago',
         'venda realizada',
       ];
+
+      // Estágios laterais que implicam ter atingido um pré-requisito da trilha
+      const LATERAL_PREREQ: Record<string, string> = {
+        'no-show': 'r1 agendada',
+        'no-show r2': 'r2 agendada',
+      };
 
       stagesPassedByDeal.forEach((stagesSet) => {
         let maxTrailIndex = -1;
@@ -307,6 +313,15 @@ export function useStageMovements({
             stagesSet.add(MAIN_TRAIL[i]);
           }
         }
+        // Inferência de pré-requisito de estágios laterais
+        const snapshotKeys = Array.from(stagesSet);
+        snapshotKeys.forEach((k) => {
+          const prereq = LATERAL_PREREQ[k];
+          if (prereq) {
+            const idx = MAIN_TRAIL.indexOf(prereq);
+            for (let i = 0; i <= idx; i++) stagesSet.add(MAIN_TRAIL[i]);
+          }
+        });
       });
 
       // 6) Origens
