@@ -1,111 +1,60 @@
 
 
-## Dashboard "Movimentações por Estágio" — Painel Comercial
+## Fix: "Nenhuma movimentação encontrada" no dashboard de Movimentações
 
-### O que vamos entregar
+### Causa raiz
 
-Nova página dedicada no Painel Comercial em `/crm/movimentacoes` que responde:
+O hook `useStageMovements` busca até 5000 atividades de `stage_change` no período e depois faz **uma única** chamada `crm_deals.select().in('id', [...5000 ids])`. A URL resultante passa de 4000 caracteres e o PostgREST devolve **HTTP 400 Bad Request**. Resultado: `deals = []`, `dealMap` vazio, tela vazia.
 
-> *"Quais leads passaram por cada estágio entre as datas X e Y, filtrando por pipeline e tags?"*
+Mesmo problema atinge `crm_origins.in('id', ...)` quando há muitas origens distintas.
 
-Lê a tabela `deal_activities` (`activity_type='stage_change'`) — fonte de verdade do histórico — e **não** depende de `created_at`/`stage_moved_at` do deal.
+### Correção
 
-### UI
+Paginar as queries `IN(...)` em lotes de 200 IDs (padrão já usado em `useDealActivitySummary.ts`), juntar os resultados em memória. Mantém o teto de 5000 atividades + adiciona log de diagnóstico no console pra você validar os números.
 
-```
-┌─ Movimentações por Estágio ────────────────────────────────────┐
-│                                                                 │
-│ [📅 01/04/26 → 15/04/26]  [Pipeline ▾]  [🏷️ Tags ▾(2)]  [Limpar]│
-│                                                                 │
-│ ┌──────────────────────────────────────────────────────────┐   │
-│ │ Resumo por estágio                                        │   │
-│ │ ─────────────────────────────────────────────────────────│   │
-│ │ R1 Agendada     │ 42 leads únicos │ 51 passagens │ ▶    │   │
-│ │ R1 Realizada    │ 28 leads únicos │ 30 passagens │ ▶    │   │
-│ │ No-Show         │  9 leads únicos │  9 passagens │ ▶    │   │
-│ │ Contrato Pago   │  6 leads únicos │  6 passagens │ ▶    │   │
-│ └──────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│ ┌─ Detalhe (clique num estágio acima pra filtrar) ─────────┐  │
-│ │ Lead          │ Pipeline │ Estágio passado │ Quando      │  │
-│ │ João Silva    │ Alpha    │ R1 Realizada    │ 03/04 14:22 │  │
-│ │ João Silva    │ Alpha    │ Contrato Pago   │ 08/04 09:10 │  │
-│ │ Maria Souza   │ Beta     │ R1 Agendada     │ 04/04 11:00 │  │
-│ │ ...                                                        │  │
-│ └─────────────────────────────────────────────────────────────│  │
-└─────────────────────────────────────────────────────────────────┘
-```
+### Mudanças
 
-**Filtros (todos opcionais e independentes):**
-- **Período**: range com calendário (DateRange, `numberOfMonths={2}`, ptBR) — padrão últimos 30 dias
-- **Pipeline**: select com origens da BU ativa (reusa `useBUOriginIds`)
-- **Tags**: `TagFilterPopover` (já existe) com modo AND/OR e regras "possui/não possui" — usa **tag atual** do lead (limitação documentada no tooltip)
+**Arquivo único:** `src/hooks/useStageMovements.ts`
 
-**Tabela resumo (topo):**
-- Linha por estágio do pipeline, ordenada conforme `crm_stages.stage_order`
-- 3 colunas: Estágio | **Leads únicos** | **Passagens** (mostra os dois lado a lado conforme você pediu)
-- Clique numa linha filtra a tabela detalhe abaixo
+1. Helper interno `chunk<T>(arr: T[], size = 200): T[][]`
+2. Substituir a query única de `crm_deals` por `Promise.all` sobre chunks:
+   ```ts
+   const dealChunks = chunk(dealIds, 200);
+   const dealsResults = await Promise.all(
+     dealChunks.map(async (ids) => {
+       let q = supabase.from('crm_deals')
+         .select('id, name, tags, origin_id')
+         .in('id', ids);
+       if (originIds && originIds.length > 0) q = q.in('origin_id', originIds);
+       const { data, error } = await q;
+       if (error) throw error;
+       return data || [];
+     })
+   );
+   const deals = dealsResults.flat();
+   ```
+3. Mesmo tratamento em `crm_origins.in('id', originIdsFromDeals)` (chunks de 200).
+4. Manter `.limit(5000)` em `deal_activities`. Adicionar `console.info('[useStageMovements]', { activities, dealsAfterFilter, rows })` para validação.
 
-**Tabela detalhe (baixo):**
-- Uma linha por **passagem** (`deal_activities` row): nome do lead, pipeline, estágio destino, timestamp
-- Clique no nome → abre `LeadDetailDrawer` existente
-- Paginada (50 por página); export CSV
+### Garantias sobre o resultado
 
-### Lógica de dados
-
-```ts
-// Hook novo: src/hooks/useStageMovements.ts
-useStageMovements({ originIds, startDate, endDate, tagFilters, tagOperator })
-
-// Pseudocódigo:
-1. SELECT * FROM deal_activities 
-     WHERE activity_type = 'stage_change'
-       AND created_at BETWEEN start AND end
-       AND deal_id IN (deals da pipeline filtrada)
-2. SELECT id, name, tags FROM crm_deals WHERE id IN (...) → aplica filtro de tags em memória
-3. JOIN com crm_stages para nome+ordem do to_stage
-4. Agrega:
-   - byStage[stage] = { unique: Set<deal_id>, passes: count }
-   - rows = [{ deal, stage, when }]
-```
-
-Reusa exatamente o padrão de `useClintFunnel`/`useClintFunnelByLeadType` (já fazem isso pra canal/lead-type).
-
-### Por que dashboard separado e não dentro do CRM
-
-- **CRM `/crm/negocios`** mostra **estado atual** dos leads (kanban, lista). Misturar histórico ali confunde.
-- **Painel Comercial** já agrega métricas históricas (Reuniões Equipe, Funil) — é o lugar natural.
-- Permite cruzar com outros relatórios da mesma seção sem poluir o operacional do SDR.
-
-### Permissões
-
-Rota: `/crm/movimentacoes` — acesso para `admin`, `manager`, `coordenador` (mesmo padrão de `reunioes-equipe`).
-
-### Arquivos
-
-| Arquivo | Mudança |
-|---|---|
-| `src/pages/crm/MovimentacoesEstagio.tsx` | **NOVO** — página com filtros + 2 tabelas |
-| `src/hooks/useStageMovements.ts` | **NOVO** — query agregada de `deal_activities` |
-| `src/components/crm/StageMovementsSummaryTable.tsx` | **NOVO** — tabela resumo clicável |
-| `src/components/crm/StageMovementsDetailTable.tsx` | **NOVO** — tabela detalhe paginada + export CSV |
-| `src/App.tsx` | + `<Route path="crm/movimentacoes" ...>` com `RoleGuard` |
-| `src/components/layout/AppSidebar.tsx` | + item "Movimentações" sob "Painel Comercial" |
+- **Não muda contagens**: mesma lógica de agregação, mesmos filtros (período, pipeline, tag atual).
+- **Não duplica linhas**: cada chunk traz IDs disjuntos; `flat()` apenas concatena.
+- **Não inflaciona "leads únicos"**: `Set<deal.id>` deduplica por natureza.
+- **Limitação de tag** documentada no plano original permanece (tag atual, não histórica).
 
 ### Validação
 
-1. Abrir `/crm/movimentacoes` → range padrão últimos 30 dias, todas pipelines, sem tags → ver resumo populado
-2. Selecionar pipeline Alpha + range 01/04–15/04 → contagens batem com export do CRM no período
-3. Adicionar tag "VIP" → leads únicos cai, passagens cai proporcionalmente
-4. Clicar em "R1 Realizada" no resumo → tabela detalhe filtra
-5. Lead que foi pra R1 Realizada 2x: aparece **1x em "leads únicos"** e **2x em "passagens"** + 2 linhas na tabela detalhe
-6. Export CSV traz todas as passagens filtradas
-7. Tag adicionada hoje: lead aparece mesmo se a movimentação foi semana passada (limitação documentada com ⓘ)
+1. Abrir `/crm/movimentacoes` com range padrão (últimos 30 dias)
+2. Network: várias chamadas `crm_deals?id=in.(...)` retornando **200** em vez de uma única **400**
+3. Console mostra `[useStageMovements] { activities: N, dealsAfterFilter: M, rows: K }`
+4. Tabela "Resumo por estágio" populada; detalhe lista os leads
+5. Filtrar por pipeline e por tag → contagens reagem
+6. Clicar num estágio do resumo → detalhe filtra
+7. Range curto (1 dia) e range longo (30 dias) ambos funcionam
 
 ### Escopo
 
-- 4 arquivos novos, 2 editados
-- Zero migrations, zero RLS (já existem em `deal_activities`)
-- Reusa: `TagFilterPopover`, `Calendar/Popover`, `useBUOriginIds`, `LeadDetailDrawer`, padrão de `useClintFunnel`
-- Custo de query: 1 SELECT em `deal_activities` no range + 1 IN nos deal_ids encontrados (igual ao funil atual)
+- 1 arquivo editado, zero migrations, zero RLS, zero mudança de UI
+- Reaproveita o padrão já existente em `useDealActivitySummary.ts`
 
