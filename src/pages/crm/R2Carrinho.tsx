@@ -168,6 +168,7 @@ export default function R2Carrinho() {
     { label: 'R2 Realizadas', value: displayKpis?.r2Realizadas ?? 0, color: 'bg-green-500' },
     { label: 'Fora do Carrinho', value: displayKpis?.foraDoCarrinho ?? 0, color: 'bg-red-500' },
     { label: 'Aprovados', value: displayKpis?.aprovados ?? 0, color: 'bg-emerald-500' },
+    { label: 'Aprovados (fora do corte)', value: displayKpis?.aprovadosForaCorte ?? 0, color: 'bg-amber-500' },
   ];
 
   const selectedCarrinhoLabel = selectedCarrinhoId 

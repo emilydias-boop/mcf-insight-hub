@@ -93,8 +93,9 @@ export function getCarrinhoMetricBoundaries(
   const currentFriday = addDays(new Date(weekStart), 1);
   // Próxima sexta = uma semana depois
   const nextFriday = addDays(currentFriday, 7);
-  // Sexta da semana ANTERIOR = -6 dias da quinta = Qui - 6
-  const previousFriday = subDays(new Date(weekStart), 6);
+  // Sexta da PRÓPRIA safra (Qui + 1) — janela operacional começa no corte desta sexta
+  // (antes disso, o lead pertence à safra anterior)
+  const previousFriday = addDays(new Date(weekStart), 1);
 
   // Horário de corte da sexta atual (default 12:00)
   const horarioCorte = config?.carrinhos?.[0]?.horario_corte || '12:00';
