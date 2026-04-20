@@ -241,3 +241,9 @@ verify_jwt = false
 
 [functions.weekly-bu-report]
 verify_jwt = false
+
+[functions.outbound-webhook-test]
+verify_jwt = false
+
+[functions.outbound-webhook-dispatcher]
+verify_jwt = false
