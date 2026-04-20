@@ -1,45 +1,51 @@
 
 
-## Substituir o "Funil Real do Período" pelo `BUFunnelComplete`
+## Restringir o canal ANAMNESE apenas a leads com tag exata "ANAMNESE" via webhook
 
-### O que está acontecendo
+### O que muda
 
-A tela `/crm` (Visão Geral) ainda renderiza o componente antigo `FlowFunnelBlock` — aquele "Funil Real do Período" com as barras horizontais (Entraram 21, Trabalhados 19, Qualificados 0, R1 Agendadas 47…).
+Hoje o classificador `classifyChannel` marca como ANAMNESE qualquer deal cuja tag/origem/lead_channel **contenha** a substring "ANAMNESE" (inclusive "ANAMNESE-INSTA", "Anamnese Incompleta", origem com nome contendo "anamnese", etc.). Você quer que, no funil, o canal ANAMNESE conte **apenas** leads que:
 
-O componente novo (`BUFunnelComplete`) com canais, A010/ANAMNESE, drill-down e tudo mais foi colocado **somente** em `/crm/movimentacoes`. Por isso, ao olhar a Visão Geral, você não vê nenhuma mudança.
+1. Vieram via webhook (`crm_deals.data_source = 'webhook'`), e
+2. Possuem a tag **exatamente igual a `"ANAMNESE"`** (case-insensitive, sem prefixo/sufixo, sem "INSTA", sem "Incompleta").
 
-### Mudança
+### Onde aplicar
 
-**Arquivo único: `src/components/crm/FunilDashboard.tsx`**
+Apenas no `useBUFunnelComplete` (não mexer no `classifyChannel` global, que é usado em outros relatórios e tem semântica mais permissiva). Adicionar uma função local `classifyChannelStrict(deal)` que:
 
-1. Remover import de `FlowFunnelBlock`.
-2. Adicionar import de `BUFunnelComplete`.
-3. Substituir a linha 96:
+- Retorna `'ANAMNESE'` **somente se** `data_source === 'webhook'` E existe alguma tag cujo valor normalizado (`trim().toUpperCase()`, e se for JSON `{name}` extrair o name) seja **exatamente** `"ANAMNESE"`.
+- Retorna `'ANAMNESE-INSTA'` se houver tag exata `"ANAMNESE-INSTA"` (mantendo separação clara).
+- Para os demais canais (A010, LIVE, etc.), continua delegando ao `classifyChannel` atual.
+- Leads que hoje caíam em ANAMNESE por matching frouxo (ex.: tag "Anamnese Incompleta", origem "ANAMNESE / INDICAÇÃO" sem a tag exata) deixam de ser ANAMNESE — vão para o canal que o classificador genérico devolver, ou para `OUTRO` se nenhum critério bater.
+
+### Mudanças
+
+**Arquivo único: `src/hooks/useBUFunnelComplete.ts`** (~+25 linhas)
+
+1. Adicionar helper local:
+   ```ts
+   function classifyChannelStrict(deal): string {
+     const tagsNorm = (deal.tags || []).map(normalizeTag); // extrai .name de JSON, trim, upper
+     if (deal.data_source === 'webhook' && tagsNorm.includes('ANAMNESE')) return 'ANAMNESE';
+     if (tagsNorm.includes('ANAMNESE-INSTA')) return 'ANAMNESE-INSTA';
+     return classifyChannel({...}); // fallback para os demais canais
+   }
    ```
-   <FlowFunnelBlock data={data?.funnel} isLoading={isLoading} />
-   ```
-   por:
-   ```
-   <BUFunnelComplete
-     startDate={periodStart}
-     endDate={periodEnd}
-     originIds={originIds}
-     periodLabel={periodLabel}
-   />
-   ```
+2. Substituir a chamada atual de `classifyChannel` por `classifyChannelStrict` no ponto onde os deals do universo são classificados.
+3. Garantir que a query de `crm_deals` já traz `data_source` e `tags` (verificar select).
 
-**Limpeza (opcional, mesmo arquivo/2 outros):**
-- Apagar `src/components/crm/overview/FlowFunnelBlock.tsx` (não será mais usado).
-- Remover bloco `funnel` de `useCRMOverviewData.ts` (queries que ficam órfãs).
+### Impacto esperado
 
-### Resultado
-
-A `/crm` (Visão Geral) passa a mostrar o mesmo funil completo da `/crm/movimentacoes`: Universo → Qualificados → Sem Interesse → R1 → R2 → Vendas Finais, com tabs por canal (A010 / ANAMNESE / Total), tooltips de fórmula e modo comparativo — respeitando o seletor de período (Hoje / Semana / Mês) que já existe no topo.
+- A coluna/tab **ANAMNESE** do funil vai cair (provavelmente bastante) — vai mostrar só os leads "puros" do webhook ANAMNESE.
+- "Anamnese Incompleta", "ANAMNESE-INSTA" e leads com origem ANAMNESE mas sem a tag exata deixam de inflar o canal.
+- Nenhum outro relatório/tela é afetado (mudança isolada no hook do funil).
 
 ### Escopo
 
-- 1 arquivo modificado (`FunilDashboard.tsx`) — ~5 linhas
-- 1 arquivo deletado (`FlowFunnelBlock.tsx`) — limpeza
-- 1 arquivo limpo (`useCRMOverviewData.ts`) — remove queries órfãs do funnel antigo
-- 0 migration
+- 1 arquivo, ~25 linhas, 0 migration.
+
+### Confirmar antes de implementar
+
+1. **"ANAMNESE-INSTA" deve aparecer como canal separado** (recomendado, já existe na lista) ou também deve ser ignorado/agrupado em "OUTRO"?
+2. **Leads com tag exata "ANAMNESE" mas `data_source != 'webhook'`** (ex.: criados manualmente, importados via CSV) — devem entrar como ANAMNESE também, ou só os de webhook valem?
 
