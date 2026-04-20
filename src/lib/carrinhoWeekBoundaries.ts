@@ -135,7 +135,7 @@ export function getCarrinhoMetricBoundaries(
     r1Meetings: { start: thuStart, end: wedEnd },
     previousCutoff: previousFridayCutoff,
     safraOpeningCutoff: previousFridayCutoff,
-    carrinhoOperacional: { start: previousFridayCutoff, end: nextFridayCutoff },
+    carrinhoOperacional: { start: currentFridayCutoff, end: nextFridayCutoff },
   };
 }
 
