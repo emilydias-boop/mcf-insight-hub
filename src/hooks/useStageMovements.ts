@@ -226,6 +226,12 @@ export function useStageMovements({
         }))
         .sort((a, b) => a.stageOrder - b.stageOrder || a.stageName.localeCompare(b.stageName));
 
+      console.info('[useStageMovements]', {
+        activities: activities.length,
+        dealsAfterFilter: filteredDeals.length,
+        rows: rows.length,
+      });
+
       return { summary, rows };
     },
   });
