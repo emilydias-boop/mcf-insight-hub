@@ -46,6 +46,12 @@ const normalizeTag = (t: unknown): string => {
 const isValidUUID = (s: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
+const chunk = <T,>(arr: T[], size = 200): T[][] => {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+};
+
 export function useStageMovements({
   originIds,
   startDate,
