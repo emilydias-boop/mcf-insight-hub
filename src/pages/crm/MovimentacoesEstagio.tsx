@@ -167,20 +167,60 @@ export default function MovimentacoesEstagio() {
                 </PopoverContent>
               </Popover>
 
-              {/* Pipeline */}
-              <Select value={originId} onValueChange={setOriginId}>
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue placeholder="Pipeline" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as pipelines</SelectItem>
-                  {origins.map((o) => (
-                    <SelectItem key={o.id} value={o.id}>
-                      {o.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Pipelines (multi-select) */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="justify-start font-normal">
+                    <Filter className="mr-2 h-4 w-4" />
+                    {selectedOriginIds.length === 0
+                      ? 'Todas as pipelines'
+                      : `${selectedOriginIds.length} pipeline${selectedOriginIds.length > 1 ? 's' : ''}`}
+                    {selectedOriginIds.length > 0 && (
+                      <Badge variant="secondary" className="ml-2">
+                        {selectedOriginIds.length}
+                      </Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0" align="start">
+                  <div className="p-2 border-b flex items-center justify-between">
+                    <span className="text-xs font-medium">Selecione as pipelines</span>
+                    {selectedOriginIds.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs"
+                        onClick={() => setSelectedOriginIds([])}
+                      >
+                        Limpar
+                      </Button>
+                    )}
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto p-2 space-y-1">
+                    {origins.map((o) => {
+                      const checked = selectedOriginIds.includes(o.id);
+                      return (
+                        <label
+                          key={o.id}
+                          className="flex items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer text-sm"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(v) => {
+                              setSelectedOriginIds((prev) =>
+                                v
+                                  ? [...prev, o.id]
+                                  : prev.filter((x) => x !== o.id),
+                              );
+                            }}
+                          />
+                          <span className="flex-1">{o.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
 
               {/* Tags */}
               <TagFilterPopover
@@ -209,7 +249,7 @@ export default function MovimentacoesEstagio() {
               <div className="ml-auto flex items-center gap-2">
                 {(selectedStageNameKey ||
                   tagFilters.length > 0 ||
-                  originId !== 'all') && (
+                  selectedOriginIds.length > 0) && (
                   <Button variant="ghost" size="sm" onClick={handleClear}>
                     <X className="h-4 w-4 mr-1" />
                     Limpar
