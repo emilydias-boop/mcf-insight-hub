@@ -194,7 +194,47 @@ export function useStageMovements({
 
       if (filteredDealsMap.size === 0) return { summary: [], rows: [] };
 
-      // 5) Origens
+      // 5) Buscar histórico COMPLETO de stage_change para todos os deals filtrados (sem filtro de data)
+      const allDealIds = Array.from(filteredDealsMap.keys()).filter(isValidUUID);
+      const historyChunks = chunk(allDealIds, 200);
+      const historyResults = await Promise.all(
+        historyChunks.map(async (ids) => {
+          const { data, error } = await supabase
+            .from('deal_activities')
+            .select('deal_id, to_stage')
+            .eq('activity_type', 'stage_change')
+            .in('deal_id', ids);
+          if (error) throw error;
+          return data || [];
+        }),
+      );
+      const fullHistory = historyResults.flat();
+
+      // Construir stagesPassedByDeal: Map<dealId, Set<stageNameKey>>
+      const stagesPassedByDeal = new Map<string, Set<string>>();
+      const ensurePassedSet = (dealId: string) => {
+        let s = stagesPassedByDeal.get(dealId);
+        if (!s) { s = new Set(); stagesPassedByDeal.set(dealId, s); }
+        return s;
+      };
+
+      fullHistory.forEach((act) => {
+        const stage = resolveStage(act.to_stage);
+        if (!stage) return;
+        const key = normalizeStageName(stage.name) || stage.id;
+        ensurePassedSet(act.deal_id).add(key);
+      });
+
+      // Adicionar estágio atual de cada deal ao histórico (cobre deals criados direto num estágio)
+      filteredDealsMap.forEach((deal) => {
+        if (!deal.stage_id) return;
+        const stage = resolveStage(deal.stage_id);
+        if (!stage) return;
+        const key = normalizeStageName(stage.name) || stage.id;
+        ensurePassedSet(deal.id).add(key);
+      });
+
+      // 6) Origens
       const originIdsFromDeals = [
         ...new Set(
           Array.from(filteredDealsMap.values())
@@ -215,7 +255,7 @@ export function useStageMovements({
       );
       const originMap = new Map(originsResults.flat().map((o) => [o.id, o.name]));
 
-      // 6) Agregação por nome normalizado
+      // 7) Agregação por nome normalizado
       type AggEntry = {
         stageId: string;
         stageName: string;
@@ -246,7 +286,7 @@ export function useStageMovements({
         return e;
       };
 
-      // 7) Linhas de movimentação
+      // 8) Linhas de movimentação
       const rows: StageMovementRow[] = [];
 
       acts.forEach((act) => {
@@ -279,9 +319,7 @@ export function useStageMovements({
         e.passagens += 1;
       });
 
-      // 8) Snapshot: somar quem está parado em cada estágio
-      // Conjunto de (dealId+stageKey) já contado como movimento pra evitar duplicar "passagens" (não precisamos)
-      // mas para "parados" contamos sempre 1 por deal/estágio atual.
+      // 9) Snapshot: somar quem está parado em cada estágio
       const movedSetByStage = new Map<string, Set<string>>(); // stageKey -> Set<dealId>
       rows.forEach((r) => {
         if (!movedSetByStage.has(r.toStageNameKey)) movedSetByStage.set(r.toStageNameKey, new Set());
@@ -318,6 +356,22 @@ export function useStageMovements({
           });
         }
         void wasAlreadyCounted;
+      });
+
+      // 10) Acumulado via histórico completo: uniqueLeads = todos os deals que JÁ passaram por cada estágio
+      stagesPassedByDeal.forEach((stagesSet, dealId) => {
+        stagesSet.forEach((stageKey) => {
+          const stageInfo = stageByKey.get(stageKey) ||
+            (() => {
+              // Tentar resolver pelo stageKey como nome normalizado
+              for (const [, v] of stageByKey) {
+                if ((normalizeStageName(v.name) || v.id) === stageKey) return v;
+              }
+              return { id: stageKey, name: stageKey, order: 999 };
+            })();
+          const e = ensureEntry(stageKey, stageInfo);
+          e.uniqueLeads.add(dealId);
+        });
       });
 
       const summary: StageMovementsSummaryRow[] = Array.from(summaryMap.entries())
