@@ -264,7 +264,7 @@ export function useStageMovements({
         if (passesTagFilter(d)) filteredDealsMap.set(id, d);
       });
 
-      if (filteredDealsMap.size === 0) return { summary: [], rows: [] };
+      if (filteredDealsMap.size === 0) return { summary: [], rows: [], totalUniqueLeads: 0 };
 
       // 5) Construir stagesPassedByDeal APENAS com movimentações no período + estágio inicial
       //    de deals criados no período.
@@ -530,7 +530,7 @@ export function useStageMovements({
         stages: summary.length,
       });
 
-      return { summary, rows };
+      return { summary, rows, totalUniqueLeads: filteredDealsMap.size };
     },
   });
 }
