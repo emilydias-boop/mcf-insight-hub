@@ -11,8 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { R2CarrinhoAttendee, useUpdateCarrinhoStatus } from '@/hooks/useR2CarrinhoData';
 import { useR2CarrinhoVendas } from '@/hooks/useR2CarrinhoVendas';
 import { useAprovadoAgreementsBatch } from '@/hooks/useAprovadoAgreements';
-import { useEncaixarNoCarrinho } from '@/hooks/useEncaixarNoCarrinho';
 import { AprovadoDetailDrawer } from './AprovadoDetailDrawer';
+import { EncaixarSemanaDialog } from './EncaixarSemanaDialog';
 import { toast } from 'sonner';
 interface R2AprovadosListProps {
   attendees: R2CarrinhoAttendee[];
@@ -31,10 +31,9 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [selectedAttendee, setSelectedAttendee] = useState<R2CarrinhoAttendee | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [encaixandoId, setEncaixandoId] = useState<string | null>(null);
-  
+  const [encaixarTarget, setEncaixarTarget] = useState<R2CarrinhoAttendee | null>(null);
+
   const updateStatus = useUpdateCarrinhoStatus();
-  const encaixarMutation = useEncaixarNoCarrinho();
   
   // Fetch real sales data (same source as Vendas tab) — pass config for boundary alignment
   const { data: vendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd);
@@ -141,12 +140,8 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
     updateStatus.mutate({ attendeeId, status });
   };
 
-  const handleEncaixar = (attendeeId: string) => {
-    setEncaixandoId(attendeeId);
-    encaixarMutation.mutate(
-      { attendeeId, weekStart },
-      { onSettled: () => setEncaixandoId(null) },
-    );
+  const openEncaixarDialog = (att: R2CarrinhoAttendee) => {
+    setEncaixarTarget(att);
   };
 
   const handleRowClick = (att: R2CarrinhoAttendee) => {
