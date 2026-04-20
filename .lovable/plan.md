@@ -1,66 +1,48 @@
 
 
-## Cadastrar webhook de saída ativo apontando para webhook.site
+## Corrigir erro "Failed to send a request to the Edge Function" no botão Testar
 
-### O que será feito
+### Diagnóstico
 
-Inserir 1 linha em `outbound_webhook_configs` com a configuração completa, ativa e pronta para receber vendas reais.
+As edge functions de webhook de saída (`outbound-webhook-test`, `outbound-webhook-dispatcher`, `outbound-webhook-cron` se existir) **não estão registradas em `supabase/config.toml`**. Isso faz o Supabase aplicar o comportamento padrão de exigir JWT válido, causando rejeição da request antes da execução — por isso não há logs da função (ela nunca rodou).
 
-### Configuração
+Confirmações:
+- `grep "outbound-webhook" supabase/config.toml` retorna vazio
+- `supabase--edge_function_logs outbound-webhook-test` retorna "No logs found"
+- Erro no UI: `Failed to send a request to the Edge Function` (erro de rede/auth, não erro interno)
+- Código da função está correto (CORS ok, lógica ok)
 
-| Campo | Valor |
-|---|---|
-| `name` | `Vendas Reais — Debug webhook.site` |
-| `description` | `Webhook de debug apontando para webhook.site. Recebe sale.created, sale.updated e sale.refunded de todas as origens.` |
-| `url` | `https://webhook.site/bc01d8da-f2d2-44d0-8a1a-a76a044f0953` |
-| `method` | `POST` |
-| `headers` | `{"Content-Type": "application/json"}` |
-| `events` | `['sale.created', 'sale.updated', 'sale.refunded']` |
-| `sources` | `['hubla', 'kiwify', 'mcfpay', 'asaas', 'make', 'manual']` |
-| `product_categories` | `null` (todas as categorias) |
-| `is_active` | `true` |
-| `secret_token` | `null` (debug, sem assinatura) |
+### Correção
 
-### SQL (operação INSERT — usa a ferramenta de inserção de dados)
+Adicionar 3 entradas em `supabase/config.toml`:
 
-```sql
-INSERT INTO public.outbound_webhook_configs (
-  name,
-  description,
-  url,
-  method,
-  headers,
-  events,
-  sources,
-  product_categories,
-  is_active,
-  secret_token
-) VALUES (
-  'Vendas Reais — Debug webhook.site',
-  'Webhook de debug apontando para webhook.site. Recebe sale.created, sale.updated e sale.refunded de todas as origens.',
-  'https://webhook.site/bc01d8da-f2d2-44d0-8a1a-a76a044f0953',
-  'POST',
-  '{"Content-Type": "application/json"}'::jsonb,
-  ARRAY['sale.created', 'sale.updated', 'sale.refunded'],
-  ARRAY['hubla', 'kiwify', 'mcfpay', 'asaas', 'make', 'manual'],
-  NULL,
-  true,
-  NULL
-);
+```toml
+[functions.outbound-webhook-test]
+verify_jwt = false
+
+[functions.outbound-webhook-dispatcher]
+verify_jwt = false
+
+[functions.outbound-webhook-cron]
+verify_jwt = false
 ```
 
-### Como validar depois de aplicado
+(A `outbound-webhook-cron` é incluída por precaução — se não existir como função separada será ignorada sem efeito; vou confirmar antes de aplicar e remover se desnecessária.)
 
-1. Abra a aba do webhook.site no navegador (mesma URL que você gerou) e deixe aberta.
-2. Em `/admin/automacoes` → aba **Webhooks Saída** → confira que o webhook `Vendas Reais — Debug webhook.site` aparece ativo.
-3. Clique em **Testar** → deve aparecer um payload de exemplo no webhook.site em segundos.
-4. Aguarde a próxima venda real entrar (Hubla/Kiwify/MCFPay/Asaas/Make/Manual) → em até 1 min o POST chega no webhook.site.
-5. Clique em **Logs** no card do webhook para ver o histórico de envios (status HTTP, duração, payload, erro se houver).
+### Validação
+
+1. Após o deploy, voltar em `/admin/automacoes` → **Webhooks Saída**
+2. Clicar em **Testar** no card "Vendas Reais — Debug webhook.site"
+3. Resultado esperado:
+   - Toast verde: `Teste enviado com sucesso (HTTP 200 em XXXms)`
+   - Payload de exemplo aparece ao vivo na tela do webhook.site
+   - Contador de "Sucessos" aumenta no card
+4. Clicar em **Logs** → linha com `event: test.ping`, status 200, payload visível
 
 ### Escopo
 
-- 1 INSERT em `outbound_webhook_configs`
-- Zero alteração de código (frontend ou edge function)
-- Zero alteração de schema
-- Zero impacto em outros webhooks ou na fila
+- 1 alteração em `supabase/config.toml` (adicionar entradas)
+- Zero alteração de código
+- Zero alteração de schema/dados
+- Zero impacto em outras funções
 
