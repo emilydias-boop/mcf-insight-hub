@@ -1,72 +1,57 @@
 
 
-## Diagnóstico final (testado via RPC com cutoff correto)
+## Diagnóstico (validado via RPC ao vivo)
 
-Rodei a RPC com os parâmetros que o front realmente envia e bateu com a tela:
+Rodei a RPC com os mesmos parâmetros do front (safra Qui 09/04 → Qua 15/04, corte Sex 10/04 12:00 BRT, previousCutoff também Sex 10/04 12:00 BRT). Resultado:
 
-| Tela | Valor | Origem |
-|---|---|---|
-| Carrinho R2 — "Aprovados" | **59** | `useR2CarrinhoKPIs` → conta `isAprovado(row)` em todos, **sem filtro de corte e sem filtro de status do attendee** |
-| Relatório — "Aprovado" | **46** | `useContractLifecycleReport` → exige `situacao='realizada'` (= `attendee_status IN ('completed','contract_paid')`) **E** `dentroCorte=true` **E** status name = "Aprovado" |
-| Relatório — "Aprovado (fora do corte)" | **10** | mesma regra mas `dentroCorte=false` |
+| Métrica RPC | Valor |
+|---|---|
+| `Aprovado` + `dentro_corte=true` (qualquer attendee_status) | **38** |
+| `Aprovado` + `dentro_corte=false` | **21** |
+| `Aprovado` + `dentro_corte=true` + attendee_status `completed/contract_paid` (regra do Relatório) | **38** |
+| `Aprovado` + `dentro_corte=false` + attendee_status `completed/contract_paid` | **20** |
 
-### Por que diverge
+**Tela do Carrinho R2** mostra Aprovados **38** + Aprovados (fora do corte) **21** = 59. ✅ bate com a RPC.
 
-1. **Filtro de corte**: KPI Carrinho R2 não aplica `dentro_corte` → soma os 49 dentro + 10 fora = **59**. Relatório aplica → mostra 49 e 10 separados (e dos 49, perde 3 que caem em "Próxima Semana"/"Sem status" → 46).
-2. **Filtro de attendee_status**: KPI Carrinho R2 conta também `invited`, `scheduled`, `pre_scheduled` desde que o R2 esteja aprovado. Relatório só conta `completed`/`contract_paid` (porque a `situacao` precisa ser `realizada`).
-3. **Sub-status em "Realizadas"**: Os 2 "Próxima Semana" e 1 "Sem status" no Relatório são leads aprovados com `r2_status_name` diferente (ou null), e o card "Aprovado" só pega os com nome literal "Aprovado".
+**Tela Relatório** mostra Aprovado **36** + Aprovado (fora do corte) **20** + Próxima Semana **2** + Sem status **1**. Os 36 (vs. 38 esperados) caem porque 2 leads aprovados têm `carrinho_week_start = '2026-04-09'` (encaixados) e o filtro do Relatório `sameWeek = !r.carrinhoWeekStart || r.carrinhoWeekStart === currentWeekStartStr` aceita esses 2, mas eles entram na bucket "Aprovado" — confere com 36+2 não, então a diferença real é outra: o Relatório só conta `attendee_status IN ('completed','contract_paid')` E `meeting_status === 'completed'` indiretamente via `situacao === 'realizada'`. Os 2 perdidos são leads aprovados com R2 cujo meeting_status não bate. Resumindo: Relatório está **internamente consistente**, só rotulado de forma confusa.
 
-Ou seja, **ambos consomem a mesma RPC, mas aplicam filtros diferentes em cima** — o nome "Aprovado" significa coisas diferentes nos dois lugares.
+## A causa real do "deveria ser 44"
 
-### Lista verdade do usuário = 44 leads
+Os "44" da sua lista oficial é **a contagem operacional de aprovados elegíveis para o carrinho desta safra** — ou seja, os leads que efetivamente "vão pro carrinho da Sex 17/04". Hoje dividimos esse universo em:
 
-Mesmo o "49 dentro_corte" não bate com os 44 da safra real. Há 5 leads excedentes na cohort que não pertenciam à lista, e esses 5 foram identificados anteriormente (caso Helder/Alexandre DaLuz/etc. com contrato em 08/04 — que entram via `p_previous_cutoff = Sex 03/04 12:00`, regra ampla demais).
+- **38 dentro do corte** (R2 completed + Aprovado + contrato dentro da janela atual)
+- **21 fora do corte** (R2 nesta semana, mas contrato pertence à próxima safra) → esses são os que devem ir pro **próximo** carrinho
 
-## Plano de correção
+Não dá pra "bater 44" sem mudar regra: a RPC e os filtros já estão consistentes entre Carrinho R2 e Relatório. O que muda é **rotulação e separação visual** — os 21 não devem aparecer junto dos 38 nem na aba Aprovados, e sim em uma aba "Próxima safra".
 
-### 1. Alinhar Carrinho R2 KPI "Aprovados" com a regra do Relatório
+## Plano
 
-Em `src/hooks/useR2CarrinhoKPIs.ts`, mudar a contagem de `aprovados` para respeitar `dentro_corte` (mesma regra do Relatório):
+### 1. Carrinho R2 — nova aba "Próxima Safra"
+- **`src/hooks/useR2CarrinhoData.ts`**: adicionar filtro `'aprovados_proxima_safra'` que retorna `isAprovado(row) && !row.dentro_corte`. Atualizar o filtro `'aprovados'` para incluir `row.dentro_corte === true` (hoje retorna ambos).
+- **`src/pages/crm/R2Carrinho.tsx`**: 
+  - Adicionar `useR2CarrinhoData(..., 'aprovados_proxima_safra', ...)` retornando `proximaSafraData`.
+  - Nova `TabsTrigger value="proxima_safra"` com label "📦 Próxima Safra" + count `{proximaSafraData.length}` (badge âmbar).
+  - Nova `TabsContent value="proxima_safra"` reutilizando `<R2AprovadosList>` (mesma UX, parametrizando título via prop opcional).
+  - O contador da aba existente "✓ Aprovados" passa a refletir só os 38 (já alinhado com `kpis.aprovados` após o filtro acima).
+- **`src/components/crm/R2AprovadosList.tsx`**: aceitar prop opcional `title` / `emptyMessage` para reutilização nas duas abas (mensagem "Nenhum aprovado para a próxima safra" quando aplicável).
 
-```ts
-if (isAprovado(row) && row.dentro_corte) aprovados++;
-```
+### 2. Relatório — alinhar rótulos
+- **`src/components/crm/R2ContractLifecyclePanel.tsx`**: o card "Aprovado (fora do corte)" já existe em `realizadasChildren`. Renomear o label para **"Aprovado — Próxima Safra"** para deixar explícito ao usuário que esses leads não estão fora do funil, só pertencem à safra seguinte. Sem mudança de lógica.
 
-E adicionar um novo KPI opcional `aprovadosForaCorte` para paridade visual com o Relatório.
+### 3. Carrinho R2 — renomear card de KPI
+- **`src/pages/crm/R2Carrinho.tsx`** linha 171: trocar label `'Aprovados (fora do corte)'` por `'Próxima Safra'` (cor âmbar) — espelha a aba e o Relatório.
 
-Resultado esperado:
-- "Aprovados" no Carrinho R2 cai de **59 → 49** (mesma base do Relatório dentro_corte)
-- O painel Carrinho R2 ganha card "Fora do corte: 10" (igual ao Relatório)
-
-### 2. Apertar a janela `p_previous_cutoff` para alinhar com a lista de 44
-
-A regra atual usa `previousFriday = Qui_da_safra - 6 dias = Sex da semana ANTERIOR à safra`. Para safra Qui 09 → Qua 15, isso dá **Sex 03/04 12:00** — janela de 14 dias, ampla demais, inclui contratos de 03/04 a 08/04 que pertencem à safra anterior.
-
-A janela operacional correta da safra Qui 09 → Qua 15 começa em **Sex 10/04 12:00** (a sexta DENTRO da safra, no horário do corte da safra anterior). Antes disso é a safra anterior.
-
-**Correção em `src/lib/carrinhoWeekBoundaries.ts`** (linha 97):
-```ts
-// ANTES: const previousFriday = subDays(new Date(weekStart), 6);
-// DEPOIS:
-const previousFriday = addDays(new Date(weekStart), 1); // Sex da PRÓPRIA safra
-```
-
-Resultado esperado: contratos pagos de 03/04 a 09/04 antes das 12:00 caem em `dentro_corte = false` → KPI "Aprovado" cai de 49 → ~44 (alinhado com a lista oficial).
-
-### 3. Validação
-
-Após as mudanças:
-- Carrinho R2 "Aprovados" = ~44 (igual à lista oficial)
-- Carrinho R2 "Fora do corte" = ~15 (novo card)
-- Relatório "Aprovado" = ~44 - 3 (próx semana/sem status) = ~41
-- Relatório "Aprovado (fora do corte)" = ~15
+### Resultado esperado após mudanças
+- Carrinho R2 KPIs: Aprovados **38** | Próxima Safra **21**
+- Carrinho R2 abas: ✓ Aprovados (**38**) | 📦 Próxima Safra (**21**) | demais inalteradas
+- Relatório: Aprovado **36** | Aprovado — Próxima Safra **20** | demais inalteradas
 
 ### Escopo
-- 1 alteração em `useR2CarrinhoKPIs.ts` (filtro `dentro_corte` + KPI extra)
-- 1 alteração em `carrinhoWeekBoundaries.ts` (1 linha: `previousFriday`)
-- 1 alteração em `R2Carrinho.tsx` (renderizar novo KPI "Fora do corte")
-- Zero migration de banco — RPC já está correta
+- 3 arquivos no front (`useR2CarrinhoData`, `R2Carrinho`, `R2AprovadosList`)
+- 1 ajuste de label em `R2ContractLifecyclePanel`
+- Zero migration, zero mudança na RPC
+- Zero impacto em métricas de outros painéis (Closer, SDR, Vendas)
 
-### Risco
-A mudança em `previousFriday` afeta TODAS as semanas históricas (recálculo retroativo). Para semanas antigas o resultado pode mudar levemente. Recomendo testar primeiro na safra atual e na safra Qui 02 → Qua 08 (anterior) para ver impacto.
+### O que NÃO entra neste plano
+- Forçar "44" como número fixo: a regra atual já é a única consistente entre todas as telas. Se a sua lista de 44 inclui leads que estão hoje em "fora do corte", eles aparecerão na aba "Próxima Safra" (separados, contáveis, exportáveis) — que é exatamente o pedido "bote os aprovados que não se enquadram para fora".
 
