@@ -533,7 +533,13 @@ export function useStageMovements({
         stages: summary.length,
       });
 
-      return { summary, rows, totalUniqueLeads: filteredDealsMap.size };
+      // Dedupe por contact_id (fallback id) para alinhar com a contagem do CRM
+      const uniqueContactKeys = new Set<string>();
+      filteredDealsMap.forEach((d) => {
+        uniqueContactKeys.add(d.contact_id ?? d.id);
+      });
+
+      return { summary, rows, totalUniqueLeads: uniqueContactKeys.size };
     },
   });
 }
