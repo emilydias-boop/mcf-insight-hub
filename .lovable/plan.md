@@ -1,62 +1,146 @@
 
 
-## Diagnóstico do bug
+## Webhook de Saída — Vendas (Hubla / Kiwify / MCFPay)
 
-Confirmei na tela "Janela do Carrinho (R2s): **03/04** 12:00 → 17/04 12:00" (14 dias!). Era pra ser **10/04** 12:00 → 17/04 12:00 (7 dias).
+Vou criar um webhook **outbound** que dispara para uma URL externa toda vez que uma venda real é registrada/atualizada na `hubla_transactions`, e centralizar o gerenciamento dos webhooks (entrada e saída) dentro de **Administração → Automações** em duas novas abas.
 
-Causa: em `carrinhoWeekBoundaries.ts` linha 99, `previousFriday = subDays(weekStart, 6)`. Para a safra Qui 09/04, isso dá Sex 03/04 (sexta da semana retrasada), não Sex 10/04 (sexta DA safra = corte do carrinho anterior real).
+### O que será entregue
 
-A regra que você descreveu:
-- Safra Qui 09/04 → Qua 15/04
-- Carrinho **abre** Sex **10/04** 12:00 (corte da safra anterior, que era Qui 02 → Qua 08)
-- Carrinho **fecha** Sex **17/04** 12:00 (corte desta safra)
+**1. Webhook de saída de vendas (POST)**
 
-Hoje o código está pegando a sexta da safra retrasada (03/04) como abertura → janela de 14 dias → todas as 85 R2s passam → KPIs e lista não são filtrados.
+Dispara para a URL configurada quando:
+- Uma transação é inserida em `hubla_transactions` com `source IN ('hubla','kiwify','mcfpay','make','asaas','manual')` e `sale_status IN ('paid','approved','completed','active')`.
+- Ignora registros não-venda: `refunded`, `chargeback`, `audit_correction`, `manual_fix`.
+- Suporta também o evento `sale.refunded` separadamente (opcional via configuração).
 
-## Correção (1 arquivo, 1 linha)
-
-### `src/lib/carrinhoWeekBoundaries.ts`
-
-Trocar a janela `carrinhoOperacional` para usar **a sexta DA safra atual** como início (não a sexta da semana anterior):
-
-```text
-// ANTES (errado — janela de 14 dias):
-carrinhoOperacional: { 
-  start: previousFridayCutoff,   // Sex 03/04 12:00 ❌
-  end: nextFridayCutoff          // Sex 17/04 12:00
-}
-
-// DEPOIS (correto — janela de 7 dias):
-carrinhoOperacional: { 
-  start: currentFridayCutoff,    // Sex 10/04 12:00 ✅
-  end: nextFridayCutoff          // Sex 17/04 12:00 ✅
+Payload enviado (JSON):
+```json
+{
+  "event": "sale.created",
+  "occurred_at": "2026-04-20T13:10:00-03:00",
+  "transaction_id": "uuid",
+  "source": "hubla|kiwify|mcfpay|make|asaas|manual",
+  "external_id": "hubla_id ou similar",
+  "product": {
+    "name": "A010 - Consultoria...",
+    "category": "a010",
+    "code": "A010",
+    "offer_name": "...",
+    "offer_id": "..."
+  },
+  "values": {
+    "gross_system": 47.00,        // product_price
+    "gross_product": 47.00,       // reference_price (preço de tabela)
+    "gross_override": null,       // se houver ajuste manual
+    "net": 41.32,                 // net_value
+    "currency": "BRL"
+  },
+  "payment": {
+    "method": "credit_card|pix|boleto|...",
+    "installment_number": 1,
+    "total_installments": 1,
+    "is_recurring": false,        // true quando installment_number > 1 OU total_installments > 1
+    "is_first_installment": true
+  },
+  "customer": {
+    "name": "...",
+    "email": "...",
+    "phone": "...",
+    "cpf": null                   // se disponível em raw_data
+  },
+  "sale_date": "2026-04-20T09:34:00-03:00",
+  "sale_status": "paid",
+  "utm": { "source": "...", "medium": "...", "campaign": "...", "content": "..." }
 }
 ```
 
-`currentFridayCutoff` já existe no arquivo (linha 106) — é a Sexta da MESMA semana da safra (Qui+1).
+Headers customizáveis pelo usuário (Authorization, X-API-Key, etc.).
 
-Não mexer em mais nada. Os hooks (`useR2CarrinhoData`, `useR2CarrinhoKPIs`, `useR2ForaDoCarrinhoData`) já consomem `carrinhoOperacional` corretamente — só estão recebendo a janela errada.
+**2. Trigger no banco**
 
-## Resultado esperado após o ajuste
+Trigger `AFTER INSERT OR UPDATE` em `hubla_transactions` que:
+- Filtra apenas vendas reais (status válidos + sources permitidas).
+- Em UPDATE, dispara `sale.updated` se `net_value`, `product_price` ou `sale_status` mudaram.
+- Em transição de `paid → refunded`, dispara `sale.refunded`.
+- Insere job na fila `outbound_webhook_queue` (nova tabela leve).
+- Edge Function `outbound-webhook-dispatcher` consome a fila a cada minuto (ou via pg_net direto), faz POST com retry (3 tentativas, backoff exponencial).
 
-| Item | Antes | Depois |
-|---|---|---|
-| Header "Janela do Carrinho (R2s)" | 03/04 12:00 → 17/04 12:00 ❌ | **10/04 12:00 → 17/04 12:00** ✅ |
-| KPI "R2 Agendadas" | 85 | ~65 |
-| KPI "R2 Realizadas" | 73 | ~57 |
-| KPI "Fora do Carrinho" | 14 | recalculado na janela certa |
-| Aba "Todas R2s" (contagem) | 85 | ~65 (some os leads do dia 09/04 que pertenciam ao carrinho anterior) |
-| KPI "Aprovados" | 49 | 49 (intacto — usa janela ampla) |
-| KPI "Próxima Safra" | 10 | 10 (intacto) |
-| KPI "Contratos (R1)" | 64 | 64 (intacto) |
-| Aba Vendas Parceria | OK | OK (já usa `nextFridayCutoff → nextMonday`) |
+**3. Tabelas novas**
 
-## Por que o problema não era de front (cache)
+```sql
+outbound_webhook_configs
+  - id, name, description, url, method, headers (jsonb)
+  - events (text[])  -- ['sale.created','sale.updated','sale.refunded']
+  - sources (text[]) -- ['hubla','kiwify','mcfpay','make','asaas','manual'] (default: todos)
+  - product_categories (text[]) -- filtro opcional por categoria
+  - is_active, secret_token (para HMAC opcional)
+  - success_count, error_count, last_triggered_at, last_error
+  - created_at, updated_at, created_by
 
-O front estava chamando o hook certo, mas o hook estava recebendo uma janela operacional de 14 dias em vez de 7. Como a RPC já retorna 85 R2s da janela ampla (Qui→Sex+1), o filtro extra `inOperationalWindow` não conseguia descartar nada porque sua janela cobria os mesmos 14 dias. Não é cache — é cálculo de boundary.
+outbound_webhook_queue
+  - id, config_id, event, payload (jsonb), attempts, status, next_retry_at
+  - response_status, response_body, last_error, created_at, sent_at
 
-## Escopo
+outbound_webhook_logs (rolling 30 dias)
+  - id, config_id, event, transaction_id, payload, response_status, response_body, duration_ms, created_at
+```
 
-- 1 arquivo, 1 linha trocada (`previousFridayCutoff` → `currentFridayCutoff` na propriedade `carrinhoOperacional.start`)
-- Zero impacto em RPC, Aprovados, Próxima Safra, Vendas Parceria ou Relatório
+RLS: somente admin/diretor podem ver/editar configs e logs.
+
+**4. Edge Function `outbound-webhook-dispatcher`**
+
+- Lê jobs `pending` ordenados por `next_retry_at`.
+- Faz POST com headers do config + assinatura HMAC opcional (`X-Signature: sha256=...`).
+- Em sucesso (2xx): marca `sent`, incrementa `success_count`, grava log.
+- Em falha: incrementa `attempts`, agenda retry (1min, 5min, 30min). Após 3 falhas → `failed`.
+- Cron `pg_cron` chama a função a cada 1 minuto.
+
+**5. UI em Administração → Automações**
+
+Reorganizar as abas atuais de Automações para incluir entrada e saída de webhooks:
+
+```text
+[Fluxos] [Cross-Pipeline] [Templates] [Webhooks Entrada] [Webhooks Saída] [Logs] [Configurações]
+```
+
+- **Webhooks Entrada** (nova aba): lista consolidada de TODOS os `webhook_endpoints` de todas as origens (Hubla, Kiwify, MCFPay, Make, Clint, Asaas, leads diretos). Filtros por origem/BU. Reaproveita `IncomingWebhookEditor` mas em modo "global" (todas as origens). Para cada endpoint exibe: nome, URL, slug, leads/eventos recebidos, último disparo, status ativo. Ações: editar, copiar URL, testar, ativar/desativar.
+
+- **Webhooks Saída** (nova aba): lista de `outbound_webhook_configs`. Cada item exibe nome, URL de destino, eventos, sources filtradas, contadores de sucesso/erro, último disparo, último erro. Ações:
+  - Criar/editar (dialog com URL, método, headers, eventos checkboxes, filtro de sources/categorias, secret HMAC, ativo/inativo)
+  - Testar (envia payload de exemplo)
+  - Ver logs (drawer com últimos 100 disparos: status code, payload, response, duração)
+  - Excluir
+  - Ativar/desativar
+
+### Arquivos a criar/editar
+
+**Backend (migration + edge function):**
+- Migration: tabelas `outbound_webhook_configs`, `outbound_webhook_queue`, `outbound_webhook_logs` + RLS + trigger em `hubla_transactions` + cron pg_cron.
+- `supabase/functions/outbound-webhook-dispatcher/index.ts` (consome fila e envia HTTP).
+- `supabase/functions/outbound-webhook-test/index.ts` (envia payload de teste sob demanda).
+
+**Frontend:**
+- `src/hooks/useOutboundWebhooks.ts` — CRUD + logs + teste.
+- `src/components/automations/OutboundWebhookList.tsx` — lista de webhooks de saída.
+- `src/components/automations/OutboundWebhookFormDialog.tsx` — formulário de criação/edição.
+- `src/components/automations/OutboundWebhookLogsDrawer.tsx` — visualização de logs por webhook.
+- `src/components/automations/IncomingWebhooksGlobalList.tsx` — lista global de webhooks de entrada (agrupado por origem).
+- Editar `src/pages/admin/Automacoes.tsx` — adicionar abas "Webhooks Entrada" e "Webhooks Saída".
+
+### Considerações técnicas
+
+- **Distinguir Recorrente**: regra atual usada no sistema (`installment_number > 1` ou produto com flag de recorrência). Vou usar a função existente `get_first_transaction_ids` como referência para marcar `is_recurring` corretamente no payload.
+- **CPF**: vem dentro de `raw_data` quando o gateway envia (Hubla/Asaas costumam mandar). Vou extrair via JSONB path.
+- **Idempotência**: payload inclui `transaction_id` UUID estável; o consumidor pode deduplicar.
+- **Segurança**: HMAC SHA-256 opcional por webhook, com secret gerado no momento da criação e exibido apenas uma vez.
+- **Retry**: 3 tentativas com backoff (1min, 5min, 30min). Depois disso fica em `failed` e aparece nos logs com botão "Reprocessar".
+- **Performance**: trigger é leve (só faz INSERT na fila, sem chamar HTTP). O dispatcher roda a cada 1min e processa em batch.
+
+### Escopo
+
+- 1 migration (tabelas + trigger + cron)
+- 2 edge functions (dispatcher + teste)
+- 6 arquivos frontend novos
+- 1 ajuste em `Automacoes.tsx`
+- Zero impacto em vendas existentes ou na UI atual de vendas
 
