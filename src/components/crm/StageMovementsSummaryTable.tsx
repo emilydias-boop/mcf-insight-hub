@@ -62,20 +62,48 @@ export function StageMovementsSummaryTable({
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   <p className="text-xs">
-                    Leads únicos que <strong>já passaram</strong> por este
-                    estágio. Considera o universo completo de leads das
-                    pipelines selecionadas (não depende da data). Para a trilha
-                    principal, leads em estágios avançados são inferidos como
-                    tendo passado pelos anteriores. Estágios laterais (No-Show,
-                    Sem Interesse) não inflam a trilha — exceto No-Show, que
-                    implica ter sido agendado.
+                    Leads únicos que passaram por este estágio <strong>dentro
+                    do período selecionado</strong> (inclui inferência da
+                    trilha do funil — leads em estágios avançados são
+                    contados nos anteriores). Trocar o período altera este
+                    número.
                   </p>
                 </TooltipContent>
               </Tooltip>
             </span>
           </TableHead>
-          <TableHead className="text-right text-xs">Passaram</TableHead>
-          <TableHead className="text-right text-xs">Estão lá</TableHead>
+          <TableHead className="text-right text-xs">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex items-center gap-1 cursor-help">
+                  Passaram
+                  <Info className="h-3 w-3 text-muted-foreground" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="text-xs">
+                  Número de movimentações (eventos) que entraram neste
+                  estágio no período selecionado.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TableHead>
+          <TableHead className="text-right text-xs">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex items-center gap-1 cursor-help">
+                  Estão lá
+                  <Info className="h-3 w-3 text-muted-foreground" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="text-xs">
+                  Leads que estavam neste estágio no <strong>fim do período
+                  selecionado</strong> (snapshot na data final, não "agora").
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TableHead>
           <TableHead className="w-10" />
         </TableRow>
       </TableHeader>
