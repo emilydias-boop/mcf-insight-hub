@@ -60,6 +60,8 @@ export interface ContractLifecycleRow {
   // Data do R2 futuro (quando pendingReason = 'r2_proxima_semana')
   futureR2Date: string | null;
   futureR2CloserName: string | null;
+  // attendee_id do R2 futuro (necessário para "Encaixar nesta semana")
+  futureR2AttendeeId: string | null;
   // Cohort cutoff metadata (from RPC)
   dentroCorte: boolean;
   effectiveContractDate: string | null;
@@ -270,6 +272,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           pendingReason: null,
           futureR2Date: null,
           futureR2CloserName: null,
+          futureR2AttendeeId: null,
           dentroCorte: !!r2.dentro_corte,
           effectiveContractDate: r2.effective_contract_date || null,
           contractSource: (r2.contract_source as any) || null,
@@ -339,6 +342,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           pendingReason: null,
           futureR2Date: null,
           futureR2CloserName: null,
+          futureR2AttendeeId: null,
           dentroCorte: false,
           effectiveContractDate: info.saleDate,
           contractSource: 'hubla',
@@ -414,7 +418,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
             .neq('status', 'cancelled');
 
           // Map deal_id -> melhor R2 (futuro mais próximo, status válido)
-          const dealToR2 = new Map<string, { date: string; closerName: string | null; isFuture: boolean }>();
+          const dealToR2 = new Map<string, { date: string; closerName: string | null; isFuture: boolean; attendeeId: string }>();
           (allR2s || []).forEach((att: any) => {
             const slot = att.meeting_slot;
             if (!slot || slot.status === 'cancelled' || slot.status === 'rescheduled') return;
@@ -430,6 +434,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
                 date: r2Date,
                 closerName: slot.closer?.name || null,
                 isFuture,
+                attendeeId: att.id,
               });
             }
           });
@@ -440,7 +445,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
             .select('id, contact_id')
             .in('id', contactDealIds);
 
-          const contactToBestR2 = new Map<string, { date: string; closerName: string | null; isFuture: boolean }>();
+          const contactToBestR2 = new Map<string, { date: string; closerName: string | null; isFuture: boolean; attendeeId: string }>();
           (dealsWithContacts || []).forEach(d => {
             if (!d.contact_id) return;
             const r2 = dealToR2.get(d.id);
@@ -464,6 +469,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
               orphan.pendingReason = 'r2_proxima_semana';
               orphan.futureR2Date = bestR2.date;
               orphan.futureR2CloserName = bestR2.closerName;
+              orphan.futureR2AttendeeId = bestR2.attendeeId;
             }
           });
         }

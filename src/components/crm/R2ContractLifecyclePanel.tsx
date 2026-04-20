@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, ChevronDown, Download, Search, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Download, Search, Loader2, PackagePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useContractLifecycleReport, ContractLifecycleRow, ContractSituacao, PendingReason } from "@/hooks/useContractLifecycleReport";
 import { DealDetailsDrawer } from "./DealDetailsDrawer";
 import { getCartWeekStart, getCartWeekEnd } from "@/lib/carrinhoWeekBoundaries";
+import { useEncaixarNoCarrinho } from "@/hooks/useEncaixarNoCarrinho";
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return '—';
@@ -105,6 +106,8 @@ export function R2ContractLifecyclePanel() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expandedKpi, setExpandedKpi] = useState<string | null>(null);
   const [activeSubFilter, setActiveSubFilter] = useState<string | null>(null);
+  const [encaixandoId, setEncaixandoId] = useState<string | null>(null);
+  const encaixarMutation = useEncaixarNoCarrinho();
 
   const safraStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
   const safraEnd = useMemo(() => getCartWeekEnd(weekDate), [weekDate]);
@@ -187,11 +190,12 @@ export function R2ContractLifecyclePanel() {
 
   // Pendentes children: recentes vs antigos
   const pendentesChildren = useMemo(() => {
-    if (!rows) return { recentes: 0, antigos: 0 };
+    if (!rows) return { recentes: 0, antigos: 0, proximaSafra: 0 };
     const pendentes = rows.filter(r => r.situacao === 'pendente');
     return {
       recentes: pendentes.filter(r => (r.diasParado ?? 0) <= 3).length,
       antigos: pendentes.filter(r => (r.diasParado ?? 0) > 3).length,
+      proximaSafra: pendentes.filter(r => r.pendingReason === 'r2_proxima_semana').length,
     };
   }, [rows]);
 
@@ -256,6 +260,8 @@ export function R2ContractLifecyclePanel() {
             result = result.filter(r => (r.diasParado ?? 0) <= 3);
           } else if (activeSubFilter === 'antigos') {
             result = result.filter(r => (r.diasParado ?? 0) > 3);
+          } else if (activeSubFilter === 'proxima_safra') {
+            result = result.filter(r => r.pendingReason === 'r2_proxima_semana');
           }
         }
       }
@@ -309,6 +315,17 @@ export function R2ContractLifecyclePanel() {
 
   const navigateWeek = (dir: number) => {
     setWeekDate(prev => dir > 0 ? addWeeks(prev, 1) : subWeeks(prev, 1));
+  };
+
+  const handleEncaixar = (row: ContractLifecycleRow, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const attendeeId = row.futureR2AttendeeId || row.id;
+    if (!attendeeId || attendeeId.startsWith('hubla-orphan-')) return;
+    setEncaixandoId(row.id);
+    encaixarMutation.mutate(
+      { attendeeId, weekStart: safraStart },
+      { onSettled: () => setEncaixandoId(null) },
+    );
   };
 
   const isParentActive = (key: string) => expandedKpi === key;
@@ -566,6 +583,18 @@ export function R2ContractLifecyclePanel() {
                 <p className="text-lg font-bold text-amber-600">{pendentesChildren.antigos}</p>
               </CardContent>
             </Card>
+            <Card
+              className={cn(
+                "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
+                activeSubFilter === 'proxima_safra' && "ring-2 ring-amber-500/50 bg-amber-500/5"
+              )}
+              onClick={() => handleSubClick('proxima_safra')}
+            >
+              <CardContent className="py-2 px-3 text-center">
+                <p className="text-[10px] text-muted-foreground">📦 Próxima Safra</p>
+                <p className="text-lg font-bold text-amber-400">{pendentesChildren.proximaSafra}</p>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
@@ -596,6 +625,9 @@ export function R2ContractLifecyclePanel() {
                     <TableHead className="whitespace-nowrap">R2 Data</TableHead>
                     <TableHead className="whitespace-nowrap">Closer R2</TableHead>
                     <TableHead className="whitespace-nowrap">R2 Status</TableHead>
+                    {expandedKpi === 'pendentes' && activeSubFilter === 'proxima_safra' && (
+                      <TableHead className="whitespace-nowrap text-right">Ação</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -628,6 +660,26 @@ export function R2ContractLifecyclePanel() {
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-xs">{row.r2CloserName || row.futureR2CloserName || '—'}</TableCell>
                       <TableCell><R2StatusBadge name={row.r2StatusName} color={row.r2StatusColor} /></TableCell>
+                      {expandedKpi === 'pendentes' && activeSubFilter === 'proxima_safra' && (
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+                            disabled={encaixandoId === row.id || !row.futureR2AttendeeId}
+                            onClick={(e) => handleEncaixar(row, e)}
+                          >
+                            {encaixandoId === row.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <PackagePlus className="h-4 w-4 mr-1" />
+                                <span className="text-xs">Encaixar</span>
+                              </>
+                            )}
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Copy, Check, ShoppingCart, X, Download, Search, Filter, XCircle, MessageSquare, AlertTriangle, Handshake } from 'lucide-react';
+import { Copy, Check, ShoppingCart, X, Download, Search, Filter, XCircle, MessageSquare, AlertTriangle, Handshake, PackagePlus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { R2CarrinhoAttendee, useUpdateCarrinhoStatus } from '@/hooks/useR2CarrinhoData';
 import { useR2CarrinhoVendas } from '@/hooks/useR2CarrinhoVendas';
 import { useAprovadoAgreementsBatch } from '@/hooks/useAprovadoAgreements';
+import { useEncaixarNoCarrinho } from '@/hooks/useEncaixarNoCarrinho';
 import { AprovadoDetailDrawer } from './AprovadoDetailDrawer';
 import { toast } from 'sonner';
 interface R2AprovadosListProps {
@@ -20,17 +21,20 @@ interface R2AprovadosListProps {
   weekEnd: Date;
   emptyMessage?: string;
   countLabel?: string;
+  showEncaixarButton?: boolean;
 }
 
-export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, emptyMessage, countLabel }: R2AprovadosListProps) {
+export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, emptyMessage, countLabel, showEncaixarButton = false }: R2AprovadosListProps) {
   const [copied, setCopied] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [closerFilter, setCloserFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [selectedAttendee, setSelectedAttendee] = useState<R2CarrinhoAttendee | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [encaixandoId, setEncaixandoId] = useState<string | null>(null);
   
   const updateStatus = useUpdateCarrinhoStatus();
+  const encaixarMutation = useEncaixarNoCarrinho();
   
   // Fetch real sales data (same source as Vendas tab) — pass config for boundary alignment
   const { data: vendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd);
@@ -135,6 +139,14 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
 
   const handleSetStatus = (attendeeId: string, status: 'vai_comprar' | 'comprou' | 'nao_comprou' | 'negociando' | 'quer_desistir' | null) => {
     updateStatus.mutate({ attendeeId, status });
+  };
+
+  const handleEncaixar = (attendeeId: string) => {
+    setEncaixandoId(attendeeId);
+    encaixarMutation.mutate(
+      { attendeeId, weekStart },
+      { onSettled: () => setEncaixandoId(null) },
+    );
   };
 
   const handleRowClick = (att: R2CarrinhoAttendee) => {
@@ -331,7 +343,7 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
           <TableBody>
             {displayedAttendees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={showEncaixarButton ? 9 : 8} className="text-center py-8 text-muted-foreground">
                   Nenhum resultado encontrado com os filtros aplicados
                 </TableCell>
               </TableRow>
@@ -508,6 +520,28 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
                         </TooltipTrigger>
                         <TooltipContent>Não Comprou</TooltipContent>
                       </Tooltip>
+
+                      {showEncaixarButton && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 px-2 ml-1 border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+                              disabled={encaixandoId === att.id}
+                              onClick={() => handleEncaixar(att.id)}
+                            >
+                              {encaixandoId === att.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <PackagePlus className="h-4 w-4" />
+                              )}
+                              <span className="hidden lg:inline ml-1 text-xs">Encaixar</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Encaixar nesta semana</TooltipContent>
+                        </Tooltip>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
