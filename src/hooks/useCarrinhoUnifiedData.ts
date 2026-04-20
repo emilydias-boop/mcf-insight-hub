@@ -121,3 +121,31 @@ export function isAgendada(row: CarrinhoLeadRow): boolean {
 export function isRealizada(row: CarrinhoLeadRow): boolean {
   return row.attendee_status === 'completed' || row.attendee_status === 'presente' || row.meeting_status === 'completed';
 }
+
+/**
+ * Definição UNIFICADA de "Aprovado elegível para o Carrinho da safra atual".
+ * Usada por Carrinho R2 e Relatório para garantir consistência entre as telas.
+ *
+ * Regras:
+ * - r2_status_name contém "aprovado"
+ * - dentro_corte = true (contrato dentro da janela operacional desta safra)
+ * - attendee_status NÃO está em estados terminais negativos (cancelled, no_show, refunded)
+ */
+const INELIGIBLE_ATTENDEE_STATUSES = ['cancelled', 'no_show', 'refunded'];
+
+export function isCarrinhoEligible(row: CarrinhoLeadRow): boolean {
+  if (!isAprovado(row)) return false;
+  if (row.dentro_corte !== true) return false;
+  const status = (row.attendee_status || '').toLowerCase();
+  if (INELIGIBLE_ATTENDEE_STATUSES.includes(status)) return false;
+  return true;
+}
+
+/** Aprovado pertencente à PRÓXIMA safra (R2 nesta semana, contrato fora do corte atual). */
+export function isProximaSafra(row: CarrinhoLeadRow): boolean {
+  if (!isAprovado(row)) return false;
+  if (row.dentro_corte !== false) return false;
+  const status = (row.attendee_status || '').toLowerCase();
+  if (INELIGIBLE_ATTENDEE_STATUSES.includes(status)) return false;
+  return true;
+}

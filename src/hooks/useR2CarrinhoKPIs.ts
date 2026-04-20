@@ -1,4 +1,4 @@
-import { useCarrinhoUnifiedData, isAprovado, isForaDoCarrinho, isPendente, isEmAnalise, isAgendada, isRealizada, CarrinhoLeadRow } from '@/hooks/useCarrinhoUnifiedData';
+import { useCarrinhoUnifiedData, isAprovado, isForaDoCarrinho, isPendente, isEmAnalise, isAgendada, isRealizada, isCarrinhoEligible, isProximaSafra, CarrinhoLeadRow } from '@/hooks/useCarrinhoUnifiedData';
 import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -72,10 +72,8 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       if (isAgendada(row)) r2Agendadas++;
       if (isRealizada(row)) r2Realizadas++;
       if (isForaDoCarrinho(row)) foraDoCarrinho++;
-      if (isAprovado(row)) {
-        if (row.dentro_corte) aprovados++;
-        else aprovadosForaCorte++;
-      }
+      if (isCarrinhoEligible(row)) aprovados++;
+      else if (isProximaSafra(row)) aprovadosForaCorte++;
       if (isPendente(row)) pendentes++;
       if (isEmAnalise(row)) emAnalise++;
     }
