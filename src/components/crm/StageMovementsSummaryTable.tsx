@@ -62,9 +62,9 @@ export function StageMovementsSummaryTable({
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   <p className="text-xs">
-                    Leads únicos que <strong>passaram</strong> pelo estágio no
-                    período <strong>+</strong> leads que <strong>estão</strong>{' '}
-                    no estágio hoje. Sem dupla contagem.
+                    Leads únicos que <strong>já passaram</strong> por este
+                    estágio em algum momento do seu histórico, entre os leads
+                    ativos no período selecionado. Sem dupla contagem.
                   </p>
                 </TooltipContent>
               </Tooltip>
