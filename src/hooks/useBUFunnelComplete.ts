@@ -405,6 +405,30 @@ export function useBUFunnelComplete({
           }),
         );
         const extraDeals = mResults.flat();
+        // Carregar email/phone dos contatos extras para checar A010 buyer
+        const extraContactIds = [
+          ...new Set(
+            extraDeals
+              .map((d) => d.contact_id)
+              .filter((x): x is string => !!x && !contactEmailById.has(x) && !contactPhoneById.has(x)),
+          ),
+        ];
+        if (extraContactIds.length > 0) {
+          const xChunks = chunk(extraContactIds, 200);
+          const xRes = await Promise.all(
+            xChunks.map(async (ids) => {
+              const { data } = await supabase
+                .from('crm_contacts')
+                .select('id, email, phone')
+                .in('id', ids);
+              return data || [];
+            }),
+          );
+          xRes.flat().forEach((c: any) => {
+            if (c.email) contactEmailById.set(c.id, c.email.toLowerCase());
+            if (c.phone) contactPhoneById.set(c.id, normPhone(c.phone));
+          });
+        }
         // origens faltantes
         const extraOriginIds = [
           ...new Set(extraDeals.map((d) => d.origin_id).filter((x): x is string => !!x && !originMap.has(x))),
@@ -425,7 +449,7 @@ export function useBUFunnelComplete({
             tags: tagsArr,
             originName: d.origin_id ? (originMap.get(d.origin_id) || null) : null,
             dataSource: d.data_source,
-            hasA010: tagsArr.some((t) => typeof t === 'string' && t.toUpperCase().includes('A010')),
+            hasA010: dealIsA010Buyer(d),
           });
           dealChannel.set(d.id, ch || 'OUTRO');
           dealsMap.set(d.id, d);
