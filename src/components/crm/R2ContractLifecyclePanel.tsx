@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { useContractLifecycleReport, ContractLifecycleRow, ContractSituacao, PendingReason } from "@/hooks/useContractLifecycleReport";
 import { DealDetailsDrawer } from "./DealDetailsDrawer";
 import { getCartWeekStart, getCartWeekEnd } from "@/lib/carrinhoWeekBoundaries";
-import { useEncaixarNoCarrinho } from "@/hooks/useEncaixarNoCarrinho";
+import { EncaixarSemanaDialog } from "./EncaixarSemanaDialog";
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return '—';
@@ -106,8 +106,7 @@ export function R2ContractLifecyclePanel() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expandedKpi, setExpandedKpi] = useState<string | null>(null);
   const [activeSubFilter, setActiveSubFilter] = useState<string | null>(null);
-  const [encaixandoId, setEncaixandoId] = useState<string | null>(null);
-  const encaixarMutation = useEncaixarNoCarrinho();
+  const [encaixarRow, setEncaixarRow] = useState<ContractLifecycleRow | null>(null);
 
   const safraStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
   const safraEnd = useMemo(() => getCartWeekEnd(weekDate), [weekDate]);
@@ -321,11 +320,7 @@ export function R2ContractLifecyclePanel() {
     e.stopPropagation();
     const attendeeId = row.futureR2AttendeeId || row.id;
     if (!attendeeId || attendeeId.startsWith('hubla-orphan-')) return;
-    setEncaixandoId(row.id);
-    encaixarMutation.mutate(
-      { attendeeId, weekStart: safraStart },
-      { onSettled: () => setEncaixandoId(null) },
-    );
+    setEncaixarRow(row);
   };
 
   const isParentActive = (key: string) => expandedKpi === key;
@@ -666,17 +661,11 @@ export function R2ContractLifecyclePanel() {
                             variant="outline"
                             size="sm"
                             className="h-8 border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
-                            disabled={encaixandoId === row.id || !row.futureR2AttendeeId}
+                            disabled={!row.futureR2AttendeeId}
                             onClick={(e) => handleEncaixar(row, e)}
                           >
-                            {encaixandoId === row.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <>
-                                <PackagePlus className="h-4 w-4 mr-1" />
-                                <span className="text-xs">Encaixar</span>
-                              </>
-                            )}
+                            <PackagePlus className="h-4 w-4 mr-1" />
+                            <span className="text-xs">Encaixar</span>
                           </Button>
                         </TableCell>
                       )}
@@ -697,6 +686,17 @@ export function R2ContractLifecyclePanel() {
           setDrawerOpen(open);
           if (!open) setSelectedDealId(null);
         }}
+      />
+
+      <EncaixarSemanaDialog
+        open={!!encaixarRow}
+        onOpenChange={(o) => { if (!o) setEncaixarRow(null); }}
+        attendeeId={encaixarRow ? (encaixarRow.futureR2AttendeeId || encaixarRow.id) : null}
+        attendeeName={encaixarRow?.leadName || null}
+        anchorWeekStart={safraStart}
+        currentCarrinhoWeekStart={encaixarRow?.carrinhoWeekStart || null}
+        contractPaidAt={encaixarRow?.contractPaidAt || null}
+        r2Date={encaixarRow?.futureR2Date || encaixarRow?.r2Date || null}
       />
     </div>
   );
