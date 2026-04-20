@@ -1,102 +1,156 @@
 
 
-## Fix: Inferir trilha principal do funil para acumulado monotonicamente decrescente
+## Fix: Universo correto + funil completo (incluindo No-Show/Sem Interesse)
 
-### Problema atual
+### Diagnóstico da diferença
 
-O acumulado busca o histórico de `deal_activities`, mas muitas movimentações intermediárias nunca foram registradas (lead criado direto em "Lead Qualificado" e movido para "R1 Agendada" sem passar explicitamente por "Anamnese Incompleta" ou "Novo Lead"). Resultado: estágios iniciais ficam com menos leads que estágios posteriores.
+Você disse: **669 leads com tag anamnese → 168 qualificados → 192 sem interesse → 163 agendados → 112 R1 realizada → 51 no-show → 29 contrato → 21 R2 realizada → 8 vendas**.
+
+O dashboard hoje diverge por 4 razões:
+
+1. **Universo subestimado**: o "acumulado" só considera deals que (a) tiveram movimentação no período OU (b) estão no snapshot atual. Deals com a tag que ficaram parados em estágios laterais (Sem Interesse, Perdido) há meses **não entram no universo**, então o total é menor que 669.
+
+2. **Snapshot truncado em 10.000**: `PIPELINE INSIDE SALES` sozinha tem >14k deals. O `.limit(10000)` no `crm_deals` corta o snapshot, perdendo leads. Quando você combina 2 pipelines, a perda é ainda maior.
+
+3. **No-Show e Sem Interesse fora da MAIN_TRAIL**: o seu funil real inclui essas etapas como passagens válidas. Hoje elas só contam se houver `stage_change` explícito registrado. Como muitos leads vão direto para "Sem Interesse" sem passar por estágios anteriores documentados, o acumulado deles fica subestimado.
+
+4. **Variações de nome entre pipelines**: "INCOMPLETA" (Piloto), "ANAMNESE INCOMPLETA" (Inside Sales), "REUNIÃO 1 AGENDADA" vs "Reunião 01 Agendada", "NO-SHOW" vs "No-Show". A normalização atual junta alguns mas não todos.
 
 ### Solução
 
-Definir uma **trilha fixa do funil principal** (main trail). Para cada lead que está num estágio dessa trilha, inferir que ele **passou por todos os estágios anteriores** da trilha. Estágios laterais (No-Show, Sem Interesse, Lead Gratuito, Lead Instagram, No-Show R2) ficam fora da inferência e mostram apenas passagens reais.
+#### 1. Universo = TODOS os deals que batem com origens + tags (sem depender de movimentação)
 
-### Trilha principal do Inside Sales (baseada no stage_order)
-
-```text
-ANAMNESE INCOMPLETA (0)
-  → Novo Lead (3)
-    → Lead Qualificado (5)
-      → Reunião 01 Agendada (6)
-        → Reunião 01 Realizada (8)
-          → Reunião 02 Agendada (10)
-            → Reunião 02 Realizada (11)
-              → Contrato Pago (9) / Venda realizada (12)
-```
-
-**Estágios laterais (sem inferência):**
-- Lead Gratuito (1)
-- Lead Instagram (2)
-- Sem Interesse (4)
-- No-Show (7)
-- No-Show R2 (8)
-
-### Mudanças no código
-
-**Arquivo:** `src/hooks/useStageMovements.ts`
-
-**1. Definir a trilha principal por nome normalizado**
+Em `useStageMovements.ts`, mudar a definição do universo:
 
 ```ts
-const MAIN_TRAIL: string[] = [
-  'anamnese incompleta',
-  'novo lead',
-  'lead qualificado',
-  'reuniao 01 agendada',
-  'reuniao 01 realizada',
-  'reuniao 02 agendada',
-  'reuniao 02 realizada',
-  'contrato pago',
-  'venda realizada',
-];
+// Universo = todos os deals das origens selecionadas que passam no filtro de tags
+// (independente de ter movimentação no período ou estar no snapshot recente)
+const { data: universeDeals } = await supabase
+  .from('crm_deals')
+  .select('id, name, tags, origin_id, stage_id')
+  .in('origin_id', queryOriginIds)
+  .order('created_at', { ascending: false })
+  .range(...) // paginar para passar de 10k
 ```
 
-**2. Após construir `stagesPassedByDeal`, aplicar inferência na trilha**
+Paginar por chunks de 1000 com `.range()` até esgotar (similar ao padrão usado em `useDealActivitySummary`). Aplicar o filtro de tags em memória sobre esse universo completo.
 
-Para cada deal, verificar o estágio mais avançado que ele atingiu na trilha (seja por histórico registrado OU por estágio atual). Todos os estágios anteriores na trilha recebem o deal no Set.
+Esse passa a ser o `filteredDealsMap` definitivo. O período de data passa a ser usado **apenas** para a coluna "Passaram" (movimentações no intervalo), não para definir quais leads contam no acumulado.
+
+#### 2. Expandir MAIN_TRAIL para incluir variações de nome e estágios laterais sequenciais
+
+Mapa de aliases por nome normalizado, agrupando pipelines diferentes:
 
 ```ts
-stagesPassedByDeal.forEach((stagesSet, dealId) => {
+const STAGE_ALIASES: Record<string, string> = {
+  'incompleta': 'anamnese incompleta',
+  'anamnese incompleta': 'anamnese incompleta',
+  'novo lead': 'novo lead',
+  'novo lead ( form )': 'novo lead',
+  'lead qualificado': 'lead qualificado',
+  'reuniao 01 agendada': 'r1 agendada',
+  'reuniao 1 agendada': 'r1 agendada',
+  'r1 agendada': 'r1 agendada',
+  'reuniao 01 realizada': 'r1 realizada',
+  'reuniao 1 realizada': 'r1 realizada',
+  'r1 realizada': 'r1 realizada',
+  'no-show': 'no-show',
+  'no show': 'no-show',
+  'sem interesse': 'sem interesse',
+  'reuniao 02 agendada': 'r2 agendada',
+  'r2 agendada': 'r2 agendada',
+  'reuniao 02 realizada': 'r2 realizada',
+  'r2 realizada': 'r2 realizada',
+  'contrato pago': 'contrato pago',
+  'venda realizada': 'venda realizada',
+  'proposta enviada': 'proposta enviada',
+  'no-show r2': 'no-show r2',
+};
+```
+
+A função `normalizeStageName` passa a aplicar o alias depois de normalizar acentos/espaços, fazendo "INCOMPLETA" e "ANAMNESE INCOMPLETA" virarem a mesma chave.
+
+#### 3. Inferência: trilha principal + ramais laterais
+
+Trilha principal (cada lead que atingiu N infere passagem por todos anteriores):
+```
+anamnese incompleta → novo lead → lead qualificado → r1 agendada → r1 realizada → r2 agendada → r2 realizada → contrato pago → venda realizada
+```
+
+**Estágios laterais com inferência de "pré-requisito"** (não estão na linha principal, mas implicam que o lead chegou até certo ponto):
+- `no-show` → infere passagem até `r1 agendada` (pra ter levado no-show, foi agendado)
+- `no-show r2` → infere passagem até `r2 agendada`
+- `sem interesse` / `proposta enviada` → não inferem nada (podem ocorrer em qualquer ponto)
+
+Implementação:
+```ts
+const LATERAL_PREREQ: Record<string, string> = {
+  'no-show': 'r1 agendada',
+  'no-show r2': 'r2 agendada',
+};
+
+stagesPassedByDeal.forEach((stagesSet) => {
+  // 1) Inferência de trilha principal (já existe)
   let maxTrailIndex = -1;
-  stagesSet.forEach((stageKey) => {
-    const idx = MAIN_TRAIL.indexOf(stageKey);
+  stagesSet.forEach((k) => {
+    const idx = MAIN_TRAIL.indexOf(k);
     if (idx > maxTrailIndex) maxTrailIndex = idx;
   });
   if (maxTrailIndex >= 0) {
-    for (let i = 0; i <= maxTrailIndex; i++) {
-      stagesSet.add(MAIN_TRAIL[i]);
-    }
+    for (let i = 0; i <= maxTrailIndex; i++) stagesSet.add(MAIN_TRAIL[i]);
   }
+  // 2) Inferência de pré-requisito de estágios laterais
+  stagesSet.forEach((k) => {
+    const prereq = LATERAL_PREREQ[k];
+    if (prereq) {
+      const idx = MAIN_TRAIL.indexOf(prereq);
+      for (let i = 0; i <= idx; i++) stagesSet.add(MAIN_TRAIL[i]);
+    }
+  });
 });
 ```
 
-**3. Resto do código permanece igual**
+#### 4. Histórico completo precisa cobrir o universo expandido
 
-- O `uniqueLeads` do summaryMap continua sendo alimentado por `stagesPassedByDeal`
-- Passagens e Parados não mudam
-- Linhas de detalhe não mudam
+Hoje o histórico já busca para todos os `filteredDealsMap`. Como esse Map agora tem o universo correto (com paginação), o histórico vai cobrir tudo automaticamente. Manter o chunking de 200 IDs.
 
-### Resultado esperado
+#### 5. Multi-pipeline na UI
 
-| Estágio | Acumulado | Passaram | Estão lá |
-|---------|-----------|----------|----------|
-| Anamnese Incompleta | **~400+** | X | Y |
-| Novo Lead | **~350+** | X | Y |
-| Lead Qualificado | **~300+** | X | Y |
-| R1 Agendada | **~200** | X | Y |
-| R1 Realizada | **~150** | X | Y |
-| ... | decrescente | ... | ... |
-| No-Show | só real | ... | ... |
-| Sem Interesse | só real | ... | ... |
+A página atual só permite escolher **uma** pipeline ou "todas". Para reproduzir seu cenário (Inside Sales + Piloto Anamnese), trocar o `Select` único por:
+- Manter "Todas as pipelines" como opção rápida
+- Adicionar opção "Selecionar múltiplas..." que abre um popover com checkboxes (padrão similar ao `TagFilterPopover` já existente)
 
-Funil monotonicamente decrescente nos estágios principais. Estágios laterais com números independentes.
+Estado vira `originIds: string[]` em vez de `originId: string`. A query já aceita array.
 
-### Aplicabilidade cross-pipeline
+### Resultado esperado (cenário do print + Piloto Anamnese)
 
-A trilha é definida por **nome normalizado**, não por UUID. Como os nomes dos estágios são consistentes entre pipelines (todos têm "Reunião 01 Agendada", "Lead Qualificado", etc.), a inferência funciona automaticamente para qualquer pipeline que use esses nomes.
+| Estágio | Acumulado |
+|---|---|
+| Anamnese Incompleta | ~669 (universo total com tag) |
+| Novo Lead | ~669 (todos passaram) |
+| Lead Qualificado | ~250 (168 do print + 82 do Piloto) |
+| R1 Agendada | ~163 |
+| R1 Realizada | ~112 |
+| No-Show | ~51 (lateral, sem inferência pra cima) |
+| Sem Interesse | ~192 (sem inferência) |
+| Contrato Pago | ~29 |
+| R2 Realizada | ~21 |
+| Venda Realizada | ~8 |
 
 ### Escopo
 
-- 1 arquivo editado: `src/hooks/useStageMovements.ts` (~15 linhas adicionadas)
-- Zero migration, zero RLS, zero mudanças de UI
-- Tooltip já está correto ("leads que já passaram por este estágio")
+- `src/hooks/useStageMovements.ts` — universo paginado (sem limite de 10k), aliases de estágio, MAIN_TRAIL expandida, inferência de prereq lateral (~50 linhas alteradas)
+- `src/pages/crm/MovimentacoesEstagio.tsx` — multi-select de pipelines (~30 linhas)
+- `src/components/crm/StageMovementsSummaryTable.tsx` — tooltip atualizado mencionando inferência
+
+Zero migration, zero RLS, zero edge function.
+
+### Validação
+
+1. Selecionar **PIPELINE INSIDE SALES + PILOTO ANAMNESE** + tag anamnese, período últimos 90 dias:
+   - Anamnese Incompleta ≈ 669
+   - Funil monotonicamente decrescente nos estágios principais
+   - No-Show ≈ 51 (não infla acima de R1 Agendada)
+2. Console: `dealsAfterFilter` próximo de 669 (não truncado)
+3. Tooltip explica que estágios laterais (No-Show) inferem passagem por agendamento anterior, mas não pelos seguintes
 
