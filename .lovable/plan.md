@@ -1,73 +1,54 @@
 
 
-## Fix: Linha Total da tabela — esclarecer que Acumulado é soma de passagens, não leads únicos
+## Fix: Excluir arquivados e deduplicar por contato (alinhar dashboard com CRM)
 
-### Diagnóstico
+### Diagnóstico confirmado
 
-- No CRM você vê **668 oportunidades** com tag ANAMNESE nas duas pipelines (universo de leads únicos).
-- No dashboard, o **1490** é a **soma vertical** da coluna Acumulado entre todos os estágios. Como cada lead aparece em vários estágios (por inferência da trilha do funil — quem chegou em R1 Realizada também conta em Lead Qualificado, R1 Agendada, etc.), a soma vertical **necessariamente** é maior que o número de leads únicos.
-- Você confirmou que Acumulado deve continuar contando **passagem por estágio** (lead avança = aparece em vários). Então o número 1490 está correto para o que ele representa.
-- O problema real: a célula no rodapé chama-se **"Total"**, o que sugere "total de leads únicos" — e aí parece divergir do CRM.
+Dashboard tem **674**, CRM tem **668** = 6 leads a mais. Causa:
 
-### Solução
+- **4 deals arquivados** (`archived_at IS NOT NULL`) com tag ANAMNESE — CRM esconde, dashboard mostra.
+- **2 deals duplicados por contato** (Germana Luz Cataldo e Igor) — mesmo `contact_id` em pipelines diferentes; CRM conta 1x, dashboard conta 2x.
 
-**1. Renomear/esclarecer a linha Total**
+### Mudanças
 
-No `StageMovementsSummaryTable.tsx`, trocar o rótulo "Total" por **"Soma (passagens)"** com tooltip explicando que esse número soma as passagens entre estágios e não representa leads únicos.
+**`src/hooks/useStageMovements.ts`**
 
-**2. Adicionar uma linha extra "Leads únicos no universo"**
+1. **Filtrar arquivados em todas as queries de `crm_deals`**:
+   ```ts
+   .is('archived_at', null)
+   ```
+   Aplicar em: query de movimentações, query de deals criados no período, e na nova query de universo CRM-compatível.
 
-Acima ou abaixo da Soma, mostrar o número de **leads únicos** no universo filtrado (`filteredDealsMap.size`). Esse é o número que bate com o CRM (668 esperado).
+2. **Deduplicar `totalUniqueLeads` por `contact_id`** (com fallback para `id` quando `contact_id` é null):
+   ```ts
+   const dedupeKey = (d: { id: string; contact_id: string | null }) =>
+     d.contact_id ?? d.id;
+   const matched = new Set<string>();
+   batch.forEach((d) => {
+     if (passesTagFilter({ tags: d.tags })) matched.add(dedupeKey(d));
+   });
+   ```
 
-Para isso:
-- `useStageMovements` passa a retornar também `totalUniqueLeads: number` (= `filteredDealsMap.size`).
-- O hook já tem essa informação; só falta expor no retorno.
-
-**3. Linha "Total" final do rodapé**
-
-```
-Leads únicos no universo:    668     —     —
-Soma de passagens:           1490    1490   668
-```
-
-- Coluna 1 (Acumulado): soma vertical = 1490 (passagens)
-- Coluna 2 (Passaram): soma de eventos no período
-- Coluna 3 (Estão lá): snapshot — soma = leads únicos com posição (≈ 668)
-
-Tooltip no header da linha "Leads únicos": "Total de oportunidades distintas que compõem o universo deste filtro (origens + tags + período). Bate com o que você vê no CRM filtrando os mesmos critérios."
-
-Tooltip na linha "Soma de passagens": "Soma vertical da coluna Acumulado. Como um lead que avança aparece em vários estágios (inferência da trilha), esse número é maior que o número de leads únicos — é esperado."
-
-### Mudanças no código
-
-**`src/hooks/useStageMovements.ts`** (~5 linhas)
-- Adicionar `totalUniqueLeads` ao tipo de retorno.
-- Calcular `const totalUniqueLeads = filteredDealsMap.size;` e retornar junto com `summary` e `rows`.
-
-**`src/components/crm/StageMovementsSummaryTable.tsx`** (~30 linhas)
-- Receber `totalUniqueLeads` via props.
-- Renderizar duas linhas no rodapé: "Leads únicos" e "Soma (passagens)" com tooltips.
-- Aplicar destaque visual diferente (Leads únicos = primary, Soma = muted).
-
-**`src/pages/crm/MovimentacoesEstagio.tsx`** (~2 linhas)
-- Passar `totalUniqueLeads={data?.totalUniqueLeads ?? 0}` para `StageMovementsSummaryTable`.
+3. Selecionar `contact_id` junto com `id` e `tags` na query do universo.
 
 ### Resultado esperado
 
-Com INSIDE SALES + PILOTO ANAMNESE + tag ANAMNESE no período:
+Com PILOTO ANAMNESE + INSIDE SALES + tag ANAMNESE:
 
-| | Acumulado | Passaram | Estão lá |
-|---|---|---|---|
-| Anamnese Incompleta | ~668 | ... | ... |
-| Lead Qualificado | ~168 | ... | ... |
-| ... | ... | ... | ... |
-| **Leads únicos no universo** | **668** | — | — |
-| **Soma (passagens)** | 1490 | 1490 | 668 |
+| Métrica | Antes | Depois |
+|---|---|---|
+| Leads únicos no universo | 674 | **668** ✅ |
+| Soma (passagens) | 1490 | ~1480 (sem arquivados) |
+| Linhas por estágio | inclui arquivados | só ativos |
 
-O 668 vai aparecer explicitamente e bater com o CRM. O 1490 continua existindo, mas com rótulo correto que evita confusão.
+### Trade-off
+
+- Linhas Acumulado/Passaram/Estão lá podem reduzir levemente quando há leads arquivados em algum estágio. É o comportamento correto e alinhado com o CRM.
+- Dedupe por `contact_id` é aplicado **só** no contador "Leads únicos no universo". Nas linhas por estágio, cada deal continua sendo uma trajetória separada (Germana em INSIDE SALES + Germana em PILOTO ANAMNESE = 2 trajetórias).
 
 ### Escopo
 
-- 3 arquivos, ~40 linhas no total
-- Zero migration, zero mudança em queries
+- 1 arquivo (`src/hooks/useStageMovements.ts`)
+- ~10 linhas
+- Zero migration
 
