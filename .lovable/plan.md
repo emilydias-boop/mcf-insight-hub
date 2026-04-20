@@ -1,118 +1,102 @@
 
 
-## Fix: Acumulado por estágio = histórico completo de cada lead envolvido
+## Fix: Inferir trilha principal do funil para acumulado monotonicamente decrescente
 
-### Definição final
+### Problema atual
 
-Para cada estágio X, o **Acumulado** = nº de leads únicos cujo **histórico completo em `deal_activities`** mostra que ele já passou por X em algum momento (sem filtro de data), considerando apenas leads que:
-- Tiveram movimentação no período selecionado, OU
-- Estão atualmente em algum estágio (snapshot)
+O acumulado busca o histórico de `deal_activities`, mas muitas movimentações intermediárias nunca foram registradas (lead criado direto em "Lead Qualificado" e movido para "R1 Agendada" sem passar explicitamente por "Anamnese Incompleta" ou "Novo Lead"). Resultado: estágios iniciais ficam com menos leads que estágios posteriores.
 
-**Resultado:** se um lead está hoje em "Reunião 01 Agendada", o sistema busca todo o histórico dele e soma +1 em "Lead Qualificado", "Novo Lead", etc. — mesmo que essas movimentações tenham sido há meses.
+### Solução
 
-Isso faz o funil ficar coerente: estágios anteriores >= posteriores naturalmente.
+Definir uma **trilha fixa do funil principal** (main trail). Para cada lead que está num estágio dessa trilha, inferir que ele **passou por todos os estágios anteriores** da trilha. Estágios laterais (No-Show, Sem Interesse, Lead Gratuito, Lead Instagram, No-Show R2) ficam fora da inferência e mostram apenas passagens reais.
+
+### Trilha principal do Inside Sales (baseada no stage_order)
+
+```text
+ANAMNESE INCOMPLETA (0)
+  → Novo Lead (3)
+    → Lead Qualificado (5)
+      → Reunião 01 Agendada (6)
+        → Reunião 01 Realizada (8)
+          → Reunião 02 Agendada (10)
+            → Reunião 02 Realizada (11)
+              → Contrato Pago (9) / Venda realizada (12)
+```
+
+**Estágios laterais (sem inferência):**
+- Lead Gratuito (1)
+- Lead Instagram (2)
+- Sem Interesse (4)
+- No-Show (7)
+- No-Show R2 (8)
 
 ### Mudanças no código
 
-**Arquivo único:** `src/hooks/useStageMovements.ts`
+**Arquivo:** `src/hooks/useStageMovements.ts`
 
-**1. Coletar o universo de deals do período**
+**1. Definir a trilha principal por nome normalizado**
 
-Mantém:
-- `acts` = stage_changes no período
-- `snapshotDeals` = deals com stage_id atual (filtrados por origem)
-- `filteredDealsMap` = união filtrada por tags
-
-**2. Buscar histórico completo desses deals (NOVA query)**
-
-Após `filteredDealsMap` estar pronto, fazer:
 ```ts
-const allDealIds = Array.from(filteredDealsMap.keys());
-const historyChunks = chunk(allDealIds, 200);
-const historyResults = await Promise.all(historyChunks.map(async (ids) => {
-  const { data } = await supabase
-    .from('deal_activities')
-    .select('deal_id, to_stage, from_stage, created_at')
-    .eq('activity_type', 'stage_change')
-    .in('deal_id', ids);
-  return data || [];
-}));
-const fullHistory = historyResults.flat();
+const MAIN_TRAIL: string[] = [
+  'anamnese incompleta',
+  'novo lead',
+  'lead qualificado',
+  'reuniao 01 agendada',
+  'reuniao 01 realizada',
+  'reuniao 02 agendada',
+  'reuniao 02 realizada',
+  'contrato pago',
+  'venda realizada',
+];
 ```
 
-Sem filtro de data — pega o histórico completo de cada deal envolvido.
+**2. Após construir `stagesPassedByDeal`, aplicar inferência na trilha**
 
-**3. Construir `stagesPassedByDeal: Map<dealId, Set<stageNameKey>>`**
+Para cada deal, verificar o estágio mais avançado que ele atingiu na trilha (seja por histórico registrado OU por estágio atual). Todos os estágios anteriores na trilha recebem o deal no Set.
 
-Para cada activity em `fullHistory`:
-- Resolve `to_stage` → nome → `stageNameKey`
-- Adiciona ao Set do deal
-
-Adicionalmente, para cada deal com `stage_id` atual:
-- Resolve → `stageNameKey`
-- Adiciona ao Set (cobre o estágio atual, mesmo que nunca tenha sido registrado um stage_change pra ele)
-
-**4. Calcular `uniqueLeads` (Acumulado) com base no histórico completo**
-
-Substituir o cálculo atual por:
 ```ts
 stagesPassedByDeal.forEach((stagesSet, dealId) => {
+  let maxTrailIndex = -1;
   stagesSet.forEach((stageKey) => {
-    const stage = resolveStageByKey(stageKey); // precisa map name→stage
-    const e = ensureEntry(stageKey, stage);
-    e.uniqueLeads.add(dealId);
+    const idx = MAIN_TRAIL.indexOf(stageKey);
+    if (idx > maxTrailIndex) maxTrailIndex = idx;
   });
+  if (maxTrailIndex >= 0) {
+    for (let i = 0; i <= maxTrailIndex; i++) {
+      stagesSet.add(MAIN_TRAIL[i]);
+    }
+  }
 });
 ```
 
-**5. Manter `passagens` e `parados` como hoje**
+**3. Resto do código permanece igual**
 
-Para preservar as colunas atuais:
-- **Passagens** = só conta `acts` do período (movimentações registradas no intervalo)
-- **Parados** = só conta deals com `stage_id` atual = X
-- **Acumulado** = `uniqueLeads.size` (calculado pelo histórico completo)
+- O `uniqueLeads` do summaryMap continua sendo alimentado por `stagesPassedByDeal`
+- Passagens e Parados não mudam
+- Linhas de detalhe não mudam
 
-Resultado esperado nas 3 colunas (exemplo do print):
-- Lead Qualificado: Acumulado **~250+** (todos que estão em Qualificado, R1, R2, Contrato), Passaram 8, Estão lá 4
-- R1 Agendada: Acumulado 116 (mesmo de antes, ou maior se houver leads em estágios posteriores que passaram por R1), Passaram 134, Estão lá 15
-- Contrato Pago: Acumulado 8 (não muda, é o último), Passaram 4, Estão lá 5
+### Resultado esperado
 
-**6. Linhas de detalhe (rows)**
+| Estágio | Acumulado | Passaram | Estão lá |
+|---------|-----------|----------|----------|
+| Anamnese Incompleta | **~400+** | X | Y |
+| Novo Lead | **~350+** | X | Y |
+| Lead Qualificado | **~300+** | X | Y |
+| R1 Agendada | **~200** | X | Y |
+| R1 Realizada | **~150** | X | Y |
+| ... | decrescente | ... | ... |
+| No-Show | só real | ... | ... |
+| Sem Interesse | só real | ... | ... |
 
-Manter como está:
-- Linhas de movimentação real (do período) → `when = data`, `isSnapshotOnly = false`
-- Linhas snapshot (parado, sem movimentação no período) → `when = null`, `isSnapshotOnly = true`
+Funil monotonicamente decrescente nos estágios principais. Estágios laterais com números independentes.
 
-Não vou criar linhas "histórica" para cada estágio passado fora do período (seria poluir muito a tabela). O detalhe continua mostrando movimentações do período + paradas atuais. O **Acumulado** na coluna mostra o número correto via histórico, mas o detalhe lista só o que aconteceu/está acontecendo no período.
+### Aplicabilidade cross-pipeline
 
-**Tooltip atualizado** na coluna Acumulado: "Leads únicos que já passaram por este estágio em algum momento de seu histórico (entre os leads ativos no período)".
-
-### Garantias
-
-- **Funil monotonicamente decrescente** (ou igual) nos estágios principais — naturalmente, sem hardcode de trilha
-- **Estágios laterais** (No-Show, Sem Interesse, Anamnese Incompleta, Lead Gratuito) só recebem +1 se o lead realmente passou por eles no histórico
-- **Sem inferência artificial**: respeita 100% o que `deal_activities` registrou
-- **Sem dupla contagem**: Set por `dealId` + `stageNameKey`
-- **Performance**: 1 query extra paginada (200/chunk) sobre `deal_activities`. Como `filteredDealsMap` raramente passa de alguns milhares, fica rápido (~100-500ms extra)
-
-### Limites conhecidos
-
-- Se um lead nunca teve `stage_change` registrado pra um estágio (ex: foi criado direto em Lead Qualificado e foi pra R1 sem registro intermediário), esse estágio não conta no histórico dele. Decisão consciente: respeita o registro.
-- Histórico depende do limite default do Supabase de 1000 rows por chunk (paginado, OK até ~200k activities totais).
-- Para o snapshot atual, o `stage_id` do `crm_deals` é sempre adicionado ao histórico do deal — então mesmo deals criados direto num estágio aparecem nele.
-
-### Validação
-
-1. `/crm/movimentacoes`, Inside Sales, últimos 7 dias:
-   - Lead Qualificado mostra Acumulado >= R1 Agendada >= R1 Realizada >= Contrato Pago
-   - Coluna "Passaram" e "Estão lá" continuam mostrando os números atuais (não mudam)
-   - Só "Acumulado" recebe boost
-2. Estágios laterais (Sem Interesse, No-Show) NÃO inflam — só contam se o lead realmente passou
-3. Performance: página carrega em até ~3s mesmo com 5k+ deals
+A trilha é definida por **nome normalizado**, não por UUID. Como os nomes dos estágios são consistentes entre pipelines (todos têm "Reunião 01 Agendada", "Lead Qualificado", etc.), a inferência funciona automaticamente para qualquer pipeline que use esses nomes.
 
 ### Escopo
 
-- 1 hook editado: `src/hooks/useStageMovements.ts` (+1 query de histórico completo, +lógica de agregação por histórico)
-- 1 componente: `StageMovementsSummaryTable.tsx` — só atualizar o texto do tooltip
-- Zero migration, zero RLS, zero outras telas afetadas
+- 1 arquivo editado: `src/hooks/useStageMovements.ts` (~15 linhas adicionadas)
+- Zero migration, zero RLS, zero mudanças de UI
+- Tooltip já está correto ("leads que já passaram por este estágio")
 
