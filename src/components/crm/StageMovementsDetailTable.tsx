@@ -8,6 +8,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -39,7 +40,7 @@ export function StageMovementsDetailTable({ rows, onOpenDeal, isLoading }: Props
         r.originName ?? '',
         r.fromStageName ?? '',
         r.toStageName,
-        format(new Date(r.when), "dd/MM/yyyy HH:mm", { locale: ptBR }),
+        r.when ? format(new Date(r.when), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : 'parado no estágio',
       ]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
         .join(','),
@@ -66,7 +67,7 @@ export function StageMovementsDetailTable({ rows, onOpenDeal, isLoading }: Props
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {rows.length.toLocaleString('pt-BR')} movimentação(ões)
+          {rows.length.toLocaleString('pt-BR')} registro(s)
         </p>
         <Button
           variant="outline"
@@ -110,15 +111,25 @@ export function StageMovementsDetailTable({ rows, onOpenDeal, isLoading }: Props
                       {r.originName ?? '—'}
                     </TableCell>
                     <TableCell className="text-sm">
-                      <span className="text-muted-foreground">
-                        {r.fromStageName ?? '(início)'}
-                      </span>{' '}
-                      → <span className="font-medium">{r.toStageName}</span>
+                      {r.isSnapshotOnly ? (
+                        <span className="font-medium">{r.toStageName}</span>
+                      ) : (
+                        <>
+                          <span className="text-muted-foreground">
+                            {r.fromStageName ?? '(início)'}
+                          </span>{' '}
+                          → <span className="font-medium">{r.toStageName}</span>
+                        </>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {format(new Date(r.when), "dd/MM/yyyy HH:mm", {
-                        locale: ptBR,
-                      })}
+                      {r.when ? (
+                        format(new Date(r.when), 'dd/MM/yyyy HH:mm', { locale: ptBR })
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          Parado no estágio
+                        </Badge>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

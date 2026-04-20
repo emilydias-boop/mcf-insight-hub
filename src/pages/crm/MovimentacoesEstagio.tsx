@@ -50,7 +50,7 @@ export default function MovimentacoesEstagio() {
   const [originId, setOriginId] = useState<string>('all');
   const [tagFilters, setTagFilters] = useState<TagFilterRule[]>([]);
   const [tagOperator, setTagOperator] = useState<TagOperator>('and');
-  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
+  const [selectedStageNameKey, setSelectedStageNameKey] = useState<string | null>(null);
   const [drawerDealId, setDrawerDealId] = useState<string | null>(null);
 
   // Origens disponíveis (filtradas pela BU ativa, se houver)
@@ -97,10 +97,10 @@ export default function MovimentacoesEstagio() {
   const allRows = data?.rows || [];
   const detailRows = useMemo(
     () =>
-      selectedStageId
-        ? allRows.filter((r) => r.toStageId === selectedStageId)
+      selectedStageNameKey
+        ? allRows.filter((r) => r.toStageNameKey === selectedStageNameKey)
         : allRows,
-    [allRows, selectedStageId],
+    [allRows, selectedStageNameKey],
   );
 
   const handleClear = () => {
@@ -111,7 +111,7 @@ export default function MovimentacoesEstagio() {
     setOriginId('all');
     setTagFilters([]);
     setTagOperator('and');
-    setSelectedStageId(null);
+    setSelectedStageNameKey(null);
   };
 
   const dateLabel = dateRange?.from
@@ -212,7 +212,7 @@ export default function MovimentacoesEstagio() {
               </Tooltip>
 
               <div className="ml-auto flex items-center gap-2">
-                {(selectedStageId ||
+                {(selectedStageNameKey ||
                   tagFilters.length > 0 ||
                   originId !== 'all') && (
                   <Button variant="ghost" size="sm" onClick={handleClear}>
@@ -231,7 +231,7 @@ export default function MovimentacoesEstagio() {
             <CardTitle className="text-base flex items-center gap-2">
               <Filter className="h-4 w-4" />
               Resumo por estágio
-              {selectedStageId && (
+              {selectedStageNameKey && (
                 <span className="text-xs font-normal text-muted-foreground ml-2">
                   (clique novamente para limpar)
                 </span>
@@ -241,8 +241,8 @@ export default function MovimentacoesEstagio() {
           <CardContent>
             <StageMovementsSummaryTable
               rows={summary}
-              selectedStageId={selectedStageId}
-              onSelectStage={setSelectedStageId}
+              selectedStageNameKey={selectedStageNameKey}
+              onSelectStage={setSelectedStageNameKey}
               isLoading={isLoading}
             />
           </CardContent>
@@ -253,10 +253,10 @@ export default function MovimentacoesEstagio() {
           <CardHeader>
             <CardTitle className="text-base">
               Detalhe das movimentações
-              {selectedStageId && (
+              {selectedStageNameKey && (
                 <span className="text-sm font-normal text-muted-foreground ml-2">
                   · filtrado por{' '}
-                  {summary.find((s) => s.stageId === selectedStageId)?.stageName}
+                  {summary.find((s) => s.stageNameKey === selectedStageNameKey)?.stageName}
                 </span>
               )}
             </CardTitle>

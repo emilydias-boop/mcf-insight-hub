@@ -7,20 +7,25 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Info } from 'lucide-react';
 import type { StageMovementsSummaryRow } from '@/hooks/useStageMovements';
 
 interface Props {
   rows: StageMovementsSummaryRow[];
-  selectedStageId: string | null;
-  onSelectStage: (stageId: string | null) => void;
+  selectedStageNameKey: string | null;
+  onSelectStage: (stageNameKey: string | null) => void;
   isLoading?: boolean;
 }
 
 export function StageMovementsSummaryTable({
   rows,
-  selectedStageId,
+  selectedStageNameKey,
   onSelectStage,
   isLoading,
 }: Props) {
@@ -39,35 +44,62 @@ export function StageMovementsSummaryTable({
     );
   }
 
-  const totalUnique = rows.reduce((acc, r) => acc + r.uniqueLeads, 0);
-  const totalPasses = rows.reduce((acc, r) => acc + r.totalPassages, 0);
+  const totalAcumulado = rows.reduce((acc, r) => acc + r.uniqueLeads, 0);
+  const totalPassagens = rows.reduce((acc, r) => acc + r.passagens, 0);
+  const totalParados = rows.reduce((acc, r) => acc + r.parados, 0);
 
   return (
     <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Estágio</TableHead>
-          <TableHead className="text-right">Leads únicos</TableHead>
-          <TableHead className="text-right">Passagens</TableHead>
+          <TableHead className="text-right">
+            <span className="inline-flex items-center gap-1">
+              Acumulado
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="text-xs">
+                    Leads únicos que <strong>passaram</strong> pelo estágio no
+                    período <strong>+</strong> leads que <strong>estão</strong>{' '}
+                    no estágio hoje. Sem dupla contagem.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </span>
+          </TableHead>
+          <TableHead className="text-right text-xs">Passaram</TableHead>
+          <TableHead className="text-right text-xs">Estão lá</TableHead>
           <TableHead className="w-10" />
         </TableRow>
       </TableHeader>
       <TableBody>
         {rows.map((r) => {
-          const isSelected = selectedStageId === r.stageId;
+          const isSelected = selectedStageNameKey === r.stageNameKey;
           return (
             <TableRow
-              key={r.stageId}
+              key={r.stageNameKey}
               data-state={isSelected ? 'selected' : undefined}
               className="cursor-pointer"
-              onClick={() => onSelectStage(isSelected ? null : r.stageId)}
+              onClick={() => onSelectStage(isSelected ? null : r.stageNameKey)}
             >
               <TableCell className="font-medium">{r.stageName}</TableCell>
               <TableCell className="text-right">
-                <Badge variant="secondary">{r.uniqueLeads}</Badge>
+                <Badge variant="default" className="font-semibold">
+                  {r.uniqueLeads}
+                </Badge>
               </TableCell>
               <TableCell className="text-right">
-                <Badge variant="outline">{r.totalPassages}</Badge>
+                <Badge variant="secondary" className="text-xs">
+                  {r.passagens}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-right">
+                <Badge variant="outline" className="text-xs">
+                  {r.parados}
+                </Badge>
               </TableCell>
               <TableCell>
                 <ChevronRight
@@ -82,8 +114,9 @@ export function StageMovementsSummaryTable({
         })}
         <TableRow className="bg-muted/30 font-semibold hover:bg-muted/30">
           <TableCell>Total</TableCell>
-          <TableCell className="text-right">{totalUnique}</TableCell>
-          <TableCell className="text-right">{totalPasses}</TableCell>
+          <TableCell className="text-right">{totalAcumulado}</TableCell>
+          <TableCell className="text-right">{totalPassagens}</TableCell>
+          <TableCell className="text-right">{totalParados}</TableCell>
           <TableCell />
         </TableRow>
       </TableBody>
