@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useCarrinhoUnifiedData, isForaDoCarrinho, CarrinhoLeadRow } from '@/hooks/useCarrinhoUnifiedData';
 import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
+import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
 
 export interface R2ForaDoCarrinhoAttendee {
   id: string;
@@ -24,8 +25,18 @@ export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date, carrinho
   const data = useMemo((): R2ForaDoCarrinhoAttendee[] => {
     if (!unifiedData) return [];
 
+    const { carrinhoOperacional } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
+    const opStart = carrinhoOperacional.start.getTime();
+    const opEnd = carrinhoOperacional.end.getTime();
+    const inOperationalWindow = (row: CarrinhoLeadRow) => {
+      if (row.is_encaixado) return true;
+      if (!row.scheduled_at) return false;
+      const t = new Date(row.scheduled_at).getTime();
+      return t >= opStart && t < opEnd;
+    };
+
     return unifiedData
-      .filter(isForaDoCarrinho)
+      .filter(r => isForaDoCarrinho(r) && inOperationalWindow(r))
       .map((row): R2ForaDoCarrinhoAttendee => ({
         id: row.attendee_id,
         attendee_name: row.attendee_name,
@@ -42,7 +53,7 @@ export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date, carrinho
         meeting_id: row.meeting_slot_id || '',
       }))
       .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
-  }, [unifiedData]);
+  }, [unifiedData, weekStart, weekEnd, carrinhoConfig, previousConfig]);
 
   return { data, isLoading };
 }

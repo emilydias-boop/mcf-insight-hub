@@ -68,10 +68,22 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
     let pendentes = 0;
     let emAnalise = 0;
 
+    // Janela operacional (Sex anterior 12:00 → Sex desta semana 12:00) para R2 agendadas/realizadas/fora.
+    const { carrinhoOperacional } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
+    const opStart = carrinhoOperacional.start.getTime();
+    const opEnd = carrinhoOperacional.end.getTime();
+    const inOperationalWindow = (row: CarrinhoLeadRow) => {
+      if (row.is_encaixado) return true;
+      if (!row.scheduled_at) return false;
+      const t = new Date(row.scheduled_at).getTime();
+      return t >= opStart && t < opEnd;
+    };
+
     for (const row of unifiedData) {
-      if (isAgendada(row)) r2Agendadas++;
-      if (isRealizada(row)) r2Realizadas++;
-      if (isForaDoCarrinho(row)) foraDoCarrinho++;
+      const opOk = inOperationalWindow(row);
+      if (opOk && isAgendada(row)) r2Agendadas++;
+      if (opOk && isRealizada(row)) r2Realizadas++;
+      if (opOk && isForaDoCarrinho(row)) foraDoCarrinho++;
       if (isCarrinhoEligible(row)) aprovados++;
       else if (isProximaSafra(row)) aprovadosForaCorte++;
       if (isPendente(row)) pendentes++;
@@ -88,7 +100,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       pendentes,
       emAnalise,
     };
-  }, [unifiedData, contratosPagos]);
+  }, [unifiedData, contratosPagos, weekStart, weekEnd, carrinhoConfig, previousConfig]);
 
   return {
     data: kpis,
