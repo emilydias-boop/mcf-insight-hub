@@ -28,7 +28,6 @@ import { CarrinhoConfigDialog } from '@/components/crm/CarrinhoConfigDialog';
 import { R2QuickScheduleModal } from '@/components/crm/R2QuickScheduleModal';
 import { useActiveR2Closers } from '@/hooks/useR2AgendaData';
 import { R2AccumulatedLead } from '@/hooks/useR2AccumulatedLeads';
-import { useEncaixarNoCarrinho } from '@/hooks/useEncaixarNoCarrinho';
 
 export default function R2Carrinho() {
   const [weekDate, setWeekDate] = useState(() => getActiveCartReferenceDate(new Date()));
@@ -39,7 +38,6 @@ export default function R2Carrinho() {
   const [activeTab, setActiveTab] = useState('agendadas');
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [selectedAccLead, setSelectedAccLead] = useState<R2AccumulatedLead | null>(null);
-  const [encaixandoId, setEncaixandoId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const weekStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
@@ -60,7 +58,6 @@ export default function R2Carrinho() {
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
   const { data: r2Closers = [] } = useActiveR2Closers();
-  const encaixarMutation = useEncaixarNoCarrinho();
 
   // Fetch data for each tab
   const { data: rawAgendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekStart, weekEnd, 'agendadas', config, prevConfig);
@@ -147,19 +144,6 @@ export default function R2Carrinho() {
     setSelectedAccLead(lead);
     setScheduleModalOpen(true);
   }, []);
-
-  const handleEncaixarAccumulated = useCallback((lead: R2AccumulatedLead) => {
-    if (!lead.id) return;
-    // For leads that are synthetic (sem-r2-...), we need the real attendee id
-    // meeting_id presence means the lead has an existing attendee record
-    setEncaixandoId(lead.id);
-    encaixarMutation.mutate(
-      { attendeeId: lead.id, weekStart },
-      {
-        onSettled: () => setEncaixandoId(null),
-      }
-    );
-  }, [encaixarMutation, weekStart]);
 
   const weekLabel = useMemo(() => {
     return `${format(weekStart, 'dd/MM', { locale: ptBR })} - ${format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}`;
@@ -368,9 +352,7 @@ export default function R2Carrinho() {
             leads={accumulatedLeads}
             isLoading={accumulatedLoading}
             onSchedule={handleScheduleAccumulated}
-            onEncaixar={handleEncaixarAccumulated}
-            isEncaixando={encaixarMutation.isPending}
-            encaixandoId={encaixandoId}
+            anchorWeekStart={weekStart}
           />
         </TabsContent>
 
