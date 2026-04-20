@@ -72,6 +72,42 @@ const stageMatches = (stageName: string, keys: string[]) => {
 const normPhone = (p: string | null | undefined) =>
   (p || '').replace(/\D/g, '').replace(/^55/, '');
 
+// Strict ANAMNESE detection: requires exact tag "ANAMNESE" (case-insensitive, supports JSON {name})
+// AND data_source === 'webhook'. ANAMNESE-INSTA stays separate via exact-tag match.
+const extractTagName = (t: unknown): string => {
+  if (typeof t !== 'string') {
+    const name = (t as any)?.name;
+    return typeof name === 'string' ? name.trim().toUpperCase() : '';
+  }
+  const s = t.trim();
+  if (s.startsWith('{')) {
+    try { const p = JSON.parse(s); return (p?.name || '').toString().trim().toUpperCase(); }
+    catch { return s.toUpperCase(); }
+  }
+  return s.toUpperCase();
+};
+
+function classifyChannelStrict(opts: {
+  tags: unknown[];
+  originName: string | null;
+  dataSource: string | null;
+  hasA010: boolean;
+}): string {
+  const exactTags = opts.tags.map(extractTagName).filter(Boolean);
+  if (opts.dataSource === 'webhook' && exactTags.includes('ANAMNESE')) return 'ANAMNESE';
+  if (exactTags.includes('ANAMNESE-INSTA')) return 'ANAMNESE-INSTA';
+  const fallback = classifyChannel({
+    tags: opts.tags as string[],
+    originName: opts.originName,
+    leadChannel: null,
+    dataSource: opts.dataSource,
+    hasA010: opts.hasA010,
+  });
+  // Prevent loose ANAMNESE classification from leaking through
+  if (fallback === 'ANAMNESE') return 'OUTRO';
+  return fallback || 'OUTRO';
+}
+
 export function useBUFunnelComplete({
   originIds,
   startDate,
@@ -206,13 +242,12 @@ export function useBUFunnelComplete({
       const dealChannel = new Map<string, string>();
       filteredDeals.forEach((d) => {
         const tagsArr = Array.isArray(d.tags) ? (d.tags as string[]) : [];
-        const ch = classifyChannel({
+        const ch = classifyChannelStrict({
           tags: tagsArr,
           originName: d.origin_id ? (originMap.get(d.origin_id) || null) : null,
-          leadChannel: null,
           dataSource: d.data_source,
           hasA010: tagsArr.some((t) => typeof t === 'string' && t.toUpperCase().includes('A010')),
-        }) || 'OUTRO';
+        });
         dealChannel.set(d.id, ch || 'OUTRO');
       });
 
@@ -337,13 +372,12 @@ export function useBUFunnelComplete({
         }
         extraDeals.forEach((d) => {
           const tagsArr = Array.isArray(d.tags) ? (d.tags as string[]) : [];
-          const ch = classifyChannel({
+          const ch = classifyChannelStrict({
             tags: tagsArr,
             originName: d.origin_id ? (originMap.get(d.origin_id) || null) : null,
-            leadChannel: null,
             dataSource: d.data_source,
             hasA010: tagsArr.some((t) => typeof t === 'string' && t.toUpperCase().includes('A010')),
-          }) || 'OUTRO';
+          });
           dealChannel.set(d.id, ch || 'OUTRO');
           dealsMap.set(d.id, d);
         });
