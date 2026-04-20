@@ -31,7 +31,8 @@ import {
 import { Plus, MoreHorizontal, Pencil, Trash2, CheckCircle, XCircle, Calendar, Info, Building2 } from 'lucide-react';
 import { useClosersList, useDeleteCloser, Closer } from '@/hooks/useClosers';
 import { CloserFormDialog } from '@/components/crm/CloserFormDialog';
-import { useActiveBU } from '@/hooks/useActiveBU';
+import { useActiveBU, useIsGlobalCRM } from '@/hooks/useActiveBU';
+import { useAuth } from '@/contexts/AuthContext';
 
 const BU_LABELS: Record<string, string> = {
   incorporador: 'Incorporador',
@@ -45,6 +46,11 @@ export default function ConfigurarClosers() {
   const { data: closers, isLoading, error } = useClosersList();
   const deleteCloser = useDeleteCloser();
   const activeBU = useActiveBU();
+  const isGlobalCRM = useIsGlobalCRM();
+  const { role } = useAuth();
+  const isAdminLike = role === 'admin' || role === 'manager';
+  // Em rota global o admin/manager vê todos; em rota BU-específica filtra pela BU
+  const showAll = isGlobalCRM && isAdminLike;
   
   const [formOpen, setFormOpen] = useState(false);
   const [selectedCloser, setSelectedCloser] = useState<Closer | null>(null);
@@ -70,7 +76,9 @@ export default function ConfigurarClosers() {
   };
 
   // Filtrar closers pela BU ativa (se houver)
-  const filteredClosers = closers?.filter(c => !activeBU || c.bu === activeBU) || [];
+  const filteredClosers = closers?.filter(c => 
+    showAll ? true : (!activeBU || c.bu === activeBU)
+  ) || [];
   const activeClosers = filteredClosers.filter(c => c.is_active);
   const configuredClosers = filteredClosers.filter(c => c.calendly_event_type_uri);
 
@@ -92,7 +100,7 @@ export default function ConfigurarClosers() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total de Closers {activeBU ? `(${BU_LABELS[activeBU] || activeBU})` : ''}
+              Total de Closers {showAll ? '(Todas as BUs)' : (activeBU ? `(${BU_LABELS[activeBU] || activeBU})` : '')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -148,7 +156,7 @@ export default function ConfigurarClosers() {
           ) : filteredClosers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Nenhum closer cadastrado {activeBU ? `para ${BU_LABELS[activeBU] || activeBU}` : ''}.</p>
+              <p>Nenhum closer cadastrado {showAll ? '' : (activeBU ? `para ${BU_LABELS[activeBU] || activeBU}` : '')}.</p>
               <Button onClick={handleAdd} variant="outline" className="mt-4">
                 <Plus className="mr-2 h-4 w-4" />
                 Adicionar primeiro closer
@@ -160,7 +168,7 @@ export default function ConfigurarClosers() {
                 <TableRow>
                   <TableHead>Closer</TableHead>
                   <TableHead>Email</TableHead>
-                  {!activeBU && <TableHead>BU</TableHead>}
+                  {(showAll || !activeBU) && <TableHead>BU</TableHead>}
                   <TableHead>Status</TableHead>
                   <TableHead>Calendly</TableHead>
                   <TableHead className="w-[70px]"></TableHead>
@@ -179,7 +187,7 @@ export default function ConfigurarClosers() {
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{closer.email}</TableCell>
-                    {!activeBU && (
+                    {(showAll || !activeBU) && (
                       <TableCell>
                         <Badge variant="outline" className="flex items-center gap-1 w-fit">
                           <Building2 className="h-3 w-3" />

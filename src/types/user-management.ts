@@ -35,6 +35,7 @@ export interface UserDetails {
   full_name: string | null;
   avatar_url: string | null;
   role: AppRole | null;
+  roles?: AppRole[];
   created_at: string | null;
   // Novos campos de acesso
   access_status: AccessStatus | null;

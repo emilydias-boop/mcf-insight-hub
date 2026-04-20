@@ -112,6 +112,73 @@ export const useUpdateUserRole = () => {
   });
 };
 
+// ===== MUTATION: Adicionar UM role (mantém os outros) =====
+export const useAddUserRole = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
+      const { error } = await supabase
+        .from("user_roles")
+        .insert({ user_id: userId, role });
+
+      // 23505 = unique violation (role já existe) — ignorar
+      if (error && (error as any).code !== "23505") throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["user-details", variables.userId] });
+      toast({
+        title: "Cargo adicionado",
+        description: "O usuário precisa fazer logout e login novamente para a mudança ter efeito.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao adicionar cargo", description: error.message, variant: "destructive" });
+    },
+  });
+};
+
+// ===== MUTATION: Remover UM role específico =====
+export const useRemoveUserRole = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
+      // Validar: não permitir remover o último role
+      const { data: existing, error: fetchError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+
+      if (fetchError) throw fetchError;
+
+      if (!existing || existing.length <= 1) {
+        throw new Error("O usuário precisa ter ao menos um cargo.");
+      }
+
+      const { error } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("role", role);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["user-details", variables.userId] });
+      toast({
+        title: "Cargo removido",
+        description: "O usuário precisa fazer logout e login novamente para a mudança ter efeito.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao remover cargo", description: error.message, variant: "destructive" });
+    },
+  });
+};
+
 export const useUpdateUserEmployment = () => {
   const queryClient = useQueryClient();
 

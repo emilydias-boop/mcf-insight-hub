@@ -36,7 +36,9 @@ import {
   useUpdateUserPermissions, 
   useUpdateUserIntegrations,
   useSendPasswordReset,
-  useDeleteUser 
+  useDeleteUser,
+  useAddUserRole,
+  useRemoveUserRole,
 } from "@/hooks/useUserMutations";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
@@ -67,6 +69,8 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const queryClient = useQueryClient();
 
   const updateRole = useUpdateUserRole();
+  const addUserRole = useAddUserRole();
+  const removeUserRole = useRemoveUserRole();
   const updateAccess = useUpdateUserAccess();
   const updatePermissions = useUpdateUserPermissions();
   const updateIntegrations = useUpdateUserIntegrations();
@@ -175,6 +179,21 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const handleRoleChange = (role: AppRole) => {
     if (!userId) return;
     updateRole.mutate({ userId, role });
+  };
+
+  const userRoles: AppRole[] = ((userDetails as any)?.roles as AppRole[]) || (userDetails?.role ? [userDetails.role] : []);
+
+  const handleToggleRole = (role: AppRole, checked: boolean) => {
+    if (!userId) return;
+    if (checked) {
+      addUserRole.mutate({ userId, role });
+    } else {
+      if (userRoles.length <= 1) {
+        toast.error("O usuário precisa ter ao menos um cargo.");
+        return;
+      }
+      removeUserRole.mutate({ userId, role });
+    }
   };
 
   const handleSaveGeneral = () => {
@@ -436,19 +455,15 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Role de sistema</Label>
-                    <Select value={userDetails.role || 'viewer'} onValueChange={handleRoleChange}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {activeRoles.map((r) => (
-                          <SelectItem key={r.role_key} value={r.role_key}>
-                            {r.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label>Cargo primário</Label>
+                    <div className="h-10 px-3 py-2 rounded-md border border-input bg-muted/30 text-sm flex items-center">
+                      <Badge variant="outline" className={cn("text-xs", roleInfo.color)}>
+                        {roleInfo.label}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground ml-2">
+                        (definido pela prioridade dos cargos selecionados abaixo)
+                      </span>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Status de acesso</Label>
@@ -497,6 +512,57 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground">Define quais BUs o usuário pode visualizar no menu</p>
+                </div>
+
+                <Separator />
+
+                {/* ===== Cargos no sistema (multi-role) ===== */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Cargos no sistema</Label>
+                    <span className="text-xs text-muted-foreground">
+                      {userRoles.length} {userRoles.length === 1 ? 'cargo' : 'cargos'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Selecione um ou mais cargos. O cargo de maior prioridade vira o primário (define dashboards padrão).
+                    Útil em períodos de migração (ex: SDR que está virando Closer).
+                  </p>
+                  <div className="space-y-2 p-3 border rounded-md max-h-64 overflow-y-auto">
+                    {activeRoles.map((r) => {
+                      const roleKey = r.role_key as AppRole;
+                      const isChecked = userRoles.includes(roleKey);
+                      const isPrimary = userDetails.role === roleKey;
+                      const isLastRole = isChecked && userRoles.length === 1;
+                      const isSaving = (addUserRole.isPending || removeUserRole.isPending);
+                      return (
+                        <label
+                          key={r.role_key}
+                          className={cn(
+                            "flex items-center gap-2 cursor-pointer py-1",
+                            isLastRole && "cursor-not-allowed opacity-80"
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={isSaving || isLastRole}
+                            onChange={(e) => handleToggleRole(roleKey, e.target.checked)}
+                            className="rounded border-gray-300"
+                          />
+                          <span className="text-sm">{r.label}</span>
+                          {isPrimary && (
+                            <Badge variant="outline" className="text-[10px] h-5 ml-auto">
+                              primário
+                            </Badge>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    ⚠️ O usuário precisa fazer logout/login para o novo cargo passar a valer (refresh do JWT).
+                  </p>
                 </div>
 
                 <Separator />
