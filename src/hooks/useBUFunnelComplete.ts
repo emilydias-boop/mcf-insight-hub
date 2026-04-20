@@ -242,13 +242,12 @@ export function useBUFunnelComplete({
       const dealChannel = new Map<string, string>();
       filteredDeals.forEach((d) => {
         const tagsArr = Array.isArray(d.tags) ? (d.tags as string[]) : [];
-        const ch = classifyChannel({
+        const ch = classifyChannelStrict({
           tags: tagsArr,
           originName: d.origin_id ? (originMap.get(d.origin_id) || null) : null,
-          leadChannel: null,
           dataSource: d.data_source,
           hasA010: tagsArr.some((t) => typeof t === 'string' && t.toUpperCase().includes('A010')),
-        }) || 'OUTRO';
+        });
         dealChannel.set(d.id, ch || 'OUTRO');
       });
 
