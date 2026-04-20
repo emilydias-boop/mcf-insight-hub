@@ -391,6 +391,7 @@ export default function R2Carrinho() {
             weekEnd={weekEnd}
             emptyMessage="Nenhum aprovado para a próxima safra"
             countLabel="próxima safra"
+            showEncaixarButton
           />
         </TabsContent>
 

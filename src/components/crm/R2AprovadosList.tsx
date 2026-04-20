@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Copy, Check, ShoppingCart, X, Download, Search, Filter, XCircle, MessageSquare, AlertTriangle, Handshake } from 'lucide-react';
+import { Copy, Check, ShoppingCart, X, Download, Search, Filter, XCircle, MessageSquare, AlertTriangle, Handshake, PackagePlus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { R2CarrinhoAttendee, useUpdateCarrinhoStatus } from '@/hooks/useR2CarrinhoData';
 import { useR2CarrinhoVendas } from '@/hooks/useR2CarrinhoVendas';
 import { useAprovadoAgreementsBatch } from '@/hooks/useAprovadoAgreements';
+import { useEncaixarNoCarrinho } from '@/hooks/useEncaixarNoCarrinho';
 import { AprovadoDetailDrawer } from './AprovadoDetailDrawer';
 import { toast } from 'sonner';
 interface R2AprovadosListProps {
@@ -20,17 +21,20 @@ interface R2AprovadosListProps {
   weekEnd: Date;
   emptyMessage?: string;
   countLabel?: string;
+  showEncaixarButton?: boolean;
 }
 
-export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, emptyMessage, countLabel }: R2AprovadosListProps) {
+export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, emptyMessage, countLabel, showEncaixarButton = false }: R2AprovadosListProps) {
   const [copied, setCopied] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [closerFilter, setCloserFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [selectedAttendee, setSelectedAttendee] = useState<R2CarrinhoAttendee | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [encaixandoId, setEncaixandoId] = useState<string | null>(null);
   
   const updateStatus = useUpdateCarrinhoStatus();
+  const encaixarMutation = useEncaixarNoCarrinho();
   
   // Fetch real sales data (same source as Vendas tab) — pass config for boundary alignment
   const { data: vendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd);
