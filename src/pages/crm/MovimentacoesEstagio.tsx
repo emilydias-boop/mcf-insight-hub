@@ -26,8 +26,10 @@ import {
 import { StageMovementsSummaryTable } from '@/components/crm/StageMovementsSummaryTable';
 import { StageMovementsDetailTable } from '@/components/crm/StageMovementsDetailTable';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
+import { BUFunnelComplete } from '@/components/crm/BUFunnelComplete';
 
 import { useStageMovements } from '@/hooks/useStageMovements';
+import { useBUFunnelComplete } from '@/hooks/useBUFunnelComplete';
 import { useUniqueDealTags } from '@/hooks/useUniqueDealTags';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
@@ -80,6 +82,15 @@ export default function MovimentacoesEstagio() {
   }, [selectedOriginIds, buOriginIds]);
 
   const { data, isLoading, isFetching, refetch } = useStageMovements({
+    originIds: queryOriginIds,
+    startDate: dateRange?.from || subDays(new Date(), 30),
+    endDate: dateRange?.to || new Date(),
+    tagFilters,
+    tagOperator,
+    enabled: !!dateRange?.from && !!dateRange?.to,
+  });
+
+  const funnelQuery = useBUFunnelComplete({
     originIds: queryOriginIds,
     startDate: dateRange?.from || subDays(new Date(), 30),
     endDate: dateRange?.to || new Date(),
@@ -259,6 +270,9 @@ export default function MovimentacoesEstagio() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Funil completo */}
+        <BUFunnelComplete data={funnelQuery.data} isLoading={funnelQuery.isLoading} />
 
         {/* Resumo por estágio */}
         <Card>
