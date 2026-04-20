@@ -46,6 +46,12 @@ const normalizeTag = (t: unknown): string => {
 const isValidUUID = (s: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
+const chunk = <T,>(arr: T[], size = 200): T[][] => {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+};
+
 export function useStageMovements({
   originIds,
   startDate,
@@ -88,17 +94,23 @@ export function useStageMovements({
       const dealIds = [...new Set(activities.map((a) => a.deal_id).filter((id) => id && isValidUUID(id)))];
       if (dealIds.length === 0) return { summary: [], rows: [] };
 
-      let dealsQuery = supabase
-        .from('crm_deals')
-        .select('id, name, tags, origin_id')
-        .in('id', dealIds);
-
-      if (originIds && originIds.length > 0) {
-        dealsQuery = dealsQuery.in('origin_id', originIds);
-      }
-
-      const { data: deals, error: dealsErr } = await dealsQuery;
-      if (dealsErr) throw dealsErr;
+      // Paginar IN(...) em chunks de 200 para evitar HTTP 400 por URL longa
+      const dealChunks = chunk(dealIds, 200);
+      const dealsResults = await Promise.all(
+        dealChunks.map(async (ids) => {
+          let q = supabase
+            .from('crm_deals')
+            .select('id, name, tags, origin_id')
+            .in('id', ids);
+          if (originIds && originIds.length > 0) {
+            q = q.in('origin_id', originIds);
+          }
+          const { data, error } = await q;
+          if (error) throw error;
+          return data || [];
+        })
+      );
+      const deals = dealsResults.flat();
 
       // Filtrar tags
       const filteredDeals = (deals || []).filter((deal) => {
@@ -121,11 +133,19 @@ export function useStageMovements({
       const originIdsFromDeals = [
         ...new Set(filteredDeals.map((d) => d.origin_id).filter((id): id is string => !!id)),
       ];
-      const { data: origins } = await supabase
-        .from('crm_origins')
-        .select('id, name')
-        .in('id', originIdsFromDeals.length > 0 ? originIdsFromDeals : ['00000000-0000-0000-0000-000000000000']);
-      const originMap = new Map((origins || []).map((o) => [o.id, o.name]));
+      const originChunks = originIdsFromDeals.length > 0 ? chunk(originIdsFromDeals, 200) : [];
+      const originsResults = await Promise.all(
+        originChunks.map(async (ids) => {
+          const { data, error } = await supabase
+            .from('crm_origins')
+            .select('id, name')
+            .in('id', ids);
+          if (error) throw error;
+          return data || [];
+        })
+      );
+      const origins = originsResults.flat();
+      const originMap = new Map(origins.map((o) => [o.id, o.name]));
 
       // 4) Buscar todas as stages para resolver nomes/ordem
       const { data: stages } = await supabase
@@ -205,6 +225,12 @@ export function useStageMovements({
           totalPassages: v.totalPassages,
         }))
         .sort((a, b) => a.stageOrder - b.stageOrder || a.stageName.localeCompare(b.stageName));
+
+      console.info('[useStageMovements]', {
+        activities: activities.length,
+        dealsAfterFilter: filteredDeals.length,
+        rows: rows.length,
+      });
 
       return { summary, rows };
     },
