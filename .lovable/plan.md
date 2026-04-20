@@ -1,86 +1,66 @@
 
 
-## Diagnóstico
+## Cadastrar webhook de saída ativo apontando para webhook.site
 
-A infraestrutura foi criada quase toda — tabelas (`outbound_webhook_configs`, `outbound_webhook_queue`, `outbound_webhook_logs`), funções de payload (`build_sale_webhook_payload`), enqueue (`enqueue_outbound_sale_webhook`), edge functions (`outbound-webhook-dispatcher`, `outbound-webhook-test`), cron rodando a cada minuto, e UI nas abas Webhooks Entrada/Saída.
+### O que será feito
 
-**Falta apenas a peça que conecta tudo:** o **trigger em `hubla_transactions`** que detecta vendas e chama `enqueue_outbound_sale_webhook`. Sem ele, nenhuma venda é enfileirada e o dispatcher fica rodando sobre fila vazia.
+Inserir 1 linha em `outbound_webhook_configs` com a configuração completa, ativa e pronta para receber vendas reais.
 
-## Correção (1 migration)
+### Configuração
 
-Criar a função de trigger + o próprio trigger em `hubla_transactions`:
+| Campo | Valor |
+|---|---|
+| `name` | `Vendas Reais — Debug webhook.site` |
+| `description` | `Webhook de debug apontando para webhook.site. Recebe sale.created, sale.updated e sale.refunded de todas as origens.` |
+| `url` | `https://webhook.site/bc01d8da-f2d2-44d0-8a1a-a76a044f0953` |
+| `method` | `POST` |
+| `headers` | `{"Content-Type": "application/json"}` |
+| `events` | `['sale.created', 'sale.updated', 'sale.refunded']` |
+| `sources` | `['hubla', 'kiwify', 'mcfpay', 'asaas', 'make', 'manual']` |
+| `product_categories` | `null` (todas as categorias) |
+| `is_active` | `true` |
+| `secret_token` | `null` (debug, sem assinatura) |
+
+### SQL (operação INSERT — usa a ferramenta de inserção de dados)
 
 ```sql
--- 1) Função de trigger
-create or replace function public.outbound_sale_webhook_trigger()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  _valid_sources text[] := array['hubla','kiwify','mcfpay','make','asaas','manual'];
-  _valid_status  text[] := array['paid','approved','completed','active'];
-  _refund_status text[] := array['refunded','chargeback'];
-begin
-  -- INSERT: nova venda válida
-  if (TG_OP = 'INSERT') then
-    if NEW.source = ANY(_valid_sources) and NEW.sale_status = ANY(_valid_status) then
-      perform public.enqueue_outbound_sale_webhook(NEW.id, 'sale.created');
-    end if;
-    return NEW;
-  end if;
-
-  -- UPDATE: detectar mudanças relevantes
-  if (TG_OP = 'UPDATE') then
-    if NEW.source = ANY(_valid_sources) then
-      -- transição para refund
-      if OLD.sale_status = ANY(_valid_status) and NEW.sale_status = ANY(_refund_status) then
-        perform public.enqueue_outbound_sale_webhook(NEW.id, 'sale.refunded');
-      -- mudança em valor / status / data
-      elsif NEW.sale_status = ANY(_valid_status) and (
-        OLD.net_value      is distinct from NEW.net_value or
-        OLD.product_price  is distinct from NEW.product_price or
-        OLD.sale_status    is distinct from NEW.sale_status or
-        OLD.sale_date      is distinct from NEW.sale_date
-      ) then
-        perform public.enqueue_outbound_sale_webhook(NEW.id, 'sale.updated');
-      end if;
-    end if;
-    return NEW;
-  end if;
-
-  return NEW;
-end;
-$$;
-
--- 2) Trigger
-drop trigger if exists trg_outbound_sale_webhook on public.hubla_transactions;
-create trigger trg_outbound_sale_webhook
-  after insert or update on public.hubla_transactions
-  for each row execute function public.outbound_sale_webhook_trigger();
+INSERT INTO public.outbound_webhook_configs (
+  name,
+  description,
+  url,
+  method,
+  headers,
+  events,
+  sources,
+  product_categories,
+  is_active,
+  secret_token
+) VALUES (
+  'Vendas Reais — Debug webhook.site',
+  'Webhook de debug apontando para webhook.site. Recebe sale.created, sale.updated e sale.refunded de todas as origens.',
+  'https://webhook.site/bc01d8da-f2d2-44d0-8a1a-a76a044f0953',
+  'POST',
+  '{"Content-Type": "application/json"}'::jsonb,
+  ARRAY['sale.created', 'sale.updated', 'sale.refunded'],
+  ARRAY['hubla', 'kiwify', 'mcfpay', 'asaas', 'make', 'manual'],
+  NULL,
+  true,
+  NULL
+);
 ```
 
-## O que isso resolve
+### Como validar depois de aplicado
 
-| Antes | Depois |
-|---|---|
-| Cria webhook na UI, ativa, mas nunca recebe nada | Toda venda nova/atualizada/reembolsada cai na fila |
-| Fila `outbound_webhook_queue` sempre vazia | Dispatcher processa em até 1min e faz POST na URL |
-| Botão "Testar" funciona (envia payload de exemplo) | Botão "Testar" continua funcionando + agora dispara real |
+1. Abra a aba do webhook.site no navegador (mesma URL que você gerou) e deixe aberta.
+2. Em `/admin/automacoes` → aba **Webhooks Saída** → confira que o webhook `Vendas Reais — Debug webhook.site` aparece ativo.
+3. Clique em **Testar** → deve aparecer um payload de exemplo no webhook.site em segundos.
+4. Aguarde a próxima venda real entrar (Hubla/Kiwify/MCFPay/Asaas/Make/Manual) → em até 1 min o POST chega no webhook.site.
+5. Clique em **Logs** no card do webhook para ver o histórico de envios (status HTTP, duração, payload, erro se houver).
 
-## Como validar depois de aplicar
+### Escopo
 
-1. Em `/admin/automacoes` → aba **Webhooks Saída**, criar webhook apontando para um endpoint de teste (ex: webhook.site).
-2. Marcar evento `sale.created`, deixar todas as sources ligadas, ativar.
-3. Clicar **Testar** → deve chegar payload de exemplo no destino.
-4. Aguardar próxima venda real entrar via Hubla/Kiwify/MCFPay → em até 1 min o POST chega no destino.
-5. Conferir histórico no botão **Logs** do webhook.
-
-## Escopo
-
-- 1 migration (1 função + 1 trigger)
-- Zero alteração em código frontend
-- Zero alteração em edge functions
-- Zero impacto em transações existentes (trigger só dispara em novas operações)
+- 1 INSERT em `outbound_webhook_configs`
+- Zero alteração de código (frontend ou edge function)
+- Zero alteração de schema
+- Zero impacto em outros webhooks ou na fila
 
