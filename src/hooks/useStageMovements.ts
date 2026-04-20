@@ -83,11 +83,17 @@ export function useStageMovements({
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString())
         .order('created_at', { ascending: false })
-        .limit(5000);
+        .limit(10000);
 
       if (actErr) throw actErr;
       if (!activities || activities.length === 0) {
         return { summary: [], rows: [] };
+      }
+
+      if (activities.length === 10000) {
+        console.warn(
+          '[useStageMovements] Limite de 10.000 atingido — encurte o período ou filtre por pipeline para ver tudo.',
+        );
       }
 
       // 2) Buscar todos os deals envolvidos
