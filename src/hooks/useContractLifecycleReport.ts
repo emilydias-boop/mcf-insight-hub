@@ -418,7 +418,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
             .neq('status', 'cancelled');
 
           // Map deal_id -> melhor R2 (futuro mais próximo, status válido)
-          const dealToR2 = new Map<string, { date: string; closerName: string | null; isFuture: boolean }>();
+          const dealToR2 = new Map<string, { date: string; closerName: string | null; isFuture: boolean; attendeeId: string }>();
           (allR2s || []).forEach((att: any) => {
             const slot = att.meeting_slot;
             if (!slot || slot.status === 'cancelled' || slot.status === 'rescheduled') return;
@@ -434,6 +434,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
                 date: r2Date,
                 closerName: slot.closer?.name || null,
                 isFuture,
+                attendeeId: att.id,
               });
             }
           });
@@ -444,7 +445,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
             .select('id, contact_id')
             .in('id', contactDealIds);
 
-          const contactToBestR2 = new Map<string, { date: string; closerName: string | null; isFuture: boolean }>();
+          const contactToBestR2 = new Map<string, { date: string; closerName: string | null; isFuture: boolean; attendeeId: string }>();
           (dealsWithContacts || []).forEach(d => {
             if (!d.contact_id) return;
             const r2 = dealToR2.get(d.id);
@@ -468,6 +469,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
               orphan.pendingReason = 'r2_proxima_semana';
               orphan.futureR2Date = bestR2.date;
               orphan.futureR2CloserName = bestR2.closerName;
+              orphan.futureR2AttendeeId = bestR2.attendeeId;
             }
           });
         }
