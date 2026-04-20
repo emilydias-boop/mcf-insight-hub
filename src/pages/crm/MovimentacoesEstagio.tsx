@@ -271,12 +271,11 @@ export default function MovimentacoesEstagio() {
           </CardContent>
         </Card>
 
-        {/* Resumo por estágio */}
-        <Card>
         {/* Funil completo */}
         <BUFunnelComplete data={funnelQuery.data} isLoading={funnelQuery.isLoading} />
 
         {/* Resumo por estágio */}
+        <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Filter className="h-4 w-4" />
