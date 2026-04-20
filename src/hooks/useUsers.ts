@@ -53,6 +53,8 @@ export const useUserDetails = (userId: string | null) => {
           )[0].role 
         : null;
 
+      const allUserRoles = (roleData?.map((r) => r.role) || []) as any[];
+
       // Get employment data
       const { data: employment, error: employmentError } = await supabase
         .from("user_employment_data")
@@ -65,6 +67,7 @@ export const useUserDetails = (userId: string | null) => {
       return {
         ...profile,
         role: primaryRole || null,
+        roles: allUserRoles,
         access_status: (profile as any).access_status as AccessStatus || 'ativo',
         blocked_until: (profile as any).blocked_until || null,
         last_login_at: (profile as any).last_login_at || null,
