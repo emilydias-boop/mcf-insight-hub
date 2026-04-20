@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { format, addWeeks, subWeeks, parseISO } from 'date-fns';
+import { format, addWeeks, subWeeks, addDays, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, PackagePlus, PackageX, Sparkles, CheckCircle2 } from 'lucide-react';
 import {
@@ -43,16 +43,17 @@ interface WeekOption {
 function buildWeekOptions(anchor: Date, suggested?: Date): WeekOption[] {
   const base = getCartWeekStart(anchor);
   const weeks = [
-    { key: 'prev', label: 'Semana anterior', start: subWeeks(base, 1) },
-    { key: 'current', label: 'Semana atual', start: base },
-    { key: 'next', label: 'Próxima semana', start: addWeeks(base, 1) },
-    { key: 'next2', label: 'Semana seguinte', start: addWeeks(base, 2) },
+    { key: 'prev', start: subWeeks(base, 1) },
+    { key: 'current', start: base },
+    { key: 'next', start: addWeeks(base, 1) },
+    { key: 'next2', start: addWeeks(base, 2) },
   ];
   const suggestedKey = suggested
     ? format(getCartWeekStart(suggested), 'yyyy-MM-dd')
     : format(base, 'yyyy-MM-dd');
   return weeks.map(w => ({
     ...w,
+    label: `Carrinho ${format(addDays(w.start, 1), 'dd/MM', { locale: ptBR })}`,
     end: getCartWeekEnd(w.start),
     isSuggested: format(w.start, 'yyyy-MM-dd') === suggestedKey,
   }));
@@ -60,6 +61,10 @@ function buildWeekOptions(anchor: Date, suggested?: Date): WeekOption[] {
 
 function formatRange(start: Date, end: Date) {
   return `Qui ${format(start, 'dd/MM', { locale: ptBR })} → Qua ${format(end, 'dd/MM', { locale: ptBR })}`;
+}
+
+function formatCarrinhoLabel(start: Date) {
+  return `Carrinho ${format(addDays(start, 1), 'dd/MM', { locale: ptBR })}`;
 }
 
 export function EncaixarSemanaDialog({
@@ -177,7 +182,7 @@ export function EncaixarSemanaDialog({
                   )}
                 >
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium flex items-center gap-1.5">
+                    <span className="text-sm font-semibold flex items-center gap-1.5">
                       {opt.label}
                       {opt.isSuggested && (
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-amber-500/40 text-amber-600 bg-amber-500/10">
@@ -208,7 +213,8 @@ export function EncaixarSemanaDialog({
           {currentOption && (
             <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
               <p className="text-xs text-amber-700 dark:text-amber-300">
-                ⚠️ Encaixado atualmente em <strong>{formatRange(currentOption.start, currentOption.end)}</strong>
+                ⚠️ Encaixado atualmente em <strong>{formatCarrinhoLabel(currentOption.start)}</strong>{' '}
+                <span className="opacity-80">({formatRange(currentOption.start, currentOption.end)})</span>
               </p>
               <Button
                 variant="outline"
@@ -229,8 +235,9 @@ export function EncaixarSemanaDialog({
 
           {selectedOption && !isSameAsCurrent && (
             <p className="text-xs text-muted-foreground mt-2">
-              O lead aparecerá em <strong>Aprovados</strong> da semana{' '}
-              <strong>{formatRange(selectedOption.start, selectedOption.end)}</strong>.
+              O lead aparecerá em <strong>Aprovados</strong> do{' '}
+              <strong>{formatCarrinhoLabel(selectedOption.start)}</strong>{' '}
+              <span className="opacity-80">({formatRange(selectedOption.start, selectedOption.end)})</span>.
             </p>
           )}
         </div>
