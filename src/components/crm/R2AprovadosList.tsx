@@ -343,7 +343,7 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
           <TableBody>
             {displayedAttendees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={showEncaixarButton ? 9 : 8} className="text-center py-8 text-muted-foreground">
                   Nenhum resultado encontrado com os filtros aplicados
                 </TableCell>
               </TableRow>
@@ -520,6 +520,28 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
                         </TooltipTrigger>
                         <TooltipContent>Não Comprou</TooltipContent>
                       </Tooltip>
+
+                      {showEncaixarButton && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 px-2 ml-1 border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+                              disabled={encaixandoId === att.id}
+                              onClick={() => handleEncaixar(att.id)}
+                            >
+                              {encaixandoId === att.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <PackagePlus className="h-4 w-4" />
+                              )}
+                              <span className="hidden lg:inline ml-1 text-xs">Encaixar</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Encaixar nesta semana</TooltipContent>
+                        </Tooltip>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
