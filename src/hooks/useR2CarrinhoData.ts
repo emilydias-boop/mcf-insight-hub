@@ -16,6 +16,7 @@ export interface R2CarrinhoAttendee {
   r2_status_name: string | null;
   carrinho_status: string | null;
   carrinho_updated_at: string | null;
+  carrinho_week_start: string | null;
   deal_id: string | null;
   meeting_id: string;
   meeting_status: string;
@@ -44,6 +45,7 @@ function toAttendee(row: CarrinhoLeadRow): R2CarrinhoAttendee {
     r2_status_name: row.r2_status_name,
     carrinho_status: row.carrinho_status,
     carrinho_updated_at: row.carrinho_updated_at,
+    carrinho_week_start: row.carrinho_week_start,
     deal_id: row.deal_id,
     meeting_id: row.meeting_slot_id || '',
     meeting_status: row.meeting_status || '',
