@@ -53,6 +53,8 @@ export interface CarrinhoMetricBoundaries {
   previousCutoff: Date;
   /** Alias semântico para previousCutoff (sexta de fechamento da safra anterior = abertura da atual) */
   safraOpeningCutoff: Date;
+  /** Janela operacional do carrinho: Sex anterior 12:00 → Sex desta semana 12:00 (filtro para R2 agendadas/realizadas/fora) */
+  carrinhoOperacional: { start: Date; end: Date };
 }
 
 /**
@@ -121,17 +123,19 @@ export function getCarrinhoMetricBoundaries(
 
   // R2 Meetings e Aprovados: janela do CARRINHO = Qui da safra 00:00 → Sex da SEMANA SEGUINTE no corte.
   // O R2 pode acontecer ao longo da semana toda da safra E até a sexta seguinte no horário de corte.
-  // Vendas parceria: Qui 00:00 da safra → Sex DA safra no corte (fechamento operacional da safra).
-  const vendasEnd = new Date(currentFridayCutoff.getTime() - 1); // Sex DA safra 11:59:59.999
+  // Vendas parceria: Sex desta semana no corte → Seg 23:59 (captura boletos atrasados após o fechamento do carrinho).
+  const nextMonday = addDays(nextFriday, 3); // Sex+1 + 3 = Seg da semana seguinte
+  const nextMondayEnd = localEndOfDay(nextMonday);
 
   return {
     contratos: { start: thuStart, end: wedEnd },
     r2Meetings: { start: thuStart, end: nextFridayCutoff },
     aprovados: { start: thuStart, end: nextFridayCutoff },
-    vendasParceria: { start: thuStart, end: vendasEnd },
+    vendasParceria: { start: nextFridayCutoff, end: nextMondayEnd },
     r1Meetings: { start: thuStart, end: wedEnd },
     previousCutoff: previousFridayCutoff,
     safraOpeningCutoff: previousFridayCutoff,
+    carrinhoOperacional: { start: previousFridayCutoff, end: nextFridayCutoff },
   };
 }
 
