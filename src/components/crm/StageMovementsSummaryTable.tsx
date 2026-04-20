@@ -63,8 +63,12 @@ export function StageMovementsSummaryTable({
                 <TooltipContent className="max-w-xs">
                   <p className="text-xs">
                     Leads únicos que <strong>já passaram</strong> por este
-                    estágio em algum momento do seu histórico, entre os leads
-                    ativos no período selecionado. Sem dupla contagem.
+                    estágio. Considera o universo completo de leads das
+                    pipelines selecionadas (não depende da data). Para a trilha
+                    principal, leads em estágios avançados são inferidos como
+                    tendo passado pelos anteriores. Estágios laterais (No-Show,
+                    Sem Interesse) não inflam a trilha — exceto No-Show, que
+                    implica ter sido agendado.
                   </p>
                 </TooltipContent>
               </Tooltip>
