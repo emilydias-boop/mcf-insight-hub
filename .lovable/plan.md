@@ -1,47 +1,72 @@
 
 
-## Diagnóstico final
+## Diagnóstico final (testado via RPC com cutoff correto)
 
-A correção do cutoff foi aplicada, mas **só no Carrinho R2 (KPIs de cima)**. A aba **Relatório** continua chamando a RPC **sem** `p_previous_cutoff`, então cai no `DEFAULT NULL` e usa Qui 00:00 como início da janela — voltando ao bug antigo.
+Rodei a RPC com os parâmetros que o front realmente envia e bateu com a tela:
 
-Comparando sua lista (44) com a tela:
+| Tela | Valor | Origem |
+|---|---|---|
+| Carrinho R2 — "Aprovados" | **59** | `useR2CarrinhoKPIs` → conta `isAprovado(row)` em todos, **sem filtro de corte e sem filtro de status do attendee** |
+| Relatório — "Aprovado" | **46** | `useContractLifecycleReport` → exige `situacao='realizada'` (= `attendee_status IN ('completed','contract_paid')`) **E** `dentroCorte=true` **E** status name = "Aprovado" |
+| Relatório — "Aprovado (fora do corte)" | **10** | mesma regra mas `dentroCorte=false` |
 
-**Aprovado 46 (Relatório)** = 18 leads com R2 nesta semana realmente dentro do corte + 11 intrusos da safra anterior (R2 entre Qui 00:00 e Sex 12:00 com contrato anterior a Sex 12:00) + ~17 órfãos Hubla (contrato pago na semana, sem R2 nesta semana — somam em "Total Pagos" e em Aprovado).
+### Por que diverge
 
-**Aprovado (fora do corte) 10** = leads com R2 nesta semana mas contrato fora da janela operacional.
+1. **Filtro de corte**: KPI Carrinho R2 não aplica `dentro_corte` → soma os 49 dentro + 10 fora = **59**. Relatório aplica → mostra 49 e 10 separados (e dos 49, perde 3 que caem em "Próxima Semana"/"Sem status" → 46).
+2. **Filtro de attendee_status**: KPI Carrinho R2 conta também `invited`, `scheduled`, `pre_scheduled` desde que o R2 esteja aprovado. Relatório só conta `completed`/`contract_paid` (porque a `situacao` precisa ser `realizada`).
+3. **Sub-status em "Realizadas"**: Os 2 "Próxima Semana" e 1 "Sem status" no Relatório são leads aprovados com `r2_status_name` diferente (ou null), e o card "Aprovado" só pega os com nome literal "Aprovado".
 
-### Sobre os 10 "fora do corte"
+Ou seja, **ambos consomem a mesma RPC, mas aplicam filtros diferentes em cima** — o nome "Aprovado" significa coisas diferentes nos dois lugares.
 
-**Sim, esses 10 deveriam aparecer no próximo carrinho.** Eles já aparecem — quando você navega para a próxima safra, eles entram como "dentro do corte" daquela semana, porque o contrato cai dentro da nova janela `[Sex 12:00 atual, Sex 12:00 próximo)`. A categoria "Aprovado (fora do corte)" só existe como **alerta visual** na semana onde o R2 aconteceu para mostrar leads que tecnicamente pertencem a outra safra. Não é bug, é semântica: R2 aconteceu aqui, mas o contrato pertence a outra cohort.
+### Lista verdade do usuário = 44 leads
 
-## Correções necessárias
+Mesmo o "49 dentro_corte" não bate com os 44 da safra real. Há 5 leads excedentes na cohort que não pertenciam à lista, e esses 5 foram identificados anteriormente (caso Helder/Alexandre DaLuz/etc. com contrato em 08/04 — que entram via `p_previous_cutoff = Sex 03/04 12:00`, regra ampla demais).
 
-### 1. `src/hooks/useContractLifecycleReport.ts` (linhas 127–135)
-Passar `p_previous_cutoff` igual ao `useCarrinhoUnifiedData`:
+## Plano de correção
 
-```diff
-- const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd);
-+ const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd);
+### 1. Alinhar Carrinho R2 KPI "Aprovados" com a regra do Relatório
 
-  const rpcPromise = supabase.rpc('get_carrinho_r2_attendees', {
-    p_week_start: weekStartStr,
-    p_window_start: boundaries.r2Meetings.start.toISOString(),
-    p_window_end: boundaries.r2Meetings.end.toISOString(),
-    p_apply_contract_cutoff: true,
-+   p_previous_cutoff: boundaries.previousCutoff.toISOString(),
-  });
+Em `src/hooks/useR2CarrinhoKPIs.ts`, mudar a contagem de `aprovados` para respeitar `dentro_corte` (mesma regra do Relatório):
+
+```ts
+if (isAprovado(row) && row.dentro_corte) aprovados++;
 ```
 
-Resultado esperado:
-- Aprovado dentro do corte: cai de **46 → ~33** (18 com R2 nesta semana + ~15 órfãos Hubla com contrato pago após Sex 12:00 anterior)
-- Aprovado (fora do corte): sobe de **10 → ~22** (10 atuais + 12 intrusos migrados)
-- "Total Pagos" não muda (continua contando todos os contratos pagos no range)
+E adicionar um novo KPI opcional `aprovadosForaCorte` para paridade visual com o Relatório.
 
-### 2. (Opcional, não vou tocar agora) Reforçar visualmente a separação
-A aba Carrinho R2 já mostra os números corretos (18+22). A aba Relatório vai ficar consistente após o fix acima.
+Resultado esperado:
+- "Aprovados" no Carrinho R2 cai de **59 → 49** (mesma base do Relatório dentro_corte)
+- O painel Carrinho R2 ganha card "Fora do corte: 10" (igual ao Relatório)
+
+### 2. Apertar a janela `p_previous_cutoff` para alinhar com a lista de 44
+
+A regra atual usa `previousFriday = Qui_da_safra - 6 dias = Sex da semana ANTERIOR à safra`. Para safra Qui 09 → Qua 15, isso dá **Sex 03/04 12:00** — janela de 14 dias, ampla demais, inclui contratos de 03/04 a 08/04 que pertencem à safra anterior.
+
+A janela operacional correta da safra Qui 09 → Qua 15 começa em **Sex 10/04 12:00** (a sexta DENTRO da safra, no horário do corte da safra anterior). Antes disso é a safra anterior.
+
+**Correção em `src/lib/carrinhoWeekBoundaries.ts`** (linha 97):
+```ts
+// ANTES: const previousFriday = subDays(new Date(weekStart), 6);
+// DEPOIS:
+const previousFriday = addDays(new Date(weekStart), 1); // Sex da PRÓPRIA safra
+```
+
+Resultado esperado: contratos pagos de 03/04 a 09/04 antes das 12:00 caem em `dentro_corte = false` → KPI "Aprovado" cai de 49 → ~44 (alinhado com a lista oficial).
+
+### 3. Validação
+
+Após as mudanças:
+- Carrinho R2 "Aprovados" = ~44 (igual à lista oficial)
+- Carrinho R2 "Fora do corte" = ~15 (novo card)
+- Relatório "Aprovado" = ~44 - 3 (próx semana/sem status) = ~41
+- Relatório "Aprovado (fora do corte)" = ~15
 
 ### Escopo
-- 1 linha adicionada em `useContractLifecycleReport.ts`
-- Zero migrations (RPC já aceita o parâmetro com DEFAULT NULL)
-- Zero impacto em outras telas
+- 1 alteração em `useR2CarrinhoKPIs.ts` (filtro `dentro_corte` + KPI extra)
+- 1 alteração em `carrinhoWeekBoundaries.ts` (1 linha: `previousFriday`)
+- 1 alteração em `R2Carrinho.tsx` (renderizar novo KPI "Fora do corte")
+- Zero migration de banco — RPC já está correta
+
+### Risco
+A mudança em `previousFriday` afeta TODAS as semanas históricas (recálculo retroativo). Para semanas antigas o resultado pode mudar levemente. Recomendo testar primeiro na safra atual e na safra Qui 02 → Qua 08 (anterior) para ver impacto.
 
