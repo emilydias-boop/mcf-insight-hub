@@ -209,7 +209,7 @@ export function useBUFunnelComplete({
         const ch = classifyChannel({
           tags: tagsArr,
           originName: d.origin_id ? (originMap.get(d.origin_id) || null) : null,
-          leadChannel: d.lead_channel,
+          leadChannel: null,
           dataSource: d.data_source,
           hasA010: tagsArr.some((t) => typeof t === 'string' && t.toUpperCase().includes('A010')),
         }) || 'OUTRO';
@@ -340,7 +340,7 @@ export function useBUFunnelComplete({
           const ch = classifyChannel({
             tags: tagsArr,
             originName: d.origin_id ? (originMap.get(d.origin_id) || null) : null,
-            leadChannel: d.lead_channel,
+            leadChannel: null,
             dataSource: d.data_source,
             hasA010: tagsArr.some((t) => typeof t === 'string' && t.toUpperCase().includes('A010')),
           }) || 'OUTRO';
