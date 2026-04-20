@@ -181,37 +181,18 @@ export function useStageMovements({
         );
       };
 
-      // 3) UNIVERSO COMPLETO: todos os deals das origens selecionadas (paginado, sem limite de 10k).
-      //    Esse é o universo definitivo — a janela de data afeta apenas "Passaram".
-      const snapshotDeals: Array<{
+      // 3) UNIVERSO DINÂMICO PELO PERÍODO:
+      //    (a) deals envolvidos em movimentações (stage_change) no período
+      //    (b) deals criados no período (cobre leads novos sem histórico)
+      type DealRow = {
         id: string;
         name: string | null;
         tags: unknown;
         origin_id: string | null;
         stage_id: string | null;
-      }> = [];
-      const PAGE = 1000;
-      for (let from = 0; ; from += PAGE) {
-        let q = supabase
-          .from('crm_deals')
-          .select('id, name, tags, origin_id, stage_id')
-          .order('created_at', { ascending: false })
-          .range(from, from + PAGE - 1);
-        if (originIds && originIds.length > 0) {
-          q = q.in('origin_id', originIds);
-        }
-        const { data, error } = await q;
-        if (error) throw error;
-        const batch = data || [];
-        snapshotDeals.push(...(batch as typeof snapshotDeals));
-        if (batch.length < PAGE) break;
-        if (from > 50_000) {
-          console.warn('[useStageMovements] Universo > 50k deals, interrompendo paginação.');
-          break;
-        }
-      }
+        created_at: string | null;
+      };
 
-      // 4) Deals envolvidos em movimentações (para nome/tags/origin)
       const movementDealIds = [
         ...new Set(acts.map((a) => a.deal_id).filter((id) => id && isValidUUID(id))),
       ];
@@ -221,7 +202,7 @@ export function useStageMovements({
         dealChunks.map(async (ids) => {
           let q = supabase
             .from('crm_deals')
-            .select('id, name, tags, origin_id, stage_id')
+            .select('id, name, tags, origin_id, stage_id, created_at')
             .in('id', ids);
           if (originIds && originIds.length > 0) {
             q = q.in('origin_id', originIds);
@@ -231,11 +212,35 @@ export function useStageMovements({
           return data || [];
         }),
       );
-      const movementDeals = dealsResults.flat();
+      const movementDeals = dealsResults.flat() as DealRow[];
 
-      // Merge: união de deals (snapshot + envolvidos em movimentações)
-      const allDealsMap = new Map<string, typeof snapshotDeals[number]>();
-      [...movementDeals, ...snapshotDeals].forEach((d) => {
+      // (b) Deals criados no período (paginado)
+      const createdInPeriod: DealRow[] = [];
+      const PAGE = 1000;
+      for (let from = 0; ; from += PAGE) {
+        let q = supabase
+          .from('crm_deals')
+          .select('id, name, tags, origin_id, stage_id, created_at')
+          .gte('created_at', startDate.toISOString())
+          .lte('created_at', endDate.toISOString())
+          .order('created_at', { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (originIds && originIds.length > 0) {
+          q = q.in('origin_id', originIds);
+        }
+        const { data, error } = await q;
+        if (error) throw error;
+        const batch = (data || []) as DealRow[];
+        createdInPeriod.push(...batch);
+        if (batch.length < PAGE) break;
+        if (from > 50_000) {
+          console.warn('[useStageMovements] Criados no período > 50k, interrompendo.');
+          break;
+        }
+      }
+
+      const allDealsMap = new Map<string, DealRow>();
+      [...movementDeals, ...createdInPeriod].forEach((d) => {
         if (d?.id) allDealsMap.set(d.id, d);
       });
 
@@ -253,30 +258,15 @@ export function useStageMovements({
           : tagFilters.some(evaluate);
       };
 
-      const filteredDealsMap = new Map<string, typeof snapshotDeals[number]>();
+      const filteredDealsMap = new Map<string, DealRow>();
       allDealsMap.forEach((d, id) => {
         if (passesTagFilter(d)) filteredDealsMap.set(id, d);
       });
 
       if (filteredDealsMap.size === 0) return { summary: [], rows: [] };
 
-      // 5) Buscar histórico COMPLETO de stage_change para todos os deals filtrados (sem filtro de data)
-      const allDealIds = Array.from(filteredDealsMap.keys()).filter(isValidUUID);
-      const historyChunks = chunk(allDealIds, 200);
-      const historyResults = await Promise.all(
-        historyChunks.map(async (ids) => {
-          const { data, error } = await supabase
-            .from('deal_activities')
-            .select('deal_id, to_stage')
-            .eq('activity_type', 'stage_change')
-            .in('deal_id', ids);
-          if (error) throw error;
-          return data || [];
-        }),
-      );
-      const fullHistory = historyResults.flat();
-
-      // Construir stagesPassedByDeal: Map<dealId, Set<stageNameKey>>
+      // 5) Construir stagesPassedByDeal APENAS com movimentações no período + estágio inicial
+      //    de deals criados no período.
       const stagesPassedByDeal = new Map<string, Set<string>>();
       const ensurePassedSet = (dealId: string) => {
         let s = stagesPassedByDeal.get(dealId);
@@ -284,15 +274,28 @@ export function useStageMovements({
         return s;
       };
 
-      fullHistory.forEach((act) => {
-        const stage = resolveStage(act.to_stage);
-        if (!stage) return;
-        const key = normalizeStageName(stage.name) || stage.id;
-        ensurePassedSet(act.deal_id).add(key);
+      // Atividades no período: tanto from_stage quanto to_stage contam como "passou"
+      acts.forEach((act) => {
+        if (!act.deal_id || !filteredDealsMap.has(act.deal_id)) return;
+        const toStage = resolveStage(act.to_stage);
+        if (toStage) {
+          const key = normalizeStageName(toStage.name) || toStage.id;
+          ensurePassedSet(act.deal_id).add(key);
+        }
+        const fromStage = resolveStage(act.from_stage);
+        if (fromStage) {
+          const key = normalizeStageName(fromStage.name) || fromStage.id;
+          ensurePassedSet(act.deal_id).add(key);
+        }
       });
 
-      // Adicionar estágio atual de cada deal ao histórico (cobre deals criados direto num estágio)
+      // Deals criados no período: estágio atual conta como "passou" no período
+      const startMs = startDate.getTime();
+      const endMs = endDate.getTime();
       filteredDealsMap.forEach((deal) => {
+        const createdMs = deal.created_at ? new Date(deal.created_at).getTime() : NaN;
+        if (!Number.isFinite(createdMs)) return;
+        if (createdMs < startMs || createdMs > endMs) return;
         if (!deal.stage_id) return;
         const stage = resolveStage(deal.stage_id);
         if (!stage) return;
@@ -434,14 +437,31 @@ export function useStageMovements({
         movedSetByStage.get(r.toStageNameKey)!.add(r.dealId);
       });
 
+      // Snapshot no FIM do período: para cada deal, descobrir o estágio que ele estava em endDate.
+      //    Estratégia: pegar a última stage_change com created_at <= endDate (acts já está ordenado desc).
+      //    Fallback: stage_id atual SE o deal foi criado <= endDate.
+      const lastStageAtEnd = new Map<string, string>(); // dealId -> stageId/clintId
+      // acts está ordenado desc por created_at e já é <= endDate (filtro da query)
+      acts.forEach((act) => {
+        if (!act.deal_id || !filteredDealsMap.has(act.deal_id)) return;
+        if (lastStageAtEnd.has(act.deal_id)) return; // já temos a mais recente
+        if (act.to_stage) lastStageAtEnd.set(act.deal_id, act.to_stage);
+      });
+
       filteredDealsMap.forEach((deal) => {
-        if (!deal.stage_id) return;
-        const stage = resolveStage(deal.stage_id);
+        let stageRef: string | null = lastStageAtEnd.get(deal.id) ?? null;
+        if (!stageRef) {
+          const createdMs = deal.created_at ? new Date(deal.created_at).getTime() : NaN;
+          if (Number.isFinite(createdMs) && createdMs <= endMs && deal.stage_id) {
+            stageRef = deal.stage_id;
+          }
+        }
+        if (!stageRef) return;
+        const stage = resolveStage(stageRef);
         if (!stage) return;
         const key = normalizeStageName(stage.name) || stage.id;
         const e = ensureEntry(key, stage);
         e.parados += 1;
-        const wasAlreadyCounted = e.uniqueLeads.has(deal.id);
         e.uniqueLeads.add(deal.id);
 
         // Se este deal não teve movimentação para este estágio no período, adicionar linha "snapshot only"
@@ -463,7 +483,6 @@ export function useStageMovements({
             isSnapshotOnly: true,
           });
         }
-        void wasAlreadyCounted;
       });
 
       // 10) Acumulado via histórico completo: uniqueLeads = todos os deals que JÁ passaram por cada estágio
@@ -503,7 +522,8 @@ export function useStageMovements({
 
       console.info('[useStageMovements]', {
         activities: acts.length,
-        snapshotDeals: snapshotDeals.length,
+        createdInPeriod: createdInPeriod.length,
+        movementDeals: movementDeals.length,
         dealsAfterFilter: filteredDealsMap.size,
         rows: rows.length,
         stages: summary.length,
