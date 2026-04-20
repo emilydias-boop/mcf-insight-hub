@@ -94,6 +94,8 @@ function classifyChannelStrict(opts: {
   hasA010: boolean;
 }): string {
   const exactTags = opts.tags.map(extractTagName).filter(Boolean);
+  // A010 = comprador Hubla (fonte de verdade) — tem prioridade máxima
+  if (opts.hasA010) return 'A010';
   if (opts.dataSource === 'webhook' && exactTags.includes('ANAMNESE')) return 'ANAMNESE';
   if (exactTags.includes('ANAMNESE-INSTA')) return 'ANAMNESE-INSTA';
   const fallback = classifyChannel({
@@ -103,8 +105,9 @@ function classifyChannelStrict(opts: {
     dataSource: opts.dataSource,
     hasA010: opts.hasA010,
   });
-  // Prevent loose ANAMNESE classification from leaking through
+  // Prevent loose ANAMNESE/A010 classification from leaking through
   if (fallback === 'ANAMNESE') return 'OUTRO';
+  if (fallback === 'A010') return 'OUTRO';
   return fallback || 'OUTRO';
 }
 
