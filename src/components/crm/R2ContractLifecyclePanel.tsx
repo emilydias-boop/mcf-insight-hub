@@ -317,6 +317,17 @@ export function R2ContractLifecyclePanel() {
     setWeekDate(prev => dir > 0 ? addWeeks(prev, 1) : subWeeks(prev, 1));
   };
 
+  const handleEncaixar = (row: ContractLifecycleRow, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const attendeeId = row.futureR2AttendeeId || row.id;
+    if (!attendeeId || attendeeId.startsWith('hubla-orphan-')) return;
+    setEncaixandoId(row.id);
+    encaixarMutation.mutate(
+      { attendeeId, weekStart: safraStart },
+      { onSettled: () => setEncaixandoId(null) },
+    );
+  };
+
   const isParentActive = (key: string) => expandedKpi === key;
 
   return (
@@ -614,6 +625,9 @@ export function R2ContractLifecyclePanel() {
                     <TableHead className="whitespace-nowrap">R2 Data</TableHead>
                     <TableHead className="whitespace-nowrap">Closer R2</TableHead>
                     <TableHead className="whitespace-nowrap">R2 Status</TableHead>
+                    {expandedKpi === 'pendentes' && activeSubFilter === 'proxima_safra' && (
+                      <TableHead className="whitespace-nowrap text-right">Ação</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -646,6 +660,26 @@ export function R2ContractLifecyclePanel() {
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-xs">{row.r2CloserName || row.futureR2CloserName || '—'}</TableCell>
                       <TableCell><R2StatusBadge name={row.r2StatusName} color={row.r2StatusColor} /></TableCell>
+                      {expandedKpi === 'pendentes' && activeSubFilter === 'proxima_safra' && (
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+                            disabled={encaixandoId === row.id || !row.futureR2AttendeeId}
+                            onClick={(e) => handleEncaixar(row, e)}
+                          >
+                            {encaixandoId === row.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <PackagePlus className="h-4 w-4 mr-1" />
+                                <span className="text-xs">Encaixar</span>
+                              </>
+                            )}
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
