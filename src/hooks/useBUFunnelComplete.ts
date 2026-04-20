@@ -491,27 +491,11 @@ export function useBUFunnelComplete({
         .gte('sale_date', startIso)
         .lte('sale_date', endIso);
 
-      // construir índices email/phone -> canal a partir dos contatos do universo
-      // precisamos buscar emails/phones dos contacts dos deals filtrados
-      const contactIds = [...new Set(filteredDeals.map((d) => d.contact_id).filter((x): x is string => !!x))];
+      // Reaproveita maps já carregados (contactEmailById/contactPhoneById) — invertidos
       const contactEmail = new Map<string, string>();
       const contactPhone = new Map<string, string>();
-      if (contactIds.length > 0) {
-        const cChunks = chunk(contactIds, 200);
-        const cRes = await Promise.all(
-          cChunks.map(async (ids) => {
-            const { data } = await supabase
-              .from('crm_contacts')
-              .select('id, email, phone')
-              .in('id', ids);
-            return data || [];
-          }),
-        );
-        cRes.flat().forEach((c: any) => {
-          if (c.email) contactEmail.set(c.email.toLowerCase(), c.id);
-          if (c.phone) contactPhone.set(normPhone(c.phone), c.id);
-        });
-      }
+      contactEmailById.forEach((email, id) => contactEmail.set(email, id));
+      contactPhoneById.forEach((phone, id) => contactPhone.set(phone, id));
       // mapear contact -> canal (prioriza primeiro deal)
       const contactToChannel = new Map<string, string>();
       filteredDeals.forEach((d) => {
