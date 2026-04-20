@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
 import { useCarrinhoUnifiedData, isAprovado, isCarrinhoEligible, isProximaSafra, CarrinhoLeadRow } from '@/hooks/useCarrinhoUnifiedData';
 import { useMemo } from 'react';
+import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
 
 export interface R2CarrinhoAttendee {
   id: string;
@@ -76,22 +77,33 @@ export function useR2CarrinhoData(
 
     let filtered = unifiedData;
 
+    // Janela operacional do carrinho (Sex anterior 12:00 → Sex desta semana 12:00) — usada apenas para R2s.
+    const { carrinhoOperacional } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
+    const opStart = carrinhoOperacional.start.getTime();
+    const opEnd = carrinhoOperacional.end.getTime();
+    const inOperationalWindow = (r: CarrinhoLeadRow) => {
+      if (r.is_encaixado) return true; // encaixados sempre passam
+      if (!r.scheduled_at) return false;
+      const t = new Date(r.scheduled_at).getTime();
+      return t >= opStart && t < opEnd;
+    };
+
     if (filter === 'aprovados') {
       filtered = filtered.filter(isCarrinhoEligible);
     } else if (filter === 'aprovados_proxima_safra') {
       filtered = filtered.filter(isProximaSafra);
     } else if (filter === 'agendadas') {
-      filtered = filtered.filter(r => r.meeting_status !== 'cancelled' && r.meeting_status !== 'rescheduled');
+      filtered = filtered.filter(r => r.meeting_status !== 'cancelled' && r.meeting_status !== 'rescheduled' && inOperationalWindow(r));
     } else if (filter === 'no_show') {
-      filtered = filtered.filter(r => r.meeting_status === 'no_show');
+      filtered = filtered.filter(r => r.meeting_status === 'no_show' && inOperationalWindow(r));
     } else if (filter === 'realizadas') {
-      filtered = filtered.filter(r => r.meeting_status === 'completed');
+      filtered = filtered.filter(r => r.meeting_status === 'completed' && inOperationalWindow(r));
     }
 
     const attendees = filtered.map(toAttendee);
     attendees.sort((a, b) => new Date(a.display_scheduled_at).getTime() - new Date(b.display_scheduled_at).getTime());
     return attendees;
-  }, [unifiedData, filter]);
+  }, [unifiedData, filter, weekStart, weekEnd, carrinhoConfig, previousConfig]);
 
   return { data, isLoading };
 }
