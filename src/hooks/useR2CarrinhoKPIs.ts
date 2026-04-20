@@ -12,6 +12,7 @@ export interface R2CarrinhoKPIs {
   r2Realizadas: number;
   foraDoCarrinho: number;
   aprovados: number;
+  aprovadosForaCorte: number;
   pendentes: number;
   emAnalise: number;
 }
@@ -63,6 +64,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
     let r2Realizadas = 0;
     let foraDoCarrinho = 0;
     let aprovados = 0;
+    let aprovadosForaCorte = 0;
     let pendentes = 0;
     let emAnalise = 0;
 
@@ -70,7 +72,10 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       if (isAgendada(row)) r2Agendadas++;
       if (isRealizada(row)) r2Realizadas++;
       if (isForaDoCarrinho(row)) foraDoCarrinho++;
-      if (isAprovado(row)) aprovados++;
+      if (isAprovado(row)) {
+        if (row.dentro_corte) aprovados++;
+        else aprovadosForaCorte++;
+      }
       if (isPendente(row)) pendentes++;
       if (isEmAnalise(row)) emAnalise++;
     }
@@ -81,6 +86,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       r2Realizadas,
       foraDoCarrinho,
       aprovados,
+      aprovadosForaCorte,
       pendentes,
       emAnalise,
     };
