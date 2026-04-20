@@ -94,6 +94,8 @@ function classifyChannelStrict(opts: {
   hasA010: boolean;
 }): string {
   const exactTags = opts.tags.map(extractTagName).filter(Boolean);
+  // A010 = comprador Hubla (fonte de verdade) — tem prioridade máxima
+  if (opts.hasA010) return 'A010';
   if (opts.dataSource === 'webhook' && exactTags.includes('ANAMNESE')) return 'ANAMNESE';
   if (exactTags.includes('ANAMNESE-INSTA')) return 'ANAMNESE-INSTA';
   const fallback = classifyChannel({
@@ -103,8 +105,9 @@ function classifyChannelStrict(opts: {
     dataSource: opts.dataSource,
     hasA010: opts.hasA010,
   });
-  // Prevent loose ANAMNESE classification from leaking through
+  // Prevent loose ANAMNESE/A010 classification from leaking through
   if (fallback === 'ANAMNESE') return 'OUTRO';
+  if (fallback === 'A010') return 'OUTRO';
   return fallback || 'OUTRO';
 }
 
@@ -238,6 +241,52 @@ export function useBUFunnelComplete({
         if (s.clint_id) stageNameById.set(s.clint_id, s.stage_name);
       });
 
+      // 5b) Compradores A010 da Hubla no período (fonte de verdade do canal A010)
+      const { data: a010Buyers } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, customer_phone')
+        .eq('product_category', 'a010')
+        .eq('sale_status', 'completed')
+        .gte('sale_date', startIso)
+        .lte('sale_date', endIso);
+      const a010EmailSet = new Set<string>();
+      const a010PhoneSet = new Set<string>();
+      (a010Buyers || []).forEach((b: any) => {
+        if (b.customer_email) a010EmailSet.add(b.customer_email.toLowerCase());
+        const ph = normPhone(b.customer_phone);
+        if (ph) a010PhoneSet.add(ph);
+      });
+
+      // Buscar email/phone dos contatos dos deals filtrados (necessário antes da classificação)
+      const allContactIds = [
+        ...new Set(filteredDeals.map((d) => d.contact_id).filter((x): x is string => !!x)),
+      ];
+      const contactEmailById = new Map<string, string>();
+      const contactPhoneById = new Map<string, string>();
+      if (allContactIds.length > 0) {
+        const ccChunks = chunk(allContactIds, 200);
+        const ccRes = await Promise.all(
+          ccChunks.map(async (ids) => {
+            const { data } = await supabase
+              .from('crm_contacts')
+              .select('id, email, phone')
+              .in('id', ids);
+            return data || [];
+          }),
+        );
+        ccRes.flat().forEach((c: any) => {
+          if (c.email) contactEmailById.set(c.id, c.email.toLowerCase());
+          if (c.phone) contactPhoneById.set(c.id, normPhone(c.phone));
+        });
+      }
+
+      const dealIsA010Buyer = (d: DealRow): boolean => {
+        if (!d.contact_id) return false;
+        const email = contactEmailById.get(d.contact_id);
+        const phone = contactPhoneById.get(d.contact_id);
+        return (!!email && a010EmailSet.has(email)) || (!!phone && a010PhoneSet.has(phone));
+      };
+
       // 6) Classificar cada deal por canal
       const dealChannel = new Map<string, string>();
       filteredDeals.forEach((d) => {
@@ -246,7 +295,7 @@ export function useBUFunnelComplete({
           tags: tagsArr,
           originName: d.origin_id ? (originMap.get(d.origin_id) || null) : null,
           dataSource: d.data_source,
-          hasA010: tagsArr.some((t) => typeof t === 'string' && t.toUpperCase().includes('A010')),
+          hasA010: dealIsA010Buyer(d),
         });
         dealChannel.set(d.id, ch || 'OUTRO');
       });
@@ -356,6 +405,30 @@ export function useBUFunnelComplete({
           }),
         );
         const extraDeals = mResults.flat();
+        // Carregar email/phone dos contatos extras para checar A010 buyer
+        const extraContactIds = [
+          ...new Set(
+            extraDeals
+              .map((d) => d.contact_id)
+              .filter((x): x is string => !!x && !contactEmailById.has(x) && !contactPhoneById.has(x)),
+          ),
+        ];
+        if (extraContactIds.length > 0) {
+          const xChunks = chunk(extraContactIds, 200);
+          const xRes = await Promise.all(
+            xChunks.map(async (ids) => {
+              const { data } = await supabase
+                .from('crm_contacts')
+                .select('id, email, phone')
+                .in('id', ids);
+              return data || [];
+            }),
+          );
+          xRes.flat().forEach((c: any) => {
+            if (c.email) contactEmailById.set(c.id, c.email.toLowerCase());
+            if (c.phone) contactPhoneById.set(c.id, normPhone(c.phone));
+          });
+        }
         // origens faltantes
         const extraOriginIds = [
           ...new Set(extraDeals.map((d) => d.origin_id).filter((x): x is string => !!x && !originMap.has(x))),
@@ -376,7 +449,7 @@ export function useBUFunnelComplete({
             tags: tagsArr,
             originName: d.origin_id ? (originMap.get(d.origin_id) || null) : null,
             dataSource: d.data_source,
-            hasA010: tagsArr.some((t) => typeof t === 'string' && t.toUpperCase().includes('A010')),
+            hasA010: dealIsA010Buyer(d),
           });
           dealChannel.set(d.id, ch || 'OUTRO');
           dealsMap.set(d.id, d);
@@ -418,27 +491,11 @@ export function useBUFunnelComplete({
         .gte('sale_date', startIso)
         .lte('sale_date', endIso);
 
-      // construir índices email/phone -> canal a partir dos contatos do universo
-      // precisamos buscar emails/phones dos contacts dos deals filtrados
-      const contactIds = [...new Set(filteredDeals.map((d) => d.contact_id).filter((x): x is string => !!x))];
+      // Reaproveita maps já carregados (contactEmailById/contactPhoneById) — invertidos
       const contactEmail = new Map<string, string>();
       const contactPhone = new Map<string, string>();
-      if (contactIds.length > 0) {
-        const cChunks = chunk(contactIds, 200);
-        const cRes = await Promise.all(
-          cChunks.map(async (ids) => {
-            const { data } = await supabase
-              .from('crm_contacts')
-              .select('id, email, phone')
-              .in('id', ids);
-            return data || [];
-          }),
-        );
-        cRes.flat().forEach((c: any) => {
-          if (c.email) contactEmail.set(c.email.toLowerCase(), c.id);
-          if (c.phone) contactPhone.set(normPhone(c.phone), c.id);
-        });
-      }
+      contactEmailById.forEach((email, id) => contactEmail.set(email, id));
+      contactPhoneById.forEach((phone, id) => contactPhone.set(phone, id));
       // mapear contact -> canal (prioriza primeiro deal)
       const contactToChannel = new Map<string, string>();
       filteredDeals.forEach((d) => {
