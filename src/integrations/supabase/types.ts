@@ -8024,6 +8024,10 @@ export type Database = {
           avatar_url: string | null
           blocked_until: string | null
           can_book_r2: boolean | null
+          can_cancel_meeting: boolean
+          can_handle_no_show: boolean
+          can_link_contract: boolean
+          can_manage_agenda: boolean
           created_at: string | null
           email: string | null
           full_name: string | null
@@ -8039,6 +8043,10 @@ export type Database = {
           avatar_url?: string | null
           blocked_until?: string | null
           can_book_r2?: boolean | null
+          can_cancel_meeting?: boolean
+          can_handle_no_show?: boolean
+          can_link_contract?: boolean
+          can_manage_agenda?: boolean
           created_at?: string | null
           email?: string | null
           full_name?: string | null
@@ -8054,6 +8062,10 @@ export type Database = {
           avatar_url?: string | null
           blocked_until?: string | null
           can_book_r2?: boolean | null
+          can_cancel_meeting?: boolean
+          can_handle_no_show?: boolean
+          can_link_contract?: boolean
+          can_manage_agenda?: boolean
           created_at?: string | null
           email?: string | null
           full_name?: string | null

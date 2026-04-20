@@ -41,6 +41,11 @@ export interface UserDetails {
   blocked_until: string | null;
   last_login_at: string | null;
   squad: string[] | null;
+  // Permissões avançadas individuais (capabilities)
+  can_manage_agenda?: boolean | null;
+  can_handle_no_show?: boolean | null;
+  can_link_contract?: boolean | null;
+  can_cancel_meeting?: boolean | null;
   // Employment (legado - para módulo RH)
   employment: {
     position: string | null;

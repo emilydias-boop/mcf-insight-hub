@@ -70,6 +70,10 @@ export const useUserDetails = (userId: string | null) => {
         last_login_at: (profile as any).last_login_at || null,
         squad: (profile as any).squad || null,
         can_book_r2: (profile as any).can_book_r2 || false,
+        can_manage_agenda: (profile as any).can_manage_agenda ?? false,
+        can_handle_no_show: (profile as any).can_handle_no_show ?? true,
+        can_link_contract: (profile as any).can_link_contract ?? false,
+        can_cancel_meeting: (profile as any).can_cancel_meeting ?? false,
         employment: employment || null,
       } as UserDetails;
     },

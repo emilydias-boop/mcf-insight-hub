@@ -26,6 +26,7 @@ import { R2EvaluationTab } from './r2-drawer/R2EvaluationTab';
 import { R2NotesTab } from './r2-drawer/R2NotesTab';
 import { R2AttendeeTransferModal } from './R2AttendeeTransferModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMyAgendaCapabilities } from '@/hooks/useMyAgendaCapabilities';
 import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
 
 interface R2MeetingDetailDrawerProps {
@@ -68,6 +69,9 @@ export function R2MeetingDetailDrawer({
   const { role } = useAuth();
   const isSdr = role === 'sdr';
   const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
+  const { canManageAgenda, canCancelMeeting } = useMyAgendaCapabilities();
+  const canManage = canManageAgenda || !isSdr;
+  const canCancel = canCancelMeeting || !isSdr;
   
   // Debug log - remove after testing
   console.log('[R2Drawer] role:', role, '| canTransfer:', canTransfer);
@@ -306,6 +310,7 @@ export function R2MeetingDetailDrawer({
                               <Pencil className="h-4 w-4" />
                             </Button>
                           )}
+                          {canManage && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -317,6 +322,7 @@ export function R2MeetingDetailDrawer({
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
+                          )}
                         </div>
                       </div>
                     );
@@ -501,8 +507,8 @@ export function R2MeetingDetailDrawer({
             <Save className="h-4 w-4 mr-2" />
             Salvar Informações
           </Button>
-          <div className={cn("grid gap-2", isSdr ? "grid-cols-1" : "grid-cols-2")}>
-            {!isSdr && (
+          <div className={cn("grid gap-2", canManage ? "grid-cols-2" : "grid-cols-1")}>
+            {canManage && (
               <Button 
                 variant="outline" 
                 className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950"
@@ -522,7 +528,7 @@ export function R2MeetingDetailDrawer({
             </Button>
           </div>
           
-          {!isSdr && (
+          {canManage && (
             <Button 
               variant="outline"
               className="w-full text-orange-600 border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950"
@@ -533,7 +539,7 @@ export function R2MeetingDetailDrawer({
             </Button>
           )}
 
-          {!isSdr && (
+          {canCancel && (
             meeting.status === 'canceled' ? (
               <Button 
                 variant="outline"

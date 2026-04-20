@@ -68,6 +68,7 @@ import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMyAgendaCapabilities } from '@/hooks/useMyAgendaCapabilities';
 
 interface AgendaMeetingDrawerProps {
   meeting: MeetingSlot | null;
@@ -116,8 +117,8 @@ const parseRescheduleHistory = (notes: string | null | undefined) => {
   return { originalNote, reschedules };
 };
 
-// Roles that can delete meetings
-const DELETE_ALLOWED_ROLES = ['admin', 'manager', 'coordenador', 'sdr'];
+// Roles that can delete meetings (sdr só se tiver can_cancel_meeting=true)
+const DELETE_ALLOWED_ROLES = ['admin', 'manager', 'coordenador'];
 
 export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpenChange, onReschedule }: AgendaMeetingDrawerProps) {
   const navigate = useNavigate();
@@ -125,6 +126,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const { role, user } = useAuth();
   const { activeBU } = useBUContext();
   const isSdr = role === 'sdr';
+  const { canManageAgenda, canLinkContract, canCancelMeeting } = useMyAgendaCapabilities();
   const [closerNotes, setCloserNotes] = useState(meeting?.closer_notes || '');
   const [sdrNote, setSdrNote] = useState(meeting?.notes || '');
   
@@ -155,7 +157,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   
 
   // Check if user can delete meetings
-  const canDeleteMeeting = role && DELETE_ALLOWED_ROLES.includes(role);
+  const canDeleteMeeting = (role && DELETE_ALLOWED_ROLES.includes(role)) || canCancelMeeting;
   
   // Check if user can transfer attendees
   const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
@@ -969,7 +971,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   {/* Status Flow Buttons - Bidirectional */}
                   <div className="grid grid-cols-2 gap-2">
                     {/* Agendada/Voltar */}
-                    {!isSdr && selectedParticipant.status !== 'scheduled' && selectedParticipant.status !== 'contract_paid' && (
+                    {(canManageAgenda || !isSdr) && selectedParticipant.status !== 'scheduled' && selectedParticipant.status !== 'contract_paid' && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1007,7 +1009,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     )}
                     
                     {/* Realizada */}
-                    {!isSdr && selectedParticipant.status !== 'contract_paid' && (
+                    {(canManageAgenda || !isSdr) && selectedParticipant.status !== 'contract_paid' && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1045,7 +1047,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     </Button>
                     
                     {/* Vincular Contrato - Show for completed status without contract_paid (not for Consórcio) */}
-                    {!isSdr && activeBU !== 'consorcio' && selectedParticipant.status === 'completed' && (
+                    {(canLinkContract || !isSdr) && activeBU !== 'consorcio' && selectedParticipant.status === 'completed' && (
                       <Button
                         variant="outline"
                         size="sm"
