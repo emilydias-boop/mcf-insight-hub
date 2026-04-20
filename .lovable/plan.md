@@ -1,51 +1,78 @@
 
 
-## Restringir o canal ANAMNESE apenas a leads com tag exata "ANAMNESE" via webhook
+## Reescrever a contagem de A010 para usar a fonte de verdade (Hubla)
 
-### O que muda
+### Diagnóstico
 
-Hoje o classificador `classifyChannel` marca como ANAMNESE qualquer deal cuja tag/origem/lead_channel **contenha** a substring "ANAMNESE" (inclusive "ANAMNESE-INSTA", "Anamnese Incompleta", origem com nome contendo "anamnese", etc.). Você quer que, no funil, o canal ANAMNESE conte **apenas** leads que:
+Você está certo: **A010 é venda da Hubla**, não tag do CRM. Hoje o funil conta A010 a partir de tags em `crm_deals` (`tags @> 'A010'`), o que sub/super-conta porque:
 
-1. Vieram via webhook (`crm_deals.data_source = 'webhook'`), e
-2. Possuem a tag **exatamente igual a `"ANAMNESE"`** (case-insensitive, sem prefixo/sufixo, sem "INSTA", sem "Incompleta").
+- Nem todo comprador A010 tem a tag aplicada no deal (depende de webhook + sync ter rodado)
+- Tags ficam no deal, mas a venda real vive em `hubla_transactions` com `product_category = 'a010'` e `sale_status = 'completed'`
+- Existe inclusive um hook dedicado pra isso: `useBulkA010Check` que cruza email do contato com `hubla_transactions`
 
-### Onde aplicar
+A fonte de verdade do "lead é A010" é: **existe transação Hubla com `product_category='a010'` e `sale_status='completed'` cujo `customer_email` (ou phone) bate com o contato do deal.**
 
-Apenas no `useBUFunnelComplete` (não mexer no `classifyChannel` global, que é usado em outros relatórios e tem semântica mais permissiva). Adicionar uma função local `classifyChannelStrict(deal)` que:
+### Mudança no `useBUFunnelComplete.ts`
 
-- Retorna `'ANAMNESE'` **somente se** `data_source === 'webhook'` E existe alguma tag cujo valor normalizado (`trim().toUpperCase()`, e se for JSON `{name}` extrair o name) seja **exatamente** `"ANAMNESE"`.
-- Retorna `'ANAMNESE-INSTA'` se houver tag exata `"ANAMNESE-INSTA"` (mantendo separação clara).
-- Para os demais canais (A010, LIVE, etc.), continua delegando ao `classifyChannel` atual.
-- Leads que hoje caíam em ANAMNESE por matching frouxo (ex.: tag "Anamnese Incompleta", origem "ANAMNESE / INDICAÇÃO" sem a tag exata) deixam de ser ANAMNESE — vão para o canal que o classificador genérico devolver, ou para `OUTRO` se nenhum critério bater.
+**1. Buscar compradores A010 da Hubla no período** (uma query nova):
+```ts
+const { data: a010Buyers } = await supabase
+  .from('hubla_transactions')
+  .select('customer_email, customer_phone, sale_date')
+  .eq('product_category', 'a010')
+  .eq('sale_status', 'completed')
+  .gte('sale_date', startDate)
+  .lte('sale_date', endDate);
 
-### Mudanças
+const a010EmailSet = new Set(a010Buyers.map(b => b.customer_email?.toLowerCase()).filter(Boolean));
+const a010PhoneSet = new Set(a010Buyers.map(b => normalizePhone(b.customer_phone)).filter(Boolean));
+```
 
-**Arquivo único: `src/hooks/useBUFunnelComplete.ts`** (~+25 linhas)
+**2. Reescrever `classifyChannelStrict`** para que A010 seja decidido pela Hubla, não pela tag:
+```ts
+function classifyChannelStrict(deal): string {
+  const email = deal.contact?.email?.toLowerCase();
+  const phone = normalizePhone(deal.contact?.phone);
+  
+  // A010 = comprador Hubla A010 (fonte de verdade)
+  if ((email && a010EmailSet.has(email)) || (phone && a010PhoneSet.has(phone))) {
+    return 'A010';
+  }
+  
+  // ANAMNESE = webhook + tag exata "ANAMNESE" (já implementado)
+  if (deal.data_source === 'webhook' && exactTags.includes('ANAMNESE')) return 'ANAMNESE';
+  if (exactTags.includes('ANAMNESE-INSTA')) return 'ANAMNESE-INSTA';
+  
+  // Demais canais
+  return classifyChannel({...}) || 'OUTRO';
+}
+```
 
-1. Adicionar helper local:
-   ```ts
-   function classifyChannelStrict(deal): string {
-     const tagsNorm = (deal.tags || []).map(normalizeTag); // extrai .name de JSON, trim, upper
-     if (deal.data_source === 'webhook' && tagsNorm.includes('ANAMNESE')) return 'ANAMNESE';
-     if (tagsNorm.includes('ANAMNESE-INSTA')) return 'ANAMNESE-INSTA';
-     return classifyChannel({...}); // fallback para os demais canais
-   }
-   ```
-2. Substituir a chamada atual de `classifyChannel` por `classifyChannelStrict` no ponto onde os deals do universo são classificados.
-3. Garantir que a query de `crm_deals` já traz `data_source` e `tags` (verificar select).
+**3. Garantir que `crm_contacts.email` e `phone` venham no select de `crm_deals`** (verificar — se já vêm, sem mudança; senão, adicionar `crm_contacts(email, phone)` no select).
 
-### Impacto esperado
+### Comportamento resultante
 
-- A coluna/tab **ANAMNESE** do funil vai cair (provavelmente bastante) — vai mostrar só os leads "puros" do webhook ANAMNESE.
-- "Anamnese Incompleta", "ANAMNESE-INSTA" e leads com origem ANAMNESE mas sem a tag exata deixam de inflar o canal.
-- Nenhum outro relatório/tela é afetado (mudança isolada no hook do funil).
+| Métrica | Antes | Depois |
+|---|---|---|
+| A010 do funil | Deals com tag `A010` no CRM (frouxo, depende de sync) | Deals cujo contato comprou A010 na Hubla no período (fonte de verdade) |
+| Universo A010 (mês) | Variável conforme tag aplicada | ~490 (bate com Hubla) |
+| Vendas Finais A010 | Deals A010 com contrato pago | Mesmo critério, mas universo correto |
+| ANAMNESE | Inalterado (webhook + tag exata) | Inalterado |
+| OUTRO | Tudo que não é A010 nem ANAMNESE | Idem |
+
+### Detalhes importantes
+
+- **Período do A010**: usar `sale_date` da Hubla dentro do período do funil. Comprou A010 fora da janela → não conta como A010 nesse período (mesmo critério dos outros canais).
+- **Conflito A010 + ANAMNESE**: se um lead é simultaneamente comprador A010 (Hubla) E veio por webhook ANAMNESE, **A010 vence** (regra de prioridade já usada em `useBulkA010Check` e na lógica de roteamento Hubla — memory `hubla-routing-collision-logic-v5`). Match direto com o que já existe no app.
+- **Match phone**: usar últimos 9 dígitos (mesma normalização do app, memory `crm-manual-entry-deduplication-standard`).
 
 ### Escopo
 
-- 1 arquivo, ~25 linhas, 0 migration.
+- 1 arquivo: `src/hooks/useBUFunnelComplete.ts`
+- ~40 linhas (1 query nova + reescrita do `classifyChannelStrict` + sets de match)
+- 0 migration
 
 ### Confirmar antes de implementar
 
-1. **"ANAMNESE-INSTA" deve aparecer como canal separado** (recomendado, já existe na lista) ou também deve ser ignorado/agrupado em "OUTRO"?
-2. **Leads com tag exata "ANAMNESE" mas `data_source != 'webhook'`** (ex.: criados manualmente, importados via CSV) — devem entrar como ANAMNESE também, ou só os de webhook valem?
+1. **Janela do comprador A010**: contar como A010 quem comprou **dentro do período do funil** (recomendado, simétrico com os outros canais), ou **qualquer comprador A010 histórico** (universo cumulativo)?
 
