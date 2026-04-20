@@ -130,7 +130,7 @@ export function useStageMovements({
       // 4) Buscar todas as stages para resolver nomes/ordem
       const { data: stages } = await supabase
         .from('crm_stages')
-        .select('id, stage_id, stage_name, stage_order')
+        .select('id, clint_id, stage_name, stage_order')
         .eq('is_active', true);
 
       // Indexa stages por id, stage_id e stage_name (lower)
@@ -141,7 +141,7 @@ export function useStageMovements({
       (stages || []).forEach((s) => {
         const entry = { id: s.id, name: s.stage_name, order: s.stage_order ?? 999 };
         if (s.id) stageByKey.set(s.id, entry);
-        if (s.stage_id) stageByKey.set(s.stage_id, entry);
+        if (s.clint_id) stageByKey.set(s.clint_id, entry);
         if (s.stage_name) stageByKey.set(s.stage_name.toLowerCase(), entry);
       });
 
