@@ -1,135 +1,93 @@
 
 
-## Liberar RLS para SDRs com capability flags ativas
+## Encaixar "Próxima Safra" — coesão entre Carrinho R2 e Agenda R2 → Relatório
 
-### Causa raiz
+### Contexto
 
-A Caroline tem os flags corretos (`can_manage_agenda=true`, `can_cancel_meeting=true`) e a UI do drawer já renderiza os botões para ela. Mas quando ela clica, o **banco de dados rejeita** silenciosamente. As RLS atuais de `meeting_slots` e `meeting_slot_attendees` não consideram os novos flags:
+Hoje existem dois lugares que lidam com leads aprovados cujo contrato caiu depois do corte (vão para a próxima safra):
 
-| Tabela | Operação | Política atual | SDR passa? |
-|---|---|---|---|
-| `meeting_slot_attendees` | UPDATE | `booked_by = auth.uid() OR admin/coordenador/closer` | ❌ Só se ela mesma agendou |
-| `meeting_slot_attendees` | DELETE | `admin/manager/coordenador` | ❌ Nunca |
-| `meeting_slots` | UPDATE | `booked_by = auth.uid() OR admin/coordenador/closer` | ❌ Só se ela mesma agendou |
-| `meeting_slots` | DELETE | `admin/manager/coordenador` | ❌ Nunca |
+| Tela | O que mostra hoje | Tem Encaixar? |
+|---|---|---|
+| **Carrinho R2** → aba "📦 Próxima Safra" (10 leads) | Lista de aprovados fora do corte (via `isProximaSafra`) usando `R2AprovadosList` | ❌ Não |
+| **Agenda R2** → aba "Relatório" → KPI "Pendentes" | Children "Recentes (≤3d) / Antigos (>3d)". Tabela mostra badge "R2 próx. semana" no motivo | ❌ Não |
+| **Carrinho R2** → aba "Acumulados" | Leads de semanas anteriores que precisam ser resgatados | ✅ Sim (via `useEncaixarNoCarrinho`) |
 
-Resultado: o botão aparece, ela clica, o Supabase retorna sucesso (0 linhas afetadas) mas nada muda — exatamente o sintoma que ela está vendo.
+**A mutation `useEncaixarNoCarrinho` já funciona para qualquer `attendee_id`** — seta `carrinho_week_start` para a semana atual e força `r2_status_id = Aprovado`. Basta expor o botão nos dois lugares.
 
-### Solução
+### O que vamos entregar
 
-Criar uma função SECURITY DEFINER e estender as 4 políticas para também aceitar usuários com a flag de capacidade ligada no `profiles`.
+**1. Novo child "📦 Próxima Safra" dentro da KPI "Pendentes" do Relatório (Agenda R2)**
 
-**1. Nova função helper**
-```sql
-create or replace function public.has_agenda_capability(_user_id uuid, _capability text)
-returns boolean
-language sql stable security definer set search_path = public
-as $$
-  select case _capability
-    when 'manage' then coalesce((select can_manage_agenda from profiles where id = _user_id), false)
-    when 'cancel' then coalesce((select can_cancel_meeting from profiles where id = _user_id), false)
-    when 'link_contract' then coalesce((select can_link_contract from profiles where id = _user_id), false)
-    else false
-  end;
-$$;
+Em `R2ContractLifecyclePanel.tsx` adicionar um 3º card filho ao lado de "Recentes" / "Antigos":
+
+```
+Pendentes (expandido)
+┌──────────────┬──────────────┬───────────────────────┐
+│ Recentes ≤3d │ Antigos >3d  │ 📦 Próxima Safra  10  │
+└──────────────┴──────────────┴───────────────────────┘
 ```
 
-**2. Atualizar política UPDATE de `meeting_slot_attendees`**
-Adicionar `OR public.has_agenda_capability(auth.uid(), 'manage')` ao USING.
+- Filtro: `situacao === 'pendente'` **E** `pendingReason === 'r2_proxima_semana'` (estes são exatamente os leads mostrados com o badge "R2 próx. semana 20/04" na tabela)
+- Ao clicar, filtra a tabela apenas para eles
+- Contagem mostrada no badge
 
-**3. Atualizar política DELETE de `meeting_slot_attendees`**
-Adicionar `OR public.has_agenda_capability(auth.uid(), 'cancel')`.
+**2. Coluna "Ação" na tabela do Relatório quando o filtro "Próxima Safra" estiver ativo**
 
-**4. Atualizar política UPDATE de `meeting_slots`**
-Adicionar `OR public.has_agenda_capability(auth.uid(), 'manage')`.
+Adicionar condicionalmente uma coluna extra ao final da tabela com botão **"Encaixar nesta semana"** para cada linha. Só aparece quando `activeSubFilter === 'proxima_safra'`.
 
-**5. Atualizar política DELETE de `meeting_slots`**
-Adicionar `OR public.has_agenda_capability(auth.uid(), 'cancel')`.
+- Clique → chama `useEncaixarNoCarrinho` com `attendeeId = row.id` (o attendee_id do R2 futuro) e `weekStart = safraStart` da semana atual
+- Estado de loading por linha (`encaixandoId`)
+- Toast "Lead encaixado no carrinho da semana!" (já existe no hook)
+- Invalida queries: `carrinho-unified-data`, `r2-carrinho-kpis`, `r2-carrinho-data`, `contract-lifecycle-report`, `r2-accumulated-leads`
 
-### Migration única
+**3. Botão "Encaixar nesta semana" na aba "📦 Próxima Safra" do Carrinho R2**
 
-```sql
--- 1. Helper function
-CREATE OR REPLACE FUNCTION public.has_agenda_capability(_user_id uuid, _capability text)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT CASE _capability
-    WHEN 'manage' THEN COALESCE((SELECT can_manage_agenda FROM profiles WHERE id = _user_id), false)
-    WHEN 'cancel' THEN COALESCE((SELECT can_cancel_meeting FROM profiles WHERE id = _user_id), false)
-    WHEN 'link_contract' THEN COALESCE((SELECT can_link_contract FROM profiles WHERE id = _user_id), false)
-    ELSE false
-  END;
-$$;
+Em `R2AprovadosList.tsx`, quando `countLabel === 'próxima safra'` (já é passada como prop pelo `R2Carrinho.tsx`):
 
--- 2. meeting_slot_attendees UPDATE
-DROP POLICY IF EXISTS "Users can update attendees they booked or have elevated roles"
-  ON public.meeting_slot_attendees;
-CREATE POLICY "Users can update attendees they booked or have elevated roles"
-  ON public.meeting_slot_attendees FOR UPDATE
-  USING (
-    booked_by = auth.uid()
-    OR has_role(auth.uid(), 'admin'::app_role)
-    OR has_role(auth.uid(), 'manager'::app_role)
-    OR has_role(auth.uid(), 'coordenador'::app_role)
-    OR has_role(auth.uid(), 'closer'::app_role)
-    OR public.has_agenda_capability(auth.uid(), 'manage')
-  );
+- Adicionar coluna "Encaixar" na tabela (ou botão na coluna Ações existente)
+- Mesmo hook `useEncaixarNoCarrinho({ attendeeId: att.id, weekStart })`
+- Depois do encaixe, o lead sai da aba "Próxima Safra" e aparece na aba "Aprovados" (comportamento natural, pois `isProximaSafra()` checa `dentro_corte === false` e o encaixe seta `carrinho_week_start = semana atual`, fazendo o RPC reclassificar)
 
--- 3. meeting_slot_attendees DELETE
-DROP POLICY IF EXISTS "Authorized roles can delete attendees"
-  ON public.meeting_slot_attendees;
-CREATE POLICY "Authorized roles can delete attendees"
-  ON public.meeting_slot_attendees FOR DELETE
-  USING (
-    has_role(auth.uid(), 'admin'::app_role)
-    OR has_role(auth.uid(), 'manager'::app_role)
-    OR has_role(auth.uid(), 'coordenador'::app_role)
-    OR public.has_agenda_capability(auth.uid(), 'cancel')
-  );
+Obs: a aba "Aprovados" (sem `countLabel`) **não** ganha esse botão — só a "Próxima Safra".
 
--- 4. meeting_slots UPDATE
-DROP POLICY IF EXISTS "Users can update slots they booked or have elevated roles"
-  ON public.meeting_slots;
-CREATE POLICY "Users can update slots they booked or have elevated roles"
-  ON public.meeting_slots FOR UPDATE
-  USING (
-    booked_by = auth.uid()
-    OR has_role(auth.uid(), 'admin'::app_role)
-    OR has_role(auth.uid(), 'manager'::app_role)
-    OR has_role(auth.uid(), 'coordenador'::app_role)
-    OR has_role(auth.uid(), 'closer'::app_role)
-    OR public.has_agenda_capability(auth.uid(), 'manage')
-  );
+**4. Coesão bidirecional (automática via React Query)**
 
--- 5. meeting_slots DELETE
-DROP POLICY IF EXISTS "Authorized roles can delete meeting slots"
-  ON public.meeting_slots;
-CREATE POLICY "Authorized roles can delete meeting slots"
-  ON public.meeting_slots FOR DELETE
-  USING (
-    has_role(auth.uid(), 'admin'::app_role)
-    OR has_role(auth.uid(), 'manager'::app_role)
-    OR has_role(auth.uid(), 'coordenador'::app_role)
-    OR public.has_agenda_capability(auth.uid(), 'cancel')
-  );
-```
+Já que ambas as telas compartilham fontes:
+
+- `R2ContractLifecyclePanel` usa `useContractLifecycleReport` → query `['contract-lifecycle-report', ...]`
+- `R2AprovadosList` (via R2Carrinho) usa `useR2CarrinhoData` / `useCarrinhoUnifiedData` → queries `['carrinho-unified-data', ...]` e `['r2-carrinho-data', ...]`
+
+Basta adicionar `['contract-lifecycle-report']` à lista de invalidações do `useEncaixarNoCarrinho.onSuccess`. Qualquer clique em um dos dois lugares dispara refetch automático nos dois — o usuário vê a mudança refletida imediatamente ao voltar para a outra aba.
+
+### Por que diferenciar "Próxima Safra" (10) de "R2 próx. semana" (pendentes)
+
+São **a mesma coisa** visto por dois ângulos:
+
+- No **Carrinho R2**, olhamos pelo viés do R2 desta semana: "tem R2 marcado aqui, está aprovado, mas o contrato é da próxima safra" → conta em `isProximaSafra`.
+- No **Relatório**, olhamos pelo viés do contrato: "contrato pago nesta safra, status pendente, porém encontramos um R2 futuro para ele" → `pendingReason = 'r2_proxima_semana'`.
+
+O número pode divergir em casos de borda (ex: contrato com R2 futuro mas ainda sem aprovação), então **não vamos forçar que os contadores sejam iguais** — cada tela mantém seu recorte. Mas o botão "Encaixar" funciona igual nos dois lados e o resultado é visível em ambos.
+
+### Arquivos alterados
+
+| Arquivo | Mudança |
+|---|---|
+| `src/components/crm/R2ContractLifecyclePanel.tsx` | + card filho "Próxima Safra" em Pendentes, + coluna Ação condicional com botão Encaixar, + chamada ao `useEncaixarNoCarrinho` |
+| `src/components/crm/R2AprovadosList.tsx` | + prop `showEncaixarButton?: boolean` + botão "Encaixar" na última coluna quando ativo |
+| `src/pages/crm/R2Carrinho.tsx` | Passar `showEncaixarButton={true}` apenas para a aba "Próxima Safra" |
+| `src/hooks/useEncaixarNoCarrinho.ts` | + `queryClient.invalidateQueries({ queryKey: ['contract-lifecycle-report'] })` no `onSuccess` |
 
 ### Validação
 
-1. Caroline (sem fazer logout — RLS é checada em runtime, não no JWT) abre uma reunião onde ela **não é** a `booked_by`
-2. Clica "Realizada" → status muda ✅
-3. Clica "Voltar p/ Agendada" → reverte ✅
-4. Clica "Cancelar Reunião" no R2 → reunião cancela ✅
-5. Outro SDR sem flags ligadas (ex: Geison) tenta o mesmo → continua bloqueado ✅
-6. Admins/managers/coordenadores → continuam funcionando como antes ✅
-
-### Por que não precisa logout
-
-`has_agenda_capability()` lê direto de `profiles` no momento da query, não do JWT. Então qualquer mudança feita em `/usuarios` vale **imediatamente** na próxima ação da Caroline — sem precisar refresh nem relogin.
+1. Carrinho R2 → aba Próxima Safra → clicar "Encaixar" num dos 10 leads → ele some da aba, aparece em "Aprovados" da mesma semana, com badge "Encaixado"
+2. Agenda R2 → Relatório → KPI Pendentes → clicar → aparecer 3º card "📦 Próxima Safra" com contagem
+3. Clicar no card → tabela filtra → coluna Ação aparece com botão Encaixar
+4. Encaixar um lead aqui → refletir imediatamente na aba "Aprovados" do Carrinho R2
+5. Vice-versa: encaixar no Carrinho R2 → o lead some do sub-filtro "Próxima Safra" do Relatório
 
 ### Escopo
 
-- 1 migration SQL (1 função nova + 4 policies recriadas)
-- Zero alteração de frontend (UI já está correta)
-- Zero alteração em `useMyAgendaCapabilities`, drawers, hooks
-- Reversível: basta desligar o flag no `/usuarios` que a permissão evapora
+- 4 arquivos editados, zero migrations, zero RLS
+- Reutiliza `useEncaixarNoCarrinho` existente (nenhuma nova mutation)
+- Zero impacto em métricas/distribuição
 
