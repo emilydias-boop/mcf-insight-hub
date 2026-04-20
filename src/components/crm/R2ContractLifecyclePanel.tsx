@@ -106,6 +106,8 @@ export function R2ContractLifecyclePanel() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expandedKpi, setExpandedKpi] = useState<string | null>(null);
   const [activeSubFilter, setActiveSubFilter] = useState<string | null>(null);
+  const [encaixandoId, setEncaixandoId] = useState<string | null>(null);
+  const encaixarMutation = useEncaixarNoCarrinho();
 
   const safraStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
   const safraEnd = useMemo(() => getCartWeekEnd(weekDate), [weekDate]);
@@ -568,6 +570,18 @@ export function R2ContractLifecyclePanel() {
               <CardContent className="py-2 px-3 text-center">
                 <p className="text-[10px] text-muted-foreground">{"Antigos (>3d)"}</p>
                 <p className="text-lg font-bold text-amber-600">{pendentesChildren.antigos}</p>
+              </CardContent>
+            </Card>
+            <Card
+              className={cn(
+                "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
+                activeSubFilter === 'proxima_safra' && "ring-2 ring-amber-500/50 bg-amber-500/5"
+              )}
+              onClick={() => handleSubClick('proxima_safra')}
+            >
+              <CardContent className="py-2 px-3 text-center">
+                <p className="text-[10px] text-muted-foreground">📦 Próxima Safra</p>
+                <p className="text-lg font-bold text-amber-400">{pendentesChildren.proximaSafra}</p>
               </CardContent>
             </Card>
           </div>
