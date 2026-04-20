@@ -66,6 +66,7 @@ export default function R2Carrinho() {
   const { data: rawAgendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekStart, weekEnd, 'agendadas', config, prevConfig);
   const { data: rawForaCarrinhoData = [], isLoading: foraCarrinhoLoading } = useR2ForaDoCarrinhoData(weekStart, weekEnd, config, prevConfig);
   const { data: rawAprovadosData = [], isLoading: aprovadosLoading } = useR2CarrinhoData(weekStart, weekEnd, 'aprovados', config, prevConfig);
+  const { data: rawProximaSafraData = [], isLoading: proximaSafraLoading } = useR2CarrinhoData(weekStart, weekEnd, 'aprovados_proxima_safra', config, prevConfig);
   const { data: rawVendasData = [] } = useR2CarrinhoVendas(weekStart, weekEnd, config, prevConfig);
 
   // Filter data by selected carrinho
@@ -80,6 +81,10 @@ export default function R2Carrinho() {
   const aprovadosData = useMemo(() => 
     filterByCarrinho(rawAprovadosData, config, selectedCarrinhoId, item => item.display_scheduled_at),
     [rawAprovadosData, config, selectedCarrinhoId]
+  );
+  const proximaSafraData = useMemo(() => 
+    filterByCarrinho(rawProximaSafraData, config, selectedCarrinhoId, item => item.display_scheduled_at),
+    [rawProximaSafraData, config, selectedCarrinhoId]
   );
   const vendasData = useMemo(() => 
     filterByCarrinho(rawVendasData, config, selectedCarrinhoId, item => item.r2_scheduled_at || item.original_scheduled_at || item.sale_date),
@@ -168,7 +173,7 @@ export default function R2Carrinho() {
     { label: 'R2 Realizadas', value: displayKpis?.r2Realizadas ?? 0, color: 'bg-green-500' },
     { label: 'Fora do Carrinho', value: displayKpis?.foraDoCarrinho ?? 0, color: 'bg-red-500' },
     { label: 'Aprovados', value: displayKpis?.aprovados ?? 0, color: 'bg-emerald-500' },
-    { label: 'Aprovados (fora do corte)', value: displayKpis?.aprovadosForaCorte ?? 0, color: 'bg-amber-500' },
+    { label: 'Próxima Safra', value: displayKpis?.aprovadosForaCorte ?? 0, color: 'bg-amber-500' },
   ];
 
   const selectedCarrinhoLabel = selectedCarrinhoId 
@@ -324,6 +329,12 @@ export default function R2Carrinho() {
               {aprovadosData.length}
             </span>
           </TabsTrigger>
+          <TabsTrigger value="proxima_safra" className="flex items-center gap-2">
+            📦 Próxima Safra
+            <span className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 px-2 py-0.5 rounded-full">
+              {proximaSafraData.length}
+            </span>
+          </TabsTrigger>
           <TabsTrigger value="vendas" className="flex items-center gap-2">
             💰 Vendas
             <span className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 px-2 py-0.5 rounded-full">
@@ -368,6 +379,17 @@ export default function R2Carrinho() {
             isLoading={aprovadosLoading}
             weekStart={weekStart}
             weekEnd={weekEnd}
+          />
+        </TabsContent>
+
+        <TabsContent value="proxima_safra">
+          <R2AprovadosList 
+            attendees={proximaSafraData} 
+            isLoading={proximaSafraLoading}
+            weekStart={weekStart}
+            weekEnd={weekEnd}
+            emptyMessage="Nenhum aprovado para a próxima safra"
+            countLabel="próxima safra"
           />
         </TabsContent>
 

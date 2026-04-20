@@ -155,7 +155,7 @@ export function R2ContractLifecyclePanel() {
           key = '__other_week__';
           color = null;
         } else if (isAprovado && !r.dentroCorte) {
-          displayName = 'Aprovado (fora do corte)';
+          displayName = 'Aprovado — Próxima Safra';
           key = '__aprovado_fora__';
           color = r.r2StatusColor || null;
         } else {
