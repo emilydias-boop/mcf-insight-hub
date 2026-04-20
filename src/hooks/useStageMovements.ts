@@ -181,37 +181,18 @@ export function useStageMovements({
         );
       };
 
-      // 3) UNIVERSO COMPLETO: todos os deals das origens selecionadas (paginado, sem limite de 10k).
-      //    Esse é o universo definitivo — a janela de data afeta apenas "Passaram".
-      const snapshotDeals: Array<{
+      // 3) UNIVERSO DINÂMICO PELO PERÍODO:
+      //    (a) deals envolvidos em movimentações (stage_change) no período
+      //    (b) deals criados no período (cobre leads novos sem histórico)
+      type DealRow = {
         id: string;
         name: string | null;
         tags: unknown;
         origin_id: string | null;
         stage_id: string | null;
-      }> = [];
-      const PAGE = 1000;
-      for (let from = 0; ; from += PAGE) {
-        let q = supabase
-          .from('crm_deals')
-          .select('id, name, tags, origin_id, stage_id')
-          .order('created_at', { ascending: false })
-          .range(from, from + PAGE - 1);
-        if (originIds && originIds.length > 0) {
-          q = q.in('origin_id', originIds);
-        }
-        const { data, error } = await q;
-        if (error) throw error;
-        const batch = data || [];
-        snapshotDeals.push(...(batch as typeof snapshotDeals));
-        if (batch.length < PAGE) break;
-        if (from > 50_000) {
-          console.warn('[useStageMovements] Universo > 50k deals, interrompendo paginação.');
-          break;
-        }
-      }
+        created_at: string | null;
+      };
 
-      // 4) Deals envolvidos em movimentações (para nome/tags/origin)
       const movementDealIds = [
         ...new Set(acts.map((a) => a.deal_id).filter((id) => id && isValidUUID(id))),
       ];
@@ -221,7 +202,7 @@ export function useStageMovements({
         dealChunks.map(async (ids) => {
           let q = supabase
             .from('crm_deals')
-            .select('id, name, tags, origin_id, stage_id')
+            .select('id, name, tags, origin_id, stage_id, created_at')
             .in('id', ids);
           if (originIds && originIds.length > 0) {
             q = q.in('origin_id', originIds);
@@ -231,11 +212,35 @@ export function useStageMovements({
           return data || [];
         }),
       );
-      const movementDeals = dealsResults.flat();
+      const movementDeals = dealsResults.flat() as DealRow[];
 
-      // Merge: união de deals (snapshot + envolvidos em movimentações)
-      const allDealsMap = new Map<string, typeof snapshotDeals[number]>();
-      [...movementDeals, ...snapshotDeals].forEach((d) => {
+      // (b) Deals criados no período (paginado)
+      const createdInPeriod: DealRow[] = [];
+      const PAGE = 1000;
+      for (let from = 0; ; from += PAGE) {
+        let q = supabase
+          .from('crm_deals')
+          .select('id, name, tags, origin_id, stage_id, created_at')
+          .gte('created_at', startDate.toISOString())
+          .lte('created_at', endDate.toISOString())
+          .order('created_at', { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (originIds && originIds.length > 0) {
+          q = q.in('origin_id', originIds);
+        }
+        const { data, error } = await q;
+        if (error) throw error;
+        const batch = (data || []) as DealRow[];
+        createdInPeriod.push(...batch);
+        if (batch.length < PAGE) break;
+        if (from > 50_000) {
+          console.warn('[useStageMovements] Criados no período > 50k, interrompendo.');
+          break;
+        }
+      }
+
+      const allDealsMap = new Map<string, DealRow>();
+      [...movementDeals, ...createdInPeriod].forEach((d) => {
         if (d?.id) allDealsMap.set(d.id, d);
       });
 
@@ -253,7 +258,7 @@ export function useStageMovements({
           : tagFilters.some(evaluate);
       };
 
-      const filteredDealsMap = new Map<string, typeof snapshotDeals[number]>();
+      const filteredDealsMap = new Map<string, DealRow>();
       allDealsMap.forEach((d, id) => {
         if (passesTagFilter(d)) filteredDealsMap.set(id, d);
       });
