@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
-import { useCarrinhoUnifiedData, isAprovado, CarrinhoLeadRow } from '@/hooks/useCarrinhoUnifiedData';
+import { useCarrinhoUnifiedData, isAprovado, isCarrinhoEligible, isProximaSafra, CarrinhoLeadRow } from '@/hooks/useCarrinhoUnifiedData';
 import { useMemo } from 'react';
 
 export interface R2CarrinhoAttendee {
@@ -77,9 +77,9 @@ export function useR2CarrinhoData(
     let filtered = unifiedData;
 
     if (filter === 'aprovados') {
-      filtered = filtered.filter(r => isAprovado(r) && r.dentro_corte === true);
+      filtered = filtered.filter(isCarrinhoEligible);
     } else if (filter === 'aprovados_proxima_safra') {
-      filtered = filtered.filter(r => isAprovado(r) && r.dentro_corte === false);
+      filtered = filtered.filter(isProximaSafra);
     } else if (filter === 'agendadas') {
       filtered = filtered.filter(r => r.meeting_status !== 'cancelled' && r.meeting_status !== 'rescheduled');
     } else if (filter === 'no_show') {
