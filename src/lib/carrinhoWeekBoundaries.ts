@@ -95,12 +95,19 @@ export function getCarrinhoMetricBoundaries(
   const currentFriday = addDays(new Date(weekStart), 1);
   // Sexta da safra ANTERIOR = Qui - 6 dias (sexta da semana anterior — abertura desta safra)
   const previousFriday = subDays(new Date(weekStart), 6);
+  // Sexta da SEMANA SEGUINTE = Qui + 8 dias (corte do carrinho desta safra)
+  const nextFriday = addDays(new Date(weekStart), 8);
 
   // Horário de corte da sexta atual (default 12:00)
   const horarioCorte = config?.carrinhos?.[0]?.horario_corte || '12:00';
   const [cutHour, cutMinute] = horarioCorte.split(':').map(Number);
   const currentFridayCutoff = new Date(
     currentFriday.getFullYear(), currentFriday.getMonth(), currentFriday.getDate(),
+    cutHour, cutMinute || 0, 0, 0
+  );
+  // Corte da sexta seguinte (mesmo horario_corte)
+  const nextFridayCutoff = new Date(
+    nextFriday.getFullYear(), nextFriday.getMonth(), nextFriday.getDate(),
     cutHour, cutMinute || 0, 0, 0
   );
 
@@ -112,14 +119,15 @@ export function getCarrinhoMetricBoundaries(
     prevCutHour, prevCutMinute || 0, 0, 0
   );
 
-  // Vendas parceria, Aprovados e R2 Meetings: Qui 00:00 da safra → Sex DA safra no corte.
-  // A safra operacional fecha na sexta DA própria semana (Qui+1) no horário de corte.
+  // R2 Meetings e Aprovados: janela do CARRINHO = Qui da safra 00:00 → Sex da SEMANA SEGUINTE no corte.
+  // O R2 pode acontecer ao longo da semana toda da safra E até a sexta seguinte no horário de corte.
+  // Vendas parceria: Qui 00:00 da safra → Sex DA safra no corte (fechamento operacional da safra).
   const vendasEnd = new Date(currentFridayCutoff.getTime() - 1); // Sex DA safra 11:59:59.999
 
   return {
     contratos: { start: thuStart, end: wedEnd },
-    r2Meetings: { start: thuStart, end: currentFridayCutoff },
-    aprovados: { start: thuStart, end: currentFridayCutoff },
+    r2Meetings: { start: thuStart, end: nextFridayCutoff },
+    aprovados: { start: thuStart, end: nextFridayCutoff },
     vendasParceria: { start: thuStart, end: vendasEnd },
     r1Meetings: { start: thuStart, end: wedEnd },
     previousCutoff: previousFridayCutoff,
