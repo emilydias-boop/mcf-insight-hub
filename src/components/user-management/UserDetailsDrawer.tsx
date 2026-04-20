@@ -76,6 +76,14 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const [searchingClint, setSearchingClint] = useState(false);
   const [canBookR2, setCanBookR2] = useState(false);
   const [savingCanBookR2, setSavingCanBookR2] = useState(false);
+  // Capabilities avançadas da agenda
+  const [agendaCaps, setAgendaCaps] = useState({
+    can_manage_agenda: false,
+    can_handle_no_show: true,
+    can_link_contract: false,
+    can_cancel_meeting: false,
+  });
+  const [savingCapKey, setSavingCapKey] = useState<string | null>(null);
   // Form state for General tab
   const [generalData, setGeneralData] = useState({
     full_name: "",
@@ -127,6 +135,12 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
       });
       setBlockedUntil(userDetails.blocked_until || "");
       setCanBookR2(!!(userDetails as any).can_book_r2);
+      setAgendaCaps({
+        can_manage_agenda: !!(userDetails as any).can_manage_agenda,
+        can_handle_no_show: (userDetails as any).can_handle_no_show ?? true,
+        can_link_contract: !!(userDetails as any).can_link_contract,
+        can_cancel_meeting: !!(userDetails as any).can_cancel_meeting,
+      });
     }
   }, [userDetails]);
 
@@ -184,6 +198,29 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
       toast.error("Erro ao atualizar permissão R2");
     } finally {
       setSavingCanBookR2(false);
+    }
+  };
+
+  const handleToggleAgendaCap = async (
+    key: 'can_manage_agenda' | 'can_handle_no_show' | 'can_link_contract' | 'can_cancel_meeting',
+    checked: boolean
+  ) => {
+    if (!userId) return;
+    setSavingCapKey(key);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ [key]: checked } as any)
+        .eq('id', userId);
+      if (error) throw error;
+      setAgendaCaps((prev) => ({ ...prev, [key]: checked }));
+      queryClient.invalidateQueries({ queryKey: ['user-details', userId] });
+      queryClient.invalidateQueries({ queryKey: ['my-agenda-capabilities'] });
+      toast.success('Permissão atualizada');
+    } catch {
+      toast.error('Erro ao atualizar permissão');
+    } finally {
+      setSavingCapKey(null);
     }
   };
 
