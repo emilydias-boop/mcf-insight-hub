@@ -141,6 +141,14 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
     updateStatus.mutate({ attendeeId, status });
   };
 
+  const handleEncaixar = (attendeeId: string) => {
+    setEncaixandoId(attendeeId);
+    encaixarMutation.mutate(
+      { attendeeId, weekStart },
+      { onSettled: () => setEncaixandoId(null) },
+    );
+  };
+
   const handleRowClick = (att: R2CarrinhoAttendee) => {
     setSelectedAttendee(att);
     setDrawerOpen(true);
