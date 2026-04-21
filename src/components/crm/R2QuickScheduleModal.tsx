@@ -345,28 +345,33 @@ export function R2QuickScheduleModal({
                               className={cn(
                                 'w-full text-left px-3 py-2 border-b last:border-b-0',
                                 isBlocked
-                                  ? 'opacity-60 cursor-not-allowed hover:bg-muted/30'
+                                  ? 'opacity-70 hover:bg-muted/30 border-l-[3px] ' +
+                                      (leadState === 'scheduled_future'
+                                        ? 'border-l-yellow-500'
+                                        : 'border-l-green-500')
                                   : 'hover:bg-accent',
                               )}
                             >
-                              <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
-                                <span>{deal.contact?.name || deal.name}</span>
-                                {stateBadge && (
-                                  <Badge
-                                    variant="outline"
-                                    className={cn(
-                                      'text-[10px] px-1.5 py-0 h-4',
-                                      stateBadge.className,
-                                    )}
-                                  >
-                                    {stateBadge.label}
-                                  </Badge>
-                                )}
+                              <div className="font-medium text-sm">
+                                {deal.contact?.name || deal.name}
                               </div>
                               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                 {deal.contact?.phone && <span>{deal.contact.phone}</span>}
                                 {deal.contact?.email && <span>{deal.contact.email}</span>}
                               </div>
+                              {stateBadge && (
+                                <div className="mt-1.5">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      'text-[11px] font-medium px-2 py-0.5 whitespace-normal text-left leading-tight w-full justify-start',
+                                      stateBadge.className,
+                                    )}
+                                  >
+                                    {stateBadge.label}
+                                  </Badge>
+                                </div>
+                              )}
                             </button>
                           );
                         })
