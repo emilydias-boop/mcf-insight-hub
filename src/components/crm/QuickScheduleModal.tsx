@@ -75,6 +75,13 @@ interface DealOption {
     id: string;
     status: string;
   } | null;
+  leadState?: 'open' | 'scheduled_future' | 'completed' | 'contract_paid' | 'won' | 'no_show';
+  scheduledInfo?: {
+    scheduledAt: string;
+    closerName: string | null;
+    meetingType: 'r1' | 'r2';
+  } | null;
+  blockReason?: string | null;
 }
 
 type LeadType = 'A' | 'B';
