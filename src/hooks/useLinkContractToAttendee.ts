@@ -74,14 +74,26 @@ export function useLinkContractToAttendee() {
 
       if (txError) throw txError;
 
-      // 2. Fetch sale_date from the transaction to use as contract_paid_at
-      const { data: txData } = await supabase
+      // 2. Fonte de verdade para contract_paid_at: sale_date da Hubla MAIS ANTIGA
+      //    vinculada ao attendee (cobre caso de múltiplas parcelas/transações).
+      //    Fallback: sale_date da própria transação sendo vinculada; depois now().
+      const { data: linkedTxs } = await supabase
         .from('hubla_transactions')
         .select('sale_date')
-        .eq('id', transactionId)
-        .maybeSingle();
+        .eq('linked_attendee_id', attendeeId)
+        .eq('sale_status', 'completed')
+        .order('sale_date', { ascending: true })
+        .limit(1);
 
-      const contractPaidAt = txData?.sale_date || new Date().toISOString();
+      let contractPaidAt = linkedTxs?.[0]?.sale_date;
+      if (!contractPaidAt) {
+        const { data: txData } = await supabase
+          .from('hubla_transactions')
+          .select('sale_date')
+          .eq('id', transactionId)
+          .maybeSingle();
+        contractPaidAt = txData?.sale_date || new Date().toISOString();
+      }
 
       // 3. Update attendee status to contract_paid with real sale date
       const { error: attendeeError } = await supabase
