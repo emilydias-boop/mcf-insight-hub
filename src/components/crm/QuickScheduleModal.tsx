@@ -45,6 +45,7 @@ import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
 import { useAgendaReleasedDates } from '@/hooks/useAgendaReleasedDates';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { BlockedLeadCard } from './BlockedLeadCard';
 
 interface QuickScheduleModalProps {
   open: boolean;
@@ -307,11 +308,8 @@ export function QuickScheduleModal({
 
   // Handle selecting a deal from search results
   const handleSelectDeal = useCallback((deal: DealOption) => {
-    // Bloquear seleção de leads em estados terminais ou já agendados
-    if (deal.leadState && deal.leadState !== 'open' && deal.leadState !== 'no_show') {
-      toast.error(deal.blockReason || 'Este lead não pode ser agendado novamente.');
-      return;
-    }
+    // Selecionar mesmo leads bloqueados — o form será substituído pelo
+    // BlockedLeadCard, deixando explícito o motivo de não poder agendar.
     setSelectedDeal(deal);
     setNameQuery(deal.contact?.name || deal.name);
     setSelectedEmail(deal.contact?.email || '');
@@ -356,6 +354,8 @@ export function QuickScheduleModal({
 
   const handleSubmit = () => {
     if (!selectedDeal || !selectedCloser || !selectedDate) return;
+    // Defesa adicional: nunca submeter para leads bloqueados
+    if (isLeadBlocked) return;
 
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const scheduledAt = new Date(selectedDate);
@@ -457,6 +457,25 @@ export function QuickScheduleModal({
   }, [slotAvailability, selectedTime]);
 
   const isSelected = !!selectedDeal;
+
+  // Derivar se o lead selecionado está em estado bloqueado (já agendado,
+  // R1 realizada, contrato pago/won). Quando bloqueado, escondemos os
+  // campos de form e mostramos um aviso grande no lugar das Notas.
+  const blockedLeadState = useMemo<
+    'scheduled_future' | 'completed' | 'contract_paid' | 'won' | null
+  >(() => {
+    const state = selectedDeal?.leadState;
+    if (
+      state === 'scheduled_future' ||
+      state === 'completed' ||
+      state === 'contract_paid' ||
+      state === 'won'
+    ) {
+      return state;
+    }
+    return null;
+  }, [selectedDeal?.leadState]);
+  const isLeadBlocked = blockedLeadState !== null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -639,40 +658,49 @@ export function QuickScheduleModal({
                           key={deal.id}
                           onClick={() => handleSelectDeal(deal as DealOption)}
                           className={cn(
-                            'w-full text-left px-3 py-2.5 border-b last:border-b-0 flex items-center justify-between gap-2',
+                            'w-full text-left px-3 py-2.5 border-b last:border-b-0',
                             isBlocked
-                              ? 'opacity-60 cursor-not-allowed hover:bg-muted/30'
+                              ? 'opacity-70 hover:bg-muted/30 border-l-[3px] ' +
+                                  (leadState === 'scheduled_future'
+                                    ? 'border-l-yellow-500'
+                                    : leadState === 'completed'
+                                      ? 'border-l-blue-500'
+                                      : 'border-l-green-500')
                               : 'hover:bg-accent',
                           )}
                         >
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">
-                              {contact?.name || deal.name}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm truncate">
+                                {contact?.name || deal.name}
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span className="truncate">{contact?.email || '(sem email)'}</span>
+                                {stageName && (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0 bg-muted/50">
+                                    {stageName}
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span className="truncate">{contact?.email || '(sem email)'}</span>
-                              {stageName && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0 bg-muted/50">
-                                  {stageName}
-                                </Badge>
-                              )}
-                              {stateBadge && (
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    'text-[10px] px-1.5 py-0 h-4 shrink-0',
-                                    stateBadge.className,
-                                  )}
-                                >
-                                  {stateBadge.label}
-                                </Badge>
-                              )}
-                            </div>
+                            {contact?.phone && (
+                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
+                                <Phone className="h-3 w-3" />
+                                <span>{formatPhoneDisplay(contact.phone)}</span>
+                              </div>
+                            )}
                           </div>
-                          {contact?.phone && (
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
-                              <Phone className="h-3 w-3" />
-                              <span>{formatPhoneDisplay(contact.phone)}</span>
+                          {stateBadge && (
+                            <div className="mt-1.5">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'text-[11px] font-medium px-2 py-0.5 whitespace-normal text-left leading-tight w-full justify-start',
+                                  stateBadge.className,
+                                )}
+                              >
+                                {stateBadge.label}
+                              </Badge>
                             </div>
                           )}
                         </button>
@@ -723,7 +751,7 @@ export function QuickScheduleModal({
           )}
 
           {/* SDR Responsável Selection - only for coordinators/admins */}
-          {isCoordinatorOrAbove && (
+          {isCoordinatorOrAbove && !isLeadBlocked && (
           <div className="space-y-2">
             <Label>SDR Responsável (opcional)</Label>
             <Select value={selectedSdr} onValueChange={setSelectedSdr}>
@@ -745,6 +773,8 @@ export function QuickScheduleModal({
           </div>
           )}
 
+          {!isLeadBlocked && (
+          <>
           {/* Closer Selection */}
           <div className="space-y-2">
             <Label>Closer</Label>
@@ -1101,6 +1131,21 @@ export function QuickScheduleModal({
               <p className="text-xs text-destructive">Nota obrigatória para agendar</p>
             )}
           </div>
+          </>
+          )}
+
+          {/* Blocked Lead Card — substitui Notas e demais campos quando o lead
+              não pode ser agendado novamente (já agendado, R1 realizada,
+              contrato pago/won). */}
+          {isLeadBlocked && blockedLeadState && selectedDeal && (
+            <BlockedLeadCard
+              leadName={selectedDeal.contact?.name || selectedDeal.name}
+              state={blockedLeadState}
+              meetingType="r1"
+              scheduledAt={selectedDeal.scheduledInfo?.scheduledAt ?? null}
+              closerName={selectedDeal.scheduledInfo?.closerName ?? null}
+            />
+          )}
 
           {/* Auto-send WhatsApp Toggle - hidden for now
           <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
@@ -1119,19 +1164,29 @@ export function QuickScheduleModal({
 
         {/* Submit - Fixed at bottom */}
         <div className="flex-shrink-0 pt-4 border-t">
-          <Button 
-            className="w-full" 
-            onClick={handleSubmit}
-            disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending || (!isCoordinatorOrAbove && slotAvailability?.available === false)}
-          >
-            {createMeeting.isPending 
-              ? 'Agendando...' 
-              : (!isCoordinatorOrAbove && slotAvailability?.available === false)
-                ? 'Horário lotado'
-                : 'Agendar Reunião'
-            }
-          </Button>
-          {isCoordinatorOrAbove && slotAvailability?.available === false && (
+          {isLeadBlocked ? (
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => onOpenChange(false)}
+            >
+              Fechar
+            </Button>
+          ) : (
+            <Button
+              className="w-full"
+              onClick={handleSubmit}
+              disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending || (!isCoordinatorOrAbove && slotAvailability?.available === false)}
+            >
+              {createMeeting.isPending
+                ? 'Agendando...'
+                : (!isCoordinatorOrAbove && slotAvailability?.available === false)
+                  ? 'Horário lotado'
+                  : 'Agendar Reunião'
+              }
+            </Button>
+          )}
+          {!isLeadBlocked && isCoordinatorOrAbove && slotAvailability?.available === false && (
             <p className="text-xs text-amber-600 text-center mt-1">
               ⚠️ Slot lotado — agendando como coordenador
             </p>
