@@ -413,6 +413,8 @@ export function R2QuickScheduleModal({
             </div>
 
             {/* Responsável pelo agendamento (booked_by) */}
+            {!isLeadBlocked && (
+            <>
             <div className="space-y-2">
               <Label className="text-xs">Responsável pelo agendamento</Label>
               <Select value={bookedBy} onValueChange={setBookedBy}>
