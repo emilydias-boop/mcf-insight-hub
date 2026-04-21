@@ -354,6 +354,8 @@ export function QuickScheduleModal({
 
   const handleSubmit = () => {
     if (!selectedDeal || !selectedCloser || !selectedDate) return;
+    // Defesa adicional: nunca submeter para leads bloqueados
+    if (isLeadBlocked) return;
 
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const scheduledAt = new Date(selectedDate);
@@ -656,40 +658,49 @@ export function QuickScheduleModal({
                           key={deal.id}
                           onClick={() => handleSelectDeal(deal as DealOption)}
                           className={cn(
-                            'w-full text-left px-3 py-2.5 border-b last:border-b-0 flex items-center justify-between gap-2',
+                            'w-full text-left px-3 py-2.5 border-b last:border-b-0',
                             isBlocked
-                              ? 'opacity-60 cursor-not-allowed hover:bg-muted/30'
+                              ? 'opacity-70 hover:bg-muted/30 border-l-[3px] ' +
+                                  (leadState === 'scheduled_future'
+                                    ? 'border-l-yellow-500'
+                                    : leadState === 'completed'
+                                      ? 'border-l-blue-500'
+                                      : 'border-l-green-500')
                               : 'hover:bg-accent',
                           )}
                         >
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">
-                              {contact?.name || deal.name}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm truncate">
+                                {contact?.name || deal.name}
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span className="truncate">{contact?.email || '(sem email)'}</span>
+                                {stageName && (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0 bg-muted/50">
+                                    {stageName}
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span className="truncate">{contact?.email || '(sem email)'}</span>
-                              {stageName && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0 bg-muted/50">
-                                  {stageName}
-                                </Badge>
-                              )}
-                              {stateBadge && (
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    'text-[10px] px-1.5 py-0 h-4 shrink-0',
-                                    stateBadge.className,
-                                  )}
-                                >
-                                  {stateBadge.label}
-                                </Badge>
-                              )}
-                            </div>
+                            {contact?.phone && (
+                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
+                                <Phone className="h-3 w-3" />
+                                <span>{formatPhoneDisplay(contact.phone)}</span>
+                              </div>
+                            )}
                           </div>
-                          {contact?.phone && (
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
-                              <Phone className="h-3 w-3" />
-                              <span>{formatPhoneDisplay(contact.phone)}</span>
+                          {stateBadge && (
+                            <div className="mt-1.5">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'text-[11px] font-medium px-2 py-0.5 whitespace-normal text-left leading-tight w-full justify-start',
+                                  stateBadge.className,
+                                )}
+                              >
+                                {stateBadge.label}
+                              </Badge>
                             </div>
                           )}
                         </button>
