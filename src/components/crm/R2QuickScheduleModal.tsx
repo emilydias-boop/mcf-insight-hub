@@ -33,6 +33,7 @@ import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2Clos
 import { useR2Bookers } from '@/hooks/useR2Bookers';
 import { R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
 import { cn } from '@/lib/utils';
+import { BlockedLeadCard } from './BlockedLeadCard';
 
 interface DealForSchedule {
   id: string;
@@ -183,10 +184,8 @@ export function R2QuickScheduleModal({
   }, [bookedBy, r2Bookers]);
 
   const handleSelectDeal = useCallback((deal: DealOption) => {
-    if (deal.leadState && deal.leadState !== 'open' && deal.leadState !== 'no_show') {
-      toast.error(deal.blockReason || 'Este lead não pode ser agendado novamente.');
-      return;
-    }
+    // Selecionar mesmo leads bloqueados — o form some e mostramos o
+    // BlockedLeadCard explicando por que não pode agendar.
     setSelectedDeal(deal);
     setSearchQuery(deal.contact?.name || deal.name);
     setShowResults(false);
