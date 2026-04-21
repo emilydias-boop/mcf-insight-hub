@@ -845,9 +845,29 @@ export function useSearchDealsByEmail(emailQuery: string, originIds?: string[]) 
   });
 }
 
-export function useSearchDealsForSchedule(query: string, originIds?: string[], ownerEmail?: string, includeWon?: boolean) {
+export type LeadScheduleState =
+  | 'open'
+  | 'scheduled_future'
+  | 'completed'
+  | 'contract_paid'
+  | 'won'
+  | 'no_show';
+
+export interface ScheduledInfo {
+  scheduledAt: string;
+  closerName: string | null;
+  meetingType: 'r1' | 'r2';
+}
+
+export function useSearchDealsForSchedule(
+  query: string,
+  originIds?: string[],
+  ownerEmail?: string,
+  includeWon?: boolean,
+  meetingType: 'r1' | 'r2' = 'r1',
+) {
   return useQuery({
-    queryKey: ['schedule-search', query, originIds, ownerEmail],
+    queryKey: ['schedule-search', query, originIds, ownerEmail, includeWon, meetingType],
     queryFn: async () => {
       if (!query || query.length < 2) return [];
 
@@ -918,24 +938,110 @@ export function useSearchDealsForSchedule(query: string, originIds?: string[], o
       }));
 
       // 6. Buscar o último attendee de cada deal para vincular reagendamentos
+      // E também todos os attendees para classificação de estado
       const dealIds = normalizedDeals.map(d => d.id);
-      let lastAttendeeMap: Record<string, { id: string; status: string }> = {};
-      
+      const lastAttendeeMap: Record<string, { id: string; status: string }> = {};
+      const stateMap: Record<
+        string,
+        {
+          leadState: LeadScheduleState;
+          scheduledInfo: ScheduledInfo | null;
+          blockReason: string | null;
+        }
+      > = {};
+
       if (dealIds.length > 0) {
-        const { data: lastAttendees } = await supabase
+        // Trazer attendees + slot info para classificar estado
+        const { data: allAttendees } = await supabase
           .from('meeting_slot_attendees')
-          .select('id, deal_id, status')
+          .select(
+            `id, deal_id, status, contract_paid_at, created_at,
+             meeting_slot:meeting_slots(id, scheduled_at, meeting_type, closer:closers(name))`,
+          )
           .in('deal_id', dealIds)
-          .in('status', ['no_show', 'invited', 'scheduled'])
+          .neq('status', 'cancelled')
           .order('created_at', { ascending: false });
-        
-        // Pegar apenas o mais recente de cada deal
-        if (lastAttendees) {
-          lastAttendees.forEach(att => {
-            if (att.deal_id && !lastAttendeeMap[att.deal_id]) {
-              lastAttendeeMap[att.deal_id] = { id: att.id, status: att.status };
+
+        const now = new Date();
+        const byDeal: Record<string, any[]> = {};
+        (allAttendees || []).forEach((att: any) => {
+          if (!att.deal_id) return;
+          (byDeal[att.deal_id] ||= []).push(att);
+          // último attendee "vivo" para reagendamento
+          if (
+            ['no_show', 'invited', 'scheduled'].includes(att.status) &&
+            !lastAttendeeMap[att.deal_id]
+          ) {
+            lastAttendeeMap[att.deal_id] = { id: att.id, status: att.status };
+          }
+        });
+
+        for (const deal of normalizedDeals) {
+          const atts = byDeal[deal.id] || [];
+          const stageName = deal.stage?.stage_name;
+          const dealStatus = getDealStatusFromStage(stageName);
+
+          // Default
+          let leadState: LeadScheduleState = 'open';
+          let scheduledInfo: ScheduledInfo | null = null;
+          let blockReason: string | null = null;
+
+          // 1) Contrato pago tem prioridade absoluta
+          const hasContractPaid = atts.some(
+            (a: any) => a.status === 'contract_paid' || a.contract_paid_at,
+          );
+          if (hasContractPaid) {
+            leadState = 'contract_paid';
+            blockReason = 'Lead já tem contrato pago — não é possível agendar nova reunião.';
+          } else if (dealStatus === 'won') {
+            leadState = 'won';
+            blockReason = 'Lead já fechou contrato — não é possível agendar nova reunião.';
+          } else {
+            // 2) Reunião futura ativa do mesmo tipo bloqueia
+            const futureActive = atts.find((a: any) => {
+              const slot = a.meeting_slot;
+              if (!slot?.scheduled_at) return false;
+              if (slot.meeting_type !== meetingType) return false;
+              if (!['invited', 'scheduled'].includes(a.status)) return false;
+              return new Date(slot.scheduled_at) > now;
+            });
+
+            if (futureActive) {
+              leadState = 'scheduled_future';
+              const slot = futureActive.meeting_slot;
+              const closer = Array.isArray(slot?.closer) ? slot.closer[0] : slot?.closer;
+              scheduledInfo = {
+                scheduledAt: slot.scheduled_at,
+                closerName: closer?.name || null,
+                meetingType: slot.meeting_type,
+              };
+              const dt = new Date(slot.scheduled_at);
+              const dd = String(dt.getDate()).padStart(2, '0');
+              const mm = String(dt.getMonth() + 1).padStart(2, '0');
+              const hh = String(dt.getHours()).padStart(2, '0');
+              const mi = String(dt.getMinutes()).padStart(2, '0');
+              const closerLabel = closer?.name ? ` c/ ${closer.name}` : '';
+              blockReason = `Lead já tem ${meetingType.toUpperCase()} agendada para ${dd}/${mm} ${hh}:${mi}${closerLabel}. Use a Agenda para reagendar.`;
+            } else if (meetingType === 'r2') {
+              // R2 só bloqueia em estados terminais ou R2 futura.
+              // R1 realizada / open → permitido.
+              leadState = 'open';
+            } else {
+              // R1 realizada bloqueia novo R1
+              const completed = atts.find(
+                (a: any) =>
+                  a.status === 'completed' &&
+                  a.meeting_slot?.meeting_type === 'r1',
+              );
+              if (completed) {
+                leadState = 'completed';
+                blockReason = 'Lead já realizou R1. Para R2, use a Agenda R2.';
+              }
+              // no_show / lost / cancelled / sem histórico → 'open' (permitido)
             }
-          });
+          }
+
+          stateMap[deal.id] = { leadState, scheduledInfo, blockReason };
         }
       }
 
@@ -946,11 +1052,21 @@ export function useSearchDealsForSchedule(query: string, originIds?: string[], o
         return status === 'open' || (includeWon && status === 'won');
       });
 
-      // 8. Adicionar informação do último attendee aos deals
-      const dealsWithLastAttendee = openDeals.map(deal => ({
-        ...deal,
-        lastAttendee: lastAttendeeMap[deal.id] || null
-      }));
+      // 8. Adicionar informação do último attendee + estado classificado
+      const dealsWithLastAttendee = openDeals.map(deal => {
+        const state = stateMap[deal.id] || {
+          leadState: 'open' as LeadScheduleState,
+          scheduledInfo: null,
+          blockReason: null,
+        };
+        return {
+          ...deal,
+          lastAttendee: lastAttendeeMap[deal.id] || null,
+          leadState: state.leadState,
+          scheduledInfo: state.scheduledInfo,
+          blockReason: state.blockReason,
+        };
+      });
 
       return dealsWithLastAttendee.slice(0, 10);
     },
