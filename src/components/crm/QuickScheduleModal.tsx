@@ -751,7 +751,7 @@ export function QuickScheduleModal({
           )}
 
           {/* SDR Responsável Selection - only for coordinators/admins */}
-          {isCoordinatorOrAbove && (
+          {isCoordinatorOrAbove && !isLeadBlocked && (
           <div className="space-y-2">
             <Label>SDR Responsável (opcional)</Label>
             <Select value={selectedSdr} onValueChange={setSelectedSdr}>
