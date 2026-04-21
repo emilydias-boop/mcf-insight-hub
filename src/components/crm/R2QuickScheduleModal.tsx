@@ -199,6 +199,8 @@ export function R2QuickScheduleModal({
 
   const handleSubmit = () => {
     if (!selectedDeal || !selectedCloser || !selectedDate || !selectedTime) return;
+    // Defesa adicional: nunca submeter para leads bloqueados.
+    if (isLeadBlocked) return;
 
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const scheduledAt = new Date(selectedDate);
@@ -236,6 +238,24 @@ export function R2QuickScheduleModal({
   };
 
   const isSelected = !!selectedDeal;
+
+  // Estado bloqueado do lead selecionado (usado para mostrar o card grande
+  // de aviso no lugar dos campos de form e do botão de agendar).
+  const blockedLeadState = useMemo<
+    'scheduled_future' | 'completed' | 'contract_paid' | 'won' | null
+  >(() => {
+    const state = selectedDeal?.leadState;
+    if (
+      state === 'scheduled_future' ||
+      state === 'completed' ||
+      state === 'contract_paid' ||
+      state === 'won'
+    ) {
+      return state;
+    }
+    return null;
+  }, [selectedDeal?.leadState]);
+  const isLeadBlocked = blockedLeadState !== null;
 
   // Get placeholder text for time select
   const getTimePlaceholder = () => {
