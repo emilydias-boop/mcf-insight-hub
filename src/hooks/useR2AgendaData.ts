@@ -401,8 +401,8 @@ export function useCreateR2Meeting() {
       queryClient.invalidateQueries({ queryKey: ['r2-noshow-leads'] });
       toast.success('Reunião R2 agendada com sucesso');
     },
-    onError: () => {
-      toast.error('Erro ao agendar reunião R2');
+    onError: (error: any) => {
+      toast.error(error?.message || 'Erro ao agendar reunião R2');
     },
   });
 }
