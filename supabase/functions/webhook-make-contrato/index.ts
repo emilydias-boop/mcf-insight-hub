@@ -151,12 +151,12 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
 
     console.log(`🎉 [AUTO-PAGO] Match por ${matchType.toUpperCase()}: Attendee ${matchingAttendee.id} (${matchingAttendee.attendee_name}) - Reunião: ${meeting.id}`);
 
-    // Atualizar attendee para contract_paid com a data da reunião
+    // Atualizar attendee para contract_paid com a data REAL do pagamento (saleDate)
     const { error: updateError } = await supabase
       .from('meeting_slot_attendees')
       .update({
         status: 'contract_paid',
-        contract_paid_at: meeting.scheduled_at
+        contract_paid_at: data.saleDate
       })
       .eq('id', matchingAttendee.id);
 
