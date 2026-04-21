@@ -1,61 +1,81 @@
 
 
-## Bloquear agendamento duplicado de leads já agendados
+## Tornar bloqueio de leads já agendados/concluídos mais explícito
 
-### Decisão
+### Problema atual
 
-Não permitir agendar novamente leads que já tenham R1 ativa no futuro. Sem opção de "agendar mesmo assim". Se precisar mudar horário, é **reagendamento** (no fluxo existente de "Leads da Semana" / drawer da reunião).
+Hoje a sinalização de "lead já agendado / concluído / contrato pago" aparece como um **badge pequeno** dentro da linha do resultado da busca, que é cortado horizontalmente (na captura: "Já agendado p/ 22/04 16:00 c/" — closer truncado). Apesar do clique já estar bloqueado e o toast aparecer, visualmente passa despercebido — e o botão "Agendar Reunião" continua presente, dando impressão de que ainda dá pra burlar.
 
-### Comportamento por estado do lead
+### Mudanças (R1 e R2)
 
-| Estado | Comportamento na busca |
-|---|---|
-| Sem histórico | Fluxo normal — agenda |
-| R1 agendada futura (`invited`/`scheduled` com `scheduled_at > now()`) | **Badge amarelo "📅 Já agendado p/ DD/MM HH:mm c/ [Closer]"** + clique **bloqueado** com toast: "Lead já tem R1 agendada. Use a Agenda para reagendar." |
-| R1 realizada (`completed`) | **Badge azul "✅ R1 realizada"** + clique **bloqueado** com toast: "Lead já realizou R1. Para R2, use a Agenda R2." |
-| Contrato pago (`contract_paid`) ou deal `won` | **Badge verde "💰 Contrato pago"** + clique **bloqueado** |
-| No-show / cancelled / lost | Fluxo normal — pode agendar nova R1 |
+**1. Card de aviso grande, no lugar do bloco "Notas"**
 
-### Implementação
+Quando um lead bloqueado é selecionado/destacado na busca (ou quando o usuário insiste em clicá-lo), substituir o textarea de **Notas** por um **card de status destacado**, ocupando o mesmo espaço:
 
-**1. `src/hooks/useAgendaData.ts` — `useSearchDealsForSchedule`**
-- Estender query para trazer último `meeting_slot_attendee` ativo + `scheduled_at` do `meeting_slot` + `closer.name` + `crm_deals.status` (won/lost).
-- Adicionar campo derivado `leadState: 'open' | 'scheduled_future' | 'completed' | 'contract_paid' | 'won'` e `blockReason: string | null` em cada resultado.
-- `scheduledInfo: { scheduledAt, closerName } | null` para o badge.
+```text
+┌─────────────────────────────────────────────────┐
+│  📅  LEAD JÁ AGENDADO                           │
+│  ─────────────────────────────────────────────  │
+│  Cícero José Monteiro Carvalho                  │
+│  Reunião 01 (R1) marcada para                   │
+│  22/04/2026 às 16:00                            │
+│  Closer: Rafael Barros                          │
+│                                                 │
+│  Para mudar o horário, use a Agenda e           │
+│  reagende a reunião existente.                  │
+└─────────────────────────────────────────────────┘
+```
 
-**2. `src/components/crm/QuickScheduleModal.tsx`**
-- Renderizar badge de estado na linha do resultado da busca (ao lado do badge de estágio atual).
-- Em `handleSelectDeal`: se `leadState !== 'open'` (e não for no-show), **não selecionar** — disparar toast com `blockReason` e abortar.
-- Resultados bloqueados ficam com `opacity-60` e cursor `not-allowed` para reforço visual.
+Variações por estado:
+- `scheduled_future` → fundo amarelo, ícone 📅, título "LEAD JÁ AGENDADO"
+- `completed` → fundo azul, ícone ✅, título "R1 JÁ REALIZADA" ("Para R2, use a Agenda R2")
+- `contract_paid` / `won` → fundo verde, ícone 💰, título "CONTRATO JÁ PAGO" ("Lead concluído")
 
-**3. `src/components/crm/R2QuickScheduleModal.tsx`**
-- Mesma lógica de badges + bloqueio, ajustada ao contexto R2:
-  - R2 já agendada futura → bloqueio.
-  - Contrato pago → bloqueio.
-  - R1 realizada sem R2 → permitido (fluxo normal de R2).
+O bloco de Notas só aparece para leads em estado `open` ou `no_show` (fluxo normal).
 
-**4. `supabase/functions/calendly-create-event/index.ts` (defesa em profundidade)**
-- Antes do insert do attendee, validar que o `deal_id` não tem outro attendee `invited`/`scheduled` com `scheduled_at > now()` para o mesmo `meeting_type`.
-- Validar que o `crm_deals.status` não é `won` e que stage não é "Contrato Pago".
-- Se violado, retornar `{ error: 'duplicate_active_booking' | 'deal_already_won', message: '...' }` com 409.
-- Frontend trata e mostra toast.
+**2. Botão de submit vira "Fechar"**
 
-### Sem migration
+Quando o estado do lead é bloqueado, o botão fixo no rodapé:
+- **Texto**: "Fechar" (em vez de "Agendar Reunião")
+- **Variante**: `secondary` (cinza, não verde)
+- **Ação**: fechar o modal (`onOpenChange(false)`)
+- **Disabled**: `false` (sempre clicável)
 
-Toda informação já existe em `meeting_slot_attendees`, `meeting_slots`, `crm_deals`, `closers`. Apenas leitura no hook e validação na edge function.
+Assim não há nem caminho visual nem caminho técnico para enviar o agendamento.
 
-### Validação pós-fix
+**3. Badge na lista de resultados continua, mas mais visível**
 
-1. Buscar **Herbert Viana** no QuickScheduleModal R1 → badge amarelo "📅 Já agendado p/ 22/04 17:45 c/ Rafael", clique não seleciona, toast informativo.
-2. Buscar **Giovani Tomazini** (contrato pago) → badge verde, clique bloqueado.
-3. Buscar lead novo → fluxo normal, sem badge.
-4. Lead com `no_show` recente → continua agendável (badge informativo opcional, mas sem bloqueio).
-5. Tentar burlar via API direta na edge function → 409 com mensagem clara.
+- Badge ocupa **linha inteira abaixo** do nome (em vez de inline cortado)
+- Texto completo sempre visível (sem `truncate`)
+- Linha bloqueada com `opacity-70` e borda colorida lateral (3px) na cor do estado
+- Tooltip extra desnecessário — informação já está expandida abaixo
+
+### Estado / fluxo de seleção
+
+Hoje, em `handleSelectDeal`, leads bloqueados disparam `toast.error` e **não são selecionados** (aborta). Vou mudar para:
+
+- **Selecionar mesmo assim** o lead (visualmente, como "card bloqueado" no lugar do form)
+- Form de agendamento (closer, data, hora, notas, etc.) **fica oculto**
+- Renderiza o **card de aviso grande** + botão "Fechar"
+- `handleSubmit` recebe guard extra: se `selectedDeal.leadState` é bloqueado → retorna sem fazer nada (defesa adicional)
+
+Isso dá feedback claro do que aconteceu sem o usuário se perder ("cliquei e não aconteceu nada").
 
 ### Arquivos afetados
 
-- `src/hooks/useAgendaData.ts`
 - `src/components/crm/QuickScheduleModal.tsx`
+  - `handleSelectDeal`: remover early-return; setar `selectedDeal` mesmo se bloqueado
+  - Renderizar `<BlockedLeadCard />` no lugar do bloco Notas + ocultar campos de form (closer, data, hora, já constrói, etc.) quando `selectedDeal.leadState` é bloqueado
+  - Botão de rodapé: trocar texto/variant/onClick conforme estado
 - `src/components/crm/R2QuickScheduleModal.tsx`
-- `supabase/functions/calendly-create-event/index.ts`
+  - Mesmas mudanças adaptadas ao R2 (textos: "R2 JÁ AGENDADA", "Para mudar horário, use a Agenda R2")
+- Sem mudança em hooks, edge function ou banco — toda a informação (`leadState`, `scheduledInfo`, `blockReason`) já está disponível.
+
+### Validação pós-fix
+
+1. Buscar **Cícero José Monteiro Carvalho** (já agendado p/ 22/04 16:00) → clicar → form some, card amarelo grande aparece com data/horário/closer completos, botão rodapé vira "Fechar".
+2. Buscar lead com R1 realizada → card azul "R1 JÁ REALIZADA".
+3. Buscar lead com contrato pago → card verde "CONTRATO JÁ PAGO".
+4. Buscar lead novo → fluxo normal mantido (form completo, botão "Agendar Reunião").
+5. Testar mesmo comportamento no R2QuickScheduleModal.
 
