@@ -773,6 +773,8 @@ export function QuickScheduleModal({
           </div>
           )}
 
+          {!isLeadBlocked && (
+          <>
           {/* Closer Selection */}
           <div className="space-y-2">
             <Label>Closer</Label>
