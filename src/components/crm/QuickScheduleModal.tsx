@@ -1164,19 +1164,29 @@ export function QuickScheduleModal({
 
         {/* Submit - Fixed at bottom */}
         <div className="flex-shrink-0 pt-4 border-t">
-          <Button 
-            className="w-full" 
-            onClick={handleSubmit}
-            disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending || (!isCoordinatorOrAbove && slotAvailability?.available === false)}
-          >
-            {createMeeting.isPending 
-              ? 'Agendando...' 
-              : (!isCoordinatorOrAbove && slotAvailability?.available === false)
-                ? 'Horário lotado'
-                : 'Agendar Reunião'
-            }
-          </Button>
-          {isCoordinatorOrAbove && slotAvailability?.available === false && (
+          {isLeadBlocked ? (
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => onOpenChange(false)}
+            >
+              Fechar
+            </Button>
+          ) : (
+            <Button
+              className="w-full"
+              onClick={handleSubmit}
+              disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending || (!isCoordinatorOrAbove && slotAvailability?.available === false)}
+            >
+              {createMeeting.isPending
+                ? 'Agendando...'
+                : (!isCoordinatorOrAbove && slotAvailability?.available === false)
+                  ? 'Horário lotado'
+                  : 'Agendar Reunião'
+              }
+            </Button>
+          )}
+          {!isLeadBlocked && isCoordinatorOrAbove && slotAvailability?.available === false && (
             <p className="text-xs text-amber-600 text-center mt-1">
               ⚠️ Slot lotado — agendando como coordenador
             </p>
