@@ -45,6 +45,7 @@ import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
 import { useAgendaReleasedDates } from '@/hooks/useAgendaReleasedDates';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { BlockedLeadCard } from './BlockedLeadCard';
 
 interface QuickScheduleModalProps {
   open: boolean;
