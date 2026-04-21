@@ -456,6 +456,25 @@ export function QuickScheduleModal({
 
   const isSelected = !!selectedDeal;
 
+  // Derivar se o lead selecionado está em estado bloqueado (já agendado,
+  // R1 realizada, contrato pago/won). Quando bloqueado, escondemos os
+  // campos de form e mostramos um aviso grande no lugar das Notas.
+  const blockedLeadState = useMemo<
+    'scheduled_future' | 'completed' | 'contract_paid' | 'won' | null
+  >(() => {
+    const state = selectedDeal?.leadState;
+    if (
+      state === 'scheduled_future' ||
+      state === 'completed' ||
+      state === 'contract_paid' ||
+      state === 'won'
+    ) {
+      return state;
+    }
+    return null;
+  }, [selectedDeal?.leadState]);
+  const isLeadBlocked = blockedLeadState !== null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
