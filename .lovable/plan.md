@@ -1,57 +1,76 @@
 
 
-## Corrigir `contract_paid_at` desalinhado da data real da venda Hubla
+## Bug: Agendamentos do dia somem quando a reunião está marcada para o futuro
 
-### Diagnóstico (caso Giovani Tomazini)
+### Diagnóstico (caso Herbert / Carol Correa, 21/04/2026)
 
-Confirmado pelos dados:
-
-| Fonte | Data |
+| Item | Valor |
 |---|---|
-| **Hubla** (transação real, `product_category=incorporador`) | **20/04/2026 18:04** |
-| **Make webhook** (espelho contrato, `linked_attendee_id` preenchido) | **20/04/2026 18:04** |
-| **meeting_slot_attendees.contract_paid_at** (no app) | **15/04/2026 21:00** ❌ |
-| **meeting_slots.scheduled_at** (R1 com Thayna) | 15/04/2026 21:00 |
+| Lead | Herbert Viana Cavalcanti da Silva |
+| Attendee criado em | 21/04/2026 12:00 (hoje) |
+| `booked_by` | Carol Correa ✅ |
+| Reunião marcada para (`scheduled_at`) | **22/04/2026 17:45** (amanhã) |
+| Status | `invited` |
 
-O `contract_paid_at` foi gravado **igual ao `scheduled_at` da reunião**, não com a `sale_date` real da Hubla. Por isso ele não apareceu no dia 20: a contagem filtra `contract_paid_at BETWEEN '2026-04-20 00:00' AND '23:59'`, e o registro está no dia 15.
+A Carol agendou **hoje** uma R1 para **amanhã**. No filtro "Hoje", o agendamento dela deveria contar +1 — mas aparece **0**.
 
-### Causa raiz provável
+### Causa raiz na RPC `get_sdr_metrics_from_agenda` (versão com `bu_filter`)
 
-Quando alguém marca o attendee como `contract_paid` manualmente no drawer da agenda, o sistema usa `now()` ou o `scheduled_at` da reunião como fallback para `contract_paid_at`, em vez de buscar a data real da `hubla_transactions` vinculada (`linked_attendee_id`).
+A RPC tem três CTEs:
 
-No caso do Giovani, a transação Hubla **foi vinculada** ao attendee (`linked_attendee_id = 0f685879...`), então a `sale_date` correta (`20/04 18:04`) está disponível mas não foi propagada.
+1. **`dedup_agendada`** — filtra `meeting_day BETWEEN start AND end` (data da reunião dentro do período)
+2. **`agendamentos_cte`** — filtra `effective_booked_at BETWEEN start AND end` (data do agendamento dentro do período)
+3. **`sdr_stats`** — faz `FROM dedup_agendada d LEFT JOIN agendamentos_cte a ...`
 
-### Plano de correção
+**O problema:** `sdr_stats` parte de `dedup_agendada`. Se o SDR não tiver nenhuma reunião acontecendo no período (caso da Carol hoje, que só tem reunião amanhã), ele é eliminado já na CTE base, e o `agendamentos_cte` (onde ele aparece corretamente) é descartado pelo LEFT JOIN inverso.
 
-**Etapa 1 — Investigar e mostrar a divergência (read-only, faço já)**
+Resultado: **agendamentos de hoje para o futuro nunca contam no card "Agendamento" do dia em que foram feitos.** Esse bug afeta toda a equipe, não só a Carol.
 
-Rodar query que lista todos os attendees `contract_paid` com `linked_attendee_id` na transação Hubla onde `attendee.contract_paid_at` ≠ `hubla_transactions.sale_date`. Isso te dá o tamanho do problema (quantos contratos estão com data errada e em quais closers/meses afeta a contagem).
+### Correção
 
-**Etapa 2 — Backfill (migration)**
+Reescrever a CTE final (`sdr_stats`) para usar **UNION** dos SDRs presentes em `dedup_agendada`, `agendamentos_cte` e `contratos_cte`, em vez de basear tudo em `dedup_agendada`:
 
-Migration única que atualiza `meeting_slot_attendees.contract_paid_at` para `hubla_transactions.sale_date` quando:
-- `attendee.status IN ('contract_paid','refunded')`
-- existe `hubla_transactions WHERE linked_attendee_id = attendee.id` com `sale_status='completed'`
-- as datas divergem em mais de 1 hora (margem de timezone)
+```sql
+sdr_universe AS (
+  SELECT sdr_email, sdr_name FROM dedup_agendada
+  UNION
+  SELECT sdr_email, sdr_email FROM agendamentos_cte 
+    JOIN raw_attendees USING (sdr_email)  -- pra recuperar sdr_name
+  UNION
+  SELECT sdr_email, sdr_email FROM contratos_cte ...
+),
+sdr_stats AS (
+  SELECT u.sdr_email, u.sdr_name,
+    COALESCE(a.agendamentos, 0) as agendamentos,
+    COALESCE(SUM(d.agendada_count), 0)::int as r1_agendada,
+    COALESCE(SUM(d.realized), 0)::int as r1_realizada,
+    COALESCE(SUM(d.is_noshow), 0)::int as no_shows,
+    COALESCE(c.contratos, 0) as contratos
+  FROM sdr_universe u
+  LEFT JOIN dedup_agendada d ON d.sdr_email = u.sdr_email
+  LEFT JOIN agendamentos_cte a ON a.sdr_email = u.sdr_email
+  LEFT JOIN contratos_cte c ON c.sdr_email = u.sdr_email
+  GROUP BY u.sdr_email, u.sdr_name, a.agendamentos, c.contratos
+)
+```
 
-Usa a `sale_date` da transação Hubla mais antiga (caso múltiplas) como fonte de verdade.
+Forma mais limpa: derivar `sdr_universe` direto de `raw_attendees` filtrando por **qualquer** uma das três condições (meeting_day OR booked_at OR contract_paid_at no período).
 
-**Etapa 3 — Corrigir a origem do bug (forward fix)**
+### Impacto esperado
 
-Identificar onde `contract_paid_at` é gravado:
-- `useUpdateAttendeeStatus` / drawer de agenda (marcação manual)
-- Edge function `link-hubla-transaction` ou similar (vinculação automática)
-- Trigger no Postgres se existir
+Após a correção, no filtro "Hoje" (21/04):
+- **Carol Correa**: Agendamento passa de 0 → **1** (Herbert)
+- Qualquer outro SDR que agendou hoje uma R1 para 22/04 ou depois também terá seus agendamentos contados
+- Card de KPI **"AGENDAMENTOS"** no topo subirá proporcionalmente
+- R1 Agendada / R1 Realizada / Contratos não mudam (já filtravam por scheduled_at, que continua igual)
 
-Em cada ponto que setar `status='contract_paid'`, **buscar a `sale_date` da transação Hubla vinculada** e usar ela. Fallback para `now()` só se não houver transação vinculada.
+### Arquivo afetado
 
-**Etapa 4 — Validação**
+- Nova migration SQL substituindo `public.get_sdr_metrics_from_agenda(text, text, text, text)` (a versão com `bu_filter`). A versão sem `bu_filter` (assinatura antiga) já faz o cálculo certo via GROUP BY simples e não precisa mudar.
 
-Após backfill, reconfirmar que Giovani Tomazini aparece nos contratos da Thayna em **20/04** (esperado: total da Thayna passa de 5 → 6 nesse dia, e o dia 15 perde 1).
+### Validação pós-fix
 
-### Confirmar antes de seguir
-
-1. **Política de data**: usar `sale_date` da Hubla como fonte de verdade para `contract_paid_at` (recomendado, pois é a data real do pagamento)?
-2. **Escopo do backfill**: corrigir **todos os contratos históricos** com divergência, ou só os de **2026** (mês corrente + retroativo curto)?
-3. **Múltiplas transações**: se o lead tem várias `hubla_transactions` vinculadas (ex: parcelas), usar a **mais antiga** (primeira parcela = data do contrato) ou a **mais recente**?
+1. Rodar `SELECT get_sdr_metrics_from_agenda('2026-04-21','2026-04-21','carol.correa@minhacasafinanciada.com','incorporador');` → esperar `agendamentos: 1`
+2. Rodar sem filtro de SDR → conferir que o total de agendamentos do time hoje aumenta
+3. Refrescar `/crm/reunioes-equipe?preset=today` → Carol Correa com 1 agendamento, KPI atualizado
 
