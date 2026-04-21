@@ -1,78 +1,57 @@
 
 
-## Reescrever a contagem de A010 para usar a fonte de verdade (Hubla)
+## Corrigir `contract_paid_at` desalinhado da data real da venda Hubla
 
-### Diagnóstico
+### Diagnóstico (caso Giovani Tomazini)
 
-Você está certo: **A010 é venda da Hubla**, não tag do CRM. Hoje o funil conta A010 a partir de tags em `crm_deals` (`tags @> 'A010'`), o que sub/super-conta porque:
+Confirmado pelos dados:
 
-- Nem todo comprador A010 tem a tag aplicada no deal (depende de webhook + sync ter rodado)
-- Tags ficam no deal, mas a venda real vive em `hubla_transactions` com `product_category = 'a010'` e `sale_status = 'completed'`
-- Existe inclusive um hook dedicado pra isso: `useBulkA010Check` que cruza email do contato com `hubla_transactions`
+| Fonte | Data |
+|---|---|
+| **Hubla** (transação real, `product_category=incorporador`) | **20/04/2026 18:04** |
+| **Make webhook** (espelho contrato, `linked_attendee_id` preenchido) | **20/04/2026 18:04** |
+| **meeting_slot_attendees.contract_paid_at** (no app) | **15/04/2026 21:00** ❌ |
+| **meeting_slots.scheduled_at** (R1 com Thayna) | 15/04/2026 21:00 |
 
-A fonte de verdade do "lead é A010" é: **existe transação Hubla com `product_category='a010'` e `sale_status='completed'` cujo `customer_email` (ou phone) bate com o contato do deal.**
+O `contract_paid_at` foi gravado **igual ao `scheduled_at` da reunião**, não com a `sale_date` real da Hubla. Por isso ele não apareceu no dia 20: a contagem filtra `contract_paid_at BETWEEN '2026-04-20 00:00' AND '23:59'`, e o registro está no dia 15.
 
-### Mudança no `useBUFunnelComplete.ts`
+### Causa raiz provável
 
-**1. Buscar compradores A010 da Hubla no período** (uma query nova):
-```ts
-const { data: a010Buyers } = await supabase
-  .from('hubla_transactions')
-  .select('customer_email, customer_phone, sale_date')
-  .eq('product_category', 'a010')
-  .eq('sale_status', 'completed')
-  .gte('sale_date', startDate)
-  .lte('sale_date', endDate);
+Quando alguém marca o attendee como `contract_paid` manualmente no drawer da agenda, o sistema usa `now()` ou o `scheduled_at` da reunião como fallback para `contract_paid_at`, em vez de buscar a data real da `hubla_transactions` vinculada (`linked_attendee_id`).
 
-const a010EmailSet = new Set(a010Buyers.map(b => b.customer_email?.toLowerCase()).filter(Boolean));
-const a010PhoneSet = new Set(a010Buyers.map(b => normalizePhone(b.customer_phone)).filter(Boolean));
-```
+No caso do Giovani, a transação Hubla **foi vinculada** ao attendee (`linked_attendee_id = 0f685879...`), então a `sale_date` correta (`20/04 18:04`) está disponível mas não foi propagada.
 
-**2. Reescrever `classifyChannelStrict`** para que A010 seja decidido pela Hubla, não pela tag:
-```ts
-function classifyChannelStrict(deal): string {
-  const email = deal.contact?.email?.toLowerCase();
-  const phone = normalizePhone(deal.contact?.phone);
-  
-  // A010 = comprador Hubla A010 (fonte de verdade)
-  if ((email && a010EmailSet.has(email)) || (phone && a010PhoneSet.has(phone))) {
-    return 'A010';
-  }
-  
-  // ANAMNESE = webhook + tag exata "ANAMNESE" (já implementado)
-  if (deal.data_source === 'webhook' && exactTags.includes('ANAMNESE')) return 'ANAMNESE';
-  if (exactTags.includes('ANAMNESE-INSTA')) return 'ANAMNESE-INSTA';
-  
-  // Demais canais
-  return classifyChannel({...}) || 'OUTRO';
-}
-```
+### Plano de correção
 
-**3. Garantir que `crm_contacts.email` e `phone` venham no select de `crm_deals`** (verificar — se já vêm, sem mudança; senão, adicionar `crm_contacts(email, phone)` no select).
+**Etapa 1 — Investigar e mostrar a divergência (read-only, faço já)**
 
-### Comportamento resultante
+Rodar query que lista todos os attendees `contract_paid` com `linked_attendee_id` na transação Hubla onde `attendee.contract_paid_at` ≠ `hubla_transactions.sale_date`. Isso te dá o tamanho do problema (quantos contratos estão com data errada e em quais closers/meses afeta a contagem).
 
-| Métrica | Antes | Depois |
-|---|---|---|
-| A010 do funil | Deals com tag `A010` no CRM (frouxo, depende de sync) | Deals cujo contato comprou A010 na Hubla no período (fonte de verdade) |
-| Universo A010 (mês) | Variável conforme tag aplicada | ~490 (bate com Hubla) |
-| Vendas Finais A010 | Deals A010 com contrato pago | Mesmo critério, mas universo correto |
-| ANAMNESE | Inalterado (webhook + tag exata) | Inalterado |
-| OUTRO | Tudo que não é A010 nem ANAMNESE | Idem |
+**Etapa 2 — Backfill (migration)**
 
-### Detalhes importantes
+Migration única que atualiza `meeting_slot_attendees.contract_paid_at` para `hubla_transactions.sale_date` quando:
+- `attendee.status IN ('contract_paid','refunded')`
+- existe `hubla_transactions WHERE linked_attendee_id = attendee.id` com `sale_status='completed'`
+- as datas divergem em mais de 1 hora (margem de timezone)
 
-- **Período do A010**: usar `sale_date` da Hubla dentro do período do funil. Comprou A010 fora da janela → não conta como A010 nesse período (mesmo critério dos outros canais).
-- **Conflito A010 + ANAMNESE**: se um lead é simultaneamente comprador A010 (Hubla) E veio por webhook ANAMNESE, **A010 vence** (regra de prioridade já usada em `useBulkA010Check` e na lógica de roteamento Hubla — memory `hubla-routing-collision-logic-v5`). Match direto com o que já existe no app.
-- **Match phone**: usar últimos 9 dígitos (mesma normalização do app, memory `crm-manual-entry-deduplication-standard`).
+Usa a `sale_date` da transação Hubla mais antiga (caso múltiplas) como fonte de verdade.
 
-### Escopo
+**Etapa 3 — Corrigir a origem do bug (forward fix)**
 
-- 1 arquivo: `src/hooks/useBUFunnelComplete.ts`
-- ~40 linhas (1 query nova + reescrita do `classifyChannelStrict` + sets de match)
-- 0 migration
+Identificar onde `contract_paid_at` é gravado:
+- `useUpdateAttendeeStatus` / drawer de agenda (marcação manual)
+- Edge function `link-hubla-transaction` ou similar (vinculação automática)
+- Trigger no Postgres se existir
 
-### Confirmar antes de implementar
+Em cada ponto que setar `status='contract_paid'`, **buscar a `sale_date` da transação Hubla vinculada** e usar ela. Fallback para `now()` só se não houver transação vinculada.
 
-1. **Janela do comprador A010**: contar como A010 quem comprou **dentro do período do funil** (recomendado, simétrico com os outros canais), ou **qualquer comprador A010 histórico** (universo cumulativo)?
+**Etapa 4 — Validação**
+
+Após backfill, reconfirmar que Giovani Tomazini aparece nos contratos da Thayna em **20/04** (esperado: total da Thayna passa de 5 → 6 nesse dia, e o dia 15 perde 1).
+
+### Confirmar antes de seguir
+
+1. **Política de data**: usar `sale_date` da Hubla como fonte de verdade para `contract_paid_at` (recomendado, pois é a data real do pagamento)?
+2. **Escopo do backfill**: corrigir **todos os contratos históricos** com divergência, ou só os de **2026** (mês corrente + retroativo curto)?
+3. **Múltiplas transações**: se o lead tem várias `hubla_transactions` vinculadas (ex: parcelas), usar a **mais antiga** (primeira parcela = data do contrato) ou a **mais recente**?
 
