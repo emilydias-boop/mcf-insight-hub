@@ -600,11 +600,50 @@ export function QuickScheduleModal({
                     searchResults.map(deal => {
                       const contact = deal.contact;
                       const stageName = (deal as any).stage?.stage_name;
+                      const leadState = (deal as any).leadState as DealOption['leadState'];
+                      const scheduledInfo = (deal as any).scheduledInfo as DealOption['scheduledInfo'];
+                      const isBlocked =
+                        leadState && leadState !== 'open' && leadState !== 'no_show';
+
+                      let stateBadge: { label: string; className: string } | null = null;
+                      if (leadState === 'scheduled_future' && scheduledInfo) {
+                        const dt = new Date(scheduledInfo.scheduledAt);
+                        const dd = String(dt.getDate()).padStart(2, '0');
+                        const mm = String(dt.getMonth() + 1).padStart(2, '0');
+                        const hh = String(dt.getHours()).padStart(2, '0');
+                        const mi = String(dt.getMinutes()).padStart(2, '0');
+                        const closerLabel = scheduledInfo.closerName
+                          ? ` c/ ${scheduledInfo.closerName}`
+                          : '';
+                        stateBadge = {
+                          label: `📅 Já agendado p/ ${dd}/${mm} ${hh}:${mi}${closerLabel}`,
+                          className:
+                            'border-yellow-500/60 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+                        };
+                      } else if (leadState === 'completed') {
+                        stateBadge = {
+                          label: '✅ R1 realizada',
+                          className:
+                            'border-blue-500/60 bg-blue-500/10 text-blue-700 dark:text-blue-400',
+                        };
+                      } else if (leadState === 'contract_paid' || leadState === 'won') {
+                        stateBadge = {
+                          label: '💰 Contrato pago',
+                          className:
+                            'border-green-500/60 bg-green-500/10 text-green-700 dark:text-green-400',
+                        };
+                      }
+
                       return (
                         <button
                           key={deal.id}
                           onClick={() => handleSelectDeal(deal as DealOption)}
-                          className="w-full text-left px-3 py-2.5 hover:bg-accent border-b last:border-b-0 flex items-center justify-between gap-2"
+                          className={cn(
+                            'w-full text-left px-3 py-2.5 border-b last:border-b-0 flex items-center justify-between gap-2',
+                            isBlocked
+                              ? 'opacity-60 cursor-not-allowed hover:bg-muted/30'
+                              : 'hover:bg-accent',
+                          )}
                         >
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-sm truncate">
@@ -615,6 +654,17 @@ export function QuickScheduleModal({
                               {stageName && (
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0 bg-muted/50">
                                   {stageName}
+                                </Badge>
+                              )}
+                              {stateBadge && (
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    'text-[10px] px-1.5 py-0 h-4 shrink-0',
+                                    stateBadge.className,
+                                  )}
+                                >
+                                  {stateBadge.label}
                                 </Badge>
                               )}
                             </div>
