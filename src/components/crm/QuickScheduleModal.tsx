@@ -308,11 +308,8 @@ export function QuickScheduleModal({
 
   // Handle selecting a deal from search results
   const handleSelectDeal = useCallback((deal: DealOption) => {
-    // Bloquear seleção de leads em estados terminais ou já agendados
-    if (deal.leadState && deal.leadState !== 'open' && deal.leadState !== 'no_show') {
-      toast.error(deal.blockReason || 'Este lead não pode ser agendado novamente.');
-      return;
-    }
+    // Selecionar mesmo leads bloqueados — o form será substituído pelo
+    // BlockedLeadCard, deixando explícito o motivo de não poder agendar.
     setSelectedDeal(deal);
     setNameQuery(deal.contact?.name || deal.name);
     setSelectedEmail(deal.contact?.email || '');
