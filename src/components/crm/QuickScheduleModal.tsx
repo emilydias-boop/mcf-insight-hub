@@ -1131,6 +1131,21 @@ export function QuickScheduleModal({
               <p className="text-xs text-destructive">Nota obrigatória para agendar</p>
             )}
           </div>
+          </>
+          )}
+
+          {/* Blocked Lead Card — substitui Notas e demais campos quando o lead
+              não pode ser agendado novamente (já agendado, R1 realizada,
+              contrato pago/won). */}
+          {isLeadBlocked && blockedLeadState && selectedDeal && (
+            <BlockedLeadCard
+              leadName={selectedDeal.contact?.name || selectedDeal.name}
+              state={blockedLeadState}
+              meetingType="r1"
+              scheduledAt={selectedDeal.scheduledInfo?.scheduledAt ?? null}
+              closerName={selectedDeal.scheduledInfo?.closerName ?? null}
+            />
+          )}
 
           {/* Auto-send WhatsApp Toggle - hidden for now
           <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
