@@ -27,6 +27,8 @@ import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { R2CloserWithAvailability, useCreateR2Meeting } from '@/hooks/useR2AgendaData';
 import { useSearchDealsForSchedule } from '@/hooks/useAgendaData';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2CloserAvailableSlots';
 import { useR2Bookers } from '@/hooks/useR2Bookers';
 import { R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
@@ -63,6 +65,13 @@ interface DealOption {
     phone: string | null;
     email: string | null;
   } | null;
+  leadState?: 'open' | 'scheduled_future' | 'completed' | 'contract_paid' | 'won' | 'no_show';
+  scheduledInfo?: {
+    scheduledAt: string;
+    closerName: string | null;
+    meetingType: 'r1' | 'r2';
+  } | null;
+  blockReason?: string | null;
 }
 
 export function R2QuickScheduleModal({
@@ -89,7 +98,13 @@ export function R2QuickScheduleModal({
   const [r2Observations, setR2Observations] = useState<string>('');
   const [isPreSchedule, setIsPreSchedule] = useState(false);
 
-  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, undefined, undefined, true);
+  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(
+    searchQuery,
+    undefined,
+    undefined,
+    true,
+    'r2',
+  );
   const createMeeting = useCreateR2Meeting();
   const { data: r2Bookers = [] } = useR2Bookers();
 
@@ -168,6 +183,10 @@ export function R2QuickScheduleModal({
   }, [bookedBy, r2Bookers]);
 
   const handleSelectDeal = useCallback((deal: DealOption) => {
+    if (deal.leadState && deal.leadState !== 'open' && deal.leadState !== 'no_show') {
+      toast.error(deal.blockReason || 'Este lead não pode ser agendado novamente.');
+      return;
+    }
     setSelectedDeal(deal);
     setSearchQuery(deal.contact?.name || deal.name);
     setShowResults(false);
