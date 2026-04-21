@@ -27,6 +27,8 @@ import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { R2CloserWithAvailability, useCreateR2Meeting } from '@/hooks/useR2AgendaData';
 import { useSearchDealsForSchedule } from '@/hooks/useAgendaData';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2CloserAvailableSlots';
 import { useR2Bookers } from '@/hooks/useR2Bookers';
 import { R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
@@ -63,6 +65,13 @@ interface DealOption {
     phone: string | null;
     email: string | null;
   } | null;
+  leadState?: 'open' | 'scheduled_future' | 'completed' | 'contract_paid' | 'won' | 'no_show';
+  scheduledInfo?: {
+    scheduledAt: string;
+    closerName: string | null;
+    meetingType: 'r1' | 'r2';
+  } | null;
+  blockReason?: string | null;
 }
 
 export function R2QuickScheduleModal({
@@ -89,7 +98,13 @@ export function R2QuickScheduleModal({
   const [r2Observations, setR2Observations] = useState<string>('');
   const [isPreSchedule, setIsPreSchedule] = useState(false);
 
-  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery, undefined, undefined, true);
+  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(
+    searchQuery,
+    undefined,
+    undefined,
+    true,
+    'r2',
+  );
   const createMeeting = useCreateR2Meeting();
   const { data: r2Bookers = [] } = useR2Bookers();
 
@@ -168,6 +183,10 @@ export function R2QuickScheduleModal({
   }, [bookedBy, r2Bookers]);
 
   const handleSelectDeal = useCallback((deal: DealOption) => {
+    if (deal.leadState && deal.leadState !== 'open' && deal.leadState !== 'no_show') {
+      toast.error(deal.blockReason || 'Este lead não pode ser agendado novamente.');
+      return;
+    }
     setSelectedDeal(deal);
     setSearchQuery(deal.contact?.name || deal.name);
     setShowResults(false);
@@ -271,19 +290,67 @@ export function R2QuickScheduleModal({
                           Nenhum resultado
                         </p>
                       ) : (
-                        searchResults.slice(0, 8).map(deal => (
-                          <button
-                            key={deal.id}
-                            onClick={() => handleSelectDeal(deal)}
-                            className="w-full text-left px-3 py-2 hover:bg-accent border-b last:border-b-0"
-                          >
-                            <div className="font-medium text-sm">{deal.contact?.name || deal.name}</div>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                              {deal.contact?.phone && <span>{deal.contact.phone}</span>}
-                              {deal.contact?.email && <span>{deal.contact.email}</span>}
-                            </div>
-                          </button>
-                        ))
+                        searchResults.slice(0, 8).map((deal: any) => {
+                          const leadState = deal.leadState as DealOption['leadState'];
+                          const scheduledInfo = deal.scheduledInfo as DealOption['scheduledInfo'];
+                          const isBlocked =
+                            leadState && leadState !== 'open' && leadState !== 'no_show';
+
+                          let stateBadge: { label: string; className: string } | null = null;
+                          if (leadState === 'scheduled_future' && scheduledInfo) {
+                            const dt = new Date(scheduledInfo.scheduledAt);
+                            const dd = String(dt.getDate()).padStart(2, '0');
+                            const mm = String(dt.getMonth() + 1).padStart(2, '0');
+                            const hh = String(dt.getHours()).padStart(2, '0');
+                            const mi = String(dt.getMinutes()).padStart(2, '0');
+                            const closerLabel = scheduledInfo.closerName
+                              ? ` c/ ${scheduledInfo.closerName}`
+                              : '';
+                            stateBadge = {
+                              label: `📅 R2 já agendada p/ ${dd}/${mm} ${hh}:${mi}${closerLabel}`,
+                              className:
+                                'border-yellow-500/60 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+                            };
+                          } else if (leadState === 'contract_paid' || leadState === 'won') {
+                            stateBadge = {
+                              label: '💰 Contrato pago',
+                              className:
+                                'border-green-500/60 bg-green-500/10 text-green-700 dark:text-green-400',
+                            };
+                          }
+
+                          return (
+                            <button
+                              key={deal.id}
+                              onClick={() => handleSelectDeal(deal)}
+                              className={cn(
+                                'w-full text-left px-3 py-2 border-b last:border-b-0',
+                                isBlocked
+                                  ? 'opacity-60 cursor-not-allowed hover:bg-muted/30'
+                                  : 'hover:bg-accent',
+                              )}
+                            >
+                              <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
+                                <span>{deal.contact?.name || deal.name}</span>
+                                {stateBadge && (
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      'text-[10px] px-1.5 py-0 h-4',
+                                      stateBadge.className,
+                                    )}
+                                  >
+                                    {stateBadge.label}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                {deal.contact?.phone && <span>{deal.contact.phone}</span>}
+                                {deal.contact?.email && <span>{deal.contact.email}</span>}
+                              </div>
+                            </button>
+                          );
+                        })
                       )}
                     </div>
                   )}

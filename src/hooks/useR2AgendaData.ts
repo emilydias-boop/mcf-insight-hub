@@ -311,6 +311,46 @@ export function useCreateR2Meeting() {
       r2Observations?: string;
       bookedBy?: string;
     }) => {
+      // ===== GUARD: bloqueia agendar lead com R2 futura ativa ou contrato pago =====
+      if (dealId) {
+        const nowIso = new Date().toISOString();
+
+        // 1) contrato pago
+        const { data: paid } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id')
+          .eq('deal_id', dealId)
+          .or('status.eq.contract_paid,contract_paid_at.not.is.null')
+          .limit(1)
+          .maybeSingle();
+        if (paid) {
+          throw new Error('Lead já tem contrato pago — não é possível agendar nova reunião.');
+        }
+
+        // 2) R2 futura ativa
+        const { data: activeFuture } = await supabase
+          .from('meeting_slot_attendees')
+          .select(
+            `id, status,
+             meeting_slot:meeting_slots!inner(id, scheduled_at, meeting_type, closer:closers(name))`,
+          )
+          .eq('deal_id', dealId)
+          .in('status', ['invited', 'scheduled'])
+          .eq('meeting_slot.meeting_type', 'r2')
+          .gt('meeting_slot.scheduled_at', nowIso)
+          .limit(1);
+        if (activeFuture && activeFuture.length > 0) {
+          const slot: any = (activeFuture[0] as any).meeting_slot;
+          const closerName = Array.isArray(slot?.closer)
+            ? slot.closer[0]?.name
+            : slot?.closer?.name;
+          throw new Error(
+            `Lead já tem R2 agendada${closerName ? ` com ${closerName}` : ''}. Use a Agenda para reagendar.`,
+          );
+        }
+      }
+      // ===== END GUARD =====
+
       const { data: slot, error: slotError } = await supabase
         .from('meeting_slots')
         .insert({
@@ -361,8 +401,8 @@ export function useCreateR2Meeting() {
       queryClient.invalidateQueries({ queryKey: ['r2-noshow-leads'] });
       toast.success('Reunião R2 agendada com sucesso');
     },
-    onError: () => {
-      toast.error('Erro ao agendar reunião R2');
+    onError: (error: any) => {
+      toast.error(error?.message || 'Erro ao agendar reunião R2');
     },
   });
 }

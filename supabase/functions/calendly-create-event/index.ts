@@ -408,6 +408,123 @@ serve(async (req) => {
     const scheduledDate = new Date(scheduledAt);
     const endDate = new Date(scheduledDate.getTime() + durationMinutes * 60000);
 
+    // ============= DUPLICATE BOOKING & TERMINAL STATE GUARD =============
+    // Bloqueia agendar lead que já tem reunião futura ativa do mesmo tipo
+    // ou que já fechou contrato.
+    const guardMeetingType: 'r1' | 'r2' = body.meetingType === 'r2' ? 'r2' : 'r1';
+
+    // 1) Deal já vendido (status won via crm_deals.status, se existir)
+    const { data: dealStatusRow } = await supabase
+      .from("crm_deals")
+      .select("id, stage:crm_stages(stage_name)")
+      .eq("id", dealId)
+      .maybeSingle();
+
+    const stageNameLower = (
+      (dealStatusRow?.stage as any)?.stage_name || ""
+    )
+      .toString()
+      .toLowerCase();
+    const isWonStage =
+      stageNameLower.includes("contrato pago") ||
+      stageNameLower.includes("venda realizada") ||
+      stageNameLower.includes("pagamento concluído") ||
+      stageNameLower.includes("crédito contratado") ||
+      stageNameLower.includes("crédito aprovado");
+
+    if (isWonStage) {
+      console.warn(`🚫 Deal already won (stage: ${stageNameLower})`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "deal_already_won",
+          message:
+            "Lead já fechou contrato — não é possível agendar nova reunião.",
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 2) Contrato pago (qualquer attendee histórico)
+    const { data: paidAttendee } = await supabase
+      .from("meeting_slot_attendees")
+      .select("id")
+      .eq("deal_id", dealId)
+      .or("status.eq.contract_paid,contract_paid_at.not.is.null")
+      .limit(1)
+      .maybeSingle();
+
+    if (paidAttendee) {
+      console.warn("🚫 Deal has contract_paid attendee");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "deal_already_paid",
+          message:
+            "Lead já tem contrato pago — não é possível agendar nova reunião.",
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 3) Reunião futura ativa do MESMO meeting_type
+    const nowIso = new Date().toISOString();
+    const { data: activeFuture } = await supabase
+      .from("meeting_slot_attendees")
+      .select(
+        `id, status,
+         meeting_slot:meeting_slots!inner(id, scheduled_at, meeting_type, closer:closers(name))`
+      )
+      .eq("deal_id", dealId)
+      .in("status", ["invited", "scheduled"])
+      .eq("meeting_slot.meeting_type", guardMeetingType)
+      .gt("meeting_slot.scheduled_at", nowIso)
+      .limit(1);
+
+    if (activeFuture && activeFuture.length > 0) {
+      const slotInfo: any = (activeFuture[0] as any).meeting_slot;
+      const closerName = Array.isArray(slotInfo?.closer)
+        ? slotInfo.closer[0]?.name
+        : slotInfo?.closer?.name;
+      console.warn(
+        `🚫 Duplicate active booking for deal ${dealId} (${guardMeetingType})`
+      );
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "duplicate_active_booking",
+          message: `Lead já tem ${guardMeetingType.toUpperCase()} agendada${closerName ? ` com ${closerName}` : ""}. Use a Agenda para reagendar.`,
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 4) R1 já realizada bloqueia novo R1 (R2 não bloqueia)
+    if (guardMeetingType === "r1") {
+      const { data: completedR1 } = await supabase
+        .from("meeting_slot_attendees")
+        .select(
+          `id, meeting_slot:meeting_slots!inner(meeting_type)`
+        )
+        .eq("deal_id", dealId)
+        .eq("status", "completed")
+        .eq("meeting_slot.meeting_type", "r1")
+        .limit(1);
+
+      if (completedR1 && completedR1.length > 0) {
+        console.warn(`🚫 R1 already completed for deal ${dealId}`);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "r1_already_completed",
+            message: "Lead já realizou R1. Para R2, use a Agenda R2.",
+          }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+    // ============= END GUARD =============
+
     let meetingLink = "";
     let videoConferenceLink = "";
     let googleEventId = "";
