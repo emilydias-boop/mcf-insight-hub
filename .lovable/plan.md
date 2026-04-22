@@ -1,59 +1,82 @@
 
 
-## Acessar "Apoio R1" direto da tela `/crm/configurar-closers`
+## Tornar o agendamento do closer R2 em "Apoio R1" explícito e acessível
 
 ### Diagnóstico
 
-Hoje existem **duas telas** de closers:
+A infra de agendamento **já está pronta** (verificado em código):
 
-- `/crm/configurar-closers` (a que você está vendo) — lista global, todos os closers de todas as BUs (R1 + R2 misturados). É onde a maioria entra.
-- `/crm/configurar-closers-r2` — tela separada e específica de R2. **É lá que está o botão Apoio R1 (ícone salva-vidas)** que adicionamos no passo anterior.
+- `Agenda.tsx` linha 561: `<QuickScheduleModal ... searchAllOwnersInBU={isR1SupportActive} />` → quando o closer R2 tem apoio ativo, o botão "Agendar" no header da Agenda R1 abre o modal em modo SDR e busca leads de qualquer SDR da BU.
+- `Agenda.tsx` linha 47: `isCloser = isCloserOnly && !isR1SupportActive` → no dia de apoio, ele deixa de cair na visão restrita "Minha Agenda" e vê grade completa + busca + Agendar.
+- `Negocios.tsx` linha 113 e `CRM.tsx`/`BUCRMLayout.tsx` → também liberam pipeline e navegação.
 
-Como você nunca abre essa tela secundária, parece que o recurso "sumiu". Solução: trazer o botão para a tela principal, dentro da linha de cada closer R2.
+**O que falta é UX/descoberta**: quem libera (admin) e quem é liberado (closer R2) não veem em lugar nenhum *que isso destrava o fluxo de agendar*. A tela `R1SupportDaysConfig` parece servir só para "marcar dias" sem evidenciar o efeito.
 
-### Mudança proposta
+### Mudanças propostas
 
-Editar **`src/pages/crm/ConfigurarClosers.tsx`** para:
+**1. `R1SupportDaysConfig.tsx` — bloco explicativo + atalho de agendamento**
 
-1. **Incluir `meeting_type` no tipo `Closer`** (`src/hooks/useClosers.ts`) — campo já existe no banco, só não estava tipado.
-2. **Adicionar item "Apoio R1" no DropdownMenu** (aquele `...` no fim da linha) **somente quando**:
-   - `closer.meeting_type === 'r2'` E
-   - `closer.is_active === true`
-3. Ao clicar, abre um `Dialog` reutilizando o componente já existente `<R1SupportDaysConfig closer={closer} />` (precisa adaptar tipo: o componente espera `R2Closer`, mas só usa `id`, `name` e `color` — ajustamos para aceitar um shape mais leve, ou convertemos no momento da abertura).
-4. Estado novo na página: `supportConfigOpen` + `supportCloser`.
-5. Ícone do item: `LifeBuoy` (mesma identidade visual da outra tela).
-6. Para closers que **não são R2**, o item não aparece — mantém o menu limpo (só Editar/Excluir).
+Adicionar no topo do painel direito (acima do header da data) um `Alert` informativo:
 
-### Resultado visual
+> **O que o apoio R1 habilita?**  
+> Nos dias liberados, **{closer.name}** poderá:  
+> • Acessar a Agenda R1 com grade completa  
+> • Buscar leads de qualquer SDR da BU  
+> • Agendar reuniões R1 (para si ou para outros closers R1)  
+> • Acessar pipeline de Negócios da BU
 
-No menu `...` de cada linha:
+Logo abaixo da lista "Datas liberadas", adicionar botão **"Abrir Agenda R1 para agendar agora"** (ícone `CalendarPlus`). Visível apenas quando há ao menos 1 data liberada. Ao clicar:
+- Fecha o Dialog atual.
+- Navega para `/crm/agenda?openSchedule=1&closerId={closer.id}` (Admin/Coordenador podem agendar em nome do closer pré-selecionando a coluna dele).
 
-```text
-Closer R2 ativo (Jessica Bellini R2):
-  • Editar
-  • Apoio R1            ← novo, com ícone salva-vidas
-  • Excluir
+**2. `Agenda.tsx` — auto-abrir modal e pré-selecionar via querystring**
 
-Closer R1 ou inativo (todos os demais):
-  • Editar
-  • Excluir             (sem mudança)
+Adicionar `useSearchParams` e `useEffect`:
+```ts
+useEffect(() => {
+  const openSchedule = searchParams.get('openSchedule');
+  const closerIdParam = searchParams.get('closerId');
+  if (openSchedule === '1') {
+    if (closerIdParam) setPreselectedCloserId(closerIdParam);
+    setQuickScheduleOpen(true);
+    // limpar params após consumir
+    setSearchParams({}, { replace: true });
+  }
+}, [searchParams]);
 ```
 
-O Dialog que abre é exatamente o mesmo da tela R2: calendário pt-BR, toggle "Dia inteiro / Janela específica", lista de datas liberadas, validações etc. Nenhuma lógica de backend muda.
+Isso permite o admin abrir o agendamento diretamente do modal de configuração, já com o closer R2-em-apoio selecionado.
+
+**3. `Agenda.tsx` — Banner "Modo Apoio R1 ativo" para o próprio closer R2**
+
+Quando `isR1SupportActive === true` E `isCloserOnly === true` (closer R2 logado em modo apoio), exibir banner sticky abaixo do header:
+
+```
+🛟 Modo Apoio R1 ativo — você pode buscar leads e agendar R1 hoje.
+   Próxima liberação: 25/04 (dia inteiro) · 26/04 (14:00–18:00)
+   [Buscar lead e agendar →]   ← botão que abre QuickScheduleModal
+```
+
+Lista as próximas 3 datas (vindo de `useIsR1SupportActive().supportDays`). Botão = atalho redundante para deixar a ação óbvia.
+
+**4. `R1SupportDaysConfig.tsx` — destaque do botão "Liberar apoio"**
+
+Renomear o CTA principal para **"Liberar dia de apoio R1"** e adicionar tooltip: "O closer poderá agendar e atender reuniões R1 nesta data".
+
+Após sucesso, exibir um pequeno toast secundário: "{closer.name} agora pode agendar R1 em {data}".
 
 ### Arquivos afetados
 
-- `src/hooks/useClosers.ts` — adicionar `meeting_type: 'r1' | 'r2' | null` na interface `Closer`.
-- `src/pages/crm/ConfigurarClosers.tsx` — novo `DropdownMenuItem` condicional + estado + Dialog `R1SupportDaysConfig`.
-- `src/components/crm/R1SupportDaysConfig.tsx` — afrouxar o tipo da prop `closer` para aceitar `{ id: string; name: string; color?: string | null }` (compatível com `Closer` e `R2Closer`).
+- `src/components/crm/R1SupportDaysConfig.tsx` — Alert explicativo + botão "Abrir Agenda R1 para agendar agora" + textos.
+- `src/pages/crm/Agenda.tsx` — leitura de `?openSchedule=1&closerId=` + banner de "Modo Apoio R1 ativo" para closer R2 logado.
 
-Nenhuma migration, nenhuma alteração em hook de dados ou edge function.
+Nenhuma alteração de hook, banco ou edge function — apenas UX.
 
 ### Validação pós-implementação
 
-1. Abrir `/crm/configurar-closers` → no menu `...` da Jessica Bellini R2 (e demais R2 ativos) aparece "Apoio R1".
-2. Clicar abre o mesmo modal que já existe em `/crm/configurar-closers-r2` (calendário + lista).
-3. Liberar uma data → toast de sucesso, dia destacado.
-4. No menu `...` de um closer R1 (ex.: Claudia Carielo) o item "Apoio R1" **não aparece**.
-5. No menu `...` de um closer R2 inativo, também não aparece.
+1. Admin abre `/crm/configurar-closers` → menu `...` da Jessica R2 → "Apoio R1" → vê o Alert explicando o que o recurso destrava.
+2. Libera dia 25/04 → clica em "Abrir Agenda R1 para agendar agora" → vai para `/crm/agenda`, modal de agendamento abre automaticamente já com a Jessica selecionada como closer.
+3. Jessica (closer R2) loga → entra em `/crm/agenda` → vê banner verde "Modo Apoio R1 ativo" listando as próximas datas + botão "Buscar lead e agendar".
+4. Jessica clica no botão → `QuickScheduleModal` abre, busca lead "João Silva" (atribuído a outro SDR) → encontra normalmente → escolhe horário → reunião criada com `booked_by = Jessica`, `closer_id = Jessica` (ou outro R1 que ela escolher).
+5. Em dia sem apoio liberado, Jessica volta à visão "Minha Agenda" restrita; banner desaparece.
 
