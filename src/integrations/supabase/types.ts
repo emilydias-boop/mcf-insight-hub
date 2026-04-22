@@ -2254,6 +2254,50 @@ export type Database = {
           },
         ]
       }
+      closer_r1_support_days: {
+        Row: {
+          closer_id: string
+          created_at: string
+          created_by: string | null
+          end_time: string | null
+          id: string
+          notes: string | null
+          start_time: string | null
+          support_date: string
+          updated_at: string
+        }
+        Insert: {
+          closer_id: string
+          created_at?: string
+          created_by?: string | null
+          end_time?: string | null
+          id?: string
+          notes?: string | null
+          start_time?: string | null
+          support_date: string
+          updated_at?: string
+        }
+        Update: {
+          closer_id?: string
+          created_at?: string
+          created_by?: string | null
+          end_time?: string | null
+          id?: string
+          notes?: string | null
+          start_time?: string | null
+          support_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closer_r1_support_days_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       closers: {
         Row: {
           bu: string | null
@@ -7155,6 +7199,7 @@ export type Database = {
           duration_minutes: number | null
           google_event_id: string | null
           id: string
+          is_support_booking: boolean
           lead_type: string | null
           max_attendees: number | null
           meeting_link: string | null
@@ -7179,6 +7224,7 @@ export type Database = {
           duration_minutes?: number | null
           google_event_id?: string | null
           id?: string
+          is_support_booking?: boolean
           lead_type?: string | null
           max_attendees?: number | null
           meeting_link?: string | null
@@ -7203,6 +7249,7 @@ export type Database = {
           duration_minutes?: number | null
           google_event_id?: string | null
           id?: string
+          is_support_booking?: boolean
           lead_type?: string | null
           max_attendees?: number | null
           meeting_link?: string | null
