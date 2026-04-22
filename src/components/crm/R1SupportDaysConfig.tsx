@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { format, isBefore, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarDays, Trash2, Clock, LifeBuoy } from 'lucide-react';
+import { CalendarDays, Trash2, Clock, LifeBuoy, CalendarPlus, Info } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 
 import {
@@ -28,6 +31,7 @@ interface R1SupportDaysConfigProps {
     name: string;
     color?: string | null;
   };
+  onNavigateAway?: () => void;
 }
 
 const TIME_MIN = '06:00';
@@ -41,7 +45,8 @@ function formatWindow(row: R1SupportDayRow): string | null {
   return `${start}–${end}`;
 }
 
-export function R1SupportDaysConfig({ closer }: R1SupportDaysConfigProps) {
+export function R1SupportDaysConfig({ closer, onNavigateAway }: R1SupportDaysConfigProps) {
+  const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [allDay, setAllDay] = useState(true);
