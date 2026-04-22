@@ -247,14 +247,23 @@ export function R1SupportDaysConfig({ closer, onNavigateAway }: R1SupportDaysCon
               />
             </div>
 
-            <Button
-              className="w-full"
-              onClick={handleRelease}
-              disabled={createMutation.isPending}
-            >
-              <LifeBuoy className="h-4 w-4 mr-2" />
-              {createMutation.isPending ? 'Liberando...' : 'Liberar apoio'}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    className="w-full"
+                    onClick={handleRelease}
+                    disabled={createMutation.isPending}
+                  >
+                    <LifeBuoy className="h-4 w-4 mr-2" />
+                    {createMutation.isPending ? 'Liberando...' : 'Liberar dia de apoio R1'}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  O closer poderá agendar e atender reuniões R1 nesta data
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         ) : (
           <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
