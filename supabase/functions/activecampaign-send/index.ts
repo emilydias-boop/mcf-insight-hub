@@ -7,13 +7,18 @@ const corsHeaders = {
 };
 
 interface SendRequest {
+  // Mode controls behavior. Default 'transactional' keeps backward compat.
+  mode?: 'transactional' | 'sync_with_tag';
   email: string;
-  name: string;
-  subject: string;
-  content: string;
+  name?: string;
+  subject?: string;
+  content?: string;
   templateId?: string;
   tags?: string[];
   listId?: number;
+  // For sync_with_tag mode:
+  tag?: string;                       // Single tag to apply (e.g. 'reminder_d-1')
+  customFields?: Record<string, string | number | null>; // perso field name -> value
 }
 
 serve(async (req) => {
@@ -23,9 +28,10 @@ serve(async (req) => {
 
   try {
     const body: SendRequest = await req.json();
-    console.log('[ACTIVECAMPAIGN] Request:', JSON.stringify({ email: body.email, subject: body.subject }));
+    const mode = body.mode || 'transactional';
+    console.log('[ACTIVECAMPAIGN] Request:', JSON.stringify({ mode, email: body.email, subject: body.subject, tag: body.tag }));
 
-    const { email, name, subject, content, templateId, tags, listId } = body;
+    const { email, name, subject, content, templateId, tags, listId, tag, customFields } = body;
 
     if (!email) {
       throw new Error('Missing required field: email');
@@ -73,6 +79,135 @@ serve(async (req) => {
 
     const contactId = syncResult.contact?.id;
     console.log('[ACTIVECAMPAIGN] Contact synced:', contactId);
+
+    // ============================================================
+    // MODE: sync_with_tag — populate custom fields + apply ONE tag
+    // ============================================================
+    if (mode === 'sync_with_tag') {
+      if (!tag) {
+        throw new Error('sync_with_tag mode requires "tag"');
+      }
+      if (!contactId) {
+        throw new Error('Could not resolve contact id from sync');
+      }
+
+      // 1. Set custom fields (perstag = field name in AC)
+      const fieldResults: Record<string, boolean> = {};
+      if (customFields && Object.keys(customFields).length > 0) {
+        // Fetch all custom fields once to map perstag -> id
+        const fieldsResponse = await fetch(`${apiUrl}/fields?limit=100`, {
+          headers: { 'Api-Token': apiKey }
+        });
+        const fieldsData = await fieldsResponse.json();
+        const fieldMap: Record<string, string> = {};
+        (fieldsData.fields || []).forEach((f: any) => {
+          if (f.perstag) fieldMap[String(f.perstag).toLowerCase()] = f.id;
+        });
+
+        for (const [fieldName, fieldValue] of Object.entries(customFields)) {
+          const fieldId = fieldMap[fieldName.toLowerCase()];
+          if (!fieldId) {
+            console.warn(`[ACTIVECAMPAIGN] Custom field not found in AC: ${fieldName}`);
+            fieldResults[fieldName] = false;
+            continue;
+          }
+          try {
+            const fvRes = await fetch(`${apiUrl}/fieldValues`, {
+              method: 'POST',
+              headers: {
+                'Api-Token': apiKey,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                fieldValue: {
+                  contact: contactId,
+                  field: fieldId,
+                  value: fieldValue == null ? '' : String(fieldValue),
+                }
+              })
+            });
+            fieldResults[fieldName] = fvRes.ok;
+            if (!fvRes.ok) {
+              const errBody = await fvRes.text();
+              console.warn(`[ACTIVECAMPAIGN] Failed to set ${fieldName}:`, errBody);
+            }
+          } catch (e: any) {
+            console.warn(`[ACTIVECAMPAIGN] Error setting field ${fieldName}:`, e.message);
+            fieldResults[fieldName] = false;
+          }
+        }
+      }
+
+      // 2. Add to list if provided
+      if (listId) {
+        try {
+          await fetch(`${apiUrl}/contactLists`, {
+            method: 'POST',
+            headers: {
+              'Api-Token': apiKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contactList: { list: listId, contact: contactId, status: 1 }
+            })
+          });
+        } catch (e: any) {
+          console.warn('[ACTIVECAMPAIGN] List add error:', e.message);
+        }
+      }
+
+      // 3. Apply the single tag (find or create, then attach)
+      let tagApplied = false;
+      try {
+        const tagSearchRes = await fetch(`${apiUrl}/tags?search=${encodeURIComponent(tag)}`, {
+          headers: { 'Api-Token': apiKey }
+        });
+        const tagSearchData = await tagSearchRes.json();
+        let tagId = (tagSearchData.tags || []).find((t: any) => t.tag === tag)?.id;
+
+        if (!tagId) {
+          const createTagRes = await fetch(`${apiUrl}/tags`, {
+            method: 'POST',
+            headers: {
+              'Api-Token': apiKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ tag: { tag, tagType: 'contact' } })
+          });
+          const createTagData = await createTagRes.json();
+          tagId = createTagData.tag?.id;
+        }
+
+        if (tagId) {
+          const attachRes = await fetch(`${apiUrl}/contactTags`, {
+            method: 'POST',
+            headers: {
+              'Api-Token': apiKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ contactTag: { contact: contactId, tag: tagId } })
+          });
+          tagApplied = attachRes.ok;
+          if (!attachRes.ok) {
+            const errBody = await attachRes.text();
+            console.warn('[ACTIVECAMPAIGN] Failed to attach tag:', errBody);
+          }
+        }
+      } catch (e: any) {
+        console.warn('[ACTIVECAMPAIGN] Tag apply error:', e.message);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          mode,
+          contactId,
+          tagApplied,
+          fieldResults,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // 2. Add tags if provided
     if (tags && tags.length > 0 && contactId) {

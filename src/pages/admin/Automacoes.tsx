@@ -8,7 +8,8 @@ import { AutomationMetrics } from "@/components/automations/AutomationMetrics";
 import { ReplicationRulesEditor } from "@/components/crm/automations/ReplicationRulesEditor";
 import { OutboundWebhookList } from "@/components/automations/OutboundWebhookList";
 import { IncomingWebhooksGlobalList } from "@/components/automations/IncomingWebhooksGlobalList";
-import { Bot, FileText, History, Settings, BarChart3, Copy, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { MeetingRemindersSettings } from "@/components/automations/MeetingRemindersSettings";
+import { Bot, FileText, History, Settings, BarChart3, Copy, ArrowDownToLine, ArrowUpFromLine, Bell } from "lucide-react";
 
 export default function Automacoes() {
   return (
@@ -44,6 +45,10 @@ export default function Automacoes() {
             <ArrowUpFromLine className="h-4 w-4" />
             Webhooks Saída
           </TabsTrigger>
+          <TabsTrigger value="reminders" className="flex items-center gap-2">
+            <Bell className="h-4 w-4" />
+            Lembretes Reunião
+          </TabsTrigger>
           <TabsTrigger value="logs" className="flex items-center gap-2">
             <History className="h-4 w-4" />
             Logs
@@ -72,6 +77,10 @@ export default function Automacoes() {
 
         <TabsContent value="webhooks-out" className="space-y-4">
           <OutboundWebhookList />
+        </TabsContent>
+
+        <TabsContent value="reminders" className="space-y-4">
+          <MeetingRemindersSettings />
         </TabsContent>
 
         <TabsContent value="logs" className="space-y-4">
