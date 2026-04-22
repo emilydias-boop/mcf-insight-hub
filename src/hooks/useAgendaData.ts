@@ -947,6 +947,8 @@ export function useSearchDealsForSchedule(
           leadState: LeadScheduleState;
           scheduledInfo: ScheduledInfo | null;
           blockReason: string | null;
+          warningOnly: boolean;
+          warningMessage: string | null;
         }
       > = {};
 
@@ -985,15 +987,20 @@ export function useSearchDealsForSchedule(
           let leadState: LeadScheduleState = 'open';
           let scheduledInfo: ScheduledInfo | null = null;
           let blockReason: string | null = null;
+          let warningOnly = false;
+          let warningMessage: string | null = null;
 
           // 1) Contrato pago tem prioridade absoluta
           const hasContractPaid = atts.some(
             (a: any) => a.status === 'contract_paid' || a.contract_paid_at,
           );
-          if (hasContractPaid) {
+          // R2 NÃO bloqueia por contrato pago (pode ser pós-venda).
+          // R2 NÃO bloqueia por R1 realizada (esse é o caso normal de R2).
+          // R2 só mostra AVISO (warningOnly) quando já existe R2 futura ativa.
+          if (hasContractPaid && meetingType !== 'r2') {
             leadState = 'contract_paid';
             blockReason = 'Lead já tem contrato pago — não é possível agendar nova reunião.';
-          } else if (dealStatus === 'won') {
+          } else if (dealStatus === 'won' && meetingType !== 'r2') {
             leadState = 'won';
             blockReason = 'Lead já fechou contrato — não é possível agendar nova reunião.';
           } else {
@@ -1007,7 +1014,6 @@ export function useSearchDealsForSchedule(
             });
 
             if (futureActive) {
-              leadState = 'scheduled_future';
               const slot = futureActive.meeting_slot;
               const closer = Array.isArray(slot?.closer) ? slot.closer[0] : slot?.closer;
               scheduledInfo = {
@@ -1021,7 +1027,17 @@ export function useSearchDealsForSchedule(
               const hh = String(dt.getHours()).padStart(2, '0');
               const mi = String(dt.getMinutes()).padStart(2, '0');
               const closerLabel = closer?.name ? ` c/ ${closer.name}` : '';
-              blockReason = `Lead já tem ${meetingType.toUpperCase()} agendada para ${dd}/${mm} ${hh}:${mi}${closerLabel}. Use a Agenda para reagendar.`;
+              if (meetingType === 'r2') {
+                // Apenas AVISO — não bloqueia o agendamento. Permite criar
+                // outra R2 ou avisa para reagendar a existente pela Agenda.
+                leadState = 'open';
+                blockReason = null;
+                warningOnly = true;
+                warningMessage = `Este lead já tem R2 agendada para ${dd}/${mm} às ${hh}:${mi}${closerLabel}. Você pode criar outra R2 ou reagendar a existente pela Agenda.`;
+              } else {
+                leadState = 'scheduled_future';
+                blockReason = `Lead já tem ${meetingType.toUpperCase()} agendada para ${dd}/${mm} ${hh}:${mi}${closerLabel}. Use a Agenda para reagendar.`;
+              }
             } else if (meetingType === 'r2') {
               // R2 só bloqueia em estados terminais ou R2 futura.
               // R1 realizada / open → permitido.
@@ -1041,7 +1057,13 @@ export function useSearchDealsForSchedule(
             }
           }
 
-          stateMap[deal.id] = { leadState, scheduledInfo, blockReason };
+          stateMap[deal.id] = {
+            leadState,
+            scheduledInfo,
+            blockReason,
+            warningOnly,
+            warningMessage,
+          };
         }
       }
 
@@ -1058,6 +1080,8 @@ export function useSearchDealsForSchedule(
           leadState: 'open' as LeadScheduleState,
           scheduledInfo: null,
           blockReason: null,
+          warningOnly: false,
+          warningMessage: null,
         };
         return {
           ...deal,
@@ -1065,6 +1089,8 @@ export function useSearchDealsForSchedule(
           leadState: state.leadState,
           scheduledInfo: state.scheduledInfo,
           blockReason: state.blockReason,
+          warningOnly: state.warningOnly,
+          warningMessage: state.warningMessage,
         };
       });
 

@@ -413,6 +413,10 @@ serve(async (req) => {
     // ou que já fechou contrato.
     const guardMeetingType: 'r1' | 'r2' = body.meetingType === 'r2' ? 'r2' : 'r1';
 
+    // R2 não aplica os guards de contrato pago / won / duplicate. R2 pode
+    // acontecer pós-venda (acompanhamento) ou ser remarcada livremente.
+    // Apenas R1 mantém o bloqueio rígido.
+    if (guardMeetingType === 'r1') {
     // 1) Deal já vendido (status won via crm_deals.status, se existir)
     const { data: dealStatusRow } = await supabase
       .from("crm_deals")
@@ -498,6 +502,7 @@ serve(async (req) => {
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    } // end if (guardMeetingType === 'r1') — fim dos guards 1, 2, 3
 
     // 4) R1 já realizada bloqueia novo R1 (R2 não bloqueia)
     if (guardMeetingType === "r1") {

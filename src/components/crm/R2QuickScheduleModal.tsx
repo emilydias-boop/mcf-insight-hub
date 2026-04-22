@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, Calendar, Clock, User, StickyNote, ExternalLink, Loader2, UserCheck, Mail, Phone, X } from 'lucide-react';
+import { Search, Calendar, Clock, User, StickyNote, ExternalLink, Loader2, UserCheck, Mail, Phone, X, AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -33,7 +33,7 @@ import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2Clos
 import { useR2Bookers } from '@/hooks/useR2Bookers';
 import { R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
 import { cn } from '@/lib/utils';
-import { BlockedLeadCard } from './BlockedLeadCard';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface DealForSchedule {
   id: string;
@@ -73,6 +73,8 @@ interface DealOption {
     meetingType: 'r1' | 'r2';
   } | null;
   blockReason?: string | null;
+  warningOnly?: boolean;
+  warningMessage?: string | null;
 }
 
 export function R2QuickScheduleModal({
@@ -199,8 +201,6 @@ export function R2QuickScheduleModal({
 
   const handleSubmit = () => {
     if (!selectedDeal || !selectedCloser || !selectedDate || !selectedTime) return;
-    // Defesa adicional: nunca submeter para leads bloqueados.
-    if (isLeadBlocked) return;
 
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const scheduledAt = new Date(selectedDate);
@@ -239,23 +239,11 @@ export function R2QuickScheduleModal({
 
   const isSelected = !!selectedDeal;
 
-  // Estado bloqueado do lead selecionado (usado para mostrar o card grande
-  // de aviso no lugar dos campos de form e do botão de agendar).
-  const blockedLeadState = useMemo<
-    'scheduled_future' | 'completed' | 'contract_paid' | 'won' | null
-  >(() => {
-    const state = selectedDeal?.leadState;
-    if (
-      state === 'scheduled_future' ||
-      state === 'completed' ||
-      state === 'contract_paid' ||
-      state === 'won'
-    ) {
-      return state;
-    }
-    return null;
-  }, [selectedDeal?.leadState]);
-  const isLeadBlocked = blockedLeadState !== null;
+  // Na R2 não bloqueamos o agendamento. Apenas mostramos um aviso suave
+  // quando já existe R2 futura ativa para esse lead.
+  const r2WarningMessage = selectedDeal?.warningOnly
+    ? selectedDeal?.warningMessage || null
+    : null;
 
   // Get placeholder text for time select
   const getTimePlaceholder = () => {
@@ -312,11 +300,10 @@ export function R2QuickScheduleModal({
                         searchResults.slice(0, 8).map((deal: any) => {
                           const leadState = deal.leadState as DealOption['leadState'];
                           const scheduledInfo = deal.scheduledInfo as DealOption['scheduledInfo'];
-                          const isBlocked =
-                            leadState && leadState !== 'open' && leadState !== 'no_show';
+                          const warningOnly = !!deal.warningOnly;
 
                           let stateBadge: { label: string; className: string } | null = null;
-                          if (leadState === 'scheduled_future' && scheduledInfo) {
+                          if (warningOnly && scheduledInfo) {
                             const dt = new Date(scheduledInfo.scheduledAt);
                             const dd = String(dt.getDate()).padStart(2, '0');
                             const mm = String(dt.getMonth() + 1).padStart(2, '0');
@@ -330,27 +317,13 @@ export function R2QuickScheduleModal({
                               className:
                                 'border-yellow-500/60 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
                             };
-                          } else if (leadState === 'contract_paid' || leadState === 'won') {
-                            stateBadge = {
-                              label: '💰 Contrato pago',
-                              className:
-                                'border-green-500/60 bg-green-500/10 text-green-700 dark:text-green-400',
-                            };
                           }
 
                           return (
                             <button
                               key={deal.id}
                               onClick={() => handleSelectDeal(deal)}
-                              className={cn(
-                                'w-full text-left px-3 py-2 border-b last:border-b-0',
-                                isBlocked
-                                  ? 'opacity-70 hover:bg-muted/30 border-l-[3px] ' +
-                                      (leadState === 'scheduled_future'
-                                        ? 'border-l-yellow-500'
-                                        : 'border-l-green-500')
-                                  : 'hover:bg-accent',
-                              )}
+                              className="w-full text-left px-3 py-2 border-b last:border-b-0 hover:bg-accent"
                             >
                               <div className="font-medium text-sm">
                                 {deal.contact?.name || deal.name}
@@ -413,8 +386,14 @@ export function R2QuickScheduleModal({
             </div>
 
             {/* Responsável pelo agendamento (booked_by) */}
-            {!isLeadBlocked && (
-            <>
+            {r2WarningMessage && (
+              <Alert className="border-yellow-500/60 bg-yellow-500/10 text-yellow-800 dark:text-yellow-300 [&>svg]:text-yellow-600">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-xs leading-relaxed">
+                  {r2WarningMessage}
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <Label className="text-xs">Responsável pelo agendamento</Label>
               <Select value={bookedBy} onValueChange={setBookedBy}>
@@ -608,39 +587,15 @@ export function R2QuickScheduleModal({
                 </div>
               );
             })()}
-            </>
-            )}
-
-            {/* Blocked Lead Card — substitui todos os campos de form quando o
-                lead não pode ser agendado novamente. */}
-            {isLeadBlocked && blockedLeadState && selectedDeal && (
-              <BlockedLeadCard
-                leadName={selectedDeal.contact?.name || selectedDeal.name}
-                state={blockedLeadState}
-                meetingType="r2"
-                scheduledAt={selectedDeal.scheduledInfo?.scheduledAt ?? null}
-                closerName={selectedDeal.scheduledInfo?.closerName ?? null}
-              />
-            )}
 
             {/* Submit */}
-            {isLeadBlocked ? (
-              <Button
-                variant="secondary"
-                className="w-full mt-4"
-                onClick={() => onOpenChange(false)}
-              >
-                Fechar
-              </Button>
-            ) : (
-              <Button
-                className="w-full bg-primary hover:bg-primary/90 mt-4"
-                onClick={handleSubmit}
-                disabled={!selectedDeal || !selectedCloser || !selectedDate || !selectedTime || createMeeting.isPending}
-              >
-                {createMeeting.isPending ? 'Agendando...' : isPreSchedule ? 'Pré-agendar R2' : 'Agendar R2'}
-              </Button>
-            )}
+            <Button
+              className="w-full bg-primary hover:bg-primary/90 mt-4"
+              onClick={handleSubmit}
+              disabled={!selectedDeal || !selectedCloser || !selectedDate || !selectedTime || createMeeting.isPending}
+            >
+              {createMeeting.isPending ? 'Agendando...' : isPreSchedule ? 'Pré-agendar R2' : 'Agendar R2'}
+            </Button>
           </div>
         </ScrollArea>
       </DialogContent>
