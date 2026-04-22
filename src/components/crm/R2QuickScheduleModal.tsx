@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, Calendar, Clock, User, StickyNote, ExternalLink, Loader2, UserCheck, Mail, Phone, X } from 'lucide-react';
+import { Search, Calendar, Clock, User, StickyNote, ExternalLink, Loader2, UserCheck, Mail, Phone, X, AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -33,7 +33,7 @@ import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2Clos
 import { useR2Bookers } from '@/hooks/useR2Bookers';
 import { R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
 import { cn } from '@/lib/utils';
-import { BlockedLeadCard } from './BlockedLeadCard';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface DealForSchedule {
   id: string;
@@ -73,6 +73,8 @@ interface DealOption {
     meetingType: 'r1' | 'r2';
   } | null;
   blockReason?: string | null;
+  warningOnly?: boolean;
+  warningMessage?: string | null;
 }
 
 export function R2QuickScheduleModal({
