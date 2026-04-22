@@ -32,6 +32,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function Agenda() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { role, allRoles, user } = useAuth();
   const sdrOwnerEmail = role === 'sdr' ? user?.email || undefined : undefined;
   const { data: myCloser } = useMyCloser();
@@ -39,7 +40,7 @@ export default function Agenda() {
 
   // Modo "Apoio R1": closer R2 com pelo menos 1 dia liberado se comporta como SDR
   // (vê grade completa, busca leads, agenda) — válido para todo o horizonte com apoio ativo.
-  const { isActive: isR1SupportActive } = useIsR1SupportActive();
+  const { isActive: isR1SupportActive, supportDays } = useIsR1SupportActive();
 
   // Verifica se usuário é closer PURO (não tem SDR)
   // Usuários com múltiplas roles (SDR + Closer) veem a agenda como SDR para poder agendar
