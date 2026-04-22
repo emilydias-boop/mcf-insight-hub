@@ -1,108 +1,70 @@
 
 
-## Closer R2 em apoio agendando R1 como SDR
+## Tela de configuração "Apoio R1" para closers R2
 
-### Refinamento sobre o plano anterior
+### Objetivo
 
-O plano anterior cobre **liberação de horários** (criar slots para R1) e badge "Apoio R2" na visão da agenda. Falta o segundo lado: **permitir que esse closer R2, no dia liberado, também opere o fluxo de SDR** — buscar lead, abrir `QuickScheduleModal`, agendar para si mesmo (ou para outro closer disponível). Hoje o code path bloqueia isso porque:
+Criar UI dentro de `/crm/configurar-closers-r2` para Admin/Manager/Coordenador liberarem dias específicos em que um closer R2 pode atender R1 (CRUD completo sobre `closer_r1_support_days`), com calendário visual, validações e janelas de horário opcionais.
 
-- Em `Agenda.tsx` (linha 40): `isCloser = role === 'closer' && !allRoles.includes('sdr')` → closer puro vê só "Minha Agenda" e não tem busca de lead para agendar; só vê reuniões já marcadas.
-- Em `Negocios.tsx` (linha 109): `isRestrictedRole = role === 'sdr' || role === 'closer'` → closer puro vê só os deals próprios, não pode acessar o pipeline para agendar leads novos.
-- O botão "Agendar" no header (linha 306) já existe para todos, mas o `QuickScheduleModal` filtra leads pelo `ownerEmail` quando role = sdr; para closer puro hoje ele não consegue acessar leads de SDR.
+### Componentes novos
 
-### Decisão
+**1. `src/hooks/useR1SupportDays.ts`** — CRUD com React Query (espelha `useR2DailySlots`):
+- `useR1SupportDaysForCloser(closerId)` → lista todas as entradas do closer (ordem por data).
+- `useR1SupportDaysWithSlots(closerId, month)` → array de `Date` para destacar no calendário.
+- `useCreateR1SupportDay()` → insert `{ closer_id, support_date, start_time?, end_time?, notes?, created_by: auth.uid() }`.
+- `useUpdateR1SupportDay()` → update parcial (notas, janela de horário).
+- `useDeleteR1SupportDay()`.
+- Toasts de sucesso/erro via `sonner`. Invalida queries `r1-support-days` + `r1-support-active` (para o gating de UI atualizar).
 
-**Closer R2 com pelo menos 1 entrada ativa em `closer_r1_support_days` válida (data >= hoje) é tratado como SDR temporário no contexto da Agenda R1**, ganhando:
+**2. `src/components/crm/R1SupportDaysConfig.tsx`** — modal/painel reutilizável:
 
-- Botão "Agendar" funcional no `QuickScheduleModal R1` com busca de qualquer lead da BU dele.
-- Capacidade de selecionar **qualquer closer R1 disponível** (incluindo ele mesmo nos dias de apoio) para o agendamento.
-- Painel "Buscar lead" na própria agenda (igual SDR) — não fica só com a visão "Minha Agenda".
-- Acesso de leitura ao pipeline de Negócios da BU (igual SDR) **somente enquanto tiver apoio futuro ativo** — para conseguir abrir um deal e marcar reunião pelo fluxo padrão (`SdrScheduleDialog`).
+Layout 2 colunas (igual `R2DailySlotConfig`):
+- **Esquerda**: `Calendar` em pt-BR; dias liberados marcados com a cor do closer (modifiers); `disabled={d => d < hoje}` (não permite liberar passado).
+- **Direita**: ao selecionar um dia
+  - Header: data formatada + badge do dia da semana.
+  - Toggle **"Dia inteiro"** (default ON) ↔ **"Janela específica"** (mostra dois `Input type="time" step={900}`).
+  - Input "Observação (opcional)" — ex.: "Cobrindo falta do João".
+  - Botão **"Liberar apoio"** (cria entrada).
+  - Lista de **datas já liberadas** (ScrollArea), cada item com data, badge "Dia inteiro" ou janela `HH:MM–HH:MM`, observação, botão remover.
 
-### Implementação (em cima do plano anterior)
+**Validações**:
+- Bloquear datas no passado (calendário disabled).
+- Se "Janela específica": exigir `start_time < end_time`, ambos em intervalos de 15 min, dentro de 06:00–22:00.
+- UNIQUE `(closer_id, support_date)` já existe no DB → tratar erro de duplicidade com toast amigável ("Esta data já está liberada para este closer").
+- Botão "Liberar" desabilitado enquanto `mutation.isPending`.
 
-**1. Hook novo `useIsR1SupportActive`**
+### Integração com `ConfigurarClosersR2.tsx`
 
+Adicionar **um botão "Apoio R1"** na linha de cada closer ativo na tabela (ao lado de Editar/Remover, ícone `LifeBuoy` ou `HandHelping`). Ao clicar, abre um `Dialog` controlado contendo `<R1SupportDaysConfig closer={closer} />`.
+
+Estado novo na página:
 ```ts
-// src/hooks/useIsR1SupportActive.ts
-// Retorna { isActive: boolean, supportDates: Date[] } para o closer logado.
-// isActive = true quando o usuário é closer R2 e existe ao menos 1 entrada
-// em closer_r1_support_days com support_date >= hoje vinculada ao employee_id dele.
+const [supportConfigOpen, setSupportConfigOpen] = useState(false);
+const [supportCloser, setSupportCloser] = useState<R2Closer | null>(null);
 ```
 
-Usa `useMyCloser()` + query em `closer_r1_support_days` filtrando por `closer_id` e `support_date >= today`.
+Header do Dialog: "Apoio R1 — {closer.name}" + descrição curta explicando que o closer poderá atender e agendar R1 nos dias liberados.
 
-**2. `Agenda.tsx`**
+### Permissões
 
-Substituir o cálculo de `isCloser`:
+A rota `/crm/configurar-closers-r2` já é protegida por `RoleGuard allowedRoles={['admin','manager','coordenador']}` (visto em `App.tsx` linha 261). As RLS policies da tabela já filtram coordenador por squad — se o INSERT falhar por RLS, o toast mostra "Sem permissão para liberar apoio para este closer".
 
-```ts
-const { isActive: isR1SupportActive } = useIsR1SupportActive();
-const isCloserOnly = role === 'closer' && !allRoles.includes('sdr');
-// No modo apoio, comporta como SDR no fluxo de agendamento
-const isCloser = isCloserOnly && !isR1SupportActive;
-```
+### Arquivos afetados
 
-Resultado: nos dias com apoio, o closer R2 deixa de cair no branch "Minha Agenda" restrita e passa a ver toda a grade, busca, filtros, e o botão Agendar abre o `QuickScheduleModal` em modo SDR (com `ownerEmail = user.email`).
+- **Novos**:
+  - `src/hooks/useR1SupportDays.ts`
+  - `src/components/crm/R1SupportDaysConfig.tsx`
+- **Editado**:
+  - `src/pages/crm/ConfigurarClosersR2.tsx` — botão "Apoio R1" por linha + Dialog.
 
-**3. `QuickScheduleModal.tsx` — busca de leads**
+### Validação pós-implementação
 
-A busca usa `useSearchDealsForSchedule` filtrando por `ownerEmail` quando informado. Para o closer em apoio, passar `ownerEmail = user.email` faz com que ele só veja deals atribuídos a ele — o que é o caso real: SDRs entregam leads a esse closer-em-apoio normalmente, ele só agenda com base nos próprios. Sem mudanças extras.
-
-Caso queiramos permitir **agendar lead de qualquer SDR** durante o dia de apoio (ex.: SDR foi embora no meio do dia), adicionar prop opcional `searchAllOwnersInBU?: boolean`. Quando `true`, o hook ignora `ownerEmail` e busca por toda a BU. Habilitar quando `isR1SupportActive`.
-
-**4. `Negocios.tsx`**
-
-Mesmo princípio: durante apoio ativo, tratar closer como SDR para visibilidade de pipeline da BU dele:
-
-```ts
-const { isActive: isR1SupportActive } = useIsR1SupportActive();
-const isRestrictedRole = (role === 'sdr' || role === 'closer') && !isR1SupportActive;
-```
-
-Com isso, dentro do dia de apoio o closer R2 enxerga o kanban completo, abre o card do lead, clica "Agendar Reunião" → `SdrScheduleDialog` → `QuickScheduleModal` (já existente). Fluxo idêntico ao do SDR, sem código novo.
-
-**5. `CRM.tsx` / `BUCRMLayout.tsx` — navegação**
-
-Mesmo ajuste: `isAgendaOnly` passa a ignorar o closer em modo apoio para que ele consiga clicar nas abas "Negócios" e "Contatos" durante o dia liberado:
-
-```ts
-const { isActive: isR1SupportActive } = useIsR1SupportActive();
-const isAgendaOnly = role && agendaOnlyRoles.includes(role) && !isR1SupportActive;
-```
-
-**6. Reuniões criadas pelo closer-em-apoio**
-
-Quando o closer R2 (em apoio) **agenda** uma R1, o booking grava:
-- `booked_by = user.id` do closer R2 (ele é o SDR daquela reunião).
-- `closer_id` = quem ele escolheu (geralmente ele mesmo, mas pode ser outro R1 disponível).
-- `is_support_booking = true` quando `closer_id === user.closer.id` E o closer escolhido é R2 nativo (igual ao plano anterior).
-
-A trilha em `deal_activities` registra `meeting_scheduled` com metadata `{ booked_by_role: 'closer_apoio', booked_by_closer_id }` — útil para dashboards e auditoria.
-
-**7. Atribuição de SDR nas métricas**
-
-A regra atual (`mem://business-logic/sdr-attribution-hierarchy-v4`) prioriza `booked_by`. Quando `booked_by` é um closer R2 em apoio, ele aparece como "SDR" daquela reunião. Para não distorcer o ranking de SDRs:
-- Em `useSdrPerformance` / `TeamGoalsPanel`, ao montar a lista, identificar `booked_by` que pertence a um closer (cruzar com `profiles`/`closers.employee_id`) e renderizar com badge **"Apoio"** ao lado, sem somar na meta de SDR e sem entrar na tabela "SDRs". Aparece numa linha separada **"Apoio comercial"** no painel da BU.
-
-### Arquivos afetados (incremento ao plano anterior)
-
-- **Novo**: `src/hooks/useIsR1SupportActive.ts`
-- **Editados**:
-  - `src/pages/crm/Agenda.tsx` (cálculo `isCloser` considerando apoio)
-  - `src/pages/crm/Negocios.tsx` (cálculo `isRestrictedRole` considerando apoio)
-  - `src/pages/CRM.tsx` + `src/pages/crm/BUCRMLayout.tsx` (`isAgendaOnly` considerando apoio)
-  - `src/components/crm/QuickScheduleModal.tsx` (prop opcional `searchAllOwnersInBU`, default `false`)
-  - `src/hooks/useAgendaData.ts` → `useSearchDealsForSchedule` aceita `ownerEmail = null` para busca BU-wide
-  - `src/hooks/useCloserScheduling.ts` (gravar `is_support_booking` + metadata `booked_by_role: 'closer_apoio'`)
-  - Hooks de métricas SDR (`useSdrPerformance`, `TeamGoalsPanel`) — separar bookings de apoio em linha própria
-
-### Validação pós-fix
-
-1. Admin libera Rafael (R2) para apoio dia 25/04 → no dia 25/04 Rafael abre `/crm/agenda` e vê grade completa + botão "Agendar" funcional.
-2. Rafael clica "Agendar" → `QuickScheduleModal` abre, busca por nome encontra leads dele → seleciona slot → reunião criada com `booked_by = Rafael`, `closer_id = Rafael`, `is_support_booking = true`.
-3. Rafael tenta no dia 26/04 (sem apoio) → volta para visão "Minha Agenda" restrita, sem busca de lead, sem botão de agendar.
-4. Rafael acessa `/crm/negocios` no dia 25/04 → vê pipeline da BU dele e consegue marcar reunião pelo card; no dia 26 cai no view restrito de closer.
-5. Painel comercial → SDRs reais mantêm contagem inalterada; aparece linha "Apoio comercial: Rafael — 3 R1 marcadas" separada.
-6. Coordenador libera apoio para closer fora do squad → bloqueado por RLS (mesma regra do plano anterior).
+1. Admin abre `/crm/configurar-closers-r2` → clica "Apoio R1" no Rafael → modal abre com calendário.
+2. Seleciona dia 25/04, mantém "Dia inteiro" → "Liberar apoio" → entrada aparece na lista, dia 25 fica destacado no calendário.
+3. Tenta liberar 25/04 de novo → toast "Esta data já está liberada".
+4. Seleciona 26/04, ativa "Janela específica" 14:00–18:00 → salva → lista mostra "26/04 · 14:00–18:00".
+5. Tenta janela 18:00–14:00 → toast de validação.
+6. Remove entrada do 25/04 → some da lista e do calendário.
+7. Rafael loga → `useIsR1SupportActive` retorna `isActive: true` (já implementado) e a Agenda R1 libera o fluxo SDR conforme plano anterior.
+8. Coordenador tenta liberar para closer fora do squad → INSERT bloqueado por RLS, toast amigável.
 
