@@ -947,6 +947,8 @@ export function useSearchDealsForSchedule(
           leadState: LeadScheduleState;
           scheduledInfo: ScheduledInfo | null;
           blockReason: string | null;
+          warningOnly: boolean;
+          warningMessage: string | null;
         }
       > = {};
 
@@ -985,6 +987,8 @@ export function useSearchDealsForSchedule(
           let leadState: LeadScheduleState = 'open';
           let scheduledInfo: ScheduledInfo | null = null;
           let blockReason: string | null = null;
+          let warningOnly = false;
+          let warningMessage: string | null = null;
 
           // 1) Contrato pago tem prioridade absoluta
           const hasContractPaid = atts.some(
@@ -1028,6 +1032,8 @@ export function useSearchDealsForSchedule(
                 // outra R2 ou avisa para reagendar a existente pela Agenda.
                 leadState = 'open';
                 blockReason = null;
+                warningOnly = true;
+                warningMessage = `Este lead já tem R2 agendada para ${dd}/${mm} às ${hh}:${mi}${closerLabel}. Você pode criar outra R2 ou reagendar a existente pela Agenda.`;
               } else {
                 leadState = 'scheduled_future';
                 blockReason = `Lead já tem ${meetingType.toUpperCase()} agendada para ${dd}/${mm} ${hh}:${mi}${closerLabel}. Use a Agenda para reagendar.`;
@@ -1051,7 +1057,13 @@ export function useSearchDealsForSchedule(
             }
           }
 
-          stateMap[deal.id] = { leadState, scheduledInfo, blockReason };
+          stateMap[deal.id] = {
+            leadState,
+            scheduledInfo,
+            blockReason,
+            warningOnly,
+            warningMessage,
+          };
         }
       }
 
@@ -1068,6 +1080,8 @@ export function useSearchDealsForSchedule(
           leadState: 'open' as LeadScheduleState,
           scheduledInfo: null,
           blockReason: null,
+          warningOnly: false,
+          warningMessage: null,
         };
         return {
           ...deal,
@@ -1075,6 +1089,8 @@ export function useSearchDealsForSchedule(
           leadState: state.leadState,
           scheduledInfo: state.scheduledInfo,
           blockReason: state.blockReason,
+          warningOnly: state.warningOnly,
+          warningMessage: state.warningMessage,
         };
       });
 
