@@ -602,39 +602,15 @@ export function R2QuickScheduleModal({
                 </div>
               );
             })()}
-            </>
-            )}
-
-            {/* Blocked Lead Card — substitui todos os campos de form quando o
-                lead não pode ser agendado novamente. */}
-            {isLeadBlocked && blockedLeadState && selectedDeal && (
-              <BlockedLeadCard
-                leadName={selectedDeal.contact?.name || selectedDeal.name}
-                state={blockedLeadState}
-                meetingType="r2"
-                scheduledAt={selectedDeal.scheduledInfo?.scheduledAt ?? null}
-                closerName={selectedDeal.scheduledInfo?.closerName ?? null}
-              />
-            )}
 
             {/* Submit */}
-            {isLeadBlocked ? (
-              <Button
-                variant="secondary"
-                className="w-full mt-4"
-                onClick={() => onOpenChange(false)}
-              >
-                Fechar
-              </Button>
-            ) : (
-              <Button
-                className="w-full bg-primary hover:bg-primary/90 mt-4"
-                onClick={handleSubmit}
-                disabled={!selectedDeal || !selectedCloser || !selectedDate || !selectedTime || createMeeting.isPending}
-              >
-                {createMeeting.isPending ? 'Agendando...' : isPreSchedule ? 'Pré-agendar R2' : 'Agendar R2'}
-              </Button>
-            )}
+            <Button
+              className="w-full bg-primary hover:bg-primary/90 mt-4"
+              onClick={handleSubmit}
+              disabled={!selectedDeal || !selectedCloser || !selectedDate || !selectedTime || createMeeting.isPending}
+            >
+              {createMeeting.isPending ? 'Agendando...' : isPreSchedule ? 'Pré-agendar R2' : 'Agendar R2'}
+            </Button>
           </div>
         </ScrollArea>
       </DialogContent>
