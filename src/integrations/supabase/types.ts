@@ -7018,6 +7018,111 @@ export type Database = {
           },
         ]
       }
+      meeting_reminder_settings: {
+        Row: {
+          ac_field_ids: Json | null
+          ac_list_id: number | null
+          ac_setup_checklist: Json | null
+          ac_setup_confirmed: boolean
+          apply_to_r1: boolean
+          apply_to_r2: boolean
+          enabled_offsets: string[]
+          fallback_meeting_link: string | null
+          id: number
+          is_active: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          ac_field_ids?: Json | null
+          ac_list_id?: number | null
+          ac_setup_checklist?: Json | null
+          ac_setup_confirmed?: boolean
+          apply_to_r1?: boolean
+          apply_to_r2?: boolean
+          enabled_offsets?: string[]
+          fallback_meeting_link?: string | null
+          id?: number
+          is_active?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          ac_field_ids?: Json | null
+          ac_list_id?: number | null
+          ac_setup_checklist?: Json | null
+          ac_setup_confirmed?: boolean
+          apply_to_r1?: boolean
+          apply_to_r2?: boolean
+          enabled_offsets?: string[]
+          fallback_meeting_link?: string | null
+          id?: number
+          is_active?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      meeting_reminders_log: {
+        Row: {
+          ac_contact_id: string | null
+          attendee_id: string
+          contact_email: string
+          error_message: string | null
+          id: string
+          meeting_slot_id: string
+          meeting_type: string
+          offset_key: string
+          scheduled_at: string | null
+          sent_at: string
+          skip_reason: string | null
+          status: string
+        }
+        Insert: {
+          ac_contact_id?: string | null
+          attendee_id: string
+          contact_email: string
+          error_message?: string | null
+          id?: string
+          meeting_slot_id: string
+          meeting_type: string
+          offset_key: string
+          scheduled_at?: string | null
+          sent_at?: string
+          skip_reason?: string | null
+          status: string
+        }
+        Update: {
+          ac_contact_id?: string | null
+          attendee_id?: string
+          contact_email?: string
+          error_message?: string | null
+          id?: string
+          meeting_slot_id?: string
+          meeting_type?: string
+          offset_key?: string
+          scheduled_at?: string | null
+          sent_at?: string
+          skip_reason?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_reminders_log_attendee_id_fkey"
+            columns: ["attendee_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slot_attendees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_reminders_log_meeting_slot_id_fkey"
+            columns: ["meeting_slot_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meeting_slot_attendees: {
         Row: {
           already_builds: boolean | null
