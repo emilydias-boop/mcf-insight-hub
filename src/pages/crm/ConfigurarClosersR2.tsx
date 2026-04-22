@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, ArrowLeft, Settings, Users, Mail, Trash2, Edit, Check, X, Calendar } from 'lucide-react';
+import { Plus, ArrowLeft, Settings, Users, Mail, Trash2, Edit, Check, X, Calendar, LifeBuoy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useR2ClosersList, useCreateR2Closer, useUpdateR2Closer, useDeleteR2Closer, R2Closer, R2CloserFormData } from '@/hooks/useR2Closers';
 import { R2CloserAvailabilityConfig } from '@/components/crm/R2CloserAvailabilityConfig';
+import { R1SupportDaysConfig } from '@/components/crm/R1SupportDaysConfig';
 
 const COLORS = [
   '#8B5CF6', '#F97316', '#10B981', '#3B82F6', '#EC4899', 
@@ -26,6 +27,8 @@ export default function ConfigurarClosersR2() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [closerToDelete, setCloserToDelete] = useState<R2Closer | null>(null);
   const [availabilityConfigOpen, setAvailabilityConfigOpen] = useState(false);
+  const [supportConfigOpen, setSupportConfigOpen] = useState(false);
+  const [supportCloser, setSupportCloser] = useState<R2Closer | null>(null);
 
   const { data: closers, isLoading, error } = useR2ClosersList();
   const createMutation = useCreateR2Closer();
