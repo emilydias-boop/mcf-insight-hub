@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { format, addDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getWeekStartsOn } from '@/lib/businessDays';
-import { CalendarDays, ChevronLeft, ChevronRight, Settings, Users, RefreshCw, Plus, Columns3, BarChart3, Search, Download } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Settings, Users, RefreshCw, Plus, Columns3, BarChart3, Search, Download, LifeBuoy } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -23,11 +23,12 @@ import { UpcomingMeetingsPanel } from '@/components/crm/UpcomingMeetingsPanel';
 import { MeetingSearchPanel } from '@/components/crm/MeetingSearchPanel';
 import { useAgendaMeetings, useClosersWithAvailability, useBlockedDates, MeetingSlot } from '@/hooks/useAgendaData';
 import { useMeetingReminders } from '@/hooks/useMeetingReminders';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMyCloser } from '@/hooks/useMyCloser';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function Agenda() {
   const navigate = useNavigate();
