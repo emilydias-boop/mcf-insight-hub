@@ -29,8 +29,11 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Plus, MoreHorizontal, Pencil, Trash2, CheckCircle, XCircle, Calendar, Info, Building2 } from 'lucide-react';
+import { LifeBuoy } from 'lucide-react';
 import { useClosersList, useDeleteCloser, Closer } from '@/hooks/useClosers';
 import { CloserFormDialog } from '@/components/crm/CloserFormDialog';
+import { R1SupportDaysConfig } from '@/components/crm/R1SupportDaysConfig';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useActiveBU, useIsGlobalCRM } from '@/hooks/useActiveBU';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -56,6 +59,8 @@ export default function ConfigurarClosers() {
   const [selectedCloser, setSelectedCloser] = useState<Closer | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [closerToDelete, setCloserToDelete] = useState<Closer | null>(null);
+  const [supportConfigOpen, setSupportConfigOpen] = useState(false);
+  const [supportCloser, setSupportCloser] = useState<Closer | null>(null);
 
   const handleEdit = (closer: Closer) => {
     setSelectedCloser(closer);
