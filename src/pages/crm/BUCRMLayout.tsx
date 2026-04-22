@@ -16,6 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { BUProvider } from '@/contexts/BUContext';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
+import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 
 // Configuração de abas visíveis por BU
 const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
@@ -55,10 +56,13 @@ interface BUCRMLayoutProps {
 export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
   const { role, user } = useAuth();
   const location = useLocation();
-  
+
+  // Closer R2 em modo "Apoio R1" deve poder navegar como SDR
+  const { isActive: isR1SupportActive } = useIsR1SupportActive();
+
   // Roles que só podem ver Agenda
   const agendaOnlyRoles = ['sdr', 'closer', 'closer_sombra'];
-  const isAgendaOnly = role && agendaOnlyRoles.includes(role);
+  const isAgendaOnly = role && agendaOnlyRoles.includes(role) && !isR1SupportActive;
   
   // Verificar permissões R2
   const canViewR2 = canUserAccessR2(role, user?.id);

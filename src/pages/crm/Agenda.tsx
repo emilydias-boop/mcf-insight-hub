@@ -27,6 +27,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMyCloser } from '@/hooks/useMyCloser';
 import { useActiveBU } from '@/hooks/useActiveBU';
+import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 
 export default function Agenda() {
   const navigate = useNavigate();
@@ -34,11 +35,16 @@ export default function Agenda() {
   const sdrOwnerEmail = role === 'sdr' ? user?.email || undefined : undefined;
   const { data: myCloser } = useMyCloser();
   const activeBU = useActiveBU();
-  
+
+  // Modo "Apoio R1": closer R2 com pelo menos 1 dia liberado se comporta como SDR
+  // (vê grade completa, busca leads, agenda) — válido para todo o horizonte com apoio ativo.
+  const { isActive: isR1SupportActive } = useIsR1SupportActive();
+
   // Verifica se usuário é closer PURO (não tem SDR)
   // Usuários com múltiplas roles (SDR + Closer) veem a agenda como SDR para poder agendar
   const isCloserOnly = role === 'closer' && !allRoles.includes('sdr');
-  const isCloser = isCloserOnly;
+  // Em modo apoio, deixa de cair no branch "Minha Agenda" restrito
+  const isCloser = isCloserOnly && !isR1SupportActive;
   
   useMeetingReminders(); // Automatic 15-min reminders
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -552,6 +558,7 @@ export default function Agenda() {
         preselectedCloserId={preselectedCloserId}
         preselectedDate={preselectedDate}
         ownerEmail={sdrOwnerEmail}
+        searchAllOwnersInBU={isR1SupportActive}
       />
 
       {/* Reschedule Modal */}

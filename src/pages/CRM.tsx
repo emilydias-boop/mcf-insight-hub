@@ -4,13 +4,17 @@ import { LayoutDashboard, Users, Briefcase, Settings, CalendarDays, Inbox, Shiel
 import { useAuth } from '@/contexts/AuthContext';
 import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
 import { BUProvider } from '@/contexts/BUContext';
+import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 
 const CRM = () => {
   const { role, user } = useAuth();
-  
+
+  // Closer R2 em modo "Apoio R1" deve poder navegar como SDR (acessar Negócios/Contatos)
+  const { isActive: isR1SupportActive } = useIsR1SupportActive();
+
   // Roles que só podem ver Agenda (exceto se estiver na whitelist R2 ou Negócios)
   const agendaOnlyRoles = ['sdr', 'closer', 'closer_sombra'];
-  const isAgendaOnly = role && agendaOnlyRoles.includes(role);
+  const isAgendaOnly = role && agendaOnlyRoles.includes(role) && !isR1SupportActive;
   
   // Verificar se usuário tem permissão especial para R2
   const canViewR2 = canUserAccessR2(role, user?.id);
