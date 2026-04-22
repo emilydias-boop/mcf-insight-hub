@@ -234,7 +234,14 @@ export function QuickScheduleModal({
     closerName?: string;
   } | null>(null);
 
-  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery, originIds && originIds.length > 0 ? originIds : undefined, ownerEmail);
+  // No modo "Apoio R1" (searchAllOwnersInBU=true), ignoramos o filtro de owner
+  // para permitir buscar leads de qualquer SDR dentro da BU ativa.
+  const effectiveOwnerEmail = searchAllOwnersInBU ? undefined : ownerEmail;
+  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(
+    nameQuery,
+    originIds && originIds.length > 0 ? originIds : undefined,
+    effectiveOwnerEmail,
+  );
   const { data: weeklyLeads = [], isLoading: weeklyLeadsLoading } = useSearchWeeklyMeetingLeads(weeklyStatusFilter, closerIdsForBU);
   const createMeeting = useCreateMeeting();
   const sendNotification = useSendMeetingNotification();
