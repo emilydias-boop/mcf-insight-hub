@@ -401,8 +401,14 @@ export function R2QuickScheduleModal({
             </div>
 
             {/* Responsável pelo agendamento (booked_by) */}
-            {!isLeadBlocked && (
-            <>
+            {r2WarningMessage && (
+              <Alert className="border-yellow-500/60 bg-yellow-500/10 text-yellow-800 dark:text-yellow-300 [&>svg]:text-yellow-600">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-xs leading-relaxed">
+                  {r2WarningMessage}
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <Label className="text-xs">Responsável pelo agendamento</Label>
               <Select value={bookedBy} onValueChange={setBookedBy}>
