@@ -14,6 +14,7 @@ export interface Closer {
   bu: string | null;
   google_calendar_id: string | null;
   google_calendar_enabled: boolean | null;
+  meeting_type: 'r1' | 'r2' | null;
   created_at: string | null;
   updated_at: string | null;
 }

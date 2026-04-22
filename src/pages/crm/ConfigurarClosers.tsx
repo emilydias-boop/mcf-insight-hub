@@ -29,8 +29,11 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Plus, MoreHorizontal, Pencil, Trash2, CheckCircle, XCircle, Calendar, Info, Building2 } from 'lucide-react';
+import { LifeBuoy } from 'lucide-react';
 import { useClosersList, useDeleteCloser, Closer } from '@/hooks/useClosers';
 import { CloserFormDialog } from '@/components/crm/CloserFormDialog';
+import { R1SupportDaysConfig } from '@/components/crm/R1SupportDaysConfig';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useActiveBU, useIsGlobalCRM } from '@/hooks/useActiveBU';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -56,6 +59,8 @@ export default function ConfigurarClosers() {
   const [selectedCloser, setSelectedCloser] = useState<Closer | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [closerToDelete, setCloserToDelete] = useState<Closer | null>(null);
+  const [supportConfigOpen, setSupportConfigOpen] = useState(false);
+  const [supportCloser, setSupportCloser] = useState<Closer | null>(null);
 
   const handleEdit = (closer: Closer) => {
     setSelectedCloser(closer);
@@ -232,6 +237,17 @@ export default function ConfigurarClosers() {
                             <Pencil className="mr-2 h-4 w-4" />
                             Editar
                           </DropdownMenuItem>
+                          {closer.is_active && closer.meeting_type === 'r2' && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSupportCloser(closer);
+                                setSupportConfigOpen(true);
+                              }}
+                            >
+                              <LifeBuoy className="mr-2 h-4 w-4" />
+                              Apoio R1
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem 
                             onClick={() => {
                               setCloserToDelete(closer);
@@ -281,6 +297,30 @@ export default function ConfigurarClosers() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* R1 Support Days Dialog */}
+      <Dialog open={supportConfigOpen} onOpenChange={setSupportConfigOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LifeBuoy className="h-5 w-5" />
+              Apoio R1 — {supportCloser?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Libere os dias em que este closer R2 poderá atender e agendar reuniões R1.
+            </DialogDescription>
+          </DialogHeader>
+          {supportCloser && (
+            <R1SupportDaysConfig
+              closer={{
+                id: supportCloser.id,
+                name: supportCloser.name,
+                color: supportCloser.color,
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
