@@ -317,6 +317,7 @@ export default function ConfigurarClosers() {
                 name: supportCloser.name,
                 color: supportCloser.color,
               }}
+              onNavigateAway={() => setSupportConfigOpen(false)}
             />
           )}
         </DialogContent>

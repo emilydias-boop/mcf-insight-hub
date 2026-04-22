@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { format, addDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getWeekStartsOn } from '@/lib/businessDays';
-import { CalendarDays, ChevronLeft, ChevronRight, Settings, Users, RefreshCw, Plus, Columns3, BarChart3, Search, Download } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Settings, Users, RefreshCw, Plus, Columns3, BarChart3, Search, Download, LifeBuoy } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -23,14 +23,16 @@ import { UpcomingMeetingsPanel } from '@/components/crm/UpcomingMeetingsPanel';
 import { MeetingSearchPanel } from '@/components/crm/MeetingSearchPanel';
 import { useAgendaMeetings, useClosersWithAvailability, useBlockedDates, MeetingSlot } from '@/hooks/useAgendaData';
 import { useMeetingReminders } from '@/hooks/useMeetingReminders';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMyCloser } from '@/hooks/useMyCloser';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function Agenda() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { role, allRoles, user } = useAuth();
   const sdrOwnerEmail = role === 'sdr' ? user?.email || undefined : undefined;
   const { data: myCloser } = useMyCloser();
@@ -38,7 +40,7 @@ export default function Agenda() {
 
   // Modo "Apoio R1": closer R2 com pelo menos 1 dia liberado se comporta como SDR
   // (vê grade completa, busca leads, agenda) — válido para todo o horizonte com apoio ativo.
-  const { isActive: isR1SupportActive } = useIsR1SupportActive();
+  const { isActive: isR1SupportActive, supportDays } = useIsR1SupportActive();
 
   // Verifica se usuário é closer PURO (não tem SDR)
   // Usuários com múltiplas roles (SDR + Closer) veem a agenda como SDR para poder agendar
@@ -60,6 +62,19 @@ export default function Agenda() {
   const [searchTerm, setSearchTerm] = useState('');
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
   const [calendarOpen, setCalendarOpen] = useState(false);
+
+  // Auto-abre o modal de agendamento quando vindo de R1SupportDaysConfig com ?openSchedule=1&closerId=
+  useEffect(() => {
+    const openSchedule = searchParams.get('openSchedule');
+    const closerIdParam = searchParams.get('closerId');
+    if (openSchedule === '1') {
+      if (closerIdParam) setPreselectedCloserId(closerIdParam);
+      setQuickScheduleOpen(true);
+      // limpa params após consumir
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Calculate date range based on viewMode
   const { rangeStart, rangeEnd } = useMemo(() => {
@@ -316,6 +331,47 @@ export default function Agenda() {
           </Button>
         </div>
       </div>
+
+      {/* Banner: Modo Apoio R1 ativo (closer R2 logado em dias liberados) */}
+      {isCloserOnly && isR1SupportActive && supportDays.length > 0 && (
+        <Alert className="border-primary/40 bg-primary/5">
+          <LifeBuoy className="h-4 w-4 text-primary" />
+          <AlertTitle className="text-primary">Modo Apoio R1 ativo</AlertTitle>
+          <AlertDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="text-xs sm:text-sm">
+                Você pode buscar leads e agendar reuniões R1 nos dias liberados.{' '}
+                <span className="text-muted-foreground">
+                  Próximas:{' '}
+                  {supportDays.slice(0, 3).map((d, i) => {
+                    const dateObj = new Date(d.support_date + 'T12:00:00');
+                    const label = format(dateObj, 'dd/MM', { locale: ptBR });
+                    const window =
+                      d.start_time && d.end_time
+                        ? ` (${d.start_time.slice(0, 5)}–${d.end_time.slice(0, 5)})`
+                        : ' (dia inteiro)';
+                    return (
+                      <span key={d.id}>
+                        {i > 0 ? ' · ' : ''}
+                        {label}
+                        {window}
+                      </span>
+                    );
+                  })}
+                </span>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setQuickScheduleOpen(true)}
+                className="shrink-0"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Buscar lead e agendar
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Navigation and Filters */}
       <div className="flex flex-col gap-3 pb-2">

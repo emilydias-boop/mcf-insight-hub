@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { format, isBefore, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarDays, Trash2, Clock, LifeBuoy } from 'lucide-react';
+import { CalendarDays, Trash2, Clock, LifeBuoy, CalendarPlus, Info } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 
 import {
@@ -28,6 +31,7 @@ interface R1SupportDaysConfigProps {
     name: string;
     color?: string | null;
   };
+  onNavigateAway?: () => void;
 }
 
 const TIME_MIN = '06:00';
@@ -41,7 +45,8 @@ function formatWindow(row: R1SupportDayRow): string | null {
   return `${start}–${end}`;
 }
 
-export function R1SupportDaysConfig({ closer }: R1SupportDaysConfigProps) {
+export function R1SupportDaysConfig({ closer, onNavigateAway }: R1SupportDaysConfigProps) {
+  const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [allDay, setAllDay] = useState(true);
@@ -89,7 +94,7 @@ export function R1SupportDaysConfig({ closer }: R1SupportDaysConfigProps) {
       payloadEnd = `${endTime}:00`;
     }
 
-    await createMutation.mutateAsync({
+    const created = await createMutation.mutateAsync({
       closerId: closer.id,
       date: selectedDate,
       startTime: payloadStart,
@@ -99,6 +104,14 @@ export function R1SupportDaysConfig({ closer }: R1SupportDaysConfigProps) {
 
     // Reset campos auxiliares (mantém data selecionada para feedback visual)
     setNotes('');
+
+    // Toast secundário explicando o efeito
+    if (created) {
+      const dateLabel = format(selectedDate, "dd/MM/yyyy", { locale: ptBR });
+      toast.message(`${closer.name} agora pode agendar R1 em ${dateLabel}`, {
+        description: 'Acesso à grade completa, busca de leads e agendamento liberados.',
+      });
+    }
   };
 
   const handleDelete = async (row: R1SupportDayRow) => {
@@ -147,6 +160,21 @@ export function R1SupportDaysConfig({ closer }: R1SupportDaysConfigProps) {
 
       {/* Coluna direita: Detalhes do dia + lista */}
       <div className="space-y-4">
+        {/* Alert explicativo: o que o apoio R1 destrava */}
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>O que o apoio R1 habilita?</AlertTitle>
+          <AlertDescription>
+            Nos dias liberados, <strong>{closer.name}</strong> poderá:
+            <ul className="list-disc pl-5 mt-1 space-y-0.5 text-xs">
+              <li>Acessar a Agenda R1 com grade completa</li>
+              <li>Buscar leads de qualquer SDR da BU</li>
+              <li>Agendar reuniões R1 (para si ou para outros closers R1)</li>
+              <li>Acessar pipeline de Negócios da BU</li>
+            </ul>
+          </AlertDescription>
+        </Alert>
+
         {selectedDate ? (
           <div className="rounded-md border p-4 space-y-4 bg-card">
             <div className="flex items-center justify-between flex-wrap gap-2">
@@ -219,14 +247,23 @@ export function R1SupportDaysConfig({ closer }: R1SupportDaysConfigProps) {
               />
             </div>
 
-            <Button
-              className="w-full"
-              onClick={handleRelease}
-              disabled={createMutation.isPending}
-            >
-              <LifeBuoy className="h-4 w-4 mr-2" />
-              {createMutation.isPending ? 'Liberando...' : 'Liberar apoio'}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    className="w-full"
+                    onClick={handleRelease}
+                    disabled={createMutation.isPending}
+                  >
+                    <LifeBuoy className="h-4 w-4 mr-2" />
+                    {createMutation.isPending ? 'Liberando...' : 'Liberar dia de apoio R1'}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  O closer poderá agendar e atender reuniões R1 nesta data
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         ) : (
           <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -301,6 +338,21 @@ export function R1SupportDaysConfig({ closer }: R1SupportDaysConfigProps) {
             </div>
           </ScrollArea>
         </div>
+
+        {/* Atalho: abrir Agenda R1 já com este closer pré-selecionado */}
+        {(rows?.length ?? 0) > 0 && (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              onNavigateAway?.();
+              navigate(`/crm/agenda?openSchedule=1&closerId=${closer.id}`);
+            }}
+          >
+            <CalendarPlus className="h-4 w-4 mr-2" />
+            Abrir Agenda R1 para agendar agora
+          </Button>
+        )}
       </div>
     </div>
   );
