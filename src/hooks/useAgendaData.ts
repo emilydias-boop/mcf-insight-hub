@@ -1043,15 +1043,45 @@ export function useSearchDealsForSchedule(
               // R1 realizada / open → permitido.
               leadState = 'open';
             } else {
-              // R1 realizada bloqueia novo R1
-              const completed = atts.find(
-                (a: any) =>
-                  a.status === 'completed' &&
-                  a.meeting_slot?.meeting_type === 'r1',
-              );
-              if (completed) {
-                leadState = 'completed';
-                blockReason = 'Lead já realizou R1. Para R2, use a Agenda R2.';
+              // R1 realizada no MÊS CORRENTE bloqueia novo R1.
+              // R1 realizada em mês anterior libera o reagendamento (apenas aviso).
+              const completedR1s = atts
+                .filter(
+                  (a: any) =>
+                    a.status === 'completed' &&
+                    a.meeting_slot?.meeting_type === 'r1' &&
+                    a.meeting_slot?.scheduled_at,
+                )
+                .sort(
+                  (a: any, b: any) =>
+                    new Date(b.meeting_slot.scheduled_at).getTime() -
+                    new Date(a.meeting_slot.scheduled_at).getTime(),
+                );
+              const lastCompleted = completedR1s[0];
+              if (lastCompleted) {
+                const fmtMonthYear = new Intl.DateTimeFormat('pt-BR', {
+                  timeZone: 'America/Sao_Paulo',
+                  year: 'numeric',
+                  month: 'numeric',
+                });
+                const completedAt = new Date(lastCompleted.meeting_slot.scheduled_at);
+                const completedKey = fmtMonthYear.format(completedAt);
+                const todayKey = fmtMonthYear.format(now);
+                if (completedKey === todayKey) {
+                  leadState = 'completed';
+                  blockReason = 'Lead já realizou R1 neste mês. Para R2, use a Agenda R2.';
+                } else {
+                  // Mês diferente → libera, mas avisa o usuário
+                  const labelMesAno = new Intl.DateTimeFormat('pt-BR', {
+                    timeZone: 'America/Sao_Paulo',
+                    month: 'long',
+                    year: 'numeric',
+                  }).format(completedAt);
+                  leadState = 'open';
+                  blockReason = null;
+                  warningOnly = true;
+                  warningMessage = `Este lead já fez R1 em ${labelMesAno}. Reagendamento permitido.`;
+                }
               }
               // no_show / lost / cancelled / sem histórico → 'open' (permitido)
             }
