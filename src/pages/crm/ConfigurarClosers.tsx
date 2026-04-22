@@ -237,6 +237,17 @@ export default function ConfigurarClosers() {
                             <Pencil className="mr-2 h-4 w-4" />
                             Editar
                           </DropdownMenuItem>
+                          {closer.is_active && closer.meeting_type === 'r2' && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSupportCloser(closer);
+                                setSupportConfigOpen(true);
+                              }}
+                            >
+                              <LifeBuoy className="mr-2 h-4 w-4" />
+                              Apoio R1
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem 
                             onClick={() => {
                               setCloserToDelete(closer);
