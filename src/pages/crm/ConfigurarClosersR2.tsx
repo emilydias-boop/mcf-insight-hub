@@ -384,7 +384,12 @@ export default function ConfigurarClosersR2() {
               Use o calendário para escolher uma data e defina se o apoio é por dia inteiro ou em uma janela específica.
             </DialogDescription>
           </DialogHeader>
-          {supportCloser && <R1SupportDaysConfig closer={supportCloser} />}
+          {supportCloser && (
+            <R1SupportDaysConfig
+              closer={supportCloser}
+              onNavigateAway={() => setSupportConfigOpen(false)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
