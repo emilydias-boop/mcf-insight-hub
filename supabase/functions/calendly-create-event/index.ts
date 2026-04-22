@@ -502,6 +502,7 @@ serve(async (req) => {
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    } // end if (guardMeetingType === 'r1') — fim dos guards 1, 2, 3
 
     // 4) R1 já realizada bloqueia novo R1 (R2 não bloqueia)
     if (guardMeetingType === "r1") {
