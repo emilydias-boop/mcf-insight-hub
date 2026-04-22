@@ -1,70 +1,59 @@
 
 
-## Tela de configuração "Apoio R1" para closers R2
+## Acessar "Apoio R1" direto da tela `/crm/configurar-closers`
 
-### Objetivo
+### Diagnóstico
 
-Criar UI dentro de `/crm/configurar-closers-r2` para Admin/Manager/Coordenador liberarem dias específicos em que um closer R2 pode atender R1 (CRUD completo sobre `closer_r1_support_days`), com calendário visual, validações e janelas de horário opcionais.
+Hoje existem **duas telas** de closers:
 
-### Componentes novos
+- `/crm/configurar-closers` (a que você está vendo) — lista global, todos os closers de todas as BUs (R1 + R2 misturados). É onde a maioria entra.
+- `/crm/configurar-closers-r2` — tela separada e específica de R2. **É lá que está o botão Apoio R1 (ícone salva-vidas)** que adicionamos no passo anterior.
 
-**1. `src/hooks/useR1SupportDays.ts`** — CRUD com React Query (espelha `useR2DailySlots`):
-- `useR1SupportDaysForCloser(closerId)` → lista todas as entradas do closer (ordem por data).
-- `useR1SupportDaysWithSlots(closerId, month)` → array de `Date` para destacar no calendário.
-- `useCreateR1SupportDay()` → insert `{ closer_id, support_date, start_time?, end_time?, notes?, created_by: auth.uid() }`.
-- `useUpdateR1SupportDay()` → update parcial (notas, janela de horário).
-- `useDeleteR1SupportDay()`.
-- Toasts de sucesso/erro via `sonner`. Invalida queries `r1-support-days` + `r1-support-active` (para o gating de UI atualizar).
+Como você nunca abre essa tela secundária, parece que o recurso "sumiu". Solução: trazer o botão para a tela principal, dentro da linha de cada closer R2.
 
-**2. `src/components/crm/R1SupportDaysConfig.tsx`** — modal/painel reutilizável:
+### Mudança proposta
 
-Layout 2 colunas (igual `R2DailySlotConfig`):
-- **Esquerda**: `Calendar` em pt-BR; dias liberados marcados com a cor do closer (modifiers); `disabled={d => d < hoje}` (não permite liberar passado).
-- **Direita**: ao selecionar um dia
-  - Header: data formatada + badge do dia da semana.
-  - Toggle **"Dia inteiro"** (default ON) ↔ **"Janela específica"** (mostra dois `Input type="time" step={900}`).
-  - Input "Observação (opcional)" — ex.: "Cobrindo falta do João".
-  - Botão **"Liberar apoio"** (cria entrada).
-  - Lista de **datas já liberadas** (ScrollArea), cada item com data, badge "Dia inteiro" ou janela `HH:MM–HH:MM`, observação, botão remover.
+Editar **`src/pages/crm/ConfigurarClosers.tsx`** para:
 
-**Validações**:
-- Bloquear datas no passado (calendário disabled).
-- Se "Janela específica": exigir `start_time < end_time`, ambos em intervalos de 15 min, dentro de 06:00–22:00.
-- UNIQUE `(closer_id, support_date)` já existe no DB → tratar erro de duplicidade com toast amigável ("Esta data já está liberada para este closer").
-- Botão "Liberar" desabilitado enquanto `mutation.isPending`.
+1. **Incluir `meeting_type` no tipo `Closer`** (`src/hooks/useClosers.ts`) — campo já existe no banco, só não estava tipado.
+2. **Adicionar item "Apoio R1" no DropdownMenu** (aquele `...` no fim da linha) **somente quando**:
+   - `closer.meeting_type === 'r2'` E
+   - `closer.is_active === true`
+3. Ao clicar, abre um `Dialog` reutilizando o componente já existente `<R1SupportDaysConfig closer={closer} />` (precisa adaptar tipo: o componente espera `R2Closer`, mas só usa `id`, `name` e `color` — ajustamos para aceitar um shape mais leve, ou convertemos no momento da abertura).
+4. Estado novo na página: `supportConfigOpen` + `supportCloser`.
+5. Ícone do item: `LifeBuoy` (mesma identidade visual da outra tela).
+6. Para closers que **não são R2**, o item não aparece — mantém o menu limpo (só Editar/Excluir).
 
-### Integração com `ConfigurarClosersR2.tsx`
+### Resultado visual
 
-Adicionar **um botão "Apoio R1"** na linha de cada closer ativo na tabela (ao lado de Editar/Remover, ícone `LifeBuoy` ou `HandHelping`). Ao clicar, abre um `Dialog` controlado contendo `<R1SupportDaysConfig closer={closer} />`.
+No menu `...` de cada linha:
 
-Estado novo na página:
-```ts
-const [supportConfigOpen, setSupportConfigOpen] = useState(false);
-const [supportCloser, setSupportCloser] = useState<R2Closer | null>(null);
+```text
+Closer R2 ativo (Jessica Bellini R2):
+  • Editar
+  • Apoio R1            ← novo, com ícone salva-vidas
+  • Excluir
+
+Closer R1 ou inativo (todos os demais):
+  • Editar
+  • Excluir             (sem mudança)
 ```
 
-Header do Dialog: "Apoio R1 — {closer.name}" + descrição curta explicando que o closer poderá atender e agendar R1 nos dias liberados.
-
-### Permissões
-
-A rota `/crm/configurar-closers-r2` já é protegida por `RoleGuard allowedRoles={['admin','manager','coordenador']}` (visto em `App.tsx` linha 261). As RLS policies da tabela já filtram coordenador por squad — se o INSERT falhar por RLS, o toast mostra "Sem permissão para liberar apoio para este closer".
+O Dialog que abre é exatamente o mesmo da tela R2: calendário pt-BR, toggle "Dia inteiro / Janela específica", lista de datas liberadas, validações etc. Nenhuma lógica de backend muda.
 
 ### Arquivos afetados
 
-- **Novos**:
-  - `src/hooks/useR1SupportDays.ts`
-  - `src/components/crm/R1SupportDaysConfig.tsx`
-- **Editado**:
-  - `src/pages/crm/ConfigurarClosersR2.tsx` — botão "Apoio R1" por linha + Dialog.
+- `src/hooks/useClosers.ts` — adicionar `meeting_type: 'r1' | 'r2' | null` na interface `Closer`.
+- `src/pages/crm/ConfigurarClosers.tsx` — novo `DropdownMenuItem` condicional + estado + Dialog `R1SupportDaysConfig`.
+- `src/components/crm/R1SupportDaysConfig.tsx` — afrouxar o tipo da prop `closer` para aceitar `{ id: string; name: string; color?: string | null }` (compatível com `Closer` e `R2Closer`).
+
+Nenhuma migration, nenhuma alteração em hook de dados ou edge function.
 
 ### Validação pós-implementação
 
-1. Admin abre `/crm/configurar-closers-r2` → clica "Apoio R1" no Rafael → modal abre com calendário.
-2. Seleciona dia 25/04, mantém "Dia inteiro" → "Liberar apoio" → entrada aparece na lista, dia 25 fica destacado no calendário.
-3. Tenta liberar 25/04 de novo → toast "Esta data já está liberada".
-4. Seleciona 26/04, ativa "Janela específica" 14:00–18:00 → salva → lista mostra "26/04 · 14:00–18:00".
-5. Tenta janela 18:00–14:00 → toast de validação.
-6. Remove entrada do 25/04 → some da lista e do calendário.
-7. Rafael loga → `useIsR1SupportActive` retorna `isActive: true` (já implementado) e a Agenda R1 libera o fluxo SDR conforme plano anterior.
-8. Coordenador tenta liberar para closer fora do squad → INSERT bloqueado por RLS, toast amigável.
+1. Abrir `/crm/configurar-closers` → no menu `...` da Jessica Bellini R2 (e demais R2 ativos) aparece "Apoio R1".
+2. Clicar abre o mesmo modal que já existe em `/crm/configurar-closers-r2` (calendário + lista).
+3. Liberar uma data → toast de sucesso, dia destacado.
+4. No menu `...` de um closer R1 (ex.: Claudia Carielo) o item "Apoio R1" **não aparece**.
+5. No menu `...` de um closer R2 inativo, também não aparece.
 
