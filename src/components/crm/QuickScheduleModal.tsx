@@ -56,6 +56,13 @@ interface QuickScheduleModalProps {
   prefilledDealId?: string;
   prefilledNotes?: string;
   ownerEmail?: string;
+  /**
+   * Quando true, ignora o filtro `ownerEmail` e busca leads de qualquer SDR
+   * dentro da BU ativa. Usado no modo "Apoio R1" (closer R2 cobrindo R1)
+   * para permitir agendar leads de outros SDRs caso necessário.
+   * Default: false.
+   */
+  searchAllOwnersInBU?: boolean;
 }
 
 interface DealOption {
@@ -119,6 +126,7 @@ export function QuickScheduleModal({
   prefilledDealId,
   prefilledNotes,
   ownerEmail,
+  searchAllOwnersInBU = false,
 }: QuickScheduleModalProps) {
   const { role } = useAuth();
   const activeBU = useActiveBU();
