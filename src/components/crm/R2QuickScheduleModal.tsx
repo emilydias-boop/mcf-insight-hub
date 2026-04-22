@@ -201,8 +201,6 @@ export function R2QuickScheduleModal({
 
   const handleSubmit = () => {
     if (!selectedDeal || !selectedCloser || !selectedDate || !selectedTime) return;
-    // Defesa adicional: nunca submeter para leads bloqueados.
-    if (isLeadBlocked) return;
 
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const scheduledAt = new Date(selectedDate);
