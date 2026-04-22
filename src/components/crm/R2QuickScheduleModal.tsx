@@ -239,23 +239,11 @@ export function R2QuickScheduleModal({
 
   const isSelected = !!selectedDeal;
 
-  // Estado bloqueado do lead selecionado (usado para mostrar o card grande
-  // de aviso no lugar dos campos de form e do botão de agendar).
-  const blockedLeadState = useMemo<
-    'scheduled_future' | 'completed' | 'contract_paid' | 'won' | null
-  >(() => {
-    const state = selectedDeal?.leadState;
-    if (
-      state === 'scheduled_future' ||
-      state === 'completed' ||
-      state === 'contract_paid' ||
-      state === 'won'
-    ) {
-      return state;
-    }
-    return null;
-  }, [selectedDeal?.leadState]);
-  const isLeadBlocked = blockedLeadState !== null;
+  // Na R2 não bloqueamos o agendamento. Apenas mostramos um aviso suave
+  // quando já existe R2 futura ativa para esse lead.
+  const r2WarningMessage = selectedDeal?.warningOnly
+    ? selectedDeal?.warningMessage || null
+    : null;
 
   // Get placeholder text for time select
   const getTimePlaceholder = () => {
