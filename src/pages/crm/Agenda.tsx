@@ -63,6 +63,19 @@ export default function Agenda() {
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
   const [calendarOpen, setCalendarOpen] = useState(false);
 
+  // Auto-abre o modal de agendamento quando vindo de R1SupportDaysConfig com ?openSchedule=1&closerId=
+  useEffect(() => {
+    const openSchedule = searchParams.get('openSchedule');
+    const closerIdParam = searchParams.get('closerId');
+    if (openSchedule === '1') {
+      if (closerIdParam) setPreselectedCloserId(closerIdParam);
+      setQuickScheduleOpen(true);
+      // limpa params após consumir
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   // Calculate date range based on viewMode
   const { rangeStart, rangeEnd } = useMemo(() => {
     if (viewMode === 'day') {
