@@ -558,6 +558,7 @@ export default function Agenda() {
         preselectedCloserId={preselectedCloserId}
         preselectedDate={preselectedDate}
         ownerEmail={sdrOwnerEmail}
+        searchAllOwnersInBU={isR1SupportActive}
       />
 
       {/* Reschedule Modal */}
