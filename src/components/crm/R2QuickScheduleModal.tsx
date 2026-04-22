@@ -300,11 +300,10 @@ export function R2QuickScheduleModal({
                         searchResults.slice(0, 8).map((deal: any) => {
                           const leadState = deal.leadState as DealOption['leadState'];
                           const scheduledInfo = deal.scheduledInfo as DealOption['scheduledInfo'];
-                          const isBlocked =
-                            leadState && leadState !== 'open' && leadState !== 'no_show';
+                          const warningOnly = !!deal.warningOnly;
 
                           let stateBadge: { label: string; className: string } | null = null;
-                          if (leadState === 'scheduled_future' && scheduledInfo) {
+                          if (warningOnly && scheduledInfo) {
                             const dt = new Date(scheduledInfo.scheduledAt);
                             const dd = String(dt.getDate()).padStart(2, '0');
                             const mm = String(dt.getMonth() + 1).padStart(2, '0');
@@ -318,27 +317,13 @@ export function R2QuickScheduleModal({
                               className:
                                 'border-yellow-500/60 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
                             };
-                          } else if (leadState === 'contract_paid' || leadState === 'won') {
-                            stateBadge = {
-                              label: '💰 Contrato pago',
-                              className:
-                                'border-green-500/60 bg-green-500/10 text-green-700 dark:text-green-400',
-                            };
                           }
 
                           return (
                             <button
                               key={deal.id}
                               onClick={() => handleSelectDeal(deal)}
-                              className={cn(
-                                'w-full text-left px-3 py-2 border-b last:border-b-0',
-                                isBlocked
-                                  ? 'opacity-70 hover:bg-muted/30 border-l-[3px] ' +
-                                      (leadState === 'scheduled_future'
-                                        ? 'border-l-yellow-500'
-                                        : 'border-l-green-500')
-                                  : 'hover:bg-accent',
-                              )}
+                              className="w-full text-left px-3 py-2 border-b last:border-b-0 hover:bg-accent"
                             >
                               <div className="font-medium text-sm">
                                 {deal.contact?.name || deal.name}
