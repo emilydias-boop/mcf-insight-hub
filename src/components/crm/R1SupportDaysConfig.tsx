@@ -338,6 +338,21 @@ export function R1SupportDaysConfig({ closer, onNavigateAway }: R1SupportDaysCon
             </div>
           </ScrollArea>
         </div>
+
+        {/* Atalho: abrir Agenda R1 já com este closer pré-selecionado */}
+        {(rows?.length ?? 0) > 0 && (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              onNavigateAway?.();
+              navigate(`/crm/agenda?openSchedule=1&closerId=${closer.id}`);
+            }}
+          >
+            <CalendarPlus className="h-4 w-4 mr-2" />
+            Abrir Agenda R1 para agendar agora
+          </Button>
+        )}
       </div>
     </div>
   );
