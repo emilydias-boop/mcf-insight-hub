@@ -297,6 +297,30 @@ export default function ConfigurarClosers() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* R1 Support Days Dialog */}
+      <Dialog open={supportConfigOpen} onOpenChange={setSupportConfigOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LifeBuoy className="h-5 w-5" />
+              Apoio R1 — {supportCloser?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Libere os dias em que este closer R2 poderá atender e agendar reuniões R1.
+            </DialogDescription>
+          </DialogHeader>
+          {supportCloser && (
+            <R1SupportDaysConfig
+              closer={{
+                id: supportCloser.id,
+                name: supportCloser.name,
+                color: supportCloser.color,
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
