@@ -13,7 +13,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 
-import type { R2Closer } from '@/hooks/useR2Closers';
 import {
   useR1SupportDaysForCloser,
   useR1SupportDaysWithSlots,
@@ -24,7 +23,11 @@ import {
 import { cn } from '@/lib/utils';
 
 interface R1SupportDaysConfigProps {
-  closer: R2Closer;
+  closer: {
+    id: string;
+    name: string;
+    color?: string | null;
+  };
 }
 
 const TIME_MIN = '06:00';
