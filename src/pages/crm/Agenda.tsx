@@ -332,6 +332,47 @@ export default function Agenda() {
         </div>
       </div>
 
+      {/* Banner: Modo Apoio R1 ativo (closer R2 logado em dias liberados) */}
+      {isCloserOnly && isR1SupportActive && supportDays.length > 0 && (
+        <Alert className="border-primary/40 bg-primary/5">
+          <LifeBuoy className="h-4 w-4 text-primary" />
+          <AlertTitle className="text-primary">Modo Apoio R1 ativo</AlertTitle>
+          <AlertDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="text-xs sm:text-sm">
+                Você pode buscar leads e agendar reuniões R1 nos dias liberados.{' '}
+                <span className="text-muted-foreground">
+                  Próximas:{' '}
+                  {supportDays.slice(0, 3).map((d, i) => {
+                    const dateObj = new Date(d.support_date + 'T12:00:00');
+                    const label = format(dateObj, 'dd/MM', { locale: ptBR });
+                    const window =
+                      d.start_time && d.end_time
+                        ? ` (${d.start_time.slice(0, 5)}–${d.end_time.slice(0, 5)})`
+                        : ' (dia inteiro)';
+                    return (
+                      <span key={d.id}>
+                        {i > 0 ? ' · ' : ''}
+                        {label}
+                        {window}
+                      </span>
+                    );
+                  })}
+                </span>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setQuickScheduleOpen(true)}
+                className="shrink-0"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Buscar lead e agendar
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Navigation and Filters */}
       <div className="flex flex-col gap-3 pb-2">
         {/* View Mode and Date Navigation */}
