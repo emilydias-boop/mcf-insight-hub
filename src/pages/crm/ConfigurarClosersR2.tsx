@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, ArrowLeft, Settings, Users, Mail, Trash2, Edit, Check, X, Calendar } from 'lucide-react';
+import { Plus, ArrowLeft, Settings, Users, Mail, Trash2, Edit, Check, X, Calendar, LifeBuoy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useR2ClosersList, useCreateR2Closer, useUpdateR2Closer, useDeleteR2Closer, R2Closer, R2CloserFormData } from '@/hooks/useR2Closers';
 import { R2CloserAvailabilityConfig } from '@/components/crm/R2CloserAvailabilityConfig';
+import { R1SupportDaysConfig } from '@/components/crm/R1SupportDaysConfig';
 
 const COLORS = [
   '#8B5CF6', '#F97316', '#10B981', '#3B82F6', '#EC4899', 
@@ -26,6 +27,8 @@ export default function ConfigurarClosersR2() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [closerToDelete, setCloserToDelete] = useState<R2Closer | null>(null);
   const [availabilityConfigOpen, setAvailabilityConfigOpen] = useState(false);
+  const [supportConfigOpen, setSupportConfigOpen] = useState(false);
+  const [supportCloser, setSupportCloser] = useState<R2Closer | null>(null);
 
   const { data: closers, isLoading, error } = useR2ClosersList();
   const createMutation = useCreateR2Closer();
@@ -221,6 +224,19 @@ export default function ConfigurarClosersR2() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {closer.is_active && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setSupportCloser(closer);
+                              setSupportConfigOpen(true);
+                            }}
+                            title="Liberar Apoio R1"
+                          >
+                            <LifeBuoy className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(closer)}>
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -349,6 +365,28 @@ export default function ConfigurarClosersR2() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Apoio R1 Config Dialog */}
+      <Dialog
+        open={supportConfigOpen}
+        onOpenChange={(open) => {
+          setSupportConfigOpen(open);
+          if (!open) setSupportCloser(null);
+        }}
+      >
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>
+              Apoio R1 — {supportCloser?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Libere dias específicos em que este closer R2 poderá atender e agendar reuniões R1.
+              Use o calendário para escolher uma data e defina se o apoio é por dia inteiro ou em uma janela específica.
+            </DialogDescription>
+          </DialogHeader>
+          {supportCloser && <R1SupportDaysConfig closer={supportCloser} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
