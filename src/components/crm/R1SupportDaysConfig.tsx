@@ -94,7 +94,7 @@ export function R1SupportDaysConfig({ closer, onNavigateAway }: R1SupportDaysCon
       payloadEnd = `${endTime}:00`;
     }
 
-    await createMutation.mutateAsync({
+    const created = await createMutation.mutateAsync({
       closerId: closer.id,
       date: selectedDate,
       startTime: payloadStart,
@@ -104,6 +104,14 @@ export function R1SupportDaysConfig({ closer, onNavigateAway }: R1SupportDaysCon
 
     // Reset campos auxiliares (mantém data selecionada para feedback visual)
     setNotes('');
+
+    // Toast secundário explicando o efeito
+    if (created) {
+      const dateLabel = format(selectedDate, "dd/MM/yyyy", { locale: ptBR });
+      toast.message(`${closer.name} agora pode agendar R1 em ${dateLabel}`, {
+        description: 'Acesso à grade completa, busca de leads e agendamento liberados.',
+      });
+    }
   };
 
   const handleDelete = async (row: R1SupportDayRow) => {
