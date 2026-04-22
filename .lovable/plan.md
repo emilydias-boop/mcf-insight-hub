@@ -1,81 +1,84 @@
 
 
-## Tornar bloqueio de leads já agendados/concluídos mais explícito
+## Liberar fluxo R2 — manter trava só na R1
 
-### Problema atual
+### Decisão
 
-Hoje a sinalização de "lead já agendado / concluído / contrato pago" aparece como um **badge pequeno** dentro da linha do resultado da busca, que é cortado horizontalmente (na captura: "Já agendado p/ 22/04 16:00 c/" — closer truncado). Apesar do clique já estar bloqueado e o toast aparecer, visualmente passa despercebido — e o botão "Agendar Reunião" continua presente, dando impressão de que ainda dá pra burlar.
+A trava de bloqueio (card grande + botão "Fechar") foi pensada **para a R1**. Na R2 ela está atrapalhando casos legítimos:
 
-### Mudanças (R1 e R2)
+- Lead com **R1 realizada** quer marcar R2 → era o caso *normal* de R2, e está bloqueado.
+- Lead com **contrato pago** pode precisar de R2 (reunião de pós-venda / acompanhamento).
+- Lead com **R2 anterior no-show** precisa poder reagendar nova R2.
 
-**1. Card de aviso grande, no lugar do bloco "Notas"**
+### Comportamento corrigido por contexto
 
-Quando um lead bloqueado é selecionado/destacado na busca (ou quando o usuário insiste em clicá-lo), substituir o textarea de **Notas** por um **card de status destacado**, ocupando o mesmo espaço:
+**R1 (`QuickScheduleModal`)** → sem mudança. Mantém todo o bloqueio:
+- R1 futura agendada → bloqueia (card amarelo + "Fechar")
+- R1 já realizada → bloqueia
+- Contrato pago / won → bloqueia
 
-```text
-┌─────────────────────────────────────────────────┐
-│  📅  LEAD JÁ AGENDADO                           │
-│  ─────────────────────────────────────────────  │
-│  Cícero José Monteiro Carvalho                  │
-│  Reunião 01 (R1) marcada para                   │
-│  22/04/2026 às 16:00                            │
-│  Closer: Rafael Barros                          │
-│                                                 │
-│  Para mudar o horário, use a Agenda e           │
-│  reagende a reunião existente.                  │
-└─────────────────────────────────────────────────┘
+**R2 (`R2QuickScheduleModal`)** → liberar tudo, exceto aviso suave de duplicata:
+- R1 realizada / open / no-show → **fluxo normal**, sem badge, sem card
+- Contrato pago / won → **fluxo normal**, sem bloqueio (R2 pós-venda permitido)
+- R2 futura agendada → **continua selecionável**, mostra:
+  - Badge amarelo na busca: "📅 R2 já agendada p/ DD/MM HH:mm c/ Closer"
+  - **Banner informativo** acima do form (não substitui notas, não bloqueia botão): "Este lead já tem R2 agendada com X. Você pode criar outra R2 ou reagendar a existente pela Agenda."
+  - Botão continua "Agendar Reunião R2" (verde, ativo)
+- R2 anterior no-show / completed → fluxo normal
+
+### Implementação
+
+**1. `src/hooks/useAgendaData.ts` — `useSearchDealsForSchedule`**
+
+No bloco onde `meetingType === 'r2'`, simplificar drasticamente:
+- Remover bloqueio por `contract_paid` e `won` quando `meetingType === 'r2'`.
+- Manter detecção de **R2 futura ativa** apenas para mostrar **info na UI**, mas mudar o `leadState` retornado de `'scheduled_future'` para algo como `'r2_duplicate_warning'` (ou marcar `blockReason = null` e expor `warningMessage` separado).
+
+Mais limpo: introduzir um campo extra `warningOnly: boolean` ao lado de `leadState`. Quando `meetingType === 'r2'` e existe R2 futura, retorna:
+```ts
+{ leadState: 'open', warningOnly: true, scheduledInfo: {...}, warningMessage: '...' }
 ```
+Assim o R2 modal trata diferente de R1 sem precisar de novo enum.
 
-Variações por estado:
-- `scheduled_future` → fundo amarelo, ícone 📅, título "LEAD JÁ AGENDADO"
-- `completed` → fundo azul, ícone ✅, título "R1 JÁ REALIZADA" ("Para R2, use a Agenda R2")
-- `contract_paid` / `won` → fundo verde, ícone 💰, título "CONTRATO JÁ PAGO" ("Lead concluído")
+**2. `src/components/crm/R2QuickScheduleModal.tsx`**
 
-O bloco de Notas só aparece para leads em estado `open` ou `no_show` (fluxo normal).
+- Remover lógica de `isLeadBlocked` / `blockedLeadState` / `BlockedLeadCard` — não mostrar mais o card grande nem trocar botão para "Fechar".
+- Substituir por um **alert banner amarelo compacto** (ex: usando `Alert` de `@/components/ui/alert`) renderizado acima dos campos do form, condicional a `selectedDeal?.warningOnly`:
+  ```
+  ⚠️ Este lead já tem R2 agendada para 22/04 às 16:00 com Rafael.
+     Você pode criar outra R2 ou reagendar a existente pela Agenda.
+  ```
+- Form completo e botão "Agendar Reunião R2" continuam ativos.
+- Badge na lista de resultados continua aparecendo (mesma cor amarela, texto "R2 já agendada"), mas item **não fica `opacity-70`** e não tem borda lateral grossa — apenas badge informativo.
 
-**2. Botão de submit vira "Fechar"**
+**3. `src/hooks/useR2AgendaData.ts` — `useCreateR2Meeting`**
 
-Quando o estado do lead é bloqueado, o botão fixo no rodapé:
-- **Texto**: "Fechar" (em vez de "Agendar Reunião")
-- **Variante**: `secondary` (cinza, não verde)
-- **Ação**: fechar o modal (`onOpenChange(false)`)
-- **Disabled**: `false` (sempre clicável)
+Remover ambos os guards (`paid` e `activeFuture`). R2 não bloqueia no client-side. Usuário fica responsável pelo aviso visual.
 
-Assim não há nem caminho visual nem caminho técnico para enviar o agendamento.
+**4. `supabase/functions/calendly-create-event/index.ts`**
 
-**3. Badge na lista de resultados continua, mas mais visível**
+Aplicar guards (deal_already_won / paid / duplicate / r1_completed) **somente quando `body.meetingType !== 'r2'`** (i.e., R1). Hoje os guards 1, 2 e 3 rodam para qualquer `meetingType`. Solução: envolver os guards 1, 2, 3 dentro de `if (guardMeetingType === 'r1') { ... }`. O guard 4 (R1 completed) já está restrito a R1.
 
-- Badge ocupa **linha inteira abaixo** do nome (em vez de inline cortado)
-- Texto completo sempre visível (sem `truncate`)
-- Linha bloqueada com `opacity-70` e borda colorida lateral (3px) na cor do estado
-- Tooltip extra desnecessário — informação já está expandida abaixo
+> Observação: a R2 do projeto não passa pela edge `calendly-create-event` (usa `useCreateR2Meeting` diretamente no Supabase). Mesmo assim ajusto a edge function por segurança/consistência caso algum dia o R2 seja roteado por ela.
 
-### Estado / fluxo de seleção
+**5. `src/components/crm/QuickScheduleModal.tsx` (R1)**
 
-Hoje, em `handleSelectDeal`, leads bloqueados disparam `toast.error` e **não são selecionados** (aborta). Vou mudar para:
-
-- **Selecionar mesmo assim** o lead (visualmente, como "card bloqueado" no lugar do form)
-- Form de agendamento (closer, data, hora, notas, etc.) **fica oculto**
-- Renderiza o **card de aviso grande** + botão "Fechar"
-- `handleSubmit` recebe guard extra: se `selectedDeal.leadState` é bloqueado → retorna sem fazer nada (defesa adicional)
-
-Isso dá feedback claro do que aconteceu sem o usuário se perder ("cliquei e não aconteceu nada").
+Sem mudança. O comportamento atual de R1 (card grande "LEAD JÁ AGENDADO" + botão "Fechar") permanece igual — é o que o usuário quer.
 
 ### Arquivos afetados
 
-- `src/components/crm/QuickScheduleModal.tsx`
-  - `handleSelectDeal`: remover early-return; setar `selectedDeal` mesmo se bloqueado
-  - Renderizar `<BlockedLeadCard />` no lugar do bloco Notas + ocultar campos de form (closer, data, hora, já constrói, etc.) quando `selectedDeal.leadState` é bloqueado
-  - Botão de rodapé: trocar texto/variant/onClick conforme estado
-- `src/components/crm/R2QuickScheduleModal.tsx`
-  - Mesmas mudanças adaptadas ao R2 (textos: "R2 JÁ AGENDADA", "Para mudar horário, use a Agenda R2")
-- Sem mudança em hooks, edge function ou banco — toda a informação (`leadState`, `scheduledInfo`, `blockReason`) já está disponível.
+- `src/hooks/useAgendaData.ts` — adicionar `warningOnly` + simplificar lógica para R2.
+- `src/components/crm/R2QuickScheduleModal.tsx` — remover BlockedLeadCard/Fechar, adicionar Alert banner suave.
+- `src/hooks/useR2AgendaData.ts` — remover guards de `useCreateR2Meeting`.
+- `supabase/functions/calendly-create-event/index.ts` — guards 1, 2, 3 só para R1.
 
 ### Validação pós-fix
 
-1. Buscar **Cícero José Monteiro Carvalho** (já agendado p/ 22/04 16:00) → clicar → form some, card amarelo grande aparece com data/horário/closer completos, botão rodapé vira "Fechar".
-2. Buscar lead com R1 realizada → card azul "R1 JÁ REALIZADA".
-3. Buscar lead com contrato pago → card verde "CONTRATO JÁ PAGO".
-4. Buscar lead novo → fluxo normal mantido (form completo, botão "Agendar Reunião").
-5. Testar mesmo comportamento no R2QuickScheduleModal.
+1. R2: buscar lead com **R1 realizada** → fluxo normal, sem badge, sem aviso, agenda direto. ✅
+2. R2: buscar lead com **contrato pago** → fluxo normal, agenda R2 (pós-venda). ✅
+3. R2: buscar lead com **R2 já agendada futura** → badge amarelo na lista, ao selecionar mostra banner amarelo de aviso, mas form completo + botão "Agendar Reunião R2" funcionam. ✅
+4. R2: buscar lead com **R2 anterior no-show** → fluxo normal. ✅
+5. R1: buscar lead **já agendado** → continua mostrando card grande "LEAD JÁ AGENDADO" + botão "Fechar". ✅ (sem regressão)
+6. R1: buscar lead com **R1 realizada** → continua bloqueado com card azul. ✅
+7. R1: buscar lead com **contrato pago** → continua bloqueado com card verde. ✅
 
