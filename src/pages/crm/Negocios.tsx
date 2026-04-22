@@ -42,6 +42,7 @@ import { useDealOwnerOptions } from '@/hooks/useDealOwnerOptions';
 import { useUniqueDealTags } from '@/hooks/useUniqueDealTags';
 import { useOutsideDetectionForDeals } from '@/hooks/useOutsideDetectionForDeals';
 import { useProductFilterData } from '@/hooks/useProductFilterData';
+import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 import { OutsideDistributionButton } from '@/components/crm/OutsideDistributionButton';
 import { MovePartnersButton } from '@/components/crm/MovePartnersButton';
 import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDialog';
@@ -106,7 +107,10 @@ const Negocios = () => {
   
   // Verificar se é SDR ou Closer (veem apenas próprios deals)
   // Movido para cima para usar no hook useCRMDeals
-  const isRestrictedRole = role === 'sdr' || role === 'closer';
+  // Closer R2 em modo "Apoio R1" passa a enxergar pipeline da BU como SDR
+  // enquanto tiver pelo menos 1 dia de apoio liberado (data >= hoje).
+  const { isActive: isR1SupportActive } = useIsR1SupportActive();
+  const isRestrictedRole = (role === 'sdr' || role === 'closer') && !isR1SupportActive;
   
   // Buscar mapeamento dinâmico da BU do banco de dados
   const { data: buMapping, isLoading: isBuMappingLoading } = useBUPipelineMap(activeBU);
