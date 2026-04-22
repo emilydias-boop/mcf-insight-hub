@@ -1,74 +1,108 @@
 
 
-## Permitir SDR ver múltiplas pipelines (caso Antony Elias)
+## Closer R2 em apoio agendando R1 como SDR
 
-### Diagnóstico
+### Refinamento sobre o plano anterior
 
-O Antony Elias está cadastrado com `allowed_origin_ids = ['7431cf4a... PILOTO ANAMNESE']` na tabela `sdr`. Como o array só tem **uma** origem, a regra de UI em `Negocios.tsx` (`sdrOverrideSingle = true`) esconde a sidebar de pipelines e trava o `effectiveOriginId` no único item do override — mesmo ele tendo **890 deals** legítimos em `PIPELINE INSIDE SALES` (`e3c04f21...`), que ficam invisíveis.
+O plano anterior cobre **liberação de horários** (criar slots para R1) e badge "Apoio R2" na visão da agenda. Falta o segundo lado: **permitir que esse closer R2, no dia liberado, também opere o fluxo de SDR** — buscar lead, abrir `QuickScheduleModal`, agendar para si mesmo (ou para outro closer disponível). Hoje o code path bloqueia isso porque:
 
-A lógica atual do código já está **correta** para o caso multi-pipeline: se `allowed_origin_ids` tiver 2+ entradas, a sidebar aparece, o usuário escolhe a pipeline, e `effectiveOriginId` respeita a seleção (linhas 141-148 e 679-685 de `src/pages/crm/Negocios.tsx`). Não precisa mexer em código, só nos dados do SDR.
-
-Levantamento mostrou que **só o Antony Elias** está nessa situação hoje (SDR ativo com 1 origem no override mas leads em 2+ origens reais). Os outros SDRs ou não têm override (veem o padrão da BU) ou já têm múltiplas origens listadas.
+- Em `Agenda.tsx` (linha 40): `isCloser = role === 'closer' && !allRoles.includes('sdr')` → closer puro vê só "Minha Agenda" e não tem busca de lead para agendar; só vê reuniões já marcadas.
+- Em `Negocios.tsx` (linha 109): `isRestrictedRole = role === 'sdr' || role === 'closer'` → closer puro vê só os deals próprios, não pode acessar o pipeline para agendar leads novos.
+- O botão "Agendar" no header (linha 306) já existe para todos, mas o `QuickScheduleModal` filtra leads pelo `ownerEmail` quando role = sdr; para closer puro hoje ele não consegue acessar leads de SDR.
 
 ### Decisão
 
-**Atualizar somente o registro do Antony Elias** para incluir as duas pipelines onde ele tem volume operacional real:
+**Closer R2 com pelo menos 1 entrada ativa em `closer_r1_support_days` válida (data >= hoje) é tratado como SDR temporário no contexto da Agenda R1**, ganhando:
 
-- `7431cf4a-dc29-4208-95a6-28a499a06dac` — PILOTO ANAMNESE / INDICAÇÃO (1545 deals)
-- `e3c04f21-ba2c-4c66-84f8-b4341c826b1c` — PIPELINE INSIDE SALES (890 deals)
+- Botão "Agendar" funcional no `QuickScheduleModal R1` com busca de qualquer lead da BU dele.
+- Capacidade de selecionar **qualquer closer R1 disponível** (incluindo ele mesmo nos dias de apoio) para o agendamento.
+- Painel "Buscar lead" na própria agenda (igual SDR) — não fica só com a visão "Minha Agenda".
+- Acesso de leitura ao pipeline de Negócios da BU (igual SDR) **somente enquanto tiver apoio futuro ativo** — para conseguir abrir um deal e marcar reunião pelo fluxo padrão (`SdrScheduleDialog`).
 
-As outras 2 origens onde aparecem deals esparsos (1 e 2 leads — `00 - GERENTES DE RELACIONAMENTO` e `VIVER DE ALUGUEL`) ficam de fora propositalmente: são resíduos de atribuição antiga, não fluxo de trabalho dele.
+### Implementação (em cima do plano anterior)
 
-### Implementação
+**1. Hook novo `useIsR1SupportActive`**
 
-**Migration única** atualizando `allowed_origin_ids`:
-
-```sql
-UPDATE public.sdr
-SET allowed_origin_ids = ARRAY[
-  '7431cf4a-dc29-4208-95a6-28a499a06dac'::uuid,
-  'e3c04f21-ba2c-4c66-84f8-b4341c826b1c'::uuid
-],
-updated_at = now()
-WHERE id = '11111111-0001-0001-0001-000000000005'
-  AND email = 'antony.elias@minhacasafinanciada.com';
+```ts
+// src/hooks/useIsR1SupportActive.ts
+// Retorna { isActive: boolean, supportDates: Date[] } para o closer logado.
+// isActive = true quando o usuário é closer R2 e existe ao menos 1 entrada
+// em closer_r1_support_days com support_date >= hoje vinculada ao employee_id dele.
 ```
 
-Sem mudança em código. A lógica de `Negocios.tsx` / `OriginsSidebar` já trata múltiplos overrides corretamente.
+Usa `useMyCloser()` + query em `closer_r1_support_days` filtrando por `closer_id` e `support_date >= today`.
 
-### Comportamento esperado pós-fix
+**2. `Agenda.tsx`**
 
-Para o Antony, ao abrir `/crm/negocios`:
+Substituir o cálculo de `isCloser`:
 
-- **Sidebar de Origens reaparece** (porque `sdrOverrideSingle = false` agora).
-- Mostra os dois itens dentro do grupo "Perpétuo - X1": **PILOTO ANAMNESE / INDICAÇÃO** e **PIPELINE INSIDE SALES**.
-- Pipeline default abre em **PILOTO ANAMNESE** (primeiro item do array — comportamento atual).
-- Clicar em **PIPELINE INSIDE SALES** carrega os 890 deals daquela origem normalmente.
-- Filtros, busca e kanban funcionam em ambas.
-- Demais SDRs continuam exatamente como estão hoje (sem regressão — a migration só altera o registro do Antony).
+```ts
+const { isActive: isR1SupportActive } = useIsR1SupportActive();
+const isCloserOnly = role === 'closer' && !allRoles.includes('sdr');
+// No modo apoio, comporta como SDR no fluxo de agendamento
+const isCloser = isCloserOnly && !isR1SupportActive;
+```
+
+Resultado: nos dias com apoio, o closer R2 deixa de cair no branch "Minha Agenda" restrita e passa a ver toda a grade, busca, filtros, e o botão Agendar abre o `QuickScheduleModal` em modo SDR (com `ownerEmail = user.email`).
+
+**3. `QuickScheduleModal.tsx` — busca de leads**
+
+A busca usa `useSearchDealsForSchedule` filtrando por `ownerEmail` quando informado. Para o closer em apoio, passar `ownerEmail = user.email` faz com que ele só veja deals atribuídos a ele — o que é o caso real: SDRs entregam leads a esse closer-em-apoio normalmente, ele só agenda com base nos próprios. Sem mudanças extras.
+
+Caso queiramos permitir **agendar lead de qualquer SDR** durante o dia de apoio (ex.: SDR foi embora no meio do dia), adicionar prop opcional `searchAllOwnersInBU?: boolean`. Quando `true`, o hook ignora `ownerEmail` e busca por toda a BU. Habilitar quando `isR1SupportActive`.
+
+**4. `Negocios.tsx`**
+
+Mesmo princípio: durante apoio ativo, tratar closer como SDR para visibilidade de pipeline da BU dele:
+
+```ts
+const { isActive: isR1SupportActive } = useIsR1SupportActive();
+const isRestrictedRole = (role === 'sdr' || role === 'closer') && !isR1SupportActive;
+```
+
+Com isso, dentro do dia de apoio o closer R2 enxerga o kanban completo, abre o card do lead, clica "Agendar Reunião" → `SdrScheduleDialog` → `QuickScheduleModal` (já existente). Fluxo idêntico ao do SDR, sem código novo.
+
+**5. `CRM.tsx` / `BUCRMLayout.tsx` — navegação**
+
+Mesmo ajuste: `isAgendaOnly` passa a ignorar o closer em modo apoio para que ele consiga clicar nas abas "Negócios" e "Contatos" durante o dia liberado:
+
+```ts
+const { isActive: isR1SupportActive } = useIsR1SupportActive();
+const isAgendaOnly = role && agendaOnlyRoles.includes(role) && !isR1SupportActive;
+```
+
+**6. Reuniões criadas pelo closer-em-apoio**
+
+Quando o closer R2 (em apoio) **agenda** uma R1, o booking grava:
+- `booked_by = user.id` do closer R2 (ele é o SDR daquela reunião).
+- `closer_id` = quem ele escolheu (geralmente ele mesmo, mas pode ser outro R1 disponível).
+- `is_support_booking = true` quando `closer_id === user.closer.id` E o closer escolhido é R2 nativo (igual ao plano anterior).
+
+A trilha em `deal_activities` registra `meeting_scheduled` com metadata `{ booked_by_role: 'closer_apoio', booked_by_closer_id }` — útil para dashboards e auditoria.
+
+**7. Atribuição de SDR nas métricas**
+
+A regra atual (`mem://business-logic/sdr-attribution-hierarchy-v4`) prioriza `booked_by`. Quando `booked_by` é um closer R2 em apoio, ele aparece como "SDR" daquela reunião. Para não distorcer o ranking de SDRs:
+- Em `useSdrPerformance` / `TeamGoalsPanel`, ao montar a lista, identificar `booked_by` que pertence a um closer (cruzar com `profiles`/`closers.employee_id`) e renderizar com badge **"Apoio"** ao lado, sem somar na meta de SDR e sem entrar na tabela "SDRs". Aparece numa linha separada **"Apoio comercial"** no painel da BU.
+
+### Arquivos afetados (incremento ao plano anterior)
+
+- **Novo**: `src/hooks/useIsR1SupportActive.ts`
+- **Editados**:
+  - `src/pages/crm/Agenda.tsx` (cálculo `isCloser` considerando apoio)
+  - `src/pages/crm/Negocios.tsx` (cálculo `isRestrictedRole` considerando apoio)
+  - `src/pages/CRM.tsx` + `src/pages/crm/BUCRMLayout.tsx` (`isAgendaOnly` considerando apoio)
+  - `src/components/crm/QuickScheduleModal.tsx` (prop opcional `searchAllOwnersInBU`, default `false`)
+  - `src/hooks/useAgendaData.ts` → `useSearchDealsForSchedule` aceita `ownerEmail = null` para busca BU-wide
+  - `src/hooks/useCloserScheduling.ts` (gravar `is_support_booking` + metadata `booked_by_role: 'closer_apoio'`)
+  - Hooks de métricas SDR (`useSdrPerformance`, `TeamGoalsPanel`) — separar bookings de apoio em linha própria
 
 ### Validação pós-fix
 
-1. Login com `antony.elias@minhacasafinanciada.com` → `/crm/negocios` → sidebar visível.
-2. Default selecionado: PILOTO ANAMNESE → 1545 leads no kanban.
-3. Clicar em PIPELINE INSIDE SALES → 890 leads carregam.
-4. Conferir que ele **não** vê outras pipelines não autorizadas (Crédito, Consórcio, etc.).
-5. Login com outro SDR (ex: Antony Nicolas, sem override) → continua com fluxo padrão da BU dele (Consórcio).
-
-### Arquivos afetados
-
-- Migration nova em `supabase/migrations/` — UPDATE no registro do Antony Elias.
-- Nenhum arquivo `.ts/.tsx` modificado.
-
-### Como expandir no futuro (sem novo deploy)
-
-Se outro SDR aparecer no mesmo cenário (leads em N pipelines mas travado em 1), basta rodar:
-
-```sql
-UPDATE public.sdr 
-SET allowed_origin_ids = ARRAY[<uuid1>, <uuid2>, ...]::uuid[]
-WHERE email = '<sdr_email>';
-```
-
-Tudo o resto (sidebar, navegação, filtros) já funciona automaticamente.
+1. Admin libera Rafael (R2) para apoio dia 25/04 → no dia 25/04 Rafael abre `/crm/agenda` e vê grade completa + botão "Agendar" funcional.
+2. Rafael clica "Agendar" → `QuickScheduleModal` abre, busca por nome encontra leads dele → seleciona slot → reunião criada com `booked_by = Rafael`, `closer_id = Rafael`, `is_support_booking = true`.
+3. Rafael tenta no dia 26/04 (sem apoio) → volta para visão "Minha Agenda" restrita, sem busca de lead, sem botão de agendar.
+4. Rafael acessa `/crm/negocios` no dia 25/04 → vê pipeline da BU dele e consegue marcar reunião pelo card; no dia 26 cai no view restrito de closer.
+5. Painel comercial → SDRs reais mantêm contagem inalterada; aparece linha "Apoio comercial: Rafael — 3 R1 marcadas" separada.
+6. Coordenador libera apoio para closer fora do squad → bloqueado por RLS (mesma regra do plano anterior).
 
