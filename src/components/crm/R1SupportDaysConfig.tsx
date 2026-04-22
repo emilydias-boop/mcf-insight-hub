@@ -160,6 +160,21 @@ export function R1SupportDaysConfig({ closer, onNavigateAway }: R1SupportDaysCon
 
       {/* Coluna direita: Detalhes do dia + lista */}
       <div className="space-y-4">
+        {/* Alert explicativo: o que o apoio R1 destrava */}
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>O que o apoio R1 habilita?</AlertTitle>
+          <AlertDescription>
+            Nos dias liberados, <strong>{closer.name}</strong> poderá:
+            <ul className="list-disc pl-5 mt-1 space-y-0.5 text-xs">
+              <li>Acessar a Agenda R1 com grade completa</li>
+              <li>Buscar leads de qualquer SDR da BU</li>
+              <li>Agendar reuniões R1 (para si ou para outros closers R1)</li>
+              <li>Acessar pipeline de Negócios da BU</li>
+            </ul>
+          </AlertDescription>
+        </Alert>
+
         {selectedDate ? (
           <div className="rounded-md border p-4 space-y-4 bg-card">
             <div className="flex items-center justify-between flex-wrap gap-2">
