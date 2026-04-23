@@ -406,11 +406,11 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     return { rows: finalRows, totals: tot };
-  }, [deals, dealChannelMap, attendees, carrinhoRows, acq.classified]);
+  }, [deals, fullDealChannelMap, attendees, carrinhoRows, acq.classified]);
 
   return {
     rows,
     totals,
-    isLoading: loadingDeals || loadingAtt || loadingCarrinho || acq.isLoading,
+    isLoading: loadingDeals || loadingAtt || loadingExtra || loadingCarrinho || acq.isLoading,
   };
 }
