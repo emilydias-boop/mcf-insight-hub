@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils';
 
 export type BlockedLeadState =
   | 'scheduled_future'
-  | 'completed'
   | 'contract_paid'
   | 'won';
 

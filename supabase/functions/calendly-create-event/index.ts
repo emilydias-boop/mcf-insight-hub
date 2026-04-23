@@ -504,48 +504,10 @@ serve(async (req) => {
     }
     } // end if (guardMeetingType === 'r1') — fim dos guards 1, 2, 3
 
-    // 4) R1 já realizada bloqueia novo R1 (R2 não bloqueia)
-    if (guardMeetingType === "r1") {
-      const { data: completedR1 } = await supabase
-        .from("meeting_slot_attendees")
-        .select(
-          `id, meeting_slot:meeting_slots!inner(meeting_type, scheduled_at)`
-        )
-        .eq("deal_id", dealId)
-        .eq("status", "completed")
-        .eq("meeting_slot.meeting_type", "r1")
-        .order("meeting_slot(scheduled_at)", { ascending: false })
-        .limit(1);
-
-      if (completedR1 && completedR1.length > 0) {
-        const slotInfo: any = (completedR1[0] as any).meeting_slot;
-        const completedAtIso: string | undefined = slotInfo?.scheduled_at;
-        if (completedAtIso) {
-          // Compara mês/ano em America/Sao_Paulo para evitar shifts de timezone
-          const fmt = new Intl.DateTimeFormat("pt-BR", {
-            timeZone: "America/Sao_Paulo",
-            year: "numeric",
-            month: "numeric",
-          });
-          const completedKey = fmt.format(new Date(completedAtIso));
-          const todayKey = fmt.format(new Date());
-          if (completedKey === todayKey) {
-            console.warn(`🚫 R1 already completed this month for deal ${dealId}`);
-            return new Response(
-              JSON.stringify({
-                success: false,
-                error: "r1_already_completed_this_month",
-                message: "Lead já realizou R1 neste mês. Para R2, use a Agenda R2.",
-              }),
-              { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-          console.log(
-            `✅ R1 completed in previous month (${completedKey}) — allowing new R1 for deal ${dealId}`
-          );
-        }
-      }
-    }
+    // 4) R1 já realizada NÃO bloqueia mais o reagendamento.
+    // A classificação "conta para SDR" vs "não conta" é feita pelo RPC de
+    // métricas (regra ordinal: ordem 1 e 2 contam; 3+ não conta), permitindo
+    // que o operacional resolva casos legítimos sem inflar métricas.
     // ============= END GUARD =============
 
     let meetingLink = "";
