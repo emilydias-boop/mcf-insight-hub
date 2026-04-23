@@ -32,6 +32,7 @@ export interface ChannelFunnelRow {
   entradas: number;
   r1Agendada: number;
   r1Realizada: number;
+  noShow: number;
   contratoPago: number;
   r2Agendada: number;
   r2Realizada: number;
@@ -46,6 +47,7 @@ export interface ChannelFunnelRow {
   r1RealToContrato: number; // contrato / R1 real
   aprovadoToVenda: number; // venda final / aprovados
   entradaToVenda: number; // venda final / entradas
+  taxaNoShow: number; // noShow / r1Agendada
 }
 
 interface DealRow {
@@ -224,8 +226,8 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   // 4. Agregação por canal
   const { rows, totals } = useMemo(() => {
     const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'ANAMNESE-INSTA', 'LIVE', 'OUTROS', 'OUTSIDE', 'LANÇAMENTO'];
-    const blank = (): Omit<ChannelFunnelRow, 'channel' | 'channelLabel' | 'r1AgToReal' | 'r1RealToContrato' | 'aprovadoToVenda' | 'entradaToVenda'> => ({
-      entradas: 0, r1Agendada: 0, r1Realizada: 0, contratoPago: 0,
+    const blank = (): Omit<ChannelFunnelRow, 'channel' | 'channelLabel' | 'r1AgToReal' | 'r1RealToContrato' | 'aprovadoToVenda' | 'entradaToVenda' | 'taxaNoShow'> => ({
+      entradas: 0, r1Agendada: 0, r1Realizada: 0, noShow: 0, contratoPago: 0,
       r2Agendada: 0, r2Realizada: 0, aprovados: 0, reprovados: 0,
       proximaSemana: 0, vendaFinal: 0, faturamentoBruto: 0, faturamentoLiquido: 0,
     });
