@@ -11237,6 +11237,10 @@ export type Database = {
           scheduled_at: string
         }[]
       }
+      get_channel_funnel_metrics: {
+        Args: { bu_filter?: string; end_date: string; start_date: string }
+        Returns: Json
+      }
       get_contact_with_meetings: {
         Args: { p_email?: string; p_phone_suffix?: string }
         Returns: {
