@@ -9482,6 +9482,41 @@ export type Database = {
         }
         Relationships: []
       }
+      sdr_squad_history: {
+        Row: {
+          created_at: string
+          id: string
+          sdr_id: string
+          squad: string
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          sdr_id: string
+          squad: string
+          valid_from: string
+          valid_to?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          sdr_id?: string
+          squad?: string
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_squad_history_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdr"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settings: {
         Row: {
           id: string
@@ -11524,6 +11559,17 @@ export type Database = {
           r1_realizada: number
           sdr_email: string
           total_agendamentos: number
+        }[]
+      }
+      get_sdrs_for_squad_in_period: {
+        Args: { p_end: string; p_squad: string; p_start: string }
+        Returns: {
+          current_squad: string
+          email: string
+          is_currently_in_squad: boolean
+          name: string
+          sdr_id: string
+          was_in_squad_during_period: boolean
         }[]
       }
       get_tv_funnel_metrics: { Args: { target_date: string }; Returns: Json }
