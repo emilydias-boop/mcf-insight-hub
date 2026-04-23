@@ -415,6 +415,15 @@ export function QuickScheduleModal({
         if (autoSendWhatsApp && data?.id) {
           sendNotification.mutate({ meetingSlotId: data.id });
         }
+        // Feedback contextual sobre contagem na meta para reagendamentos
+        // após R1 já realizada
+        if (selectedDeal?.leadState === 'completed' && selectedDeal?.warningMessage) {
+          if (selectedDeal.warningMessage.includes('NÃO contará')) {
+            toast.info('Reagendamento criado. Não conta na sua meta (já há 1 agendamento + 1 reagendamento válido neste lead).');
+          } else {
+            toast.success('Reagendamento criado. Conta como 1º Reagendamento na sua meta.');
+          }
+        }
         onOpenChange(false);
         resetForm();
       },
