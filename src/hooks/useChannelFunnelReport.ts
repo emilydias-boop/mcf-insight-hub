@@ -247,8 +247,8 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     // R1/R2 — deduplicação por deal (Realizada vence No-show; até 2 dias contam para agendada)
     const REALIZED = new Set(['completed', 'contract_paid', 'refunded']);
     const dedup = (type: 'r1' | 'r2') => {
-      const dealMap = new Map<string, { days: Set<string>; realized: boolean; contractPaid: boolean }>();
-      const noDealCount = { agendada: 0, realizada: 0, contractPaid: 0 };
+      const dealMap = new Map<string, { days: Set<string>; realized: boolean; contractPaid: boolean; noShow: boolean }>();
+      const noDealCount = { agendada: 0, realizada: 0, contractPaid: 0, noShow: 0 };
       attendees.forEach(a => {
         if (a.meeting_slots?.meeting_type !== type) return;
         const status = (a.status || a.meeting_slots?.status || '').toLowerCase();
@@ -261,12 +261,14 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
           noDealCount.agendada++;
           if (REALIZED.has(status)) noDealCount.realizada++;
           if (status === 'contract_paid') noDealCount.contractPaid++;
+          if (status === 'no_show') noDealCount.noShow++;
           return;
         }
-        const cur = dealMap.get(a.deal_id) || { days: new Set<string>(), realized: false, contractPaid: false };
+        const cur = dealMap.get(a.deal_id) || { days: new Set<string>(), realized: false, contractPaid: false, noShow: false };
         cur.days.add(day);
         if (REALIZED.has(status)) cur.realized = true;
         if (status === 'contract_paid') cur.contractPaid = true;
+        if (status === 'no_show') cur.noShow = true;
         dealMap.set(a.deal_id, cur);
       });
       return { dealMap, noDealCount };
@@ -281,6 +283,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       // Conta deals únicos — reagendamentos não inflam o denominador
       slot.r1Agendada += 1;
       if (v.realized) slot.r1Realizada++;
+      if (v.noShow) slot.noShow++;
       if (v.contractPaid) slot.contratoPago++;
     });
     r2.dealMap.forEach((v, dealId) => {
@@ -294,6 +297,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       const slot = get('OUTROS');
       slot.r1Agendada += r1.noDealCount.agendada;
       slot.r1Realizada += r1.noDealCount.realizada;
+      slot.noShow += r1.noDealCount.noShow;
       slot.contratoPago += r1.noDealCount.contractPaid;
     }
     if (r2.noDealCount.agendada > 0) {
