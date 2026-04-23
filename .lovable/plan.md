@@ -1,70 +1,82 @@
 
 
-## Liberar reagendamento de R1 quando a anterior foi realizada em mês diferente
+## Ajuste: Leticia trocou de squad — atribuir contrato ao squad ativo na data do agendamento
 
-### Regra atual
+### Contexto
 
-Hoje, qualquer R1 com `status = 'completed'` no histórico do lead bloqueia novo agendamento de R1, em dois pontos:
+Leticia Nunes está hoje no squad **crédito**, mas quando agendou a reunião do Natanael (que virou contrato Incorporador em 22/04) ela estava no squad **incorporador**. Por isso o contrato dela deve aparecer normalmente na aba SDRs do Incorporador para o período de 22/04, e só sair quando consultarmos períodos posteriores à troca de squad.
 
-1. **Backend** (`supabase/functions/calendly-create-event/index.ts`, linhas 507–530) — guard #4 retorna `409 r1_already_completed`.
-2. **Frontend** (`src/hooks/useAgendaData.ts`, linhas 1046–1056) — busca por R1 realizada e marca `leadState = 'completed'`, exibindo o card "R1 JÁ REALIZADA" (`BlockedLeadCard.tsx`).
+### Regra correta
 
-### Nova regra
+Atribuir o agendamento/contrato ao SDR considerando o **squad que ele tinha na data em que agendou** (`meeting_slot_attendees.created_at`), não o squad atual.
 
-> R1 realizada **no mês corrente** continua bloqueando novo R1.
-> R1 realizada em **mês anterior** (lead voltando depois) **libera** novo agendamento de R1.
-
-Comparação por **mês + ano** do `meeting_slots.scheduled_at` da R1 realizada versus o mês/ano de **hoje** (timezone São Paulo, alinhado ao resto do sistema).
-
-Casos:
-
-| R1 realizada em | Hoje | Pode reagendar R1? |
-|---|---|---|
-| Janeiro/2026 | Abril/2026 | ✅ Sim (mês diferente) |
-| 02/Abril/2026 | 22/Abril/2026 | ❌ Não (mesmo mês) |
-| 30/Março/2026 | 02/Abril/2026 | ✅ Sim (mês diferente) |
-
-Os outros guards permanecem inalterados:
-- Contrato pago → continua bloqueando sempre.
-- Deal em estágio "won" → continua bloqueando sempre.
-- R1 futura ativa (já agendada e não realizada) → continua bloqueando sempre.
+| Cenário | Squad em 22/04 | Squad hoje | Aparece em SDRs Incorporador (período 22/04)? |
+|---|---|---|---|
+| Leticia agendou Natanael em 22/04 | incorporador | crédito | ✅ Sim |
+| Leticia agenda novo lead hoje | crédito | crédito | ❌ Não (vai para aba Crédito) |
 
 ### Mudanças
 
-**1. Backend — `supabase/functions/calendly-create-event/index.ts`**
+**1. Histórico de squad por SDR**
 
-Alterar o guard #4 (linhas 507–530):
-- Buscar a R1 completed mais recente do deal trazendo também `meeting_slot.scheduled_at`.
-- Se existir e `scheduled_at` estiver no **mesmo mês/ano** que `now()` (em `America/Sao_Paulo`), bloquear com a mensagem atual atualizada: `"Lead já realizou R1 neste mês. Para R2, use a Agenda R2."`.
-- Se for de mês anterior, **permitir** o agendamento (não retorna 409).
+Verificar se já existe tabela de histórico (`sdr_squad_history` / `employees_history` / coluna `squad_changed_at`). Se não existir, criar:
 
-**2. Frontend — `src/hooks/useAgendaData.ts`**
+```sql
+create table public.sdr_squad_history (
+  id uuid primary key default gen_random_uuid(),
+  sdr_id uuid references public.sdr(id) on delete cascade,
+  squad text not null,
+  valid_from timestamptz not null,
+  valid_to timestamptz,
+  created_at timestamptz default now()
+);
+```
 
-No bloco que classifica `leadState = 'completed'` (linhas 1046–1056):
-- Substituir o `find` simples pela busca da R1 completed **mais recente**, comparando ano+mês com a data atual.
-- Se mês/ano = atual → mantém `leadState = 'completed'` e bloqueia (mesma mensagem da regra nova).
-- Se mês/ano anterior → `leadState = 'open'` (libera) e expõe um `warningOnly = true` com mensagem informativa: `"Este lead já fez R1 em {mês/ano}. Reagendamento permitido."` para o usuário ter visibilidade.
+Backfill: para cada SDR, criar uma linha com `valid_from = sdr.created_at` e `squad = sdr.squad` atual. Trigger no `UPDATE` da `public.sdr` quando `squad` muda: fechar a linha aberta (`valid_to = now()`) e inserir nova linha.
 
-**3. UI — `src/components/crm/BlockedLeadCard.tsx`**
+**2. RPC `get_sdr_metrics_from_agenda`**
 
-Atualizar o texto do estado `completed` para refletir a regra: `"R1 já realizada neste mês"` em vez de só `"R1 JÁ REALIZADA"`, e descrição `"Este lead já passou pela Reunião 01 dentro do mês corrente."`.
+Trocar o filtro `WHERE sdr.squad = bu_filter` por:
+```sql
+join sdr_squad_history h
+  on h.sdr_id = sdr.id
+ and h.squad = bu_filter
+ and msa.created_at >= h.valid_from
+ and msa.created_at <  coalesce(h.valid_to, 'infinity')
+```
+Assim o SDR é incluído se pertencia ao squad da BU **na data em que agendou** o attendee.
+
+**3. Frontend `useTeamMeetingsData.ts`**
+
+Hoje o filtro `validSdrEmails` vem de `useSdrsFromSquad('incorporador')`, que é a foto **atual**. Mudar para um novo hook `useSdrsForSquadInPeriod(squad, startDate, endDate)` que consulta `sdr_squad_history` e retorna todos os SDRs que estiveram no squad em qualquer momento dentro do período. Leticia entra na lista se o intervalo `[valid_from, valid_to)` cruza `[startDate, endDate]`.
+
+**4. UI — `SdrSummaryTable.tsx`**
+
+Para SDRs que não estão mais no squad (mas estavam no período), exibir badge cinza `"ex-{squad}"` ao lado do nome para deixar claro. Sem alterar lógica de meta — meta usa `sdr_squad_history` igualmente para calcular dias úteis no squad.
+
+**5. Plano anterior continua valendo**
+
+- Cards do topo sempre usam `enrichedKPIs` (já consolidado).
+- Linha "Total" da tabela SDRs usa `totaisOverride` derivado de `enrichedKPIs`.
 
 ### Arquivos afetados
 
-- `supabase/functions/calendly-create-event/index.ts` (editar guard #4)
-- `src/hooks/useAgendaData.ts` (editar lógica de classificação `completed`)
-- `src/components/crm/BlockedLeadCard.tsx` (atualizar copy)
+- **Migration**: criar `sdr_squad_history`, trigger e backfill.
+- `supabase/migrations/...` — nova migration.
+- `supabase/functions/...` ou RPC `get_sdr_metrics_from_agenda` — usar histórico.
+- `src/hooks/useSdrsFromSquad.ts` — adicionar variante por período (ou novo hook `useSdrsForSquadInPeriod`).
+- `src/hooks/useTeamMeetingsData.ts` — usar lista por período.
+- `src/components/sdr/SdrSummaryTable.tsx` — badge "ex-squad" + `totaisOverride`.
+- `src/pages/crm/ReunioesEquipe.tsx` — passar `enrichedKPIs` sempre nos cards.
 
-### Observações técnicas
+### Validação
 
-- Sem migration de banco — é só lógica.
-- Comparação usa `Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: 'numeric' })` ou equivalente para evitar shifts de timezone (mesma abordagem já usada em outros pontos do projeto).
-- Não afeta R2 — R2 já não é bloqueada por R1 realizada.
+1. Período 22/04, BU Incorporador: Leticia aparece com 1 contrato (Natanael) e badge `"ex-incorporador"`. Total = 8.
+2. Período hoje (23/04+), BU Incorporador: Leticia **não** aparece, novos agendamentos dela vão para Crédito.
+3. Período hoje, BU Crédito: Leticia aparece normalmente.
+4. SDR que nunca trocou de squad: comportamento idêntico ao atual.
 
-### Validação pós-deploy
+### Pergunta antes de implementar
 
-1. Lead com R1 realizada no mês corrente → tentar agendar nova R1 → bloqueio mantido com mensagem nova.
-2. Lead com R1 realizada em mês anterior → tentar agendar nova R1 → permitido, com aviso informativo na UI mostrando data da R1 anterior.
-3. Lead com R1 futura agendada → bloqueio continua (guard #3 separado).
-4. Lead com contrato pago → bloqueio continua (guards #1 e #2).
+A tabela `sdr` tem hoje algum campo tipo `squad_changed_at` ou histórico em outro lugar (ex: `employees_history`, log de auditoria)? Se sim, reaproveito; se não, crio a `sdr_squad_history` do zero com backfill conservador (assume squad atual desde `sdr.created_at`).
 
