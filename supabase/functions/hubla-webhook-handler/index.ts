@@ -1930,42 +1930,16 @@ serve(async (req) => {
           payment_method: transactionData.payment_method,
         });
 
-        // Se for A010 e for primeira parcela, inserir na tabela a010_sales e criar contato/deal no CRM
+        // 🚫 [CRM] NewSale NÃO cria mais lead/deal/a010_sales no CRM.
+        // O lead será criado apenas quando o `invoice.payment_succeeded` chegar,
+        // evitando duplicação por race condition (NewSale + payment_succeeded simultâneos)
+        // e leads-fantasma de boletos não pagos.
+        // Mantemos apenas a transação em `hubla_transactions` e o sync de billing acima.
         if (productCategory === 'a010' && installment === 1) {
-          await supabase
-            .from('a010_sales')
-            .upsert({
-              customer_name: transactionData.customer_name || 'Cliente Desconhecido',
-              customer_email: transactionData.customer_email,
-              customer_phone: transactionData.customer_phone,
-              net_value: netValue,
-              sale_date: saleDate,
-              status: 'completed',
-            }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
-          
-          // Criar contato e deal no CRM para leads A010
-          await createOrUpdateCRMContact(supabase, {
-            email: transactionData.customer_email,
-            phone: transactionData.customer_phone,
-            name: transactionData.customer_name,
-            originName: 'A010 Hubla',
-            productName: productName,
-            value: netValue
-          });
+          console.log(`[CRM] NewSale A010 recebido (${transactionData.customer_email}) — lead será criado quando invoice.payment_succeeded chegar`);
         }
-        
-        // 🏦 CONSÓRCIO: Se for produto de consórcio e primeira parcela, criar deal
         if (CONSORCIO_PRODUCT_CATEGORIES.includes(productCategory) && installment === 1) {
-          console.log(`🏦 [CONSÓRCIO NewSale] Detectado: ${productName} (${productCategory})`);
-          await createDealForConsorcioProduct(supabase, {
-            email: transactionData.customer_email,
-            phone: transactionData.customer_phone,
-            name: transactionData.customer_name,
-            productName: productName,
-            productCategory: productCategory,
-            value: netValue,
-            saleDate: saleDate,
-          });
+          console.log(`[CRM] NewSale Consórcio recebido (${productName}) — deal será criado quando invoice.payment_succeeded chegar`);
         }
       }
 
