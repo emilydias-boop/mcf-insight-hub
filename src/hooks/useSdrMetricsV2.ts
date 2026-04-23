@@ -105,7 +105,6 @@ export const useSdrMetricsV2 = (startDate: Date | null, endDate: Date | null, sd
     },
     enabled: !!startDate && !!endDate,
     staleTime: 30000,
-    refetchInterval: 60000,
     retry: 1, // Reduce retries to avoid long waits on timeout
     retryDelay: 1000
   });
@@ -136,7 +135,6 @@ export const useSdrMeetingsV2 = (startDate: Date | null, endDate: Date | null, s
     },
     enabled: !!startDate && !!endDate,
     staleTime: 30000,
-    refetchInterval: 60000,
     retry: 1, // Reduce retries to avoid long waits on timeout
     retryDelay: 1000
   });

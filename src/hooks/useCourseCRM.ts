@@ -61,6 +61,5 @@ export const useCourseCRM = (email: string | null) => {
       } as CourseCRMData;
     },
     enabled: !!email,
-    refetchInterval: 60000,
   });
 };

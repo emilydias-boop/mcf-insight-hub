@@ -321,6 +321,5 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         faturamentoLiquido,
       };
     },
-    refetchInterval: 60000,
   });
 };

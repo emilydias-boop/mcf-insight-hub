@@ -39,6 +39,5 @@ export function useMeetingRemindersLogs(filters: LogsFilter = {}) {
       if (error) throw error;
       return (data ?? []) as MeetingReminderLog[];
     },
-    refetchInterval: 30000,
   });
 }

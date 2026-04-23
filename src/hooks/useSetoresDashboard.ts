@@ -244,7 +244,6 @@ export function useSetoresDashboard(referenceDate?: Date) {
       return { setores, semanaLabel, mesLabel, totais };
     },
     staleTime: 1000 * 60 * 2,
-    refetchInterval: 1000 * 30,
   });
 
   return query;

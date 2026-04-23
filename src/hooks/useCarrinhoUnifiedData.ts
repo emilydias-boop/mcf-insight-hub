@@ -83,7 +83,6 @@ export function useCarrinhoUnifiedData(
       return (data || []) as CarrinhoLeadRow[];
     },
     staleTime: 30000,
-    refetchInterval: 60000,
   });
 }
 

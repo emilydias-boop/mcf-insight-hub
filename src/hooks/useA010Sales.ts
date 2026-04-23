@@ -76,7 +76,6 @@ export const useA010Sales = ({
       if (error) throw error;
       return data as A010Sale[];
     },
-    refetchInterval: 60000, // 1 minuto
   });
 };
 
@@ -151,6 +150,5 @@ export const useA010Summary = ({
         chartData,
       };
     },
-    refetchInterval: 60000, // 1 minuto
   });
 };

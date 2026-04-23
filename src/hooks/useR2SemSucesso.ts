@@ -156,7 +156,6 @@ export function useR2SemSucessoLeads() {
       });
     },
     staleTime: 30000,
-    refetchInterval: 60000,
   });
 }
 

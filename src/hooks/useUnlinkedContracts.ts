@@ -61,7 +61,6 @@ export function useUnlinkedContracts(options: UseUnlinkedContractsOptions = {}) 
       if (error) throw error;
       return (data || []) as UnlinkedContract[];
     },
-    refetchInterval: 60000,
     staleTime: 10000,
   });
 }

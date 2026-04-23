@@ -344,6 +344,5 @@ export const useChairmanMetrics = (filters: ChairmanFilters) => {
       };
     },
     staleTime: 60000, // 1 minute
-    refetchInterval: 300000 // 5 minutes
   });
 };

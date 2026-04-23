@@ -452,6 +452,5 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
 
       return consolidatedVendas;
     },
-    refetchInterval: 60000, // 1 minuto
   });
 }

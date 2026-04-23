@@ -100,6 +100,5 @@ export function useCobrancaHistory(type: 'consorcio' | 'billing', limit = 50) {
         });
       }
     },
-    refetchInterval: 5 * 60 * 1000,
   });
 }

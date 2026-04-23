@@ -370,7 +370,6 @@ export function useR2PendingLeads() {
       return uniquePendingLeads;
     },
     staleTime: 30000, // 30 seconds
-    refetchInterval: 60000, // Refetch every minute
   });
 }
 

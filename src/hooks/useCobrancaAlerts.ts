@@ -115,7 +115,6 @@ export function useConsorcioCobrancaAlerts() {
         })
         .filter(a => !a.tem_acao); // Only show alerts without actions
     },
-    refetchInterval: 5 * 60 * 1000, // 5 minutes
   });
 }
 
@@ -183,6 +182,5 @@ export function useBillingCobrancaAlerts() {
         })
         .filter(a => !a.tem_acao);
     },
-    refetchInterval: 5 * 60 * 1000,
   });
 }

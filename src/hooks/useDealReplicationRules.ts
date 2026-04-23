@@ -257,7 +257,6 @@ export const useReplicationQueue = () => {
       if (error) throw error;
       return data;
     },
-    refetchInterval: 10000, // Refresh every 10 seconds
   });
 };
 
