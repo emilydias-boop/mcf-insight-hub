@@ -1,82 +1,75 @@
 
 
-## Ajuste: Leticia trocou de squad — atribuir contrato ao squad ativo na data do agendamento
+## Ajuste: criar lead no CRM apenas no `invoice.payment_succeeded`
 
-### Contexto
+### Por que isso resolve a duplicação
 
-Leticia Nunes está hoje no squad **crédito**, mas quando agendou a reunião do Natanael (que virou contrato Incorporador em 22/04) ela estava no squad **incorporador**. Por isso o contrato dela deve aparecer normalmente na aba SDRs do Incorporador para o período de 22/04, e só sair quando consultarmos períodos posteriores à troca de squad.
+Hoje a Hubla dispara dois eventos para cada venda:
 
-### Regra correta
+| Evento | O que significa | Hoje cria lead no CRM? |
+|---|---|---|
+| `NewSale` | Pedido criado (PIX/boleto gerado, intenção de pagamento) | ✅ Sim |
+| `invoice.payment_succeeded` | Pagamento confirmado | ✅ Sim |
 
-Atribuir o agendamento/contrato ao SDR considerando o **squad que ele tinha na data em que agendou** (`meeting_slot_attendees.created_at`), não o squad atual.
+Os dois chegam quase ao mesmo tempo no caso de PIX/cartão à vista (A010). Como `crm_contacts` não tem trava de identidade, as duas execuções rodam em paralelo, cada uma cria um contato e um deal — exatamente o que aconteceu com a Stéphanne.
 
-| Cenário | Squad em 22/04 | Squad hoje | Aparece em SDRs Incorporador (período 22/04)? |
-|---|---|---|---|
-| Leticia agendou Natanael em 22/04 | incorporador | crédito | ✅ Sim |
-| Leticia agenda novo lead hoje | crédito | crédito | ❌ Não (vai para aba Crédito) |
+**Sua proposta está certa**: como o que importa para o CRM é a venda confirmada, basta que apenas `invoice.payment_succeeded` crie o lead. `NewSale` continua existindo, mas só atualiza `hubla_transactions` (para billing/dashboard ainda enxergarem a tentativa).
+
+### Pequena ressalva sobre semântica
+
+`NewSale` na Hubla não é estritamente "intenção" — é "venda registrada" (boleto/PIX gerado). Para A010 isso vira pagamento confirmado em segundos, então o impacto de esperar o `invoice.payment_succeeded` é mínimo. Para boletos, isso pode atrasar a entrada do lead no CRM em horas/dias, mas ganhamos:
+
+- Zero leads-fantasma de boletos não pagos
+- Zero duplicação por race condition
+- Source of truth única: lead no CRM = pagamento confirmado
 
 ### Mudanças
 
-**1. Histórico de squad por SDR**
+**1. `supabase/functions/hubla-webhook-handler/index.ts` — bloco `NewSale`**
 
-Verificar se já existe tabela de histórico (`sdr_squad_history` / `employees_history` / coluna `squad_changed_at`). Se não existir, criar:
+Manter:
+- Upsert em `hubla_transactions` (linha 1911-1913)
+- `syncBillingFromTransaction` (linha 1918) — billing precisa enxergar a venda mesmo sem pagamento confirmado
 
-```sql
-create table public.sdr_squad_history (
-  id uuid primary key default gen_random_uuid(),
-  sdr_id uuid references public.sdr(id) on delete cascade,
-  squad text not null,
-  valid_from timestamptz not null,
-  valid_to timestamptz,
-  created_at timestamptz default now()
-);
+Remover do bloco `NewSale`:
+- `a010_sales` upsert (linhas 1934-1944)
+- `createOrUpdateCRMContact` para A010 (linhas 1947-1954)
+- `createDealForConsorcioProduct` para Consórcio (linhas 1958-1969)
+
+**2. Bloco `invoice.payment_succeeded`**
+
+Continua igual — já é onde se cria contato/deal A010 e Consórcio. Nenhuma mudança.
+
+**3. Logs**
+
+Adicionar log claro em `NewSale`:
+```
+[CRM] NewSale recebido — lead será criado quando invoice.payment_succeeded chegar
 ```
 
-Backfill: para cada SDR, criar uma linha com `valid_from = sdr.created_at` e `squad = sdr.squad` atual. Trigger no `UPDATE` da `public.sdr` quando `squad` muda: fechar a linha aberta (`valid_to = now()`) e inserir nova linha.
+### Comportamento resultante
 
-**2. RPC `get_sdr_metrics_from_agenda`**
-
-Trocar o filtro `WHERE sdr.squad = bu_filter` por:
-```sql
-join sdr_squad_history h
-  on h.sdr_id = sdr.id
- and h.squad = bu_filter
- and msa.created_at >= h.valid_from
- and msa.created_at <  coalesce(h.valid_to, 'infinity')
-```
-Assim o SDR é incluído se pertencia ao squad da BU **na data em que agendou** o attendee.
-
-**3. Frontend `useTeamMeetingsData.ts`**
-
-Hoje o filtro `validSdrEmails` vem de `useSdrsFromSquad('incorporador')`, que é a foto **atual**. Mudar para um novo hook `useSdrsForSquadInPeriod(squad, startDate, endDate)` que consulta `sdr_squad_history` e retorna todos os SDRs que estiveram no squad em qualquer momento dentro do período. Leticia entra na lista se o intervalo `[valid_from, valid_to)` cruza `[startDate, endDate]`.
-
-**4. UI — `SdrSummaryTable.tsx`**
-
-Para SDRs que não estão mais no squad (mas estavam no período), exibir badge cinza `"ex-{squad}"` ao lado do nome para deixar claro. Sem alterar lógica de meta — meta usa `sdr_squad_history` igualmente para calcular dias úteis no squad.
-
-**5. Plano anterior continua valendo**
-
-- Cards do topo sempre usam `enrichedKPIs` (já consolidado).
-- Linha "Total" da tabela SDRs usa `totaisOverride` derivado de `enrichedKPIs`.
-
-### Arquivos afetados
-
-- **Migration**: criar `sdr_squad_history`, trigger e backfill.
-- `supabase/migrations/...` — nova migration.
-- `supabase/functions/...` ou RPC `get_sdr_metrics_from_agenda` — usar histórico.
-- `src/hooks/useSdrsFromSquad.ts` — adicionar variante por período (ou novo hook `useSdrsForSquadInPeriod`).
-- `src/hooks/useTeamMeetingsData.ts` — usar lista por período.
-- `src/components/sdr/SdrSummaryTable.tsx` — badge "ex-squad" + `totaisOverride`.
-- `src/pages/crm/ReunioesEquipe.tsx` — passar `enrichedKPIs` sempre nos cards.
-
-### Validação
-
-1. Período 22/04, BU Incorporador: Leticia aparece com 1 contrato (Natanael) e badge `"ex-incorporador"`. Total = 8.
-2. Período hoje (23/04+), BU Incorporador: Leticia **não** aparece, novos agendamentos dela vão para Crédito.
-3. Período hoje, BU Crédito: Leticia aparece normalmente.
-4. SDR que nunca trocou de squad: comportamento idêntico ao atual.
+| Cenário | Antes | Depois |
+|---|---|---|
+| PIX A010 pago | 2 contatos + 2 deals (race) | 1 contato + 1 deal |
+| Boleto A010 não pago | 1 lead "fantasma" no CRM | Nenhum lead até pagar |
+| Boleto A010 pago em 3 dias | Lead criado no dia da emissão, depois redundante | Lead criado no dia do pagamento |
+| Refund antes de pagar | Lead órfão | Nenhum lead criado |
 
 ### Pergunta antes de implementar
 
-A tabela `sdr` tem hoje algum campo tipo `squad_changed_at` ou histórico em outro lugar (ex: `employees_history`, log de auditoria)? Se sim, reaproveito; se não, crio a `sdr_squad_history` do zero com backfill conservador (assume squad atual desde `sdr.created_at`).
+Para boletos não pagos, hoje você quer enxergar esses leads no CRM (mesmo sem pagamento) para alguém da operação fazer cobrança? Se sim, manter `NewSale` criando lead com tag `aguardando_pagamento` é uma alternativa — mas aí precisa adicionar a constraint única em `crm_contacts` (do plano anterior) para não duplicar quando o `invoice.payment_succeeded` chegar.
+
+Se a resposta for "não preciso ver boletos não pagos no CRM", a mudança proposta acima já resolve a duplicação sem precisar mexer em constraints de banco.
+
+### Validação
+
+1. Simular `NewSale` A010 da Stéphanne sem `invoice.payment_succeeded` → nenhum lead criado, transação registrada.
+2. Simular `NewSale` + `invoice.payment_succeeded` em sequência → 1 lead, 1 deal.
+3. Refund após `NewSale` (sem pagamento) → nenhum lead órfão para limpar.
+4. Consórcio com 12 parcelas: `invoice.payment_succeeded` da parcela 1 cria deal; demais parcelas só atualizam billing (já é o comportamento atual).
+
+### Arquivos afetados
+
+- `supabase/functions/hubla-webhook-handler/index.ts` — remover criação de contato/deal/a010_sales do bloco `NewSale`.
 
