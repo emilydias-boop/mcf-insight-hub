@@ -107,10 +107,23 @@ export function useUpdateCloser() {
   
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<CloserFormData> }) => {
+      const sanitized: Record<string, any> = { ...data };
+      const nullableFields = [
+        'employee_id',
+        'calendly_event_type_uri',
+        'calendly_default_link',
+        'google_calendar_id',
+        'color',
+        'bu',
+        'meeting_type',
+      ];
+      for (const field of nullableFields) {
+        if (sanitized[field] === '') sanitized[field] = null;
+      }
       const { data: result, error } = await supabase
         .from('closers')
         .update({
-          ...data,
+          ...sanitized,
           updated_at: new Date().toISOString()
         })
         .eq('id', id)
