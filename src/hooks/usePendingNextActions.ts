@@ -60,7 +60,6 @@ export const usePendingNextActions = () => {
         };
       });
     },
-    refetchInterval: 60000, // refresh every minute
   });
 };
 

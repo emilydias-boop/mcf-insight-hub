@@ -113,7 +113,6 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
 
       return a010Sales.length;
     },
-    refetchInterval: 30000,
   });
 
   // Realtime listener para hubla_transactions

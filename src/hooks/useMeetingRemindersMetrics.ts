@@ -67,6 +67,5 @@ export function useMeetingRemindersMetrics() {
         byOffset,
       };
     },
-    refetchInterval: 60000,
   });
 }

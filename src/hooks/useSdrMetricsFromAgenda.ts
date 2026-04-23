@@ -58,6 +58,5 @@ export const useSdrMetricsFromAgenda = (
     },
     enabled: !!startDate && !!endDate,
     staleTime: 30000,
-    refetchInterval: 60000,
   });
 };

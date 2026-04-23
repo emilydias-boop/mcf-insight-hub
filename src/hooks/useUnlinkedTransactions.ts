@@ -106,6 +106,5 @@ export function useUnlinkedTransactions(weekDate: Date) {
 
       return unlinkedTransactions;
     },
-    refetchInterval: 60000, // 1 minuto
   });
 }

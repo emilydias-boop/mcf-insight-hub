@@ -88,7 +88,6 @@ export function useR2CloserMetrics(startDate: Date, endDate: Date) {
 
       return metrics;
     },
-    refetchInterval: 60000, // 1 minuto
   });
 }
 

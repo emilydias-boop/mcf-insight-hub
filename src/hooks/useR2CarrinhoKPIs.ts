@@ -53,7 +53,6 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       return emailMap.size;
     },
     staleTime: 30000,
-    refetchInterval: 60000,
   });
 
   // Derive KPIs from unified data

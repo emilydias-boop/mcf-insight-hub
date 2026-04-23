@@ -248,7 +248,6 @@ export function useR2MetricsData(weekStart: Date, weekEnd: Date, carrinhoConfig?
     },
     enabled: !!unifiedData,
     staleTime: 30000,
-    refetchInterval: 60000,
   });
 }
 

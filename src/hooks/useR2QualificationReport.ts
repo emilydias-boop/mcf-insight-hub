@@ -53,7 +53,6 @@ export function useR2QualificationReport(filters: QualificationFilters) {
   return useQuery({
     queryKey: ['r2-qualification-report', filters.startDate.toISOString(), filters.endDate.toISOString(), filters.closerId, filters.status],
     staleTime: 30000,
-    refetchInterval: 30000,
     queryFn: async () => {
       let query = supabase
         .from('meeting_slots')

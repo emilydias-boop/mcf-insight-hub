@@ -52,7 +52,6 @@ export function useMeetingsPendentesHoje(buFilter?: string) {
       return pendentes.length;
     },
     staleTime: 10 * 1000,
-    refetchInterval: 30 * 1000,
     refetchOnWindowFocus: true,
   });
 }

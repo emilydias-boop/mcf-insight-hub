@@ -140,6 +140,5 @@ export function useSDRCarrinhoMetrics(weekStart: Date, weekEnd: Date, squad: str
       return result;
     },
     enabled: sdrsQuery.isSuccess,
-    refetchInterval: 60000,
   });
 }

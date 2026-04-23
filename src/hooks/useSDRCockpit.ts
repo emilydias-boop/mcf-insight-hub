@@ -104,7 +104,6 @@ export const useSDRQueueInfinite = () => {
       return (lastPageParam as number) + PAGE_SIZE;
     },
     enabled: !!user?.email,
-    refetchInterval: 60000,
   });
 
   const flatData = query.data?.pages.flatMap(p => p) ?? [];

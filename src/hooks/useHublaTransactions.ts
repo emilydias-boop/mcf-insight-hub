@@ -74,7 +74,6 @@ export const useHublaTransactionsFiltered = (filters: TransactionFilters) => {
       
       return result;
     },
-    refetchInterval: 60000, // 1 minuto
   });
 };
 
@@ -267,7 +266,6 @@ export const useHublaTransactions = (limit: number = 50) => {
       if (error) throw error;
       return data as HublaTransaction[];
     },
-    refetchInterval: 60000, // 1 minuto
   });
 };
 
@@ -334,6 +332,5 @@ export const useHublaSummary = () => {
         lastTransaction: todayTransactions?.[0] || null,
       };
     },
-    refetchInterval: 60000, // 1 minuto
   });
 };
