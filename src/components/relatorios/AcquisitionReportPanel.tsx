@@ -219,6 +219,20 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
         <KPICard icon={TrendingUp} label="Ticket Médio" value={formatCurrency(kpis.avgTicket)} color="muted" isMuted />
       </div>
 
+      {/* Funil por Canal */}
+      {funnelLoading ? (
+        <Card>
+          <CardContent className="py-8">
+            <div className="flex items-center justify-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Carregando funil por canal...</span>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <ChannelFunnelTable rows={funnelRows} totals={funnelTotals} />
+      )}
+
       {/* Faturamento por Closer */}
       <DimensionTable
         title="Faturamento por Closer"
@@ -230,7 +244,7 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
       <DimensionTable title="Faturamento por SDR" rows={bySDR} />
 
       {/* Faturamento por Canal */}
-      <DimensionTable title="Faturamento por Canal" rows={filteredByChannel} />
+      <DimensionTable title="Faturamento por Canal" rows={byChannelDisplay} />
 
       {/* Faturamento Outside */}
       <Card>
