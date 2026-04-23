@@ -58,7 +58,7 @@ interface DealRow {
 interface AttendeeFunnelRow {
   id: string;
   deal_id: string | null;
-  attendee_status: string | null;
+  status: string | null;
   meeting_slots: { meeting_type: string | null; scheduled_at: string | null; status: string | null } | null;
 }
 
