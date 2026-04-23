@@ -1,110 +1,111 @@
 
 
-## Sinalizar duplicados existentes + bloquear novos duplicados
+## Permitir reagendamento de R1 Realizada com contagem honesta
 
-### Decisão
+### Regra acordada (resumo)
 
-Em vez de mesclar os ~3.193 grupos existentes (risco de falsos positivos, custo alto), vamos:
+A trava atual bloqueia **qualquer** reagendamento de R1 que já foi Realizada no mês. Isso é restritivo demais — leads legítimos (ex: precisa reunir com o sócio) ficam travados. A nova regra é:
 
-1. **Manter os duplicados atuais como estão**, apenas sinalizando visualmente com badge "Dup" no Kanban e na lista de contatos.
-2. **Travar a criação de novos duplicados** em todos os pontos de entrada (webhooks, importação, criação manual).
+| Situação do deal | Pode agendar? | Conta para o SDR? |
+|---|---|---|
+| Sem agendamento prévio | Sim (1º Agendamento) | Sim — conta como **agendamento** |
+| Já tem 1º Agendamento (futuro) | Não — usa "Reagendar" da Agenda | — |
+| R1 Realizada (foi o 1º Agendamento) e novo agendamento | **Sim** | Sim — conta como **1º Reagendamento (válido)** |
+| R1 Realizada precedida de No-Show e novo agendamento | **Sim** | Sim — conta como **1º Reagendamento (válido)** |
+| Já teve 1 Agendamento + 1 Reagendamento Válido (qualquer combinação) | **Sim, agenda mas não conta** | Não — vira **Reagendamento Inválido** (registrado mas fora da meta) |
+| Contrato Pago / Won | Não | — |
 
-### Etapa 1 — Sinalização visual dos duplicados existentes
+**Limite duro**: cada deal contabiliza no máximo **2 movimentos** para o SDR (1 agendamento + 1 reagendamento válido). Tudo acima disso pode ser agendado para resolver o caso operacional, mas é registrado como "Reagendamento Inválido" e não infla métrica.
 
-**Backend: nova RPC `get_duplicate_contact_ids`**
+**Escopo**: vale só para **R1**. R2 fica como está (sem trava de contagem).
 
-Função SQL (security definer, stable) que retorna a lista de `contact_ids` que são duplicados (compartilham email lowercase OU sufixo de telefone com outro contato ativo).
+### Mudanças necessárias
+
+**1. Frontend — destravar R1 Realizada (`useAgendaData.ts`)**
+
+Linhas 1046-1085 hoje bloqueiam novo R1 se completou no mês corrente. Mudar para:
+
+- Sempre liberar agendamento de R1 quando o estado for `completed` (R1 Realizada).
+- Substituir o `blockReason` por um **aviso** (`warningOnly = true`):
+  - "Lead já realizou R1. Este será o **1º Reagendamento** (conta para sua meta)." se ainda não houve reagendamento válido.
+  - "Lead já tem agendamento + reagendamento válido. Pode agendar, mas **não contará** na sua meta." quando já bateu o teto.
+- Manter bloqueio total apenas para: `contract_paid`, `won`, `scheduled_future` (R1 futura ativa do mesmo tipo).
+
+Isso requer consultar quantos reagendamentos válidos o deal já tem — adicionar query auxiliar no enriquecimento do search (já existe estrutura de `atts`).
+
+**2. Frontend — `BlockedLeadCard.tsx` e `QuickScheduleModal.tsx`**
+
+- Remover/abrandar o estado `completed` do `BlockedLeadCard`. Em vez disso, mostrar banner informativo amarelo no modal explicando se vai contar ou não.
+- Badge no resultado de busca: "✅ R1 realizada — reagendamento contará" vs "✅ R1 realizada — reagendamento NÃO contará (limite atingido)".
+
+**3. Backend — `calendly-create-event/index.ts`**
+
+Linha 535-541 retorna 409 com `r1_already_completed_this_month`. Remover essa trava — passa a permitir a criação. A classificação de "conta ou não" é responsabilidade do RPC de métricas, não do gateway de booking.
+
+**4. Backend — RPC `get_sdr_metrics_from_agenda` (versão 4-arg atual)**
+
+CTE `agendamentos_cte` (linhas 179-191) hoje considera apenas `parent_attendee_id IS NULL` ou primeiro nível de filho. Precisa virar uma **classificação por ordem de movimento dentro do deal**:
 
 ```sql
-create or replace function public.get_duplicate_contact_ids()
-returns table(contact_id uuid)
-language sql stable security definer set search_path = public as $$
-  with sufixos as (
-    select id, lower(email) as email_norm,
-           right(regexp_replace(coalesce(phone,''),'\D','','g'), 9) as phone_suf
-    from crm_contacts
-    where coalesce(is_archived,false) = false
-  ),
-  dups_email as (
-    select id from sufixos
-    where email_norm is not null and email_norm <> ''
-      and email_norm in (select email_norm from sufixos
-                         where email_norm is not null and email_norm <> ''
-                         group by email_norm having count(*) > 1)
-  ),
-  dups_phone as (
-    select id from sufixos
-    where length(phone_suf) = 9
-      and phone_suf in (select phone_suf from sufixos
-                        where length(phone_suf) = 9
-                        group by phone_suf having count(*) > 1)
-  )
-  select id from dups_email union select id from dups_phone;
-$$;
+-- Pseudocódigo da nova lógica
+WITH ranked_movements AS (
+  SELECT
+    sdr_email, deal_id, effective_booked_at,
+    ROW_NUMBER() OVER (PARTITION BY deal_id ORDER BY effective_booked_at) as ordem
+  FROM raw_attendees
+)
+SELECT sdr_email, COUNT(*) as agendamentos
+FROM ranked_movements
+WHERE ordem <= 2  -- só os 2 primeiros movimentos contam (1 agend + 1 reagend)
+  AND (effective_booked_at AT TIME ZONE 'America/Sao_Paulo')::date
+      BETWEEN start_date AND end_date
+GROUP BY sdr_email;
 ```
 
-Cacheada por 5min em hook React: `useDuplicateContactIds()`.
+Isto substitui a lógica atual baseada em `parent_attendee_id`/`is_reschedule` por uma **regra ordinal**: o 1º e o 2º movimento contam, o 3º+ não — independente do motivo. Garante que a soma jamais ultrapasse 2 por deal.
 
-**Frontend**
+**5. Backend — RPC de listagem `get_sdr_meetings_from_agenda` (tipo de movimento)**
 
-- `src/hooks/useContactsEnriched.ts` (linha 190): trocar `isDuplicate: false` por `isDuplicate: duplicateSet.has(contact.id)` usando o set retornado pela RPC.
-- `src/components/crm/ContactCard.tsx`: badge "Dup" já existe (linha 98-103) — só passa a aparecer naturalmente.
-- Adicionar tooltip no badge: "Existe outro contato com mesmo email ou telefone. Clique para ver."
-- Opcional: filtro "Mostrar só duplicados" na barra de filtros do `/crm/contatos` para o admin auditar manualmente.
+A coluna `tipo` exibida na tabela hoje vem da CTE `all_movements` (migration 20251218180500) com regras antigas baseadas em No-Show. Atualizar para refletir a regra ordinal:
 
-### Etapa 2 — Bloquear criação de novos duplicados
+- `ordem = 1` → `'1º Agendamento'`
+- `ordem = 2` → `'Reagendamento Válido'`
+- `ordem >= 3` → `'Reagendamento Inválido'`
 
-**Auditoria dos pontos de entrada**
+Garante que UI (badges em `MeetingsTable.tsx` e `SdrLeadsTable.tsx`) reflita exatamente o que entrou na métrica.
 
-| Origem | Já protege? | Ação |
-|---|---|---|
-| `webhook-lead-receiver` | Sim (`check_duplicate_deal_by_identity`) | Manter |
-| `webhook-live-leads` | Sim | Manter |
-| `import-spreadsheet-leads` | Sim | Manter |
-| `hubla-webhook-handler` | Sim (busca por email/telefone antes de criar) | Manter |
-| `webhook-make-a010` | Sim (fallback por email + sufixo) | Manter |
-| **Criação manual no CRM** (`DealCreateModal` / similar) | A verificar | **Adicionar checagem** |
-| **Edição de contato** (mudar email/telefone) | Não | **Adicionar checagem** |
+**6. UI — feedback claro no momento do agendamento**
 
-**Mudanças**
+No `QuickScheduleModal`, ao confirmar reagendamento de R1 já Realizada:
+- Toast de sucesso: "Reagendamento criado. Conta como 1º Reagendamento na sua meta." OU "Reagendamento criado. Não conta na meta (já há 1 reagendamento válido neste deal)."
 
-1. **Reforçar `check_duplicate_deal_by_identity`** se ainda não cobre busca a nível de **contato** (não só deal): criar variante `check_duplicate_contact_by_identity(p_email, p_phone_suffix)` que retorna `contact_id` existente se houver match. Já usar a contact match em vez de criar um novo.
+### Validação anti-burla
 
-2. **Criação manual de lead/deal no CRM** (`src/components/crm/CreateLeadModal.tsx` ou equivalente):
-   - Antes de inserir em `crm_contacts`, chamar `check_duplicate_contact_by_identity`.
-   - Se retornar match: avisar "Já existe um contato com esse email/telefone: [Nome]. Deseja usar o existente?" com botões "Usar existente" (cria deal vinculado ao contact_id existente) ou "Cancelar".
+- O `r1_agendada` continua com `LEAST(COUNT(DISTINCT meeting_day), 2)` — defesa em profundidade.
+- A nova `agendamentos_cte` com `ordem <= 2` é o teto por movimento.
+- SDR não consegue inflar criando 5 reagendamentos: do 3º em diante, a UI mostra "não conta", a métrica ignora, e o histórico fica auditável.
 
-3. **Edição de email/telefone em contato existente**:
-   - Validar se o novo valor não colide com outro contato ativo.
-   - Se colidir: mostrar erro "Email/telefone já pertence a outro contato (Nome). Considere mesclar manualmente."
+### Arquivos afetados
 
-4. **Constraint de banco (proteção final)**:
-   - Índice único parcial: `create unique index crm_contacts_email_active_uniq on crm_contacts (lower(email)) where is_archived = false and email is not null and email <> '';`
-   - Idem para sufixo de telefone:  
-     `create unique index crm_contacts_phone_suffix_active_uniq on crm_contacts ((right(regexp_replace(phone,'\D','','g'), 9))) where is_archived = false and length(regexp_replace(phone,'\D','','g')) >= 9;`
-   - **Importante**: criar com `CREATE UNIQUE INDEX CONCURRENTLY` em migration separada **só depois** de resolver os 116 grupos suspeitos (senão a criação do índice falha). Como decisão atual é não mexer nos existentes, esta etapa fica como **opcional/futura**. No curto prazo, a proteção é puramente em código (nas edge functions e no frontend).
-
-### Etapa 3 — Tela de auditoria opcional (recomendada)
-
-Página `/admin/duplicados` listando os ~3.193 grupos com:
-- Nomes, emails, telefones lado a lado.
-- Badge de severidade (mesmo email = certeza, só sufixo = suspeito).
-- Botões: "Mesclar este grupo" (chama edge function pontualmente), "Marcar como pessoas diferentes" (adiciona a uma lista de exceções para parar de aparecer).
-
-Permite resolver caso a caso, no ritmo da operação, sem ação em massa.
-
-### Resumo do que vai ser feito agora
-
-1. **Migration**: criar funções `get_duplicate_contact_ids()` e `check_duplicate_contact_by_identity()`.
-2. **Hook**: `src/hooks/useDuplicateContactIds.ts` (cache 5min).
-3. **Hook existente**: `useContactsEnriched.ts` — popular `isDuplicate` real.
-4. **UI**: tooltip no badge "Dup" do `ContactCard`; filtro "Só duplicados" na lista.
-5. **Criação manual**: localizar modal/form de criação de lead no CRM e adicionar checagem antiduplicata com diálogo de "usar existente".
-6. **Edição de contato**: validação no form de edição de email/telefone.
-
-Etapa 3 (tela `/admin/duplicados`) e índice único de banco ficam como próximas etapas opcionais — confirmo antes de fazer.
+- `src/hooks/useAgendaData.ts` (linhas 1046-1085) — relaxar trava `completed`
+- `src/components/crm/BlockedLeadCard.tsx` — remover/ajustar estado `completed`
+- `src/components/crm/QuickScheduleModal.tsx` — banner amarelo + badge contextual no resultado de busca
+- `supabase/functions/calendly-create-event/index.ts` (linhas ~530-545) — remover bloqueio 409
+- Nova migration: substituir `get_sdr_metrics_from_agenda` (4-arg) com lógica ordinal de `ordem <= 2`
+- Nova migration: substituir RPC de `get_sdr_meetings_from_agenda` para emitir `tipo` baseado em `ordem`
+- `src/types/r2Agenda.ts` / `src/hooks/useSdrMeetingsFromAgenda.ts` — sem mudança estrutural; apenas continua mapeando os 3 tipos já existentes
 
 ### Reversibilidade
 
-Nada destrutivo. Sinalização é só leitura. Bloqueios novos podem ser desligados removendo a checagem, sem afetar dados existentes.
+- Migrations criam funções `CREATE OR REPLACE`, fáceis de reverter para versão atual se necessário.
+- Mudanças de UI são puramente visuais — sem perda de dado.
+- Edge function: a trava removida pode ser reposta com 3 linhas se houver regressão.
+
+### Comportamento esperado pós-deploy
+
+1. SDR busca lead com R1 Realizada → modal abre normalmente, mostra banner "Será 1º Reagendamento — conta na meta".
+2. SDR confirma → reunião criada, badge "Reagendamento" aparece na lista, métrica do mês incrementa em +1.
+3. Mesmo deal volta para reagendar de novo → modal abre, banner amarelo: "Já há 1 reagendamento válido. Este novo NÃO contará na meta".
+4. SDR confirma → reunião criada, badge "Reagendamento" cinza (Inválido), métrica não incrementa.
+5. Contrato Pago / Won continua bloqueado totalmente.
 
