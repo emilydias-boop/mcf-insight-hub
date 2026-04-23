@@ -3,6 +3,7 @@ import { MeetingV2 } from "./useSdrMetricsV2";
 import { useSdrMetricsFromAgenda, SdrAgendaMetrics } from "./useSdrMetricsFromAgenda";
 import { useSdrMeetingsFromAgenda } from "./useSdrMeetingsFromAgenda";
 import { useSdrsFromSquad } from "./useSdrsFromSquad";
+import { useSdrsForSquadInPeriod } from "./useSdrsForSquadInPeriod";
 
 export interface TeamKPIs {
   sdrCount: number;
@@ -24,6 +25,8 @@ export interface SdrSummaryRow {
   r1Realizada: number;       // Realizadas no período
   noShows: number;           // No-shows no período
   contratos: number;         // Contratos pagos no período
+  isExSquad?: boolean;       // SDR pertencia ao squad no período mas hoje está em outro
+  currentSquad?: string | null;
 }
 
 interface TeamMeetingsParams {
@@ -35,30 +38,46 @@ interface TeamMeetingsParams {
 }
 
 export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad = 'incorporador' }: TeamMeetingsParams) {
-  // Fetch active SDRs from the specified squad dynamically
+  // Fetch SDRs that belonged to this squad at any point during the period (uses sdr_squad_history)
+  const sdrsInPeriodQuery = useSdrsForSquadInPeriod(squad, startDate, endDate);
+  // Also fetch current squad members to support "today" preset (allSdrsWithZeros, etc.)
   const sdrsQuery = useSdrsFromSquad(squad);
-  
+
   // Fetch metrics from agenda (meeting_slot_attendees) instead of deal_activities
   const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmailFilter, squad);
   const meetingsQuery = useSdrMeetingsFromAgenda({ startDate, endDate, sdrEmailFilter, buFilter: squad });
 
-  // Create Set of valid SDR emails from database (dynamic)
-  const validSdrEmails = useMemo(() => {
-    const sdrs = sdrsQuery.data || [];
-    return new Set(sdrs.filter(sdr => sdr.email).map(sdr => sdr.email!.toLowerCase()));
-  }, [sdrsQuery.data]);
+  // Build a metadata map keyed by lowercased email combining both sources.
+  // Period-based list takes precedence (so historical SDRs are included with isExSquad flag).
+  const sdrMetaMap = useMemo(() => {
+    const map = new Map<string, { name: string; isExSquad: boolean; currentSquad: string | null }>();
 
-  // Create lookup for SDR names from database
-  const sdrNameMap = useMemo(() => {
-    const map = new Map<string, string>();
-    const sdrs = sdrsQuery.data || [];
-    sdrs.filter(sdr => sdr.email).forEach(sdr => {
-      map.set(sdr.email!.toLowerCase(), sdr.name);
+    // Current squad members (foto atual)
+    (sdrsQuery.data || []).forEach(sdr => {
+      if (!sdr.email) return;
+      map.set(sdr.email.toLowerCase(), {
+        name: sdr.name,
+        isExSquad: false,
+        currentSquad: squad,
+      });
     });
-    return map;
-  }, [sdrsQuery.data]);
 
-  // Build summary rows per SDR - FILTERED to only include the 13 SDRs from SDR_LIST
+    // Historical members for the period (overwrites with richer info)
+    (sdrsInPeriodQuery.data || []).forEach(sdr => {
+      if (!sdr.email) return;
+      map.set(sdr.email.toLowerCase(), {
+        name: sdr.name,
+        isExSquad: !sdr.is_currently_in_squad,
+        currentSquad: sdr.current_squad ?? null,
+      });
+    });
+
+    return map;
+  }, [sdrsQuery.data, sdrsInPeriodQuery.data, squad]);
+
+  const validSdrEmails = useMemo(() => new Set(sdrMetaMap.keys()), [sdrMetaMap]);
+
+  // Build summary rows per SDR - filtered to SDRs that belong/belonged to the squad
   const bySDR = useMemo((): SdrSummaryRow[] => {
     const metrics = metricsQuery.data?.metrics || [];
 
@@ -70,10 +89,11 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
         return true;
       })
       .map((m: SdrAgendaMetrics) => {
-        const sdrName = sdrNameMap.get(m.sdr_email?.toLowerCase() || '') 
-          || m.sdr_email?.split('@')[0] 
+        const meta = sdrMetaMap.get(m.sdr_email?.toLowerCase() || '');
+        const sdrName = meta?.name
+          || m.sdr_email?.split('@')[0]
           || 'Desconhecido';
-        
+
         return {
           sdrEmail: m.sdr_email,
           sdrName,
@@ -82,10 +102,16 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
           r1Realizada: m.r1_realizada,
           noShows: m.no_shows || 0,
           contratos: m.contratos,
+          isExSquad: meta?.isExSquad ?? false,
+          currentSquad: meta?.currentSquad ?? null,
         };
       })
-      .sort((a, b) => b.agendamentos - a.agendamentos);
-  }, [metricsQuery.data, sdrNameMap, validSdrEmails]);
+      .sort((a, b) => {
+        // Active SDRs first, ex-squad SDRs last
+        if (a.isExSquad !== b.isExSquad) return a.isExSquad ? 1 : -1;
+        return b.agendamentos - a.agendamentos;
+      });
+  }, [metricsQuery.data, sdrMetaMap, validSdrEmails]);
 
   // Calculate team KPIs from FILTERED SDRs only
   const teamKPIs = useMemo((): TeamKPIs => {
@@ -148,10 +174,11 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
     bySDR,
     allMeetings,
     getMeetingsForSDR,
-    isLoading: sdrsQuery.isLoading || metricsQuery.isLoading || meetingsQuery.isLoading,
-    error: sdrsQuery.error || metricsQuery.error || meetingsQuery.error,
+    isLoading: sdrsQuery.isLoading || sdrsInPeriodQuery.isLoading || metricsQuery.isLoading || meetingsQuery.isLoading,
+    error: sdrsQuery.error || sdrsInPeriodQuery.error || metricsQuery.error || meetingsQuery.error,
     refetch: () => {
       sdrsQuery.refetch();
+      sdrsInPeriodQuery.refetch();
       metricsQuery.refetch();
       meetingsQuery.refetch();
     },
