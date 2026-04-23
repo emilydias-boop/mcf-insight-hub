@@ -285,7 +285,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
 
   // 4. Agregação por canal
   const { rows, totals } = useMemo(() => {
-    const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'ANAMNESE-INSTA', 'LIVE', 'OUTROS', 'OUTSIDE', 'LANÇAMENTO'];
+    const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'OUTROS'];
     const blank = (): Omit<ChannelFunnelRow, 'channel' | 'channelLabel' | 'r1AgToReal' | 'r1RealToContrato' | 'aprovadoToVenda' | 'entradaToVenda' | 'taxaNoShow'> => ({
       entradas: 0, r1Agendada: 0, r1Realizada: 0, noShow: 0, contratoPago: 0,
       r2Agendada: 0, r2Realizada: 0, aprovados: 0, reprovados: 0,
