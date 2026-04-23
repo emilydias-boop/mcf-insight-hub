@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import type { DayContentProps } from 'react-day-picker';
 import { ptBR } from 'date-fns/locale';
-import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check, CalendarDays, StickyNote } from 'lucide-react';
+import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check, CalendarDays, StickyNote, CheckCircle2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -90,6 +90,8 @@ interface DealOption {
     meetingType: 'r1' | 'r2';
   } | null;
   blockReason?: string | null;
+  warningOnly?: boolean;
+  warningMessage?: string | null;
 }
 
 type LeadType = 'A' | 'B';
@@ -413,6 +415,15 @@ export function QuickScheduleModal({
         if (autoSendWhatsApp && data?.id) {
           sendNotification.mutate({ meetingSlotId: data.id });
         }
+        // Feedback contextual sobre contagem na meta para reagendamentos
+        // após R1 já realizada
+        if (selectedDeal?.leadState === 'completed' && selectedDeal?.warningMessage) {
+          if (selectedDeal.warningMessage.includes('NÃO contará')) {
+            toast.info('Reagendamento criado. Não conta na sua meta (já há 1 agendamento + 1 reagendamento válido neste lead).');
+          } else {
+            toast.success('Reagendamento criado. Conta como 1º Reagendamento na sua meta.');
+          }
+        }
         onOpenChange(false);
         resetForm();
       },
@@ -477,16 +488,15 @@ export function QuickScheduleModal({
   // R1 realizada, contrato pago/won). Quando bloqueado, escondemos os
   // campos de form e mostramos um aviso grande no lugar das Notas.
   const blockedLeadState = useMemo<
-    'scheduled_future' | 'completed' | 'contract_paid' | 'won' | null
+    'scheduled_future' | 'contract_paid' | 'won' | null
   >(() => {
     const state = selectedDeal?.leadState;
     if (
       state === 'scheduled_future' ||
-      state === 'completed' ||
       state === 'contract_paid' ||
       state === 'won'
     ) {
-      return state;
+      return state as 'scheduled_future' | 'contract_paid' | 'won';
     }
     return null;
   }, [selectedDeal?.leadState]);
@@ -636,8 +646,14 @@ export function QuickScheduleModal({
                       const stageName = (deal as any).stage?.stage_name;
                       const leadState = (deal as any).leadState as DealOption['leadState'];
                       const scheduledInfo = (deal as any).scheduledInfo as DealOption['scheduledInfo'];
+                      // 'completed' não bloqueia mais — apenas avisa.
                       const isBlocked =
-                        leadState && leadState !== 'open' && leadState !== 'no_show';
+                        leadState &&
+                        leadState !== 'open' &&
+                        leadState !== 'no_show' &&
+                        leadState !== 'completed';
+                      const warningMsg = (deal as any).warningMessage as string | null | undefined;
+                      const willCount = warningMsg && !warningMsg.includes('NÃO contará');
 
                       let stateBadge: { label: string; className: string } | null = null;
                       if (leadState === 'scheduled_future' && scheduledInfo) {
@@ -656,9 +672,12 @@ export function QuickScheduleModal({
                         };
                       } else if (leadState === 'completed') {
                         stateBadge = {
-                          label: '✅ R1 realizada',
-                          className:
-                            'border-blue-500/60 bg-blue-500/10 text-blue-700 dark:text-blue-400',
+                          label: willCount === false
+                            ? '✅ R1 realizada — reagendamento NÃO contará (limite atingido)'
+                            : '✅ R1 realizada — reagendamento contará na meta',
+                          className: willCount === false
+                            ? 'border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                            : 'border-blue-500/60 bg-blue-500/10 text-blue-700 dark:text-blue-400',
                         };
                       } else if (leadState === 'contract_paid' || leadState === 'won') {
                         stateBadge = {
@@ -678,9 +697,7 @@ export function QuickScheduleModal({
                               ? 'opacity-70 hover:bg-muted/30 border-l-[3px] ' +
                                   (leadState === 'scheduled_future'
                                     ? 'border-l-yellow-500'
-                                    : leadState === 'completed'
-                                      ? 'border-l-blue-500'
-                                      : 'border-l-green-500')
+                                    : 'border-l-green-500')
                               : 'hover:bg-accent',
                           )}
                         >
@@ -1146,6 +1163,27 @@ export function QuickScheduleModal({
               <p className="text-xs text-destructive">Nota obrigatória para agendar</p>
             )}
           </div>
+
+          {/* Banner de aviso para R1 já realizada (reagendamento permitido) */}
+          {selectedDeal?.leadState === 'completed' && selectedDeal?.warningMessage && (
+            <div
+              className={cn(
+                'rounded-lg border-2 p-3 text-sm',
+                selectedDeal.warningMessage.includes('NÃO contará')
+                  ? 'border-amber-500/60 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+                  : 'border-blue-500/60 bg-blue-500/10 text-blue-800 dark:text-blue-300',
+              )}
+              role="alert"
+            >
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-semibold">R1 já realizada — reagendamento permitido</div>
+                  <p className="leading-snug">{selectedDeal.warningMessage}</p>
+                </div>
+              </div>
+            </div>
+          )}
           </>
           )}
 
