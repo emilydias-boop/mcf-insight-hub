@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useUpdateCRMContact, useUpdateCRMDeal } from '@/hooks/useCRMData';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { checkDuplicateContactByIdentity } from '@/hooks/useDuplicateContactIds';
 
 interface EditLeadDialogProps {
   open: boolean;
@@ -48,6 +49,27 @@ export const EditLeadDialog = ({ open, onOpenChange, deal, contact }: EditLeadDi
     e.preventDefault();
 
     try {
+      // Validate email/phone changes don't collide with another active contact
+      const emailChanged = formData.email.trim().toLowerCase() !== (contact?.email || '').toLowerCase();
+      const phoneChanged = formData.phone.trim() !== (contact?.phone || '');
+
+      if (contact?.id && (emailChanged || phoneChanged)) {
+        const newEmail = emailChanged && formData.email.trim() ? formData.email.trim() : null;
+        const newPhone = phoneChanged && formData.phone.trim() ? formData.phone.trim() : null;
+
+        if (newEmail || newPhone) {
+          const match = await checkDuplicateContactByIdentity(newEmail, newPhone);
+          if (match && match.contact_id !== contact.id) {
+            const matchLabel = match.match_type === 'email' ? 'email' : 'telefone';
+            toast.error(
+              `Este ${matchLabel} já pertence a outro contato ativo: ${match.contact_name}. ` +
+              `Considere mesclar manualmente em vez de criar duplicata.`
+            );
+            return;
+          }
+        }
+      }
+
       // Update deal name if changed
       if (deal?.id && formData.dealName.trim() !== (deal?.name || '')) {
         await updateDeal.mutateAsync({
