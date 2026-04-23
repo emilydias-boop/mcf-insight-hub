@@ -67,7 +67,7 @@ export function SdrSummaryTable({
 
   // Calculate totals
   const totals = useMemo(() => {
-    return data.reduce(
+    const computed = data.reduce(
       (acc, row) => ({
         agendamentos: acc.agendamentos + row.agendamentos,
         r1Agendada: acc.r1Agendada + row.r1Agendada,
@@ -77,7 +77,18 @@ export function SdrSummaryTable({
       }),
       { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0 }
     );
-  }, [data]);
+
+    if (totaisOverride) {
+      return {
+        agendamentos: totaisOverride.agendamentos ?? computed.agendamentos,
+        r1Agendada: totaisOverride.r1Agendada,
+        r1Realizada: totaisOverride.r1Realizada,
+        noShows: totaisOverride.noShows,
+        contratos: totaisOverride.contratos,
+      };
+    }
+    return computed;
+  }, [data, totaisOverride]);
 
   const totalTaxaContrato = totals.r1Realizada > 0 
     ? ((totals.contratos / totals.r1Realizada) * 100) : 0;
@@ -147,7 +158,26 @@ export function SdrSummaryTable({
                 >
                   <TableCell className="font-medium">
                     <div className="flex flex-col">
-                      <span className="text-foreground">{row.sdrName}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-foreground">{row.sdrName}</span>
+                        {row.isExSquad && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-border text-[10px] px-1.5 py-0 h-4">
+                                  ex-squad
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">
+                                  SDR pertencia a este squad no período.
+                                  {row.currentSquad && ` Hoje está em: ${row.currentSquad}.`}
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
                       <span className="text-xs text-muted-foreground">{row.sdrEmail.split('@')[0]}</span>
                     </div>
                   </TableCell>
@@ -214,7 +244,25 @@ export function SdrSummaryTable({
 
             {/* Totals Row */}
             <TableRow className="bg-muted/30 font-semibold border-t-2 border-border">
-              <TableCell className="text-foreground">Total</TableCell>
+              <TableCell className="text-foreground">
+                <div className="flex items-center gap-1.5">
+                  <span>Total</span>
+                  {totaisOverride && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="text-xs">
+                            O total reflete as métricas consolidadas da BU (deduplicadas por deal e incluindo vendas manuais), iguais aos cards do topo e à aba Closers. As linhas individuais mostram o esforço de cada SDR conforme o agendamento via Agenda.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </div>
+              </TableCell>
               <TableCell className="text-center text-muted-foreground">—</TableCell>
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
