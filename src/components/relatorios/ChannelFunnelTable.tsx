@@ -2,7 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Info } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Info, ChevronDown } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { ChannelFunnelRow } from '@/hooks/useChannelFunnelReport';
 
@@ -86,7 +87,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="R1 Agend."
-                        info="Deals únicos com R1 agendado no período, filtrados pela origem do deal (BU). Para visão por trabalho do SDR (independente da BU do lead), ver o Painel Comercial."
+                        info="Deals únicos com R1 marcada para o período (scheduled_at), filtrados pela origem do deal (BU). Conta 1 por deal — reagendamentos não inflam. Diferente do 'Agendamentos' do Painel Comercial, que conta atos de agendar (booked_at) com cap de 2 movs/deal. Veja 'Notas metodológicas' abaixo."
                       />
                     </TableHead>
                     <TableHead className="text-right">R1 Realiz.</TableHead>
@@ -181,6 +182,48 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                 </TableBody>
               </Table>
             </div>
+
+            {/* Notas metodológicas */}
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors group">
+                <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
+                <span className="underline">Notas metodológicas — por que estes números diferem do Painel Comercial?</span>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 rounded-md border bg-muted/30 p-4 text-xs space-y-3">
+                <p className="text-foreground">
+                  O <strong>Funil por Canal</strong> e o <strong>Painel Comercial</strong> medem perspectivas diferentes — ambos estão corretos, mas servem para análises distintas.
+                </p>
+                <div className="space-y-2">
+                  <div>
+                    <p className="font-semibold text-foreground">1. Janela de tempo (booked_at vs scheduled_at)</p>
+                    <p className="text-muted-foreground">
+                      <strong>Painel</strong>: conta o ato de agendar feito no período (<code>booked_at</code>). Um agendamento feito em 28/abr para 5/mai conta em abril.
+                      <br />
+                      <strong>Funil</strong>: conta a R1 marcada para o período (<code>scheduled_at</code>). Uma R1 agendada em março mas marcada para abril conta em abril.
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-foreground">2. Critério de inclusão (SDR vs Origem do deal)</p>
+                    <p className="text-muted-foreground">
+                      <strong>Painel</strong>: filtra por SDRs com squad da BU no momento do agendamento (via <code>sdr_squad_history</code>). Inclui agendamentos do SDR Inc em deals de outras BUs.
+                      <br />
+                      <strong>Funil</strong>: filtra pela origem do deal (<code>origin_id</code> da BU). Mede a perspectiva do lead.
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-foreground">3. Deduplicação (cap 2 vs deal único)</p>
+                    <p className="text-muted-foreground">
+                      <strong>Painel</strong>: aplica cap de até 2 movimentos por deal em métricas como R1 Agendada; "Agendamentos" não tem cap.
+                      <br />
+                      <strong>Funil</strong>: conta deals únicos — reagendamentos do mesmo deal não inflam o número (1 deal = 1 unidade).
+                    </p>
+                  </div>
+                </div>
+                <p className="text-muted-foreground italic">
+                  Para gestão e produtividade do time SDR, use o <strong>Painel Comercial</strong>. Para análise de canal e jornada do lead, use o <strong>Funil por Canal</strong>.
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
           </>
         )}
       </CardContent>
