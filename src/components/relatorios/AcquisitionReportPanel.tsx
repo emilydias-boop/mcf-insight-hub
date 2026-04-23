@@ -98,6 +98,27 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
     ), 'Outside');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(toSheet(byOrigin)), 'Por Origem');
 
+    // Funil por Canal
+    const funnelSheet = funnelRows.map(r => ({
+      'Canal': r.channelLabel,
+      'Entradas': r.entradas,
+      'R1 Agendada': r.r1Agendada,
+      'R1 Realizada': r.r1Realizada,
+      'Contrato Pago': r.contratoPago,
+      'R2 Agendada': r.r2Agendada,
+      'R2 Realizada': r.r2Realizada,
+      'Aprovados': r.aprovados,
+      'Reprovados': r.reprovados,
+      'Próxima Semana': r.proximaSemana,
+      'Venda Final': r.vendaFinal,
+      'Faturamento': r.faturamento,
+      'R1 Ag→Real %': r.r1AgToReal.toFixed(1),
+      'R1 Real→Contrato %': r.r1RealToContrato.toFixed(1),
+      'Aprovado→Venda %': r.aprovadoToVenda.toFixed(1),
+      'Entrada→Venda %': r.entradaToVenda.toFixed(1),
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(funnelSheet), 'Funil por Canal');
+
     XLSX.writeFile(wb, `aquisicao_origem_${bu}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
   };
 
