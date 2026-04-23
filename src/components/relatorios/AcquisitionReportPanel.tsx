@@ -12,6 +12,8 @@ import { startOfMonth, endOfMonth } from 'date-fns';
 import { formatCurrency } from '@/lib/formatters';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { useAcquisitionReport, DimensionRow } from '@/hooks/useAcquisitionReport';
+import { useChannelFunnelReport, displayChannelLabel } from '@/hooks/useChannelFunnelReport';
+import { ChannelFunnelTable } from './ChannelFunnelTable';
 import * as XLSX from 'xlsx';
 
 interface AcquisitionReportPanelProps {
@@ -34,6 +36,9 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
     closers, classified, isLoading,
   } = useAcquisitionReport(dateRange, bu);
 
+  const { rows: funnelRows, totals: funnelTotals, isLoading: funnelLoading } =
+    useChannelFunnelReport(dateRange, bu);
+
   // Apply local filters on classified data to recalculate if needed
   // For simplicity the main hook already processes all; filters here are on the aggregated views
   const filteredByCloser = useMemo(() => {
@@ -48,6 +53,12 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
     if (selectedChannel === 'all') return byChannel;
     return byChannel.filter(r => r.label === selectedChannel.toUpperCase());
   }, [byChannel, selectedChannel]);
+
+  // Display label override: LIVE → "ANAMNESE (ex-LIVE)" — only visual, value stays "LIVE"
+  const byChannelDisplay = useMemo(
+    () => filteredByChannel.map(r => ({ ...r, label: displayChannelLabel(r.label) })),
+    [filteredByChannel]
+  );
 
   const filteredByOrigin = useMemo(() => {
     if (selectedOrigin === 'all') return byOrigin;
@@ -86,6 +97,27 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
       byOutside.map(r => ({ Closer: r.label, 'Qtde Outside': r.outsideCount, 'Fat. Outside': r.outsideRevenue }))
     ), 'Outside');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(toSheet(byOrigin)), 'Por Origem');
+
+    // Funil por Canal
+    const funnelSheet = funnelRows.map(r => ({
+      'Canal': r.channelLabel,
+      'Entradas': r.entradas,
+      'R1 Agendada': r.r1Agendada,
+      'R1 Realizada': r.r1Realizada,
+      'Contrato Pago': r.contratoPago,
+      'R2 Agendada': r.r2Agendada,
+      'R2 Realizada': r.r2Realizada,
+      'Aprovados': r.aprovados,
+      'Reprovados': r.reprovados,
+      'Próxima Semana': r.proximaSemana,
+      'Venda Final': r.vendaFinal,
+      'Faturamento': r.faturamento,
+      'R1 Ag→Real %': r.r1AgToReal.toFixed(1),
+      'R1 Real→Contrato %': r.r1RealToContrato.toFixed(1),
+      'Aprovado→Venda %': r.aprovadoToVenda.toFixed(1),
+      'Entrada→Venda %': r.entradaToVenda.toFixed(1),
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(funnelSheet), 'Funil por Canal');
 
     XLSX.writeFile(wb, `aquisicao_origem_${bu}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
   };
@@ -153,7 +185,7 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="A010">A010</SelectItem>
-                  <SelectItem value="LIVE">LIVE</SelectItem>
+                  <SelectItem value="LIVE">ANAMNESE (ex-LIVE)</SelectItem>
                   <SelectItem value="ANAMNESE">ANAMNESE</SelectItem>
                   <SelectItem value="ANAMNESE-INSTA">ANAMNESE-INSTA</SelectItem>
                   <SelectItem value="OUTSIDE">OUTSIDE</SelectItem>
@@ -187,6 +219,20 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
         <KPICard icon={TrendingUp} label="Ticket Médio" value={formatCurrency(kpis.avgTicket)} color="muted" isMuted />
       </div>
 
+      {/* Funil por Canal */}
+      {funnelLoading ? (
+        <Card>
+          <CardContent className="py-8">
+            <div className="flex items-center justify-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Carregando funil por canal...</span>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <ChannelFunnelTable rows={funnelRows} totals={funnelTotals} />
+      )}
+
       {/* Faturamento por Closer */}
       <DimensionTable
         title="Faturamento por Closer"
@@ -198,7 +244,7 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
       <DimensionTable title="Faturamento por SDR" rows={bySDR} />
 
       {/* Faturamento por Canal */}
-      <DimensionTable title="Faturamento por Canal" rows={filteredByChannel} />
+      <DimensionTable title="Faturamento por Canal" rows={byChannelDisplay} />
 
       {/* Faturamento Outside */}
       <Card>

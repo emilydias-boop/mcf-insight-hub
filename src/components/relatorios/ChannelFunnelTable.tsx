@@ -1,0 +1,150 @@
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { formatCurrency } from '@/lib/formatters';
+import { ChannelFunnelRow } from '@/hooks/useChannelFunnelReport';
+
+interface Props {
+  rows: ChannelFunnelRow[];
+  totals: {
+    entradas: number; r1Agendada: number; r1Realizada: number; contratoPago: number;
+    r2Agendada: number; r2Realizada: number; aprovados: number; reprovados: number;
+    proximaSemana: number; vendaFinal: number; faturamento: number;
+  };
+}
+
+function pct(n: number): string {
+  if (!isFinite(n) || n <= 0) return '—';
+  return `${n.toFixed(1)}%`;
+}
+
+function pctBadge(n: number) {
+  if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground">—</span>;
+  const variant = n >= 50 ? 'default' : n >= 20 ? 'secondary' : 'outline';
+  return <Badge variant={variant as any} className="font-mono">{n.toFixed(1)}%</Badge>;
+}
+
+export function ChannelFunnelTable({ rows, totals }: Props) {
+  const totalConv = {
+    r1AgToReal: totals.r1Agendada > 0 ? (totals.r1Realizada / totals.r1Agendada) * 100 : 0,
+    r1RealToContrato: totals.r1Realizada > 0 ? (totals.contratoPago / totals.r1Realizada) * 100 : 0,
+    aprovadoToVenda: totals.aprovados > 0 ? (totals.vendaFinal / totals.aprovados) * 100 : 0,
+    entradaToVenda: totals.entradas > 0 ? (totals.vendaFinal / totals.entradas) * 100 : 0,
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Funil por Canal</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Jornada completa do lead por canal de aquisição: do primeiro contato à venda final.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">Sem dados no período</p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="sticky left-0 bg-background min-w-[160px]">Canal</TableHead>
+                    <TableHead className="text-right">Entradas</TableHead>
+                    <TableHead className="text-right">R1 Agend.</TableHead>
+                    <TableHead className="text-right">R1 Realiz.</TableHead>
+                    <TableHead className="text-right">Contrato Pago</TableHead>
+                    <TableHead className="text-right">R2 Agend.</TableHead>
+                    <TableHead className="text-right">R2 Realiz.</TableHead>
+                    <TableHead className="text-right">Aprovados</TableHead>
+                    <TableHead className="text-right">Reprovados</TableHead>
+                    <TableHead className="text-right">Próx. Semana</TableHead>
+                    <TableHead className="text-right">Venda Final</TableHead>
+                    <TableHead className="text-right">Faturamento</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map(r => (
+                    <TableRow key={r.channel}>
+                      <TableCell className="sticky left-0 bg-background font-medium">{r.channelLabel}</TableCell>
+                      <TableCell className="text-right">{r.entradas}</TableCell>
+                      <TableCell className="text-right">{r.r1Agendada}</TableCell>
+                      <TableCell className="text-right">{r.r1Realizada}</TableCell>
+                      <TableCell className="text-right">{r.contratoPago}</TableCell>
+                      <TableCell className="text-right">{r.r2Agendada}</TableCell>
+                      <TableCell className="text-right">{r.r2Realizada}</TableCell>
+                      <TableCell className="text-right text-success">{r.aprovados}</TableCell>
+                      <TableCell className="text-right text-destructive">{r.reprovados}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">{r.proximaSemana}</TableCell>
+                      <TableCell className="text-right font-semibold">{r.vendaFinal}</TableCell>
+                      <TableCell className="text-right font-semibold">{formatCurrency(r.faturamento)}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="border-t-2 bg-muted/30 font-semibold">
+                    <TableCell className="sticky left-0 bg-muted/30">Total</TableCell>
+                    <TableCell className="text-right">{totals.entradas}</TableCell>
+                    <TableCell className="text-right">{totals.r1Agendada}</TableCell>
+                    <TableCell className="text-right">{totals.r1Realizada}</TableCell>
+                    <TableCell className="text-right">{totals.contratoPago}</TableCell>
+                    <TableCell className="text-right">{totals.r2Agendada}</TableCell>
+                    <TableCell className="text-right">{totals.r2Realizada}</TableCell>
+                    <TableCell className="text-right text-success">{totals.aprovados}</TableCell>
+                    <TableCell className="text-right text-destructive">{totals.reprovados}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">{totals.proximaSemana}</TableCell>
+                    <TableCell className="text-right">{totals.vendaFinal}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(totals.faturamento)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Conversões agregadas */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <ConversionCard label="R1 Ag → R1 Real" value={totalConv.r1AgToReal} />
+              <ConversionCard label="R1 Real → Contrato Pago" value={totalConv.r1RealToContrato} />
+              <ConversionCard label="Aprovado → Venda Final" value={totalConv.aprovadoToVenda} />
+              <ConversionCard label="Entrada → Venda Final" value={totalConv.entradaToVenda} />
+            </div>
+
+            {/* Tabela de conversões por canal */}
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[160px]">Canal — Conversões</TableHead>
+                    <TableHead className="text-right">R1 Ag → Real</TableHead>
+                    <TableHead className="text-right">R1 Real → Contrato</TableHead>
+                    <TableHead className="text-right">Aprovado → Venda</TableHead>
+                    <TableHead className="text-right">Entrada → Venda</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map(r => (
+                    <TableRow key={`conv-${r.channel}`}>
+                      <TableCell className="font-medium">{r.channelLabel}</TableCell>
+                      <TableCell className="text-right">{pctBadge(r.r1AgToReal)}</TableCell>
+                      <TableCell className="text-right">{pctBadge(r.r1RealToContrato)}</TableCell>
+                      <TableCell className="text-right">{pctBadge(r.aprovadoToVenda)}</TableCell>
+                      <TableCell className="text-right">{pctBadge(r.entradaToVenda)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ConversionCard({ label, value }: { label: string; value: number }) {
+  return (
+    <Card className="bg-muted/30">
+      <CardContent className="pt-4 pb-4">
+        <p className="text-xs text-muted-foreground mb-1">{label}</p>
+        <p className="text-xl font-bold">{pct(value)}</p>
+      </CardContent>
+    </Card>
+  );
+}
