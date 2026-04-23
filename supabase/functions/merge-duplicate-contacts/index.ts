@@ -58,6 +58,21 @@ Deno.serve(async (req) => {
           results.deals_remapeados += dC || 0;
           results.attendees_remapeados += aC || 0;
           results.contatos_arquivados += secondaryIds.length;
+
+          // Estimate deals to be archived: simulate post-remap grouping
+          const { data: simDeals } = await supabase
+            .from("crm_deals")
+            .select("id, origin_id")
+            .in("contact_id", [principalId, ...secondaryIds])
+            .eq("is_archived", false);
+          const counts: Record<string, number> = {};
+          for (const d of simDeals || []) {
+            if (!d.origin_id) continue;
+            counts[d.origin_id] = (counts[d.origin_id] || 0) + 1;
+          }
+          for (const o of Object.keys(counts)) {
+            if (counts[o] > 1) results.deals_arquivados += counts[o] - 1;
+          }
         } else {
           // Remap deals
           const { data: rd } = await supabase
