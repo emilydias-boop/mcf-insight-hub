@@ -157,6 +157,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableHead className="min-w-[160px]">Canal — Conversões</TableHead>
                     <TableHead className="text-right">R1 Ag → Real</TableHead>
                     <TableHead className="text-right">R1 Real → Contrato</TableHead>
+                    <TableHead className="text-right">Taxa No-Show</TableHead>
                     <TableHead className="text-right">Aprovado → Venda</TableHead>
                     <TableHead className="text-right">Entrada → Venda</TableHead>
                   </TableRow>
@@ -167,6 +168,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                       <TableCell className="font-medium">{r.channelLabel}</TableCell>
                       <TableCell className="text-right">{pctBadge(r.r1AgToReal)}</TableCell>
                       <TableCell className="text-right">{pctBadge(r.r1RealToContrato)}</TableCell>
+                      <TableCell className="text-right">{pctBadgeInverted(r.taxaNoShow)}</TableCell>
                       <TableCell className="text-right">{pctBadge(r.aprovadoToVenda)}</TableCell>
                       <TableCell className="text-right">{pctBadge(r.entradaToVenda)}</TableCell>
                     </TableRow>
