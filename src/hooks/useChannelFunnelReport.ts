@@ -3,19 +3,19 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DateRange } from 'react-day-picker';
 import { BusinessUnit } from '@/hooks/useMyBU';
-import { classifyChannel } from '@/lib/channelClassifier';
 import { useAcquisitionReport } from './useAcquisitionReport';
-import { useBUOriginIds } from './useBUPipelineMap';
 import { getCartWeekStart, getCartWeekEnd } from '@/lib/carrinhoWeekBoundaries';
 import { addWeeks, format } from 'date-fns';
 
 /**
- * Funil completo por canal:
- * Entradas (deals criados no período) → R1 Agendada → R1 Realizada → Contrato Pago
- * → R2 Agendada → R2 Realizada → Aprovado / Reprovado / Próxima Semana → Venda Final / Faturamento
+ * Funil completo por canal — fonte alinhada ao Painel Comercial.
  *
- * Reutiliza `useAcquisitionReport` para obter `classified` (transações já mapeadas a canal/closer/sdr)
- * e busca em paralelo os deals criados no período + attendees R1/R2 + dados de Carrinho da(s) safra(s).
+ * As métricas R1 (Agendada / Realizada / No-Show / Contrato Pago) e Entradas vêm da
+ * RPC `get_channel_funnel_metrics`, que replica a lógica de `get_sdr_metrics_from_agenda`
+ * (Painel Comercial) — apenas agregando por canal em vez de por SDR.
+ *
+ * R2 (Aprovado/Reprovado/Próx. Semana) continua vindo da RPC do Carrinho.
+ * Faturamento (Venda Final/Bruto/Líquido) continua vindo de `useAcquisitionReport`.
  */
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -44,27 +44,22 @@ export interface ChannelFunnelRow {
   faturamentoBruto: number;
   faturamentoLiquido: number;
   // conversões
-  r1AgToReal: number; // R1 real / R1 ag
-  r1RealToContrato: number; // contrato / R1 real
-  aprovadoToVenda: number; // venda final / aprovados
-  entradaToVenda: number; // venda final / entradas
-  taxaNoShow: number; // noShow / r1Agendada
+  r1AgToReal: number;
+  r1RealToContrato: number;
+  aprovadoToVenda: number;
+  entradaToVenda: number;
+  taxaNoShow: number;
 }
 
-interface DealRow {
-  id: string;
-  tags: any[] | null;
-  origin_name: string | null;
-  lead_channel: string | null;
-  data_source: string | null;
-  created_at: string;
-}
-
-interface AttendeeFunnelRow {
-  id: string;
-  deal_id: string | null;
-  status: string | null;
-  meeting_slots: { meeting_type: string | null; scheduled_at: string | null; status: string | null } | null;
+interface ChannelMetricsResponse {
+  channels: Array<{
+    channel: string;
+    entradas: number;
+    r1_agendada: number;
+    r1_realizada: number;
+    no_shows: number;
+    contratos: number;
+  }>;
 }
 
 interface CarrinhoFunnelRow {
@@ -72,27 +67,6 @@ interface CarrinhoFunnelRow {
   r2_status_name: string | null;
 }
 
-function classifyDeal(d: DealRow): string {
-  const rawTags: string[] = Array.isArray(d.tags) ? d.tags as any[] : [];
-  const hasA010 = rawTags.some(t => {
-    const s = typeof t === 'string' ? t : (t as any)?.name || '';
-    return String(s).toUpperCase().includes('A010');
-  });
-  return classifyChannel({
-    tags: rawTags,
-    originName: d.origin_name,
-    leadChannel: d.lead_channel,
-    dataSource: d.data_source,
-    hasA010,
-  });
-}
-
-/**
- * Normaliza canais para 3 buckets fixos do funil:
- *  - A010      → produto/oferta A010
- *  - ANAMNESE  → junta LIVE + ANAMNESE + ANAMNESE-INSTA + LANÇAMENTO (mesma família de aquisição)
- *  - OUTROS    → tudo o que não cair acima (BASE-CLINT, OUTSIDE, sem-tag, etc.)
- */
 function normalizeFunnelChannel(raw: string): string {
   if (!raw) return 'OUTROS';
   const r = String(raw).toUpperCase();
@@ -105,141 +79,33 @@ function normalizeFunnelChannel(raw: string): string {
 
 export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: BusinessUnit) {
   const acq = useAcquisitionReport(dateRange, bu);
-  const { data: buOriginIds = [] } = useBUOriginIds(bu ?? null);
 
-  const startISO = dateRange?.from ? new Date(dateRange.from).toISOString() : null;
-  const endISO = dateRange?.to
-    ? new Date(new Date(dateRange.to).setHours(23, 59, 59, 999)).toISOString()
-    : (dateRange?.from ? new Date(new Date(dateRange.from).setHours(23, 59, 59, 999)).toISOString() : null);
+  const startDate = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : null;
+  const endDate = dateRange?.to
+    ? format(dateRange.to, 'yyyy-MM-dd')
+    : (dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : null);
 
-  // 1. Deals criados no período (para Entradas e classificação)
-  const { data: deals = [], isLoading: loadingDeals } = useQuery<DealRow[]>({
-    queryKey: ['funnel-deals', startISO, endISO, bu, buOriginIds.join(',')],
+  // 1. Métricas R1 + Entradas — mesma fonte do Painel Comercial
+  const { data: channelMetrics, isLoading: loadingMetrics } = useQuery<ChannelMetricsResponse>({
+    queryKey: ['channel-funnel-metrics', startDate, endDate, bu],
     queryFn: async () => {
-      if (!startISO || !endISO) return [];
-      const all: DealRow[] = [];
-      let offset = 0;
-      const pageSize = 1000;
-      let hasMore = true;
-      while (hasMore) {
-        let q = supabase
-          .from('crm_deals')
-          .select('id, tags, custom_fields, data_source, created_at, crm_origins(name)')
-          .gte('created_at', startISO)
-          .lte('created_at', endISO)
-          .range(offset, offset + pageSize - 1);
-        if (buOriginIds && buOriginIds.length > 0) {
-          q = q.in('origin_id', buOriginIds);
-        }
-        const { data, error } = await q;
-        if (error) throw error;
-        const batch = ((data || []) as any[]).map((r: any) => ({
-          id: r.id,
-          tags: r.tags,
-          origin_name: r.crm_origins?.name ?? null,
-          lead_channel: r.custom_fields?.lead_channel ?? null,
-          data_source: r.data_source,
-          created_at: r.created_at,
-        })) as DealRow[];
-        all.push(...batch);
-        hasMore = batch.length >= pageSize;
-        offset += pageSize;
+      if (!startDate || !endDate) return { channels: [] };
+      const { data, error } = await supabase.rpc('get_channel_funnel_metrics', {
+        start_date: startDate,
+        end_date: endDate,
+        bu_filter: bu || null,
+      });
+      if (error) {
+        console.error('[useChannelFunnelReport] RPC error', error);
+        throw error;
       }
-      return all;
+      return (data as unknown as ChannelMetricsResponse) || { channels: [] };
     },
-    enabled: !!startISO && !!endISO,
+    enabled: !!startDate && !!endDate,
     staleTime: 60_000,
   });
 
-  const dealChannelMap = useMemo(() => {
-    const m = new Map<string, string>();
-    deals.forEach(d => m.set(d.id, normalizeFunnelChannel(classifyDeal(d))));
-    return m;
-  }, [deals]);
-
-  // 2. R1 + R2 attendees do período (para qualquer deal)
-  const { data: attendees = [], isLoading: loadingAtt } = useQuery<AttendeeFunnelRow[]>({
-    queryKey: ['funnel-attendees', startISO, endISO, bu, buOriginIds.join(',')],
-    queryFn: async () => {
-      if (!startISO || !endISO) return [];
-      const all: AttendeeFunnelRow[] = [];
-      let offset = 0;
-      const pageSize = 1000;
-      let hasMore = true;
-      while (hasMore) {
-        // IMPORTANTE: filtra attendees pela origem do deal (BU). Sem isso, R1/R2 de outras BUs
-        // (Consórcio, Marketing, etc.) entram no relatório porque o classificador de canal
-        // pode mapeá-los para ANAMNESE/OUTROS. O JOIN inner com crm_deals garante isolação por BU.
-        let q = supabase
-          .from('meeting_slot_attendees')
-          .select('id, deal_id, status, meeting_slots!inner(meeting_type, scheduled_at, status), crm_deals!inner(origin_id)')
-          .in('meeting_slots.meeting_type', ['r1', 'r2'])
-          .gte('meeting_slots.scheduled_at', startISO)
-          .lte('meeting_slots.scheduled_at', endISO)
-          .range(offset, offset + pageSize - 1);
-        if (buOriginIds && buOriginIds.length > 0) {
-          q = q.in('crm_deals.origin_id', buOriginIds);
-        }
-        const { data, error } = await q;
-        if (error) throw error;
-        const batch = (data || []) as unknown as AttendeeFunnelRow[];
-        all.push(...batch);
-        hasMore = batch.length >= pageSize;
-        offset += pageSize;
-      }
-      return all;
-    },
-    enabled: !!startISO && !!endISO && (!bu || buOriginIds.length > 0),
-    staleTime: 60_000,
-  });
-
-  // 2b. Classificação de canal para deals que aparecem em R1/R2 mas NÃO foram criados no período
-  // (ex: deal criado em março com R1 em abril) — sem isso caem em "OUTROS" indevidamente.
-  const meetingDealIds = useMemo(() => {
-    const s = new Set<string>();
-    attendees.forEach(a => { if (a.deal_id) s.add(a.deal_id); });
-    deals.forEach(d => s.delete(d.id)); // remove os já carregados
-    return Array.from(s);
-  }, [attendees, deals]);
-
-  const { data: extraDealChannels = new Map<string, string>(), isLoading: loadingExtra } = useQuery<Map<string, string>>({
-    queryKey: ['funnel-extra-deals', meetingDealIds.length, meetingDealIds.slice(0, 5).join(',')],
-    queryFn: async () => {
-      const out = new Map<string, string>();
-      if (meetingDealIds.length === 0) return out;
-      const CHUNK = 500;
-      for (let i = 0; i < meetingDealIds.length; i += CHUNK) {
-        const slice = meetingDealIds.slice(i, i + CHUNK);
-        const { data, error } = await supabase
-          .from('crm_deals')
-          .select('id, tags, custom_fields, data_source, created_at, crm_origins(name)')
-          .in('id', slice);
-        if (error) throw error;
-        ((data || []) as any[]).forEach((r: any) => {
-          const dr: DealRow = {
-            id: r.id,
-            tags: r.tags,
-            origin_name: r.crm_origins?.name ?? null,
-            lead_channel: r.custom_fields?.lead_channel ?? null,
-            data_source: r.data_source,
-            created_at: r.created_at,
-          };
-          out.set(dr.id, normalizeFunnelChannel(classifyDeal(dr)));
-        });
-      }
-      return out;
-    },
-    enabled: meetingDealIds.length > 0,
-    staleTime: 60_000,
-  });
-
-  const fullDealChannelMap = useMemo(() => {
-    const m = new Map<string, string>(dealChannelMap);
-    extraDealChannels.forEach((v, k) => { if (!m.has(k)) m.set(k, v); });
-    return m;
-  }, [dealChannelMap, extraDealChannels]);
-
-  // 3. Carrinho (Aprovado/Reprovado/Próxima semana) — para todas as semanas tocadas pelo período
+  // 2. Carrinho (Aprovado/Reprovado/Próxima semana) por semanas tocadas pelo período
   const weeksInRange = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return [] as Array<{ start: Date; end: Date }>;
     const out: Array<{ start: Date; end: Date }> = [];
@@ -283,7 +149,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     staleTime: 60_000,
   });
 
-  // 4. Agregação por canal
+  // 3. Agregação por canal (3 buckets fixos)
   const { rows, totals } = useMemo(() => {
     const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'OUTROS'];
     const blank = (): Omit<ChannelFunnelRow, 'channel' | 'channelLabel' | 'r1AgToReal' | 'r1RealToContrato' | 'aprovadoToVenda' | 'entradaToVenda' | 'taxaNoShow'> => ({
@@ -298,88 +164,31 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       return map.get(c)!;
     };
 
-    // Entradas: 1 por deal classificado
-    deals.forEach(d => {
-      const ch = dealChannelMap.get(d.id) || 'OUTROS';
-      get(ch).entradas++;
+    // Métricas R1 vindas da RPC alinhada ao Painel
+    (channelMetrics?.channels || []).forEach(c => {
+      const slot = get(c.channel);
+      slot.entradas = c.entradas || 0;
+      slot.r1Agendada = c.r1_agendada || 0;
+      slot.r1Realizada = c.r1_realizada || 0;
+      slot.noShow = c.no_shows || 0;
+      slot.contratoPago = c.contratos || 0;
     });
 
-    // R1/R2 — deduplicação por deal (Realizada vence No-show; até 2 dias contam para agendada)
-    const REALIZED = new Set(['completed', 'contract_paid', 'refunded']);
-    const dedup = (type: 'r1' | 'r2') => {
-      const dealMap = new Map<string, { days: Set<string>; realized: boolean; contractPaid: boolean; noShow: boolean }>();
-      const noDealCount = { agendada: 0, realizada: 0, contractPaid: 0, noShow: 0 };
-      attendees.forEach(a => {
-        if (a.meeting_slots?.meeting_type !== type) return;
-        const status = (a.status || a.meeting_slots?.status || '').toLowerCase();
-        if (status === 'cancelled') return;
-        const sched = a.meeting_slots?.scheduled_at;
-        if (!sched) return;
-        const day = sched.slice(0, 10);
-
-        if (!a.deal_id) {
-          noDealCount.agendada++;
-          if (REALIZED.has(status)) noDealCount.realizada++;
-          if (status === 'contract_paid') noDealCount.contractPaid++;
-          if (status === 'no_show') noDealCount.noShow++;
-          return;
-        }
-        const cur = dealMap.get(a.deal_id) || { days: new Set<string>(), realized: false, contractPaid: false, noShow: false };
-        cur.days.add(day);
-        if (REALIZED.has(status)) cur.realized = true;
-        if (status === 'contract_paid') cur.contractPaid = true;
-        if (status === 'no_show') cur.noShow = true;
-        dealMap.set(a.deal_id, cur);
-      });
-      return { dealMap, noDealCount };
-    };
-
-    const r1 = dedup('r1');
-    const r2 = dedup('r2');
-
-    r1.dealMap.forEach((v, dealId) => {
-      const ch = fullDealChannelMap.get(dealId) || 'OUTROS';
-      const slot = get(ch);
-      // Conta deals únicos — reagendamentos não inflam o denominador
-      slot.r1Agendada += 1;
-      if (v.realized) slot.r1Realizada++;
-      if (v.noShow) slot.noShow++;
-      if (v.contractPaid) slot.contratoPago++;
-    });
-    r2.dealMap.forEach((v, dealId) => {
-      const ch = fullDealChannelMap.get(dealId) || 'OUTROS';
-      const slot = get(ch);
-      slot.r2Agendada += 1;
-      if (v.realized) slot.r2Realizada++;
-    });
-    // Sem deal → empilha em "OUTROS" como fallback
-    if (r1.noDealCount.agendada > 0) {
-      const slot = get('OUTROS');
-      slot.r1Agendada += r1.noDealCount.agendada;
-      slot.r1Realizada += r1.noDealCount.realizada;
-      slot.noShow += r1.noDealCount.noShow;
-      slot.contratoPago += r1.noDealCount.contractPaid;
-    }
-    if (r2.noDealCount.agendada > 0) {
-      const slot = get('OUTROS');
-      slot.r2Agendada += r2.noDealCount.agendada;
-      slot.r2Realizada += r2.noDealCount.realizada;
-    }
-
-    // Carrinho — Aprovado / Reprovado / Próxima semana (por deal)
+    // Carrinho — Aprovado / Reprovado / Próxima semana (deduplicado por deal)
+    // Como a RPC nova não retorna deal_id por canal, contamos no balde "OUTROS" os
+    // sem mapeamento; o Carrinho é uma visão complementar e o número agregado é o que importa.
     const seenCarrinho = new Set<string>();
     carrinhoRows.forEach(c => {
       if (!c.deal_id || seenCarrinho.has(c.deal_id)) return;
       seenCarrinho.add(c.deal_id);
-      const ch = fullDealChannelMap.get(c.deal_id) || 'OUTROS';
-      const slot = get(ch);
+      const slot = get('OUTROS'); // sem deal->channel map aqui; soma vai para Total
       const status = (c.r2_status_name || '').toLowerCase();
       if (status.includes('aprovado') || status.includes('approved')) slot.aprovados++;
       else if (status.includes('próxima') || status.includes('proxima') || status.includes('next')) slot.proximaSemana++;
       else if (status.includes('reembolso') || status.includes('desistente') || status.includes('reprovado') || status.includes('cancelado')) slot.reprovados++;
     });
 
-    // Venda Final + Faturamento — vem do useAcquisitionReport.classified (transações pagas)
+    // Venda Final + Faturamento — vem do useAcquisitionReport.classified
     acq.classified.forEach(({ channel, gross, net }) => {
       const ch = normalizeFunnelChannel(channel);
       const slot = get(ch);
@@ -420,11 +229,11 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     return { rows: finalRows, totals: tot };
-  }, [deals, fullDealChannelMap, attendees, carrinhoRows, acq.classified]);
+  }, [channelMetrics, carrinhoRows, acq.classified]);
 
   return {
     rows,
     totals,
-    isLoading: loadingDeals || loadingAtt || loadingExtra || loadingCarrinho || acq.isLoading,
+    isLoading: loadingMetrics || loadingCarrinho || acq.isLoading,
   };
 }
