@@ -9,7 +9,7 @@ import { ChannelFunnelRow } from '@/hooks/useChannelFunnelReport';
 interface Props {
   rows: ChannelFunnelRow[];
   totals: {
-    entradas: number; r1Agendada: number; r1Realizada: number; contratoPago: number;
+    entradas: number; r1Agendada: number; r1Realizada: number; noShow: number; contratoPago: number;
     r2Agendada: number; r2Realizada: number; aprovados: number; reprovados: number;
     proximaSemana: number; vendaFinal: number; faturamentoBruto: number; faturamentoLiquido: number;
   };
@@ -23,6 +23,13 @@ function pct(n: number): string {
 function pctBadge(n: number) {
   if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground">—</span>;
   const variant = n >= 50 ? 'default' : n >= 20 ? 'secondary' : 'outline';
+  return <Badge variant={variant as any} className="font-mono">{n.toFixed(1)}%</Badge>;
+}
+
+function pctBadgeInverted(n: number) {
+  // Para No-Show: quanto menor, melhor
+  if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground">—</span>;
+  const variant = n >= 30 ? 'destructive' : n >= 20 ? 'secondary' : 'default';
   return <Badge variant={variant as any} className="font-mono">{n.toFixed(1)}%</Badge>;
 }
 
@@ -78,6 +85,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     </TableHead>
                     <TableHead className="text-right">R1 Agend.</TableHead>
                     <TableHead className="text-right">R1 Realiz.</TableHead>
+                    <TableHead className="text-right">No-Show</TableHead>
                     <TableHead className="text-right">Contrato Pago</TableHead>
                     <TableHead className="text-right">R2 Agend.</TableHead>
                     <TableHead className="text-right">R2 Realiz.</TableHead>
@@ -101,6 +109,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                       <TableCell className="text-right">{r.entradas}</TableCell>
                       <TableCell className="text-right">{r.r1Agendada}</TableCell>
                       <TableCell className="text-right">{r.r1Realizada}</TableCell>
+                      <TableCell className="text-right text-destructive">{r.noShow}</TableCell>
                       <TableCell className="text-right">{r.contratoPago}</TableCell>
                       <TableCell className="text-right">{r.r2Agendada}</TableCell>
                       <TableCell className="text-right">{r.r2Realizada}</TableCell>
@@ -117,6 +126,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableCell className="text-right">{totals.entradas}</TableCell>
                     <TableCell className="text-right">{totals.r1Agendada}</TableCell>
                     <TableCell className="text-right">{totals.r1Realizada}</TableCell>
+                    <TableCell className="text-right text-destructive">{totals.noShow}</TableCell>
                     <TableCell className="text-right">{totals.contratoPago}</TableCell>
                     <TableCell className="text-right">{totals.r2Agendada}</TableCell>
                     <TableCell className="text-right">{totals.r2Realizada}</TableCell>
@@ -147,6 +157,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableHead className="min-w-[160px]">Canal — Conversões</TableHead>
                     <TableHead className="text-right">R1 Ag → Real</TableHead>
                     <TableHead className="text-right">R1 Real → Contrato</TableHead>
+                    <TableHead className="text-right">Taxa No-Show</TableHead>
                     <TableHead className="text-right">Aprovado → Venda</TableHead>
                     <TableHead className="text-right">Entrada → Venda</TableHead>
                   </TableRow>
@@ -157,6 +168,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                       <TableCell className="font-medium">{r.channelLabel}</TableCell>
                       <TableCell className="text-right">{pctBadge(r.r1AgToReal)}</TableCell>
                       <TableCell className="text-right">{pctBadge(r.r1RealToContrato)}</TableCell>
+                      <TableCell className="text-right">{pctBadgeInverted(r.taxaNoShow)}</TableCell>
                       <TableCell className="text-right">{pctBadge(r.aprovadoToVenda)}</TableCell>
                       <TableCell className="text-right">{pctBadge(r.entradaToVenda)}</TableCell>
                     </TableRow>

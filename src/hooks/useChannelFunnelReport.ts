@@ -32,6 +32,7 @@ export interface ChannelFunnelRow {
   entradas: number;
   r1Agendada: number;
   r1Realizada: number;
+  noShow: number;
   contratoPago: number;
   r2Agendada: number;
   r2Realizada: number;
@@ -46,6 +47,7 @@ export interface ChannelFunnelRow {
   r1RealToContrato: number; // contrato / R1 real
   aprovadoToVenda: number; // venda final / aprovados
   entradaToVenda: number; // venda final / entradas
+  taxaNoShow: number; // noShow / r1Agendada
 }
 
 interface DealRow {
@@ -224,8 +226,8 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   // 4. Agregação por canal
   const { rows, totals } = useMemo(() => {
     const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'ANAMNESE-INSTA', 'LIVE', 'OUTROS', 'OUTSIDE', 'LANÇAMENTO'];
-    const blank = (): Omit<ChannelFunnelRow, 'channel' | 'channelLabel' | 'r1AgToReal' | 'r1RealToContrato' | 'aprovadoToVenda' | 'entradaToVenda'> => ({
-      entradas: 0, r1Agendada: 0, r1Realizada: 0, contratoPago: 0,
+    const blank = (): Omit<ChannelFunnelRow, 'channel' | 'channelLabel' | 'r1AgToReal' | 'r1RealToContrato' | 'aprovadoToVenda' | 'entradaToVenda' | 'taxaNoShow'> => ({
+      entradas: 0, r1Agendada: 0, r1Realizada: 0, noShow: 0, contratoPago: 0,
       r2Agendada: 0, r2Realizada: 0, aprovados: 0, reprovados: 0,
       proximaSemana: 0, vendaFinal: 0, faturamentoBruto: 0, faturamentoLiquido: 0,
     });
@@ -245,8 +247,8 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     // R1/R2 — deduplicação por deal (Realizada vence No-show; até 2 dias contam para agendada)
     const REALIZED = new Set(['completed', 'contract_paid', 'refunded']);
     const dedup = (type: 'r1' | 'r2') => {
-      const dealMap = new Map<string, { days: Set<string>; realized: boolean; contractPaid: boolean }>();
-      const noDealCount = { agendada: 0, realizada: 0, contractPaid: 0 };
+      const dealMap = new Map<string, { days: Set<string>; realized: boolean; contractPaid: boolean; noShow: boolean }>();
+      const noDealCount = { agendada: 0, realizada: 0, contractPaid: 0, noShow: 0 };
       attendees.forEach(a => {
         if (a.meeting_slots?.meeting_type !== type) return;
         const status = (a.status || a.meeting_slots?.status || '').toLowerCase();
@@ -259,12 +261,14 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
           noDealCount.agendada++;
           if (REALIZED.has(status)) noDealCount.realizada++;
           if (status === 'contract_paid') noDealCount.contractPaid++;
+          if (status === 'no_show') noDealCount.noShow++;
           return;
         }
-        const cur = dealMap.get(a.deal_id) || { days: new Set<string>(), realized: false, contractPaid: false };
+        const cur = dealMap.get(a.deal_id) || { days: new Set<string>(), realized: false, contractPaid: false, noShow: false };
         cur.days.add(day);
         if (REALIZED.has(status)) cur.realized = true;
         if (status === 'contract_paid') cur.contractPaid = true;
+        if (status === 'no_show') cur.noShow = true;
         dealMap.set(a.deal_id, cur);
       });
       return { dealMap, noDealCount };
@@ -279,6 +283,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       // Conta deals únicos — reagendamentos não inflam o denominador
       slot.r1Agendada += 1;
       if (v.realized) slot.r1Realizada++;
+      if (v.noShow) slot.noShow++;
       if (v.contractPaid) slot.contratoPago++;
     });
     r2.dealMap.forEach((v, dealId) => {
@@ -292,6 +297,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       const slot = get('OUTROS');
       slot.r1Agendada += r1.noDealCount.agendada;
       slot.r1Realizada += r1.noDealCount.realizada;
+      slot.noShow += r1.noDealCount.noShow;
       slot.contratoPago += r1.noDealCount.contractPaid;
     }
     if (r2.noDealCount.agendada > 0) {
@@ -330,12 +336,14 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       r1RealToContrato: v.r1Realizada > 0 ? (v.contratoPago / v.r1Realizada) * 100 : 0,
       aprovadoToVenda: v.aprovados > 0 ? (v.vendaFinal / v.aprovados) * 100 : 0,
       entradaToVenda: v.entradas > 0 ? (v.vendaFinal / v.entradas) * 100 : 0,
+      taxaNoShow: v.r1Agendada > 0 ? (v.noShow / v.r1Agendada) * 100 : 0,
     })).sort((a, b) => b.faturamentoLiquido - a.faturamentoLiquido);
 
     const tot = finalRows.reduce((acc, r) => ({
       entradas: acc.entradas + r.entradas,
       r1Agendada: acc.r1Agendada + r.r1Agendada,
       r1Realizada: acc.r1Realizada + r.r1Realizada,
+      noShow: acc.noShow + r.noShow,
       contratoPago: acc.contratoPago + r.contratoPago,
       r2Agendada: acc.r2Agendada + r.r2Agendada,
       r2Realizada: acc.r2Realizada + r.r2Realizada,
@@ -346,7 +354,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       faturamentoBruto: acc.faturamentoBruto + r.faturamentoBruto,
       faturamentoLiquido: acc.faturamentoLiquido + r.faturamentoLiquido,
     }), {
-      entradas: 0, r1Agendada: 0, r1Realizada: 0, contratoPago: 0,
+      entradas: 0, r1Agendada: 0, r1Realizada: 0, noShow: 0, contratoPago: 0,
       r2Agendada: 0, r2Realizada: 0, aprovados: 0, reprovados: 0,
       proximaSemana: 0, vendaFinal: 0, faturamentoBruto: 0, faturamentoLiquido: 0,
     });
