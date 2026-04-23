@@ -628,7 +628,7 @@ export default function ReunioesEquipe() {
 
       {/* KPI Cards - SDR tab uses teamKPIs (SDR perspective), Closers tab uses enrichedKPIs (closer perspective) */}
       <TeamKPICards 
-        kpis={activeTab === 'sdrs' ? teamKPIs : enrichedKPIs} 
+        kpis={enrichedKPIs} 
         isLoading={isLoading}
         isToday={datePreset === "today"}
         pendentesHoje={pendentesHoje}
@@ -665,6 +665,12 @@ export default function ReunioesEquipe() {
               sdrMetaMap={sdrMetaMap}
               diasUteisNoPeriodo={diasUteisNoPeriodo}
               sdrDiasUteisMap={sdrDiasUteisMap}
+              totaisOverride={{
+                r1Agendada: enrichedKPIs.totalR1Agendada,
+                r1Realizada: enrichedKPIs.totalRealizadas,
+                noShows: enrichedKPIs.totalNoShows,
+                contratos: enrichedKPIs.totalContratos,
+              }}
             />
           ) : (
             <CloserSummaryTable
