@@ -11,7 +11,16 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+export interface SdrSummaryTotalsOverride {
+  agendamentos?: number;
+  r1Agendada: number;
+  r1Realizada: number;
+  noShows: number;
+  contratos: number;
+}
 
 interface SdrSummaryTableProps {
   data: SdrSummaryRow[];
@@ -20,6 +29,7 @@ interface SdrSummaryTableProps {
   sdrMetaMap?: Map<string, number>;
   diasUteisNoPeriodo?: number;
   sdrDiasUteisMap?: Map<string, number>;
+  totaisOverride?: SdrSummaryTotalsOverride;
 }
 
 export function SdrSummaryTable({ 
@@ -29,6 +39,7 @@ export function SdrSummaryTable({
   sdrMetaMap,
   diasUteisNoPeriodo,
   sdrDiasUteisMap,
+  totaisOverride,
 }: SdrSummaryTableProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
