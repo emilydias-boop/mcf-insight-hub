@@ -686,9 +686,7 @@ export function QuickScheduleModal({
                               ? 'opacity-70 hover:bg-muted/30 border-l-[3px] ' +
                                   (leadState === 'scheduled_future'
                                     ? 'border-l-yellow-500'
-                                    : leadState === 'completed'
-                                      ? 'border-l-blue-500'
-                                      : 'border-l-green-500')
+                                    : 'border-l-green-500')
                               : 'hover:bg-accent',
                           )}
                         >
