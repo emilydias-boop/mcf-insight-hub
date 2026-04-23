@@ -1,84 +1,76 @@
 
 
-## Saneamento dos leads duplicados — manter o deal mais avançado
+## Validar se os 3.193 grupos são realmente duplicados antes de mesclar
 
-### Resumo
+### Por que essa pergunta é crítica
 
-Consolidar contatos e deals duplicados existentes no CRM. Para cada grupo de duplicados, eleger o registro canônico, migrar todo o histórico (atividades, tarefas, reuniões, vendas) e arquivar os secundários sem perder dados.
+O critério atual de "duplicado" é: **mesmo sufixo de 9 dígitos do telefone**. Isso pega a maioria dos casos reais (Stéphanne, Alexandre, etc.), mas também produz **falsos positivos** quando:
 
-### Critério de eleição
+- Telefone é genérico/placeholder (`(11) 99999-9999`, `(00) 00000-0000`, números de teste).
+- Telefone vazio ou só com DDD (sufixo virou `000000000` ou similar).
+- Diferentes pessoas com telefones realmente parecidos nos últimos 9 dígitos (raro, mas possível com números corporativos truncados).
+- Importações antigas em massa que preencheram telefone com o mesmo número fictício.
 
-**Contato canônico** (por grupo de identidade — mesmo email lowercase OU mesmo sufixo de 9 dígitos do telefone):
-1. Mais antigo (`created_at` mais cedo)
-2. Em empate, o que tem mais campos preenchidos (email + telefone + nome)
-3. Em empate final, o com mais relacionamentos
+A média de **~11 contatos por grupo** que apareceu no dry-run é o sinal de alerta: contatos reais duplicados normalmente vêm em grupos de 2-3, não 11. Grupos enormes geralmente são contaminação por placeholder.
 
-**Deal canônico** (após remap, quando sobrarem 2+ deals no mesmo `contact_id` + `origin_id`):
-1. Estágio mais avançado (maior `stage_order` da tabela `crm_stages`)
-2. Em empate de estágio, o mais antigo
+### O que precisa ser feito antes de qualquer merge em massa
 
-### Etapas
+**1. Diagnosticar a composição dos 3.193 grupos**
 
-**1. Migration de schema**
+Rodar queries SQL de leitura para responder:
 
-Adicionar em `crm_deals` colunas de auditoria de merge:
-- `merged_into_deal_id uuid references crm_deals(id)`
-- `merged_at timestamptz`
-- `is_archived boolean default false`
-- Índice parcial `(contact_id, origin_id) where is_archived = false` para acelerar queries do Kanban
+- Distribuição de tamanho dos grupos: quantos grupos têm 2, 3, 4-10, 11+ contatos
+- Top 20 sufixos mais frequentes (provavelmente placeholders): listar `phone_suffix`, `count`, exemplos de nomes/emails
+- Quantos grupos têm **emails completamente diferentes** entre si (sinal forte de falso positivo)
+- Quantos grupos têm **nomes completamente diferentes** entre si
+- Quantos grupos têm sufixo composto só de zeros, noves repetidos, ou padrões suspeitos (`000000000`, `999999999`, `123456789`)
 
-**2. Atualizar `merge-duplicate-contacts`**
+**2. Apresentar amostragem para revisão humana**
 
-A função hoje já remapeia `crm_deals.contact_id` e `meeting_slot_attendees.contact_id` e arquiva contatos secundários. Adicionar passo final:
+Listar 30 grupos aleatórios com nomes, emails e telefones lado a lado, separados em três categorias:
 
-Para cada `(contact_id, origin_id)` com 2+ deals ativos após remap:
-- Eleger principal (maior `stage_order`, depois mais antigo)
-- Mover para o deal principal: `deal_activities`, `deal_tasks`, `meeting_slots`, `calls`, `consorcio_pending_registrations`, `automation_queue`, `automation_logs`, `attendee_notes` (atualizar `deal_id`)
-- Registrar uma `deal_activities` no principal: "Mesclado a partir do deal {id} em {data}"
-- Arquivar secundário: `is_archived = true`, `merged_into_deal_id = principal`, `merged_at = now()`
+- **Provável duplicação real** (mesmo nome OU mesmo email + sufixo igual)
+- **Suspeito** (nomes diferentes, emails diferentes, mas sufixo igual)
+- **Quase certo falso positivo** (sufixo placeholder, nomes/emails completamente distintos)
 
-Retornar relatório completo: contatos arquivados, deals remapeados, deals arquivados, atividades movidas, erros.
+Você revisa a amostra e confirma se o critério está coerente.
 
-**3. Filtrar arquivados no frontend**
+**3. Refinar critério de merge**
 
-Adicionar `.eq('is_archived', false)` (ou `.or('is_archived.is.null,is_archived.eq.false')`) em:
-- `src/hooks/useCRMData.ts` — Kanban principal
-- `src/hooks/useContactDeals.ts` — deals do contato
-- `src/hooks/useContactDealIds.ts` — resolução de IDs
-- `src/hooks/useContactsEnriched.ts` — listagem enriquecida
-- `src/hooks/useTeamMeetingsData.ts` e RPCs de relatório que contam deals (revisar e ajustar onde fizer sentido)
+Com base no diagnóstico, ajustar a função `get_merge_groups` para excluir falsos positivos. Opções de filtro adicionais a aplicar **em conjunto** com o sufixo de telefone:
 
-**4. Execução do saneamento**
+- Sufixos placeholder na blacklist (`000000000`, `999999999`, `111111111`, `123456789`, sufixos com 7+ dígitos repetidos)
+- Exigir **pelo menos uma similaridade adicional**: mesmo email lowercase OU primeiro nome igual (ignorando acentos/case)
+- Limitar tamanho máximo de grupo (ex.: grupos com 8+ contatos são marcados para revisão manual, não merge automático)
 
-Em duas chamadas da edge function `merge-duplicate-contacts`:
-1. **Dry-run** (`dry_run: true, batch_size: 200`): retorna o relatório do que será mesclado. Reviso os números com você antes de aplicar.
-2. **Execução** (`dry_run: false, batch_size: 100`): aplica em lotes para não sobrecarregar o banco.
+**4. Re-rodar o dry-run com critério refinado**
 
-### Comportamento esperado após saneamento
+Aplicar a função ajustada e gerar relatório novo. Comparar números antes/depois para confirmar que reduziu falsos positivos sem deixar de fora os duplicados reais já confirmados (Stéphanne, Alexandre, Fábio, Clerismar).
 
-| Caso | Antes | Depois |
-|---|---|---|
-| Stéphanne (2 contatos + 2 deals na Inside Sales) | duplicado | 1 contato + 1 deal (o mais avançado), histórico unificado |
-| Lead com deal R1 Agendada + deal Contrato Pago duplicado | 2 deals | 1 deal Contrato Pago, atividades do R1 migradas |
-| Contato com email igual em pipelines diferentes (Incorp + Crédito) | 2 contatos | 1 contato, 2 deals (um em cada pipeline — não são duplicados de pipeline) |
-| Métricas de Reuniões/Carrinho/Closing | infladas | leve queda esperada (= duplicação removida) |
+**5. Só então executar o merge em massa**
 
-### Validação pós-execução
+Com o critério validado, rodar a RPC consolidada SQL (proposta na resposta anterior) ou continuar pela edge function em lotes, conforme volume final.
 
-1. Buscar Stéphanne → 1 contato ativo, 1 deal ativo na Inside Sales, histórico completo (R1, ligações, venda).
-2. Query: contar grupos de contatos ativos com mesma identidade → 0.
-3. Query: contar `(contact_id, origin_id)` com 2+ deals ativos → 0.
-4. Conferir Alexandre, Fábio e Clerismar (casos confirmados).
-5. Verificar `deal_activities` do deal canônico contém entrada "Mesclado a partir de…" para rastreabilidade.
+### Entregável desta etapa
 
-### Arquivos afetados
+Um relatório em chat com:
 
-- **Migration**: `crm_deals` (colunas de merge + índice).
-- `supabase/functions/merge-duplicate-contacts/index.ts`: passo de consolidação de deals + relatório expandido.
-- `src/hooks/useCRMData.ts`, `src/hooks/useContactDeals.ts`, `src/hooks/useContactDealIds.ts`, `src/hooks/useContactsEnriched.ts`: filtro `is_archived`.
-- (Sem mudanças no `hubla-webhook-handler` — já corrigido na etapa anterior.)
+- Tabela de distribuição de tamanho dos grupos
+- Top sufixos suspeitos com contagem
+- 30 grupos amostrados com classificação manual
+- Recomendação final: critério ajustado + estimativa de quantos grupos sobram após filtro
+
+Você decide se aprova o critério refinado antes de qualquer escrita no banco.
+
+### Arquivos/recursos envolvidos
+
+- Apenas **leituras** nesta etapa: queries SQL via `supabase--read_query`.
+- Caso o critério refinado seja aprovado, depois ajustar:
+  - `get_merge_groups` (RPC SQL no Postgres) — adicionar filtros de blacklist + similaridade adicional
+  - `supabase/functions/merge-duplicate-contacts/index.ts` — sem mudanças, continua consumindo a RPC
+- Nenhuma escrita no banco até você aprovar a amostragem.
 
 ### Reversibilidade
 
-Nada é deletado. Contatos e deals secundários ficam com `is_archived = true` + ponteiros `merged_into_*`. Se algum merge precisar ser revertido, é possível desarquivar e remapear de volta usando os campos de auditoria.
+Como ainda não houve nenhum merge real (só dry-run e 35 grupos confirmados como duplicados óbvios), pausar agora não causa nenhum dano. Os 345 contatos já mesclados nas 7 batches podem ser auditados individualmente via `merged_into_contact_id` se necessário.
 
