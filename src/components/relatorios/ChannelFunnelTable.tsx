@@ -83,7 +83,12 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                         info="Deals criados no período (crm_deals.created_at), filtrados pela BU. Classificados pelas tags do deal."
                       />
                     </TableHead>
-                    <TableHead className="text-right">R1 Agend.</TableHead>
+                    <TableHead className="text-right">
+                      <HeaderWithInfo
+                        label="R1 Agend."
+                        info="Deals únicos com R1 agendado no período, filtrados pela origem do deal (BU). Para visão por trabalho do SDR (independente da BU do lead), ver o Painel Comercial."
+                      />
+                    </TableHead>
                     <TableHead className="text-right">R1 Realiz.</TableHead>
                     <TableHead className="text-right">No-Show</TableHead>
                     <TableHead className="text-right">Contrato Pago</TableHead>
