@@ -70,7 +70,12 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="sticky left-0 bg-background min-w-[160px]">Canal</TableHead>
-                    <TableHead className="text-right">Entradas</TableHead>
+                    <TableHead className="text-right">
+                      <HeaderWithInfo
+                        label="Entradas"
+                        info="Deals criados no período (crm_deals.created_at), filtrados pela BU. Classificados pelas tags do deal."
+                      />
+                    </TableHead>
                     <TableHead className="text-right">R1 Agend.</TableHead>
                     <TableHead className="text-right">R1 Realiz.</TableHead>
                     <TableHead className="text-right">Contrato Pago</TableHead>
@@ -79,7 +84,12 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableHead className="text-right">Aprovados</TableHead>
                     <TableHead className="text-right">Reprovados</TableHead>
                     <TableHead className="text-right">Próx. Semana</TableHead>
-                    <TableHead className="text-right">Venda Final</TableHead>
+                    <TableHead className="text-right">
+                      <HeaderWithInfo
+                        label="Venda Final"
+                        info="Transações pagas no período (hubla_transactions.sale_status='paid'). Classificadas pelo produto/oferta — pode divergir de Entradas (janela e fonte distintas)."
+                      />
+                    </TableHead>
                     <TableHead className="text-right">Fat. Bruto</TableHead>
                     <TableHead className="text-right">Fat. Líquido</TableHead>
                   </TableRow>
