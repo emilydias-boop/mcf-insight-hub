@@ -635,8 +635,14 @@ export function QuickScheduleModal({
                       const stageName = (deal as any).stage?.stage_name;
                       const leadState = (deal as any).leadState as DealOption['leadState'];
                       const scheduledInfo = (deal as any).scheduledInfo as DealOption['scheduledInfo'];
+                      // 'completed' não bloqueia mais — apenas avisa.
                       const isBlocked =
-                        leadState && leadState !== 'open' && leadState !== 'no_show';
+                        leadState &&
+                        leadState !== 'open' &&
+                        leadState !== 'no_show' &&
+                        leadState !== 'completed';
+                      const warningMsg = (deal as any).warningMessage as string | null | undefined;
+                      const willCount = warningMsg && !warningMsg.includes('NÃO contará');
 
                       let stateBadge: { label: string; className: string } | null = null;
                       if (leadState === 'scheduled_future' && scheduledInfo) {
@@ -655,9 +661,12 @@ export function QuickScheduleModal({
                         };
                       } else if (leadState === 'completed') {
                         stateBadge = {
-                          label: '✅ R1 realizada',
-                          className:
-                            'border-blue-500/60 bg-blue-500/10 text-blue-700 dark:text-blue-400',
+                          label: willCount === false
+                            ? '✅ R1 realizada — reagendamento NÃO contará (limite atingido)'
+                            : '✅ R1 realizada — reagendamento contará na meta',
+                          className: willCount === false
+                            ? 'border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                            : 'border-blue-500/60 bg-blue-500/10 text-blue-700 dark:text-blue-400',
                         };
                       } else if (leadState === 'contract_paid' || leadState === 'won') {
                         stateBadge = {
