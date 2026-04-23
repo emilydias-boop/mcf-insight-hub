@@ -199,10 +199,12 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
 };
 
 export const useContactsEnriched = (searchTerm?: string, page: number = 1, pageSize: number = 50, buOriginIds?: string[]) => {
+  const { data: duplicateSet } = useDuplicateContactIds();
   return useQuery({
-    queryKey: ['contacts-enriched', searchTerm || '', page, pageSize, buOriginIds || []],
-    queryFn: () => fetchContactsPage(page, pageSize, searchTerm, buOriginIds),
+    queryKey: ['contacts-enriched', searchTerm || '', page, pageSize, buOriginIds || [], duplicateSet?.size || 0],
+    queryFn: () => fetchContactsPage(page, pageSize, searchTerm, buOriginIds, duplicateSet),
     staleTime: 30000,
+    enabled: duplicateSet !== undefined,
   });
 };
 
