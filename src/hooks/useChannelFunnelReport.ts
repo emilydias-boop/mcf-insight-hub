@@ -5,6 +5,7 @@ import { DateRange } from 'react-day-picker';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { classifyChannel } from '@/lib/channelClassifier';
 import { useAcquisitionReport } from './useAcquisitionReport';
+import { useBUOriginIds } from './useBUPipelineMap';
 import { getCartWeekStart, getCartWeekEnd } from '@/lib/carrinhoWeekBoundaries';
 import { addWeeks, format } from 'date-fns';
 
