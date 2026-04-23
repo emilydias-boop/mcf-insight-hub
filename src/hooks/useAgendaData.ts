@@ -957,7 +957,7 @@ export function useSearchDealsForSchedule(
         const { data: allAttendees } = await supabase
           .from('meeting_slot_attendees')
           .select(
-            `id, deal_id, status, contract_paid_at, created_at,
+            `id, deal_id, status, contract_paid_at, created_at, booked_at,
              meeting_slot:meeting_slots(id, scheduled_at, meeting_type, closer:closers(name))`,
           )
           .in('deal_id', dealIds)
