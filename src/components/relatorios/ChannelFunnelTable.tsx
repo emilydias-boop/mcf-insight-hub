@@ -85,6 +85,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     </TableHead>
                     <TableHead className="text-right">R1 Agend.</TableHead>
                     <TableHead className="text-right">R1 Realiz.</TableHead>
+                    <TableHead className="text-right">No-Show</TableHead>
                     <TableHead className="text-right">Contrato Pago</TableHead>
                     <TableHead className="text-right">R2 Agend.</TableHead>
                     <TableHead className="text-right">R2 Realiz.</TableHead>
@@ -108,6 +109,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                       <TableCell className="text-right">{r.entradas}</TableCell>
                       <TableCell className="text-right">{r.r1Agendada}</TableCell>
                       <TableCell className="text-right">{r.r1Realizada}</TableCell>
+                      <TableCell className="text-right text-destructive">{r.noShow}</TableCell>
                       <TableCell className="text-right">{r.contratoPago}</TableCell>
                       <TableCell className="text-right">{r.r2Agendada}</TableCell>
                       <TableCell className="text-right">{r.r2Realizada}</TableCell>
@@ -124,6 +126,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableCell className="text-right">{totals.entradas}</TableCell>
                     <TableCell className="text-right">{totals.r1Agendada}</TableCell>
                     <TableCell className="text-right">{totals.r1Realizada}</TableCell>
+                    <TableCell className="text-right text-destructive">{totals.noShow}</TableCell>
                     <TableCell className="text-right">{totals.contratoPago}</TableCell>
                     <TableCell className="text-right">{totals.r2Agendada}</TableCell>
                     <TableCell className="text-right">{totals.r2Realizada}</TableCell>
