@@ -152,7 +152,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
 
   // 2. R1 + R2 attendees do período (para qualquer deal)
   const { data: attendees = [], isLoading: loadingAtt } = useQuery<AttendeeFunnelRow[]>({
-    queryKey: ['funnel-attendees', startISO, endISO],
+    queryKey: ['funnel-attendees', startISO, endISO, bu, buOriginIds.join(',')],
     queryFn: async () => {
       if (!startISO || !endISO) return [];
       const all: AttendeeFunnelRow[] = [];
@@ -160,13 +160,20 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       const pageSize = 1000;
       let hasMore = true;
       while (hasMore) {
-        const { data, error } = await supabase
+        // IMPORTANTE: filtra attendees pela origem do deal (BU). Sem isso, R1/R2 de outras BUs
+        // (Consórcio, Marketing, etc.) entram no relatório porque o classificador de canal
+        // pode mapeá-los para ANAMNESE/OUTROS. O JOIN inner com crm_deals garante isolação por BU.
+        let q = supabase
           .from('meeting_slot_attendees')
-          .select('id, deal_id, status, meeting_slots!inner(meeting_type, scheduled_at, status)')
+          .select('id, deal_id, status, meeting_slots!inner(meeting_type, scheduled_at, status), crm_deals!inner(origin_id)')
           .in('meeting_slots.meeting_type', ['r1', 'r2'])
           .gte('meeting_slots.scheduled_at', startISO)
           .lte('meeting_slots.scheduled_at', endISO)
           .range(offset, offset + pageSize - 1);
+        if (buOriginIds && buOriginIds.length > 0) {
+          q = q.in('crm_deals.origin_id', buOriginIds);
+        }
+        const { data, error } = await q;
         if (error) throw error;
         const batch = (data || []) as unknown as AttendeeFunnelRow[];
         all.push(...batch);
@@ -175,7 +182,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       }
       return all;
     },
-    enabled: !!startISO && !!endISO,
+    enabled: !!startISO && !!endISO && (!bu || buOriginIds.length > 0),
     staleTime: 60_000,
   });
 
