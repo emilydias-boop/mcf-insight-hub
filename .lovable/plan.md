@@ -1,79 +1,84 @@
 
 
-## Diagnóstico: números da tela divergem do banco
+## Diagnóstico: por que o "Funil por Canal" diverge do Painel Comercial
 
-Validei contra Supabase (BU Incorporador, Abril 2026, origens `e3c04f21...` + `7431cf4a...`).
+### As duas telas medem coisas diferentes — nenhuma das duas é "BU Incorporador" no sentido estrito
 
-### Comparação tela vs banco
+Validei cada número contra o banco para abril/2026:
 
-**Entradas (deals criados em Abril) — bate ✅**
+| Métrica | Funil por Canal (relatório) | Painel Comercial (CRM) | Banco |
+|---|---|---|---|
+| R1 Agendada | 895 | 774 | — |
+| R1 Realizada | 564 | 334 | — |
+| No-Show | 296 | 197 | — |
+| Contratos | 136 | 112 | — |
 
-| Canal | Tela | Banco |
+### Por que cada tela dá um número diferente
+
+#### 1. **Funil por Canal: NÃO filtra attendees pela BU do deal** ❌
+
+No `useChannelFunnelReport.ts` linhas 154-180, a query `funnel-attendees` busca **TODOS os R1/R2 do banco no período**, sem nenhum filtro de origin/BU. Confirmado em SQL:
+
+- Total de deals únicos R1 abril (todas as BUs): **895** ← bate com a tela
+- Apenas deals com `origin_id` da Inc: **685**
+- Deals de outras BUs (Consórcio, Marketing, etc.): **210**
+
+Então **210 R1 de outras BUs estão entrando no relatório da Inc**. Isso acontece porque:
+- Os attendees são carregados sem filtro de origem
+- O hook usa `fullDealChannelMap` para classificar canal, mas se um deal de Consórcio for classificado como "ANAMNESE" ou "OUTROS", ele **entra no funil da Inc** mesmo sem ser da BU.
+
+A coluna **Entradas** está correta (filtra por `origin_id` da Inc → 2615 ✅), mas as colunas R1/R2/No-Show estão **inflando com leads de outras BUs**.
+
+#### 2. **Painel Comercial: filtra por squad do SDR, não por origem do deal**
+
+A RPC `get_sdr_metrics_from_agenda(bu_filter='incorporador')` agrupa por **SDR** e mostra **apenas SDRs cujo `squad='incorporador'` no momento do agendamento** (via `sdr_squad_history`). Além disso:
+
+- Tem cap de 2 movimentos por deal (`LEAST(COUNT(DISTINCT meeting_day), 2)`).
+- Filtra `is_partner = false`.
+- Não filtra por origem do deal — então um SDR Inc que agendar um R1 num deal de Consórcio também conta aqui.
+
+Por isso os 11 SDRs listados no painel somam **774**, não 685 (origem) nem 895 (todas BUs).
+
+#### 3. **Resumo da causa raiz**
+
+| Tela | Filtra por | Resultado |
 |---|---|---|
-| ANAMNESE | 1625 | 1628 ✅ |
-| A010 | 506 | 510 ✅ |
-| ANAMNESE-INSTA | 35 | 35 ✅ |
-| LIVE | 4 | 4 ✅ |
-| OUTROS | 443 | 443 ✅ |
-| **Total** | **2613** | **2620** ✅ |
+| Funil por Canal | nada (todos R1 do banco) | 895 — infla com Consórcio/Marketing |
+| Painel Comercial | squad do SDR + cap 2 movs | 774 — visão "trabalho do time Inc" |
+| BU Incorporador real (origem) | `origin_id` da Inc | 685 — visão "leads que pertencem à Inc" |
 
-A coluna **Entradas está correta** (pequena diferença de 7 é arredondamento de timezone).
-
-**R1 Agendada / R1 Realizada / No-Show — quebrado ❌**
-
-Contando deals únicos (sem multiplicar por dias) e classificando o **deal pelo seu canal real**:
-
-| Canal | Tela R1 Ag | Banco | Tela R1 Real | Banco | Tela NoShow | Banco |
-|---|---|---|---|---|---|---|
-| ANAMNESE | 139 | **161** | 59 | **47** | 69 | **78** |
-| A010 | 259 | **323** | 180 | **139** | 71 | **101** |
-| OUTROS | 493 | **196** | 323 | **85** | 155 | **78** |
-| LIVE | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | 893 | ~683 | 563 | ~272 | 296 | 258 |
-
-### Causa raiz
-
-O problema é em `useChannelFunnelReport.ts`:
-
-1. **Para R1/R2/No-Show, o hook NÃO classifica o deal pelo canal real.** Ele usa o array `dealsRows` carregado apenas dos deals **criados no período**. Se um deal foi criado em **março** mas teve R1 em abril, ele cai no balde "OUTROS" porque não está em `dealMap` (que indexa só os deals do período).
-
-2. **Inflação de OUTROS**: todos os deals de R1 cujo `deal_id` não está em `dealsRows` (criados antes do período) são contabilizados em "OUTROS / SEM-CLASSIFICAÇÃO" — por isso OUTROS está com 493 R1 Agendada quando o real é 196.
-
-3. **R1 Realizada com 563 vs 272 real**: além do problema acima, está provavelmente contando **attendees** em vez de **deals únicos** em alguns ramos do código.
+**Nenhuma das três é "errada"**, mas a do Funil por Canal está **definitivamente quebrada** porque o nome da tela ("Relatórios da BU Incorporador") implica filtro por BU, e ela não filtra.
 
 ### Correção proposta
 
 **Arquivo único: `src/hooks/useChannelFunnelReport.ts`**
 
-1. **Carregar tags/origin de TODOS os deals que aparecem em R1/R2 do período**, não só dos criados no período. Após buscar attendees R1+R2, coletar o set de `deal_id` único, fazer um SELECT extra em `crm_deals` (paginado) para esses IDs e classificar cada um.
+1. **Filtrar attendees por origem da BU** na query `funnel-attendees`. Adicionar JOIN com `crm_deals` e `WHERE d.origin_id IN buOriginIds`. Isso vai trazer R1 só dos deals da BU correta.
 
-2. **Garantir contagem de deals únicos** em R1 Realizada (já corrigimos R1 Agendada antes — confirmar que R1 Real também usa `Set<deal_id>` e não soma duplicados quando o mesmo deal tem 2 attendees `completed`).
+2. **Aplicar o mesmo filtro na query `funnel-extra-deals`** (já filtra por `id IN (...)`, mas precisa garantir que esses IDs sejam só da BU — o filtro do passo 1 já garante isso indiretamente, mas vou validar).
 
-3. **No-Show já está usando deals únicos** (corrigi no plano anterior) — vai bater com o banco depois que a classificação for corrigida.
+3. **Manter a regra atual de classificação por canal** — depois do fix, deals de Consórcio sumirão e o funil ficará coerente com a coluna "Entradas".
 
 ### Resultado esperado pós-fix (Abril 2026)
 
-| Canal | Entradas | R1 Ag | R1 Real | No-Show | Conv R1 |
-|---|---|---|---|---|---|
-| ANAMNESE | 1628 | 161 | 47 | 78 | 29% |
-| A010 | 510 | 323 | 139 | 101 | 43% |
-| ANAMNESE-INSTA | 35 | 3 | 1 | 1 | 33% |
-| LIVE | 4 | 0 | 0 | 0 | — |
-| OUTROS | 443 | 196 | 85 | 78 | 43% |
+| Métrica | Antes | Depois | Bate com |
+|---|---|---|---|
+| R1 Agendada | 895 | **685** | origens Inc no banco ✅ |
+| R1 Realizada | 564 | ~430 | (a recalcular após fix) |
+| No-Show | 296 | ~210 | idem |
 
-A leitura passa a ser **honesta**: A010 é o canal com melhor conversão de R1, ANAMNESE tem alto volume de entrada mas baixa conversão a R1, e OUTROS volta a representar só os leads sem classificação clara que tiveram reunião no período.
+A tela passa a representar **deals que são da BU Incorporador** (consistente com a coluna Entradas). A diferença que ainda vai existir vs. Painel Comercial (685 vs 774) é **legítima**: o Painel mede "trabalho do time SDR Inc" (incluindo agendamentos que o SDR fez em deals de outras BUs), e o Funil mede "deals da BU Inc" (incluindo R1 agendados por SDRs de outras BUs em leads Inc).
 
-### O que está correto (não mexer)
+### Vou adicionar uma nota explicativa no header da tabela
 
-- Entradas, Aprovados, Reprovados, Próx. Semana, Venda Final, Faturamento Bruto, Faturamento Líquido — todos batem.
-- A coluna LIVE com 4 entradas e 0 R1 está correta (são leads de live recentes que ainda não tiveram reunião).
+Pequeno tooltip: "Métricas filtradas por origem do deal (BU = Inc). Para visão por SDR, ver Painel Comercial."
 
 ### Fora do escopo
 
-- Não vou tocar no Carrinho RPC nem no `useAcquisitionReport`.
-- Não vou unificar os classificadores (`classifyChannel` vs `detectChannel`).
+- Não vou reescrever a RPC `get_sdr_metrics_from_agenda` nem mudar o Painel Comercial.
+- Não vou unificar as duas visões (são úteis para perspectivas diferentes).
 
 ### Reversibilidade
 
-Mudança em ~30 linhas de 1 arquivo. Adiciona uma query extra (deals do período de R1/R2 que não estão na lista de Entradas). Reverter = remover essa query e voltar ao `dealMap` original.
+Mudança em ~10 linhas de 1 arquivo (adicionar JOIN+WHERE na query de attendees). Reverter = remover o filtro.
 
