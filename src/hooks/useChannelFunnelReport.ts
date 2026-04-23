@@ -19,7 +19,8 @@ import { addWeeks, format } from 'date-fns';
  */
 
 const CHANNEL_LABELS: Record<string, string> = {
-  LIVE: 'ANAMNESE (ex-LIVE)',
+  LIVE: 'LIVE',
+  OUTROS: 'OUTROS / SEM-CLASSIFICAÇÃO',
 };
 export function displayChannelLabel(raw: string): string {
   return CHANNEL_LABELS[raw] || raw;
@@ -85,10 +86,12 @@ function classifyDeal(d: DealRow): string {
 
 /** Normaliza canais de deal (que podem incluir BIO-INSTAGRAM, LEAD-FORM, etc.) para os 6 canais oficiais do funil. */
 function normalizeFunnelChannel(raw: string): string {
-  if (!raw) return 'LIVE';
+  if (!raw) return 'OUTROS';
   if (raw === 'A010 (MAKE)') return 'A010';
-  if (raw === 'BIO-INSTAGRAM' || raw === 'LEAD-FORM' || raw === 'HUBLA' || raw === 'BASE CLINT' || raw === 'CSV' || raw === 'WEBHOOK' || raw === '') return 'LIVE';
-  return raw;
+  if (raw === 'LIVE') return 'LIVE';
+  if (raw === 'A010' || raw === 'ANAMNESE' || raw === 'ANAMNESE-INSTA' || raw === 'OUTSIDE' || raw === 'LANÇAMENTO') return raw;
+  // Tudo o que não é canal oficial (BIO-INSTAGRAM, LEAD-FORM, HUBLA, BASE CLINT, CSV, WEBHOOK, etc.) cai em OUTROS
+  return 'OUTROS';
 }
 
 export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: BusinessUnit) {
