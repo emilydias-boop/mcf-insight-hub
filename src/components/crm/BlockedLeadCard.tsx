@@ -54,15 +54,6 @@ export function BlockedLeadCard({
     iconWrapCls = 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
     titleCls = 'text-yellow-800 dark:text-yellow-300';
     dividerCls = 'bg-yellow-500/30';
-  } else if (state === 'completed') {
-    title = 'R1 JÁ REALIZADA NESTE MÊS';
-    icon = <CheckCircle2 className="h-6 w-6" />;
-    description = 'Este lead já passou pela Reunião 01 dentro do mês corrente.';
-    helper = 'Para agendar a R2, utilize a Agenda R2. Novo R1 só será permitido a partir do próximo mês.';
-    containerCls = 'border-blue-500/60 bg-blue-500/10 dark:bg-blue-500/5';
-    iconWrapCls = 'bg-blue-500/20 text-blue-700 dark:text-blue-400';
-    titleCls = 'text-blue-800 dark:text-blue-300';
-    dividerCls = 'bg-blue-500/30';
   } else {
     // contract_paid | won
     title = 'CONTRATO JÁ PAGO';

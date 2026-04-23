@@ -477,16 +477,15 @@ export function QuickScheduleModal({
   // R1 realizada, contrato pago/won). Quando bloqueado, escondemos os
   // campos de form e mostramos um aviso grande no lugar das Notas.
   const blockedLeadState = useMemo<
-    'scheduled_future' | 'completed' | 'contract_paid' | 'won' | null
+    'scheduled_future' | 'contract_paid' | 'won' | null
   >(() => {
     const state = selectedDeal?.leadState;
     if (
       state === 'scheduled_future' ||
-      state === 'completed' ||
       state === 'contract_paid' ||
       state === 'won'
     ) {
-      return state;
+      return state as 'scheduled_future' | 'contract_paid' | 'won';
     }
     return null;
   }, [selectedDeal?.leadState]);
