@@ -1,76 +1,110 @@
 
 
-## Validar se os 3.193 grupos são realmente duplicados antes de mesclar
+## Sinalizar duplicados existentes + bloquear novos duplicados
 
-### Por que essa pergunta é crítica
+### Decisão
 
-O critério atual de "duplicado" é: **mesmo sufixo de 9 dígitos do telefone**. Isso pega a maioria dos casos reais (Stéphanne, Alexandre, etc.), mas também produz **falsos positivos** quando:
+Em vez de mesclar os ~3.193 grupos existentes (risco de falsos positivos, custo alto), vamos:
 
-- Telefone é genérico/placeholder (`(11) 99999-9999`, `(00) 00000-0000`, números de teste).
-- Telefone vazio ou só com DDD (sufixo virou `000000000` ou similar).
-- Diferentes pessoas com telefones realmente parecidos nos últimos 9 dígitos (raro, mas possível com números corporativos truncados).
-- Importações antigas em massa que preencheram telefone com o mesmo número fictício.
+1. **Manter os duplicados atuais como estão**, apenas sinalizando visualmente com badge "Dup" no Kanban e na lista de contatos.
+2. **Travar a criação de novos duplicados** em todos os pontos de entrada (webhooks, importação, criação manual).
 
-A média de **~11 contatos por grupo** que apareceu no dry-run é o sinal de alerta: contatos reais duplicados normalmente vêm em grupos de 2-3, não 11. Grupos enormes geralmente são contaminação por placeholder.
+### Etapa 1 — Sinalização visual dos duplicados existentes
 
-### O que precisa ser feito antes de qualquer merge em massa
+**Backend: nova RPC `get_duplicate_contact_ids`**
 
-**1. Diagnosticar a composição dos 3.193 grupos**
+Função SQL (security definer, stable) que retorna a lista de `contact_ids` que são duplicados (compartilham email lowercase OU sufixo de telefone com outro contato ativo).
 
-Rodar queries SQL de leitura para responder:
+```sql
+create or replace function public.get_duplicate_contact_ids()
+returns table(contact_id uuid)
+language sql stable security definer set search_path = public as $$
+  with sufixos as (
+    select id, lower(email) as email_norm,
+           right(regexp_replace(coalesce(phone,''),'\D','','g'), 9) as phone_suf
+    from crm_contacts
+    where coalesce(is_archived,false) = false
+  ),
+  dups_email as (
+    select id from sufixos
+    where email_norm is not null and email_norm <> ''
+      and email_norm in (select email_norm from sufixos
+                         where email_norm is not null and email_norm <> ''
+                         group by email_norm having count(*) > 1)
+  ),
+  dups_phone as (
+    select id from sufixos
+    where length(phone_suf) = 9
+      and phone_suf in (select phone_suf from sufixos
+                        where length(phone_suf) = 9
+                        group by phone_suf having count(*) > 1)
+  )
+  select id from dups_email union select id from dups_phone;
+$$;
+```
 
-- Distribuição de tamanho dos grupos: quantos grupos têm 2, 3, 4-10, 11+ contatos
-- Top 20 sufixos mais frequentes (provavelmente placeholders): listar `phone_suffix`, `count`, exemplos de nomes/emails
-- Quantos grupos têm **emails completamente diferentes** entre si (sinal forte de falso positivo)
-- Quantos grupos têm **nomes completamente diferentes** entre si
-- Quantos grupos têm sufixo composto só de zeros, noves repetidos, ou padrões suspeitos (`000000000`, `999999999`, `123456789`)
+Cacheada por 5min em hook React: `useDuplicateContactIds()`.
 
-**2. Apresentar amostragem para revisão humana**
+**Frontend**
 
-Listar 30 grupos aleatórios com nomes, emails e telefones lado a lado, separados em três categorias:
+- `src/hooks/useContactsEnriched.ts` (linha 190): trocar `isDuplicate: false` por `isDuplicate: duplicateSet.has(contact.id)` usando o set retornado pela RPC.
+- `src/components/crm/ContactCard.tsx`: badge "Dup" já existe (linha 98-103) — só passa a aparecer naturalmente.
+- Adicionar tooltip no badge: "Existe outro contato com mesmo email ou telefone. Clique para ver."
+- Opcional: filtro "Mostrar só duplicados" na barra de filtros do `/crm/contatos` para o admin auditar manualmente.
 
-- **Provável duplicação real** (mesmo nome OU mesmo email + sufixo igual)
-- **Suspeito** (nomes diferentes, emails diferentes, mas sufixo igual)
-- **Quase certo falso positivo** (sufixo placeholder, nomes/emails completamente distintos)
+### Etapa 2 — Bloquear criação de novos duplicados
 
-Você revisa a amostra e confirma se o critério está coerente.
+**Auditoria dos pontos de entrada**
 
-**3. Refinar critério de merge**
+| Origem | Já protege? | Ação |
+|---|---|---|
+| `webhook-lead-receiver` | Sim (`check_duplicate_deal_by_identity`) | Manter |
+| `webhook-live-leads` | Sim | Manter |
+| `import-spreadsheet-leads` | Sim | Manter |
+| `hubla-webhook-handler` | Sim (busca por email/telefone antes de criar) | Manter |
+| `webhook-make-a010` | Sim (fallback por email + sufixo) | Manter |
+| **Criação manual no CRM** (`DealCreateModal` / similar) | A verificar | **Adicionar checagem** |
+| **Edição de contato** (mudar email/telefone) | Não | **Adicionar checagem** |
 
-Com base no diagnóstico, ajustar a função `get_merge_groups` para excluir falsos positivos. Opções de filtro adicionais a aplicar **em conjunto** com o sufixo de telefone:
+**Mudanças**
 
-- Sufixos placeholder na blacklist (`000000000`, `999999999`, `111111111`, `123456789`, sufixos com 7+ dígitos repetidos)
-- Exigir **pelo menos uma similaridade adicional**: mesmo email lowercase OU primeiro nome igual (ignorando acentos/case)
-- Limitar tamanho máximo de grupo (ex.: grupos com 8+ contatos são marcados para revisão manual, não merge automático)
+1. **Reforçar `check_duplicate_deal_by_identity`** se ainda não cobre busca a nível de **contato** (não só deal): criar variante `check_duplicate_contact_by_identity(p_email, p_phone_suffix)` que retorna `contact_id` existente se houver match. Já usar a contact match em vez de criar um novo.
 
-**4. Re-rodar o dry-run com critério refinado**
+2. **Criação manual de lead/deal no CRM** (`src/components/crm/CreateLeadModal.tsx` ou equivalente):
+   - Antes de inserir em `crm_contacts`, chamar `check_duplicate_contact_by_identity`.
+   - Se retornar match: avisar "Já existe um contato com esse email/telefone: [Nome]. Deseja usar o existente?" com botões "Usar existente" (cria deal vinculado ao contact_id existente) ou "Cancelar".
 
-Aplicar a função ajustada e gerar relatório novo. Comparar números antes/depois para confirmar que reduziu falsos positivos sem deixar de fora os duplicados reais já confirmados (Stéphanne, Alexandre, Fábio, Clerismar).
+3. **Edição de email/telefone em contato existente**:
+   - Validar se o novo valor não colide com outro contato ativo.
+   - Se colidir: mostrar erro "Email/telefone já pertence a outro contato (Nome). Considere mesclar manualmente."
 
-**5. Só então executar o merge em massa**
+4. **Constraint de banco (proteção final)**:
+   - Índice único parcial: `create unique index crm_contacts_email_active_uniq on crm_contacts (lower(email)) where is_archived = false and email is not null and email <> '';`
+   - Idem para sufixo de telefone:  
+     `create unique index crm_contacts_phone_suffix_active_uniq on crm_contacts ((right(regexp_replace(phone,'\D','','g'), 9))) where is_archived = false and length(regexp_replace(phone,'\D','','g')) >= 9;`
+   - **Importante**: criar com `CREATE UNIQUE INDEX CONCURRENTLY` em migration separada **só depois** de resolver os 116 grupos suspeitos (senão a criação do índice falha). Como decisão atual é não mexer nos existentes, esta etapa fica como **opcional/futura**. No curto prazo, a proteção é puramente em código (nas edge functions e no frontend).
 
-Com o critério validado, rodar a RPC consolidada SQL (proposta na resposta anterior) ou continuar pela edge function em lotes, conforme volume final.
+### Etapa 3 — Tela de auditoria opcional (recomendada)
 
-### Entregável desta etapa
+Página `/admin/duplicados` listando os ~3.193 grupos com:
+- Nomes, emails, telefones lado a lado.
+- Badge de severidade (mesmo email = certeza, só sufixo = suspeito).
+- Botões: "Mesclar este grupo" (chama edge function pontualmente), "Marcar como pessoas diferentes" (adiciona a uma lista de exceções para parar de aparecer).
 
-Um relatório em chat com:
+Permite resolver caso a caso, no ritmo da operação, sem ação em massa.
 
-- Tabela de distribuição de tamanho dos grupos
-- Top sufixos suspeitos com contagem
-- 30 grupos amostrados com classificação manual
-- Recomendação final: critério ajustado + estimativa de quantos grupos sobram após filtro
+### Resumo do que vai ser feito agora
 
-Você decide se aprova o critério refinado antes de qualquer escrita no banco.
+1. **Migration**: criar funções `get_duplicate_contact_ids()` e `check_duplicate_contact_by_identity()`.
+2. **Hook**: `src/hooks/useDuplicateContactIds.ts` (cache 5min).
+3. **Hook existente**: `useContactsEnriched.ts` — popular `isDuplicate` real.
+4. **UI**: tooltip no badge "Dup" do `ContactCard`; filtro "Só duplicados" na lista.
+5. **Criação manual**: localizar modal/form de criação de lead no CRM e adicionar checagem antiduplicata com diálogo de "usar existente".
+6. **Edição de contato**: validação no form de edição de email/telefone.
 
-### Arquivos/recursos envolvidos
-
-- Apenas **leituras** nesta etapa: queries SQL via `supabase--read_query`.
-- Caso o critério refinado seja aprovado, depois ajustar:
-  - `get_merge_groups` (RPC SQL no Postgres) — adicionar filtros de blacklist + similaridade adicional
-  - `supabase/functions/merge-duplicate-contacts/index.ts` — sem mudanças, continua consumindo a RPC
-- Nenhuma escrita no banco até você aprovar a amostragem.
+Etapa 3 (tela `/admin/duplicados`) e índice único de banco ficam como próximas etapas opcionais — confirmo antes de fazer.
 
 ### Reversibilidade
 
-Como ainda não houve nenhum merge real (só dry-run e 35 grupos confirmados como duplicados óbvios), pausar agora não causa nenhum dano. Os 345 contatos já mesclados nas 7 batches podem ser auditados individualmente via `merged_into_contact_id` se necessário.
+Nada destrutivo. Sinalização é só leitura. Bloqueios novos podem ser desligados removendo a checagem, sem afetar dados existentes.
 
