@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { differenceInDays } from 'date-fns';
+import { useDuplicateContactIds } from './useDuplicateContactIds';
 
 export type ThermalStatus = 'quente' | 'morno' | 'frio' | 'perdido' | 'sem_deal';
 
@@ -53,7 +54,7 @@ interface PaginatedResult {
   totalCount: number;
 }
 
-const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: string, buOriginIds?: string[]): Promise<PaginatedResult> => {
+const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: string, buOriginIds?: string[], duplicateSet?: Set<string>): Promise<PaginatedResult> => {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
@@ -187,7 +188,7 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
       } : null,
       thermalStatus: getThermalStatus(daysSinceActivity),
       daysSinceActivity,
-      isDuplicate: false,
+      isDuplicate: duplicateSet ? duplicateSet.has(contact.id) : false,
       sdrName: sdrEmail ? (profileMap[sdrEmail] || sdrEmail) : null,
       closerName: closerEmail ? (profileMap[closerEmail] || closerEmail) : null,
       lastActivity: lastAct,
@@ -198,10 +199,12 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
 };
 
 export const useContactsEnriched = (searchTerm?: string, page: number = 1, pageSize: number = 50, buOriginIds?: string[]) => {
+  const { data: duplicateSet } = useDuplicateContactIds();
   return useQuery({
-    queryKey: ['contacts-enriched', searchTerm || '', page, pageSize, buOriginIds || []],
-    queryFn: () => fetchContactsPage(page, pageSize, searchTerm, buOriginIds),
+    queryKey: ['contacts-enriched', searchTerm || '', page, pageSize, buOriginIds || [], duplicateSet?.size || 0],
+    queryFn: () => fetchContactsPage(page, pageSize, searchTerm, buOriginIds, duplicateSet),
     staleTime: 30000,
+    enabled: duplicateSet !== undefined,
   });
 };
 

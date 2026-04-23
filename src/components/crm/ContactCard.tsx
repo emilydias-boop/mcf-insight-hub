@@ -1,6 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { Mail, Phone, User, AlertTriangle, Clock, Copy, Handshake } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -96,10 +97,19 @@ export const ContactCard = ({ contact, onClick, partnerProduct, selected, onSele
               </Badge>
             )}
             {contact.isDuplicate && (
-              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-5">
-                <Copy className="h-3 w-3 mr-0.5" />
-                Dup
-              </Badge>
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-5 cursor-help">
+                      <Copy className="h-3 w-3 mr-0.5" />
+                      Dup
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs">
+                    Existe outro contato ativo com o mesmo email ou telefone. Verifique antes de criar novos negócios.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
             <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-5 ${thermal.badgeClass}`}>
               {thermal.label}
