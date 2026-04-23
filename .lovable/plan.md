@@ -1,86 +1,74 @@
 
 
-## Corrigir "No-Show" inflado pelos Pendentes na aba SDRs/Closers Incorporador
+## Funil por Canal dentro de "Aquisição & Origem" — BU Incorporador
 
-### Diagnóstico
+### Objetivo
 
-No `src/hooks/useR1CloserMetrics.ts` (linhas 521-524), o cálculo de `noshow` está sendo feito por **subtração**:
+Adicionar uma nova seção dentro do relatório de **Aquisição & Origem** (rota `/bu-incorporador/relatorios` → card "Aquisição & Origem") com o **funil completo por canal** (A010, ANAMNESE [ex-LIVE], ANAMNESE-INSTA, LANÇAMENTO, OUTSIDE), mostrando todas as etapas do ciclo Inside Sales numa única tabela.
 
-```ts
-metricsMap.forEach(metric => {
-  metric.noshow = Math.max(0, metric.r1_agendada - metric.r1_realizada);
-});
-```
+> **Nota terminológica:** o usuário pediu para renomear "LIVE" para "ANAMNESE" daqui para frente. Vou tratar isso na Etapa 4 abaixo.
 
-Isso é matematicamente errado: tudo que **ainda não aconteceu** (pendentes com status `scheduled`/`invited`/`rescheduled`) cai no "no-show" porque ainda não está em `r1_realizada`.
+### O que a seção nova vai mostrar
 
-**Evidência (preset Hoje, 23/04, BU Incorporador):**
+Tabela "Funil por Canal", uma linha por canal, com as colunas:
 
-| Status real (DB) | Quantidade |
-|---|---|
-| `invited` (pendente) | 38 |
-| `rescheduled` (pendente) | 6 |
-| `completed` | 8 |
-| `contract_paid` | 5 |
-| `no_show` (real) | **7** |
+| Canal | Entradas | R1 Agend. | R1 Realiz. | Contrato Pago | R2 Agend. | R2 Realiz. | Aprovados | Reprovados | Próxima Semana | Venda Final | Faturamento |
+|---|---|---|---|---|---|---|---|---|---|---|---|
 
-Painel mostra **No-Shows = 51** e **Taxa No-Show = 79.7%**. Conta bate: `64 (agendada) − 13 (realizada) = 51`. Os 44 pendentes estão sendo classificados como no-show.
+- **Entradas:** total de leads do canal no período (deals criados + transações automáticas A010/Lançamento sem deal).
+- **R1 Agendada / Realizada / No-show:** vindo dos `meeting_slot_attendees` R1 dos deals daquele canal, deduplicados por deal (mesma regra do `useR1CloserMetrics` — Realizada vence No-show).
+- **Contrato Pago:** attendees com `status='contract_paid'` cujo deal é do canal.
+- **R2 Agendada / Realizada:** attendees R2 dos mesmos deals.
+- **Aprovados / Reprovados / Próxima Semana:** vindo de `useCarrinhoUnifiedData` (status do Carrinho), filtrado pelos deals do canal no período.
+- **Venda Final:** transações Hubla pagas atribuídas ao deal daquele canal (mesma lógica do `useAcquisitionReport.classified` que já existe).
+- **Faturamento:** soma de receita líquida das vendas finais do canal (já temos no `byChannel`).
 
-A confusão veio do hook usar contagem deduplicada por deal (max 2x por `r1_agendada`), o que torna inviável contar `no_show` direto da tabela com a mesma deduplicação. A solução correta é deduplicar `no_show` da mesma forma — não usar subtração.
+Abaixo da tabela, **conversões agregadas** por canal: `R1 ag → R1 real %`, `R1 real → Contrato pago %`, `Aprovado → Venda final %`, `Entrada → Venda final %`.
 
-### Correção
+### Como o canal de cada lead é determinado
 
-**Arquivo:** `src/hooks/useR1CloserMetrics.ts`
+Já existe `src/lib/channelClassifier.ts` (`classifyChannel`) usado em outros relatórios. Vou usar **a mesma função** para classificar cada **deal** (a partir de `tags`, `origin_name`, `lead_channel`, `data_source`). Para vendas sem deal vinculado (A010 / Lançamento automáticos), uso a classificação de transação (`detectChannel` em `useAcquisitionReport`, que já trata A010, LANÇAMENTO, ANAMNESE-INSTA, etc.). Assim o funil e a coluna de faturamento batem com o que já é mostrado em "Faturamento por Canal" hoje.
 
-1. Adicionar um campo `noshow` ao objeto `entry` da deduplicação (linhas 504-508), marcando `noshow = true` quando `status === 'no_show'` e nenhum attendee do deal tem status final realizado.
+### Arquivos que vou criar/alterar
 
-2. Aplicar `noshow` na fase de agregação (linhas 512-519), incrementando `metric.noshow++` quando `entry.noshow === true && entry.realized === false` (deal só conta como no-show se nenhum dos seus attendees foi realizado — evita dupla contagem em remarcações que viraram completed).
+1. **Novo hook** `src/hooks/useChannelFunnelReport.ts`
+   - Aceita `dateRange`, `bu`, e (opcional) filtros já existentes na tela (search, closer).
+   - Reutiliza dados já carregados pelo `useAcquisitionReport` quando possível para evitar refetch.
+   - Busca:
+     - `crm_deals` criados no período (deal_id, tags, origin_name, custom_fields, lead_channel, data_source) — para "Entradas" e classificação.
+     - `meeting_slot_attendees` + `meeting_slots` filtrados por `meeting_type` ∈ {r1, r2} e `scheduled_at` no período (já buscado em `useAcquisitionReport`, vou expor).
+     - `useCarrinhoUnifiedData(weekStart, weekEnd)` para Aprovado/Reprovado/Próxima safra (atrelado ao deal_id).
+   - Aplica deduplicação por deal nas etapas (mesma regra do `useR1CloserMetrics` que acabamos de corrigir).
+   - Retorna `Array<ChannelFunnelRow>` + totais.
 
-3. **Remover** o bloco de subtração (linhas 521-524).
+2. **Atualizar** `src/components/relatorios/AcquisitionReportPanel.tsx`
+   - Importar o novo hook e renderizar a seção **"Funil por Canal"** logo abaixo do KPI cards e acima de "Faturamento por Closer".
+   - Botão de export Excel: adicionar uma nova aba "Funil por Canal" no XLSX existente.
+   - Filtros existentes (período, canal, closer) continuam aplicáveis também à nova tabela.
 
-Pseudocódigo da nova lógica:
+3. **Novo componente** `src/components/relatorios/ChannelFunnelTable.tsx`
+   - Tabela responsiva com sticky header, formatação numérica e badges de conversão.
+   - Linha de "Total" no rodapé.
 
-```ts
-// dentro do forEach de meetings:
-if (status === 'no_show') entry.noshow = true;
-if (['completed','contract_paid','refunded'].includes(status)) entry.realized = true;
+4. **Renomear "LIVE" → "ANAMNESE" no canal padrão (UI only)**
+   - Em `src/lib/channelClassifier.ts` e `src/hooks/useAcquisitionReport.ts` o **fallback** que hoje devolve `'LIVE'` continua existindo internamente (para não quebrar relatórios históricos), mas no **label exibido** dentro do novo funil e no dropdown de Canal vou trocar para `ANAMNESE (ex-LIVE)`. Não vou alterar o valor armazenado — somente a renderização — assim relatórios antigos não quebram.
+   - Confirmar com você se quer que eu renomeie globalmente (mais arriscado, afeta todos os relatórios) ou só visual (seguro).
 
-// na agregação:
-dealMap.forEach(({ days, realized, noshow }) => {
-  metric.r1_agendada += days.size >= 2 ? 2 : 1;
-  if (realized) metric.r1_realizada++;
-  else if (noshow) metric.noshow++;
-});
-```
+### Validações de qualidade
 
-A regra `else if` garante que um deal que foi `no_show` numa primeira reunião e depois `completed` numa segunda conte como **realizada**, não como no-show — alinhado com a regra de negócio "Realizada vence No-Show por deal".
+- A coluna **Faturamento** da nova tabela tem que bater com a tabela "Faturamento por Canal" já existente (mesmo período).
+- Soma de **Entradas** por canal ≥ soma de R1 Agendada (lead pode entrar e não ter R1 ainda).
+- Soma de **Venda Final** por canal = `kpis.totalTransactions` quando filtros não estão aplicados.
+- Aprovado/Reprovado/Próxima Semana só fazem sentido para a janela do Carrinho da semana atual; se o período do filtro for maior que 1 semana, agrego por todas as semanas tocadas e somo.
 
-### Resultado esperado (Hoje, 23/04)
+### O que NÃO faz parte deste plano
 
-- **No-Shows** passa de 51 → 7 (valor real)
-- **Taxa No-Show** passa de 79.7% → ~10.9% (7/64)
-- **R1 Agendada** continua 64
-- **R1 Realizada** continua 13
-- **Pendentes Hoje (44)** aparece só no card próprio, não infla mais o no-show
-- Por SDR a coluna No-show já estava correta (vem de outro hook, `useTeamMeetingsData`); só o agregado/Closers vai ajustar
-
-### Impacto colateral (avaliado e seguro)
-
-- A função `useR1CloserMetrics` é usada em:
-  - `ReunioesEquipe.tsx` (esta tela) — corrige
-  - Outras páginas que mostrem ranking de Closer R1 — também passam a mostrar no-show real
-
-- O painel de **Closers** (segundo screenshot) também é alimentado por esse hook. Hoje mostra Julio com No-show 16 / Taxa 100% — depois do fix mostrará apenas os no-shows reais dele.
-
-- **R2** (`useR2CloserMetrics`) tem a mesma lógica de subtração mas é outro hook; **não está no escopo deste plano** — se você confirmar que o problema também aparece na aba R2, abro um plano separado.
+- Não vou criar nova rota — tudo dentro do mesmo painel "Aquisição & Origem".
+- Não vou alterar o classificador global de canais nem o RPC `get_first_transaction_ids`.
+- Não vou criar nada para outras BUs neste momento — o foco é Incorporador (mas o hook é genérico e poderá ser ativado em outras BUs depois trocando o `bu` prop).
+- Renomeação física `LIVE → ANAMNESE` no banco/RPC fica fora — só label de UI.
 
 ### Reversibilidade
 
-Mudança isolada em ~10 linhas de um único arquivo. Reverter = restaurar o bloco de subtração.
-
-### Fora do escopo
-
-- Não vou tocar no RPC `get_sdr_metrics_from_agenda` — ele já calcula no-show corretamente (`status = 'no_show'`).
-- Não vou alterar `useMeetingsPendentesHoje` — está correto.
-- Não vou mexer no `useR2CloserMetrics` sem confirmação separada de que tem o mesmo problema na prática.
+Hook e componente novos, isolados. Reverter = remover importação no `AcquisitionReportPanel` e apagar os 2 arquivos novos.
 
