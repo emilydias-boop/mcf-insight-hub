@@ -87,7 +87,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="R1 Agend."
-                        info="Deals únicos com R1 agendado no período, filtrados pela origem do deal (BU). Para visão por trabalho do SDR (independente da BU do lead), ver o Painel Comercial."
+                        info="Deals únicos com R1 marcada para o período (scheduled_at), filtrados pela origem do deal (BU). Conta 1 por deal — reagendamentos não inflam. Diferente do 'Agendamentos' do Painel Comercial, que conta atos de agendar (booked_at) com cap de 2 movs/deal. Veja 'Notas metodológicas' abaixo."
                       />
                     </TableHead>
                     <TableHead className="text-right">R1 Realiz.</TableHead>
