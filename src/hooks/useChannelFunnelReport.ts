@@ -3,19 +3,20 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DateRange } from 'react-day-picker';
 import { BusinessUnit } from '@/hooks/useMyBU';
-import { classifyChannel } from '@/lib/channelClassifier';
 import { useAcquisitionReport } from './useAcquisitionReport';
-import { useBUOriginIds } from './useBUPipelineMap';
 import { getCartWeekStart, getCartWeekEnd } from '@/lib/carrinhoWeekBoundaries';
 import { addWeeks, format } from 'date-fns';
 
 /**
- * Funil completo por canal:
- * Entradas (deals criados no período) → R1 Agendada → R1 Realizada → Contrato Pago
- * → R2 Agendada → R2 Realizada → Aprovado / Reprovado / Próxima Semana → Venda Final / Faturamento
+ * Funil completo por canal — fonte alinhada ao Painel Comercial.
  *
- * Reutiliza `useAcquisitionReport` para obter `classified` (transações já mapeadas a canal/closer/sdr)
- * e busca em paralelo os deals criados no período + attendees R1/R2 + dados de Carrinho da(s) safra(s).
+ * As métricas de R1 (Agendada/Realizada/No-Show/Contrato Pago) e Entradas vêm da
+ * RPC `get_channel_funnel_metrics`, que replica EXATAMENTE a lógica de
+ * `get_sdr_metrics_from_agenda` (usada pelo Painel Comercial), apenas agregando
+ * por canal em vez de por SDR. Garante que os números do Funil bata com o Painel.
+ *
+ * Carrinho (Aprovado/Reprovado/Próx. Semana) e Faturamento (Venda Final/Bruto/Líquido)
+ * continuam vindo das fontes próprias (RPC carrinho + useAcquisitionReport).
  */
 
 const CHANNEL_LABELS: Record<string, string> = {
