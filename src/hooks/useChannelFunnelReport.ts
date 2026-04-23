@@ -5,6 +5,7 @@ import { DateRange } from 'react-day-picker';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { classifyChannel } from '@/lib/channelClassifier';
 import { useAcquisitionReport } from './useAcquisitionReport';
+import { useBUOriginIds } from './useBUPipelineMap';
 import { getCartWeekStart, getCartWeekEnd } from '@/lib/carrinhoWeekBoundaries';
 import { addWeeks, format } from 'date-fns';
 
@@ -57,7 +58,7 @@ interface DealRow {
 interface AttendeeFunnelRow {
   id: string;
   deal_id: string | null;
-  attendee_status: string | null;
+  status: string | null;
   meeting_slots: { meeting_type: string | null; scheduled_at: string | null; status: string | null } | null;
 }
 
@@ -91,6 +92,7 @@ function normalizeFunnelChannel(raw: string): string {
 
 export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: BusinessUnit) {
   const acq = useAcquisitionReport(dateRange, bu);
+  const { data: buOriginIds = [] } = useBUOriginIds(bu ?? null);
 
   const startISO = dateRange?.from ? new Date(dateRange.from).toISOString() : null;
   const endISO = dateRange?.to
@@ -99,7 +101,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
 
   // 1. Deals criados no período (para Entradas e classificação)
   const { data: deals = [], isLoading: loadingDeals } = useQuery<DealRow[]>({
-    queryKey: ['funnel-deals', startISO, endISO, bu],
+    queryKey: ['funnel-deals', startISO, endISO, bu, buOriginIds.join(',')],
     queryFn: async () => {
       if (!startISO || !endISO) return [];
       const all: DealRow[] = [];
@@ -107,14 +109,25 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       const pageSize = 1000;
       let hasMore = true;
       while (hasMore) {
-        const { data, error } = await supabase
+        let q = supabase
           .from('crm_deals')
-          .select('id, tags, origin_name, lead_channel, data_source, created_at')
+          .select('id, tags, custom_fields, data_source, created_at, crm_origins(name)')
           .gte('created_at', startISO)
           .lte('created_at', endISO)
           .range(offset, offset + pageSize - 1);
+        if (buOriginIds && buOriginIds.length > 0) {
+          q = q.in('origin_id', buOriginIds);
+        }
+        const { data, error } = await q;
         if (error) throw error;
-        const batch = (data || []) as unknown as DealRow[];
+        const batch = ((data || []) as any[]).map((r: any) => ({
+          id: r.id,
+          tags: r.tags,
+          origin_name: r.crm_origins?.name ?? null,
+          lead_channel: r.custom_fields?.lead_channel ?? null,
+          data_source: r.data_source,
+          created_at: r.created_at,
+        })) as DealRow[];
         all.push(...batch);
         hasMore = batch.length >= pageSize;
         offset += pageSize;
@@ -143,7 +156,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       while (hasMore) {
         const { data, error } = await supabase
           .from('meeting_slot_attendees')
-          .select('id, deal_id, attendee_status, meeting_slots!inner(meeting_type, scheduled_at, status)')
+          .select('id, deal_id, status, meeting_slots!inner(meeting_type, scheduled_at, status)')
           .in('meeting_slots.meeting_type', ['r1', 'r2'])
           .gte('meeting_slots.scheduled_at', startISO)
           .lte('meeting_slots.scheduled_at', endISO)
@@ -232,7 +245,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       const noDealCount = { agendada: 0, realizada: 0, contractPaid: 0 };
       attendees.forEach(a => {
         if (a.meeting_slots?.meeting_type !== type) return;
-        const status = (a.attendee_status || a.meeting_slots?.status || '').toLowerCase();
+        const status = (a.status || a.meeting_slots?.status || '').toLowerCase();
         if (status === 'cancelled') return;
         const sched = a.meeting_slots?.scheduled_at;
         if (!sched) return;
