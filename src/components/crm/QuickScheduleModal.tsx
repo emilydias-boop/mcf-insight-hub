@@ -1154,6 +1154,27 @@ export function QuickScheduleModal({
               <p className="text-xs text-destructive">Nota obrigatória para agendar</p>
             )}
           </div>
+
+          {/* Banner de aviso para R1 já realizada (reagendamento permitido) */}
+          {selectedDeal?.leadState === 'completed' && selectedDeal?.warningMessage && (
+            <div
+              className={cn(
+                'rounded-lg border-2 p-3 text-sm',
+                selectedDeal.warningMessage.includes('NÃO contará')
+                  ? 'border-amber-500/60 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+                  : 'border-blue-500/60 bg-blue-500/10 text-blue-800 dark:text-blue-300',
+              )}
+              role="alert"
+            >
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-semibold">R1 já realizada — reagendamento permitido</div>
+                  <p className="leading-snug">{selectedDeal.warningMessage}</p>
+                </div>
+              </div>
+            </div>
+          )}
           </>
           )}
 
