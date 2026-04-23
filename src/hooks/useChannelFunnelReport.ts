@@ -336,12 +336,14 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       r1RealToContrato: v.r1Realizada > 0 ? (v.contratoPago / v.r1Realizada) * 100 : 0,
       aprovadoToVenda: v.aprovados > 0 ? (v.vendaFinal / v.aprovados) * 100 : 0,
       entradaToVenda: v.entradas > 0 ? (v.vendaFinal / v.entradas) * 100 : 0,
+      taxaNoShow: v.r1Agendada > 0 ? (v.noShow / v.r1Agendada) * 100 : 0,
     })).sort((a, b) => b.faturamentoLiquido - a.faturamentoLiquido);
 
     const tot = finalRows.reduce((acc, r) => ({
       entradas: acc.entradas + r.entradas,
       r1Agendada: acc.r1Agendada + r.r1Agendada,
       r1Realizada: acc.r1Realizada + r.r1Realizada,
+      noShow: acc.noShow + r.noShow,
       contratoPago: acc.contratoPago + r.contratoPago,
       r2Agendada: acc.r2Agendada + r.r2Agendada,
       r2Realizada: acc.r2Realizada + r.r2Realizada,
@@ -352,7 +354,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       faturamentoBruto: acc.faturamentoBruto + r.faturamentoBruto,
       faturamentoLiquido: acc.faturamentoLiquido + r.faturamentoLiquido,
     }), {
-      entradas: 0, r1Agendada: 0, r1Realizada: 0, contratoPago: 0,
+      entradas: 0, r1Agendada: 0, r1Realizada: 0, noShow: 0, contratoPago: 0,
       r2Agendada: 0, r2Realizada: 0, aprovados: 0, reprovados: 0,
       proximaSemana: 0, vendaFinal: 0, faturamentoBruto: 0, faturamentoLiquido: 0,
     });
