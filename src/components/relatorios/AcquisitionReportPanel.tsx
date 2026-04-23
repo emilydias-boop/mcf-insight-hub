@@ -104,6 +104,7 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
       'Entradas': r.entradas,
       'R1 Agendada': r.r1Agendada,
       'R1 Realizada': r.r1Realizada,
+      'No-Show': r.noShow,
       'Contrato Pago': r.contratoPago,
       'R2 Agendada': r.r2Agendada,
       'R2 Realizada': r.r2Realizada,
@@ -115,6 +116,7 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
       'Fat. Líquido': r.faturamentoLiquido,
       'R1 Ag→Real %': r.r1AgToReal.toFixed(1),
       'R1 Real→Contrato %': r.r1RealToContrato.toFixed(1),
+      'Taxa No-Show %': r.taxaNoShow.toFixed(1),
       'Aprovado→Venda %': r.aprovadoToVenda.toFixed(1),
       'Entrada→Venda %': r.entradaToVenda.toFixed(1),
     }));
