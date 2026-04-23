@@ -90,6 +90,8 @@ interface DealOption {
     meetingType: 'r1' | 'r2';
   } | null;
   blockReason?: string | null;
+  warningOnly?: boolean;
+  warningMessage?: string | null;
 }
 
 type LeadType = 'A' | 'B';
