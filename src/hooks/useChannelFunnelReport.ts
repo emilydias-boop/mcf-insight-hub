@@ -324,7 +324,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     const r2 = dedup('r2');
 
     r1.dealMap.forEach((v, dealId) => {
-      const ch = dealChannelMap.get(dealId) || 'OUTROS';
+      const ch = fullDealChannelMap.get(dealId) || 'OUTROS';
       const slot = get(ch);
       // Conta deals únicos — reagendamentos não inflam o denominador
       slot.r1Agendada += 1;
@@ -333,7 +333,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       if (v.contractPaid) slot.contratoPago++;
     });
     r2.dealMap.forEach((v, dealId) => {
-      const ch = dealChannelMap.get(dealId) || 'OUTROS';
+      const ch = fullDealChannelMap.get(dealId) || 'OUTROS';
       const slot = get(ch);
       slot.r2Agendada += 1;
       if (v.realized) slot.r2Realizada++;
@@ -357,7 +357,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     carrinhoRows.forEach(c => {
       if (!c.deal_id || seenCarrinho.has(c.deal_id)) return;
       seenCarrinho.add(c.deal_id);
-      const ch = dealChannelMap.get(c.deal_id) || 'OUTROS';
+      const ch = fullDealChannelMap.get(c.deal_id) || 'OUTROS';
       const slot = get(ch);
       const status = (c.r2_status_name || '').toLowerCase();
       if (status.includes('aprovado') || status.includes('approved')) slot.aprovados++;
