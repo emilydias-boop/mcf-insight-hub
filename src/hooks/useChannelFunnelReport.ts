@@ -38,7 +38,8 @@ export interface ChannelFunnelRow {
   reprovados: number;
   proximaSemana: number;
   vendaFinal: number;
-  faturamento: number;
+  faturamentoBruto: number;
+  faturamentoLiquido: number;
   // conversões
   r1AgToReal: number; // R1 real / R1 ag
   r1RealToContrato: number; // contrato / R1 real
