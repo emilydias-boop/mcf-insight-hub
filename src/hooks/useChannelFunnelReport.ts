@@ -38,7 +38,8 @@ export interface ChannelFunnelRow {
   reprovados: number;
   proximaSemana: number;
   vendaFinal: number;
-  faturamento: number;
+  faturamentoBruto: number;
+  faturamentoLiquido: number;
   // conversões
   r1AgToReal: number; // R1 real / R1 ag
   r1RealToContrato: number; // contrato / R1 real
@@ -223,7 +224,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     const blank = (): Omit<ChannelFunnelRow, 'channel' | 'channelLabel' | 'r1AgToReal' | 'r1RealToContrato' | 'aprovadoToVenda' | 'entradaToVenda'> => ({
       entradas: 0, r1Agendada: 0, r1Realizada: 0, contratoPago: 0,
       r2Agendada: 0, r2Realizada: 0, aprovados: 0, reprovados: 0,
-      proximaSemana: 0, vendaFinal: 0, faturamento: 0,
+      proximaSemana: 0, vendaFinal: 0, faturamentoBruto: 0, faturamentoLiquido: 0,
     });
     const map = new Map<string, ReturnType<typeof blank>>();
     FUNNEL_CHANNELS.forEach(c => map.set(c, blank()));
@@ -309,11 +310,12 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     // Venda Final + Faturamento — vem do useAcquisitionReport.classified (transações pagas)
-    acq.classified.forEach(({ channel, net }) => {
+    acq.classified.forEach(({ channel, gross, net }) => {
       const ch = normalizeFunnelChannel(channel);
       const slot = get(ch);
       slot.vendaFinal++;
-      slot.faturamento += net || 0;
+      slot.faturamentoBruto += gross || 0;
+      slot.faturamentoLiquido += net || 0;
     });
 
     const finalRows: ChannelFunnelRow[] = Array.from(map.entries()).map(([channel, v]) => ({
@@ -324,7 +326,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       r1RealToContrato: v.r1Realizada > 0 ? (v.contratoPago / v.r1Realizada) * 100 : 0,
       aprovadoToVenda: v.aprovados > 0 ? (v.vendaFinal / v.aprovados) * 100 : 0,
       entradaToVenda: v.entradas > 0 ? (v.vendaFinal / v.entradas) * 100 : 0,
-    })).sort((a, b) => b.faturamento - a.faturamento);
+    })).sort((a, b) => b.faturamentoLiquido - a.faturamentoLiquido);
 
     const tot = finalRows.reduce((acc, r) => ({
       entradas: acc.entradas + r.entradas,
@@ -337,11 +339,12 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       reprovados: acc.reprovados + r.reprovados,
       proximaSemana: acc.proximaSemana + r.proximaSemana,
       vendaFinal: acc.vendaFinal + r.vendaFinal,
-      faturamento: acc.faturamento + r.faturamento,
+      faturamentoBruto: acc.faturamentoBruto + r.faturamentoBruto,
+      faturamentoLiquido: acc.faturamentoLiquido + r.faturamentoLiquido,
     }), {
       entradas: 0, r1Agendada: 0, r1Realizada: 0, contratoPago: 0,
       r2Agendada: 0, r2Realizada: 0, aprovados: 0, reprovados: 0,
-      proximaSemana: 0, vendaFinal: 0, faturamento: 0,
+      proximaSemana: 0, vendaFinal: 0, faturamentoBruto: 0, faturamentoLiquido: 0,
     });
 
     return { rows: finalRows, totals: tot };
