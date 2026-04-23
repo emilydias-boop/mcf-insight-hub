@@ -185,7 +185,7 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="A010">A010</SelectItem>
-                  <SelectItem value="LIVE">LIVE</SelectItem>
+                  <SelectItem value="LIVE">ANAMNESE (ex-LIVE)</SelectItem>
                   <SelectItem value="ANAMNESE">ANAMNESE</SelectItem>
                   <SelectItem value="ANAMNESE-INSTA">ANAMNESE-INSTA</SelectItem>
                   <SelectItem value="OUTSIDE">OUTSIDE</SelectItem>
