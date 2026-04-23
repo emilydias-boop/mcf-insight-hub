@@ -81,27 +81,46 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
   const bySDR = useMemo((): SdrSummaryRow[] => {
     const metrics = metricsQuery.data?.metrics || [];
 
-    return metrics
-      .filter((m: SdrAgendaMetrics) => {
-        if (validSdrEmails.size > 0) {
-          return validSdrEmails.has(m.sdr_email?.toLowerCase() || '');
-        }
-        return true;
-      })
-      .map((m: SdrAgendaMetrics) => {
-        const meta = sdrMetaMap.get(m.sdr_email?.toLowerCase() || '');
+    // Build a map of metrics keyed by lowercased email for quick lookup
+    const metricsByEmail = new Map<string, SdrAgendaMetrics>();
+    metrics.forEach((m: SdrAgendaMetrics) => {
+      if (m.sdr_email) metricsByEmail.set(m.sdr_email.toLowerCase(), m);
+    });
+
+    // Union of all emails: SDRs that belong/belonged to the squad + SDRs that have metrics
+    const allEmails = new Set<string>();
+    if (validSdrEmails.size > 0) {
+      validSdrEmails.forEach(e => allEmails.add(e));
+      // Also include metrics emails that are part of the valid set (filter by squad membership)
+      metrics.forEach((m: SdrAgendaMetrics) => {
+        const e = m.sdr_email?.toLowerCase();
+        if (e && validSdrEmails.has(e)) allEmails.add(e);
+      });
+    } else {
+      // No squad metadata available — fall back to whatever metrics return
+      metrics.forEach((m: SdrAgendaMetrics) => {
+        const e = m.sdr_email?.toLowerCase();
+        if (e) allEmails.add(e);
+      });
+    }
+
+    return Array.from(allEmails)
+      .map((emailLower) => {
+        const m = metricsByEmail.get(emailLower);
+        const meta = sdrMetaMap.get(emailLower);
+        const sdrEmail = m?.sdr_email || emailLower;
         const sdrName = meta?.name
-          || m.sdr_email?.split('@')[0]
+          || sdrEmail.split('@')[0]
           || 'Desconhecido';
 
         return {
-          sdrEmail: m.sdr_email,
+          sdrEmail,
           sdrName,
-          agendamentos: m.agendamentos,
-          r1Agendada: m.r1_agendada,
-          r1Realizada: m.r1_realizada,
-          noShows: m.no_shows || 0,
-          contratos: m.contratos,
+          agendamentos: m?.agendamentos ?? 0,
+          r1Agendada: m?.r1_agendada ?? 0,
+          r1Realizada: m?.r1_realizada ?? 0,
+          noShows: m?.no_shows ?? 0,
+          contratos: m?.contratos ?? 0,
           isExSquad: meta?.isExSquad ?? false,
           currentSquad: meta?.currentSquad ?? null,
         };
