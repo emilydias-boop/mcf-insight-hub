@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCreateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useActiveBU } from '@/hooks/useActiveBU';
+import { checkDuplicateContactByIdentity } from '@/hooks/useDuplicateContactIds';
 import { toast } from 'sonner';
 
 import {
@@ -151,22 +152,26 @@ export function DealFormDialog({
       const phoneClean = (data.contact_phone || '').replace(/\D/g, '');
       const phoneSuffix = phoneClean.length >= 9 ? phoneClean.slice(-9) : phoneClean;
 
-      if (emailNorm) {
-        const { data: existing } = await supabase
-          .from('crm_contacts')
-          .select('id')
-          .ilike('email', emailNorm)
-          .limit(1);
-        if (existing?.length) contactId = existing[0].id;
-      }
+      // Use the centralized RPC for duplicate detection
+      const existingMatch = await checkDuplicateContactByIdentity(
+        emailNorm || null,
+        data.contact_phone || null
+      );
 
-      if (!contactId && phoneSuffix && phoneSuffix.length >= 8) {
-        const { data: existing } = await supabase
-          .from('crm_contacts')
-          .select('id')
-          .ilike('phone', `%${phoneSuffix}`)
-          .limit(1);
-        if (existing?.length) contactId = existing[0].id;
+      if (existingMatch) {
+        const matchLabel = existingMatch.match_type === 'email' ? 'mesmo email' : 'mesmo telefone';
+        const useExisting = window.confirm(
+          `Já existe um contato com ${matchLabel}:\n\n` +
+          `${existingMatch.contact_name}\n` +
+          `${existingMatch.contact_email || 'sem email'} • ${existingMatch.contact_phone || 'sem telefone'}\n\n` +
+          `Deseja vincular o novo negócio a este contato existente?\n\n` +
+          `OK = Usar contato existente\nCancelar = Abortar criação`
+        );
+        if (!useExisting) {
+          toast.info('Criação cancelada. Localize o contato existente para criar o negócio.');
+          return;
+        }
+        contactId = existingMatch.contact_id;
       }
 
       // 2. Check if active deal already exists by email OR phone suffix in this pipeline
