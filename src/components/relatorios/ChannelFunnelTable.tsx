@@ -9,7 +9,7 @@ import { ChannelFunnelRow } from '@/hooks/useChannelFunnelReport';
 interface Props {
   rows: ChannelFunnelRow[];
   totals: {
-    entradas: number; r1Agendada: number; r1Realizada: number; contratoPago: number;
+    entradas: number; r1Agendada: number; r1Realizada: number; noShow: number; contratoPago: number;
     r2Agendada: number; r2Realizada: number; aprovados: number; reprovados: number;
     proximaSemana: number; vendaFinal: number; faturamentoBruto: number; faturamentoLiquido: number;
   };
@@ -23,6 +23,13 @@ function pct(n: number): string {
 function pctBadge(n: number) {
   if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground">—</span>;
   const variant = n >= 50 ? 'default' : n >= 20 ? 'secondary' : 'outline';
+  return <Badge variant={variant as any} className="font-mono">{n.toFixed(1)}%</Badge>;
+}
+
+function pctBadgeInverted(n: number) {
+  // Para No-Show: quanto menor, melhor
+  if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground">—</span>;
+  const variant = n >= 30 ? 'destructive' : n >= 20 ? 'secondary' : 'default';
   return <Badge variant={variant as any} className="font-mono">{n.toFixed(1)}%</Badge>;
 }
 
