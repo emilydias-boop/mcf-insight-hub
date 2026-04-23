@@ -466,7 +466,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       // ========== DEDUPLICATION: max 2x per deal_id ==========
       // Same-day reschedule = 1x, different days = max 2x
       // Realizada: 1x per deal if at least one attendee has final status
-      const closerDealMap = new Map<string, Map<string, { days: Set<string>; realized: boolean }>>();
+      const closerDealMap = new Map<string, Map<string, { days: Set<string>; realized: boolean; noshow: boolean }>>();
 
       meetings?.forEach(meeting => {
         const closerId = meeting.closer_id;
@@ -501,10 +501,11 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
 
           if (!closerDealMap.has(closerId)) closerDealMap.set(closerId, new Map());
           const dealMap = closerDealMap.get(closerId)!;
-          if (!dealMap.has(att.deal_id)) dealMap.set(att.deal_id, { days: new Set(), realized: false });
+          if (!dealMap.has(att.deal_id)) dealMap.set(att.deal_id, { days: new Set(), realized: false, noshow: false });
           const entry = dealMap.get(att.deal_id)!;
           entry.days.add(day);
           if (['completed', 'contract_paid', 'refunded'].includes(status)) entry.realized = true;
+          if (status === 'no_show') entry.noshow = true;
         });
       });
 
@@ -512,15 +513,11 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       closerDealMap.forEach((dealMap, closerId) => {
         const metric = metricsMap.get(closerId);
         if (!metric) return;
-        dealMap.forEach(({ days, realized }) => {
+        dealMap.forEach(({ days, realized, noshow }) => {
           metric.r1_agendada += days.size >= 2 ? 2 : 1;
           if (realized) metric.r1_realizada++;
+          else if (noshow) metric.noshow++;
         });
-      });
-
-      // Calcular no-show por subtração: R1 Agendada - R1 Realizada
-      metricsMap.forEach(metric => {
-        metric.noshow = Math.max(0, metric.r1_agendada - metric.r1_realizada);
       });
 
       // Convert to array and sort by r1_agendada desc
