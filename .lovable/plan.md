@@ -1,105 +1,102 @@
 
 
-## Limpeza profunda de performance — Plano completo
+## Diagnóstico: de onde vêm os números do "Funil por Canal" e o que está errado
 
-### Diagnóstico
+### Como cada coluna é calculada hoje
 
-Análise do codebase (286 hooks, 540 componentes, ~228k linhas):
+**Fonte:** `src/hooks/useChannelFunnelReport.ts`. O funil cruza 4 fontes:
 
-| Sintoma | Medição | Impacto |
+| Coluna | Fonte | Filtro | Como soma |
+|---|---|---|---|
+| **Entradas** | `crm_deals` criados no período, filtrados por `origin_id` da BU Incorporador | data de criação no período + BU | 1 por deal, classificado em canal |
+| **R1 Agendada / R1 Realizada / Contrato Pago** | `meeting_slot_attendees` com `meeting_type='r1'` no período | data agendada no período | deduplicado por `deal_id`. **Se o mesmo deal tem R1 em 2+ dias diferentes → conta 2** (tentativa de capturar reagendamento) |
+| **R2 Agendada / R2 Realizada** | Mesmo, com `meeting_type='r2'` | idem | mesma regra (×2 se 2+ dias) |
+| **Aprovados / Reprovados / Próx. Semana** | RPC `get_carrinho_r2_attendees` para todas as semanas-safra que tocam o período | semana cheia | 1 por `deal_id` único, baseado em `r2_status_name` |
+| **Venda Final / Faturamento** | `useAcquisitionReport.classified` — transações Hubla pagas no período, classificadas por `detectChannel` (lógica diferente!) | sale_date no período | 1 por transação. Bruto = `product_price`, Líquido = `net_value` |
+
+A **classificação de canal** acontece em **2 lugares com regras diferentes**:
+- **Para deals/R1/R2/Carrinho**: `classifyChannel()` em `src/lib/channelClassifier.ts` (lê tags, origin_name, lead_channel, data_source).
+- **Para Venda Final/Faturamento**: `detectChannel()` dentro de `useAcquisitionReport.ts` (lê product_name, sale_origin, tags do deal vinculado, productCategory).
+
+### O que validei contra o banco (preset Mês — Abril 2026, BU Incorporador)
+
+#### Problema 1 — A coluna **"ANAMNESE (ex-LIVE) = 397"** está enganando
+
+Validação em SQL replicando a regra:
+
+| Canal | Tela | Banco real |
 |---|---|---|
-| **Sem code-splitting** | 0 `React.lazy()`, 0 `Suspense` em rotas. Tudo importado sincronamente em `App.tsx` | Bundle inicial enorme — usuário baixa todas as páginas no primeiro load |
-| **Polling agressivo** | 27 hooks com `refetchInterval: 60000`, 4 com 30s, 2 com 5s, 2 com 10s — **40 hooks** disparando refetch em background sem pausar | A cada minuto dezenas de queries pesadas rodam mesmo com a aba parada |
-| **`refetchOnWindowFocus` sem controle** | Apenas 7 hooks desabilitam — o resto recarrega tudo a cada troca de aba | Cada `Alt+Tab` dispara cascata de refetch |
-| **Sem `staleTime` consistente** | 91 hooks usam `staleTime`, mas valores variam de 10s a 10min sem critério; QueryClient default sem config | React Query refaz fetch a cada navegação |
-| **Selects amplos** | 281 ocorrências de `select('*')` ou similar; muitos em modais e drawers | Payload grande, muitas colunas inúteis |
-| **439 `console.log` em produção** | Sem flag de build | Custo de serialização + ruído no DevTools |
-| **Hooks gigantes** | `useCRMOverviewData` 554 linhas, `useR1CloserMetrics` 528, `useR2CarrinhoVendas` 457 — múltiplos `useQuery` aninhados | Recomputações em cascata |
-| **QueryClient default** | `new QueryClient()` sem opções globais em `App.tsx` linha 124 | Defaults do React Query são agressivos |
-| **Edge function `sync-clint-data` rodando "shutdown" frequente** | Logs mostram boot/shutdown a cada 30-60s do `outbound-webhook-dispatcher` e `process-deal-replication` | Confirma que polling do front dispara backend continuamente |
+| ANAMNESE | 1625 | 1628 ✅ |
+| A010 | 506 | 508 ✅ |
+| ANAMNESE-INSTA | 35 | 35 ✅ |
+| **ANAMNESE (ex-LIVE)** | **397** | apenas **4** deals têm tag `LEAD-LIVE` de verdade |
 
-### Plano de limpeza — 5 ondas
+Os outros **393 deals** que aparecem em "ANAMNESE (ex-LIVE)" são **fallbacks**: deals cujas tags são `HUBLA`, `BASE CLINT`, `INDICAÇÃO`, `REEMBOLSO`, `OB-CONSTRUIR-ALUGAR`, `MAKE` (sem A010 junto), ou **sem nenhuma tag** (90 deals). A regra atual (`normalizeFunnelChannel`) joga todos esses no balde "LIVE" e o rótulo na UI é "ANAMNESE (ex-LIVE)".
 
-#### **Onda 1 — QueryClient global + parar polling em background** (impacto enorme, baixo risco)
+**Resultado**: o usuário lê "397 leads vieram de Anamnese antigo (Live)" mas na verdade são **393 leads sem classificação clara + 4 leads de live verdadeiros**.
 
-**`src/App.tsx`** — substituir `new QueryClient()` por config global:
-```ts
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60_000,                  // padrão: 1 min
-      gcTime: 5 * 60_000,                 // GC após 5 min sem uso
-      refetchOnWindowFocus: false,        // não recarrega ao focar aba
-      refetchOnReconnect: 'always',
-      refetchIntervalInBackground: false, // ⚠️ chave: pausa polling quando aba não está visível
-      retry: 1,
-      retryDelay: 1000,
-    },
-  },
-});
-```
+#### Problema 2 — Coluna R1 Agendada está inflada por reagendamento
 
-Isso sozinho elimina ~70% das requisições desnecessárias porque hoje o polling de 60s roda mesmo em abas em background.
+Validei R1 attendees Inc-abril:
 
-#### **Onda 2 — Code-splitting de rotas** (carregamento inicial muito mais rápido)
+| Canal | Tela R1 Ag | Banco (deals únicos R1) |
+|---|---|---|
+| ANAMNESE (ex-LIVE) | 559 | 392 |
+| ANAMNESE | 163 | 161 |
+| A010 | 297 | 335 |
+| **Total** | **1022** | **891 únicos** |
 
-**`src/App.tsx`** — converter ~80 imports de páginas para `React.lazy()`:
-```ts
-const Chairman = lazy(() => import('./pages/Chairman'));
-const ConsorcioFechamento = lazy(() => import('./pages/bu-consorcio/Fechamento'));
-// ... idem para todas as páginas
-```
+A diferença de 131 vem da regra `slot.r1Agendada += v.days.size >= 2 ? 2 : 1` (linha 276 do hook). Um deal com R1 em 2+ dias diferentes conta **2 vezes** em "R1 Agendada" mas só **1 vez** em "R1 Realizada". Isso quebra a leitura "R1 Ag → R1 Real" — o denominador foi inflado artificialmente.
 
-Envolver `<Routes>` em `<Suspense fallback={<PageSkeleton />}>`. Páginas pequenas e raras (Auth, Reset, NotFound) podem ficar síncronas.
+Validar que isso é o que o usuário quer ou não: hoje **R1 Ag → R1 Real = 55%**, mas se contássemos só deals únicos seria **562/891 = 63%**.
 
-Resultado esperado: bundle inicial cai de ~1 chunk gigante para vários chunks por rota; cada rota só baixa o JS dela.
+#### Problema 3 — Faturamento por canal usa classificador **diferente** dos deals
 
-#### **Onda 3 — Auditar e reduzir polling** (CPU/rede)
+A tabela mostra 558 vendas em A010 com R$ 24.927,65 líquido — esse "558" vem de `detectChannel(transações)` que olha **product_name** (`%a010%`) ou **product_category=a010**. Já as 506 "Entradas A010" vêm de `classifyDeal` que olha **tags do deal**. As regras divergem:
 
-Para cada um dos 40 hooks com `refetchInterval`, aplicar uma destas 3 regras:
+- Uma transação A010 sem deal vinculado entra em "Venda Final A010" mas não tem "Entrada A010" correspondente → infla `Aprovado→Venda` (398%) e `Entrada→Venda` (110.3%).
+- Por isso o **OUTSIDE = 5 vendas** (transações sem R1) aparece com 0 entradas.
+- Por isso a coluna **LANÇAMENTO** mostra 1 venda mas zero em tudo o resto.
 
-1. **Remover polling** se a tabela já tem realtime ou se a aba não exige tempo real (ex: `useChairmanMetrics`, `useTeamRevenueByMonth`, `useUltrameta*`, `useR2QualificationReport`, `useCobranca*`, `useMeetingReminders*`).
-2. **Aumentar para 5 min** quando faz sentido manter atualização (ex: relatórios financeiros, dashboards executivos).
-3. **Manter 30s/60s só para listas operacionais ao vivo**: `useWebhookLogs`, `useSyncMonitor`, `useAutomationLogs`, `usePendingNextActions`, `useUnlinkedTransactions`, `useR2CarrinhoVendas` (apenas durante uso ativo da aba).
+Os totais batem com o resto do painel (R$ 918.334 bruto / R$ 641.549 líquido = ✅ idênticos aos cards do topo), mas **a alocação por canal diverge** entre as colunas de funil (deal-based) e a coluna de venda (transaction-based).
 
-Heurística: rotas executivas/relatórios → sem polling; rotas operacionais (Carrinho, Webhooks, Sync) → 30-60s; tudo mais → invalidação por mutação.
+#### O que está correto
 
-#### **Onda 4 — Reduzir payload de queries** (rede + parse)
+- Faturamento Bruto e Líquido **totais** batem com cards do topo.
+- ANAMNESE, A010 e ANAMNESE-INSTA na coluna Entradas batem com banco.
+- Aprovados/Reprovados/Próx. Semana vêm direto do RPC do Carrinho — corretos.
 
-1. **Eliminar `select('*')` em hot paths** (281 ocorrências). Foco nos componentes que aparecem com frequência: `ContactDetailsDrawer`, `DealFormDialog`, `DealHistory`, `NextActionBlockCompact`, `useA010Acquisition`. Trocar por colunas explícitas.
-2. **Validar uso de `range()` paginado** em vez de buscas grandes (já existe em alguns lugares, mas há `.limit(5000)` em `useAllHublaTransactions` e `useTransactionsByBU`).
-3. **Identificar queries duplicadas** entre páginas Incorporador (`AcquisitionReportPanel`, `ChannelFunnelTable`) que hoje refazem o mesmo fetch — consolidar em uma `queryKey` compartilhada (já parcialmente feito via `useAcquisitionReport`).
+### Plano de correção (3 ajustes pequenos)
 
-#### **Onda 5 — Limpeza de código** (manutenção + parse)
+**Arquivo único:** `src/hooks/useChannelFunnelReport.ts` + label em `displayChannelLabel`.
 
-1. **Remover `console.log/info/debug`** em produção via plugin Vite ou condicional `if (import.meta.env.DEV)`. Manter `console.error` para Sentry-like tracking. Total: 439 ocorrências.
-2. **Quebrar hooks gigantes** (>400 linhas) em sub-hooks compostos. Aplicar primeiro a `useCRMOverviewData`, `useR1CloserMetrics`, `useR2CarrinhoVendas` — eles são chamados em rotas frequentes e cada re-render reprocessa tudo.
-3. **Memoização**: rodar perfil rápido nos componentes mais pesados (`AcquisitionReportPanel`, `R2CarrinhoView`) para identificar `useMemo` faltantes.
+1. **Renomear o canal "LIVE" para "OUTROS / SEM-CLASSIFICAÇÃO"** (e atualizar o label de exibição). Hoje rotular como "ANAMNESE (ex-LIVE)" mente — quase nenhum desses leads é Live. Manter um canal **"LIVE"** separado que só recebe deals com tag `LEAD-LIVE`/`LIVE` real (no abril seriam apenas 4 deals). Adicionar **"OUTROS"** como canal explícito de fallback. Nova lista: `['A010', 'ANAMNESE', 'ANAMNESE-INSTA', 'LIVE', 'OUTROS', 'OUTSIDE', 'LANÇAMENTO']`.
 
-### Rollout sugerido (ordem de risco crescente)
+2. **Corrigir R1/R2 Agendada para contar deals únicos** (remover `v.days.size >= 2 ? 2 : 1` → sempre 1). Isso alinha o denominador da conversão "R1 Ag → R1 Real" com a realidade. Reuniões em 2+ dias passam a contar como 1 lead único, que é o que faz sentido para análise de funil. (Se quisermos preservar "tentativas de reagendamento", criar coluna separada "Tentativas R1" — fora deste escopo.)
 
-1. **Onda 1** (1 arquivo, 5 min, reversível trivial) → ganho imediato.
-2. **Onda 2** (1 arquivo grande mas mecânico) → maior ganho percebido pelo usuário.
-3. **Onda 3** (40 arquivos, mas mudanças pequenas em cada) → eu agrupo por categoria.
-4. **Onda 4** (incremental, faço por componente) → ganho médio.
-5. **Onda 5** (limpeza contínua) → ganho de manutenibilidade + parse.
+3. **Adicionar tooltip explicativo no header da coluna "Entradas"** descrevendo que ela vem de `crm_deals.created_at` filtrado pela BU, e na coluna "Venda Final" descrevendo que vem das transações pagas (`hubla_transactions.sale_status='paid'`). Isso evita futura confusão sobre por que o canal A010 tem 506 entradas e 558 vendas (são fontes e janelas diferentes — uma transação paga em abril pode vir de um deal criado em março).
 
-Recomendo aprovar **Ondas 1 + 2 + 3** numa primeira leva — são as que mais impactam performance percebida sem risco de regressão funcional. Ondas 4 e 5 podem vir num plano separado depois.
+### Resultado esperado após o fix (Abril 2026)
 
-### Validação pós-implementação
+| Canal | Entradas | R1 Ag | R1 Real | Venda Final |
+|---|---|---|---|---|
+| ANAMNESE | 1628 | 161 | ~58 | 11 |
+| A010 | 508 | 335 | ~180 | 558 |
+| OUTROS | 393 | 386 | ~317 | ~14 |
+| ANAMNESE-INSTA | 35 | 3 | 1 | 0 |
+| LIVE (real) | 4 | 6 | ~5 | 0 |
+| OUTSIDE | 0 | 0 | 0 | 5 |
+| LANÇAMENTO | 0 | 0 | 0 | 1 |
 
-- Bundle inicial: medir com `vite build` antes/depois (esperado: queda 60-80%).
-- Network tab: contar requisições por minuto numa rota parada (esperado: cair de ~30-50/min para <5/min).
-- Edge functions: monitorar `outbound-webhook-dispatcher` boot rate (esperado: cair pela metade pelo menos).
-- Memória: heap do navegador após 10 min ocioso (esperado: ~30% menor).
+A leitura passa a ser honesta: o funil "OUTROS" vai mostrar que a maior parte do trabalho do time vem de leads sem origem rastreável — informação útil para investir em melhorar a tagueação na entrada.
 
 ### Fora do escopo
 
-- Otimizações de RPC no banco (alguns RPCs como `get_carrinho_r2_attendees` podem ser lentos — fica para outro plano se medirmos gargalo lá).
-- Service Worker / PWA cache.
-- Reescrever páginas — apenas otimizar.
+- Não vou unificar `classifyChannel` e `detectChannel` num único classificador (mudança grande, vai virar plano próprio).
+- Não vou tocar no RPC `get_carrinho_r2_attendees`.
+- Não vou adicionar coluna "Tentativas R1" (reagendamentos) — pode vir num próximo passo se você pedir.
 
 ### Reversibilidade
 
-Onda 1 e Onda 2 são reversíveis em <5 min. Onda 3 é mudança por arquivo, fácil reverter por hook. Todas mudanças preservam comportamento funcional.
+Mudança em ~15 linhas de 1 arquivo + 1 ajuste em label. Reverter = restaurar `* 2` e o label antigo.
 
