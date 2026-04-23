@@ -1043,44 +1043,42 @@ export function useSearchDealsForSchedule(
               // R1 realizada / open → permitido.
               leadState = 'open';
             } else {
-              // R1 realizada no MÊS CORRENTE bloqueia novo R1.
-              // R1 realizada em mês anterior libera o reagendamento (apenas aviso).
-              const completedR1s = atts
+              // R1 realizada NÃO bloqueia mais. Apenas exibe aviso explicando
+              // se o novo agendamento contará (1º Reagendamento) ou não
+              // (já bateu o teto de 1 agendamento + 1 reagendamento).
+              const r1Movements = atts
                 .filter(
                   (a: any) =>
-                    a.status === 'completed' &&
                     a.meeting_slot?.meeting_type === 'r1' &&
                     a.meeting_slot?.scheduled_at,
                 )
                 .sort(
-                  (a: any, b: any) =>
-                    new Date(b.meeting_slot.scheduled_at).getTime() -
-                    new Date(a.meeting_slot.scheduled_at).getTime(),
+                  (a: any, b: any) => {
+                    const aTime = new Date(
+                      a.booked_at || a.created_at,
+                    ).getTime();
+                    const bTime = new Date(
+                      b.booked_at || b.created_at,
+                    ).getTime();
+                    return aTime - bTime;
+                  },
                 );
-              const lastCompleted = completedR1s[0];
-              if (lastCompleted) {
-                const fmtMonthYear = new Intl.DateTimeFormat('pt-BR', {
-                  timeZone: 'America/Sao_Paulo',
-                  year: 'numeric',
-                  month: 'numeric',
-                });
-                const completedAt = new Date(lastCompleted.meeting_slot.scheduled_at);
-                const completedKey = fmtMonthYear.format(completedAt);
-                const todayKey = fmtMonthYear.format(now);
-                if (completedKey === todayKey) {
-                  leadState = 'completed';
-                  blockReason = 'Lead já realizou R1 neste mês. Para R2, use a Agenda R2.';
+              const hasCompleted = r1Movements.some(
+                (a: any) => a.status === 'completed',
+              );
+              if (hasCompleted) {
+                // Movimentos R1 (não-cancelados) já existentes determinam a
+                // ordem do PRÓXIMO movimento (ordem n+1).
+                const totalMovements = r1Movements.length;
+                leadState = 'open';
+                blockReason = null;
+                warningOnly = true;
+                if (totalMovements >= 2) {
+                  warningMessage =
+                    'Lead já tem 1 agendamento + 1 reagendamento válido. Você pode agendar, mas este NOVO movimento NÃO contará na sua meta.';
                 } else {
-                  // Mês diferente → libera, mas avisa o usuário
-                  const labelMesAno = new Intl.DateTimeFormat('pt-BR', {
-                    timeZone: 'America/Sao_Paulo',
-                    month: 'long',
-                    year: 'numeric',
-                  }).format(completedAt);
-                  leadState = 'open';
-                  blockReason = null;
-                  warningOnly = true;
-                  warningMessage = `Este lead já fez R1 em ${labelMesAno}. Reagendamento permitido.`;
+                  warningMessage =
+                    'Lead já realizou R1. Este será o 1º Reagendamento e CONTA na sua meta.';
                 }
               }
               // no_show / lost / cancelled / sem histórico → 'open' (permitido)
