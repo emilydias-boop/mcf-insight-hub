@@ -11135,6 +11135,16 @@ export type Database = {
         }
         Returns: Json
       }
+      check_duplicate_contact_by_identity: {
+        Args: { p_email?: string; p_phone?: string }
+        Returns: {
+          contact_email: string
+          contact_id: string
+          contact_name: string
+          contact_phone: string
+          match_type: string
+        }[]
+      }
       check_duplicate_deal_by_identity: {
         Args: { p_email: string; p_origin_id: string; p_phone_suffix: string }
         Returns: string
@@ -11248,6 +11258,12 @@ export type Database = {
         Returns: {
           contact_count: number
           email: string
+        }[]
+      }
+      get_duplicate_contact_ids: {
+        Args: never
+        Returns: {
+          contact_id: string
         }[]
       }
       get_duplicate_contact_phones: {
