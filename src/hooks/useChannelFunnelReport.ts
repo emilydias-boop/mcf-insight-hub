@@ -19,7 +19,8 @@ import { addWeeks, format } from 'date-fns';
  */
 
 const CHANNEL_LABELS: Record<string, string> = {
-  LIVE: 'ANAMNESE (ex-LIVE)',
+  LIVE: 'LIVE',
+  OUTROS: 'OUTROS / SEM-CLASSIFICAÇÃO',
 };
 export function displayChannelLabel(raw: string): string {
   return CHANNEL_LABELS[raw] || raw;
@@ -85,10 +86,12 @@ function classifyDeal(d: DealRow): string {
 
 /** Normaliza canais de deal (que podem incluir BIO-INSTAGRAM, LEAD-FORM, etc.) para os 6 canais oficiais do funil. */
 function normalizeFunnelChannel(raw: string): string {
-  if (!raw) return 'LIVE';
+  if (!raw) return 'OUTROS';
   if (raw === 'A010 (MAKE)') return 'A010';
-  if (raw === 'BIO-INSTAGRAM' || raw === 'LEAD-FORM' || raw === 'HUBLA' || raw === 'BASE CLINT' || raw === 'CSV' || raw === 'WEBHOOK' || raw === '') return 'LIVE';
-  return raw;
+  if (raw === 'LIVE') return 'LIVE';
+  if (raw === 'A010' || raw === 'ANAMNESE' || raw === 'ANAMNESE-INSTA' || raw === 'OUTSIDE' || raw === 'LANÇAMENTO') return raw;
+  // Tudo o que não é canal oficial (BIO-INSTAGRAM, LEAD-FORM, HUBLA, BASE CLINT, CSV, WEBHOOK, etc.) cai em OUTROS
+  return 'OUTROS';
 }
 
 export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: BusinessUnit) {
@@ -220,7 +223,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
 
   // 4. Agregação por canal
   const { rows, totals } = useMemo(() => {
-    const FUNNEL_CHANNELS = ['A010', 'LIVE', 'ANAMNESE', 'ANAMNESE-INSTA', 'OUTSIDE', 'LANÇAMENTO'];
+    const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'ANAMNESE-INSTA', 'LIVE', 'OUTROS', 'OUTSIDE', 'LANÇAMENTO'];
     const blank = (): Omit<ChannelFunnelRow, 'channel' | 'channelLabel' | 'r1AgToReal' | 'r1RealToContrato' | 'aprovadoToVenda' | 'entradaToVenda'> => ({
       entradas: 0, r1Agendada: 0, r1Realizada: 0, contratoPago: 0,
       r2Agendada: 0, r2Realizada: 0, aprovados: 0, reprovados: 0,
@@ -235,7 +238,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
 
     // Entradas: 1 por deal classificado
     deals.forEach(d => {
-      const ch = dealChannelMap.get(d.id) || 'LIVE';
+      const ch = dealChannelMap.get(d.id) || 'OUTROS';
       get(ch).entradas++;
     });
 
@@ -271,27 +274,28 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     const r2 = dedup('r2');
 
     r1.dealMap.forEach((v, dealId) => {
-      const ch = dealChannelMap.get(dealId) || 'LIVE';
+      const ch = dealChannelMap.get(dealId) || 'OUTROS';
       const slot = get(ch);
-      slot.r1Agendada += v.days.size >= 2 ? 2 : 1;
+      // Conta deals únicos — reagendamentos não inflam o denominador
+      slot.r1Agendada += 1;
       if (v.realized) slot.r1Realizada++;
       if (v.contractPaid) slot.contratoPago++;
     });
     r2.dealMap.forEach((v, dealId) => {
-      const ch = dealChannelMap.get(dealId) || 'LIVE';
+      const ch = dealChannelMap.get(dealId) || 'OUTROS';
       const slot = get(ch);
-      slot.r2Agendada += v.days.size >= 2 ? 2 : 1;
+      slot.r2Agendada += 1;
       if (v.realized) slot.r2Realizada++;
     });
-    // Sem deal → empilha em "LIVE" como fallback (fluxo padrão)
+    // Sem deal → empilha em "OUTROS" como fallback
     if (r1.noDealCount.agendada > 0) {
-      const slot = get('LIVE');
+      const slot = get('OUTROS');
       slot.r1Agendada += r1.noDealCount.agendada;
       slot.r1Realizada += r1.noDealCount.realizada;
       slot.contratoPago += r1.noDealCount.contractPaid;
     }
     if (r2.noDealCount.agendada > 0) {
-      const slot = get('LIVE');
+      const slot = get('OUTROS');
       slot.r2Agendada += r2.noDealCount.agendada;
       slot.r2Realizada += r2.noDealCount.realizada;
     }
@@ -301,7 +305,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     carrinhoRows.forEach(c => {
       if (!c.deal_id || seenCarrinho.has(c.deal_id)) return;
       seenCarrinho.add(c.deal_id);
-      const ch = dealChannelMap.get(c.deal_id) || 'LIVE';
+      const ch = dealChannelMap.get(c.deal_id) || 'OUTROS';
       const slot = get(ch);
       const status = (c.r2_status_name || '').toLowerCase();
       if (status.includes('aprovado') || status.includes('approved')) slot.aprovados++;
