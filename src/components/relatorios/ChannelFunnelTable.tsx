@@ -9,7 +9,7 @@ interface Props {
   totals: {
     entradas: number; r1Agendada: number; r1Realizada: number; contratoPago: number;
     r2Agendada: number; r2Realizada: number; aprovados: number; reprovados: number;
-    proximaSemana: number; vendaFinal: number; faturamento: number;
+    proximaSemana: number; vendaFinal: number; faturamentoBruto: number; faturamentoLiquido: number;
   };
 }
 
@@ -60,7 +60,8 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableHead className="text-right">Reprovados</TableHead>
                     <TableHead className="text-right">Próx. Semana</TableHead>
                     <TableHead className="text-right">Venda Final</TableHead>
-                    <TableHead className="text-right">Faturamento</TableHead>
+                    <TableHead className="text-right">Fat. Bruto</TableHead>
+                    <TableHead className="text-right">Fat. Líquido</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -77,7 +78,8 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                       <TableCell className="text-right text-destructive">{r.reprovados}</TableCell>
                       <TableCell className="text-right text-muted-foreground">{r.proximaSemana}</TableCell>
                       <TableCell className="text-right font-semibold">{r.vendaFinal}</TableCell>
-                      <TableCell className="text-right font-semibold">{formatCurrency(r.faturamento)}</TableCell>
+                      <TableCell className="text-right font-semibold">{formatCurrency(r.faturamentoBruto)}</TableCell>
+                      <TableCell className="text-right font-semibold">{formatCurrency(r.faturamentoLiquido)}</TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="border-t-2 bg-muted/30 font-semibold">
@@ -92,7 +94,8 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableCell className="text-right text-destructive">{totals.reprovados}</TableCell>
                     <TableCell className="text-right text-muted-foreground">{totals.proximaSemana}</TableCell>
                     <TableCell className="text-right">{totals.vendaFinal}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(totals.faturamento)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(totals.faturamentoBruto)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(totals.faturamentoLiquido)}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
