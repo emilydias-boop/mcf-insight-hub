@@ -65,7 +65,8 @@ export function useContactDealIds(dealId: string | undefined, contactId?: string
       const { data: deals } = await supabase
         .from('crm_deals')
         .select('id, clint_id')
-        .eq('contact_id', resolvedContactId);
+        .eq('contact_id', resolvedContactId)
+        .eq('is_archived', false);
 
       if (!deals || deals.length === 0) return dealId ? [dealId] : [];
 

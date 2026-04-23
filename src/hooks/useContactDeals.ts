@@ -18,12 +18,14 @@ export const useContactDeals = (contactId: string | undefined, excludeDealId: st
           .from('crm_deals')
           .select(selectFields)
           .eq('contact_id', contactId)
+          .eq('is_archived', false)
           .order('created_at', { ascending: false });
       } else if (dealName) {
         query = supabase
           .from('crm_deals')
           .select(selectFields)
           .eq('name', dealName)
+          .eq('is_archived', false)
           .order('created_at', { ascending: false });
       } else {
         return [];

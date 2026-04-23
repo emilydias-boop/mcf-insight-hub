@@ -427,6 +427,7 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
         `)
       .eq('is_duplicate', false)
       .is('archived_at', null)
+      .eq('is_archived', false)
       .order('stage_moved_at', { ascending: false, nullsFirst: false })
       .limit(limit);
       
@@ -524,6 +525,7 @@ export const useCRMDealsInfinite = (filters: InfiniteDealsFilters = {}) => {
       if (filters.originId) query = query.eq('origin_id', filters.originId);
       if (filters.stageId) query = query.eq('stage_id', filters.stageId);
       if (filters.searchTerm) query = query.ilike('name', `%${filters.searchTerm}%`);
+      query = query.eq('is_archived', false);
       
       const { data, error } = await query;
       

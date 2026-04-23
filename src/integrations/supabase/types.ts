@@ -4360,9 +4360,12 @@ export type Database = {
           duplicate_of_deal_id: string | null
           expected_close_date: string | null
           id: string
+          is_archived: boolean
           is_duplicate: boolean | null
           last_contact_at: string | null
           last_worked_at: string | null
+          merged_at: string | null
+          merged_into_deal_id: string | null
           name: string
           next_action_date: string | null
           next_action_note: string | null
@@ -4395,9 +4398,12 @@ export type Database = {
           duplicate_of_deal_id?: string | null
           expected_close_date?: string | null
           id?: string
+          is_archived?: boolean
           is_duplicate?: boolean | null
           last_contact_at?: string | null
           last_worked_at?: string | null
+          merged_at?: string | null
+          merged_into_deal_id?: string | null
           name: string
           next_action_date?: string | null
           next_action_note?: string | null
@@ -4430,9 +4436,12 @@ export type Database = {
           duplicate_of_deal_id?: string | null
           expected_close_date?: string | null
           id?: string
+          is_archived?: boolean
           is_duplicate?: boolean | null
           last_contact_at?: string | null
           last_worked_at?: string | null
+          merged_at?: string | null
+          merged_into_deal_id?: string | null
           name?: string
           next_action_date?: string | null
           next_action_note?: string | null
@@ -4459,6 +4468,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_deals_merged_into_deal_id_fkey"
+            columns: ["merged_into_deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
             referencedColumns: ["id"]
           },
           {

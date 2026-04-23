@@ -73,6 +73,9 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
     .order('created_at', { ascending: false })
     .range(from, to);
 
+  // Hide archived contacts (merged duplicates)
+  query = query.or('is_archived.is.null,is_archived.eq.false');
+
   if (searchTerm && searchTerm.length >= 3) {
     query = query.or(`name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
   }
