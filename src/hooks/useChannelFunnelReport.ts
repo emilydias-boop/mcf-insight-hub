@@ -179,6 +179,52 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     staleTime: 60_000,
   });
 
+  // 2b. Classificação de canal para deals que aparecem em R1/R2 mas NÃO foram criados no período
+  // (ex: deal criado em março com R1 em abril) — sem isso caem em "OUTROS" indevidamente.
+  const meetingDealIds = useMemo(() => {
+    const s = new Set<string>();
+    attendees.forEach(a => { if (a.deal_id) s.add(a.deal_id); });
+    deals.forEach(d => s.delete(d.id)); // remove os já carregados
+    return Array.from(s);
+  }, [attendees, deals]);
+
+  const { data: extraDealChannels = new Map<string, string>(), isLoading: loadingExtra } = useQuery<Map<string, string>>({
+    queryKey: ['funnel-extra-deals', meetingDealIds.length, meetingDealIds.slice(0, 5).join(',')],
+    queryFn: async () => {
+      const out = new Map<string, string>();
+      if (meetingDealIds.length === 0) return out;
+      const CHUNK = 500;
+      for (let i = 0; i < meetingDealIds.length; i += CHUNK) {
+        const slice = meetingDealIds.slice(i, i + CHUNK);
+        const { data, error } = await supabase
+          .from('crm_deals')
+          .select('id, tags, custom_fields, data_source, created_at, crm_origins(name)')
+          .in('id', slice);
+        if (error) throw error;
+        ((data || []) as any[]).forEach((r: any) => {
+          const dr: DealRow = {
+            id: r.id,
+            tags: r.tags,
+            origin_name: r.crm_origins?.name ?? null,
+            lead_channel: r.custom_fields?.lead_channel ?? null,
+            data_source: r.data_source,
+            created_at: r.created_at,
+          };
+          out.set(dr.id, normalizeFunnelChannel(classifyDeal(dr)));
+        });
+      }
+      return out;
+    },
+    enabled: meetingDealIds.length > 0,
+    staleTime: 60_000,
+  });
+
+  const fullDealChannelMap = useMemo(() => {
+    const m = new Map<string, string>(dealChannelMap);
+    extraDealChannels.forEach((v, k) => { if (!m.has(k)) m.set(k, v); });
+    return m;
+  }, [dealChannelMap, extraDealChannels]);
+
   // 3. Carrinho (Aprovado/Reprovado/Próxima semana) — para todas as semanas tocadas pelo período
   const weeksInRange = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return [] as Array<{ start: Date; end: Date }>;
@@ -278,7 +324,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     const r2 = dedup('r2');
 
     r1.dealMap.forEach((v, dealId) => {
-      const ch = dealChannelMap.get(dealId) || 'OUTROS';
+      const ch = fullDealChannelMap.get(dealId) || 'OUTROS';
       const slot = get(ch);
       // Conta deals únicos — reagendamentos não inflam o denominador
       slot.r1Agendada += 1;
@@ -287,7 +333,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       if (v.contractPaid) slot.contratoPago++;
     });
     r2.dealMap.forEach((v, dealId) => {
-      const ch = dealChannelMap.get(dealId) || 'OUTROS';
+      const ch = fullDealChannelMap.get(dealId) || 'OUTROS';
       const slot = get(ch);
       slot.r2Agendada += 1;
       if (v.realized) slot.r2Realizada++;
@@ -311,7 +357,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     carrinhoRows.forEach(c => {
       if (!c.deal_id || seenCarrinho.has(c.deal_id)) return;
       seenCarrinho.add(c.deal_id);
-      const ch = dealChannelMap.get(c.deal_id) || 'OUTROS';
+      const ch = fullDealChannelMap.get(c.deal_id) || 'OUTROS';
       const slot = get(ch);
       const status = (c.r2_status_name || '').toLowerCase();
       if (status.includes('aprovado') || status.includes('approved')) slot.aprovados++;
@@ -360,11 +406,11 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     return { rows: finalRows, totals: tot };
-  }, [deals, dealChannelMap, attendees, carrinhoRows, acq.classified]);
+  }, [deals, fullDealChannelMap, attendees, carrinhoRows, acq.classified]);
 
   return {
     rows,
     totals,
-    isLoading: loadingDeals || loadingAtt || loadingCarrinho || acq.isLoading,
+    isLoading: loadingDeals || loadingAtt || loadingExtra || loadingCarrinho || acq.isLoading,
   };
 }
