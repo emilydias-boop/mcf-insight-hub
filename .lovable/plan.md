@@ -1,53 +1,105 @@
 
 
-## Separar Faturamento Bruto e Líquido no Funil por Canal
+## Limpeza profunda de performance — Plano completo
 
-### Como cada um é calculado hoje (confirmação)
+### Diagnóstico
 
-A coluna "Faturamento" da tabela vem do `useAcquisitionReport.classified` — exatamente as mesmas transações Hubla pagas que alimentam o card "Faturamento Líquido R$ 641.549,44" no topo do painel. O hook já calcula **dois valores** por transação (em `useAcquisitionReport.ts` linhas 377-378):
+Análise do codebase (286 hooks, 540 componentes, ~228k linhas):
 
-- **Bruto (`gross`):**
-  - Para BU Incorporador (que tem filtro BU ativo): `tx.product_price ?? tx.net_value ?? 0` — usa o `product_price` (preço de tabela do produto, ex: 50.000 para Incorporador 50K).
-  - Para outras BUs: usa `getDeduplicatedGross(tx, isFirst)` — pega `reference_price` do catálogo de produtos centralizado, mas só na **primeira transação do contrato** (parcelas seguintes contam 0 para não inflar o bruto).
-- **Líquido (`net`):** sempre `tx.net_value` — o que efetivamente caiu no caixa após taxas Hubla, parcelamento, etc. (é igual à coluna `net_value` da `hubla_transactions`).
+| Sintoma | Medição | Impacto |
+|---|---|---|
+| **Sem code-splitting** | 0 `React.lazy()`, 0 `Suspense` em rotas. Tudo importado sincronamente em `App.tsx` | Bundle inicial enorme — usuário baixa todas as páginas no primeiro load |
+| **Polling agressivo** | 27 hooks com `refetchInterval: 60000`, 4 com 30s, 2 com 5s, 2 com 10s — **40 hooks** disparando refetch em background sem pausar | A cada minuto dezenas de queries pesadas rodam mesmo com a aba parada |
+| **`refetchOnWindowFocus` sem controle** | Apenas 7 hooks desabilitam — o resto recarrega tudo a cada troca de aba | Cada `Alt+Tab` dispara cascata de refetch |
+| **Sem `staleTime` consistente** | 91 hooks usam `staleTime`, mas valores variam de 10s a 10min sem critério; QueryClient default sem config | React Query refaz fetch a cada navegação |
+| **Selects amplos** | 281 ocorrências de `select('*')` ou similar; muitos em modais e drawers | Payload grande, muitas colunas inúteis |
+| **439 `console.log` em produção** | Sem flag de build | Custo de serialização + ruído no DevTools |
+| **Hooks gigantes** | `useCRMOverviewData` 554 linhas, `useR1CloserMetrics` 528, `useR2CarrinhoVendas` 457 — múltiplos `useQuery` aninhados | Recomputações em cascata |
+| **QueryClient default** | `new QueryClient()` sem opções globais em `App.tsx` linha 124 | Defaults do React Query são agressivos |
+| **Edge function `sync-clint-data` rodando "shutdown" frequente** | Logs mostram boot/shutdown a cada 30-60s do `outbound-webhook-dispatcher` e `process-deal-replication` | Confirma que polling do front dispara backend continuamente |
 
-Hoje o funil mostra **só o líquido** porque a agregação em `useChannelFunnelReport.ts` linha 316 faz `slot.faturamento += net || 0`. O `gross` está sendo descartado.
+### Plano de limpeza — 5 ondas
 
-> Por isso o total da coluna "Faturamento" (R$ 641.549,44) bate exatamente com o card "Receita Líquida" e está bem abaixo do "Faturamento Bruto R$ 918.334,00" — são valores diferentes da mesma venda.
+#### **Onda 1 — QueryClient global + parar polling em background** (impacto enorme, baixo risco)
 
-### O que vou alterar
+**`src/App.tsx`** — substituir `new QueryClient()` por config global:
+```ts
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,                  // padrão: 1 min
+      gcTime: 5 * 60_000,                 // GC após 5 min sem uso
+      refetchOnWindowFocus: false,        // não recarrega ao focar aba
+      refetchOnReconnect: 'always',
+      refetchIntervalInBackground: false, // ⚠️ chave: pausa polling quando aba não está visível
+      retry: 1,
+      retryDelay: 1000,
+    },
+  },
+});
+```
 
-**Arquivo 1: `src/hooks/useChannelFunnelReport.ts`**
-- Trocar o campo único `faturamento: number` por dois: `faturamentoBruto: number` e `faturamentoLiquido: number`.
-- Na agregação (linha 312-317), somar `gross` e `net` em campos separados:
-  ```ts
-  slot.faturamentoBruto += gross || 0;
-  slot.faturamentoLiquido += net || 0;
-  ```
-- Ordenar `finalRows` por `faturamentoLiquido` (mantém comportamento atual).
-- Atualizar `totals` para incluir os dois.
+Isso sozinho elimina ~70% das requisições desnecessárias porque hoje o polling de 60s roda mesmo em abas em background.
 
-**Arquivo 2: `src/components/relatorios/ChannelFunnelTable.tsx`**
-- Substituir a coluna "Faturamento" por **duas colunas**: "Fat. Bruto" e "Fat. Líquido", lado a lado no fim da tabela.
-- Atualizar o `<TableHeader>`, as linhas, e a linha de Total para mostrar ambos com `formatCurrency`.
-- Atualizar a interface `Props.totals` para refletir os dois campos.
+#### **Onda 2 — Code-splitting de rotas** (carregamento inicial muito mais rápido)
 
-**Arquivo 3: `src/components/relatorios/AcquisitionReportPanel.tsx`**
-- No export Excel da aba "Funil por Canal", desdobrar a coluna em duas (`Fat. Bruto` e `Fat. Líquido`).
+**`src/App.tsx`** — converter ~80 imports de páginas para `React.lazy()`:
+```ts
+const Chairman = lazy(() => import('./pages/Chairman'));
+const ConsorcioFechamento = lazy(() => import('./pages/bu-consorcio/Fechamento'));
+// ... idem para todas as páginas
+```
 
-### Validação esperada (preset Mês, BU Incorporador)
+Envolver `<Routes>` em `<Suspense fallback={<PageSkeleton />}>`. Páginas pequenas e raras (Auth, Reset, NotFound) podem ficar síncronas.
 
-- Total **Fat. Bruto** do funil ≈ R$ 918.334,00 (bate com o card "Faturamento Bruto" no topo).
-- Total **Fat. Líquido** do funil = R$ 641.549,44 (bate com o card "Receita Líquida" e com o valor atual da coluna única).
-- Diferença bruto vs líquido por canal explica taxas Hubla / parcelamento — útil para análise de margem por canal.
+Resultado esperado: bundle inicial cai de ~1 chunk gigante para vários chunks por rota; cada rota só baixa o JS dela.
 
-### O que NÃO vai mudar
+#### **Onda 3 — Auditar e reduzir polling** (CPU/rede)
 
-- Lógica de classificação de canal (continua usando `detectChannel` da `useAcquisitionReport`).
-- Cálculo de `gross` em si — só passo a expô-lo. A regra de deduplicação por contrato (`getDeduplicatedGross`) e o uso de `product_price` no Incorporador continuam idênticos.
-- Outras tabelas do painel (Faturamento por Closer, por SDR, por Canal de cima) — não estão no escopo. Posso fazer numa próxima iteração se você pedir.
+Para cada um dos 40 hooks com `refetchInterval`, aplicar uma destas 3 regras:
+
+1. **Remover polling** se a tabela já tem realtime ou se a aba não exige tempo real (ex: `useChairmanMetrics`, `useTeamRevenueByMonth`, `useUltrameta*`, `useR2QualificationReport`, `useCobranca*`, `useMeetingReminders*`).
+2. **Aumentar para 5 min** quando faz sentido manter atualização (ex: relatórios financeiros, dashboards executivos).
+3. **Manter 30s/60s só para listas operacionais ao vivo**: `useWebhookLogs`, `useSyncMonitor`, `useAutomationLogs`, `usePendingNextActions`, `useUnlinkedTransactions`, `useR2CarrinhoVendas` (apenas durante uso ativo da aba).
+
+Heurística: rotas executivas/relatórios → sem polling; rotas operacionais (Carrinho, Webhooks, Sync) → 30-60s; tudo mais → invalidação por mutação.
+
+#### **Onda 4 — Reduzir payload de queries** (rede + parse)
+
+1. **Eliminar `select('*')` em hot paths** (281 ocorrências). Foco nos componentes que aparecem com frequência: `ContactDetailsDrawer`, `DealFormDialog`, `DealHistory`, `NextActionBlockCompact`, `useA010Acquisition`. Trocar por colunas explícitas.
+2. **Validar uso de `range()` paginado** em vez de buscas grandes (já existe em alguns lugares, mas há `.limit(5000)` em `useAllHublaTransactions` e `useTransactionsByBU`).
+3. **Identificar queries duplicadas** entre páginas Incorporador (`AcquisitionReportPanel`, `ChannelFunnelTable`) que hoje refazem o mesmo fetch — consolidar em uma `queryKey` compartilhada (já parcialmente feito via `useAcquisitionReport`).
+
+#### **Onda 5 — Limpeza de código** (manutenção + parse)
+
+1. **Remover `console.log/info/debug`** em produção via plugin Vite ou condicional `if (import.meta.env.DEV)`. Manter `console.error` para Sentry-like tracking. Total: 439 ocorrências.
+2. **Quebrar hooks gigantes** (>400 linhas) em sub-hooks compostos. Aplicar primeiro a `useCRMOverviewData`, `useR1CloserMetrics`, `useR2CarrinhoVendas` — eles são chamados em rotas frequentes e cada re-render reprocessa tudo.
+3. **Memoização**: rodar perfil rápido nos componentes mais pesados (`AcquisitionReportPanel`, `R2CarrinhoView`) para identificar `useMemo` faltantes.
+
+### Rollout sugerido (ordem de risco crescente)
+
+1. **Onda 1** (1 arquivo, 5 min, reversível trivial) → ganho imediato.
+2. **Onda 2** (1 arquivo grande mas mecânico) → maior ganho percebido pelo usuário.
+3. **Onda 3** (40 arquivos, mas mudanças pequenas em cada) → eu agrupo por categoria.
+4. **Onda 4** (incremental, faço por componente) → ganho médio.
+5. **Onda 5** (limpeza contínua) → ganho de manutenibilidade + parse.
+
+Recomendo aprovar **Ondas 1 + 2 + 3** numa primeira leva — são as que mais impactam performance percebida sem risco de regressão funcional. Ondas 4 e 5 podem vir num plano separado depois.
+
+### Validação pós-implementação
+
+- Bundle inicial: medir com `vite build` antes/depois (esperado: queda 60-80%).
+- Network tab: contar requisições por minuto numa rota parada (esperado: cair de ~30-50/min para <5/min).
+- Edge functions: monitorar `outbound-webhook-dispatcher` boot rate (esperado: cair pela metade pelo menos).
+- Memória: heap do navegador após 10 min ocioso (esperado: ~30% menor).
+
+### Fora do escopo
+
+- Otimizações de RPC no banco (alguns RPCs como `get_carrinho_r2_attendees` podem ser lentos — fica para outro plano se medirmos gargalo lá).
+- Service Worker / PWA cache.
+- Reescrever páginas — apenas otimizar.
 
 ### Reversibilidade
 
-3 arquivos, ~20 linhas alteradas. Reverter = restaurar nome único `faturamento`.
+Onda 1 e Onda 2 são reversíveis em <5 min. Onda 3 é mudança por arquivo, fácil reverter por hook. Todas mudanças preservam comportamento funcional.
 
