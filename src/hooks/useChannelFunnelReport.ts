@@ -179,6 +179,52 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     staleTime: 60_000,
   });
 
+  // 2b. Classificação de canal para deals que aparecem em R1/R2 mas NÃO foram criados no período
+  // (ex: deal criado em março com R1 em abril) — sem isso caem em "OUTROS" indevidamente.
+  const meetingDealIds = useMemo(() => {
+    const s = new Set<string>();
+    attendees.forEach(a => { if (a.deal_id) s.add(a.deal_id); });
+    deals.forEach(d => s.delete(d.id)); // remove os já carregados
+    return Array.from(s);
+  }, [attendees, deals]);
+
+  const { data: extraDealChannels = new Map<string, string>(), isLoading: loadingExtra } = useQuery<Map<string, string>>({
+    queryKey: ['funnel-extra-deals', meetingDealIds.length, meetingDealIds.slice(0, 5).join(',')],
+    queryFn: async () => {
+      const out = new Map<string, string>();
+      if (meetingDealIds.length === 0) return out;
+      const CHUNK = 500;
+      for (let i = 0; i < meetingDealIds.length; i += CHUNK) {
+        const slice = meetingDealIds.slice(i, i + CHUNK);
+        const { data, error } = await supabase
+          .from('crm_deals')
+          .select('id, tags, custom_fields, data_source, created_at, crm_origins(name)')
+          .in('id', slice);
+        if (error) throw error;
+        ((data || []) as any[]).forEach((r: any) => {
+          const dr: DealRow = {
+            id: r.id,
+            tags: r.tags,
+            origin_name: r.crm_origins?.name ?? null,
+            lead_channel: r.custom_fields?.lead_channel ?? null,
+            data_source: r.data_source,
+            created_at: r.created_at,
+          };
+          out.set(dr.id, normalizeFunnelChannel(classifyDeal(dr)));
+        });
+      }
+      return out;
+    },
+    enabled: meetingDealIds.length > 0,
+    staleTime: 60_000,
+  });
+
+  const fullDealChannelMap = useMemo(() => {
+    const m = new Map<string, string>(dealChannelMap);
+    extraDealChannels.forEach((v, k) => { if (!m.has(k)) m.set(k, v); });
+    return m;
+  }, [dealChannelMap, extraDealChannels]);
+
   // 3. Carrinho (Aprovado/Reprovado/Próxima semana) — para todas as semanas tocadas pelo período
   const weeksInRange = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return [] as Array<{ start: Date; end: Date }>;
