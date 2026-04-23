@@ -1,70 +1,53 @@
 
 
-## Corrigir Funil por Canal — colunas inexistentes nas queries
+## Separar Faturamento Bruto e Líquido no Funil por Canal
 
-### Diagnóstico
+### Como cada um é calculado hoje (confirmação)
 
-A tabela ficou com Entradas / R1 / R2 / Contrato Pago **zeradas** porque duas queries do `useChannelFunnelReport.ts` referenciam colunas que **não existem no banco**, então o Supabase retorna erro/array vazio silenciosamente. Aprovados, Reprovados, Próxima Semana e Venda Final aparecem porque vêm de outras fontes (RPC `get_carrinho_r2_attendees` e `useAcquisitionReport.classified`).
+A coluna "Faturamento" da tabela vem do `useAcquisitionReport.classified` — exatamente as mesmas transações Hubla pagas que alimentam o card "Faturamento Líquido R$ 641.549,44" no topo do painel. O hook já calcula **dois valores** por transação (em `useAcquisitionReport.ts` linhas 377-378):
 
-**Erro 1 — Query de deals (`crm_deals`):**
-```ts
-.select('id, tags, origin_name, lead_channel, data_source, created_at')
-```
-- `origin_name` **não existe** — a tabela tem `origin_id` (FK para `crm_origins.name`).
-- `lead_channel` **não existe** como coluna — está dentro do JSONB `custom_fields->>'lead_channel'`.
+- **Bruto (`gross`):**
+  - Para BU Incorporador (que tem filtro BU ativo): `tx.product_price ?? tx.net_value ?? 0` — usa o `product_price` (preço de tabela do produto, ex: 50.000 para Incorporador 50K).
+  - Para outras BUs: usa `getDeduplicatedGross(tx, isFirst)` — pega `reference_price` do catálogo de produtos centralizado, mas só na **primeira transação do contrato** (parcelas seguintes contam 0 para não inflar o bruto).
+- **Líquido (`net`):** sempre `tx.net_value` — o que efetivamente caiu no caixa após taxas Hubla, parcelamento, etc. (é igual à coluna `net_value` da `hubla_transactions`).
 
-**Erro 2 — Query de attendees (`meeting_slot_attendees`):**
-```ts
-.select('id, deal_id, attendee_status, meeting_slots!inner(meeting_type, scheduled_at, status)')
-```
-- `attendee_status` **não existe** nessa tabela — a coluna é `status`. (Confusão com o RPC `get_carrinho_r2_attendees` que retorna `attendee_status` como alias.)
+Hoje o funil mostra **só o líquido** porque a agregação em `useChannelFunnelReport.ts` linha 316 faz `slot.faturamento += net || 0`. O `gross` está sendo descartado.
 
-Confirmado pelo schema:
-- `crm_deals` tem: `id, origin_id, tags, custom_fields, data_source, created_at` (sem `origin_name`/`lead_channel`).
-- `meeting_slot_attendees` tem `status`, não `attendee_status`.
+> Por isso o total da coluna "Faturamento" (R$ 641.549,44) bate exatamente com o card "Receita Líquida" e está bem abaixo do "Faturamento Bruto R$ 918.334,00" — são valores diferentes da mesma venda.
 
-E confirmei no banco que existem **2972 deals** e **1219 attendees R1/R2** em abril/2026 — os dados existem, é a query que não consegue lê-los.
+### O que vou alterar
 
-### Correção
+**Arquivo 1: `src/hooks/useChannelFunnelReport.ts`**
+- Trocar o campo único `faturamento: number` por dois: `faturamentoBruto: number` e `faturamentoLiquido: number`.
+- Na agregação (linha 312-317), somar `gross` e `net` em campos separados:
+  ```ts
+  slot.faturamentoBruto += gross || 0;
+  slot.faturamentoLiquido += net || 0;
+  ```
+- Ordenar `finalRows` por `faturamentoLiquido` (mantém comportamento atual).
+- Atualizar `totals` para incluir os dois.
 
-**Arquivo único:** `src/hooks/useChannelFunnelReport.ts`
+**Arquivo 2: `src/components/relatorios/ChannelFunnelTable.tsx`**
+- Substituir a coluna "Faturamento" por **duas colunas**: "Fat. Bruto" e "Fat. Líquido", lado a lado no fim da tabela.
+- Atualizar o `<TableHeader>`, as linhas, e a linha de Total para mostrar ambos com `formatCurrency`.
+- Atualizar a interface `Props.totals` para refletir os dois campos.
 
-1. **Query de deals:** trocar select para `id, tags, origin_id, custom_fields, data_source, created_at` e fazer JOIN com `crm_origins` para puxar o `origin_name`:
-   ```ts
-   .select('id, tags, custom_fields, data_source, created_at, crm_origins(name)')
-   ```
-   Mapear no resultado: `origin_name = row.crm_origins?.name ?? null`, `lead_channel = row.custom_fields?.lead_channel ?? null`.
+**Arquivo 3: `src/components/relatorios/AcquisitionReportPanel.tsx`**
+- No export Excel da aba "Funil por Canal", desdobrar a coluna em duas (`Fat. Bruto` e `Fat. Líquido`).
 
-2. **Query de attendees:** trocar `attendee_status` por `status`:
-   ```ts
-   .select('id, deal_id, status, meeting_slots!inner(meeting_type, scheduled_at, status)')
-   ```
-   E ajustar a interface `AttendeeFunnelRow` (renomear `attendee_status` → `status`) e a leitura na deduplicação (linha 235): `const status = (a.status || a.meeting_slots?.status || '').toLowerCase();`.
+### Validação esperada (preset Mês, BU Incorporador)
 
-3. **(Opcional, mas recomendado) Filtrar deals por BU:** adicionar filtro `.in('origin_id', originIds)` quando `bu` está definido, usando o mesmo helper que outros relatórios usam (`useBuOriginIds(bu)`). Sem isso, a tabela mostra deals de todas as BUs misturados (incluindo Consórcio/Crédito), o que infla "Entradas" e quebra a leitura. Vou usar o mesmo padrão já presente em `useAcquisitionReport`.
+- Total **Fat. Bruto** do funil ≈ R$ 918.334,00 (bate com o card "Faturamento Bruto" no topo).
+- Total **Fat. Líquido** do funil = R$ 641.549,44 (bate com o card "Receita Líquida" e com o valor atual da coluna única).
+- Diferença bruto vs líquido por canal explica taxas Hubla / parcelamento — útil para análise de margem por canal.
 
-### Resultado esperado após o fix (preset Mês, BU Incorporador)
+### O que NÃO vai mudar
 
-- **Entradas** passa a mostrar a contagem real de deals criados no mês por canal (centenas/milhares).
-- **R1 Agendada/Realizada e Contrato Pago** passam a refletir os attendees reais (1219 attendees no mês).
-- **R2 Agendada/Realizada** idem.
-- Aprovados/Reprovados/Próx. Semana/Venda Final/Faturamento **continuam corretos** (já estavam funcionando).
-- A conversão "Aprovado → Venda Final" deixa de mostrar 735.8% (986/134) porque Venda Final passa a estar no mesmo eixo de comparação consistente — embora valores >100% ainda sejam possíveis em filtros largos por causa de OUTSIDE/A010 sem deal correspondente.
-
-### Validações pós-fix
-
-1. Total de **Entradas** > 0 e próximo do número de deals criados no período (≈2972 em abril).
-2. Total de **R1 Agendada** entre 600 e 1100 (deduplicação por deal de 1219 attendees R1+R2).
-3. Total de **Faturamento** continua batendo com o card "Faturamento Bruto/Líquido" no topo.
-4. Nenhuma linha do console com erro tipo "column ... does not exist".
+- Lógica de classificação de canal (continua usando `detectChannel` da `useAcquisitionReport`).
+- Cálculo de `gross` em si — só passo a expô-lo. A regra de deduplicação por contrato (`getDeduplicatedGross`) e o uso de `product_price` no Incorporador continuam idênticos.
+- Outras tabelas do painel (Faturamento por Closer, por SDR, por Canal de cima) — não estão no escopo. Posso fazer numa próxima iteração se você pedir.
 
 ### Reversibilidade
 
-Mudança isolada num único hook (~15 linhas). Zero impacto em outros relatórios.
-
-### Fora do escopo
-
-- Não vou alterar o RPC `get_carrinho_r2_attendees` nem o `useAcquisitionReport`.
-- Não vou implementar filtro por Closer/Search no funil (esses filtros do painel já não eram aplicados ao funil — fica para próxima iteração se você pedir).
-- Não vou tocar nas outras tabelas do painel (Faturamento por Closer, SDR, etc.).
+3 arquivos, ~20 linhas alteradas. Reverter = restaurar nome único `faturamento`.
 
