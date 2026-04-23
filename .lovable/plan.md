@@ -1,84 +1,60 @@
 
 
-## Diagnóstico: por que o "Funil por Canal" diverge do Painel Comercial
+## Por que 775 (Painel) ≠ 685 (Relatório) — são métricas diferentes
 
-### As duas telas medem coisas diferentes — nenhuma das duas é "BU Incorporador" no sentido estrito
+### Validação no banco (Abril/2026, BU Incorporador)
 
-Validei cada número contra o banco para abril/2026:
-
-| Métrica | Funil por Canal (relatório) | Painel Comercial (CRM) | Banco |
-|---|---|---|---|
-| R1 Agendada | 895 | 774 | — |
-| R1 Realizada | 564 | 334 | — |
-| No-Show | 296 | 197 | — |
-| Contratos | 136 | 112 | — |
-
-### Por que cada tela dá um número diferente
-
-#### 1. **Funil por Canal: NÃO filtra attendees pela BU do deal** ❌
-
-No `useChannelFunnelReport.ts` linhas 154-180, a query `funnel-attendees` busca **TODOS os R1/R2 do banco no período**, sem nenhum filtro de origin/BU. Confirmado em SQL:
-
-- Total de deals únicos R1 abril (todas as BUs): **895** ← bate com a tela
-- Apenas deals com `origin_id` da Inc: **685**
-- Deals de outras BUs (Consórcio, Marketing, etc.): **210**
-
-Então **210 R1 de outras BUs estão entrando no relatório da Inc**. Isso acontece porque:
-- Os attendees são carregados sem filtro de origem
-- O hook usa `fullDealChannelMap` para classificar canal, mas se um deal de Consórcio for classificado como "ANAMNESE" ou "OUTROS", ele **entra no funil da Inc** mesmo sem ser da BU.
-
-A coluna **Entradas** está correta (filtra por `origin_id` da Inc → 2615 ✅), mas as colunas R1/R2/No-Show estão **inflando com leads de outras BUs**.
-
-#### 2. **Painel Comercial: filtra por squad do SDR, não por origem do deal**
-
-A RPC `get_sdr_metrics_from_agenda(bu_filter='incorporador')` agrupa por **SDR** e mostra **apenas SDRs cujo `squad='incorporador'` no momento do agendamento** (via `sdr_squad_history`). Além disso:
-
-- Tem cap de 2 movimentos por deal (`LEAST(COUNT(DISTINCT meeting_day), 2)`).
-- Filtra `is_partner = false`.
-- Não filtra por origem do deal — então um SDR Inc que agendar um R1 num deal de Consórcio também conta aqui.
-
-Por isso os 11 SDRs listados no painel somam **774**, não 685 (origem) nem 895 (todas BUs).
-
-#### 3. **Resumo da causa raiz**
-
-| Tela | Filtra por | Resultado |
+| Conceito | Valor real | Onde aparece |
 |---|---|---|
-| Funil por Canal | nada (todos R1 do banco) | 895 — infla com Consórcio/Marketing |
-| Painel Comercial | squad do SDR + cap 2 movs | 774 — visão "trabalho do time Inc" |
-| BU Incorporador real (origem) | `origin_id` da Inc | 685 — visão "leads que pertencem à Inc" |
+| **Agendamentos** = SDR clicou "agendar" em abril (`booked_at` em abril) | **780–800** | Painel Comercial (775 ✅) |
+| **R1 Agendada** = R1 que vai acontecer em abril (`scheduled_at` em abril), deals únicos da BU | **686** | Funil por Canal (685 ✅) |
 
-**Nenhuma das três é "errada"**, mas a do Funil por Canal está **definitivamente quebrada** porque o nome da tela ("Relatórios da BU Incorporador") implica filtro por BU, e ela não filtra.
+Ambos números estão **corretos**, eles medem coisas diferentes:
 
-### Correção proposta
+### Diferença #1 — Janela de tempo (booked_at vs scheduled_at)
 
-**Arquivo único: `src/hooks/useChannelFunnelReport.ts`**
+- **Painel "Agendamentos"** conta o **ato de agendar** que aconteceu em abril. Se o SDR agendou dia 28/abr uma R1 para 5/maio, conta no painel de abril.
+- **Relatório "R1 Agendada"** conta a **R1 que está marcada para abril**. Se a reunião é em abril mas foi agendada em março, conta no relatório de abril.
 
-1. **Filtrar attendees por origem da BU** na query `funnel-attendees`. Adicionar JOIN com `crm_deals` e `WHERE d.origin_id IN buOriginIds`. Isso vai trazer R1 só dos deals da BU correta.
+São janelas opostas — agendamentos feitos em abril para datas futuras vs. reuniões marcadas para abril (independente de quando foram agendadas).
 
-2. **Aplicar o mesmo filtro na query `funnel-extra-deals`** (já filtra por `id IN (...)`, mas precisa garantir que esses IDs sejam só da BU — o filtro do passo 1 já garante isso indiretamente, mas vou validar).
+### Diferença #2 — Critério de inclusão
 
-3. **Manter a regra atual de classificação por canal** — depois do fix, deals de Consórcio sumirão e o funil ficará coerente com a coluna "Entradas".
+- **Painel** inclui qualquer deal/agendamento feito por SDR com **squad = "incorporador" no momento do agendamento** (via `sdr_squad_history`). Pode incluir leads de outras BUs se um SDR Inc agendar.
+- **Relatório** inclui deals cujo `origin_id` **pertence à BU Incorporador**. Mede a perspectiva do *lead*, não do SDR.
 
-### Resultado esperado pós-fix (Abril 2026)
+No abril, esses dois universos coincidem (todos os 686 deals com R1 da Inc também foram agendados por SDRs Inc), então a diferença é puramente de janela.
 
-| Métrica | Antes | Depois | Bate com |
-|---|---|---|---|
-| R1 Agendada | 895 | **685** | origens Inc no banco ✅ |
-| R1 Realizada | 564 | ~430 | (a recalcular após fix) |
-| No-Show | 296 | ~210 | idem |
+### Diferença #3 — Múltiplos agendamentos do mesmo deal
 
-A tela passa a representar **deals que são da BU Incorporador** (consistente com a coluna Entradas). A diferença que ainda vai existir vs. Painel Comercial (685 vs 774) é **legítima**: o Painel mede "trabalho do time SDR Inc" (incluindo agendamentos que o SDR fez em deals de outras BUs), e o Funil mede "deals da BU Inc" (incluindo R1 agendados por SDRs de outras BUs em leads Inc).
+- **Painel** aplica `LEAST(COUNT(DISTINCT meeting_day), 2)` na métrica `r1_agendada` (até 2 movimentos por deal contam) e conta `agendamentos` 1 a 1 (sem cap).
+- **Relatório** conta **deals únicos** (1 deal = 1 agendamento). Reagendamentos não inflam.
 
-### Vou adicionar uma nota explicativa no header da tabela
+### O que mostrar para o usuário
 
-Pequeno tooltip: "Métricas filtradas por origem do deal (BU = Inc). Para visão por SDR, ver Painel Comercial."
+A tela do relatório já tem tooltip explicando "métricas filtradas por origem do deal (BU)". Vou **melhorar esse tooltip** e adicionar uma nota explicativa abaixo da tabela:
 
-### Fora do escopo
+> **Por que estes números diferem do Painel Comercial?**
+> - **Painel Comercial** mede *o trabalho do time SDR Inc*: agendamentos feitos no período (`booked_at`), com até 2 movimentos por deal contando.
+> - **Funil por Canal** mede *os deals da BU Inc*: reuniões marcadas para o período (`scheduled_at`), 1 deal = 1 unidade.
+>
+> Os dois são corretos para perspectivas diferentes. Para gestão do time SDR, use o Painel. Para análise de canal/lead, use o Funil.
 
-- Não vou reescrever a RPC `get_sdr_metrics_from_agenda` nem mudar o Painel Comercial.
-- Não vou unificar as duas visões (são úteis para perspectivas diferentes).
+### O que vou alterar
+
+**Arquivo único: `src/components/relatorios/ChannelFunnelTable.tsx`**
+
+1. Atualizar tooltip da coluna "R1 Agend." para texto mais didático: "Deals únicos com R1 marcada para o período (`scheduled_at`). Conta 1 por deal — reagendamentos não inflam. Diferente do 'Agendamentos' do Painel Comercial, que conta atos de agendar (`booked_at`) com cap de 2 movs/deal."
+
+2. Adicionar bloco **"Notas metodológicas"** colapsável abaixo da tabela com a explicação completa das 3 diferenças (janela, critério, deduplicação).
+
+### O que NÃO vou alterar
+
+- A lógica do hook `useChannelFunnelReport.ts` está correta (685 é o número certo para a perspectiva "BU = origem do deal").
+- A RPC `get_sdr_metrics_from_agenda` está correta (775 é o número certo para a perspectiva "trabalho do SDR Inc").
+- Não vou unificar as duas visões — elas servem propósitos distintos.
 
 ### Reversibilidade
 
-Mudança em ~10 linhas de 1 arquivo (adicionar JOIN+WHERE na query de attendees). Reverter = remover o filtro.
+1 arquivo, ~25 linhas adicionadas (tooltip melhor + bloco explicativo). Reverter = remover o bloco.
 
