@@ -12,6 +12,8 @@ import { startOfMonth, endOfMonth } from 'date-fns';
 import { formatCurrency } from '@/lib/formatters';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { useAcquisitionReport, DimensionRow } from '@/hooks/useAcquisitionReport';
+import { useChannelFunnelReport, displayChannelLabel } from '@/hooks/useChannelFunnelReport';
+import { ChannelFunnelTable } from './ChannelFunnelTable';
 import * as XLSX from 'xlsx';
 
 interface AcquisitionReportPanelProps {
@@ -34,6 +36,9 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
     closers, classified, isLoading,
   } = useAcquisitionReport(dateRange, bu);
 
+  const { rows: funnelRows, totals: funnelTotals, isLoading: funnelLoading } =
+    useChannelFunnelReport(dateRange, bu);
+
   // Apply local filters on classified data to recalculate if needed
   // For simplicity the main hook already processes all; filters here are on the aggregated views
   const filteredByCloser = useMemo(() => {
@@ -48,6 +53,12 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
     if (selectedChannel === 'all') return byChannel;
     return byChannel.filter(r => r.label === selectedChannel.toUpperCase());
   }, [byChannel, selectedChannel]);
+
+  // Display label override: LIVE → "ANAMNESE (ex-LIVE)" — only visual, value stays "LIVE"
+  const byChannelDisplay = useMemo(
+    () => filteredByChannel.map(r => ({ ...r, label: displayChannelLabel(r.label) })),
+    [filteredByChannel]
+  );
 
   const filteredByOrigin = useMemo(() => {
     if (selectedOrigin === 'all') return byOrigin;
