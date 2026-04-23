@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Info } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { ChannelFunnelRow } from '@/hooks/useChannelFunnelReport';
 
@@ -22,6 +24,24 @@ function pctBadge(n: number) {
   if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground">—</span>;
   const variant = n >= 50 ? 'default' : n >= 20 ? 'secondary' : 'outline';
   return <Badge variant={variant as any} className="font-mono">{n.toFixed(1)}%</Badge>;
+}
+
+function HeaderWithInfo({ label, info, align = 'right' }: { label: string; info: string; align?: 'left' | 'right' }) {
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className={`inline-flex items-center gap-1 cursor-help ${align === 'right' ? 'justify-end w-full' : ''}`}>
+            {label}
+            <Info className="h-3 w-3 text-muted-foreground" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs text-xs">
+          {info}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 export function ChannelFunnelTable({ rows, totals }: Props) {
