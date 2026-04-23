@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import type { DayContentProps } from 'react-day-picker';
 import { ptBR } from 'date-fns/locale';
-import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check, CalendarDays, StickyNote } from 'lucide-react';
+import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check, CalendarDays, StickyNote, CheckCircle2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
