@@ -13,6 +13,7 @@ import {
 interface SdrDetailKPICardsProps {
   metrics: MetricWithMeta[];
   isLoading?: boolean;
+  onMetricClick?: (key: string) => void;
 }
 
 const formatDuration = (seconds: number): string => {
@@ -35,7 +36,7 @@ const tooltipDescriptions: Record<string, string> = {
   tempo_medio: "Tempo médio de duração das ligações atendidas.",
 };
 
-function KPICard({ metric }: { metric: MetricWithMeta }) {
+function KPICard({ metric, onClick }: { metric: MetricWithMeta; onClick?: () => void }) {
   const hasMeta = metric.meta > 0;
   const progressPct = hasMeta ? Math.min(metric.attainment, 100) : 0;
 
@@ -74,7 +75,13 @@ function KPICard({ metric }: { metric: MetricWithMeta }) {
   const tooltipText = tooltipDescriptions[metric.key] || `Métrica: ${metric.label}`;
 
   return (
-    <Card className="bg-card border-border">
+    <Card
+      className={cn(
+        "bg-card border-border",
+        onClick && "cursor-pointer hover:border-primary/50 transition-colors"
+      )}
+      onClick={onClick}
+    >
       <CardContent className="p-4 space-y-2.5">
         {/* Title + tooltip */}
         <div className="flex items-center justify-between">
@@ -152,7 +159,7 @@ function KPICard({ metric }: { metric: MetricWithMeta }) {
   );
 }
 
-export function SdrDetailKPICards({ metrics, isLoading }: SdrDetailKPICardsProps) {
+export function SdrDetailKPICards({ metrics, isLoading, onMetricClick }: SdrDetailKPICardsProps) {
   if (isLoading || metrics.length === 0) {
     return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3">
@@ -168,7 +175,11 @@ export function SdrDetailKPICards({ metrics, isLoading }: SdrDetailKPICardsProps
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3">
       {metrics.map((metric) => (
-        <KPICard key={metric.key} metric={metric} />
+        <KPICard
+          key={metric.key}
+          metric={metric}
+          onClick={onMetricClick ? () => onMetricClick(metric.key) : undefined}
+        />
       ))}
     </div>
   );
