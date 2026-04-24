@@ -11489,62 +11489,34 @@ export type Database = {
           urgency: string
         }[]
       }
-      get_sdr_meetings_from_agenda:
-        | {
-            Args: {
-              end_date: string
-              sdr_email_filter?: string
-              start_date: string
-            }
-            Returns: {
-              attendee_id: string
-              attendee_status: string
-              booked_at: string
-              closer: string
-              contact_email: string
-              contact_name: string
-              contact_phone: string
-              data_agendamento: string
-              deal_id: string
-              deal_name: string
-              intermediador: string
-              meeting_slot_id: string
-              origin_name: string
-              probability: number
-              scheduled_at: string
-              sdr_email: string
-              status_atual: string
-              tipo: string
-            }[]
-          }
-        | {
-            Args: {
-              bu_filter?: string
-              end_date: string
-              sdr_email_filter?: string
-              start_date: string
-            }
-            Returns: {
-              attendee_id: string
-              attendee_status: string
-              booked_at: string
-              closer: string
-              contact_email: string
-              contact_name: string
-              contact_phone: string
-              data_agendamento: string
-              deal_id: string
-              deal_name: string
-              intermediador: string
-              meeting_slot_id: string
-              origin_name: string
-              probability: number
-              scheduled_at: string
-              sdr_email: string
-              status_atual: string
-              tipo: string
-            }[]
-          }
+      get_sdr_meetings_from_agenda: {
+        Args: {
+          bu_filter?: string
+          end_date: string
+          sdr_email_filter?: string
+          start_date: string
+        }
+        Returns: {
+          attendee_id: string
+          attendee_status: string
+          booked_at: string
+          closer: string
+          contact_email: string
+          contact_name: string
+          contact_phone: string
+          data_agendamento: string
+          deal_id: string
+          deal_name: string
+          intermediador: string
+          meeting_slot_id: string
+          origin_name: string
+          probability: number
+          scheduled_at: string
+          sdr_email: string
+          status_atual: string
+          tipo: string
+        }[]
+      }
       get_sdr_meetings_v2: {
         Args: {
           end_date: string
@@ -11553,24 +11525,15 @@ export type Database = {
         }
         Returns: Json
       }
-      get_sdr_metrics_from_agenda:
-        | {
-            Args: {
-              end_date: string
-              sdr_email_filter?: string
-              start_date: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              bu_filter?: string
-              end_date: string
-              sdr_email_filter?: string
-              start_date: string
-            }
-            Returns: Json
-          }
+      get_sdr_metrics_from_agenda: {
+        Args: {
+          bu_filter?: string
+          end_date: string
+          sdr_email_filter?: string
+          start_date: string
+        }
+        Returns: Json
+      }
       get_sdr_metrics_v2: {
         Args: {
           end_date: string
