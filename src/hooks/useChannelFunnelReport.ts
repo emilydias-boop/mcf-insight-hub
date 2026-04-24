@@ -114,11 +114,32 @@ function classifyChannelWith30dRule(opts: {
   reachedR1?: boolean;
 }): string {
   const { tags, originName, firstA010Purchase, referenceDate, reachedR1 } = opts;
+  // IMPORTANTE: tags com "INCOMPLET" (ex: ANAMNESE-INCOMPLETA / ANAMNESE-INCOMPLETO)
+  // representam formulário ABANDONADO e NÃO contam como sinal de canal ANAMNESE.
+  // Só conta como ANAMNESE se o lead tiver tag completa: ANAMNESE, ANAMNESE-INSTA,
+  // LIVE / LEAD-LIVE, LANÇAMENTO / LEAD-LANÇAMENTO.
+  const isAnamneseTag = (t: string) => {
+    if (t.includes('INCOMPLET')) return false;
+    return (
+      t.includes('ANAMNESE') ||
+      t.includes('LIVE') ||
+      t.includes('LANÇ') ||
+      t.includes('LANC')
+    );
+  };
+  const isAnamneseText = (s: string) => {
+    if (s.includes('INCOMPLET')) return false;
+    return (
+      s.includes('ANAMNESE') ||
+      s.includes('LIVE') ||
+      s.includes('LANÇ') ||
+      s.includes('LANC')
+    );
+  };
+
   const hasA010Tag = tags.some(t => t.includes('A010'));
   const hasAnamneseSignal =
-    tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC')) ||
-    originName.includes('ANAMNESE') || originName.includes('LIVE') ||
-    originName.includes('LANÇ') || originName.includes('LANC');
+    tags.some(isAnamneseTag) || isAnamneseText(originName);
   const hasA010Origin = originName.includes('A010');
 
   if (firstA010Purchase) {
