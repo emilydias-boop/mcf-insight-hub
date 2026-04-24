@@ -11128,6 +11128,13 @@ export type Database = {
         }
         Returns: string
       }
+      build_consorcio_sale_webhook_payload: {
+        Args: {
+          card: Database["public"]["Tables"]["consortium_cards"]["Row"]
+          event_name: string
+        }
+        Returns: Json
+      }
       build_sale_webhook_payload: {
         Args: {
           _event: string
