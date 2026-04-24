@@ -793,29 +793,13 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Clint User ID</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={integrationsData.clint_user_id}
-                      onChange={(e) => setIntegrationsData({ ...integrationsData, clint_user_id: e.target.value })}
-                      placeholder="ID do usuário no Clint CRM"
-                      className="flex-1"
-                    />
-                    <Button 
-                      variant="outline" 
-                      size="icon"
-                      onClick={handleFetchClintId}
-                      disabled={searchingClint}
-                      title="Buscar ID pelo email"
-                    >
-                      {searchingClint ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Search className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
+                  <Input
+                    value={integrationsData.clint_user_id}
+                    onChange={(e) => setIntegrationsData({ ...integrationsData, clint_user_id: e.target.value })}
+                    placeholder="ID histórico do usuário no Clint CRM"
+                  />
                   <p className="text-xs text-muted-foreground">
-                    Clique no ícone 🔍 para buscar automaticamente pelo email
+                    Campo mantido apenas como referência histórica (integração Clint encerrada).
                   </p>
                 </div>
                 <div className="space-y-2">
