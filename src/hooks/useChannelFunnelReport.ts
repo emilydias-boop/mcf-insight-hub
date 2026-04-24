@@ -6,6 +6,7 @@ import { BusinessUnit } from '@/hooks/useMyBU';
 import { useAcquisitionReport } from './useAcquisitionReport';
 import { getCartWeekStart, getCartWeekEnd } from '@/lib/carrinhoWeekBoundaries';
 import { addWeeks, format } from 'date-fns';
+import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
 /**
  * Funil completo por canal — fonte alinhada ao Painel Comercial.
@@ -83,13 +84,22 @@ const phoneSuffix = (phone: string | null | undefined): string => {
   return digits.length >= 9 ? digits.slice(-9) : digits;
 };
 
+// Produtos que contam como Venda Final de Parceria.
+// Reaproveita a whitelist do relatório de Faturamento + A005 (P2 = pacote de
+// parceria, com 35 ocorrências/mês).
+const PARCERIA_VENDA_PRODUCTS = new Set<string>([
+  ...ALLOWED_BILLING_PRODUCTS,
+  'A005 - MCF P2',
+]);
+
 interface ParceriaConversion {
   id: string;
   email: string;
   phone: string;
-  product_price: number;
-  net_value: number;
-  channel: string; // 'A010' | 'ANAMNESE' | 'OUTROS'
+  product_name: string;
+  bruto: number;     // reference_price configurado
+  liquido: number;   // valor pago (product_price do Hubla)
+  channel: string;   // 'A010' | 'ANAMNESE' | 'OUTROS'
 }
 
 export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: BusinessUnit) {
@@ -167,25 +177,53 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   });
 
   // 2b. IDs da PRIMEIRA compra de parceria por email no período.
-  // Busca DIRETA em hubla_transactions (sem passar por acq.classified, que perde
-  // dados por filtros do RPC get_all_hubla_transactions). Para cada conversão,
-  // determina o canal via R1 attendees (mesma lógica do Painel Comercial).
+  // Busca DIRETA em hubla_transactions (sem passar por acq.classified).
   //
-  // Categorias incluídas: 'incorporador' (A001/A005/A009/A000-Contrato no Hubla)
-  // e 'parceria' (lançamentos manuais via Make/manual). Sources: hubla, kiwify,
-  // manual, mcfpay (exclui 'make' a partir de 2026-04 que cria espelhos).
+  // Filtros aplicados:
+  //  - product_name na whitelist PARCERIA_VENDA_PRODUCTS (A001/A002/A003/A004/
+  //    A005/A009 completo). EXCLUI A000-Contrato (parcela mensal), renovações
+  //    (A006, A009-Renovação), Club isolado e produtos auxiliares.
+  //  - sale_status = 'completed', sources hubla/kiwify/manual/mcfpay (exclui
+  //    'make' que duplica).
+  //  - "Primeira conversão" = email NUNCA comprou parceria antes (lookback
+  //    12 meses). Recompras/upsells de quem já era parceiro NÃO contam.
   //
-  // "Primeira conversão" = email NUNCA comprou nenhuma dessas categorias antes
-  // (lookback 12 meses). Recompras de quem já era parceiro NÃO contam.
+  // Bruto = reference_price configurado em product_configurations.
+  // Líquido = product_price (o que efetivamente entrou via Hubla).
+  // Canal = via R1 attendees (email/telefone). Quem foi reconhecido em R1
+  // entra em A010/ANAMNESE conforme tags ou pipeline; quem não passou por R1
+  // cai em OUTROS.
+  const { data: refPrices = new Map<string, number>() } = useQuery<Map<string, number>>({
+    queryKey: ['funnel-ref-prices'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('product_configurations')
+        .select('product_name, reference_price')
+        .in('product_category', ['incorporador', 'parceria'])
+        .eq('is_active', true);
+      if (error) {
+        console.error('[useChannelFunnelReport] ref prices error', error);
+        return new Map();
+      }
+      const m = new Map<string, number>();
+      (data || []).forEach((r: any) => {
+        m.set(r.product_name, Number(r.reference_price) || 0);
+      });
+      return m;
+    },
+    staleTime: 5 * 60_000,
+  });
+
   const { data: parceriaConversions = [], isLoading: loadingFirstParceria } = useQuery<ParceriaConversion[]>({
-    queryKey: ['funnel-parceria-conversions-v2', startDate, endDate],
+    queryKey: ['funnel-parceria-conversions-v3', startDate, endDate, refPrices.size],
     queryFn: async () => {
       if (!startDate || !endDate) return [];
 
-      // 1. Todas as parcerias do período (para deduplicar primeira por email)
+      // 1. Todas as transações do período da whitelist (para deduplicar
+      //    primeira por email).
       const { data: periodTx, error: periodErr } = await supabase
         .from('hubla_transactions')
-        .select('id, customer_email, customer_phone, product_price, net_value, sale_date')
+        .select('id, customer_email, customer_phone, product_name, product_price, sale_date')
         .in('product_category', ['incorporador', 'parceria'])
         .eq('sale_status', 'completed')
         .in('source', ['hubla', 'kiwify', 'manual', 'mcfpay'])
@@ -198,7 +236,15 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         throw periodErr;
       }
 
+      // Filtra pela whitelist de produtos válidos (exclui A000/Renovação/etc)
+      const validTx = (periodTx || []).filter((tx: any) =>
+        PARCERIA_VENDA_PRODUCTS.has(tx.product_name)
+      );
+
       // 2. Quem JÁ era parceiro antes do período (lookback 12 meses) — excluir
+      //    Aqui mantemos o filtro AMPLO (qualquer compra de parceria/incorporador)
+      //    para garantir que recompras de quem já era parceiro fiquem fora,
+      //    mesmo que naquela época tenha comprado um produto fora da whitelist.
       const lookbackStart = new Date(`${startDate}T00:00:00-03:00`);
       lookbackStart.setMonth(lookbackStart.getMonth() - 12);
       const { data: priorBuyers, error: priorErr } = await supabase
@@ -223,18 +269,30 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       // 3. Reduzir a uma única conversão por email (a primeira no período) e
       //    excluir quem já era parceiro antes.
       const seen = new Set<string>();
-      type Pending = { id: string; email: string; phone: string; product_price: number; net_value: number };
+      type Pending = {
+        id: string;
+        email: string;
+        phone: string;
+        product_name: string;
+        bruto: number;
+        liquido: number;
+      };
       const pending: Pending[] = [];
-      for (const tx of (periodTx || []) as any[]) {
+      for (const tx of validTx as any[]) {
         const email = (tx.customer_email || '').toLowerCase().trim();
         if (!email || seen.has(email) || priorEmails.has(email)) continue;
         seen.add(email);
+        const liquido = Number(tx.product_price) || 0;
+        // Bruto = reference_price configurado. Fallback para o próprio Hubla
+        // se não houver configuração (não deve acontecer, mas evita zerar).
+        const bruto = refPrices.get(tx.product_name) || liquido;
         pending.push({
           id: tx.id,
           email,
           phone: phoneSuffix(tx.customer_phone),
-          product_price: Number(tx.product_price) || 0,
-          net_value: Number(tx.net_value) || 0,
+          product_name: tx.product_name,
+          bruto,
+          liquido,
         });
       }
 
@@ -250,6 +308,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         attendee_phone: string | null;
         crm_deals: {
           tags: any[] | null;
+          origin_id: string | null;
           crm_contacts: { email: string | null; phone: string | null } | null;
         } | null;
       };
@@ -263,7 +322,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
           .select(`
             attendee_phone,
             meeting_slots!inner(scheduled_at, meeting_type),
-            crm_deals!deal_id(tags, crm_contacts!contact_id(email, phone))
+            crm_deals!deal_id(tags, origin_id, crm_contacts!contact_id(email, phone))
           `)
           .eq('meeting_slots.meeting_type', 'r1')
           .gte('meeting_slots.scheduled_at', r1Lookback.toISOString())
@@ -279,9 +338,25 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         offset += pageSize;
       }
 
-      // 5. Indexar attendees por email e por sufixo de telefone
-      const emailToTags = new Map<string, string[]>();
-      const phoneToTags = new Map<string, string[]>();
+      // 5. Buscar nomes de pipelines/origens para fallback de classificação
+      const originIds = new Set<string>();
+      allAtt.forEach(a => {
+        if (a.crm_deals?.origin_id) originIds.add(a.crm_deals.origin_id);
+      });
+      let originNameById = new Map<string, string>();
+      if (originIds.size > 0) {
+        const { data: origins } = await supabase
+          .from('crm_origins')
+          .select('id, name')
+          .in('id', Array.from(originIds));
+        (origins || []).forEach((o: any) => originNameById.set(o.id, (o.name || '').toUpperCase()));
+      }
+
+      // 6. Indexar attendees por email e por sufixo de telefone, guardando
+      //    tags + nome da origem para classificação.
+      type AttIdx = { tags: string[]; originName: string };
+      const emailToAtt = new Map<string, AttIdx>();
+      const phoneToAtt = new Map<string, AttIdx>();
       for (const a of allAtt) {
         const tags: string[] = (a.crm_deals?.tags as any[] || []).map((t: any) => {
           if (typeof t === 'string') {
@@ -292,31 +367,42 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
           }
           return (t?.name || '').toUpperCase();
         });
+        const originName = a.crm_deals?.origin_id
+          ? (originNameById.get(a.crm_deals.origin_id) || '')
+          : '';
+        const idx: AttIdx = { tags, originName };
         const email = (a.crm_deals?.crm_contacts?.email || '').toLowerCase().trim();
-        if (email) emailToTags.set(email, tags);
+        if (email) emailToAtt.set(email, idx);
         const cPhone = phoneSuffix(a.crm_deals?.crm_contacts?.phone);
-        if (cPhone.length >= 8) phoneToTags.set(cPhone, tags);
+        if (cPhone.length >= 8) phoneToAtt.set(cPhone, idx);
         const aPhone = phoneSuffix(a.attendee_phone);
-        if (aPhone.length >= 8 && aPhone !== cPhone) phoneToTags.set(aPhone, tags);
+        if (aPhone.length >= 8 && aPhone !== cPhone) phoneToAtt.set(aPhone, idx);
       }
 
-      // 6. Classificar cada conversão por canal
-      const classifyByTags = (tags: string[]): string => {
+      // 7. Classificação:
+      //  a) Tags claras → A010 / ANAMNESE
+      //  b) Origem (pipeline) → A010 / ANAMNESE
+      //  c) Tinha R1 mas sem sinal claro → ANAMNESE (passou pelo funil)
+      //  d) Sem R1 attendee → OUTROS (compra direta)
+      const classifyAtt = (idx: AttIdx): string => {
+        const { tags, originName } = idx;
         if (tags.some(t => t.includes('A010'))) return 'A010';
-        if (tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC'))) {
-          return 'ANAMNESE';
-        }
-        return 'OUTROS';
+        if (tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC'))) return 'ANAMNESE';
+        if (originName.includes('A010')) return 'A010';
+        if (originName.includes('ANAMNESE') || originName.includes('LIVE') || originName.includes('LANÇ') || originName.includes('LANC')) return 'ANAMNESE';
+        // Passou por R1, foi reconhecido, mas sem sinal explícito de canal:
+        // assume ANAMNESE (a maior parte dos R1 sem tag vem desse fluxo).
+        return 'ANAMNESE';
       };
 
       const result: ParceriaConversion[] = pending.map(p => {
-        const tags = emailToTags.get(p.email) || (p.phone.length >= 8 ? phoneToTags.get(p.phone) : undefined);
-        const channel = tags ? classifyByTags(tags) : 'OUTROS';
+        const att = emailToAtt.get(p.email) || (p.phone.length >= 8 ? phoneToAtt.get(p.phone) : undefined);
+        const channel = att ? classifyAtt(att) : 'OUTROS';
         return { ...p, channel };
       });
       return result;
     },
-    enabled: !!startDate && !!endDate,
+    enabled: !!startDate && !!endDate && refPrices.size > 0,
     staleTime: 60_000,
   });
 
@@ -359,21 +445,23 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       else if (status.includes('reembolso') || status.includes('desistente') || status.includes('reprovado') || status.includes('cancelado')) slot.reprovados++;
     });
 
-    // Venda Final + Faturamento — apenas PRIMEIRA conversão em parceria por
-    // cliente (email) no período. Vem da query direta acima (não do
-    // acq.classified, que perde dados por filtros do RPC).
+    // Venda Final + Faturamento — primeira conversão em Parceria por cliente
+    // (email) no período, da whitelist de produtos válidos.
     //
-    // Inclui categorias 'incorporador' (A001/A005/A009/A000) e 'parceria'.
-    // Exclui:
-    //  - A010 / Vitalício / Renovação / Clube / Outros (não-parceria)
-    //  - Quem já era parceiro nos últimos 12 meses (recompras/upsells)
-    // Canal vem dos R1 attendees (mesma fonte do Painel Comercial).
-    parceriaConversions.forEach(({ channel, product_price, net_value }) => {
+    // Bruto  = reference_price configurado em product_configurations
+    // Líquido = valor pago via Hubla (product_price)
+    //
+    // Canal:
+    //   - Tem R1 attendee + tag/origem A010 → A010
+    //   - Tem R1 attendee + tag/origem ANAMNESE/LIVE/LANÇ → ANAMNESE
+    //   - Tem R1 attendee mas sem sinal claro → ANAMNESE (passou por R1)
+    //   - Não tem R1 attendee → OUTROS (compra direta)
+    parceriaConversions.forEach(({ channel, bruto, liquido }) => {
       const ch = normalizeFunnelChannel(channel);
       const slot = get(ch);
       slot.vendaFinal++;
-      slot.faturamentoBruto += product_price || 0;
-      slot.faturamentoLiquido += net_value || 0;
+      slot.faturamentoBruto += bruto || 0;
+      slot.faturamentoLiquido += liquido || 0;
     });
 
     const finalRows: ChannelFunnelRow[] = Array.from(map.entries()).map(([channel, v]) => ({
